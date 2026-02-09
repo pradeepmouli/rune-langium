@@ -3,7 +3,7 @@
 /**
  * Rename package scope across the entire project
  * Usage: node scripts/rename-scope.mjs old-scope new-scope
- * Example: node scripts/rename-scope.mjs company myorg
+ * Example: node scripts/rename-scope.mjs rune-langium myorg
  */
 
 import { argv } from 'zx';
@@ -13,7 +13,7 @@ const newScope = argv._[1];
 
 if (!oldScope || !newScope) {
   console.log('Usage: node scripts/rename-scope.mjs <old-scope> <new-scope>');
-  console.log('Example: node scripts/rename-scope.mjs company myorg');
+  console.log('Example: node scripts/rename-scope.mjs rune-langium myorg');
   process.exit(1);
 }
 
