@@ -1,22 +1,18 @@
 # Workspace Guide
 
-<!-- TEMPLATE: Update package names and structure to match your project -->
-This template uses **pnpm workspaces** for managing multiple packages in a monorepo structure.
+This repository uses **pnpm workspaces** for managing multiple packages in a monorepo.
 
 ## Directory Structure
 
 ```
-template-ts/
+rune-langium/
 ├── packages/
-│   ├── core/          # Core utilities used across packages (TEMPLATE: example package)
-│   ├── utils/         # General utility functions (TEMPLATE: example package)
-│   ├── test-utils/    # Shared testing utilities (TEMPLATE: example package)
 │   └── [your-package]/
-├── scripts/           # Build and automation scripts
-├── e2e/              # End-to-end tests (Playwright)
-├── docs/             # Project documentation
+├── scripts/
+├── e2e/
+├── docs/
 ├── pnpm-workspace.yaml
-└── package.json      # Root workspace configuration
+└── package.json
 ```
 
 ## Key Concepts
@@ -25,11 +21,10 @@ template-ts/
 
 Use the `workspace:*` protocol to reference packages within the monorepo:
 
-<!-- TEMPLATE: Update with your actual package scope (@company is a placeholder) -->
 ```json
 {
   "dependencies": {
-    "@company/core": "workspace:*"
+    "@rune-langium/core": "workspace:*"
   }
 }
 ```
@@ -59,8 +54,8 @@ Each package should define proper exports in its `package.json`:
 ```
 
 This enables:
-- Clean import paths: `import { helper } from '@company/utils'`
-- Subpath exports: `import { testing } from '@company/utils/testing'`
+- Clean import paths: `import { helper } from '@rune-langium/utils'`
+- Subpath exports: `import { testing } from '@rune-langium/utils/testing'`
 - Proper TypeScript support
 
 ## Common Commands
@@ -68,113 +63,60 @@ This enables:
 ### Development
 
 ```bash
-# Install dependencies for all packages
 pnpm install
-
-# Start development mode for all packages
 pnpm run dev
-
-# Run development for a specific package
-pnpm --filter @company/core run dev
+pnpm --filter @rune-langium/core run dev
 ```
 
 ### Building
 
 ```bash
-# Build all packages
 pnpm run build
-
-# Build a specific package
-pnpm --filter @company/utils run build
-
-# Build packages in dependency order
+pnpm --filter @rune-langium/utils run build
 pnpm run build -- --recursive
 ```
 
 ### Testing
 
 ```bash
-# Run all tests
 pnpm run test
-
-# Run tests in watch mode
 pnpm run test:watch
-
-# Run tests with coverage
 pnpm run test:coverage
-
-# Run tests for specific package
-pnpm --filter @company/core run test
-
-# Run integration tests
-pnpm run test integration.test.ts
+pnpm --filter @rune-langium/core run test
 ```
 
 ### Code Quality
 
 ```bash
-# Lint all packages
 pnpm run lint
-
-# Fix linting issues
 pnpm run lint:fix
-
-# Check code format
 pnpm run format:check
-
-# Format all code
 pnpm run format
-
-# Type check all packages
 pnpm run type-check
-
-# Watch mode type checking
-pnpm run typecheck:watch
 ```
 
 ### Dependency Management
 
 ```bash
-# Check for outdated packages
-pnpm run outdated
-
-# Update dependencies
-pnpm run update:deps
-
-# Audit dependencies for security issues
-pnpm run audit
-
-# Clean and reinstall (nuclear option)
 pnpm run fresh
 ```
 
 ### Versioning & Publishing
 
 ```bash
-# Create a changeset
 pnpm run changeset
-
-# Bump versions based on changesets
 pnpm run changeset:version
-
-# Publish to npm
 pnpm run changeset:publish
 ```
 
 ## Adding New Packages
 
-1. Create a new directory in `packages/`:
-
-```bash
-mkdir packages/my-package
-cd packages/my-package
-```
-
-2. Create `package.json` with proper exports:
+1. Create a new directory in `packages/`.
+2. Add a `package.json` with proper exports.
 
 ```json
 {
-  "name": "@company/my-package",
+  "name": "@rune-langium/my-package",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -188,7 +130,7 @@ cd packages/my-package
 }
 ```
 
-3. Create `tsconfig.json` extending the root:
+3. Create `tsconfig.json` extending the root.
 
 ```json
 {
@@ -201,7 +143,7 @@ cd packages/my-package
 }
 ```
 
-4. Create source files:
+4. Add source files:
 
 ```
 src/
@@ -214,7 +156,7 @@ src/
 ```json
 {
   "dependencies": {
-    "@company/my-package": "workspace:*"
+    "@rune-langium/my-package": "workspace:*"
   }
 }
 ```
@@ -225,7 +167,7 @@ src/
 
 ```javascript
 // ✅ Workspace package (during development)
-"@company/core": "workspace:*"
+"@rune-langium/core": "workspace:*"
 
 // ✅ Specific version
 "zod": "^4.2.1"
@@ -240,14 +182,9 @@ src/
 ### Checking Dependency Graph
 
 ```bash
-# See all workspace packages
 pnpm ls --depth 0 -r
-
-# Check specific package dependencies
-pnpm ls --filter @company/core
-
-# Visualize dependency tree
-pnpm --filter @company/utils run type-check
+pnpm ls --filter @rune-langium/core
+pnpm --filter @rune-langium/utils run type-check
 ```
 
 ## Best Practices
@@ -261,13 +198,13 @@ pnpm --filter @company/utils run type-check
 ### 2. Consistent Naming
 
 ```
-✅ @company/core
-✅ @company/utils
-✅ @company/test-utils
-✅ @company/components (if using React)
+✅ @rune-langium/core
+✅ @rune-langium/utils
+✅ @rune-langium/test-utils
+✅ @rune-langium/components (if using React)
 
-❌ @company/utils-core
-❌ @company/shared-utils-lib
+❌ @rune-langium/utils-core
+❌ @rune-langium/shared-utils-lib
 ```
 
 ### 3. Version Management
@@ -282,26 +219,7 @@ pnpm --filter @company/utils run type-check
 - Place integration tests in root `integration.test.ts`
 - Mock external dependencies, not workspace packages
 
-### 5. TypeScript Configuration
-
-- All packages extend root `tsconfig.json`
-- Use `references` in `tsconfig.json` for proper type checking
-- Keep `rootDir` specific to each package
-
 ## Troubleshooting
-
-### "Cannot find module" errors
-
-**Problem**: Importing from workspace package fails in IDE
-
-**Solution**:
-```bash
-# Rebuild all packages
-pnpm run build
-
-# Re-index TypeScript in your editor
-# In VS Code: Cmd+Shift+P -> "TypeScript: Reload Projects"
-```
 
 ### Circular dependency errors
 
@@ -312,30 +230,14 @@ pnpm run build
 2. Have both A and B depend on the shared package
 3. Or restructure packages to break the cycle
 
-### Workspace protocol not resolving
-
-**Problem**: `workspace:*` protocol not recognized during type checking
-
-**Solution**:
-```bash
-# Ensure pnpm is up to date
-pnpm install -g pnpm@latest
-
-# Reinstall all packages
-pnpm install
-```
-
 ### Slow builds
 
 **Problem**: Building all packages takes too long
 
 **Solution**:
 ```bash
-# Build only changed packages
 pnpm --filter "...{packages/core}" run build
-
-# Or build specific package
-pnpm --filter @company/core run build
+pnpm --filter @rune-langium/core run build
 ```
 
 ## Resources

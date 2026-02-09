@@ -1,6 +1,4 @@
-# Contributing to TypeScript Template
-
-<!-- TEMPLATE: Update project name and customize guidelines for your project -->
+# Contributing to rune-langium
 Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to this project.
 
 ## Code of Conduct
@@ -11,16 +9,15 @@ We are committed to providing a welcoming and inclusive environment. Please be r
 
 ### Prerequisites
 
-- Node.js >= 18.0.0
-- pnpm >= 8.0.0
+- Node.js >= 20.0.0
+- pnpm >= 10.0.0
 
 ### Development Setup
 
 1. **Fork and clone the repository**
    ```bash
-   <!-- TEMPLATE: Update with your repository URL -->
-   git clone https://github.com/your-username/YOUR_REPO_NAME.git
-   cd YOUR_REPO_NAME
+  git clone https://github.com/pradeepmouli/rune-langium.git
+  cd rune-langium
    ```
 
 2. **Install dependencies**
@@ -45,7 +42,6 @@ pnpm dev              # Start development mode
 pnpm test            # Run tests once
 pnpm test:watch      # Run tests in watch mode
 pnpm test:coverage   # Generate coverage report
-pnpm test:ui         # Run tests with UI
 
 # Linting & Formatting
 pnpm lint            # Run linter
@@ -61,9 +57,7 @@ pnpm build           # Build for production
 pnpm clean           # Remove build artifacts
 
 # Monorepo
-pnpm audit           # Security audit
-pnpm outdated        # Check outdated dependencies
-pnpm update:deps     # Update dependencies
+# Add project-specific scripts here as needed
 ```
 
 ## Coding Standards

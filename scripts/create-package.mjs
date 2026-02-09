@@ -9,7 +9,7 @@
 import { argv } from 'zx';
 
 const packageName = argv._[0];
-const scope = argv.scope || 'company';
+const scope = argv.scope || 'rune-langium';
 
 if (!packageName) {
   console.log('Usage: node scripts/create-package.mjs <package-name>');

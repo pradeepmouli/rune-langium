@@ -10,9 +10,8 @@ We take security seriously. If you discover a security vulnerability in this pro
 
 ### Report Privately
 
-<!-- TEMPLATE: Update with your actual contact information -->
-1. **Email:** security@YOUR_DOMAIN.com
-2. **GitHub Security Advisory:** Use GitHub's [security advisory feature](https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME/security/advisories)
+1. **Email:** pmouli@mac.com
+2. **GitHub Security Advisory:** Use GitHub's [security advisory feature](https://github.com/pradeepmouli/rune-langium/security/advisories)
 3. **Direct Contact:** Contact maintainers privately if needed
 
 ### Information to Include
@@ -113,8 +112,8 @@ We will not take legal action against researchers who:
 
 ## Questions?
 
-- **Security Questions:** security@example.com
-- **General Questions:** Open a discussion on GitHub
+- **Security Questions:** pmouli@mac.com
+- **General Questions:** Open a discussion on GitHub: https://github.com/pradeepmouli/rune-langium/discussions
 - **Bug Reports:** Open an issue with `security` label
 
 ---

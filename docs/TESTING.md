@@ -1,6 +1,5 @@
 # Testing Guide
 
-<!-- TEMPLATE: Customize testing guidelines for your project -->
 This template includes comprehensive testing setup with Vitest for unit/integration tests and Playwright for E2E tests.
 
 ## Unit & Integration Testing
@@ -66,16 +65,11 @@ Configure in [vitest.config.ts](../vitest.config.ts).
 
 ### Using Test Utilities
 
-The `@company/test-utils` package provides mocks and fixtures:
+If you create a shared test utilities package, import helpers from it:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import {
-  createMockUser,
-  createMockApiResponse,
-  createMockFn,
-  spyOn,
-} from '@company/test-utils';
+import { createMockUser, createMockApiResponse, createMockFn, spyOn } from '@rune-langium/test-utils';
 
 describe('User API', () => {
   it('should fetch user', async () => {
@@ -104,8 +98,8 @@ Test integration between packages in `integration.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { isValidEmail, createSuccessResponse } from '@company/core';
-import { capitalize } from '@company/utils';
+import { isValidEmail, createSuccessResponse } from '@rune-langium/core';
+import { capitalize } from '@rune-langium/utils';
 
 describe('Cross-Package Integration', () => {
   it('should combine utilities', () => {
@@ -140,7 +134,7 @@ Create benchmark files (usually separate from unit tests):
 ```typescript
 // vitest.benchmark.config.ts
 import { bench, describe } from 'vitest';
-import { unique, flatten } from '@company/utils';
+import { unique, flatten } from '@rune-langium/utils';
 
 describe('Benchmarks', () => {
   const largeArray = Array.from({ length: 10000 }, (_, i) => i % 100);

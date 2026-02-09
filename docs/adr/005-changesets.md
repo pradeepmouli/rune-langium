@@ -107,8 +107,8 @@ To switch to Release-Please or Semantic Release:
 
 ```yaml
 ---
-"@company/core": minor
-"@company/utils": patch
+"@rune/core": minor
+"@rune/utils": patch
 ---
 
 Add new authentication API with JWT support

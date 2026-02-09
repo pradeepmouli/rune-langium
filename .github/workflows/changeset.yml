@@ -129,8 +129,8 @@ jobs:
 
           cat <<EOF > .changeset/${TIMESTAMP}.md
           ---
-          "@company/core": ${CHANGE_TYPE}
-          "@company/utils": ${CHANGE_TYPE}
+          "@rune-langium/core": ${CHANGE_TYPE}
+          "@rune-langium/utils": ${CHANGE_TYPE}
           ---
 
           $(cat /tmp/changelog_content.txt)

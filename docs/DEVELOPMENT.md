@@ -1,6 +1,5 @@
 # Development Workflow
 
-<!-- TEMPLATE: Customize this guide for your project's specific workflow -->
 Guide to the recommended development process for this monorepo.
 
 ## Getting Started
@@ -9,18 +8,14 @@ Guide to the recommended development process for this monorepo.
 
 ```bash
 # Clone the repository
-<!-- TEMPLATE: Update with your repository URL -->
-git clone https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git
-cd YOUR_REPO_NAME
+git clone https://github.com/pradeepmouli/rune-langium.git
+cd rune-langium
 
 # Install pnpm if not already installed
-npm install -g pnpm@8.15.0
+npm install -g pnpm@10
 
 # Install dependencies
 pnpm install
-
-# Set up git hooks
-pnpm run prepare
 
 # Create a new branch for your work
 git checkout -b feat/your-feature-name
@@ -150,7 +145,7 @@ This creates a file in `.changeset/` like:
 
 ```markdown
 ---
-'@company/utils': minor
+-'@rune-langium/example-package': minor
 ---
 
 Add isValidUrl utility function for URL validation
@@ -224,8 +219,8 @@ If your change affects multiple packages:
 
 ```bash
 # Install in multiple packages
-pnpm --filter @company/core add lodash
-pnpm --filter @company/utils add lodash
+pnpm --filter @rune-langium/core add lodash
+pnpm --filter @rune-langium/utils add lodash
 
 # Or install in all packages
 pnpm add -r lodash
@@ -237,9 +232,9 @@ If package B depends on package A:
 
 ```json
 {
-  "name": "@company/b",
+  "name": "@rune-langium/b",
   "dependencies": {
-    "@company/a": "workspace:*"
+    "@rune-langium/a": "workspace:*"
   }
 }
 ```
@@ -255,8 +250,8 @@ Use integration tests to verify packages work together:
 
 ```typescript
 // integration.test.ts
-import { isValidEmail } from '@company/core';
-import { capitalize } from '@company/utils';
+import { isValidEmail } from '@rune-langium/core';
+import { capitalize } from '@rune-langium/utils';
 
 it('should combine core and utils', () => {
   expect(isValidEmail('john@example.com')).toBe(true);
@@ -275,7 +270,7 @@ For faster builds:
 pnpm --filter "...{packages/core}" run build
 
 # Run tests only for affected packages
-pnpm --filter @company/core run test
+pnpm --filter @rune-langium/core run test
 ```
 
 ### Type Checking
@@ -350,7 +345,7 @@ pnpm install
 pnpm run test
 
 # 6. Commit
-git commit -m "chore: add new package @company/my-new-package"
+git commit -m "chore: add new package @rune-langium/my-new-package"
 ```
 
 ## Debugging

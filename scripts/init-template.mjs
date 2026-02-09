@@ -5,7 +5,40 @@
  * This script helps initialize a new project from this template-ts
  */
 
-import { question } from 'zx';
+const stdinIsTty = Boolean(process.stdin.isTTY);
+const stdinLines = stdinIsTty ? [] : fs.readFileSync(0, 'utf8').split(/\r?\n/);
+
+function readQueuedInput(defaultValue = '') {
+  if (stdinIsTty) {
+    return null;
+  }
+
+  const next = stdinLines.shift();
+  if (next === undefined || next === '') {
+    return defaultValue;
+  }
+
+  return next;
+}
+
+async function askWithDefault(prompt, defaultValue = '') {
+  const queued = readQueuedInput(defaultValue);
+  if (queued !== null) {
+    return queued;
+  }
+
+  const answer = await question(prompt);
+  return answer || defaultValue;
+}
+
+async function askRequired(prompt) {
+  const queued = readQueuedInput('');
+  if (queued !== null) {
+    return queued;
+  }
+
+  return question(prompt);
+}
 
 // Helper function to validate input
 function validateInput(input) {
@@ -32,38 +65,41 @@ try {
   defaultRepoUrl = (await $`git config --get remote.origin.url`).stdout.trim();
 } catch {}
 
-// Extract package scope from project name if it contains a dash
-let defaultPackageScope = 'company';
-if (defaultProjectName.includes('-')) {
-  defaultPackageScope = defaultProjectName.split('-')[0];
-}
+// Default package scope to project name, fallback to rune-langium
+const defaultPackageScope = defaultProjectName || 'rune-langium';
 
 // Get project details with intelligent defaults
-const projectName =
-  (await question(`📝 Enter project name [default: ${defaultProjectName}]: `)) ||
-  defaultProjectName;
+const projectName = await askWithDefault(
+  `📝 Enter project name [default: ${defaultProjectName}]: `,
+  defaultProjectName
+);
 
 if (!validateInput(projectName)) {
   console.log(chalk.red('❌ Project name is required'));
   process.exit(1);
 }
 
-const authorName =
-  (await question(`👤 Enter author name [default: ${defaultAuthorName}]: `)) || defaultAuthorName;
+const authorName = await askWithDefault(
+  `👤 Enter author name [default: ${defaultAuthorName}]: `,
+  defaultAuthorName
+);
 
 if (!validateInput(authorName)) {
   console.log(chalk.red('❌ Author name is required'));
   process.exit(1);
 }
 
-const authorEmail =
-  (await question(`📧 Enter author email [default: ${defaultAuthorEmail}]: `)) ||
-  defaultAuthorEmail;
+const authorEmail = await askWithDefault(
+  `📧 Enter author email [default: ${defaultAuthorEmail}]: `,
+  defaultAuthorEmail
+);
 
-const projectDescription = await question('📚 Enter project description: ');
+const projectDescription = await askRequired('📚 Enter project description: ');
 
-const repoUrl =
-  (await question(`🌐 Enter repository URL [default: ${defaultRepoUrl}]: `)) || defaultRepoUrl;
+const repoUrl = await askWithDefault(
+  `🌐 Enter repository URL [default: ${defaultRepoUrl}]: `,
+  defaultRepoUrl
+);
 
 console.log('');
 console.log(chalk.blue('Configuration Summary:'));
@@ -73,7 +109,7 @@ console.log(`  Description: ${projectDescription}`);
 console.log(`  Repository: ${repoUrl || 'Not set'}`);
 console.log('');
 
-const continueAnswer = await question('Continue with these settings? (y/n) ');
+const continueAnswer = await askWithDefault('Continue with these settings? (y/n) ', 'y');
 if (continueAnswer.toLowerCase() !== 'y') {
   console.log(chalk.red('❌ Initialization cancelled'));
   process.exit(1);
@@ -81,14 +117,18 @@ if (continueAnswer.toLowerCase() !== 'y') {
 
 // Get package scope
 console.log('');
-await question(`📦 Enter package scope (e.g., company, org) [default: ${defaultPackageScope}]: `);
+const packageScope = await askWithDefault(
+  `📦 Enter package scope (e.g., company, org) [default: ${defaultPackageScope}]: `,
+  defaultPackageScope
+);
+console.log(chalk.blue(`Using package scope: ${packageScope}`));
 
 // Discover recommended skills
 console.log('');
 console.log(chalk.blue('Discovering recommended skills for your project...'));
 if (await fs.pathExists('scripts/discover-skills.mjs')) {
   try {
-    await $`node scripts/discover-skills.mjs ${projectName} ${projectDescription}`;
+    await $`npm zx scripts/discover-skills.mjs ${projectName} ${projectDescription}`;
     console.log('');
   } catch {}
 }
@@ -288,8 +328,9 @@ for (const file of cleanupFiles) {
 }
 
 // Remove example packages
-const removeExamplePackages = await question(
-  'Remove example packages (core, utils, test-utils)? (y/n) '
+const removeExamplePackages = await askWithDefault(
+  'Remove example packages (core, utils, test-utils)? (y/n) ',
+  'y'
 );
 if (removeExamplePackages.toLowerCase() === 'y') {
   await fs.remove('packages/core').catch(() => {});
@@ -300,7 +341,7 @@ if (removeExamplePackages.toLowerCase() === 'y') {
 }
 
 // Remove example tests
-const removeExampleTests = await question('Remove example test files? (y/n) ');
+const removeExampleTests = await askWithDefault('Remove example test files? (y/n) ', 'y');
 if (removeExampleTests.toLowerCase() === 'y') {
   await fs.remove('src/index.test.ts').catch(() => {});
   await fs.remove('src/index.ts').catch(() => {});
@@ -320,15 +361,16 @@ export function hello(): string {
 }
 
 // Remove example E2E tests
-const removeE2E = await question('Remove example E2E tests? (y/n) ');
+const removeE2E = await askWithDefault('Remove example E2E tests? (y/n) ', 'y');
 if (removeE2E.toLowerCase() === 'y') {
   await fs.remove('e2e').catch(() => {});
   console.log(chalk.green('✅ Removed example E2E tests'));
 }
 
 // Replace TEMPLATE_INITIALIZATION guide
-const replaceTemplateDoc = await question(
-  'Replace scripts/TEMPLATE_INITIALIZATION.md with project-specific details? (y/n) '
+const replaceTemplateDoc = await askWithDefault(
+  'Replace scripts/TEMPLATE_INITIALIZATION.md with project-specific details? (y/n) ',
+  'y'
 );
 if (replaceTemplateDoc.toLowerCase() === 'y') {
   const templateInitDoc = `# Project Initialization Guide
@@ -394,32 +436,33 @@ try {
   await $`which uvx`;
 
   console.log(chalk.blue('Installing specify...'));
+  const specifyInitArgs = stdinIsTty ? [] : ['--force', '--ignore-agent-tools'];
   try {
-    await $`uvx specify --ai copilot`;
+    await $`specify init . --ai copilot ${specifyInitArgs}`;
     console.log(chalk.green('✅ Specify installed with Copilot agent'));
   } catch {
     console.log(
       chalk.yellow(
-        '⚠️  Failed to install specify, you can install it manually with: uvx specify --ai copilot'
+        '⚠️  Failed to install specify. Try: specify init . --ai copilot --force --ignore-agent-tools'
       )
     );
   }
 
   console.log(chalk.blue('Installing specify-extend...'));
   try {
-    await $`uvx specify-extend --agent copilot`;
+    await $`uvx specify-extend --all --agent copilot`;
     console.log(chalk.green('✅ Specify-extend installed with Copilot agent'));
   } catch {
     console.log(
       chalk.yellow(
-        '⚠️  Failed to install specify-extend, you can install it manually with: uvx specify-extend --agent copilot'
+        '⚠️  Failed to install specify-extend, you can install it manually with: uvx specify-extend --all --agent copilot'
       )
     );
   }
 } catch {
   console.log(chalk.yellow('⚠️  uvx not found. To install specify tools manually, run:'));
-  console.log('  uvx specify --ai copilot');
-  console.log('  uvx specify-extend --agent copilot');
+  console.log('  specify init . --ai copilot');
+  console.log('  uvx specify-extend --all --agent copilot');
   console.log('');
   console.log('You can install uv from: https://github.com/astral-sh/uv');
 }
@@ -442,8 +485,9 @@ console.log('  pnpm run test     - Run tests');
 console.log('  pnpm run dev      - Start development');
 console.log('');
 console.log(chalk.blue('Specify Tools (for Copilot):'));
-console.log('  uvx specify --ai copilot          - Initialize specify');
-console.log('  uvx specify-extend --agent copilot - Install extensions');
+console.log('  specify init . --ai copilot        - Initialize specify');
+console.log('  specify init . --ai copilot --force --ignore-agent-tools - Non-interactive');
+console.log('  uvx specify-extend --all --agent copilot - Install extensions');
 console.log('');
 console.log(chalk.blue('Documentation:'));
 console.log('  📖 docs/WORKSPACE.md - Workspace management');

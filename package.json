@@ -1,88 +1,48 @@
 {
-  "name": "@company/ts-template",
-  "version": "1.0.0",
+  "name": "rune-langium",
+  "version": "0.1.0",
   "private": true,
-  "description": "TypeScript monorepo template with pnpm, oxlint, oxfmt, and Vitest",
-  "__template__": "This is a template repository. Run 'node scripts/init-template.mjs' to customize.",
-  "keywords": [
-    "monorepo",
-    "oxfmt",
-    "oxlint",
-    "pnpm",
-    "template",
-    "typescript",
-    "vitest"
-  ],
-  "homepage": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME#readme",
-  "bugs": {
-    "url": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME/issues"
-  },
+  "description": "Langium port for Rune DSL tooling",
+  "type": "module",
+  "author": "Pradeep Mouli <pmouli@mac.com>",
   "license": "MIT",
-  "author": "YOUR_NAME <YOUR_EMAIL@example.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git"
+    "url": "https://github.com/pradeepmouli/rune-langium.git"
   },
   "workspaces": [
     "packages/*"
   ],
-  "type": "module",
   "scripts": {
     "build": "pnpm -r run build",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint --fix .",
-    "format": "oxfmt .",
-    "format:check": "oxfmt --check .",
-    "type-check": "pnpm -r run type-check",
-    "typecheck:watch": "pnpm -r --parallel run type-check -- --watch",
     "clean": "pnpm -r run clean && rm -rf node_modules/.cache",
     "clean:all": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
-    "fresh": "pnpm clean:all && pnpm install",
     "dev": "pnpm -r --parallel run dev",
-    "audit": "pnpm audit --audit-level moderate",
-    "outdated": "pnpm outdated -r",
-    "update:deps": "pnpm update -r --latest",
-    "changeset": "changeset",
-    "changeset:version": "changeset version",
-    "changeset:publish": "pnpm run build && changeset publish",
-    "prepare": "simple-git-hooks"
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "fresh": "pnpm clean:all && pnpm install",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "type-check": "pnpm -r run type-check"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
-    "@size-limit/preset-small-lib": "^12.0.0",
-    "@types/node": "^25.2.2",
-    "@typescript/native-preview": "7.0.0-dev.20260205.1",
-    "@vitest/coverage-v8": "^4.0.18",
-    "@vitest/ui": "^4.0.18",
+    "@types/node": "^25.0.3",
+    "@vitest/coverage-v8": "^4.0.16",
+    "@vitest/ui": "^4.0.16",
     "lint-staged": "^16.2.7",
-    "oxfmt": "^0.28.0",
-    "oxlint": "^1.43.0",
+    "oxfmt": "^0.21.0",
+    "oxlint": "^1.36.0",
     "simple-git-hooks": "^2.13.1",
-    "size-limit": "^12.0.0",
-    "type-fest": "^5.4.3",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1",
-    "vitest": "^4.0.18",
-    "zx": "^8.8.5"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged && pnpm run type-check"
-  },
-  "lint-staged": {
-    "*.{ts,tsx,js,jsx,json,md}": [
-      "oxfmt . --no-error-on-unmatched-pattern"
-    ],
-    "*.{ts,tsx,js,jsx}": [
-      "oxlint --fix"
-    ]
+    "vitest": "^4.0.16"
   },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=10.0.0"
   },
-  "packageManager": "pnpm@10.28.2"
+  "packageManager": "pnpm@10.27.0"
 }

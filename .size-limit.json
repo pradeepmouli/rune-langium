@@ -1,11 +1,11 @@
 [
   {
-    "name": "@company/core",
+    "name": "@rune-langium/core",
     "path": "packages/core/dist/index.js",
     "limit": "10 KB"
   },
   {
-    "name": "@company/utils",
+    "name": "@rune-langium/utils",
     "path": "packages/utils/dist/index.js",
     "limit": "15 KB"
   }
