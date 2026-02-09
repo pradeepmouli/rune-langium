@@ -31,7 +31,12 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+This plan MUST demonstrate compliance with the project constitution:
+- DSL Fidelity & Typed AST (grammar coverage, typed expressions)
+- Deterministic Fixtures (vendored CDM and rune-dsl sources)
+- Validation Parity (parity-only scope, zero false positives)
+- Performance & Workers (latency budgets, worker usage)
+- Reversibility & Compatibility (adapter layer, migration plan)
 
 ## Project Structure
 

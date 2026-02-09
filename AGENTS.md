@@ -28,8 +28,8 @@ This repository is designed for multi-agent collaboration (Copilot, Claude, Gemi
 - Use vitest for tests; add coverage for public APIs.
 
 ## Agent-Specific Notes
-- Coordinate with other agents by updating docs (README, TEMPLATE_INITIALIZATION.md) when workflows change.
-- When modifying scripts, explain any new prompts or defaults in TEMPLATE_INITIALIZATION.md.
+- Coordinate with other agents by updating docs (README, specs) when workflows change.
+- When modifying scripts, explain any new prompts or defaults in relevant documentation.
 - If adding hooks, prefer simple-git-hooks and lint-staged already in package.json.
 
 ## Deliverables Expectation

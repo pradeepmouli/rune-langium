@@ -13,12 +13,12 @@ Phased delivery: expression grammar proof-of-concept first (highest risk + highe
 
 - **Language**: TypeScript (strict mode)
 - **Framework**: Langium 4.2.0, Chevrotain parser
-- **Build**: tsup or tsc for dual CJS/ESM output
+- **Build**: tsup or tsgo for dual CJS/ESM output
 - **Dependencies**: `langium`, `chevrotain` (runtime); `langium-cli`, `vitest`, `tsup` (dev)
 - **Testing**: Vitest for unit/integration tests, CDM corpus for conformance
-- **Platform**: Node.js (>=18) and modern browsers (ES2020+)
+- **Platform**: Node.js (>=20) and modern browsers (ES2020+)
 - **Source grammar**: [finos/rune-dsl](https://github.com/finos/rune-dsl) — `rune-lang/src/main/java/com/regnosys/rosetta/Rosetta.xtext` + `rune-lang/model/*.xcore` (Apache-2.0; reference, not runtime dependency)
-- **Test corpus**: [finos/common-domain-model](https://github.com/finos/common-domain-model) — CDM `.rosetta` files in `rosetta-source/` (Community Specification License 1.0; cloned at test time, not bundled)
+- **Test corpus**: Vendored snapshots under `fixtures/cdm` and `fixtures/rune-dsl` (excluded from published npm package)
 
 ## Project Structure
 
@@ -83,16 +83,17 @@ rune-langium/
         api/
           parse-api.test.ts                # Public API tests
         fixtures/
-          *.rosetta                         # Curated CDM samples
+          cdm/                              # Vendored CDM snapshot (excluded from npm package)
+          rune-dsl/                          # Vendored rune-dsl snapshot (excluded from npm package)
       langium-config.json                  # Langium CLI configuration
       tsconfig.json
       package.json
-    cli/                                   # @rune-langium/cli (optional)
+    cli/                                   # @rune-langium/cli
       src/
-        index.ts                           # CLI entry point
+        index.ts                           # CLI entry point (`parse`, `validate`)
       package.json
   scripts/
-    setup-corpus.sh                        # Clone upstream repos
+    update-fixtures.sh                     # Refresh vendored snapshots (manual)
   tsconfig.json                            # Root tsconfig
   package.json                             # Workspace root
   README.md
@@ -114,14 +115,14 @@ rune-langium/
 **Goal**: Repository with build pipeline, initial grammar skeleton, and generated type output.
 
 - Initialize repository with `package.json`, `tsconfig.json`, `langium-config.json`
-- Create `scripts/setup-corpus.sh` to clone/fetch [finos/rune-dsl](https://github.com/finos/rune-dsl) and [finos/common-domain-model](https://github.com/finos/common-domain-model) at pinned version tags
-- Add `CDM_CORPUS_PATH` and `RUNE_DSL_PATH` env var support for configurable corpus locations
+- Vendor snapshots under `packages/core/tests/fixtures/cdm` and `packages/core/tests/fixtures/rune-dsl`
+- Add `scripts/update-fixtures.sh` to refresh snapshots manually (no network in tests)
 - Configure dual CJS/ESM build output via tsup
 - Write grammar skeleton: terminals (ID, STRING, INT, ML_COMMENT, SL_COMMENT, WS) + `RosettaModel` entry rule
 - Run `langium-cli generate` to verify type generation pipeline
 - Set up Vitest test harness with Langium test utilities
 - Create `parse()` API stub
-- **Checkpoint**: `npm run generate` produces `ast.ts` with `RosettaModel` interface. `parse("")` returns empty model.
+- **Checkpoint**: `npm run generate` produces `ast.ts` with `RosettaModel` interface. `parse("")` returns empty model. Vendored fixtures present.
 
 ### Phase 2: Expression Grammar (Proof of Concept) -- US1
 **Goal**: Full expression subsystem ported and parsing correctly. This is the highest-risk phase.
@@ -172,13 +173,15 @@ rune-langium/
 - **Checkpoint**: Full CDM corpus parses and round-trips. `ast.ts` contains ~95 interfaces.
 
 ### Phase 6: Packaging & Release
-**Goal**: Published package with documentation and CI.
+**Goal**: Published core + CLI packages with documentation and CI.
 
 - Finalize public API exports (`index.ts`)
-- Write README with usage examples, API reference
-- Configure CI (GitHub Actions): lint, test, generate, build, conformance
+- Implement minimal CLI (`parse`, `validate`) with default human-readable output and `--json`
+- Wire CLI input handling (files, dirs, glob) and exit codes for validation failures
+- Write README with usage examples, API reference (core + CLI)
+- Configure CI (GitHub Actions): lint, test, generate, build, conformance (offline)
 - Browser compatibility testing
 - Web worker helper
 - Performance benchmarks
 - Publish to npm
-- **Checkpoint**: `npm install @rune-langium/core` works. All tests pass in CI.
+- **Checkpoint**: `npm install @rune-langium/core` and `@rune-langium/cli` works. All tests pass in CI.

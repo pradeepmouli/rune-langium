@@ -21,7 +21,7 @@ It exposes:
 ### Session 2026-02-07
 
 **Q1**: Is this a library or an application?
-**A**: A library package (`rune-langium`). No UI, no server, no CLI application. Consuming packages import the parser and types.
+**A**: A library-first package (`rune-langium`) with an optional minimal CLI as a separate package. No UI or server. Consuming packages import the parser and types.
 
 **Q2**: Does this replace the Xtext implementation?
 **A**: For parsing and type generation, yes. The Xtext/Xtend pipeline continues to own Java code generation — that is out of scope for this package.
@@ -34,6 +34,21 @@ It exposes:
 
 **Q5**: What's the project structure?
 **A**: A monorepo (`rune-langium`) scoped as `@rune-langium/*` with multiple packages (e.g. `@rune-langium/core`, `@rune-langium/cli`). Packages export types, parser services, and utility functions.
+
+### Session 2026-02-09
+
+- Q: How should the CDM corpus be provided for tests/benchmarks? → A: Vendor a snapshot in-repo (e.g., fixtures/cdm).
+- Q: How should the rune-dsl source be provided for tests/benchmarks? → A: Vendor a snapshot in-repo (e.g., fixtures/rune-dsl).
+- Q: What level of round-trip fidelity is required? → A: Semantically equivalent round-trip (formatting may differ).
+- Q: Should the Langium grammar be manual, generated, or hybrid? → A: Hybrid, starting from automated generation then manual refinement with parity checks.
+- Q: Should validation extend beyond Xtext rules? → A: Parity-only with Xtext rules for initial releases.
+- Q: How should parsing handle syntax errors? → A: Recover and return partial AST + diagnostics.
+- Q: Should the CLI be separate or bundled? → A: Provide a minimal CLI as a separate `@rune-langium/cli` package.
+- Q: Should the CLI be included in the initial release scope? → A: Yes, include `@rune-langium/cli` in the initial release.
+- Q: What CLI output formats should be supported? → A: Human-readable by default with an optional `--json` structured output.
+- Q: What are the minimal CLI commands? → A: `parse` and `validate`.
+- Q: What inputs should the CLI accept? → A: Multiple files and/or directories (glob/dir support).
+- Q: How should CLI validation exit codes behave? → A: Validate all inputs and exit non-zero if any errors occur.
 
 ---
 
@@ -145,6 +160,7 @@ As a **developer needing complete DSL coverage**, I want the synonym system, ann
 - **LANG-RT-003**: Cross-references MUST resolve using `Reference<T>` with the same scoping rules as the Xtext `RosettaScopeProvider`
 - **LANG-VAL-001**: The validator MUST report diagnostics for at least 80% of the 101 Xtext validation rules
 - **LANG-VAL-002**: The validator MUST NOT produce false-positive diagnostics on valid CDM source files
+- **LANG-VAL-003**: Validation scope is parity-only with Xtext rules for the initial release
 - **LANG-PARSE-001**: The parser MUST use Chevrotain error recovery to produce partial ASTs for invalid input
 - **LANG-PARSE-002**: The grammar MUST handle all 60+ syntactic predicates from the Xtext grammar, restructured for LL(k)
 
@@ -162,8 +178,13 @@ As a **developer needing complete DSL coverage**, I want the synonym system, ann
 - **LANG-API-002**: The package MUST export a `parseWorkspace(files: Map<string, string>): WorkspaceResult` for multi-file models
 - **LANG-API-003**: The package MUST export all generated AST types from a single entry point
 - **LANG-API-004**: The package MUST export type guard functions for all AST node types
-- **LANG-API-005**: The package MUST work in Node.js (>=18) and modern browsers (ES2020+)
+- **LANG-API-005**: The package MUST work in Node.js (>=20) and modern browsers (ES2020+)
 - **LANG-API-006**: The package MUST have zero runtime dependencies beyond `langium` and `chevrotain`
+- **LANG-API-007**: A minimal CLI MUST be provided as a separate `@rune-langium/cli` package for parse/validate convenience
+- **LANG-API-008**: The CLI MUST output human-readable diagnostics by default and support `--json` for structured output
+- **LANG-API-009**: The CLI MUST expose `parse` and `validate` commands as the minimal command set
+- **LANG-API-010**: The CLI MUST accept multiple files and directories as input (including glob patterns)
+- **LANG-API-011**: The CLI MUST validate all inputs and exit non-zero when any validation errors are reported
 
 ### Observability & Quality Gates
 
@@ -171,6 +192,7 @@ As a **developer needing complete DSL coverage**, I want the synonym system, ann
 - **LANG-OBS-002**: A validation parity report MUST track which Xtext rules have equivalents
 - **LANG-OBS-003**: A grammar conformance test suite MUST cover all top-level constructs and expression operators
 - **LANG-OBS-004**: Performance benchmarks MUST be automated (parse time for CDM corpus, memory usage)
+- **LANG-OBS-005**: The initial Langium grammar MAY be auto-generated from Xtext, but MUST be manually refined with automated parity checks
 
 ---
 
@@ -183,6 +205,7 @@ As a **developer needing complete DSL coverage**, I want the synonym system, ann
 - **SC-005**: Parse latency <200ms for single files, <5s for full CDM corpus
 - **SC-006**: Validation parity reaches 80% of Xtext rules
 - **SC-007**: Package published to npm with complete type exports
+- **SC-008**: Initial release includes `@rune-langium/cli` alongside `@rune-langium/core`
 
 ---
 
@@ -203,18 +226,17 @@ As a **developer needing complete DSL coverage**, I want the synonym system, ann
 
 - **Repository**: [finos/common-domain-model](https://github.com/finos/common-domain-model) (Community Specification License 1.0)
 - **What we need**: The `.rosetta` model source files as the conformance test corpus
-- **How we use it**: Parse the entire CDM corpus to verify grammar completeness (SC-001: 100% parse rate). Also used for validation parity testing, performance benchmarks, and round-trip serialization tests.
+- **How we use it**: Parse the vendored CDM snapshot to verify grammar completeness (SC-001: 100% parse rate). Also used for validation parity testing, performance benchmarks, and round-trip serialization tests.
 - **Key path**: `rosetta-source/` (all `.rosetta` model files)
-- **Current version**: 7.0.0-dev.x (682+ releases)
-- **Loading strategy**: Clone or shallow-fetch at test time. NOT bundled in the npm package. Configured via environment variable `CDM_CORPUS_PATH` or fetched by a test setup script.
+- **Current version**: 7.0.0-dev.x (pinned snapshot in-repo)
+- **Loading strategy**: Vendored snapshot under `fixtures/cdm`. Excluded from the published npm package.
 
 ### Loading Requirements
 
-- **LANG-CORPUS-001**: The test suite MUST be able to load the full CDM corpus from `finos/common-domain-model` for conformance testing
-- **LANG-CORPUS-002**: The test suite MUST be able to load the Rune DSL built-in types from `finos/rune-dsl` (required for cross-reference resolution of primitives like `string`, `number`, `date`, etc.)
-- **LANG-CORPUS-003**: A test setup script MUST clone/fetch both repositories to a configurable local path
-- **LANG-CORPUS-004**: CI MUST run conformance tests against a pinned CDM version tag for reproducibility
-- **LANG-CORPUS-005**: The package itself MUST NOT depend on or bundle either repository at runtime
+- **LANG-CORPUS-001**: The test suite MUST load the vendored CDM corpus snapshot from `fixtures/cdm` for conformance testing
+- **LANG-CORPUS-002**: The test suite MUST load the vendored Rune DSL sources from `fixtures/rune-dsl` for built-in types and scoping
+- **LANG-CORPUS-003**: CI MUST run conformance tests against the vendored snapshots for reproducibility
+- **LANG-CORPUS-004**: The published package MUST NOT include the vendored fixtures
 
 ---
 
@@ -223,9 +245,9 @@ As a **developer needing complete DSL coverage**, I want the synonym system, ann
 1. Langium 4.2.0 is stable and suitable for production use
 2. Chevrotain LL(k) parser can handle the Rune grammar with `maxLookahead: 3`
 3. The Xtext Java pipeline remains available for Java code generation — out of scope
-4. CDM `.rosetta` source files are available from [finos/common-domain-model](https://github.com/finos/common-domain-model) for conformance testing
-5. The Rune DSL grammar at [finos/rune-dsl](https://github.com/finos/rune-dsl) is the authoritative source for porting
-6. Both upstream repositories are open source and available for CI cloning
+4. CDM `.rosetta` source files are vendored in-repo as a snapshot for conformance testing
+5. The Rune DSL grammar is vendored in-repo as the authoritative source for porting
+6. Vendored fixtures are excluded from published npm packages
 
 ---
 

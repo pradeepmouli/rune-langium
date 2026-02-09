@@ -90,6 +90,19 @@
 - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
 - **FR-005**: System MUST [behavior, e.g., "log all security events"]
 
+### Constitution Alignment
+
+<!--
+  ACTION REQUIRED: Confirm alignment with the project constitution.
+  Reference any principles that affect scope, tests, or performance goals.
+-->
+
+- **CA-001**: [Describe how DSL fidelity and typed AST requirements are met]
+- **CA-002**: [Describe how deterministic fixtures will be used]
+- **CA-003**: [Describe validation parity expectations]
+- **CA-004**: [Describe performance and worker constraints]
+- **CA-005**: [Describe adapter/backward-compatibility approach]
+
 *Example of marking unclear requirements:*
 
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
