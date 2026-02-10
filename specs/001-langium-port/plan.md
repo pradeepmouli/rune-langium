@@ -185,6 +185,7 @@ rune-langium/
 
 - Finalize public API exports (`index.ts`)
 - Implement minimal CLI (`parse`, `validate`) with default human-readable output and `--json`
+- Document CLI runtime scope as Node.js-only (programmatic API remains browser-compatible)
 - Wire CLI input handling (files, dirs, glob) and exit codes for validation failures
 - Write README with usage examples, API reference (core + CLI)
 - Configure CI (GitHub Actions): lint, test, generate, build, conformance (offline)
