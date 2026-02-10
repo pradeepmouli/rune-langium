@@ -1,0 +1,17 @@
+{
+  "projectName": "RuneDsl",
+  "languages": [
+    {
+      "id": "rune-dsl",
+      "grammar": "src/grammar/rune-dsl.langium",
+      "fileExtensions": [".rosetta"]
+    }
+  ],
+  "out": "src/generated",
+  "importExtension": ".js",
+  "chevrotainParserConfig": {
+    "recoveryEnabled": true,
+    "nodeLocationTracking": "full",
+    "maxLookahead": 4
+  }
+}

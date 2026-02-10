@@ -11,3 +11,6 @@ coverage/
 .nyc_output/
 .pnpm-debug.log*
 *.tsbuildinfo
+
+# Disposable Xtext source clone for grammar conversion
+.rune-dsl/
