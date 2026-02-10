@@ -515,10 +515,10 @@ export function isAttribute(item: unknown): item is Attribute {
   return reflection.isInstance(item, Attribute.$type);
 }
 
-export type BigDecimal = bigint;
+export type BigDecimal = string;
 
 export function isBigDecimal(item: unknown): item is BigDecimal {
-  return typeof item === 'bigint';
+  return typeof item === 'string';
 }
 
 export type CardinalityModifier = 'all' | 'any';

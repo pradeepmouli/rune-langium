@@ -12,6 +12,13 @@ import {
   EmptyFileSystem
 } from 'langium';
 import { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from '../generated/module.js';
+import { RuneDslScopeProvider } from './rune-dsl-scope-provider.js';
+import { RuneDslValidator } from './rune-dsl-validator.js';
+
+/**
+ * Union type for all services available in the Rune DSL language.
+ */
+export type RuneDslServices = LangiumCoreServices;
 
 /**
  * Dependency injection module for the Rune DSL language.
@@ -19,7 +26,9 @@ import { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from '../generat
  * Override or register custom services here (validators, scoping, etc.).
  */
 export const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServices> = {
-  // Custom services will be registered here as the implementation progresses.
+  references: {
+    ScopeProvider: (services) => new RuneDslScopeProvider(services)
+  }
 };
 
 /**
@@ -36,6 +45,10 @@ export function createRuneDslServices(context: DefaultSharedCoreModuleContext = 
     RuneDslModule
   );
   shared.ServiceRegistry.register(RuneDsl);
+
+  // Register validation checks
+  const validator = new RuneDslValidator();
+  validator.registerChecks(RuneDsl);
 
   // Initialize configuration for non-LSP usage
   shared.workspace.ConfigurationProvider.initialized({});

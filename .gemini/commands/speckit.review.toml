@@ -9,6 +9,7 @@ User input:--- =
 $
 
 
+
 ARGUMENTS = 
 ## Overview
 
@@ -26,12 +27,9 @@ cd "$(git rev-parse --show-toplevel)" && \source .specify/scripts/bash/common.sh
 
 
 This provides:- `FEATURE_DIR` - Feature directory path- `FEATURE_SPEC` - Specification file (spec.md)- `IMPL_PLAN` - Implementation plan (plan.md)- `TASKS` - Task list (tasks.md)bash = 
-get_feature_paths = 
 
-Load these files to understand:
-- Feature requirements and acceptance criteria
-- Implementation approach and design decisions
-- Task breakdown and current status
+
+Load these files to understand:- Feature requirements and acceptance criteria- Implementation approach and design decisions- Task breakdown and current statusget_feature_paths = 
 
 ### 2. Identify Review Target
 
@@ -133,6 +131,7 @@ This updates tasks.md, changing:
 Create a comprehensive review report:
 
 ```
+
 
 markdown = 
 # Review Report

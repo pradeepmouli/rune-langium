@@ -1,0 +1,35 @@
+{
+  "name": "@rune-langium/cli",
+  "version": "0.1.0",
+  "description": "CLI tools for the Rune DSL (Langium-based parser)",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "rune-dsl": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@rune-langium/core": "workspace:*",
+    "langium": "^4.2.0",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}

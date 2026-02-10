@@ -2,11 +2,30 @@
 export * from './generated/ast.js';
 
 // Parse API
-export { parse } from './api/parse.js';
+export { parse, parseWorkspace } from './api/parse.js';
 export type { ParseResult } from './api/parse.js';
 
 // Services
 export { createRuneDslServices, RuneDslModule } from './services/rune-dsl-module.js';
+export type { RuneDslServices } from './services/rune-dsl-module.js';
+export { RuneDslScopeProvider } from './services/rune-dsl-scope-provider.js';
+export { RuneDslValidator } from './services/rune-dsl-validator.js';
 
 // Generated module essentials
 export { RuneDslLanguageMetaData } from './generated/module.js';
+
+// Utility functions
+export {
+  isOptional,
+  isSingular,
+  isPlural,
+  isRequired,
+  toConstraintString
+} from './utils/cardinality-utils.js';
+export { getOptions, getEffectiveConditions } from './utils/choice-utils.js';
+export {
+  hasGeneratedInput,
+  setGeneratedInputIfAbsent,
+  getFunctionInputs,
+  getFunctionOutput
+} from './utils/expression-utils.js';

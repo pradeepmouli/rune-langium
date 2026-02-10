@@ -126,7 +126,7 @@ ChoiceOption:
 
 Attribute:
     override?='override'?
-    RosettaNamed RosettaTyped card=RosettaCardinality RosettaDefinable?
+    RosettaNamed typeCall=TypeCallSimple card=RosettaCardinality RosettaDefinable?
     (References | Annotations | Synonyms | labels+=LabelAnnotation | RuleReference)*
 ;
 
@@ -206,6 +206,12 @@ fragment RosettaTyped:
 TypeCall:
     ^type=[RosettaType:QualifiedName]
     ('(' arguments+=TypeCallArgument (',' arguments+=TypeCallArgument)* ')')?
+;
+
+// Simple type reference without optional arguments, used in Attribute
+// to avoid ambiguity with RosettaCardinality (both start with '(').
+TypeCallSimple infers TypeCall:
+    ^type=[RosettaType:QualifiedName]
 ;
 
 TypeCallArgument:
@@ -303,14 +309,19 @@ AndOperation infers RosettaExpression:
 ;
 
 EqualityOperationRule infers RosettaExpression:
-    ComparisonOperationRule (
-        {infer EqualityOperation.left=current} cardMod=CardinalityModifier? operator=('=' | '<>') right=ComparisonOperationRule
-    )*
-;
-
-ComparisonOperationRule infers RosettaExpression:
     AdditiveOperation (
-        {infer ComparisonOperation.left=current} cardMod=CardinalityModifier? operator=('>=' | '<=' | '>' | '<') right=AdditiveOperation
+        {infer ComparisonOperation.left=current}
+        (
+            cardMod=CardinalityModifier operator=('>=' | '<=' | '>' | '<')
+            | operator=('>=' | '<=' | '>' | '<')
+        )
+        right=AdditiveOperation
+        | {infer EqualityOperation.left=current}
+        (
+            cardMod=CardinalityModifier operator=('=' | '<>')
+            | operator=('=' | '<>')
+        )
+        right=AdditiveOperation
     )*
 ;
 
@@ -806,8 +817,8 @@ RosettaQualifiableType returns string:
 // DATA TYPE & HELPER RULES
 // ═══════════════════════════════════════════════════════════════════
 
-BigDecimal returns bigint:
-    ('+' | '-')? ('.' INT | INT '.' INT?) (('e' | 'E') ('+' | '-') INT | ID)?
+BigDecimal returns string:
+    ('+' | '-')? ('.' INT | INT '.' INT?) (('e' | 'E') ('+' | '-')? INT)?
 ;
 
 Integer returns bigint:
@@ -819,7 +830,7 @@ QualifiedName returns string:
 ;
 
 QualifiedNameWithWildcard returns string:
-    QualifiedName ('.' '*')?
+    ValidID ('.' (ValidID | '*'))*
 ;
 
 TypeParameterValidID returns string:

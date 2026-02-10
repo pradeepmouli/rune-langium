@@ -1,0 +1,4 @@
+# Vendored fixture content — fetched by scripts/update-fixtures.sh
+# Keep this directory tracked but ignore vendored .rosetta files
+*.rosetta
+.version
