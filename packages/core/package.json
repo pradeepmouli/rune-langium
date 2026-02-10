@@ -3,19 +3,12 @@
   "version": "0.1.0",
   "description": "Langium-based parser and typed AST for the Rune DSL (.rosetta files)",
   "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "files": [
@@ -25,9 +18,9 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup",
+    "build": "tsc -b",
     "clean": "rm -rf dist",
-    "dev": "tsup --watch",
+    "dev": "tsc -b --watch",
     "generate": "langium generate",
     "lint": "oxlint .",
     "test": "vitest run",
@@ -39,7 +32,6 @@
   },
   "devDependencies": {
     "langium-cli": "^4.2.0",
-    "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },
   "engines": {

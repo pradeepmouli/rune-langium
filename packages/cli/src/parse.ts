@@ -51,12 +51,10 @@ export async function runParse(paths: string[], options: ParseCommandOptions): P
     const result: ParseResult = await parse(content, `file:///${file}`);
     const errors = [
       ...result.lexerErrors.map(
-        (e: { message: string; line?: number; column?: number }) =>
-          `${relative(process.cwd(), file)}:${e.line ?? 0}:${e.column ?? 0}: ${e.message}`
+        (e) => `${relative(process.cwd(), file)}:${e.line ?? 0}:${e.column ?? 0}: ${e.message}`
       ),
       ...result.parserErrors.map(
-        (e: { message: string; line?: number; column?: number }) =>
-          `${relative(process.cwd(), file)}:${e.line ?? 0}:${e.column ?? 0}: ${e.message}`
+        (e) => `${relative(process.cwd(), file)}:${e.line ?? 0}:${e.column ?? 0}: ${e.message}`
       )
     ];
 

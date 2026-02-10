@@ -93,25 +93,18 @@ export async function parseWorkspace(
 
   return documents.map((doc) => {
     const model = doc.parseResult.value as RosettaModel;
-    const lexErrors = doc.parseResult.lexerErrors.map(
-      (e: { message: string; offset: number; line?: number; column?: number }) => ({
-        message: e.message,
-        offset: e.offset,
-        line: e.line,
-        column: e.column
-      })
-    );
-    const parsErrors = doc.parseResult.parserErrors.map(
-      (e: {
-        message: string;
-        token: { startOffset?: number; startLine?: number; startColumn?: number };
-      }) => ({
-        message: e.message,
-        offset: e.token?.startOffset,
-        line: e.token?.startLine,
-        column: e.token?.startColumn
-      })
-    );
+    const lexErrors = doc.parseResult.lexerErrors.map((e) => ({
+      message: e.message,
+      offset: e.offset,
+      line: e.line,
+      column: e.column
+    }));
+    const parsErrors = doc.parseResult.parserErrors.map((e) => ({
+      message: e.message,
+      offset: e.token?.startOffset,
+      line: e.token?.startLine,
+      column: e.token?.startColumn
+    }));
     return {
       value: model,
       lexerErrors: lexErrors,

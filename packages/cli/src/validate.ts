@@ -65,15 +65,13 @@ export async function runValidate(
 
   for (const doc of documents) {
     const filePath = relative(process.cwd(), doc.uri.fsPath);
-    const diagnostics = (doc.diagnostics ?? []).map(
-      (d: { severity: number; message: string; range: { start: { line: number } } }) => ({
-        severity: d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : 'info',
-        message: d.message,
-        line: (d.range.start.line ?? 0) + 1
-      })
-    );
+    const diagnostics = (doc.diagnostics ?? []).map((d) => ({
+      severity: d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : 'info',
+      message: d.message,
+      line: (d.range.start.line ?? 0) + 1
+    }));
 
-    const errors = diagnostics.filter((d: { severity: string }) => d.severity === 'error');
+    const errors = diagnostics.filter((d) => d.severity === 'error');
     if (errors.length > 0) hasErrors = true;
 
     results.push({ file: filePath, diagnostics });

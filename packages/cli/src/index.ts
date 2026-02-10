@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Command } from 'commander';
 import { runParse } from './parse.js';
 import { runValidate } from './validate.js';

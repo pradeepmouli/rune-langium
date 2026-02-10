@@ -6,7 +6,7 @@ import type { RosettaExpression, RosettaFunction } from '../generated/ast.js';
  * automatically inferred rather than explicitly declared.
  */
 export function hasGeneratedInput(node: RosettaExpression): boolean {
-  return (node as unknown as Record<string, unknown>).__generatedInput === true;
+  return (node as unknown as Record<string, unknown>)['__generatedInput'] === true;
 }
 
 /**
@@ -15,10 +15,10 @@ export function hasGeneratedInput(node: RosettaExpression): boolean {
  */
 export function setGeneratedInputIfAbsent(node: RosettaExpression): boolean {
   const record = node as unknown as Record<string, unknown>;
-  if (record.__generatedInput === true) {
+  if (record['__generatedInput'] === true) {
     return false;
   }
-  record.__generatedInput = true;
+  record['__generatedInput'] = true;
   return true;
 }
 
