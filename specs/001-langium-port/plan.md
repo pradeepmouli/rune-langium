@@ -9,6 +9,14 @@ Port the Xtext-based Rune DSL (~95 grammar rules, 3 Xcore metamodels, 101 valida
 
 Phased delivery: expression grammar proof-of-concept first (highest risk + highest value), then structural types, then scoping/validation, then full grammar coverage.
 
+## Constitution Check
+
+- Principle I (DSL Fidelity & Typed AST): Grammar and AST targets stay aligned with Xtext parity and typed nodes.
+- Principle II (Deterministic Fixtures): Vendored CDM and rune-dsl fixtures are required for all conformance/parity tests.
+- Principle III (Validation Parity): Scope remains parity-only, with a tracked parity report.
+- Principle IV (Performance & Workers): Benchmarks and worker support remain explicit deliverables.
+- General Gates: Grammar/scoping/validation changes require tests and parity/conformance updates; benchmarks run for parser changes.
+
 ## Technical Context
 
 - **Language**: TypeScript (strict mode)
@@ -107,7 +115,7 @@ rune-langium/
 | `maxLookahead: 3` may be insufficient | Chevrotain LL(k) vs ANTLR LL(*). Some predicate patterns may need higher lookahead. | Monitor during Phase 2. Increase if specific rules fail. |
 | "Without left parameter" grammar duplication | 7 Xtext rules duplicated for implicit variable binding. Needs Langium-native redesign. | Prototype in Phase 2 using parser actions or post-parse rewrite. |
 | Browser bundle size | Langium + Chevrotain may produce a large bundle. | Tree-shake. Provide a slim `types-only` export for consumers that only need types. |
-| CDM test fixture licensing | CDM source files may have licensing constraints for bundling. | Bundle only curated samples. Full corpus test as optional CI step. |
+| CDM test fixture licensing | CDM source files may have licensing constraints for bundling. | Use vendored snapshots for CI conformance, exclude fixtures from published packages. |
 
 ## Phase Plan
 

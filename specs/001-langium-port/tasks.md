@@ -14,6 +14,14 @@
 
 All paths are relative to the `rune-langium/` monorepo root. Core package paths are under `packages/core/`.
 
+## Constitution Check
+
+- Principle I: Grammar and AST changes must preserve typed nodes and Xtext parity.
+- Principle II: All conformance/parity/benchmark tests use vendored fixtures.
+- Principle III: Validation stays parity-only, with parity reporting updated.
+- Principle IV: Performance benchmarks and worker support remain required.
+- General Gates: Grammar/scoping/validation changes include tests and parity/conformance updates.
+
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
@@ -86,6 +94,7 @@ All paths are relative to the `rune-langium/` monorepo root. Core package paths 
 - [ ] T041 [US1] Resolve `<` token ambiguity: documentation string (`<"...">`) vs comparison operator -- LL(k) strategy (packages/core/src/grammar/rune-dsl.langium) (depends on T033)
 - [ ] T042 [US1] Run `langium-cli generate` and verify all ~40 expression interfaces in `ast.ts` (packages/core/src/generated/ast.ts) (depends on T035)
 - [ ] T043 [US1] Write expression utility functions: `hasGeneratedInput`, `setGeneratedInputIfAbsent` (packages/core/src/utils/expression-utils.ts) (depends on T042)
+- [ ] T123 [US1] Add grammar parity check harness comparing Xtext vs Langium acceptance on vendored fixtures (packages/core/tests/conformance/grammar-parity.test.ts) (depends on T042)
 - [ ] T044 [US1] Run all expression tests, fix parser issues, iterate until green (depends on T014-T026, T042)
 
 **Checkpoint**: All expression parsing tests pass. `ast.ts` contains ~40 typed expression interfaces with `$type` discriminators.
@@ -198,7 +207,7 @@ All paths are relative to the `rune-langium/` monorepo root. Core package paths 
 
 **Goal**: Published core + CLI packages with documentation, CI, and browser support.
 
-**Independent Test**: `npm install @rune-langium/core` and `@rune-langium/cli` in a fresh project. Import `parse()` and all types. `rune-langium parse` works in Node.js and browser.
+**Independent Test**: `npm install @rune-langium/core` and `@rune-langium/cli` in a fresh project. Import `parse()` and all types. `rune-langium parse` works in Node.js.
 
 ### Tests for User Story 3
 - [ ] T105 [P] [US3] Write Node.js API integration test: `parse()` returns typed AST (packages/core/tests/api/parse-api.test.ts)
@@ -220,7 +229,8 @@ All paths are relative to the `rune-langium/` monorepo root. Core package paths 
 - [ ] T120 [US3] Implement CLI `parse` command with file/dir/glob inputs (packages/cli/src/parse.ts) (depends on T119)
 - [ ] T121 [US3] Implement CLI `validate` command with exit codes and `--json` output (packages/cli/src/validate.ts) (depends on T120)
 - [ ] T122 [US3] Wire CLI entrypoint and shared formatting utils (packages/cli/src/index.ts) (depends on T120-T121)
-- [ ] T116 Publish initial release to npm (depends on T105-T108, T109-T115, T117-T118, T119-T122)
+- [ ] T124 [US3] Verify generated type guards are exported and usable (packages/core/tests/api/type-guards.test.ts) (depends on T102, T109)
+- [ ] T116 Publish initial release to npm (depends on T105-T108, T109-T115, T117-T118, T119-T124)
 
 **Checkpoint**: `npm install @rune-langium/core` and `@rune-langium/cli` works. All types exported. Browser and Node.js compatible. CLI parse/validate works. CI green.
 

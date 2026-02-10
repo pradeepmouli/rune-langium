@@ -1,8 +1,8 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 -> 1.1.0
-- Modified principles: None
-- Added sections: Development Workflow; expanded Workflow & Quality Gates
+- Version change: 1.1.0 -> 1.1.1
+- Modified principles: V. Reversibility & Compatibility
+- Added sections: None
 - Removed sections: None
 - Templates requiring updates: ✅ none
 - Follow-up TODOs: TODO(RATIFICATION_DATE): initial ratification date not recorded
@@ -34,9 +34,9 @@ in a web worker for browser integration. Performance regressions MUST be caught
 by automated benchmarks.
 
 ### V. Reversibility & Compatibility
-The editor integration MUST remain backward-compatible via an adapter layer
-until the Langium parser is stable. Deprecations MUST include a migration guide
-and a staged rollout plan.
+If editor integration is in scope, it MUST remain backward-compatible via an
+adapter layer until the Langium parser is stable. Deprecations MUST include a
+migration guide and a staged rollout plan.
 
 ## Tooling & Standards
 
@@ -142,4 +142,4 @@ that exceed a single-phase plan MUST use the full feature workflow.
 	references relevant principles.
 - Compliance is reviewed during planning and before implementation completion.
 
-**Version**: 1.1.0 | **Ratified**: TODO(RATIFICATION_DATE): initial ratification date not recorded | **Last Amended**: 2026-02-09
+**Version**: 1.1.1 | **Ratified**: TODO(RATIFICATION_DATE): initial ratification date not recorded | **Last Amended**: 2026-02-09

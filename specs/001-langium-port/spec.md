@@ -179,7 +179,7 @@ As a **developer needing complete DSL coverage**, I want the synonym system, ann
 - **LANG-API-003**: The package MUST export all generated AST types from a single entry point
 - **LANG-API-004**: The package MUST export type guard functions for all AST node types
 - **LANG-API-005**: The package MUST work in Node.js (>=20) and modern browsers (ES2020+)
-- **LANG-API-006**: The package MUST have zero runtime dependencies beyond `langium` and `chevrotain`
+- **LANG-API-006**: The core package MUST have zero runtime dependencies beyond `langium` and `chevrotain` (CLI may use minimal runtime helpers for file/glob handling)
 - **LANG-API-007**: A minimal CLI MUST be provided as a separate `@rune-langium/cli` package for parse/validate convenience
 - **LANG-API-008**: The CLI MUST output human-readable diagnostics by default and support `--json` for structured output
 - **LANG-API-009**: The CLI MUST expose `parse` and `validate` commands as the minimal command set
