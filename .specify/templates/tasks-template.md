@@ -12,6 +12,18 @@ description: "Task list template for feature implementation"
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
+## Constitution Check
+
+<!--
+  ACTION REQUIRED: Confirm tasks cover constitution principles (fidelity, fixtures,
+  parity, performance, reversibility). Include any required test or benchmark tasks.
+-->
+
+- [ ] CC-001 Include conformance tests against vendored fixtures
+- [ ] CC-002 Include validation parity report update
+- [ ] CC-003 Include performance benchmark tasks for parser changes
+- [ ] CC-004 Include adapter/migration tasks for compatibility
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
@@ -25,21 +37,21 @@ description: "Task list template for feature implementation"
 - **Mobile**: `api/src/`, `ios/src/` or `android/src/`
 - Paths shown below assume single project - adjust based on plan.md structure
 
-<!-- 
+<!--
   ============================================================================
   IMPORTANT: The tasks below are SAMPLE TASKS for illustration purposes only.
-  
+
   The /speckit.tasks command MUST replace these with actual tasks based on:
   - User stories from spec.md (with their priorities P1, P2, P3...)
   - Feature requirements from plan.md
   - Entities from data-model.md
   - Endpoints from contracts/
-  
+
   Tasks MUST be organized by user story so each story can be:
   - Implemented independently
   - Tested independently
   - Delivered as an MVP increment
-  
+
   DO NOT keep these sample tasks in the generated tasks.md file.
   ============================================================================
 -->

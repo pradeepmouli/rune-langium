@@ -39,6 +39,10 @@ jobs:
       - name: Format check
         run: pnpm run format:check
 
+      - name: Generate Langium artifacts
+        run: pnpm run generate
+        continue-on-error: true
+
       - name: Build
         run: pnpm run build
 

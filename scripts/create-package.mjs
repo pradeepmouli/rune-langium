@@ -48,10 +48,10 @@ const packageJson = {
     }
   },
   scripts: {
-    build: 'tsc -p tsconfig.json',
+    build: 'tsgo -p tsconfig.json',
     clean: 'rm -rf dist',
-    dev: 'tsc -p tsconfig.json --watch',
-    'type-check': 'tsc -p tsconfig.json --noEmit',
+    dev: 'tsgo -p tsconfig.json --watch',
+    'type-check': 'tsgo -p tsconfig.json --noEmit',
     test: 'vitest run',
     'test:watch': 'vitest'
   },

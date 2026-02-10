@@ -3,6 +3,7 @@ description: Convert development phases into individual GitHub issues for better
 
 
 
+
 --- = 
 --- = 
 ## User Input
@@ -13,8 +14,9 @@ $
 
 
 You **MUST** consider the user input before proceeding (if not empty).text = 
-ARGUMENTS = 
 
+
+ARGUMENTS = 
 ## Outline
 
 ### 1. Load Feature Context
@@ -27,9 +29,9 @@ cd "$(git rev-parse --show-toplevel)" && \source .specify/scripts/bash/common.sh
 
 
 This provides:- `FEATURE_DIR` - Feature directory path- `FEATURE_SPEC` - Specification file (spec.md)- `IMPL_PLAN` - Implementation plan (plan.md)- `TASKS` - Task list (tasks.md)bash = 
-get_feature_paths = 
 
-All paths are absolute.
+
+All paths are absolute.get_feature_paths = 
 
 ### 2. Verify GitHub Repository
 
@@ -71,6 +73,7 @@ Load and parse the specification file (`$FEATURE_SPEC` / spec.md):
 Construct a comprehensive GitHub issue with this structure:
 
 ```
+
 
 markdown = 
 ## Description
