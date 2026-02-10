@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 /* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 const currentDir = dirname(fileURLToPath(import.meta.url));
-const FIXTURES_DIR = resolve(currentDir, '../fixtures');
+// .resources/ lives at the monorepo root
+const FIXTURES_DIR = resolve(currentDir, '../../../../.resources');
 
 /**
  * Load a single fixture file by relative path.

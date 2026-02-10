@@ -14,3 +14,7 @@ coverage/
 
 # Disposable Xtext source clone for grammar conversion
 .rune-dsl/
+
+# Vendored fixture snapshots (CDM corpus, Rune DSL built-in types)
+# Fetched by scripts/update-fixtures.sh — not published to npm
+.resources/

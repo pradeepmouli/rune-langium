@@ -16,8 +16,8 @@ set -euo pipefail
 CDM_REPO="https://github.com/finos/common-domain-model.git"
 RUNE_REPO="https://github.com/finos/rune-dsl.git"
 
-CDM_TAG="v6.0.0-dev.83"
-RUNE_TAG="v11.31.0"
+CDM_TAG="7.0.0-dev.83"
+RUNE_TAG="9.76.1"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -29,7 +29,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-FIXTURES_DIR="$ROOT_DIR/packages/core/test/fixtures"
+FIXTURES_DIR="$ROOT_DIR/.resources"
 
 echo "=== Updating vendored fixtures ==="
 echo "CDM tag:  $CDM_TAG"
@@ -43,21 +43,15 @@ echo "--- Fetching CDM corpus ($CDM_TAG) ---"
 TMP_CDM="$(mktemp -d)"
 trap 'rm -rf "$TMP_CDM"' EXIT
 
-git clone --depth 1 --branch "$CDM_TAG" --filter=blob:none --sparse "$CDM_REPO" "$TMP_CDM/cdm" 2>/dev/null || {
+git clone --depth 1 --branch "$CDM_TAG" --single-branch --filter=blob:none "$CDM_REPO" "$TMP_CDM/cdm" 2>/dev/null || {
   echo "Failed to clone CDM repo at tag $CDM_TAG"
   exit 1
 }
-
-pushd "$TMP_CDM/cdm" > /dev/null
-git sparse-checkout set "rosetta-source/src/main/rosetta"
-popd > /dev/null
 
 rm -rf "$CDM_DIR"
 mkdir -p "$CDM_DIR"
 
 if [[ -d "$TMP_CDM/cdm/rosetta-source/src/main/rosetta" ]]; then
-  cp -r "$TMP_CDM/cdm/rosetta-source/src/main/rosetta/"*.rosetta "$CDM_DIR/" 2>/dev/null || true
-  # Also copy from subdirectories
   find "$TMP_CDM/cdm/rosetta-source/src/main/rosetta" -name "*.rosetta" -exec cp {} "$CDM_DIR/" \;
 fi
 
@@ -75,20 +69,16 @@ echo "--- Fetching Rune DSL built-in types ($RUNE_TAG) ---"
 TMP_RUNE="$(mktemp -d)"
 trap 'rm -rf "$TMP_CDM" "$TMP_RUNE"' EXIT
 
-git clone --depth 1 --branch "$RUNE_TAG" --filter=blob:none --sparse "$RUNE_REPO" "$TMP_RUNE/rune-dsl" 2>/dev/null || {
+git clone --depth 1 --branch "$RUNE_TAG" --single-branch --filter=blob:none "$RUNE_REPO" "$TMP_RUNE/rune-dsl" 2>/dev/null || {
   echo "Failed to clone rune-dsl repo at tag $RUNE_TAG"
   exit 1
 }
 
-pushd "$TMP_RUNE/rune-dsl" > /dev/null
-git sparse-checkout set "rune-lang/src/main/resources/model"
-popd > /dev/null
-
 rm -rf "$RUNE_DIR"
 mkdir -p "$RUNE_DIR"
 
-if [[ -d "$TMP_RUNE/rune-dsl/rune-lang/src/main/resources/model" ]]; then
-  find "$TMP_RUNE/rune-dsl/rune-lang/src/main/resources/model" -name "*.rosetta" -exec cp {} "$RUNE_DIR/" \;
+if [[ -d "$TMP_RUNE/rune-dsl/rune-runtime/src/main/resources/model" ]]; then
+  find "$TMP_RUNE/rune-dsl/rune-runtime/src/main/resources/model" -name "*.rosetta" -exec cp {} "$RUNE_DIR/" \;
 fi
 
 RUNE_COUNT=$(find "$RUNE_DIR" -name "*.rosetta" | wc -l | tr -d ' ')
