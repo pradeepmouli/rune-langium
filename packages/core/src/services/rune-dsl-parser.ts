@@ -120,8 +120,6 @@ const STATEMENT_KEYWORDS = new Set([
   'only-element',
   'one-of',
   'join',
-  'default',
-  'switch',
   'contains',
   'disjoint',
   // choice/exists at start of line end an expression
@@ -352,6 +350,10 @@ function findExpressionEnd(text: string, start: number): number {
   let depth = 0;
   let seenSwitch = false; // tracks whether we've scanned past a `switch` keyword
   let i = start;
+  // Track position before trailing line comments at depth 0.
+  // If the expression ends at a newline after a comment, the `]` must be
+  // placed BEFORE the comment (otherwise the `]` would be inside the comment).
+  let preCommentEnd = -1;
 
   while (i < text.length) {
     const ch = text[i];
@@ -364,6 +366,14 @@ function findExpressionEnd(text: string, start: number): number {
 
     // Skip comments
     if (ch === '/' && text[i + 1] === '/') {
+      if (depth === 0) {
+        // Save position before comment (trimming trailing whitespace)
+        let end = i;
+        while (end > start && (text[end - 1] === ' ' || text[end - 1] === '\t')) {
+          end--;
+        }
+        preCommentEnd = end;
+      }
       i = skipLineComment(text, i);
       continue;
     }
@@ -413,22 +423,69 @@ function findExpressionEnd(text: string, start: number): number {
       const nlEnd = ch === '\r' && text[i + 1] === '\n' ? i + 2 : i + 1;
       const nextNonWs = findNextNonWhitespaceOnLine(text, nlEnd);
 
+      // Helper: return the expression end position, using the pre-comment
+      // position if the current line had a trailing comment.
+      const exprEnd = () => (preCommentEnd >= 0 ? preCommentEnd : i);
+
+      // Compute indentation early (needed by comment and continuation checks)
+      const startCol = getColumnOfPos(text, start);
+
       // If we hit another newline or EOF, expression ends
       if (nextNonWs >= text.length || text[nextNonWs] === '\n' || text[nextNonWs] === '\r') {
-        return i;
+        return exprEnd();
+      }
+
+      // If next line is a comment-only line (starts with // or /*),
+      // it should NOT trigger continuation — skip it and check the line after.
+      if (text[nextNonWs] === '/' && (text[nextNonWs + 1] === '/' || text[nextNonWs + 1] === '*')) {
+        // Skip the comment and any following whitespace/comments
+        let past = nextNonWs;
+        if (text[past + 1] === '/') {
+          past = skipLineComment(text, past);
+        } else {
+          past = skipBlockComment(text, past);
+        }
+        // After the comment, skip whitespace/newlines to find the real next content
+        past = skipWhitespaceAndNewlines(text, past);
+        // Check the real next content (after comments)
+        if (past >= text.length) return exprEnd();
+        const realNextWord = extractWord(text, past);
+        const realNextCol = getColumnOfPos(text, past);
+        // If real next content is at lower indentation or is a statement keyword,
+        // the expression ends BEFORE the comment
+        if (realNextWord && STATEMENT_KEYWORDS.has(realNextWord)) return exprEnd();
+        if (realNextWord && CONTINUATION_KEYWORDS.has(realNextWord)) {
+          if (realNextCol >= startCol) {
+            // The line after the comment continues the expression
+            i = past - 1; // -1 because the main loop will i++ or handle this position
+            preCommentEnd = -1;
+            i = nlEnd;
+            continue;
+          }
+          return exprEnd();
+        }
+        if (realNextCol > startCol) {
+          preCommentEnd = -1;
+          i = nlEnd;
+          continue;
+        }
+        return exprEnd();
       }
 
       // Check if next line starts with a statement keyword
       const nextWord = extractWord(text, nextNonWs);
       if (nextWord && STATEMENT_KEYWORDS.has(nextWord)) {
-        return i; // Statement keyword → expression ends here
+        return exprEnd(); // Statement keyword → expression ends here
       }
 
       // Check for closing tokens at start of next line
       const nextCh = text[nextNonWs];
       if (nextCh === ')' || nextCh === ']') {
-        return i;
+        return exprEnd();
       }
+
+      // Expression continues on next line — reset comment tracking
+      preCommentEnd = -1;
 
       // Lines starting with `->` or `->>` are feature call continuations
       if (text.startsWith('->', nextNonWs)) {
@@ -437,13 +494,18 @@ function findExpressionEnd(text: string, start: number): number {
       }
 
       // Lines starting with operators that continue binary expressions
-      if (nextCh === '+' || nextCh === '-' || nextCh === '*' || nextCh === '/') {
+      // Note: '/' is excluded when followed by '/' or '*' (comment starts)
+      if (
+        nextCh === '+' ||
+        nextCh === '-' ||
+        nextCh === '*' ||
+        (nextCh === '/' && text[nextNonWs + 1] !== '/' && text[nextNonWs + 1] !== '*')
+      ) {
         i = nlEnd;
         continue;
       }
 
       // Compute indentation for continuation decisions
-      const startCol = getColumnOfPos(text, start);
       const nextCol = getColumnOfPos(text, nextNonWs);
 
       // Lines starting with 'and', 'or', 'then', 'else', etc. continue
@@ -456,7 +518,7 @@ function findExpressionEnd(text: string, start: number): number {
           continue;
         }
         // Continuation keyword at lower indentation → terminates
-        return i;
+        return exprEnd();
       }
 
       // Lines starting with `=`, `<>`, `>=`, `<=` continue
@@ -474,7 +536,7 @@ function findExpressionEnd(text: string, start: number): number {
       }
 
       // By default, expression ends at newline
-      return i;
+      return exprEnd();
     }
 
     i++;
