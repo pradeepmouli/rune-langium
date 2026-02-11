@@ -725,7 +725,7 @@ export interface ComparisonOperation extends langium.AstNode {
     | WithMetaOperation;
   readonly $type: 'ComparisonOperation';
   cardMod?: CardinalityModifier;
-  left: RosettaExpression;
+  left?: RosettaExpression;
   operator: '<' | '<=' | '>' | '>=';
   right: RosettaExpression;
 }
@@ -870,7 +870,7 @@ export interface DefaultOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'DefaultOperation';
-  left: RosettaExpression;
+  left?: RosettaExpression;
   operator: 'default';
   right: RosettaExpression;
 }
@@ -943,7 +943,7 @@ export interface DistinctOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'DistinctOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'distinct';
 }
 
@@ -1032,7 +1032,7 @@ export interface EqualityOperation extends langium.AstNode {
     | WithMetaOperation;
   readonly $type: 'EqualityOperation';
   cardMod?: CardinalityModifier;
-  left: RosettaExpression;
+  left?: RosettaExpression;
   operator: '<>' | '=';
   right: RosettaExpression;
 }
@@ -1118,7 +1118,7 @@ export interface FilterOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'FilterOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   function?: InlineFunction;
   operator: 'filter';
 }
@@ -1191,7 +1191,7 @@ export interface FirstOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'FirstOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'first';
 }
 
@@ -1262,7 +1262,7 @@ export interface FlattenOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'FlattenOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'flatten';
 }
 
@@ -1380,7 +1380,7 @@ export interface JoinOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'JoinOperation';
-  left: RosettaExpression;
+  left?: RosettaExpression;
   operator: 'join';
   right?: RosettaExpression;
 }
@@ -1474,7 +1474,7 @@ export interface LastOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'LastOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'last';
 }
 
@@ -1687,7 +1687,7 @@ export interface MapOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'MapOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   function?: InlineFunction;
   operator: 'extract';
 }
@@ -1760,7 +1760,7 @@ export interface MaxOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'MaxOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   function?: InlineFunction;
   operator: 'max';
 }
@@ -1833,7 +1833,7 @@ export interface MinOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'MinOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   function?: InlineFunction;
   operator: 'min';
 }
@@ -1912,7 +1912,7 @@ export interface OneOfOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'OneOfOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'one-of';
 }
 
@@ -2018,7 +2018,7 @@ export interface ReduceOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ReduceOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   function?: InlineFunction;
   operator: 'reduce';
 }
@@ -2110,7 +2110,7 @@ export interface ReverseOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ReverseOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'reverse';
 }
 
@@ -2181,7 +2181,7 @@ export interface RosettaAbsentExpression extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'RosettaAbsentExpression';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'absent';
 }
 
@@ -2582,7 +2582,7 @@ export interface RosettaContainsExpression extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'RosettaContainsExpression';
-  left: RosettaExpression;
+  left?: RosettaExpression;
   operator: 'contains';
   right: RosettaExpression;
 }
@@ -2678,7 +2678,7 @@ export interface RosettaCountOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'RosettaCountOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'count';
 }
 
@@ -2837,7 +2837,7 @@ export interface RosettaDisjointExpression extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'RosettaDisjointExpression';
-  left: RosettaExpression;
+  left?: RosettaExpression;
   operator: 'disjoint';
   right: RosettaExpression;
 }
@@ -3043,7 +3043,7 @@ export interface RosettaExistsExpression extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'RosettaExistsExpression';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   modifier?: ExistsModifier;
   operator: 'exists';
 }
@@ -3954,7 +3954,7 @@ export interface RosettaOnlyElement extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'RosettaOnlyElement';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'only-element';
 }
 
@@ -4025,12 +4025,14 @@ export interface RosettaOnlyExistsExpression extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'RosettaOnlyExistsExpression';
-  argument: RosettaExpression;
-  operator: 'exists';
+  args: Array<RosettaExpression>;
+  argument?: RosettaExpression;
+  operator?: 'exists';
 }
 
 export const RosettaOnlyExistsExpression = {
   $type: 'RosettaOnlyExistsExpression',
+  args: 'args',
   argument: 'argument',
   operator: 'operator'
 } as const;
@@ -4752,7 +4754,7 @@ export interface SortOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'SortOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   function?: InlineFunction;
   operator: 'sort';
 }
@@ -4825,7 +4827,7 @@ export interface SumOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'SumOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'sum';
 }
 
@@ -5086,7 +5088,7 @@ export interface ToDateOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ToDateOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'to-date';
 }
 
@@ -5157,7 +5159,7 @@ export interface ToDateTimeOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ToDateTimeOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'to-date-time';
 }
 
@@ -5228,7 +5230,7 @@ export interface ToEnumOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ToEnumOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   enumeration: langium.Reference<RosettaEnumeration>;
   operator: 'to-enum';
 }
@@ -5301,7 +5303,7 @@ export interface ToIntOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ToIntOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'to-int';
 }
 
@@ -5372,7 +5374,7 @@ export interface ToNumberOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ToNumberOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'to-number';
 }
 
@@ -5443,7 +5445,7 @@ export interface ToStringOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ToStringOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'to-string';
 }
 
@@ -5514,7 +5516,7 @@ export interface ToTimeOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ToTimeOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'to-time';
 }
 
@@ -5585,7 +5587,7 @@ export interface ToZonedDateTimeOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ToZonedDateTimeOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   operator: 'to-zoned-date-time';
 }
 
@@ -7407,6 +7409,10 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
     RosettaOnlyExistsExpression: {
       name: RosettaOnlyExistsExpression.$type,
       properties: {
+        args: {
+          name: RosettaOnlyExistsExpression.args,
+          defaultValue: []
+        },
         argument: {
           name: RosettaOnlyExistsExpression.argument
         },
