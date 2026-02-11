@@ -112,7 +112,7 @@ export class RuneDslValidator {
     registry.register(checks, this);
   }
 
-  // ── Structural Validations (S-01 to S-20) ───────────────────────────
+  // ── Structural Validations (S-01 to S-27) ───────────────────────────
 
   /**
    * S-01: No duplicate attribute names within a Data type.
@@ -276,6 +276,10 @@ export class RuneDslValidator {
 
   /**
    * S-17: Attribute type reference must resolve.
+   * 
+   * NOTE: Not registered. Langium's built-in linker already emits an error for
+   * unresolved TypeCall.type references, so registering this check would produce
+   * duplicate error messages.
    */
   checkAttributeTypeResolved(node: Attribute, accept: ValidationAcceptor): void {
     if (node.typeCall && node.typeCall.type && !node.typeCall.type.ref) {
@@ -351,6 +355,10 @@ export class RuneDslValidator {
 
   /**
    * S-22: ChoiceOption type must resolve.
+   * 
+   * NOTE: Not registered. Langium's built-in linker already emits an error for
+   * unresolved TypeCall.type references, so registering this check would produce
+   * duplicate error messages.
    */
   checkChoiceOptionTypeResolved(node: ChoiceOption, accept: ValidationAcceptor): void {
     if (node.typeCall && node.typeCall.type && !node.typeCall.type.ref) {
@@ -380,7 +388,7 @@ export class RuneDslValidator {
     if (!node.expression) {
       accept('warning', `Condition '${node.name ?? '(unnamed)'}' has no expression.`, {
         node,
-        property: 'name'
+        property: 'expression'
       });
     }
   }
@@ -496,7 +504,7 @@ export class RuneDslValidator {
   }
 
   /**
-   * N-07: Enum value names should not contain lowercase letters (convention: PascalCase or UPPER_CASE).
+   * N-07: Enum value names should start with an uppercase letter (convention: PascalCase or UPPER_CASE).
    */
   checkEnumValueNaming(node: RosettaEnumeration, accept: ValidationAcceptor): void {
     for (const value of node.enumValues) {

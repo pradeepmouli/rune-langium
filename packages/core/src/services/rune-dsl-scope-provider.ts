@@ -30,7 +30,8 @@ import type {
   RosettaFeatureCall,
   RosettaDeepFeatureCall,
   Segment,
-  TypeCall
+  TypeCall,
+  Operation
 } from '../generated/ast.js';
 
 /**
@@ -309,9 +310,9 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   /**
    * Get the chain of segments preceding the target segment.
    */
-  private getSegmentChain(operation: AstNode & { path?: Segment }, target: Segment): Segment[] {
+  private getSegmentChain(operation: Operation, target: Segment): Segment[] {
     const chain: Segment[] = [];
-    let current: Segment | undefined = (operation as any).path;
+    let current: Segment | undefined = operation.path;
     while (current && current !== target) {
       chain.push(current);
       current = current.next;
