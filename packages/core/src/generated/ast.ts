@@ -607,7 +607,7 @@ export interface ChoiceOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'ChoiceOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   attributes: Array<langium.Reference<Attribute>>;
   necessity: Necessity;
   operator: 'choice';
