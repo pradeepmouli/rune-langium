@@ -76,8 +76,7 @@ export class RuneDslValidator {
       ],
       Attribute: [
         this.checkAttributeCardinality,
-        this.checkAttributeNaming,
-        this.checkAttributeTypeResolved
+        this.checkAttributeNaming
       ],
       RosettaFunction: [
         this.checkFunctionNoDuplicateInputs,
@@ -102,7 +101,7 @@ export class RuneDslValidator {
         this.checkModelNamespaceValid
       ],
       Condition: [this.checkConditionNaming, this.checkConditionHasExpression],
-      ChoiceOption: [this.checkChoiceOptionTypeResolved],
+      ChoiceOption: [],
       RosettaEnumValue: [this.checkEnumValueNamingRule],
       ShortcutDeclaration: [this.checkShortcutNaming, this.checkShortcutHasExpression],
       Operation: [this.checkOperationHasExpression],
@@ -277,6 +276,10 @@ export class RuneDslValidator {
 
   /**
    * S-17: Attribute type reference must resolve.
+   * 
+   * NOTE: Not registered. Langium's built-in linker already emits an error for
+   * unresolved TypeCall.type references, so registering this check would produce
+   * duplicate error messages.
    */
   checkAttributeTypeResolved(node: Attribute, accept: ValidationAcceptor): void {
     if (node.typeCall && node.typeCall.type && !node.typeCall.type.ref) {
@@ -352,6 +355,10 @@ export class RuneDslValidator {
 
   /**
    * S-22: ChoiceOption type must resolve.
+   * 
+   * NOTE: Not registered. Langium's built-in linker already emits an error for
+   * unresolved TypeCall.type references, so registering this check would produce
+   * duplicate error messages.
    */
   checkChoiceOptionTypeResolved(node: ChoiceOption, accept: ValidationAcceptor): void {
     if (node.typeCall && node.typeCall.type && !node.typeCall.type.ref) {
