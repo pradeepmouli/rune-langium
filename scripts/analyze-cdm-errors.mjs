@@ -15,7 +15,7 @@ for (const f of files) {
   const text = fs.readFileSync(path.join(cdmDir, f), 'utf-8');
   const doc = services.shared.workspace.LangiumDocumentFactory.fromString(
     text,
-    URI.file(`/tmp/${f}`)
+    URI.file(path.join(cdmDir, f))
   );
   services.shared.workspace.LangiumDocuments.addDocument(doc);
 }
