@@ -76,7 +76,8 @@ export class RuneDslValidator {
       ],
       Attribute: [
         this.checkAttributeCardinality,
-        this.checkAttributeNaming
+        this.checkAttributeNaming,
+        this.checkAttributeTypeResolved
       ],
       RosettaFunction: [
         this.checkFunctionNoDuplicateInputs,
@@ -101,7 +102,7 @@ export class RuneDslValidator {
         this.checkModelNamespaceValid
       ],
       Condition: [this.checkConditionNaming, this.checkConditionHasExpression],
-      ChoiceOption: [],
+      ChoiceOption: [this.checkChoiceOptionTypeResolved],
       RosettaEnumValue: [this.checkEnumValueNamingRule],
       ShortcutDeclaration: [this.checkShortcutNaming, this.checkShortcutHasExpression],
       Operation: [this.checkOperationHasExpression],
@@ -112,7 +113,7 @@ export class RuneDslValidator {
     registry.register(checks, this);
   }
 
-  // ── Structural Validations (S-01 to S-20) ───────────────────────────
+  // ── Structural Validations (S-01 to S-27) ───────────────────────────
 
   /**
    * S-01: No duplicate attribute names within a Data type.
@@ -380,7 +381,7 @@ export class RuneDslValidator {
     if (!node.expression) {
       accept('warning', `Condition '${node.name ?? '(unnamed)'}' has no expression.`, {
         node,
-        property: 'name'
+        property: 'expression'
       });
     }
   }
@@ -496,7 +497,7 @@ export class RuneDslValidator {
   }
 
   /**
-   * N-07: Enum value names should not contain lowercase letters (convention: PascalCase or UPPER_CASE).
+   * N-07: Enum value names should start with an uppercase letter (convention: PascalCase or UPPER_CASE).
    */
   checkEnumValueNaming(node: RosettaEnumeration, accept: ValidationAcceptor): void {
     for (const value of node.enumValues) {
