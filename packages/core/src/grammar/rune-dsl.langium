@@ -445,6 +445,10 @@ PrimaryExpression infers RosettaExpression:
     // e.g., `optional choice dateAdjustments, dateAdjustmentsReference`
     | {infer ChoiceOperation} necessity=Necessity operator='choice'
         attributes+=[Attribute:ValidID] (',' attributes+=[Attribute:ValidID])*
+    // Standalone switch operation (no left argument):
+    // e.g., `(switch Type1 then expr, default empty)`
+    | {infer SwitchOperation} operator='switch'
+        cases+=SwitchCaseOrDefault (',' cases+=SwitchCaseOrDefault)*
 ;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -586,13 +590,13 @@ RosettaSynonym:
 
 RosettaSynonymBody:
     (
-        'value' (values+=RosettaSynonymValue ',')* values+=RosettaSynonymValue
+        'value' values+=RosettaSynonymValue (',' values+=RosettaSynonymValue)*
             (mappingLogic=RosettaMapping)?
-            ('meta' (metaValues+=STRING ',')* metaValues+=STRING)?
-        | 'hint' (hints+=STRING ',')* hints+=STRING
+            ('meta' metaValues+=STRING (',' metaValues+=STRING)*)?
+        | 'hint' hints+=STRING (',' hints+=STRING)*
         | 'merge' merge=RosettaMergeSynonymValue
         | mappingLogic=RosettaMappingSetTo
-        | 'meta' (metaValues+=STRING ',')* metaValues+=STRING
+        | 'meta' metaValues+=STRING (',' metaValues+=STRING)*
     )
     ('dateFormat' format=STRING)?
     ('pattern' patternMatch=STRING patternReplace=STRING)?
@@ -726,8 +730,10 @@ RosettaBody:
 ;
 
 RosettaCorpus:
-    'corpus' corpusType=ID (body=[RosettaBody:QualifiedName])?
-    (displayName=STRING)? RosettaNamed RosettaDefinable?
+    'corpus' corpusType=ID
+    (displayName=STRING)?
+    (body=[RosettaBody:QualifiedName] name=ValidID | name=ValidID)
+    RosettaDefinable?
 ;
 
 RosettaSegment:

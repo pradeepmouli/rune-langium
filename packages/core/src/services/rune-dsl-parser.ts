@@ -65,7 +65,6 @@ const FUNCTIONAL_OPS = new Set(['extract', 'filter', 'reduce']);
  * the expression ends at the preceding newline.
  */
 const STATEMENT_KEYWORDS = new Set([
-  'then',
   'func',
   'type',
   'enum',
@@ -138,6 +137,7 @@ const CONTINUATION_KEYWORDS = new Set([
   'and',
   'or',
   'then',
+  'else',
   'exists',
   'is',
   'absent',
@@ -211,8 +211,8 @@ export function insertImplicitBrackets(text: string): string {
     if (keyword) {
       const keywordEnd = i + keyword.length;
 
-      // Skip whitespace (including newlines) after keyword to find start of body
-      let pos = skipWhitespaceAndNewlines(text, keywordEnd);
+      // Skip whitespace (including newlines) and comments after keyword
+      let pos = skipWhitespaceAndComments(text, keywordEnd);
 
       // If EOF or already `[` → skip
       if (pos >= text.length || text[pos] === '[') {
@@ -268,7 +268,9 @@ export function insertImplicitBrackets(text: string): string {
         insertions.push({ pos: exprEnd, ch: ']' });
       }
 
-      i = exprEnd;
+      // Continue scanning from after the keyword so nested
+      // functional ops inside the body get their own brackets
+      i = keywordEnd;
       continue;
     }
 
@@ -279,10 +281,12 @@ export function insertImplicitBrackets(text: string): string {
     return text;
   }
 
-  // Apply insertions in reverse order to preserve positions
+  // Sort by position descending so earlier insertions don't shift later ones
+  insertions.sort((a, b) => b.pos - a.pos);
+
+  // Apply insertions from end to start to preserve positions
   let result = text;
-  for (let j = insertions.length - 1; j >= 0; j--) {
-    const ins = insertions[j]!;
+  for (const ins of insertions) {
     result = result.substring(0, ins.pos) + ins.ch + result.substring(ins.pos);
   }
 
@@ -346,6 +350,7 @@ function matchFunctionalOp(text: string, i: number): string | null {
  */
 function findExpressionEnd(text: string, start: number): number {
   let depth = 0;
+  let seenSwitch = false; // tracks whether we've scanned past a `switch` keyword
   let i = start;
 
   while (i < text.length) {
@@ -380,8 +385,25 @@ function findExpressionEnd(text: string, start: number): number {
       continue;
     }
 
-    // Comma at depth 0 ends the expression
+    // Detect `switch` keyword at word boundaries to track switch context
+    if (
+      ch === 's' &&
+      depth === 0 &&
+      text.startsWith('switch', i) &&
+      (i === 0 || !isWordChar(text[i - 1])) &&
+      !isWordChar(text[i + 6])
+    ) {
+      seenSwitch = true;
+    }
+
+    // Comma at depth 0 ends the expression UNLESS we're inside a switch
+    // expression (where commas separate cases).
     if (ch === ',' && depth === 0) {
+      if (seenSwitch) {
+        // Inside a switch expression → comma is a case separator
+        i++;
+        continue;
+      }
       return i;
     }
 
@@ -420,10 +442,21 @@ function findExpressionEnd(text: string, start: number): number {
         continue;
       }
 
-      // Lines starting with 'and', 'or', 'then', comparison ops continue
+      // Compute indentation for continuation decisions
+      const startCol = getColumnOfPos(text, start);
+      const nextCol = getColumnOfPos(text, nextNonWs);
+
+      // Lines starting with 'and', 'or', 'then', 'else', etc. continue
+      // the expression IF at the same or deeper indentation than start.
+      // At lower indentation, they represent chaining operations (e.g.,
+      // `then filter` at block level) and should terminate.
       if (nextWord && CONTINUATION_KEYWORDS.has(nextWord)) {
-        i = nlEnd;
-        continue;
+        if (nextCol >= startCol) {
+          i = nlEnd;
+          continue;
+        }
+        // Continuation keyword at lower indentation → terminates
+        return i;
       }
 
       // Lines starting with `=`, `<>`, `>=`, `<=` continue
@@ -431,13 +464,6 @@ function findExpressionEnd(text: string, start: number): number {
         i = nlEnd;
         continue;
       }
-
-      // If the current line's expression is inside a construct started
-      // by this bare expression (i.e. we're mid-expression), the next
-      // line starting with an ID that has more indentation than the
-      // expression start should continue the expression
-      const startCol = getColumnOfPos(text, start);
-      const nextCol = getColumnOfPos(text, nextNonWs);
 
       // If next line is indented deeper than the expression start,
       // it's a continuation (e.g., multi-line constructor body,
@@ -529,6 +555,26 @@ function skipWhitespaceAndNewlines(text: string, start: number): number {
     (text[i] === ' ' || text[i] === '\t' || text[i] === '\r' || text[i] === '\n')
   ) {
     i++;
+  }
+  return i;
+}
+
+/**
+ * Skips whitespace, newlines, AND comments (both // and /* *​/ forms).
+ * Used to find the actual expression body after a functional op keyword.
+ */
+function skipWhitespaceAndComments(text: string, start: number): number {
+  let i = skipWhitespaceAndNewlines(text, start);
+  while (i < text.length) {
+    if (text[i] === '/' && text[i + 1] === '/') {
+      i = skipLineComment(text, i);
+      i = skipWhitespaceAndNewlines(text, i);
+    } else if (text[i] === '/' && text[i + 1] === '*') {
+      i = skipBlockComment(text, i);
+      i = skipWhitespaceAndNewlines(text, i);
+    } else {
+      break;
+    }
   }
   return i;
 }

@@ -5722,6 +5722,61 @@ export const RuneDslGrammar = (): Grammar =>
                 "cardinality": "*"
               }
             ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "SwitchOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "switch"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "cases",
+                "operator": "+=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@65"
+                  },
+                  "arguments": []
+                }
+              },
+              {
+                "$type": "Group",
+                "elements": [
+                  {
+                    "$type": "Keyword",
+                    "value": ","
+                  },
+                  {
+                    "$type": "Assignment",
+                    "feature": "cases",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@65"
+                      },
+                      "arguments": []
+                    }
+                  }
+                ],
+                "cardinality": "*"
+              }
+            ]
           }
         ]
       },
@@ -7075,8 +7130,24 @@ export const RuneDslGrammar = (): Grammar =>
                     "value": "value"
                   },
                   {
+                    "$type": "Assignment",
+                    "feature": "values",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@85"
+                      },
+                      "arguments": []
+                    }
+                  },
+                  {
                     "$type": "Group",
                     "elements": [
+                      {
+                        "$type": "Keyword",
+                        "value": ","
+                      },
                       {
                         "$type": "Assignment",
                         "feature": "values",
@@ -7088,25 +7159,9 @@ export const RuneDslGrammar = (): Grammar =>
                           },
                           "arguments": []
                         }
-                      },
-                      {
-                        "$type": "Keyword",
-                        "value": ","
                       }
                     ],
                     "cardinality": "*"
-                  },
-                  {
-                    "$type": "Assignment",
-                    "feature": "values",
-                    "operator": "+=",
-                    "terminal": {
-                      "$type": "RuleCall",
-                      "rule": {
-                        "$ref": "#/rules@85"
-                      },
-                      "arguments": []
-                    }
                   },
                   {
                     "$type": "Assignment",
@@ -7129,8 +7184,24 @@ export const RuneDslGrammar = (): Grammar =>
                         "value": "meta"
                       },
                       {
+                        "$type": "Assignment",
+                        "feature": "metaValues",
+                        "operator": "+=",
+                        "terminal": {
+                          "$type": "RuleCall",
+                          "rule": {
+                            "$ref": "#/rules@2"
+                          },
+                          "arguments": []
+                        }
+                      },
+                      {
                         "$type": "Group",
                         "elements": [
+                          {
+                            "$type": "Keyword",
+                            "value": ","
+                          },
                           {
                             "$type": "Assignment",
                             "feature": "metaValues",
@@ -7142,25 +7213,9 @@ export const RuneDslGrammar = (): Grammar =>
                               },
                               "arguments": []
                             }
-                          },
-                          {
-                            "$type": "Keyword",
-                            "value": ","
                           }
                         ],
                         "cardinality": "*"
-                      },
-                      {
-                        "$type": "Assignment",
-                        "feature": "metaValues",
-                        "operator": "+=",
-                        "terminal": {
-                          "$type": "RuleCall",
-                          "rule": {
-                            "$ref": "#/rules@2"
-                          },
-                          "arguments": []
-                        }
                       }
                     ],
                     "cardinality": "?"
@@ -7175,8 +7230,24 @@ export const RuneDslGrammar = (): Grammar =>
                     "value": "hint"
                   },
                   {
+                    "$type": "Assignment",
+                    "feature": "hints",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@2"
+                      },
+                      "arguments": []
+                    }
+                  },
+                  {
                     "$type": "Group",
                     "elements": [
+                      {
+                        "$type": "Keyword",
+                        "value": ","
+                      },
                       {
                         "$type": "Assignment",
                         "feature": "hints",
@@ -7188,25 +7259,9 @@ export const RuneDslGrammar = (): Grammar =>
                           },
                           "arguments": []
                         }
-                      },
-                      {
-                        "$type": "Keyword",
-                        "value": ","
                       }
                     ],
                     "cardinality": "*"
-                  },
-                  {
-                    "$type": "Assignment",
-                    "feature": "hints",
-                    "operator": "+=",
-                    "terminal": {
-                      "$type": "RuleCall",
-                      "rule": {
-                        "$ref": "#/rules@2"
-                      },
-                      "arguments": []
-                    }
                   }
                 ]
               },
@@ -7251,8 +7306,24 @@ export const RuneDslGrammar = (): Grammar =>
                     "value": "meta"
                   },
                   {
+                    "$type": "Assignment",
+                    "feature": "metaValues",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@2"
+                      },
+                      "arguments": []
+                    }
+                  },
+                  {
                     "$type": "Group",
                     "elements": [
+                      {
+                        "$type": "Keyword",
+                        "value": ","
+                      },
                       {
                         "$type": "Assignment",
                         "feature": "metaValues",
@@ -7264,25 +7335,9 @@ export const RuneDslGrammar = (): Grammar =>
                           },
                           "arguments": []
                         }
-                      },
-                      {
-                        "$type": "Keyword",
-                        "value": ","
                       }
                     ],
                     "cardinality": "*"
-                  },
-                  {
-                    "$type": "Assignment",
-                    "feature": "metaValues",
-                    "operator": "+=",
-                    "terminal": {
-                      "$type": "RuleCall",
-                      "rule": {
-                        "$ref": "#/rules@2"
-                      },
-                      "arguments": []
-                    }
                   }
                 ]
               }
@@ -8920,27 +8975,6 @@ export const RuneDslGrammar = (): Grammar =>
           },
           {
             "$type": "Assignment",
-            "feature": "body",
-            "operator": "=",
-            "terminal": {
-              "$type": "CrossReference",
-              "type": {
-                "$ref": "#/rules@108"
-              },
-              "terminal": {
-                "$type": "RuleCall",
-                "rule": {
-                  "$ref": "#/rules@132"
-                },
-                "arguments": []
-              },
-              "deprecatedSyntax": false,
-              "isMulti": false
-            },
-            "cardinality": "?"
-          },
-          {
-            "$type": "Assignment",
             "feature": "displayName",
             "operator": "=",
             "terminal": {
@@ -8953,11 +8987,58 @@ export const RuneDslGrammar = (): Grammar =>
             "cardinality": "?"
           },
           {
-            "$type": "RuleCall",
-            "rule": {
-              "$ref": "#/rules@31"
-            },
-            "arguments": []
+            "$type": "Alternatives",
+            "elements": [
+              {
+                "$type": "Group",
+                "elements": [
+                  {
+                    "$type": "Assignment",
+                    "feature": "body",
+                    "operator": "=",
+                    "terminal": {
+                      "$type": "CrossReference",
+                      "type": {
+                        "$ref": "#/rules@108"
+                      },
+                      "terminal": {
+                        "$type": "RuleCall",
+                        "rule": {
+                          "$ref": "#/rules@132"
+                        },
+                        "arguments": []
+                      },
+                      "deprecatedSyntax": false,
+                      "isMulti": false
+                    }
+                  },
+                  {
+                    "$type": "Assignment",
+                    "feature": "name",
+                    "operator": "=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@135"
+                      },
+                      "arguments": []
+                    }
+                  }
+                ]
+              },
+              {
+                "$type": "Assignment",
+                "feature": "name",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@135"
+                  },
+                  "arguments": []
+                }
+              }
+            ]
           },
           {
             "$type": "RuleCall",

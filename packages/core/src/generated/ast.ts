@@ -4942,7 +4942,7 @@ export interface SwitchOperation extends langium.AstNode {
     | WithMetaEntry
     | WithMetaOperation;
   readonly $type: 'SwitchOperation';
-  argument: RosettaExpression;
+  argument?: RosettaExpression;
   cases: Array<SwitchCaseOrDefault>;
   operator: 'switch';
 }
