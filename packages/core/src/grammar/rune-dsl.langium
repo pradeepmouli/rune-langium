@@ -441,6 +441,10 @@ PrimaryExpression infers RosettaExpression:
     // "Without left" equality/comparison (e.g., 'then all = True'):
     | {infer EqualityOperation} (cardMod=CardinalityModifier)? operator=('=' | '<>') right=AdditiveOperation
     | {infer ComparisonOperation} (cardMod=CardinalityModifier)? operator=('>=' | '<=' | '>' | '<') right=AdditiveOperation
+    // Standalone choice operation (no left argument):
+    // e.g., `optional choice dateAdjustments, dateAdjustmentsReference`
+    | {infer ChoiceOperation} necessity=Necessity operator='choice'
+        attributes+=[Attribute:ValidID] (',' attributes+=[Attribute:ValidID])*
 ;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -510,6 +514,8 @@ InlineFunction:
     (parameters+=ClosureParameter (',' parameters+=ClosureParameter)*)? '[' body=Expression ']'
 ;
 
+// Bare-or-bracket function body for extract/filter/reduce.
+// Bracket form: `[body]` or `param [body]`  — same as InlineFunction.
 ImplicitInlineFunction infers InlineFunction:
     body=OrOperation
 ;
@@ -707,7 +713,7 @@ DocumentRationale:
 ;
 
 RegulatoryDocumentReference:
-    body=[RosettaBody:QualifiedName] corpusList+=[RosettaCorpus:QualifiedName]+
+    body=[RosettaBody:QualifiedName] corpusList+=[RosettaCorpus:QualifiedName]
     segments+=RosettaSegmentRef*
 ;
 
