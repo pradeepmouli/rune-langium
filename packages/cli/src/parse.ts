@@ -48,7 +48,7 @@ export async function runParse(paths: string[], options: ParseCommandOptions): P
 
   for (const file of files) {
     const content = await readFile(file, 'utf-8');
-    const result: ParseResult = await parse(content, `file:///${file}`);
+    const result: ParseResult = await parse(content, `file://${file}`);
     const errors = [
       ...result.lexerErrors.map(
         (e) => `${relative(process.cwd(), file)}:${e.line ?? 0}:${e.column ?? 0}: ${e.message}`

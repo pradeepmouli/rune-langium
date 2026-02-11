@@ -132,6 +132,15 @@ const STATEMENT_KEYWORDS = new Set([
 /**
  * Keywords that continue an expression on the next line
  * (binary operators, logical connectors, etc.)
+ *
+ * NOTE: Some entries overlap with STATEMENT_KEYWORDS intentionally.
+ * Whether a keyword terminates or continues depends on execution order:
+ * CONTINUATION_KEYWORDS is only checked inside `findExpressionEnd` after
+ * a newline, where indentation determines the outcome — keywords at the
+ * same or deeper indentation continue the expression, while those at
+ * shallower indentation terminate it. STATEMENT_KEYWORDS is checked
+ * first (before entering `findExpressionEnd`) to reject bare expressions
+ * that start with a statement keyword.
  */
 const CONTINUATION_KEYWORDS = new Set([
   'and',
@@ -522,14 +531,6 @@ function skipBlockComment(text: string, start: number): number {
 function scanIdentifier(text: string, start: number): number {
   let i = start;
   while (i < text.length && isWordChar(text.charAt(i))) i++;
-  return i;
-}
-
-function findNextNonWhitespace(text: string, start: number): number {
-  let i = start;
-  while (i < text.length && (text[i] === ' ' || text[i] === '\t' || text[i] === '\r')) {
-    i++;
-  }
   return i;
 }
 

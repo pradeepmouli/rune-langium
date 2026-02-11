@@ -1,14 +1,12 @@
-import type { AstNode, AstNodeDescription, ReferenceInfo, Scope, Stream } from 'langium';
-import { AstUtils, stream, EMPTY_SCOPE, DefaultScopeProvider, MapScope } from 'langium';
+import type { AstNode, AstNodeDescription, ReferenceInfo, Scope } from 'langium';
+import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope } from 'langium';
 import type { LangiumCoreServices } from 'langium';
 import {
   isData,
   isRosettaFunction,
   isRosettaEnumeration,
-  isChoice,
   isAttribute,
   isOperation,
-  isCondition,
   isShortcutDeclaration,
   isRosettaFeatureCall,
   isRosettaDeepFeatureCall,
@@ -21,18 +19,18 @@ import {
   isWithMetaEntry,
   isRosettaExternalRegularAttribute,
   isRosettaExternalClass,
-  isChoiceOption,
-  isAnnotationRef
+  isAnnotationRef,
+  isRosettaSymbolReference
 } from '../generated/ast.js';
 import type {
   Data,
   Attribute,
-  RosettaFunction,
-  RosettaEnumeration,
-  Choice,
-  TypeCall,
   RosettaExpression,
-  RosettaModel
+  RosettaModel,
+  RosettaFeatureCall,
+  RosettaDeepFeatureCall,
+  Segment,
+  TypeCall
 } from '../generated/ast.js';
 
 /**
@@ -109,27 +107,216 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     return super.getScope(context);
   }
 
+  // ── Type-aware scoping ──────────────────────────────────────────────
+
+  /**
+   * Resolve the type produced by an expression.
+   * Returns a Data node if the expression's type can be determined, or undefined.
+   */
+  private resolveExpressionType(expr: RosettaExpression): Data | undefined {
+    // Symbol reference → look up the symbol to determine its type
+    if (isRosettaSymbolReference(expr)) {
+      const sym = expr.symbol?.ref;
+      if (!sym) return undefined;
+
+      // Attribute → its typeCall determines the type
+      if (isAttribute(sym)) {
+        return this.resolveTypeCallToData(sym.typeCall);
+      }
+
+      // ShortcutDeclaration → type comes from its expression
+      if (isShortcutDeclaration(sym)) {
+        return sym.expression ? this.resolveExpressionType(sym.expression) : undefined;
+      }
+
+      // Function → type comes from output attribute's typeCall
+      if (isRosettaFunction(sym)) {
+        return sym.output ? this.resolveTypeCallToData(sym.output.typeCall) : undefined;
+      }
+
+      // Data type referenced directly
+      if (isData(sym)) {
+        return sym;
+      }
+
+      return undefined;
+    }
+
+    // Feature call → resolve the feature to get its type
+    if (isRosettaFeatureCall(expr)) {
+      const feature = expr.feature?.ref;
+      if (feature && isAttribute(feature)) {
+        return this.resolveTypeCallToData(feature.typeCall);
+      }
+      return undefined;
+    }
+
+    // Deep feature call → same logic
+    if (isRosettaDeepFeatureCall(expr)) {
+      const feature = expr.feature?.ref;
+      if (feature && isAttribute(feature)) {
+        return this.resolveTypeCallToData(feature.typeCall);
+      }
+      return undefined;
+    }
+
+    // Constructor expression → resolve the typeRef
+    if (isRosettaConstructorExpression(expr)) {
+      return this.resolveExpressionType(expr.typeRef);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Resolve a TypeCall to a Data node, if the type reference points to one.
+   */
+  private resolveTypeCallToData(typeCall: TypeCall | undefined): Data | undefined {
+    const ref = typeCall?.type?.ref;
+    if (ref && isData(ref)) {
+      return ref;
+    }
+    return undefined;
+  }
+
+  /**
+   * Collect all attributes from a Data type including inherited attributes.
+   */
+  private collectDataAttributes(data: Data, visited?: Set<Data>): Attribute[] {
+    if (!visited) visited = new Set();
+    if (visited.has(data)) return []; // cycle guard
+    visited.add(data);
+
+    const attrs = [...data.attributes];
+
+    // Walk the inheritance chain
+    const superRef = data.superType?.ref;
+    if (superRef && isData(superRef)) {
+      attrs.push(...this.collectDataAttributes(superRef, visited));
+    }
+
+    return attrs;
+  }
+
+  /**
+   * Build a scope from a Data type's attributes (including inherited).
+   * Falls back to the global attribute scope if the type cannot be resolved.
+   */
+  private buildTypedScope(data: Data | undefined, fallbackNode: AstNode): Scope {
+    if (!data) {
+      return this.getAllAttributesScope(fallbackNode);
+    }
+    const attrs = this.collectDataAttributes(data);
+    if (attrs.length === 0) {
+      return this.getAllAttributesScope(fallbackNode);
+    }
+    const descriptions = attrs.map((a) => this.createDescription(a, a.name));
+    return new MapScope(descriptions);
+  }
+
+  // ── Case implementations ────────────────────────────────────────────
+
   /**
    * Case 1: Feature call scope — attributes of the receiver's resolved type.
    */
-  private getFeatureCallScope(node: AstNode): Scope {
-    // Without a type system pass, we can't definitively resolve the receiver type.
-    // For now, provide a scope containing all attributes in the current model.
-    return this.getAllAttributesScope(node);
+  private getFeatureCallScope(node: RosettaFeatureCall): Scope {
+    const receiverType = this.resolveExpressionType(node.receiver);
+    return this.buildTypedScope(receiverType, node);
   }
 
   /**
-   * Case 2: Deep feature call scope — transitive attributes.
+   * Case 2: Deep feature call scope — all attributes (own + transitive) of receiver type.
    */
-  private getDeepFeatureCallScope(node: AstNode): Scope {
-    return this.getAllAttributesScope(node);
+  private getDeepFeatureCallScope(node: RosettaDeepFeatureCall): Scope {
+    const receiverType = this.resolveExpressionType(node.receiver);
+    if (!receiverType) {
+      return this.getAllAttributesScope(node);
+    }
+    // For deep feature calls, collect attributes transitively:
+    // gather all attributes of the type and all types reachable from those attributes.
+    const allAttrs = this.collectTransitiveAttributes(receiverType);
+    if (allAttrs.length === 0) {
+      return this.getAllAttributesScope(node);
+    }
+    const descriptions = allAttrs.map((a) => this.createDescription(a, a.name));
+    return new MapScope(descriptions);
   }
 
   /**
-   * Case 3: Segment scope — features of the context type.
+   * Collect attributes transitively: the type's own attrs plus attributes
+   * of all types reachable through attribute type references.
    */
-  private getSegmentScope(node: AstNode): Scope {
-    return this.getAllAttributesScope(node);
+  private collectTransitiveAttributes(data: Data, visited?: Set<Data>): Attribute[] {
+    if (!visited) visited = new Set();
+    if (visited.has(data)) return [];
+    visited.add(data);
+
+    const attrs = this.collectDataAttributes(data);
+    for (const attr of [...attrs]) {
+      const attrType = this.resolveTypeCallToData(attr.typeCall);
+      if (attrType) {
+        attrs.push(...this.collectTransitiveAttributes(attrType, visited));
+      }
+    }
+    return attrs;
+  }
+
+  /**
+   * Case 3: Segment scope — features of the segment's context type.
+   * A segment chain `-> a -> b` resolves each step relative to the previous type.
+   */
+  private getSegmentScope(node: Segment): Scope {
+    // Walk up the segment chain to find the root Operation
+    const operation = AstUtils.getContainerOfType(node, isOperation);
+    if (!operation) {
+      return this.getAllAttributesScope(node);
+    }
+
+    // The operation's assignRoot is an Attribute or ShortcutDeclaration
+    const root = operation.assignRoot?.ref;
+    if (!root) {
+      return this.getAllAttributesScope(node);
+    }
+
+    // Get the root type
+    let currentType: Data | undefined;
+    if (isAttribute(root)) {
+      currentType = this.resolveTypeCallToData(root.typeCall);
+    } else if (isShortcutDeclaration(root)) {
+      currentType = root.expression ? this.resolveExpressionType(root.expression) : undefined;
+    }
+
+    if (!currentType) {
+      return this.getAllAttributesScope(node);
+    }
+
+    // Walk the segment chain: for each preceding segment, resolve its type
+    const segments = this.getSegmentChain(operation, node);
+    for (const seg of segments) {
+      const feature = seg.feature?.ref;
+      if (feature && isAttribute(feature)) {
+        currentType = this.resolveTypeCallToData(feature.typeCall);
+        if (!currentType) break;
+      } else {
+        currentType = undefined;
+        break;
+      }
+    }
+
+    return this.buildTypedScope(currentType, node);
+  }
+
+  /**
+   * Get the chain of segments preceding the target segment.
+   */
+  private getSegmentChain(operation: AstNode & { path?: Segment }, target: Segment): Segment[] {
+    const chain: Segment[] = [];
+    let current: Segment | undefined = (operation as any).path;
+    while (current && current !== target) {
+      chain.push(current);
+      current = current.next;
+    }
+    return chain;
   }
 
   /**
@@ -161,9 +348,8 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (!constructor?.typeRef) {
       return EMPTY_SCOPE;
     }
-    // typeRef is a RosettaExpression (usually a RosettaSymbolReference)
-    // We'd need the resolved type to get its features
-    return this.getAllAttributesScope(node);
+    const constructedType = this.resolveExpressionType(constructor.typeRef);
+    return this.buildTypedScope(constructedType, node);
   }
 
   /**
@@ -217,12 +403,17 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (!dataRef || !isData(dataRef)) {
       return EMPTY_SCOPE;
     }
-    const descriptions = dataRef.attributes.map((a) => this.createDescription(a, a.name));
+    const descriptions = this.collectDataAttributes(dataRef).map((a) =>
+      this.createDescription(a, a.name)
+    );
     return new MapScope(descriptions);
   }
 
+  // ── Fallback scopes ─────────────────────────────────────────────────
+
   /**
    * Collect all attributes from all Data types in the current document.
+   * Used as a fallback when the receiver type cannot be resolved.
    */
   private getAllAttributesScope(node: AstNode): Scope {
     const model = AstUtils.getContainerOfType(
