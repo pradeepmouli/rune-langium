@@ -9,7 +9,7 @@ const rootDir = path.resolve(__dirname, '..');
 
 const services = createRuneDslServices().RuneDsl;
 const cdmDir = path.join(rootDir, '.resources/cdm');
-const files = fs.readdirSync(cdmDir).filter(f => f.endsWith('.rosetta'));
+const files = fs.readdirSync(cdmDir).filter((f) => f.endsWith('.rosetta'));
 
 for (const f of files) {
   const text = fs.readFileSync(path.join(cdmDir, f), 'utf-8');
@@ -22,7 +22,7 @@ for (const f of files) {
 
 const allDocs = Array.from(services.shared.workspace.LangiumDocuments.all);
 await services.shared.workspace.DocumentBuilder.build(allDocs, {
-  validation: false,
+  validation: false
 });
 
 const errMap = {};
@@ -30,7 +30,7 @@ for (const doc of services.shared.workspace.LangiumDocuments.all) {
   const errs = doc.parseResult.parserErrors;
   if (errs.length > 0) {
     const name = path.basename(doc.uri.path);
-    const msgs = [...new Set(errs.map(e => e.message.slice(0, 150)))];
+    const msgs = [...new Set(errs.map((e) => e.message.slice(0, 150)))];
     errMap[name] = msgs.slice(0, 5);
   }
 }

@@ -74,10 +74,7 @@ export class RuneDslValidator {
         this.checkDataAttributeOverrideValid,
         this.checkDataMustHaveAttributesOrSuperType
       ],
-      Attribute: [
-        this.checkAttributeCardinality,
-        this.checkAttributeNaming
-      ],
+      Attribute: [this.checkAttributeCardinality, this.checkAttributeNaming],
       RosettaFunction: [
         this.checkFunctionNoDuplicateInputs,
         this.checkFunctionOutputRequired,
@@ -96,10 +93,7 @@ export class RuneDslValidator {
         this.checkChoiceNaming,
         this.checkChoiceMinOptions
       ],
-      RosettaModel: [
-        this.checkModelNoDuplicateElements,
-        this.checkModelNamespaceValid
-      ],
+      RosettaModel: [this.checkModelNoDuplicateElements, this.checkModelNamespaceValid],
       Condition: [this.checkConditionNaming, this.checkConditionHasExpression],
       ChoiceOption: [],
       RosettaEnumValue: [this.checkEnumValueNamingRule],
@@ -254,10 +248,14 @@ export class RuneDslValidator {
     const superAttrs = this.collectInheritedAttributeNames(node.superType.ref as Data);
     for (const attr of node.attributes) {
       if (attr.override && !superAttrs.has(attr.name)) {
-        accept('error', `Attribute '${attr.name}' is marked override but does not exist in supertype.`, {
-          node: attr,
-          property: 'name'
-        });
+        accept(
+          'error',
+          `Attribute '${attr.name}' is marked override but does not exist in supertype.`,
+          {
+            node: attr,
+            property: 'name'
+          }
+        );
       }
     }
   }
@@ -276,7 +274,7 @@ export class RuneDslValidator {
 
   /**
    * S-17: Attribute type reference must resolve.
-   * 
+   *
    * NOTE: Not registered. Langium's built-in linker already emits an error for
    * unresolved TypeCall.type references, so registering this check would produce
    * duplicate error messages.
@@ -355,7 +353,7 @@ export class RuneDslValidator {
 
   /**
    * S-22: ChoiceOption type must resolve.
-   * 
+   *
    * NOTE: Not registered. Langium's built-in linker already emits an error for
    * unresolved TypeCall.type references, so registering this check would produce
    * duplicate error messages.
@@ -572,50 +570,80 @@ export class RuneDslValidator {
     // E-01: Conditional expression must have 'if' and 'ifthen'
     if (isRosettaConditionalExpression(node)) {
       if (!node.if) {
-        accept('error', 'Conditional expression missing condition.', { node, property: 'if' as any });
+        accept('error', 'Conditional expression missing condition.', {
+          node,
+          property: 'if' as any
+        });
       }
       if (!node.ifthen) {
-        accept('error', 'Conditional expression missing then-branch.', { node, property: 'ifthen' as any });
+        accept('error', 'Conditional expression missing then-branch.', {
+          node,
+          property: 'ifthen' as any
+        });
       }
     }
 
     // E-02: Logical operations must have both left and right operands
     if (isLogicalOperation(node)) {
       if (!node.left) {
-        accept('error', `Logical '${node.operator}' missing left operand.`, { node, property: 'left' as any });
+        accept('error', `Logical '${node.operator}' missing left operand.`, {
+          node,
+          property: 'left' as any
+        });
       }
       if (!node.right) {
-        accept('error', `Logical '${node.operator}' missing right operand.`, { node, property: 'right' as any });
+        accept('error', `Logical '${node.operator}' missing right operand.`, {
+          node,
+          property: 'right' as any
+        });
       }
     }
 
     // E-03: Comparison operations must have both left and right operands
     if (isComparisonOperation(node)) {
       if (!node.left) {
-        accept('error', `Comparison '${node.operator}' missing left operand.`, { node, property: 'left' as any });
+        accept('error', `Comparison '${node.operator}' missing left operand.`, {
+          node,
+          property: 'left' as any
+        });
       }
       if (!node.right) {
-        accept('error', `Comparison '${node.operator}' missing right operand.`, { node, property: 'right' as any });
+        accept('error', `Comparison '${node.operator}' missing right operand.`, {
+          node,
+          property: 'right' as any
+        });
       }
     }
 
     // E-04: Equality operations must have both left and right operands
     if (isEqualityOperation(node)) {
       if (!node.left) {
-        accept('error', `Equality '${node.operator}' missing left operand.`, { node, property: 'left' as any });
+        accept('error', `Equality '${node.operator}' missing left operand.`, {
+          node,
+          property: 'left' as any
+        });
       }
       if (!node.right) {
-        accept('error', `Equality '${node.operator}' missing right operand.`, { node, property: 'right' as any });
+        accept('error', `Equality '${node.operator}' missing right operand.`, {
+          node,
+          property: 'right' as any
+        });
       }
     }
 
     // E-05: Arithmetic operations must have both left and right operands
     if (isArithmeticOperation(node)) {
       if (!node.left) {
-        accept('error', `Arithmetic '${node.operator}' missing left operand.`, { node, property: 'left' as any });
+        accept('error', `Arithmetic '${node.operator}' missing left operand.`, {
+          node,
+          property: 'left' as any
+        });
       }
       if (!node.right) {
-        accept('error', `Arithmetic '${node.operator}' missing right operand.`, { node, property: 'right' as any });
+        accept('error', `Arithmetic '${node.operator}' missing right operand.`, {
+          node,
+          property: 'right' as any
+        });
       }
     }
 
@@ -629,31 +657,46 @@ export class RuneDslValidator {
 
     // E-07: Switch operation must have at least one case
     if (isSwitchOperation(node) && node.cases.length === 0) {
-      accept('error', 'Switch expression must have at least one case.', { node, property: 'cases' as any });
+      accept('error', 'Switch expression must have at least one case.', {
+        node,
+        property: 'cases' as any
+      });
     }
 
     // E-08: Constructor expression values should not be empty (unless implicitEmpty)
     if (isRosettaConstructorExpression(node)) {
       if (node.values.length === 0 && !node.implicitEmpty) {
-        accept('warning', 'Constructor expression has no key-value pairs.', { node, property: 'values' as any });
+        accept('warning', 'Constructor expression has no key-value pairs.', {
+          node,
+          property: 'values' as any
+        });
       }
     }
 
     // E-09: only-exists requires at least one argument
     if (isRosettaOnlyExistsExpression(node)) {
       if (!node.argument && (!node.args || node.args.length === 0)) {
-        accept('error', "'only exists' requires at least one expression.", { node, property: 'argument' as any });
+        accept('error', "'only exists' requires at least one expression.", {
+          node,
+          property: 'argument' as any
+        });
       }
     }
 
     // E-10: Feature call receiver should not be missing
     if (isRosettaFeatureCall(node) && !node.receiver) {
-      accept('error', 'Feature call missing receiver expression.', { node, property: 'receiver' as any });
+      accept('error', 'Feature call missing receiver expression.', {
+        node,
+        property: 'receiver' as any
+      });
     }
 
     // E-11: Deep feature call receiver should not be missing
     if (isRosettaDeepFeatureCall(node) && !node.receiver) {
-      accept('error', 'Deep feature call missing receiver expression.', { node, property: 'receiver' as any });
+      accept('error', 'Deep feature call missing receiver expression.', {
+        node,
+        property: 'receiver' as any
+      });
     }
   }
 

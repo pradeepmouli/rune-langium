@@ -109,10 +109,10 @@ func GetBar:
         }
       ]);
       expect(results).toHaveLength(2);
-      expect(results[0].hasErrors).toBe(false);
-      expect(results[1].hasErrors).toBe(false);
-      expect(results[0].value.name).toBe('test.types');
-      expect(results[1].value.name).toBe('test.funcs');
+      expect(results[0]?.hasErrors).toBe(false);
+      expect(results[1]?.hasErrors).toBe(false);
+      expect(results[0]?.value.name).toBe('test.types');
+      expect(results[1]?.value.name).toBe('test.funcs');
     });
 
     it('should return individual errors per document', async () => {
@@ -131,8 +131,8 @@ type Valid:
 `
         }
       ]);
-      expect(results[0].hasErrors).toBe(false);
-      expect(results[1].hasErrors).toBe(true);
+      expect(results[0]?.hasErrors).toBe(false);
+      expect(results[1]?.hasErrors).toBe(true);
     });
   });
 });

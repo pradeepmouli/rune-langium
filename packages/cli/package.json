@@ -25,8 +25,8 @@
   },
   "dependencies": {
     "@rune-langium/core": "workspace:*",
-    "langium": "^4.2.0",
-    "commander": "^13.1.0"
+    "commander": "^14.0.3",
+    "langium": "^4.2.1"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
