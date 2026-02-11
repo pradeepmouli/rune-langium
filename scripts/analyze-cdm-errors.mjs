@@ -1,5 +1,5 @@
 import { createRuneDslServices } from '../packages/core/dist/index.js';
-import { URI } from '../packages/core/node_modules/langium/lib/index.js';
+import { URI } from 'langium';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
