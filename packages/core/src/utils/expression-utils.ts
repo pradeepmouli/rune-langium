@@ -1,12 +1,18 @@
 import type { RosettaExpression, RosettaFunction } from '../generated/ast.js';
 
 /**
+ * Tracks which expression nodes have a generated (synthetic) input.
+ * Uses a WeakMap to avoid mutating AST nodes directly.
+ */
+const generatedInputs = new WeakMap<RosettaExpression, boolean>();
+
+/**
  * Check if an expression node has a generated (synthetic) input marker.
  * This is used during code generation to track inputs that were
  * automatically inferred rather than explicitly declared.
  */
 export function hasGeneratedInput(node: RosettaExpression): boolean {
-  return (node as unknown as Record<string, unknown>)['__generatedInput'] === true;
+  return generatedInputs.get(node) === true;
 }
 
 /**
@@ -14,11 +20,10 @@ export function hasGeneratedInput(node: RosettaExpression): boolean {
  * Returns `true` if the marker was set, `false` if it was already present.
  */
 export function setGeneratedInputIfAbsent(node: RosettaExpression): boolean {
-  const record = node as unknown as Record<string, unknown>;
-  if (record['__generatedInput'] === true) {
+  if (generatedInputs.get(node) === true) {
     return false;
   }
-  record['__generatedInput'] = true;
+  generatedInputs.set(node, true);
   return true;
 }
 
