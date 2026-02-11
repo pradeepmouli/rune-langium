@@ -117,7 +117,7 @@ describe('Scoping', () => {
       const model = result.value;
       const enumType = model.elements[0] as RosettaEnumeration;
       expect(enumType.enumValues).toHaveLength(3);
-      expect(enumType.enumValues[0].name).toBe('USD');
+      expect(enumType.enumValues[0]!.name).toBe('USD');
     });
   });
 

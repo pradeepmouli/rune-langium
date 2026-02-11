@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "allowJs": false,
@@ -26,6 +26,5 @@
     "composite": true,
     "incremental": true
   },
-  "include": ["src"],
   "exclude": ["node_modules", "dist", "build", "coverage"]
 }
