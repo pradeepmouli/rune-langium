@@ -118,8 +118,8 @@ interface TypeDiagnosticsSummary {
 
 ```typescript
 interface DiagnosticsStoreState {
-  /** Map of file URI → diagnostics */
-  fileDiagnostics: Map<string, FileDiagnostics>;
+  /** Map of file URI → diagnostics array (aligned with contract) */
+  fileDiagnostics: Map<string, Diagnostic[]>;
   /** Map of type name → diagnostic summary (for graph badges) */
   typeDiagnostics: Map<string, TypeDiagnosticsSummary>;
   /** Total error count across all files */

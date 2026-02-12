@@ -37,6 +37,10 @@ This feature builds on:
 **Q3**: Should this be part of the 002 spec or a new spec?
 **A**: New spec (003) — keeps concerns isolated from the visual editor feature.
 
+- Q: What security posture for the WebSocket connection to rune-lsp-server? → A: Localhost only, no auth. Standard for local dev tools.
+- Q: What if browser doesn't support SharedWorker for embedded LSP? → A: SharedWorker primary, dedicated Worker fallback for broader compatibility.
+- Q: How do editor edits propagate to the ReactFlow graph? → A: Debounced re-parse with semantic-diff: after idle period, re-parse and compare AST; only trigger graph re-layout when structural changes occur (new/removed types, changed inheritance/attributes), not on cosmetic edits (comments, whitespace).
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*
@@ -51,8 +55,8 @@ As a **Rune DSL developer editing .rosetta files in the studio**, I want to see 
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid `.rosetta` file opened in the editor, **When** the user introduces a syntax error (e.g., missing closing brace), **Then** within 1 second the editor shows a red squiggly underline on the error location and a diagnostic message on hover
-2. **Given** a `.rosetta` file with a Rune validation error (duplicate attribute), **When** the LSP server publishes diagnostics, **Then** the editor displays an inline warning/error and the graph view highlights the affected node
+1. **Given** a valid `.rosetta` file opened in the editor, **When** the user introduces a syntax error (e.g., missing closing brace), **Then** within 500ms (NFR-1) the editor shows a red squiggly underline on the error location and a diagnostic message on hover
+2. **Given** a `.rosetta` file with a Rune validation error (duplicate attribute), **When** the LSP server publishes diagnostics, **Then** the editor displays an inline warning/error and the graph view highlights the affected node (depends on US5 graph integration tasks)
 3. **Given** multiple files open in tabs, **When** the user switches between files, **Then** each editor tab shows its own diagnostics, and document lifecycle events (didOpen/didClose/didChange) are sent correctly to the LSP server
 4. **Given** the user fixes an error, **When** the file re-validates clean, **Then** the underline disappears and the graph node error marker is removed
 
@@ -101,7 +105,7 @@ As a **user launching the studio**, I want it to automatically connect to a runn
 **Acceptance Scenarios**:
 
 1. **Given** `rune-lsp-server` is running on port 3001, **When** the studio loads, **Then** it connects via WebSocket within 2 seconds and the status indicator shows "Connected"
-2. **Given** no LSP server is running, **When** the studio loads and WebSocket connection fails, **Then** within 3 seconds the studio falls back to the SharedWorker-based LSP server and shows "Embedded" status
+2. **Given** no LSP server is running, **When** the studio loads and WebSocket connection fails, **Then** within 3 seconds the studio falls back to the SharedWorker-based LSP server (or a dedicated Worker if SharedWorker is unsupported) and shows "Embedded" status
 3. **Given** a connected WebSocket session, **When** the server goes down, **Then** the studio detects disconnection within 5 seconds, shows "Reconnecting…" status, attempts reconnection with exponential backoff, and falls back to embedded mode after 3 failed attempts
 4. **Given** the studio is in embedded mode, **When** a WebSocket server becomes available and the user clicks "Reconnect", **Then** the studio switches to WebSocket mode
 
@@ -121,6 +125,7 @@ As a **developer using both the graph view and source editor**, I want LSP diagn
 2. **Given** the user clicks a graph node "Trade", **When** the click handler fires, **Then** the source editor scrolls to the `type Trade` declaration and highlights it briefly
 3. **Given** the user clicks an error badge on a graph node, **When** handled, **Then** the editor scrolls to the specific error line within that type
 4. **Given** a diagnostic is resolved (user fixes the error), **When** new diagnostics arrive without the error, **Then** the graph node error badge is removed
+5. **Given** the user edits source (e.g., renames an attribute), **When** 500ms of idle time passes, **Then** the source is re-parsed, a semantic diff is computed against the previous AST, and the graph is updated only if structural changes occurred (new/removed types, changed inheritance). Cosmetic changes (comments, whitespace) do not trigger re-layout.
 
 ---
 
@@ -134,6 +139,7 @@ As a **developer using both the graph view and source editor**, I want LSP diagn
 | NFR-4 | Memory overhead (SharedWorker LSP server) | < 50MB |
 | NFR-5 | Reconnection attempts before fallback | 3 with exponential backoff |
 | NFR-6 | Multi-file support | At least 10 simultaneous open files |
+| NFR-7 | WebSocket security | Localhost-only binding (127.0.0.1); no auth token required |
 
 ## Out of Scope
 

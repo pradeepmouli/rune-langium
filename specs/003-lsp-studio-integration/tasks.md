@@ -46,8 +46,8 @@ description: "Task list for LSP-powered studio editor"
 ### Implementation
 
 - [ ] T008 [P] [US4] Implement WebSocket → CM Transport adapter in apps/studio/src/services/ws-transport.ts
-- [ ] T009 [P] [US4] Implement SharedWorker → CM Transport adapter in apps/studio/src/services/worker-transport.ts
-- [ ] T010 [US4] Implement SharedWorker LSP server entry point in apps/studio/src/workers/lsp-worker.ts
+- [ ] T009 [P] [US4] Implement Worker → CM Transport adapter (SharedWorker primary, dedicated Worker fallback if SharedWorker unsupported) in apps/studio/src/services/worker-transport.ts
+- [ ] T010 [US4] Implement Worker LSP server entry point (SharedWorker with dedicated Worker fallback) in apps/studio/src/workers/lsp-worker.ts
 - [ ] T011 [US4] Implement transport provider with failover logic in apps/studio/src/services/transport-provider.ts
 - [ ] T012 [P] [US4] Write ConnectionStatus indicator component in apps/studio/src/components/ConnectionStatus.tsx
 - [ ] T013 [P] [US4] Write ConnectionStatus component tests in apps/studio/test/components/ConnectionStatus.test.tsx
@@ -88,11 +88,13 @@ description: "Task list for LSP-powered studio editor"
 
 - [ ] T020 [US1] Implement SourceEditor component with CodeMirror 6 in apps/studio/src/components/SourceEditor.tsx
 - [ ] T021 [US1] Wire editor to LSP client (diagnostics, document sync) in SourceEditor — `client.plugin(uri)` integration
-- [ ] T022 [US2] Verify hover information works via @codemirror/lsp-client in SourceEditor (hover extension included in languageServerExtensions)
-- [ ] T023 [US3] Verify completion works via @codemirror/lsp-client in SourceEditor (completion extension included in languageServerExtensions)
-- [ ] T024 Implement multi-tab support (tab bar, active tab, tab switching) in SourceEditor
-- [ ] T025 Wire EditorPage to use SourceEditor instead of SourceView in apps/studio/src/pages/EditorPage.tsx
-- [ ] T026 Update App.tsx to initialize LSP client on startup in apps/studio/src/App.tsx
+- [ ] T022 [P] [US2] Write hover integration tests (type reference hover shows tooltip, Ctrl+click navigates to definition, cross-file go-to-def opens new tab) in apps/studio/test/components/SourceEditor.test.tsx (hover describe block)
+- [ ] T023 [P] [US3] Write completion integration tests (extends keyword triggers type list, enter inserts selection) in apps/studio/test/components/SourceEditor.test.tsx (completion describe block)
+- [ ] T024 [US2] Verify hover information works via @codemirror/lsp-client in SourceEditor (hover extension included in languageServerExtensions)
+- [ ] T025 [US3] Verify completion works via @codemirror/lsp-client in SourceEditor (completion extension included in languageServerExtensions)
+- [ ] T026 Implement multi-tab support (tab bar, active tab, tab switching; cross-file go-to-definition opens/switches tab) in SourceEditor
+- [ ] T027 Wire EditorPage to use SourceEditor instead of SourceView in apps/studio/src/pages/EditorPage.tsx
+- [ ] T028 Update App.tsx to initialize LSP client on startup in apps/studio/src/App.tsx
 
 **Checkpoint**: CodeMirror editor replacing SourceView with full LSP features
 
@@ -105,16 +107,19 @@ description: "Task list for LSP-powered studio editor"
 
 ### Tests first
 
-- [ ] T027 [P] Write diagnostics bridge tests (LSP → type mapping) in apps/studio/test/services/diagnostics-bridge.test.ts
-- [ ] T028 [P] Write diagnostics store tests in apps/studio/test/store/diagnostics-store.test.ts
+- [ ] T029 [P] Write diagnostics bridge tests (LSP → type mapping) in apps/studio/test/services/diagnostics-bridge.test.ts
+- [ ] T030 [P] Write diagnostics store tests in apps/studio/test/store/diagnostics-store.test.ts
+- [ ] T031 [P] Write semantic-diff utility tests (AST structural comparison, ignore comments/whitespace) in apps/studio/test/services/semantic-diff.test.ts
 
 ### Implementation
 
-- [ ] T029 [US5] Implement diagnostics zustand store in apps/studio/src/store/diagnostics-store.ts
-- [ ] T030 [US5] Implement diagnostics bridge (LSP diagnostics → type name mapping) in apps/studio/src/services/diagnostics-bridge.ts
-- [ ] T031 [US5] Wire diagnostics bridge to LSP client onDiagnostics callback in App.tsx or EditorPage.tsx
-- [ ] T032 [US5] Add error badge rendering to graph nodes (consume diagnostics store) in visual-editor DataTypeNode/ChoiceTypeNode/EnumTypeNode or EditorPage overlay
-- [ ] T033 [US5] Implement graph node click → editor scroll navigation in EditorPage.tsx
+- [ ] T032 [US5] Implement diagnostics zustand store in apps/studio/src/store/diagnostics-store.ts
+- [ ] T033 [US5] Implement diagnostics bridge (LSP diagnostics → type name mapping) in apps/studio/src/services/diagnostics-bridge.ts
+- [ ] T034 [US5] Implement semantic AST diff utility (compare type declarations, inheritance, attributes; ignore cosmetic changes) in apps/studio/src/services/semantic-diff.ts
+- [ ] T035 [US5] Implement debounced re-parse hook (500ms idle → re-parse → semantic diff → conditional graph re-layout) in apps/studio/src/services/debounced-reparse.ts
+- [ ] T036 [US5] Wire diagnostics bridge to LSP client onDiagnostics callback in App.tsx or EditorPage.tsx
+- [ ] T037 [US5] Add error badge rendering to graph nodes (consume diagnostics store) in visual-editor DataTypeNode/ChoiceTypeNode/EnumTypeNode or EditorPage overlay
+- [ ] T038 [US5] Implement graph node click → editor scroll navigation in EditorPage.tsx
 
 **Checkpoint**: Full bidirectional sync between graph and editor
 
@@ -124,13 +129,14 @@ description: "Task list for LSP-powered studio editor"
 
 **Purpose**: Error list panel, final integration, performance validation
 
-- [ ] T034 [P] Write DiagnosticsPanel component tests in apps/studio/test/components/DiagnosticsPanel.test.tsx
-- [ ] T035 [P] [US1] Implement DiagnosticsPanel component (error/warning list with navigation) in apps/studio/src/components/DiagnosticsPanel.tsx
-- [ ] T036 Wire DiagnosticsPanel into EditorPage layout in apps/studio/src/pages/EditorPage.tsx
-- [ ] T037 Add editor styles (CodeMirror theme, tab bar, connection indicator) in apps/studio/src/styles.css
-- [ ] T038 Verify NFR targets: diagnostics latency <500ms, handshake <2s, editor load <500ms
-- [ ] T039 Update studio README with LSP features documentation in apps/studio/README.md
-- [ ] T040 Final integration test: load files → connect LSP → edit → see diagnostics in editor + graph
+- [ ] T039 [P] Add vendored .rosetta test fixtures for LSP integration tests (reuse CDM corpus subset) in apps/studio/test/fixtures/
+- [ ] T040 [P] Write DiagnosticsPanel component tests in apps/studio/test/components/DiagnosticsPanel.test.tsx
+- [ ] T041 [P] [US1] Implement DiagnosticsPanel component (error/warning list with navigation) in apps/studio/src/components/DiagnosticsPanel.tsx
+- [ ] T042 Wire DiagnosticsPanel into EditorPage layout in apps/studio/src/pages/EditorPage.tsx
+- [ ] T043 Add editor styles (CodeMirror theme, tab bar, connection indicator) in apps/studio/src/styles.css
+- [ ] T044 Verify NFR targets: diagnostics latency <500ms (NFR-1), handshake <2s (NFR-2), editor load <500ms (NFR-3), SharedWorker memory <50MB (NFR-4), WebSocket binds to localhost only (NFR-7)
+- [ ] T045 Update studio README with LSP features documentation in apps/studio/README.md
+- [ ] T046 Final integration test: load vendored fixtures → connect LSP → edit → see diagnostics in editor + graph
 
 ---
 
@@ -148,10 +154,10 @@ Dev D: T007 (transport-provider test) → T011 (transport-provider.ts)
 ### Phase 5+6 parallel splits
 
 ```text
-Dev A: T020-T024 (SourceEditor, tabs)
-Dev B: T029-T030 (diagnostics store + bridge)
-Dev C: T032-T033 (graph badges + navigation)
-Dev D: T034-T035 (DiagnosticsPanel)
+Dev A: T020-T026 (SourceEditor, tabs, hover/completion tests)
+Dev B: T032-T035 (diagnostics store + bridge + semantic diff)
+Dev C: T037-T038 (graph badges + navigation)
+Dev D: T039-T041 (fixtures + DiagnosticsPanel)
 ```
 
 ---
@@ -194,7 +200,7 @@ SharedWorker fallback and graph integration are additive.
 | 2. Transport | 9 | 6 | 3 |
 | 3. Language | 2 | 2 | 0 |
 | 4. LSP Client | 2 | 0 | 2 |
-| 5. Editor | 9 | 2 | 7 |
-| 6. Graph Bridge | 7 | 2 | 5 |
-| 7. Polish | 7 | 2 | 5 |
-| **Total** | **40** | **15** | **25** |
+| 5. Editor | 11 | 4 | 7 |
+| 6. Graph Bridge | 10 | 3 | 7 |
+| 7. Polish | 8 | 3 | 5 |
+| **Total** | **46** | **19** | **27** |
