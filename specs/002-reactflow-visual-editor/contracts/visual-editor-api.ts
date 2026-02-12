@@ -53,6 +53,9 @@ export interface ValidationError {
   severity: 'error' | 'warning' | 'info';
   message: string;
   ruleId?: string;
+  /** Optional structured location for parity with core diagnostics */
+  line?: number;
+  column?: number;
 }
 
 // ---------------------------------------------------------------------------
