@@ -1,0 +1,200 @@
+---
+
+description: "Task list for LSP-powered studio editor"
+
+---
+
+# Tasks: LSP-Powered Studio Editor
+
+**Input**: Design documents from `/specs/003-lsp-studio-integration/`
+**Prerequisites**: plan.md (required), spec.md (required), research.md, data-model.md, contracts/
+
+**Tests**: INCLUDED (mandatory per spec.md "User Scenarios & Testing").
+
+**Organization**: Tasks are grouped by phase (transport → editor → graph integration → polish) with user story traceability.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: Can run in parallel (different files, no dependencies)
+- **[Story]**: Which user story this task belongs to (e.g., US1, US4)
+- Include exact file paths in descriptions
+
+---
+
+## Phase 1: Setup & Dependencies
+
+**Purpose**: Install CodeMirror and LSP dependencies, configure build
+
+- [ ] T001 Add CodeMirror and LSP dependencies to studio package.json: `codemirror`, `@codemirror/lsp-client`, `@codemirror/language`, `@codemirror/view`, `@codemirror/state`, `@codemirror/commands`, `@codemirror/lint`, `@lspeasy/core`, `@lspeasy/client` in apps/studio/package.json
+- [ ] T002 Configure Vite for SharedWorker support (worker plugin) in apps/studio/vite.config.ts
+- [ ] T003 [P] Add `@rune-langium/lsp-server` dependency to studio in apps/studio/package.json
+- [ ] T004 Run pnpm install and verify build passes
+
+---
+
+## Phase 2: Transport Layer (US4 — Connection Management)
+
+**Purpose**: Implement dual transport with automatic failover
+**Validates**: User Story 4 (Connection Management & Fallback)
+
+### Tests first
+
+- [ ] T005 [P] Write unit tests for WebSocket transport adapter in apps/studio/test/services/ws-transport.test.ts
+- [ ] T006 [P] Write unit tests for SharedWorker transport adapter in apps/studio/test/services/worker-transport.test.ts
+- [ ] T007 [P] Write unit tests for transport provider (failover logic) in apps/studio/test/services/transport-provider.test.ts
+
+### Implementation
+
+- [ ] T008 [P] [US4] Implement WebSocket → CM Transport adapter in apps/studio/src/services/ws-transport.ts
+- [ ] T009 [P] [US4] Implement SharedWorker → CM Transport adapter in apps/studio/src/services/worker-transport.ts
+- [ ] T010 [US4] Implement SharedWorker LSP server entry point in apps/studio/src/workers/lsp-worker.ts
+- [ ] T011 [US4] Implement transport provider with failover logic in apps/studio/src/services/transport-provider.ts
+- [ ] T012 [P] [US4] Write ConnectionStatus indicator component in apps/studio/src/components/ConnectionStatus.tsx
+- [ ] T013 [P] [US4] Write ConnectionStatus component tests in apps/studio/test/components/ConnectionStatus.test.tsx
+
+**Checkpoint**: Transport layer complete — WebSocket and SharedWorker transports working with automatic failover
+
+---
+
+## Phase 3: Rune DSL Language Support
+
+**Purpose**: Syntax highlighting for .rosetta files in CodeMirror
+
+- [ ] T014 [P] Write tests for Rune DSL syntax highlighting in apps/studio/test/lang/rune-dsl.test.ts
+- [ ] T015 [P] Implement Rune DSL StreamLanguage definition in apps/studio/src/lang/rune-dsl.ts
+
+---
+
+## Phase 4: LSP Client Service
+
+**Purpose**: Manage LSPClient lifecycle, document sync, and diagnostics subscription
+
+- [ ] T016 Write unit tests for LSP client service in apps/studio/test/services/lsp-client.test.ts
+- [ ] T017 Implement LSP client service (connect, disconnect, getPlugin, onDiagnostics) in apps/studio/src/services/lsp-client.ts
+
+---
+
+## Phase 5: CodeMirror Editor (US1, US2, US3 — Diagnostics, Hover, Completion)
+
+**Purpose**: Replace SourceView with CodeMirror 6 editor wired to LSP
+**Validates**: User Story 1 (Diagnostics), User Story 2 (Hover & Go-to-Definition), User Story 3 (Completion)
+
+### Tests first
+
+- [ ] T018 [P] Write SourceEditor component tests (render, tabs, content) in apps/studio/test/components/SourceEditor.test.tsx
+- [ ] T019 [P] Write diagnostics display tests (underlines, hover) in apps/studio/test/components/SourceEditor.test.tsx (diagnostics describe block)
+
+### Implementation
+
+- [ ] T020 [US1] Implement SourceEditor component with CodeMirror 6 in apps/studio/src/components/SourceEditor.tsx
+- [ ] T021 [US1] Wire editor to LSP client (diagnostics, document sync) in SourceEditor — `client.plugin(uri)` integration
+- [ ] T022 [US2] Verify hover information works via @codemirror/lsp-client in SourceEditor (hover extension included in languageServerExtensions)
+- [ ] T023 [US3] Verify completion works via @codemirror/lsp-client in SourceEditor (completion extension included in languageServerExtensions)
+- [ ] T024 Implement multi-tab support (tab bar, active tab, tab switching) in SourceEditor
+- [ ] T025 Wire EditorPage to use SourceEditor instead of SourceView in apps/studio/src/pages/EditorPage.tsx
+- [ ] T026 Update App.tsx to initialize LSP client on startup in apps/studio/src/App.tsx
+
+**Checkpoint**: CodeMirror editor replacing SourceView with full LSP features
+
+---
+
+## Phase 6: Diagnostics Bridge & Graph Integration (US5)
+
+**Purpose**: Connect LSP diagnostics to ReactFlow graph nodes
+**Validates**: User Story 5 (Graph ↔ Editor Sync)
+
+### Tests first
+
+- [ ] T027 [P] Write diagnostics bridge tests (LSP → type mapping) in apps/studio/test/services/diagnostics-bridge.test.ts
+- [ ] T028 [P] Write diagnostics store tests in apps/studio/test/store/diagnostics-store.test.ts
+
+### Implementation
+
+- [ ] T029 [US5] Implement diagnostics zustand store in apps/studio/src/store/diagnostics-store.ts
+- [ ] T030 [US5] Implement diagnostics bridge (LSP diagnostics → type name mapping) in apps/studio/src/services/diagnostics-bridge.ts
+- [ ] T031 [US5] Wire diagnostics bridge to LSP client onDiagnostics callback in App.tsx or EditorPage.tsx
+- [ ] T032 [US5] Add error badge rendering to graph nodes (consume diagnostics store) in visual-editor DataTypeNode/ChoiceTypeNode/EnumTypeNode or EditorPage overlay
+- [ ] T033 [US5] Implement graph node click → editor scroll navigation in EditorPage.tsx
+
+**Checkpoint**: Full bidirectional sync between graph and editor
+
+---
+
+## Phase 7: DiagnosticsPanel & Polish
+
+**Purpose**: Error list panel, final integration, performance validation
+
+- [ ] T034 [P] Write DiagnosticsPanel component tests in apps/studio/test/components/DiagnosticsPanel.test.tsx
+- [ ] T035 [P] [US1] Implement DiagnosticsPanel component (error/warning list with navigation) in apps/studio/src/components/DiagnosticsPanel.tsx
+- [ ] T036 Wire DiagnosticsPanel into EditorPage layout in apps/studio/src/pages/EditorPage.tsx
+- [ ] T037 Add editor styles (CodeMirror theme, tab bar, connection indicator) in apps/studio/src/styles.css
+- [ ] T038 Verify NFR targets: diagnostics latency <500ms, handshake <2s, editor load <500ms
+- [ ] T039 Update studio README with LSP features documentation in apps/studio/README.md
+- [ ] T040 Final integration test: load files → connect LSP → edit → see diagnostics in editor + graph
+
+---
+
+## Parallel Execution Guide
+
+### Phase 2 parallel splits
+
+```text
+Dev A: T008 (ws-transport.ts) + T005 (test)
+Dev B: T009 (worker-transport.ts) + T006 (test)
+Dev C: T012 (ConnectionStatus.tsx) + T013 (test)
+Dev D: T007 (transport-provider test) → T011 (transport-provider.ts)
+```
+
+### Phase 5+6 parallel splits
+
+```text
+Dev A: T020-T024 (SourceEditor, tabs)
+Dev B: T029-T030 (diagnostics store + bridge)
+Dev C: T032-T033 (graph badges + navigation)
+Dev D: T034-T035 (DiagnosticsPanel)
+```
+
+---
+
+## Implementation Strategy
+
+### Phase Ordering
+
+1. **Setup (Phase 1)** — foundation for everything
+2. **Transport (Phase 2)** — must work before any LSP features
+3. **Language + Client (Phase 3-4)** — can run in parallel
+4. **Editor (Phase 5)** — depends on transport + language + client
+5. **Graph Bridge (Phase 6)** — depends on editor + diagnostics
+6. **Polish (Phase 7)** — depends on everything above
+
+### MVP First
+
+The minimum viable integration is:
+1. Phase 1 (setup)
+2. Phase 2 (transport — WebSocket only, skip SharedWorker for MVP)
+3. Phase 3 (syntax highlighting)
+4. Phase 4 (LSP client)
+5. Phase 5 (editor) → **Usable LSP editor**
+
+SharedWorker fallback and graph integration are additive.
+
+### Incremental Delivery
+
+1. Setup + Transport → connection works
+2. Language + Client → LSP pipeline ready
+3. Editor → diagnostics, hover, completion in source editor
+4. Graph bridge → errors visible on graph nodes
+5. Polish → production-ready experience
+
+### Task Count Summary
+
+| Phase | Tasks | Parallel | Sequential |
+|-------|-------|----------|------------|
+| 1. Setup | 4 | 1 | 3 |
+| 2. Transport | 9 | 6 | 3 |
+| 3. Language | 2 | 2 | 0 |
+| 4. LSP Client | 2 | 0 | 2 |
+| 5. Editor | 9 | 2 | 7 |
+| 6. Graph Bridge | 7 | 2 | 5 |
+| 7. Polish | 7 | 2 | 5 |
+| **Total** | **40** | **15** | **25** |
