@@ -1,0 +1,325 @@
+/* @rune-langium/studio — App styles (T090) */
+
+/* ---------- Reset ---------- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- App shell ---------- */
+.studio-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #e2e8f0;
+  background: #0f172a;
+}
+
+/* ---------- Header ---------- */
+.studio-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  min-height: 44px;
+}
+
+.studio-header__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.studio-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.studio-header__info {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.studio-header__errors {
+  color: #f87171;
+}
+
+.studio-header__button {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #e2e8f0;
+  background: #334155;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.studio-header__button:hover {
+  background: #475569;
+}
+
+/* ---------- Main ---------- */
+.studio-main {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ---------- Loading ---------- */
+.studio-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+/* ---------- File Loader ---------- */
+.studio-file-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px;
+  transition: background 0.2s;
+}
+
+.studio-file-loader--dragging {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.studio-file-loader__content {
+  text-align: center;
+  max-width: 480px;
+}
+
+.studio-file-loader__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-bottom: 8px;
+}
+
+.studio-file-loader__hint {
+  font-size: 14px;
+  color: #94a3b8;
+  margin-bottom: 24px;
+}
+
+.studio-file-loader__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.studio-file-loader__button {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  background: #3b82f6;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.studio-file-loader__button:hover {
+  background: #2563eb;
+}
+
+.studio-file-loader__button--secondary {
+  background: #334155;
+  border: 1px solid #475569;
+}
+
+.studio-file-loader__button--secondary:hover {
+  background: #475569;
+}
+
+/* ---------- Editor Page ---------- */
+.studio-editor-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.studio-editor-page__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  gap: 8px;
+}
+
+.studio-editor-page__toolbar-left,
+.studio-editor-page__toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-toolbar-button {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #cbd5e1;
+  background: #334155;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.studio-toolbar-button:hover {
+  background: #475569;
+  color: #f1f5f9;
+}
+
+.studio-toolbar-button--active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.studio-editor-page__content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.studio-editor-page__graph {
+  flex: 1;
+  position: relative;
+}
+
+.studio-editor-page__graph--with-source {
+  flex: 2;
+}
+
+.studio-editor-page__source {
+  flex: 1;
+  border-left: 1px solid #334155;
+  overflow: auto;
+  max-width: 480px;
+  min-width: 240px;
+}
+
+.studio-editor-page__status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #64748b;
+  background: #1e293b;
+  border-top: 1px solid #334155;
+}
+
+/* ---------- Source View ---------- */
+.studio-source-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0f172a;
+}
+
+.studio-source-view--empty {
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.studio-source-view__tabs {
+  display: flex;
+  overflow-x: auto;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  gap: 1px;
+}
+
+.studio-source-view__tab {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.studio-source-view__tab:hover {
+  color: #e2e8f0;
+}
+
+.studio-source-view__tab--active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.studio-source-view__dirty {
+  color: #f59e0b;
+}
+
+.studio-source-view__content {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+
+.studio-source-view__code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+}
+
+.studio-source-view__placeholder {
+  color: #64748b;
+  text-align: center;
+  padding: 24px;
+}
+
+/* ---------- Export Menu ---------- */
+.studio-export-menu {
+  display: flex;
+  gap: 4px;
+}
+
+.studio-export-menu__button {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #cbd5e1;
+  background: #334155;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.studio-export-menu__button:hover:not(:disabled) {
+  background: #475569;
+  color: #f1f5f9;
+}
+
+.studio-export-menu__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

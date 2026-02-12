@@ -11,13 +11,18 @@
     "url": "https://github.com/pradeepmouli/rune-langium.git"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "build": "pnpm -r run build",
+    "build:core": "pnpm --filter @rune-langium/core build",
+    "build:visual-editor": "pnpm --filter @rune-langium/visual-editor build",
+    "build:studio": "pnpm --filter @rune-langium/studio build",
     "clean": "pnpm -r run clean && rm -rf node_modules/.cache",
     "clean:all": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
     "dev": "pnpm -r --parallel run dev",
+    "dev:studio": "pnpm --filter @rune-langium/studio dev",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "fresh": "pnpm clean:all && pnpm install",
@@ -44,5 +49,9 @@
     "node": ">=20.0.0",
     "pnpm": ">=10.0.0"
   },
-  "packageManager": "pnpm@10.28.0"
+  "packageManager": "pnpm@10.28.0",
+  "dependencies": {
+    "@lspeasy/client": "link:../lspy/packages/client",
+    "@lspeasy/core": "link:../lspy/packages/core"
+  }
 }

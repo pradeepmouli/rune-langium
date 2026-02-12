@@ -7,10 +7,17 @@ This repository uses **pnpm workspaces** for managing multiple packages in a mon
 ```
 rune-langium/
 ├── packages/
-│   └── [your-package]/
+│   ├── core/                  # Langium-based Rune DSL parser + AST
+│   ├── cli/                   # CLI tool for parsing/validation
+│   └── visual-editor/         # ReactFlow component library
+├── apps/
+│   └── studio/                # Standalone web app (Vite + React)
 ├── scripts/
 ├── e2e/
 ├── docs/
+├── specs/
+│   ├── 001-langium-port/
+│   └── 002-reactflow-visual-editor/
 ├── pnpm-workspace.yaml
 └── package.json
 ```

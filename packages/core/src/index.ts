@@ -16,8 +16,16 @@ export {
   insertImplicitBrackets
 } from './services/rune-dsl-parser.js';
 
-// Generated module essentials
+// Generated module essentials — needed for LSP server integration
 export { RuneDslLanguageMetaData } from './generated/module.js';
+export { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from './generated/module.js';
+
+// Serializer
+export {
+  serializeModel,
+  serializeElement,
+  serializeModels
+} from './serializer/rosetta-serializer.js';
 
 // Utility functions
 export {

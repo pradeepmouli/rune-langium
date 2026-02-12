@@ -1,33 +1,137 @@
 # Examples
 
-This directory contains examples demonstrating how to use packages in this monorepo. Update the
-imports to match the packages you create under [packages/](../packages).
+Usage examples for packages in this monorepo.
 
-## Root Module
+## Core Parser
 
 ```typescript
-import { hello } from '../src/index';
+import { parse } from '@rune-langium/core';
 
-console.log(hello());
+const result = await parse(`
+  namespace demo
+
+  type Foo:
+    bar string (1..1)
+`);
+console.log(result.value);
 ```
 
-## Package Usage (Example)
+## Visual Editor — Quick Start
 
-```typescript
-import { parseRune } from '@rune-langium/example-package';
+```tsx
+import { RuneTypeGraph } from '@rune-langium/visual-editor';
+import '@rune-langium/visual-editor/styles.css';
+import { parse } from '@rune-langium/core';
 
-const ast = parseRune('data example');
-console.log(ast);
+const result = await parse(`
+  namespace demo
+  type Foo:
+    bar string (1..1)
+`);
+
+function App() {
+  return (
+    <RuneTypeGraph
+      models={[result.value]}
+      config={{ layout: { direction: 'TB' } }}
+    />
+  );
+}
 ```
 
-## Cross-Package Integration (Example)
+## Visual Editor — Filtering
 
-```typescript
-import { parseRune } from '@rune-langium/core';
-import { formatDiagnostics } from '@rune-langium/utils';
+```tsx
+<RuneTypeGraph
+  models={models}
+  config={{
+    filters: {
+      kinds: ['data', 'enum'],
+      namespaces: ['demo'],
+      namePattern: 'Foo',
+      hideOrphans: true
+    }
+  }}
+/>
+```
 
-const diagnostics = parseRune('data example');
-console.log(formatDiagnostics(diagnostics));
+## Visual Editor — Callbacks
+
+```tsx
+<RuneTypeGraph
+  models={models}
+  callbacks={{
+    onNodeSelect: (node) => console.log('Selected:', node?.id),
+    onEdgeSelect: (edge) => console.log('Edge:', edge?.id),
+    onViewportChange: (vp) => console.log('Viewport:', vp),
+    onGraphReady: () => console.log('Graph loaded')
+  }}
+/>
+```
+
+## Visual Editor — Ref API (Imperative Control)
+
+```tsx
+import { useRef } from 'react';
+import type { RuneTypeGraphRef } from '@rune-langium/visual-editor';
+
+function App() {
+  const ref = useRef<RuneTypeGraphRef>(null);
+
+  return (
+    <>
+      <button onClick={() => ref.current?.fitView()}>Fit</button>
+      <button onClick={() => ref.current?.search('Foo')}>Search</button>
+      <button onClick={() => ref.current?.relayout('LR')}>Layout LR</button>
+      <RuneTypeGraph ref={ref} models={models} />
+    </>
+  );
+}
+```
+
+## Visual Editor — Detail Panel
+
+```tsx
+import { RuneTypeGraph, DetailPanel } from '@rune-langium/visual-editor';
+
+function App() {
+  return (
+    <RuneTypeGraph models={models}>
+      <DetailPanel />
+    </RuneTypeGraph>
+  );
+}
+```
+
+## Visual Editor — Custom Styling
+
+```tsx
+<RuneTypeGraph
+  models={models}
+  config={{
+    nodeStyles: {
+      data: { headerColor: '#3b82f6', borderRadius: 8 },
+      choice: { headerColor: '#f59e0b' },
+      enum: { headerColor: '#10b981' }
+    },
+    edgeStyles: {
+      inheritance: { stroke: '#3b82f6', strokeWidth: 2 },
+      'attribute-ref': { stroke: '#6b7280', strokeDasharray: '5,5' }
+    }
+  }}
+/>
+```
+
+## Visual Editor — Multiple Models
+
+```tsx
+const result1 = await parse(source1);
+const result2 = await parse(source2);
+
+<RuneTypeGraph
+  models={[result1.value, result2.value]}
+  config={{ layout: { direction: 'LR', separation: { node: 80, rank: 200 } } }}
+/>
 ```
     return createSuccessResponse(data);
   } catch (error) {
