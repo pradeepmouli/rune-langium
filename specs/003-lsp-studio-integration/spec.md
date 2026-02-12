@@ -52,7 +52,7 @@ As a **Rune DSL developer editing .rosetta files in the studio**, I want to see 
 **Acceptance Scenarios**:
 
 1. **Given** a valid `.rosetta` file opened in the editor, **When** the user introduces a syntax error (e.g., missing closing brace), **Then** within 1 second the editor shows a red squiggly underline on the error location and a diagnostic message on hover
-2. **Given** a `.rosetta` file with a Rune validation error (duplicate attribute), **When** the LSP server publishes diagnostics, **Then** the editor displays an inline warning/error and the graph view highlights the affected node   
+2. **Given** a `.rosetta` file with a Rune validation error (duplicate attribute), **When** the LSP server publishes diagnostics, **Then** the editor displays an inline warning/error and the graph view highlights the affected node
 3. **Given** multiple files open in tabs, **When** the user switches between files, **Then** each editor tab shows its own diagnostics, and document lifecycle events (didOpen/didClose/didChange) are sent correctly to the LSP server
 4. **Given** the user fixes an error, **When** the file re-validates clean, **Then** the underline disappears and the graph node error marker is removed
 
@@ -86,7 +86,7 @@ As a **developer writing Rune DSL code**, I want autocomplete suggestions for ty
 
 1. **Given** the cursor is after `extends `, **When** the user triggers completion (Ctrl+Space or typing), **Then** a list of valid type names from the workspace appears
 2. **Given** the cursor is at the start of a line inside a type body, **When** the user triggers completion, **Then** keyword suggestions (e.g., attribute types, cardinality patterns) appear
-3. **Given** a completion item is selected, **When** the user presses Enter/Tab, **Then** the selected text is inserted and the editor re-validates  
+3. **Given** a completion item is selected, **When** the user presses Enter/Tab, **Then** the selected text is inserted and the editor re-validates
 
 ---
 
