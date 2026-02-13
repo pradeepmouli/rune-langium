@@ -47,6 +47,13 @@ export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] 
 }
 
 /**
+ * Escape special regex characters in a string.
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Filter namespace tree entries by a search query.
  *
  * Matches against both namespace name and type names.
@@ -56,7 +63,8 @@ export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] 
 export function filterNamespaceTree(tree: NamespaceTreeNode[], query: string): NamespaceTreeNode[] {
   if (!query.trim()) return tree;
 
-  const regex = new RegExp(query, 'i');
+  const escapedQuery = escapeRegex(query);
+  const regex = new RegExp(escapedQuery, 'i');
   const results: NamespaceTreeNode[] = [];
 
   for (const entry of tree) {

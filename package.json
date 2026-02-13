@@ -28,7 +28,7 @@
     "fresh": "pnpm clean:all && pnpm install",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
-    "test": "vitest run",
+    "test": "pnpm -r run test",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "type-check": "pnpm -r run type-check"

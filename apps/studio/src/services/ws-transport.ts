@@ -17,13 +17,18 @@ export function createWebSocketTransport(uri: string, timeout = 2000): Promise<T
   return new Promise((resolve, reject) => {
     const handlers: ((value: string) => void)[] = [];
     const sock = new WebSocket(uri);
+    let settled = false;
 
     const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
       sock.close();
       reject(new Error(`WebSocket connection to ${uri} timed out after ${timeout}ms`));
     }, timeout);
 
     sock.onopen = () => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       resolve({
         send(message: string) {
@@ -45,7 +50,10 @@ export function createWebSocketTransport(uri: string, timeout = 2000): Promise<T
     };
 
     sock.onerror = () => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      sock.close();
       reject(new Error(`WebSocket connection to ${uri} failed`));
     };
   });

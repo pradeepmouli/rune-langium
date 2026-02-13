@@ -15,15 +15,20 @@ import { createRuneLspServer } from './rune-dsl-server.js';
 const DEFAULT_PORT = 3001;
 const DEFAULT_HOST = '0.0.0.0';
 
-function parseArgs(): { port: number; host: string } {
-  const args = process.argv.slice(2);
+export function parseArgs(argv: string[] = process.argv.slice(2)): { port: number; host: string } {
+  const args = argv;
   let port = DEFAULT_PORT;
   let host = DEFAULT_HOST;
 
   for (let i = 0; i < args.length; i++) {
     const next = args[i + 1];
     if (args[i] === '--port' && next) {
-      port = parseInt(next, 10);
+      const parsed = parseInt(next, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 65535) {
+        console.error(`Invalid port: "${next}". Port must be a number between 1 and 65535.`);
+        process.exit(1);
+      }
+      port = parsed;
       i++;
     } else if (args[i] === '--host' && next) {
       host = next;

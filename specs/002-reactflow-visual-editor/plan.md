@@ -172,6 +172,23 @@ Zustand is used internally by ReactFlow and recommended by the ReactFlow team. Z
 - **New types created visually**: Use the custom serializer to generate `.rosetta` text from AST nodes
 - **Export**: Full re-serialization of the complete model, producing semantically equivalent but freshly-formatted output
 
+### AD-6: AST Source Provenance — Generic Typed Graph Model
+
+Graph types (`TypeNodeData`, `MemberDisplay`) are generic over the Langium AST kind so that
+rich type information flows through the pipeline without creating a separate taxonomy:
+
+- `TypeNodeData<K extends TypeKind>` carries `source?: AstNodeKindMap[K]` — the original AST node
+- `MemberDisplay<M = AstMemberType>` carries `source?: M` — the original AST member node
+- `AstNodeKindMap` maps `data→Data`, `choice→Choice`, `enum→RosettaEnumeration`
+- `AstMemberKindMap` maps `data→Attribute`, `choice→ChoiceOption`, `enum→RosettaEnumValue`
+- `ast-to-graph.ts` populates `source` using real Langium type guards (`isData`, `isChoice`, `isRosettaEnumeration`)
+- `graph-to-ast.ts` Synthetic* interfaces carry `source?` for pass-through to downstream consumers
+- `@rune-langium/core` is a **runtime dependency** (not just devDependency) of `@rune-langium/visual-editor`
+
+This preserves all annotations, conditions, synonyms, labels, doc-references, type parameters, and
+other metadata that the previous adapter layer was dropping. The `source?` fields are optional, so
+new types created via the graph editor have `undefined` source — no tight coupling is forced.
+
 ## Implementation Phases
 
 ### Phase 1: Read-Only Visualization (P1 — MVP)

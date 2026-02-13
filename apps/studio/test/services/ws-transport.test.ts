@@ -132,4 +132,67 @@ describe('createWebSocketTransport', () => {
     expect(h1).toHaveBeenCalledWith('test');
     expect(h2).toHaveBeenCalledWith('test');
   });
+
+  it('does not reject after successful connection (settled flag prevents timeout rejection)', async () => {
+    vi.useFakeTimers();
+    const promise = createWebSocketTransport('ws://localhost:3001', 1000);
+    const ws = MockWebSocket.instances[0]!;
+
+    // Connection opens successfully
+    ws.simulateOpen();
+    const transport = await promise;
+
+    // Advance time past timeout
+    vi.advanceTimersByTime(1500);
+
+    // Promise should already be resolved, transport remains valid
+    expect(transport).toBeDefined();
+    expect(typeof transport.send).toBe('function');
+
+    vi.useRealTimers();
+  });
+
+  it('does not reject after successful connection (settled flag prevents error rejection)', async () => {
+    const promise = createWebSocketTransport('ws://localhost:3001');
+    const ws = MockWebSocket.instances[0]!;
+
+    // Connection opens successfully
+    ws.simulateOpen();
+    const transport = await promise;
+
+    // Simulate error after successful connection
+    ws.simulateError();
+
+    // Should not throw - promise is already settled
+    expect(transport).toBeDefined();
+  });
+
+  it('only rejects once when both timeout and error occur', async () => {
+    vi.useFakeTimers();
+    const promise = createWebSocketTransport('ws://localhost:3001', 100);
+    const ws = MockWebSocket.instances[0]!;
+
+    // Trigger error first
+    ws.simulateError();
+
+    // Then trigger timeout
+    vi.advanceTimersByTime(150);
+
+    // Should only reject once (from error)
+    await expect(promise).rejects.toThrow(/failed/);
+
+    vi.useRealTimers();
+  });
+
+  it('rejects with timeout when connection does not open in time', async () => {
+    vi.useFakeTimers();
+    const promise = createWebSocketTransport('ws://localhost:3001', 100);
+
+    // Don't simulate open, just let it timeout
+    vi.advanceTimersByTime(150);
+
+    await expect(promise).rejects.toThrow(/timed out/);
+
+    vi.useRealTimers();
+  });
 });
