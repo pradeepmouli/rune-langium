@@ -10,7 +10,6 @@ import { useRef, useCallback, useState, useMemo } from 'react';
 import {
   RuneTypeGraph,
   NamespaceExplorerPanel,
-  buildNamespaceTree,
   astToGraph
 } from '@rune-langium/visual-editor';
 import type { RuneTypeGraphRef, VisibilityState, TypeGraphNode } from '@rune-langium/visual-editor';
