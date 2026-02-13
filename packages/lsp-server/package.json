@@ -19,14 +19,14 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsgo -b",
     "clean": "rm -rf dist",
-    "dev": "tsc -b --watch",
+    "dev": "tsgo -b --watch",
     "lint": "oxlint .",
     "start": "node dist/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsgo --noEmit"
   },
   "dependencies": {
     "@lspeasy/core": "link:../../../lspy/packages/core",
