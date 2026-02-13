@@ -41,8 +41,8 @@ describe('parseArgs (port validation)', () => {
 
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    processExitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: number) => {
-      throw new Error(`process.exit(${code})`);
+    processExitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null | undefined): never => {
+      throw new Error(`process.exit(${code})`) as never;
     });
   });
 

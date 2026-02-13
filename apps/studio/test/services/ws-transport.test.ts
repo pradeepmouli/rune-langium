@@ -140,13 +140,14 @@ describe('createWebSocketTransport', () => {
 
     // Connection opens successfully
     ws.simulateOpen();
-    await promise;
+    const transport = await promise;
 
     // Advance time past timeout
     vi.advanceTimersByTime(1500);
 
-    // Promise should already be resolved, timeout should not reject
-    await expect(Promise.resolve()).resolves.not.toThrow();
+    // Promise should already be resolved, transport remains valid
+    expect(transport).toBeDefined();
+    expect(typeof transport.send).toBe('function');
 
     vi.useRealTimers();
   });
