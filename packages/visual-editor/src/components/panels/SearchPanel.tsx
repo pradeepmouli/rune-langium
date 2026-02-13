@@ -46,13 +46,13 @@ export function SearchPanel({
         onChange={(e) => onSearchChange(e.target.value)}
       />
       {searchQuery && (
-        <div style={{ marginTop: 4, fontSize: 12, color: '#718096' }}>
+        <div className="rune-search-panel__results">
           {resultCount} result{resultCount !== 1 ? 's' : ''}
         </div>
       )}
-      <div style={{ marginTop: 8 }}>
+      <div className="rune-search-panel__filter-section">
         <div className="rune-detail-label">Filter by Kind</div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div className="rune-search-panel__filter-buttons">
           {(['data', 'choice', 'enum'] as TypeKind[]).map((kind) => (
             <button
               key={kind}
@@ -66,8 +66,8 @@ export function SearchPanel({
           ))}
         </div>
       </div>
-      <div style={{ marginTop: 8 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+      <div className="rune-search-panel__orphan-toggle">
+        <label className="rune-search-panel__orphan-label">
           <input
             type="checkbox"
             checked={filters.hideOrphans ?? false}

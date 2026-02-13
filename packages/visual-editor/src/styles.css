@@ -177,6 +177,40 @@
   box-shadow: 0 0 0 1px #4299e1;
 }
 
+/* Search panel layout */
+.rune-search-panel__results {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #718096;
+}
+
+.rune-search-panel__filter-section {
+  margin-top: 8px;
+}
+
+.rune-search-panel__filter-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.rune-search-panel__orphan-toggle {
+  margin-top: 8px;
+}
+
+.rune-search-panel__orphan-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rune-toolbar-button-active {
+  background: #4299e1;
+  border-color: #4299e1;
+  color: #ffffff;
+}
+
 /* Toolbar */
 .rune-toolbar {
   display: flex;
@@ -194,6 +228,21 @@
 }
 
 .rune-toolbar-button:hover {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+.rune-toolbar-select {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #4a5568;
+  cursor: pointer;
+}
+
+.rune-toolbar-select:hover {
   background: #f7fafc;
   border-color: #cbd5e0;
 }

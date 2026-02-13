@@ -27,60 +27,32 @@ const MODE_LABELS: Record<string, string> = {
   embedded: 'Embedded'
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  disconnected: '#888',
-  connecting: '#f5a623',
-  connected: '#4caf50',
-  error: '#e53935'
-};
-
 export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) {
   const statusLabel = STATUS_LABELS[state.status] ?? state.status;
   const modeLabel = MODE_LABELS[state.mode] ?? state.mode;
-  const color = STATUS_COLORS[state.status] ?? '#888';
 
   const showReconnect =
     onReconnect !== undefined && state.status !== 'connected' && state.status !== 'connecting';
 
+  const dotClass = `studio-connection-status__dot studio-connection-status__dot--${state.status}`;
+
   return (
-    <div
-      className="connection-status"
-      style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}
-      role="status"
-    >
-      <span
-        className="connection-status__dot"
-        style={{
-          width: '8px',
-          height: '8px',
-          borderRadius: '50%',
-          backgroundColor: color,
-          display: 'inline-block'
-        }}
-      />
-      <span className="connection-status__label">
+    <div className="studio-connection-status" role="status">
+      <span className={dotClass} />
+      <span>
         {statusLabel}
         {modeLabel && state.status === 'connected' ? ` (${modeLabel})` : ''}
       </span>
       {state.status === 'error' && state.error && (
-        <span className="connection-status__error" style={{ color: '#e53935' }}>
+        <span className="studio-connection-status__error">
           {state.error.message}
         </span>
       )}
       {showReconnect && (
         <button
-          className="connection-status__reconnect"
+          className="studio-connection-status__reconnect"
           onClick={onReconnect}
           aria-label="Reconnect"
-          style={{
-            fontSize: '11px',
-            padding: '2px 8px',
-            cursor: 'pointer',
-            border: '1px solid #666',
-            borderRadius: '3px',
-            background: 'transparent',
-            color: 'inherit'
-          }}
         >
           Reconnect
         </button>
