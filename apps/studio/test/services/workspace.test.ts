@@ -30,8 +30,8 @@ type Foo:
   it('should return errors for invalid syntax', async () => {
     const source = 'this is not valid rosetta %%%';
     const result = await parseFile(source);
-    // We expect at least some diagnostics
-    expect(result.errors.length).toBeGreaterThanOrEqual(0);
+    // We expect at least some diagnostics for invalid syntax
+    expect(result.errors.length).toBeGreaterThan(0);
     // Even on parse errors, the result object is always returned
     expect(result).toHaveProperty('model');
     expect(result).toHaveProperty('errors');

@@ -17,6 +17,14 @@ cd rune-langium
 pnpm install
 ```
 
+> **Note on Local Dependencies**: This project currently uses local `link:` overrides for `@lspeasy/*` packages in `pnpm-workspace.yaml` and `package.json`. These require a sibling `../lspy` directory to be present during installation. If you're not working on LSP features:
+> 
+> 1. Comment out the `overrides:` section in `pnpm-workspace.yaml`
+> 2. Remove the `@lspeasy/*` dependencies from root `package.json`
+> 3. Run `pnpm install` again
+> 
+> For contributors working on LSP features, ensure the `lspy` repository is cloned as a sibling directory to this repo.
+
 ### Development
 
 ```bash
