@@ -21,7 +21,7 @@ Build a ReactFlow-based visual editor for the Rune DSL type hierarchy, delivered
 - `@rune-langium/core` workspace:* (parser, AST types, validator)
 **Storage**: Browser-only; File System Access API for standalone app, no backend
 **Testing**: Vitest (unit/integration), React Testing Library (component tests), Playwright (E2E for standalone app)
-**Build**: Vite 6.x (standalone app), tsc (component library)
+**Build**: Vite 6.x (standalone app), tsgo (component library)
 **Target Platform**: Modern browsers (ES2020+, same as core parser)
 **Project Type**: Monorepo — 2 new packages + 1 new app
 **Performance Goals**: Graph renders 500+ nodes with smooth pan/zoom (60fps interaction); auto-layout < 2s for 500 nodes; initial load < 3s

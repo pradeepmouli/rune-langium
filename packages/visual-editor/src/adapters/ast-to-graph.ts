@@ -3,8 +3,29 @@
  *
  * Transforms Rune DSL typed AST (Data, Choice, RosettaEnumeration)
  * into ReactFlow nodes and edges for visualization.
+ *
+ * Source AST nodes are attached to each graph node and member so that
+ * consumers retain full access to Langium type information without
+ * creating a separate taxonomy.
  */
 
+import {
+  isData,
+  isChoice,
+  isRosettaEnumeration,
+  isRosettaBasicType,
+  isRosettaRecordType
+} from '@rune-langium/core';
+import type {
+  RosettaModel,
+  RosettaRootElement,
+  Data,
+  Choice,
+  RosettaEnumeration,
+  Attribute,
+  ChoiceOption,
+  RosettaEnumValue
+} from '@rune-langium/core';
 import type {
   TypeGraphNode,
   TypeGraphEdge,
@@ -31,32 +52,10 @@ export interface AstToGraphResult {
 }
 
 /**
- * Checks if an AST element is a Data type.
- */
-function isDataType(element: unknown): boolean {
-  return (element as { $type?: string })?.$type === 'Data';
-}
-
-/**
- * Checks if an AST element is a Choice type.
- */
-function isChoiceType(element: unknown): boolean {
-  return (element as { $type?: string })?.$type === 'Choice';
-}
-
-/**
- * Checks if an AST element is a RosettaEnumeration type.
- */
-function isEnumType(element: unknown): boolean {
-  return (element as { $type?: string })?.$type === 'RosettaEnumeration';
-}
-
-/**
- * Checks if a type reference is a basic/primitive type (not a graph node).
+ * Checks if a type reference target is a basic/primitive type (not a graph node).
  */
 function isBasicType(element: unknown): boolean {
-  const type = (element as { $type?: string })?.$type;
-  return type === 'RosettaBasicType' || type === 'RosettaRecordType';
+  return isRosettaBasicType(element) || isRosettaRecordType(element);
 }
 
 /**
@@ -73,13 +72,10 @@ function formatCardinality(card: { inf: number; sup?: number; unbounded: boolean
 /**
  * Get the namespace from a RosettaModel.
  */
-function getNamespace(model: unknown): string {
-  const m = model as { name?: string | { segments?: string[] } };
-  if (typeof m.name === 'string') {
-    return m.name;
-  }
-  if (m.name && typeof m.name === 'object' && 'segments' in m.name) {
-    return (m.name as { segments: string[] }).segments.join('.');
+function getNamespace(model: RosettaModel): string {
+  const name = model.name;
+  if (typeof name === 'string') {
+    return name;
   }
   return 'unknown';
 }
@@ -124,11 +120,125 @@ function passesFilter(
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Per-kind member extraction (preserves AST source)
+// ---------------------------------------------------------------------------
+
+function dataAttributeToMember(attr: Attribute): MemberDisplay<Attribute> {
+  return {
+    name: attr.name,
+    typeName: attr.typeCall?.type?.$refText,
+    cardinality: attr.card ? formatCardinality(attr.card) : undefined,
+    isOverride: attr.override ?? false,
+    source: attr
+  };
+}
+
+function choiceOptionToMember(opt: ChoiceOption): MemberDisplay<ChoiceOption> {
+  return {
+    name: opt.typeCall?.type?.$refText ?? 'unknown',
+    typeName: opt.typeCall?.type?.$refText,
+    isOverride: false,
+    source: opt
+  };
+}
+
+function enumValueToMember(val: RosettaEnumValue): MemberDisplay<RosettaEnumValue> {
+  return {
+    name: val.name,
+    isOverride: false,
+    source: val
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Per-kind node builders
+// ---------------------------------------------------------------------------
+
+function buildDataNode(data: Data, namespace: string, nodeId: string): TypeGraphNode {
+  const members = (data.attributes ?? []).map(dataAttributeToMember);
+  const parentRef = data.superType;
+  const parentName = parentRef?.ref?.name ?? parentRef?.$refText;
+
+  return {
+    id: nodeId,
+    type: 'data',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'data',
+      name: data.name,
+      namespace,
+      definition: data.definition,
+      members,
+      parentName,
+      hasExternalRefs: false,
+      errors: [],
+      source: data
+    } as TypeNodeData<'data'>
+  };
+}
+
+function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): TypeGraphNode {
+  const members = (choice.attributes ?? []).map(choiceOptionToMember);
+
+  return {
+    id: nodeId,
+    type: 'choice',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'choice',
+      name: choice.name,
+      namespace,
+      definition: choice.definition,
+      members,
+      hasExternalRefs: false,
+      errors: [],
+      source: choice
+    } as TypeNodeData<'choice'>
+  };
+}
+
+function buildEnumNode(
+  enumType: RosettaEnumeration,
+  namespace: string,
+  nodeId: string
+): TypeGraphNode {
+  const members = (enumType.enumValues ?? []).map(enumValueToMember);
+  const parentRef = enumType.parent;
+  const parentName = parentRef?.ref?.name ?? parentRef?.$refText;
+
+  return {
+    id: nodeId,
+    type: 'enum',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'enum',
+      name: enumType.name,
+      namespace,
+      definition: enumType.definition,
+      members,
+      parentName,
+      hasExternalRefs: false,
+      errors: [],
+      source: enumType
+    } as TypeNodeData<'enum'>
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /**
  * Convert one or more RosettaModel AST roots into ReactFlow nodes and edges.
+ *
+ * Each graph node carries a `source` reference to the original Langium AST node,
+ * and each member carries a `source` reference to its AST member node, so that
+ * rich type metadata (annotations, synonyms, conditions, etc.) remains accessible
+ * without a separate type taxonomy.
  */
 export function astToGraph(
-  models: unknown | unknown[],
+  models: RosettaModel | RosettaModel[] | unknown | unknown[],
   options?: AstToGraphOptions
 ): AstToGraphResult {
   const modelArray = Array.isArray(models) ? models : [models];
@@ -140,132 +250,34 @@ export function astToGraph(
 
   // First pass: collect all type nodes
   for (const model of modelArray) {
-    const m = model as { elements?: unknown[]; name?: unknown };
-    const namespace = getNamespace(model);
-    const elements = m.elements ?? [];
+    const m = model as RosettaModel;
+    const namespace = getNamespace(m);
+    const elements: RosettaRootElement[] = (m.elements ?? []) as RosettaRootElement[];
 
     for (const element of elements) {
-      const el = element as { name?: string; $type?: string };
-      const name = el.name ?? 'unknown';
+      const name = (element as { name?: string }).name ?? 'unknown';
 
-      if (isDataType(element)) {
+      if (isData(element)) {
         if (!passesFilter('data', namespace, name, filters)) continue;
-
-        const data = element as {
-          name: string;
-          definition?: string;
-          superType?: { ref?: { name?: string }; $refText?: string };
-          attributes?: Array<{
-            name: string;
-            typeCall?: { type?: { ref?: unknown; $refText?: string } };
-            card?: { inf: number; sup?: number; unbounded: boolean };
-            override?: boolean;
-          }>;
-        };
-
-        const members: MemberDisplay[] = (data.attributes ?? []).map((attr) => ({
-          name: attr.name,
-          typeName: attr.typeCall?.type?.$refText,
-          cardinality: attr.card ? formatCardinality(attr.card) : undefined,
-          isOverride: attr.override ?? false
-        }));
-
-        const parentRef = data.superType;
-        const parentName = parentRef?.ref?.name ?? parentRef?.$refText;
-
         const nodeId = makeNodeId(namespace, name);
-        const hasExternalRefs = members.some((m) => m.typeName && !nodeIdSet.has(m.typeName));
-
-        nodes.push({
-          id: nodeId,
-          type: 'data',
-          position: { x: 0, y: 0 },
-          data: {
-            kind: 'data',
-            name,
-            namespace,
-            definition: data.definition,
-            members,
-            parentName,
-            hasExternalRefs,
-            errors: []
-          }
-        });
+        nodes.push(buildDataNode(element, namespace, nodeId));
         nodeIdSet.add(nodeId);
-      } else if (isChoiceType(element)) {
+      } else if (isChoice(element)) {
         if (!passesFilter('choice', namespace, name, filters)) continue;
-
-        const choice = element as {
-          name: string;
-          definition?: string;
-          attributes?: Array<{
-            typeCall?: { type?: { ref?: unknown; $refText?: string } };
-          }>;
-        };
-
-        const members: MemberDisplay[] = (choice.attributes ?? []).map((opt) => ({
-          name: opt.typeCall?.type?.$refText ?? 'unknown',
-          typeName: opt.typeCall?.type?.$refText,
-          isOverride: false
-        }));
-
         const nodeId = makeNodeId(namespace, name);
-        nodes.push({
-          id: nodeId,
-          type: 'choice',
-          position: { x: 0, y: 0 },
-          data: {
-            kind: 'choice',
-            name,
-            namespace,
-            definition: choice.definition,
-            members,
-            hasExternalRefs: false,
-            errors: []
-          }
-        });
+        nodes.push(buildChoiceNode(element, namespace, nodeId));
         nodeIdSet.add(nodeId);
-      } else if (isEnumType(element)) {
+      } else if (isRosettaEnumeration(element)) {
         if (!passesFilter('enum', namespace, name, filters)) continue;
-
-        const enumType = element as {
-          name: string;
-          definition?: string;
-          parent?: { ref?: { name?: string }; $refText?: string };
-          enumValues?: Array<{ name: string; definition?: string }>;
-        };
-
-        const members: MemberDisplay[] = (enumType.enumValues ?? []).map((v) => ({
-          name: v.name,
-          isOverride: false
-        }));
-
-        const parentRef = enumType.parent;
-        const parentName = parentRef?.ref?.name ?? parentRef?.$refText;
-
         const nodeId = makeNodeId(namespace, name);
-        nodes.push({
-          id: nodeId,
-          type: 'enum',
-          position: { x: 0, y: 0 },
-          data: {
-            kind: 'enum',
-            name,
-            namespace,
-            definition: enumType.definition,
-            members,
-            parentName,
-            hasExternalRefs: false,
-            errors: []
-          }
-        });
+        nodes.push(buildEnumNode(element, namespace, nodeId));
         nodeIdSet.add(nodeId);
       }
     }
   }
 
   // Second pass: create edges
-  // Need to build a lookup from type name → node ID
+  // Build a lookup from type name → node ID
   const nameToNodeId = new Map<string, string>();
   for (const node of nodes) {
     nameToNodeId.set(node.data.name, node.id);

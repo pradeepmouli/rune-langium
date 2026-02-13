@@ -3,7 +3,7 @@
 **Feature**: 002-reactflow-visual-editor
 
 > **Implementation verified**: All packages build cleanly. 113 visual-editor tests pass;
-> 11 studio unit tests pass. Studio type-checks via `tsc --noEmit`. Run `pnpm test` from
+> 11 studio unit tests pass. Studio type-checks via `tsgo --noEmit`. Run `pnpm test` from
 > the repo root to verify.
 
 ## Prerequisites

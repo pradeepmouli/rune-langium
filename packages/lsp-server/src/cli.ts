@@ -46,8 +46,12 @@ async function main(): Promise<void> {
     // Each WebSocket connection gets its own LSP server instance
     const lsp = createRuneLspServer();
 
-    // Create a WebSocketTransport from the raw WebSocket
-    const transport = new WebSocketTransport(ws as any);
+    // Create a WebSocketTransport from the raw WebSocket.
+    // The socket is already open (from wss 'connection' event), but
+    // WebSocketTransport only sets `connected = true` on the 'open' event.
+    // Re-emit 'open' so the transport recognises the connection.
+    const transport = new WebSocketTransport({ socket: ws as any });
+    ws.emit('open');
 
     // Bind and start processing messages
     await lsp.listen(transport);

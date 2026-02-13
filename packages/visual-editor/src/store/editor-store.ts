@@ -15,7 +15,8 @@ import type {
   TypeNodeData,
   EdgeData,
   MemberDisplay,
-  LayoutOptions
+  LayoutOptions,
+  VisibilityState
 } from '../types.js';
 import { astToGraph } from '../adapters/ast-to-graph.js';
 import { computeLayout } from '../layout/dagre-layout.js';
@@ -40,6 +41,9 @@ export interface EditorState {
 
   // --- Layout options ---
   layoutOptions: LayoutOptions;
+
+  // --- Namespace visibility ---
+  visibility: VisibilityState;
 }
 
 export interface EditorActions {
@@ -58,6 +62,16 @@ export interface EditorActions {
   // --- Graph state access ---
   getNodes(): TypeGraphNode[];
   getEdges(): TypeGraphEdge[];
+
+  // --- Namespace visibility ---
+  toggleNamespace(namespace: string): void;
+  toggleNodeVisibility(nodeId: string): void;
+  expandAllNamespaces(): void;
+  collapseAllNamespaces(): void;
+  setInitialVisibility(totalNodeCount: number): void;
+  toggleExplorer(): void;
+  getVisibleNodes(): TypeGraphNode[];
+  getVisibleEdges(): TypeGraphEdge[];
 
   // --- Editing (P2) ---
   createType(kind: TypeKind, name: string, namespace: string): string;
@@ -94,6 +108,9 @@ function formatCardinalityString(card: string): string {
 // Initial state
 // ---------------------------------------------------------------------------
 
+/** Threshold above which namespaces start collapsed for performance. */
+const LARGE_MODEL_THRESHOLD = 100;
+
 const initialState: EditorState = {
   nodes: [],
   edges: [],
@@ -103,7 +120,12 @@ const initialState: EditorState = {
   activeFilters: {},
   detailPanelOpen: false,
   validationErrors: [],
-  layoutOptions: { direction: 'TB', nodeSeparation: 50, rankSeparation: 100 }
+  layoutOptions: { direction: 'TB', nodeSeparation: 50, rankSeparation: 100 },
+  visibility: {
+    expandedNamespaces: new Set<string>(),
+    hiddenNodeIds: new Set<string>(),
+    explorerOpen: true
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -123,15 +145,30 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
       const opts = layoutOpts ?? get().layoutOptions;
       const filters = get().activeFilters;
       const { nodes: rawNodes, edges } = astToGraph(models, { filters });
-      const nodes = computeLayout(rawNodes, edges, opts);
+
+      // Determine initial visibility based on model size
+      const allNamespaces = new Set(rawNodes.map((n) => n.data.namespace));
+      const shouldCollapse = rawNodes.length > LARGE_MODEL_THRESHOLD;
+
+      const expandedNamespaces = shouldCollapse ? new Set<string>() : new Set(allNamespaces);
+
+      // Only layout visible nodes
+      const visibleNodes = shouldCollapse ? [] : rawNodes;
+      const visibleEdges = shouldCollapse ? [] : edges;
+      const nodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : [];
 
       set({
-        nodes,
+        nodes: rawNodes,
         edges,
         layoutOptions: opts,
         selectedNodeId: null,
         searchQuery: '',
-        searchResults: []
+        searchResults: [],
+        visibility: {
+          expandedNamespaces,
+          hiddenNodeIds: new Set<string>(),
+          explorerOpen: true
+        }
       });
     },
 
@@ -340,6 +377,102 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
       const errors = validateGraph(get().nodes, get().edges);
       set({ validationErrors: errors });
       return errors;
+    },
+
+    // -----------------------------------------------------------------------
+    // Namespace visibility
+    // -----------------------------------------------------------------------
+
+    toggleNamespace(namespace: string) {
+      set((state) => {
+        const next = new Set(state.visibility.expandedNamespaces);
+        if (next.has(namespace)) {
+          next.delete(namespace);
+        } else {
+          next.add(namespace);
+        }
+        return {
+          visibility: { ...state.visibility, expandedNamespaces: next }
+        };
+      });
+    },
+
+    toggleNodeVisibility(nodeId: string) {
+      set((state) => {
+        const next = new Set(state.visibility.hiddenNodeIds);
+        if (next.has(nodeId)) {
+          next.delete(nodeId);
+        } else {
+          next.add(nodeId);
+        }
+        return {
+          visibility: { ...state.visibility, hiddenNodeIds: next }
+        };
+      });
+    },
+
+    expandAllNamespaces() {
+      set((state) => {
+        const allNs = new Set(state.nodes.map((n) => n.data.namespace));
+        return {
+          visibility: {
+            ...state.visibility,
+            expandedNamespaces: allNs,
+            hiddenNodeIds: new Set<string>()
+          }
+        };
+      });
+    },
+
+    collapseAllNamespaces() {
+      set((state) => ({
+        visibility: {
+          ...state.visibility,
+          expandedNamespaces: new Set<string>(),
+          hiddenNodeIds: new Set<string>()
+        }
+      }));
+    },
+
+    setInitialVisibility(totalNodeCount: number) {
+      set((state) => {
+        const shouldCollapse = totalNodeCount > LARGE_MODEL_THRESHOLD;
+        const allNs = new Set(state.nodes.map((n) => n.data.namespace));
+        return {
+          visibility: {
+            ...state.visibility,
+            expandedNamespaces: shouldCollapse ? new Set<string>() : allNs,
+            hiddenNodeIds: new Set<string>()
+          }
+        };
+      });
+    },
+
+    toggleExplorer() {
+      set((state) => ({
+        visibility: {
+          ...state.visibility,
+          explorerOpen: !state.visibility.explorerOpen
+        }
+      }));
+    },
+
+    getVisibleNodes(): TypeGraphNode[] {
+      const { nodes, visibility } = get();
+      return nodes.filter(
+        (n) =>
+          visibility.expandedNamespaces.has(n.data.namespace) && !visibility.hiddenNodeIds.has(n.id)
+      );
+    },
+
+    getVisibleEdges(): TypeGraphEdge[] {
+      const { edges } = get();
+      const visibleNodeIds = new Set(
+        get()
+          .getVisibleNodes()
+          .map((n) => n.id)
+      );
+      return edges.filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target));
     }
   }));
 

@@ -19,14 +19,14 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsgo -b",
     "clean": "rm -rf dist",
-    "dev": "tsc -b --watch",
+    "dev": "tsgo -b --watch",
     "lint": "oxlint .",
     "start": "node dist/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsgo --noEmit"
   },
   "dependencies": {
     "@lspeasy/core": "link:../../../lspy/packages/core",
@@ -34,13 +34,13 @@
     "@rune-langium/core": "workspace:*",
     "langium": "^4.2.1",
     "vscode-languageserver": "~9.0.1",
-    "ws": "^8.18.0"
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@lspeasy/client": "link:../../../lspy/packages/client",
     "@types/ws": "^8.18.1",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.1"
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20.0.0"

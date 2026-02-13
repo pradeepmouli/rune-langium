@@ -4,10 +4,23 @@
  * Converts ReactFlow graph state (nodes + edges) back into lightweight
  * model objects suitable for serialization via the core serializer.
  *
+ * When a graph node carries its `source` AST reference (populated by
+ * `astToGraph`), the synthetic model will pass it through so that
+ * downstream consumers can access the full Langium type information.
+ *
  * NOTE: These are NOT full Langium AST nodes — they're serializer-compatible
- * plain objects containing only the fields the serializer reads.
+ * plain objects containing only the fields the serializer reads plus
+ * optional `source` back-references.
  */
 
+import type {
+  Data,
+  Choice,
+  RosettaEnumeration,
+  Attribute,
+  ChoiceOption,
+  RosettaEnumValue
+} from '@rune-langium/core';
 import type { TypeGraphNode, TypeGraphEdge, TypeNodeData, MemberDisplay } from '../types.js';
 
 /**
@@ -30,6 +43,8 @@ export interface SyntheticData {
   superType?: { ref?: { name?: string }; $refText?: string };
   attributes: SyntheticAttribute[];
   conditions: never[];
+  /** Original AST node when available. */
+  source?: Data;
 }
 
 export interface SyntheticAttribute {
@@ -37,6 +52,8 @@ export interface SyntheticAttribute {
   override: boolean;
   typeCall: { type: { ref: { name: string }; $refText: string } };
   card: { inf: number; sup?: number; unbounded: boolean };
+  /** Original AST node when available. */
+  source?: Attribute;
 }
 
 export interface SyntheticChoice {
@@ -44,10 +61,14 @@ export interface SyntheticChoice {
   name: string;
   definition?: string;
   attributes: SyntheticChoiceOption[];
+  /** Original AST node when available. */
+  source?: Choice;
 }
 
 export interface SyntheticChoiceOption {
   typeCall: { type: { ref: { name: string }; $refText: string } };
+  /** Original AST node when available. */
+  source?: ChoiceOption;
 }
 
 export interface SyntheticEnum {
@@ -56,12 +77,16 @@ export interface SyntheticEnum {
   definition?: string;
   parent?: { ref?: { name?: string }; $refText?: string };
   enumValues: SyntheticEnumValue[];
+  /** Original AST node when available. */
+  source?: RosettaEnumeration;
 }
 
 export interface SyntheticEnumValue {
   name: string;
   definition?: string;
   display?: string;
+  /** Original AST node when available. */
+  source?: RosettaEnumValue;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,7 +124,8 @@ function memberToAttribute(member: MemberDisplay): SyntheticAttribute {
     typeCall: {
       type: { ref: { name: typeName }, $refText: typeName }
     },
-    card: parseCardinality(member.cardinality)
+    card: parseCardinality(member.cardinality),
+    source: member.source as Attribute | undefined
   };
 }
 
@@ -108,12 +134,19 @@ function memberToChoiceOption(member: MemberDisplay): SyntheticChoiceOption {
   return {
     typeCall: {
       type: { ref: { name: typeName }, $refText: typeName }
-    }
+    },
+    source: member.source as ChoiceOption | undefined
   };
 }
 
 function memberToEnumValue(member: MemberDisplay): SyntheticEnumValue {
-  return { name: member.name };
+  const enumVal = member.source as RosettaEnumValue | undefined;
+  return {
+    name: member.name,
+    definition: enumVal?.definition,
+    display: enumVal?.display,
+    source: enumVal
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +212,8 @@ export function graphToModels(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): S
           definition: data.definition,
           superType: parentName ? { ref: { name: parentName }, $refText: parentName } : undefined,
           attributes: data.members.map(memberToAttribute),
-          conditions: []
+          conditions: [],
+          source: data.source as Data | undefined
         };
         elements.push(element);
       } else if (data.kind === 'choice') {
@@ -187,7 +221,8 @@ export function graphToModels(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): S
           $type: 'Choice',
           name: data.name,
           definition: data.definition,
-          attributes: data.members.map(memberToChoiceOption)
+          attributes: data.members.map(memberToChoiceOption),
+          source: data.source as Choice | undefined
         };
         elements.push(element);
       } else if (data.kind === 'enum') {
@@ -200,7 +235,8 @@ export function graphToModels(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): S
           name: data.name,
           definition: data.definition,
           parent: parentName ? { ref: { name: parentName }, $refText: parentName } : undefined,
-          enumValues: data.members.map(memberToEnumValue)
+          enumValues: data.members.map(memberToEnumValue),
+          source: data.source as RosettaEnumeration | undefined
         };
         elements.push(element);
       }

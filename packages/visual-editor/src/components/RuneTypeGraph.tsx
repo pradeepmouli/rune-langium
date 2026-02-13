@@ -112,21 +112,55 @@ const DEFAULT_CONFIG = {
 // Inner component (needs ReactFlowProvider context)
 // ---------------------------------------------------------------------------
 
+/**
+ * Serialize a Set to a stable string key for use in dependency arrays.
+ */
+function setKey(s: Set<string>): string {
+  return [...s].sort().join('\0');
+}
+
 const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
-  function RuneTypeGraphInner({ models, config, callbacks, className }, ref) {
+  function RuneTypeGraphInner({ models, config, callbacks, className, visibilityState }, ref) {
     const mergedConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
     const { fitView, setCenter } = useReactFlow();
 
-    // Derive graph from AST models
-    const { initialNodes, initialEdges } = useMemo(() => {
+    // Derive full graph from AST models (unfiltered)
+    const { allNodes, allEdges } = useMemo(() => {
       const modelArray = Array.isArray(models) ? models : [models];
       const { nodes: rawNodes, edges } = astToGraph(modelArray, {
         filters: mergedConfig.initialFilters
       });
+      return { allNodes: rawNodes, allEdges: edges };
+    }, [models, mergedConfig.initialFilters]);
+
+    // Derive visible nodes/edges based on visibility state
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const expandedKey = visibilityState ? setKey(visibilityState.expandedNamespaces) : 'all';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const hiddenKey = visibilityState ? setKey(visibilityState.hiddenNodeIds) : 'none';
+
+    const { initialNodes, initialEdges } = useMemo(() => {
+      let visibleNodes: TypeGraphNode[];
+      let visibleEdges: TypeGraphEdge[];
+
+      if (visibilityState) {
+        const { expandedNamespaces, hiddenNodeIds } = visibilityState;
+        visibleNodes = allNodes.filter(
+          (n) => expandedNamespaces.has(n.data.namespace) && !hiddenNodeIds.has(n.id)
+        );
+        const visibleIds = new Set(visibleNodes.map((n) => n.id));
+        visibleEdges = allEdges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target));
+      } else {
+        visibleNodes = allNodes;
+        visibleEdges = allEdges;
+      }
+
       const layoutOpts = mergedConfig.layout;
-      const nodes = computeLayout(rawNodes, edges, layoutOpts);
-      return { initialNodes: nodes, initialEdges: edges };
-    }, [models, mergedConfig.initialFilters, mergedConfig.layout]);
+      const nodes =
+        visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, layoutOpts) : [];
+      return { initialNodes: nodes, initialEdges: visibleEdges };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [allNodes, allEdges, expandedKey, hiddenKey, mergedConfig.layout]);
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -134,11 +168,15 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     // Track current filters
     const filtersRef = useRef<GraphFilters>(mergedConfig.initialFilters ?? {});
 
-    // Sync when models/config change
+    // Sync when models/config/visibility change
     useEffect(() => {
       setNodes(initialNodes);
       setEdges(initialEdges);
-    }, [initialNodes, initialEdges, setNodes, setEdges]);
+      // Auto fit-view when visibility changes
+      if (initialNodes.length > 0) {
+        setTimeout(() => fitView({ duration: 200 }), 50);
+      }
+    }, [initialNodes, initialEdges, setNodes, setEdges, fitView]);
 
     // Selection handler
     const handleSelectionChange = useCallback(

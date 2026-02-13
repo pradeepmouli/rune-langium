@@ -6,6 +6,8 @@ export { RuneTypeGraph } from './components/RuneTypeGraph.js';
 // Panel components (for custom layouts)
 export { DetailPanel } from './components/panels/DetailPanel.js';
 export type { DetailPanelProps } from './components/panels/DetailPanel.js';
+export { NamespaceExplorerPanel } from './components/panels/NamespaceExplorerPanel.js';
+export type { NamespaceExplorerPanelProps } from './components/panels/NamespaceExplorerPanel.js';
 
 // Editor components (P2)
 export { TypeCreator } from './components/editors/TypeCreator.js';
@@ -19,6 +21,10 @@ export type { CardinalityEditorProps } from './components/editors/CardinalityEdi
 export type {
   TypeKind,
   EdgeKind,
+  AstNodeKindMap,
+  AstMemberKindMap,
+  AstNodeType,
+  AstMemberType,
   MemberDisplay,
   TypeNodeData,
   EdgeData,
@@ -33,7 +39,10 @@ export type {
   RuneTypeGraphProps,
   RuneTypeGraphRef,
   TypeGraphNode,
-  TypeGraphEdge
+  TypeGraphEdge,
+  NamespaceTreeNode,
+  NamespaceTypeEntry,
+  VisibilityState
 } from './types.js';
 
 // Adapter utilities
@@ -43,6 +52,9 @@ export type { SyntheticModel, SyntheticElement } from './adapters/graph-to-ast.j
 
 // Layout
 export { computeLayout } from './layout/dagre-layout.js';
+
+// Namespace tree utilities
+export { buildNamespaceTree, filterNamespaceTree } from './utils/namespace-tree.js';
 
 // Store (for advanced consumers)
 export { createEditorStore, useEditorStore } from './store/editor-store.js';
