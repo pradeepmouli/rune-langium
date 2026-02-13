@@ -114,4 +114,41 @@ describe('filterNamespaceTree', () => {
     const result = filterNamespaceTree(tree, 'Trade');
     expect(result[0]!.totalCount).toBe(1);
   });
+
+  it('handles regex special characters without crashing', () => {
+    // Test bracket metacharacters
+    expect(() => filterNamespaceTree(tree, '[')).not.toThrow();
+    expect(() => filterNamespaceTree(tree, ']')).not.toThrow();
+    expect(() => filterNamespaceTree(tree, '[special')).not.toThrow();
+
+    // Test backslash
+    expect(() => filterNamespaceTree(tree, '\\')).not.toThrow();
+
+    // Test other metacharacters
+    expect(() => filterNamespaceTree(tree, '.*')).not.toThrow();
+    expect(() => filterNamespaceTree(tree, '(test)')).not.toThrow();
+    expect(() => filterNamespaceTree(tree, 'foo|bar')).not.toThrow();
+    expect(() => filterNamespaceTree(tree, 'test$')).not.toThrow();
+    expect(() => filterNamespaceTree(tree, '^start')).not.toThrow();
+  });
+
+  it('treats regex metacharacters as literal strings', () => {
+    // Add nodes with special characters in their names
+    const specialNodes = [
+      makeNode('ns', 'Type[A]'),
+      makeNode('ns', 'Type(B)'),
+      makeNode('ns', 'Type.C')
+    ];
+    const specialTree = buildNamespaceTree(specialNodes);
+
+    // Searching for literal brackets should match Type[A]
+    const result1 = filterNamespaceTree(specialTree, '[');
+    expect(result1).toHaveLength(1);
+    expect(result1[0]!.types[0]!.name).toBe('Type[A]');
+
+    // Searching for literal dot should match Type.C
+    const result2 = filterNamespaceTree(specialTree, '.');
+    expect(result2).toHaveLength(1);
+    expect(result2[0]!.types[0]!.name).toBe('Type.C');
+  });
 });

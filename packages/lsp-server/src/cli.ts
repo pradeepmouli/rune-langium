@@ -15,8 +15,8 @@ import { createRuneLspServer } from './rune-dsl-server.js';
 const DEFAULT_PORT = 3001;
 const DEFAULT_HOST = '0.0.0.0';
 
-function parseArgs(): { port: number; host: string } {
-  const args = process.argv.slice(2);
+export function parseArgs(argv: string[] = process.argv.slice(2)): { port: number; host: string } {
+  const args = argv;
   let port = DEFAULT_PORT;
   let host = DEFAULT_HOST;
 
