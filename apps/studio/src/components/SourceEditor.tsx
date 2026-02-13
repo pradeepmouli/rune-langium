@@ -63,7 +63,13 @@ export function SourceEditor({
   // Track content per file for document model
   const contentMapRef = useRef<Map<string, string>>(new Map());
 
-  // Initialise content map
+  // Stable callback refs — prevents editor recreation when parent re-renders
+  const onContentChangeRef = useRef(onContentChange);
+  useEffect(() => {
+    onContentChangeRef.current = onContentChange;
+  }, [onContentChange]);
+
+  // Initialise content map (new files only)
   useEffect(() => {
     for (const file of files) {
       if (!contentMapRef.current.has(file.path)) {
@@ -71,6 +77,23 @@ export function SourceEditor({
       }
     }
   }, [files]);
+
+  // Handle external content updates (e.g., from graph → source sync)
+  useEffect(() => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    const file = files.find((f) => f.path === selectedPath);
+    if (!file) return;
+    const editorContent = view.state.doc.toString();
+    const mapContent = contentMapRef.current.get(file.path);
+    // Only update if file content differs from BOTH editor and map (external change)
+    if (file.content !== editorContent && file.content !== mapContent) {
+      contentMapRef.current.set(file.path, file.content);
+      view.dispatch({
+        changes: { from: 0, to: editorContent.length, insert: file.content }
+      });
+    }
+  }, [files, selectedPath]);
 
   const currentFile = useMemo(
     () => files.find((f) => f.path === selectedPath),
@@ -90,7 +113,7 @@ export function SourceEditor({
     [selectedPath, onFileSelect]
   );
 
-  // Build extensions
+  // Build extensions — uses refs for callbacks to keep extensions stable
   const buildExtensions = useCallback(
     (filePath: string): Extension[] => {
       const exts: Extension[] = [
@@ -101,7 +124,7 @@ export function SourceEditor({
           if (update.docChanged) {
             const content = update.state.doc.toString();
             contentMapRef.current.set(filePath, content);
-            onContentChange?.(filePath, content);
+            onContentChangeRef.current?.(filePath, content);
           }
         })
       ];
@@ -114,10 +137,11 @@ export function SourceEditor({
 
       return exts;
     },
-    [lspClient, onContentChange]
+    [lspClient]
   );
 
-  // Create / update editor view when file changes
+  // Create / update editor view when file PATH changes (tab switch) or LSP connects.
+  // Content changes are handled by CodeMirror's internal state + updateListener.
   useEffect(() => {
     if (!editorContainerRef.current || !currentFile) return;
 
@@ -145,7 +169,10 @@ export function SourceEditor({
       view.destroy();
       editorViewRef.current = null;
     };
-  }, [currentFile, buildExtensions]);
+    // Only recreate editor when file path changes (tab switch) or LSP connects.
+    // Content updates are handled by the updateListener extension, NOT by recreating.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFile?.path, buildExtensions]);
 
   // Empty state
   if (files.length === 0) {

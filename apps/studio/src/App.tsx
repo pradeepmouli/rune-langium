@@ -27,6 +27,14 @@ export function App() {
 
   const lspClientRef = useRef<LspClientService | null>(null);
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
+  const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup reparse timer on unmount
+  useEffect(() => {
+    return () => {
+      if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
+    };
+  }, []);
 
   // Initialise LSP on mount
   useEffect(() => {
@@ -59,6 +67,26 @@ export function App() {
     setModels(result.models);
     setErrors(result.errors);
     setLoading(false);
+  }, []);
+
+  /**
+   * Handle file content changes (e.g., from source editor edits).
+   * Updates files immediately and debounce-reparses after 500ms idle.
+   */
+  const handleFilesChange = useCallback((updatedFiles: WorkspaceFile[]) => {
+    setFiles(updatedFiles);
+
+    // Debounced reparse — wait for typing to settle
+    if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
+    reparseTimerRef.current = setTimeout(async () => {
+      try {
+        const result = await parseWorkspaceFiles(updatedFiles);
+        setModels(result.models);
+        setErrors(result.errors);
+      } catch {
+        // Parse failure — keep existing models
+      }
+    }, 500);
   }, []);
 
   const handleReconnect = useCallback(async () => {
@@ -112,7 +140,7 @@ export function App() {
           <EditorPage
             models={models as import('@rune-langium/core').RosettaModel[]}
             files={files}
-            onFilesChange={setFiles}
+            onFilesChange={handleFilesChange}
             lspClient={lspClientRef.current ?? undefined}
             transportState={transportState}
             onReconnect={handleReconnect}

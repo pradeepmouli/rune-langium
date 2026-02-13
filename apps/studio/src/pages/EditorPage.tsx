@@ -159,6 +159,60 @@ export function EditorPage({
     graphRef.current?.focusNode(nodeId);
   }, []);
 
+  // --- Stable ref for files (prevents stale closure in handleSourceChange) ---
+  const filesRef = useRef(files);
+  useMemo(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  // --- Source → Graph: wire onContentChange ---
+  const handleSourceChange = useCallback(
+    (path: string, content: string) => {
+      const currentFiles = filesRef.current;
+      const updatedFiles = currentFiles.map((f) =>
+        f.path === path ? { ...f, content, dirty: true } : f
+      );
+      onFilesChange?.(updatedFiles);
+    },
+    [onFilesChange]
+  );
+
+  // --- Graph → Source: wire onModelChanged ---
+  // Build namespace → file path mapping for reverse sync
+  const namespaceToFile = useMemo(() => {
+    const map = new Map<string, string>();
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i] as { name?: string | { segments?: string[] } };
+      let ns = 'unknown';
+      if (typeof model.name === 'string') {
+        ns = model.name;
+      } else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
+        ns = (model.name as { segments: string[] }).segments.join('.');
+      }
+      if (i < files.length) {
+        map.set(ns, files[i]!.path);
+      }
+    }
+    return map;
+  }, [models, files]);
+
+  const handleModelChanged = useCallback(
+    (serialized: Map<string, string>) => {
+      const currentFiles = filesRef.current;
+      const updatedFiles = currentFiles.map((f) => {
+        // Find serialized text that maps to this file
+        for (const [ns, text] of serialized) {
+          if (namespaceToFile.get(ns) === f.path) {
+            return { ...f, content: text, dirty: true };
+          }
+        }
+        return f;
+      });
+      onFilesChange?.(updatedFiles);
+    },
+    [namespaceToFile, onFilesChange]
+  );
+
   // T036: Wire LSP diagnostics to store
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics, totalErrors, totalWarnings } = useDiagnosticsStore();
@@ -178,17 +232,9 @@ export function EditorPage({
 
   const getSerializedFiles = useCallback((): Map<string, string> => {
     const rosettaText = graphRef.current?.exportRosetta?.();
-    if (!rosettaText || typeof rosettaText !== 'string') return new Map();
-
-    // If we have workspace files, map back to file names
-    if (files.length > 0) {
-      const result = new Map<string, string>();
-      result.set(files[0]!.name, rosettaText);
-      return result;
-    }
-
-    return new Map<string, string>([['model.rosetta', rosettaText]]);
-  }, [files]);
+    if (!rosettaText || rosettaText.size === 0) return new Map();
+    return rosettaText;
+  }, []);
 
   const getGraphElement = useCallback(() => graphContainerRef.current, []);
 
@@ -280,7 +326,8 @@ export function EditorPage({
             }}
             callbacks={{
               onNodeSelect: handleNodeSelect,
-              onNodeDoubleClick: handleNodeDoubleClick
+              onNodeDoubleClick: handleNodeDoubleClick,
+              onModelChanged: handleModelChanged
             }}
             visibilityState={visibilityState}
           />
@@ -294,6 +341,7 @@ export function EditorPage({
               activeFile={activeEditorFile}
               lspClient={lspClient}
               onFileSelect={(path) => setActiveEditorFile(path)}
+              onContentChange={handleSourceChange}
             />
           </div>
         )}
