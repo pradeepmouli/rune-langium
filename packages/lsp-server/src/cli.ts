@@ -23,7 +23,12 @@ function parseArgs(): { port: number; host: string } {
   for (let i = 0; i < args.length; i++) {
     const next = args[i + 1];
     if (args[i] === '--port' && next) {
-      port = parseInt(next, 10);
+      const parsed = parseInt(next, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 65535) {
+        console.error(`Invalid port: "${next}". Port must be a number between 1 and 65535.`);
+        process.exit(1);
+      }
+      port = parsed;
       i++;
     } else if (args[i] === '--host' && next) {
       host = next;
