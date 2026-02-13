@@ -73,25 +73,39 @@ export interface MemberDisplay<M = AstMemberType> {
 /**
  * Data payload carried by every graph node. Generic over `K extends TypeKind`
  * so that `source` is automatically narrowed to the correct AST type.
+ *
+ * The index signature `[key: string]: unknown` is required for compatibility
+ * with ReactFlow's `Node<T extends Record<string, unknown>>` constraint.
+ * While this allows arbitrary properties at runtime, TypeScript will still
+ * catch typos in declared property names during development.
  */
 export interface TypeNodeData<K extends TypeKind = TypeKind> {
   kind: K;
   name: string;
   namespace: string;
   definition?: string;
-  members: MemberDisplay[];
+  members: Array<MemberDisplay<AstMemberKindMap[K]>>;
   parentName?: string;
   hasExternalRefs: boolean;
   errors: ValidationError[];
   /** Source AST node — preserves full Langium type information. */
   source?: AstNodeKindMap[K];
+  /** Required for ReactFlow compatibility: Node<T> requires T extends Record<string, unknown> */
   [key: string]: unknown;
 }
 
+/**
+ * Data payload for graph edges.
+ *
+ * The index signature is required for compatibility with ReactFlow's
+ * `Edge<T extends Record<string, unknown>>` constraint.
+ */
 export interface EdgeData {
   kind: EdgeKind;
   label?: string;
   cardinality?: string;
+  /** Required for ReactFlow compatibility: Edge<T> requires T extends Record<string, unknown> */
+  [key: string]: unknown;
 }
 
 export interface ValidationError {
