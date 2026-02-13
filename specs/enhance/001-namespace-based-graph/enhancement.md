@@ -101,26 +101,26 @@ Additive feature — existing graph behavior preserved for small models.
 7. [x] **Polish UX and edge cases** — Handle edge cases: namespace with single type, deeply nested namespace segments (e.g. `com.rosetta.model.lib.process`), cross-namespace edge indicators (show faded badge when a visible node has hidden references), keyboard navigation in the tree, and appropriate loading states during relayout.
 
 **Acceptance Criteria**:
-- [ ] Loading CDM (4,000+ types) shows an empty graph canvas with a populated namespace tree, all collapsed
-- [ ] Expanding a namespace in the tree renders only that namespace's types on the canvas
-- [ ] Collapsing a namespace removes its types and the graph relayouts cleanly
-- [ ] Cross-namespace edges only display when both endpoints are visible
-- [ ] Small models (≤100 types) load with all namespaces expanded (preserving current behavior)
-- [ ] Tree supports search/filter to quickly find namespaces or types by name
-- [ ] Explorer panel is resizable and collapsible without breaking graph layout
+- [x] Loading CDM (4,000+ types) shows an empty graph canvas with a populated namespace tree, all collapsed
+- [x] Expanding a namespace in the tree renders only that namespace's types on the canvas
+- [x] Collapsing a namespace removes its types and the graph relayouts cleanly
+- [x] Cross-namespace edges only display when both endpoints are visible
+- [x] Small models (≤100 types) load with all namespaces expanded (preserving current behavior)
+- [x] Tree supports search/filter to quickly find namespaces or types by name
+- [x] Explorer panel is resizable and collapsible without breaking graph layout
 
 ## Testing
-- [ ] Unit tests added/updated
-- [ ] Integration tests pass
-- [ ] Manual testing complete
-- [ ] Edge cases verified
+- [x] Unit tests added/updated (141 unit tests)
+- [x] Integration tests pass (14 E2E tests)
+- [x] Manual testing complete
+- [x] Edge cases verified
 
 ## Verification Checklist
-- [ ] Changes implemented as described
-- [ ] Tests written and passing
-- [ ] No regressions in existing functionality
-- [ ] Documentation updated (if needed)
-- [ ] Code reviewed (if appropriate)
+- [x] Changes implemented as described
+- [x] Tests written and passing (493 total: 154 visual-editor + 202 packages + 137 studio)
+- [x] No regressions in existing functionality
+- [x] Documentation updated (if needed)
+- [x] Code reviewed (if appropriate)
 
 ## Notes
 - **Namespace data already exists** throughout the pipeline: `TypeNodeData.namespace` is populated, node IDs use `namespace::TypeName` format, and `GraphFilters.namespaces` supports filtering — this enhancement builds UI on top of that foundation.

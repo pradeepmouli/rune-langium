@@ -140,6 +140,68 @@ description: "Task list for LSP-powered studio editor"
 
 ---
 
+## Phase 8: LSP Server Bug Fixes & Regression Tests
+
+**Purpose**: Fix runtime bugs in LSP server connection and add regression tests
+**Context**: Discovered during first live testing of studio ↔ LSP server integration
+
+### Bug Fixes
+
+- [X] T047 [US4] Fix WebSocketTransport constructor: `new WebSocketTransport(ws)` → `new WebSocketTransport({ socket: ws as any })` (options object API) in packages/lsp-server/src/cli.ts
+- [X] T048 [US4] Fix pre-opened socket: add `ws.emit('open')` after transport creation to trigger @lspeasy initialization in packages/lsp-server/src/cli.ts
+- [X] T049 [US1] Fix pathToUri malformed URIs: relative paths now get `/workspace/` prefix → `file:///workspace/model.rosetta` in apps/studio/src/utils/uri.ts
+- [X] T050 [P] Extract `pathToUri` utility from SourceEditor to apps/studio/src/utils/uri.ts (re-exported for backward compat)
+
+### Regression Tests
+
+- [X] T051 [P] Add pathToUri unit tests (12 tests) in apps/studio/test/components/pathToUri.test.ts
+- [X] T052 [P] Add LSP CLI transport constructor tests (5 tests) in packages/lsp-server/test/cli-transport.test.ts
+- [X] T053 [P] Add LSP URI regression integration tests (20 tests) in apps/studio/test/integration/lsp-uri-regression.test.ts
+
+**Checkpoint**: LSP server fully operational, regression tests prevent future breakage
+
+---
+
+## Phase 9: Two-Way Editing Integration
+
+**Purpose**: Wire bidirectional sync between source editor and graph editor
+**Context**: Source edits propagate to graph, graph edits propagate to source text
+
+### Bug Fixes
+
+- [X] T054 [US5] Fix `getSerializedFiles` type check: `typeof rosettaText !== 'string'` → `rosettaText.size === 0` (exportRosetta returns Map, not string) in apps/studio/src/pages/EditorPage.tsx
+- [X] T055 [US5] Fix SourceEditor recreation loop: use refs for callbacks, depend on `currentFile?.path` not `currentFile` in apps/studio/src/components/SourceEditor.tsx
+- [X] T056 [US5] Add external content update handling: detect graph→source text changes and update CodeMirror via `view.dispatch()` in apps/studio/src/components/SourceEditor.tsx
+
+### Source → Graph Wiring
+
+- [X] T057 [US5] Wire `onContentChange` callback from SourceEditor to EditorPage in apps/studio/src/pages/EditorPage.tsx
+- [X] T058 [US5] Implement `handleSourceChange` to update files with dirty flag in apps/studio/src/pages/EditorPage.tsx
+- [X] T059 [US5] Implement debounced reparse in App.tsx: 500ms idle → `parseWorkspaceFiles` → update models in apps/studio/src/App.tsx
+
+### Graph → Source Wiring
+
+- [X] T060 [US5] Wire `onModelChanged` callback from RuneTypeGraph to EditorPage in apps/studio/src/pages/EditorPage.tsx
+- [X] T061 [US5] Implement namespace→file mapping for reverse sync in apps/studio/src/pages/EditorPage.tsx
+- [X] T062 [US5] Implement `handleModelChanged` to map serialized namespace text back to workspace files in apps/studio/src/pages/EditorPage.tsx
+
+**Checkpoint**: Full two-way editing — source↔graph sync operational
+
+---
+
+## Phase 10: Vite Build Fix — Worker Transport
+
+**Purpose**: Fix Vite production build failure caused by Node.js-only modules in worker bundle
+**Context**: `@lspeasy/core` imports `node:events`, `node:crypto` — incompatible with browser workers
+
+- [X] T063 [US4] Remove static import of worker-transport.ts from transport-provider.ts (was triggering Vite worker bundling of Node.js modules) in apps/studio/src/services/transport-provider.ts
+- [X] T064 [US4] Replace worker fallback with graceful no-op transport + error state in apps/studio/src/services/transport-provider.ts
+- [X] T065 [P] Update transport-provider tests: worker fallback returns no-op with 'disconnected'/'error' state in apps/studio/test/services/transport-provider.test.ts
+
+**Checkpoint**: Vite production build succeeds; WebSocket transport remains the production path
+
+---
+
 ## Parallel Execution Guide
 
 ### Phase 2 parallel splits

@@ -174,3 +174,40 @@ App (LSP client lifecycle)
 | Langium server too heavy for SharedWorker | Low | Medium | Langium is ~2MB bundled; SharedWorker memory budget is 50MB |
 | Multi-tab document sync complexity | Medium | Medium | `@codemirror/lsp-client` handles didOpen/didClose automatically per plugin |
 | Graph diagnostics mapping accuracy | Medium | Low | Best-effort line → type name mapping; exact match not required for badges |
+
+## Architecture Decisions (Post-Implementation)
+
+### AD-LSP1: Worker Transport Infeasible — Graceful No-op Fallback
+
+**Status**: Decided  
+**Date**: 2025-07-12  
+**Context**: `@lspeasy/core` imports `node:events` and `node:crypto`, which are Node.js built-in modules. When Vite bundles a SharedWorker or regular Worker that transitively imports these modules, the build fails with `"EventEmitter" is not exported by "__vite-browser-external"`. This is a fundamental platform mismatch, not a configuration issue.
+
+**Decision**: Remove the static import of `worker-transport.ts` from `transport-provider.ts`. Replace the worker fallback path with a graceful no-op transport that returns `{ send(){}, subscribe(){}, unsubscribe(){} }` and sets the connection state to `{ mode: 'disconnected', status: 'error' }`. Console warning explains how to start the external LSP server.
+
+**Consequences**:
+- WebSocket transport (connecting to external `@rune-langium/lsp-server`) is the only operational LSP path
+- No in-browser LSP — users must run `rune-langium lsp --port 3001` separately
+- Vite production build succeeds cleanly
+- Future: could revisit if `@lspeasy/core` removes Node.js dependencies or provides a browser-compatible build
+
+### AD-LSP2: Two-Way Editing Data Flow
+
+**Status**: Decided  
+**Date**: 2025-07-12  
+**Context**: Source editor and graph editor must stay synchronized bidirectionally. Naive approaches (e.g., recreating CodeMirror on every render, using object identity for deps) caused infinite loops.
+
+**Decision**: Two separate data flows with stable ref patterns:
+
+1. **Source → Graph**: `SourceEditor.onContentChange` → `EditorPage.handleSourceChange` (marks file dirty) → `App.handleFilesChange` (500ms debounced `parseWorkspaceFiles`) → updated models → graph re-renders
+2. **Graph → Source**: `RuneTypeGraph.onModelChanged` → `EditorPage.handleModelChanged` (serializes namespace → maps to file → updates content) → file change triggers same debounced reparse
+
+**Key stability patterns**:
+- `onContentChangeRef` (useRef) prevents `buildExtensions` from being recreated on every render
+- Effect depends on `currentFile?.path` not `currentFile` object to avoid firing on content-only changes
+- External content detection: compares CodeMirror doc text vs file content, dispatches transaction only on real diffs
+
+**Consequences**:
+- No infinite render loops
+- 500ms debounce avoids excessive parsing during typing
+- Graph → Source requires namespace→file mapping (maintained in EditorPage)

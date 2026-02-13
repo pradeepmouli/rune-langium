@@ -205,6 +205,23 @@ description: "Task list for feature implementation"
 
 ---
 
+## Phase 7b: AST Source Provenance (Post-MVP Enhancement)
+
+**Goal**: Preserve rich Langium AST type information through the graph pipeline so that downstream consumers can access annotations, conditions, synonyms, type parameters, and other metadata without creating a separate type taxonomy.
+
+- [X] T104 [US1] Add generic AST-aware types: `AstNodeKindMap`, `AstMemberKindMap`, `AstNodeType`, `AstMemberType` in packages/visual-editor/src/types.ts
+- [X] T105 [US1] Make `TypeNodeData<K>` generic with `source?: AstNodeKindMap[K]` in packages/visual-editor/src/types.ts
+- [X] T106 [US1] Make `MemberDisplay<M>` generic with `source?: M` in packages/visual-editor/src/types.ts
+- [X] T107 [US1] Rewrite ast-to-graph.ts with real AST type guards (`isData`, `isChoice`, `isRosettaEnumeration`) and populate `source` refs in packages/visual-editor/src/adapters/ast-to-graph.ts
+- [X] T108 [US4] Update graph-to-ast.ts Synthetic* interfaces with `source?` fields and pass-through in packages/visual-editor/src/adapters/graph-to-ast.ts
+- [X] T109 [US3] Promote `@rune-langium/core` from devDependency to dependency in packages/visual-editor/package.json
+- [X] T110 [US3] Export `AstNodeKindMap`, `AstMemberKindMap`, `AstNodeType`, `AstMemberType` from packages/visual-editor/src/index.ts
+- [X] T111 [P] [US1] Add AST source provenance tests (13 tests) in packages/visual-editor/test/adapters/ast-source-provenance.test.ts
+
+**Checkpoint**: AST source provenance — rich type information flows through the entire graph pipeline
+
+---
+
 ## Phase 8: User Story 6 - Standalone Web Application (Priority: P3)
 
 **Goal**: Provide a browser app to load files/folders, view/edit graph, export images, and download updated `.rosetta`.
