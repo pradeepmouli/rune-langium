@@ -17,7 +17,7 @@ export const DataNode = memo(function DataNode({ data, selected }: NodeProps) {
     <div className={`rune-node rune-node-data${selected ? ' rune-node-selected' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="rune-node-header">
-        <span className="rune-node-kind-badge">Data</span>
+        <span className="rune-node-kind-badge">Type</span>
         <span>{nodeData.name}</span>
       </div>
       <div className="rune-node-body">

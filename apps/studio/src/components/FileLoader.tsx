@@ -81,13 +81,14 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
             Select Folder
           </button>
         </div>
+        {/* Visually hidden — NOT display:none, Chrome blocks .click() on those */}
         <input
           ref={fileInputRef}
           type="file"
           accept=".rosetta"
           multiple
           onChange={handleFileInput}
-          hidden
+          style={{ position: 'absolute', width: 0, height: 0, opacity: 0, overflow: 'hidden' }}
         />
         <input
           ref={dirInputRef}
@@ -95,7 +96,7 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
           // @ts-expect-error webkitdirectory is not in the type defs
           webkitdirectory=""
           onChange={handleFileInput}
-          hidden
+          style={{ position: 'absolute', width: 0, height: 0, opacity: 0, overflow: 'hidden' }}
         />
       </div>
     </div>

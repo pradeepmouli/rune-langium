@@ -1,22 +1,55 @@
 /**
- * App — Root component for Rune DSL Studio (T089).
+ * App — Root component for Rune DSL Studio (T089, T028).
  *
- * Orchestrates file loading, parsing, and the editor page.
+ * Orchestrates file loading, parsing, the editor page,
+ * and LSP client lifecycle.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import '@rune-langium/visual-editor/styles.css';
 import { FileLoader } from './components/FileLoader.js';
 import { EditorPage } from './pages/EditorPage.js';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles } from './services/workspace.js';
+import { createLspClientService, type LspClientService } from './services/lsp-client.js';
+import { createTransportProvider, type TransportState } from './services/transport-provider.js';
 
 export function App() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [models, setModels] = useState<unknown[]>([]);
   const [errors, setErrors] = useState<Map<string, string[]>>(new Map());
   const [loading, setLoading] = useState(false);
+  const [transportState, setTransportState] = useState<TransportState>({
+    mode: 'disconnected',
+    status: 'disconnected'
+  });
+
+  const lspClientRef = useRef<LspClientService | null>(null);
+  const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
+
+  // Initialise LSP on mount
+  useEffect(() => {
+    const provider = createTransportProvider();
+    providerRef.current = provider;
+
+    const unsub = provider.onStateChange((state) => {
+      setTransportState(state);
+    });
+
+    const client = createLspClientService({ transportProvider: provider });
+    lspClientRef.current = client;
+
+    client.connect().catch((err) => {
+      console.error('[App] LSP connect failed:', err);
+    });
+
+    return () => {
+      unsub();
+      client.dispose();
+      provider.dispose();
+    };
+  }, []);
 
   const handleFilesLoaded = useCallback(async (loadedFiles: WorkspaceFile[]) => {
     setLoading(true);
@@ -26,6 +59,14 @@ export function App() {
     setModels(result.models);
     setErrors(result.errors);
     setLoading(false);
+  }, []);
+
+  const handleReconnect = useCallback(async () => {
+    try {
+      await lspClientRef.current?.reconnect();
+    } catch (err) {
+      console.error('[App] LSP reconnect failed:', err);
+    }
   }, []);
 
   const handleReset = useCallback(() => {
@@ -72,6 +113,9 @@ export function App() {
             models={models as import('@rune-langium/core').RosettaModel[]}
             files={files}
             onFilesChange={setFiles}
+            lspClient={lspClientRef.current ?? undefined}
+            transportState={transportState}
+            onReconnect={handleReconnect}
           />
         )}
       </main>
