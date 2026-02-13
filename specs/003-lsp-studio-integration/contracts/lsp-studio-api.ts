@@ -24,6 +24,13 @@ export interface CMTransport {
   unsubscribe(handler: (value: string) => void): void;
 }
 
+/**
+ * Transport modes.
+ * Note: 'embedded' (SharedWorker) is not currently operational.
+ * @lspeasy/core imports node:events and node:crypto which cannot run
+ * in browser Workers. The worker fallback returns a no-op transport
+ * with mode 'disconnected' and status 'error'.
+ */
 export type TransportMode = 'websocket' | 'embedded' | 'disconnected';
 
 export type TransportStatus =
@@ -70,7 +77,10 @@ export declare function createWebSocketTransport(uri: string): Promise<CMTranspo
 
 /**
  * Create a SharedWorker transport adapter for @codemirror/lsp-client.
- * The worker runs the Langium LSP server in-browser.
+ *
+ * @deprecated Not operational — @lspeasy/core imports node:events and
+ * node:crypto which are incompatible with browser Workers. The transport
+ * provider falls back to a no-op transport instead. See AD-LSP1 in plan.md.
  */
 export declare function createWorkerTransport(): CMTransport;
 
@@ -213,3 +223,20 @@ export interface EditorTab {
  * Returns a StreamLanguage-based extension.
  */
 export declare function runeDslLanguage(): Extension;
+
+// ────────────────────────────────────────────────────────────────────────────
+// URI Utilities
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Convert a workspace file path to a well-formed file:// URI.
+ * - Absolute paths → `file:///absolute/path`
+ * - Relative paths → `file:///workspace/relative/path`
+ * - Already-formed URIs → returned unchanged
+ *
+ * Extracted from SourceEditor for reuse across LSP client,
+ * diagnostics bridge, and editor navigation.
+ *
+ * @see apps/studio/src/utils/uri.ts
+ */
+export declare function pathToUri(path: string): string;

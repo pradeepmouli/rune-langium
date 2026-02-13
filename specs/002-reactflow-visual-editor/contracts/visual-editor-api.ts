@@ -16,36 +16,96 @@
 type RosettaModel = import('@rune-langium/core').RosettaModel;
 type ParseResult = import('@rune-langium/core').ParseResult;
 
+// AST types used for source provenance
+type Data = import('@rune-langium/core').Data;
+type Choice = import('@rune-langium/core').Choice;
+type RosettaEnumeration = import('@rune-langium/core').RosettaEnumeration;
+type Attribute = import('@rune-langium/core').Attribute;
+type ChoiceOption = import('@rune-langium/core').ChoiceOption;
+type RosettaEnumValue = import('@rune-langium/core').RosettaEnumValue;
+
+// ---------------------------------------------------------------------------
+// AST ↔ Graph Kind Mappings
+// ---------------------------------------------------------------------------
+
+/** Maps each TypeKind to its Langium AST node type. */
+export interface AstNodeKindMap {
+  data: Data;
+  choice: Choice;
+  enum: RosettaEnumeration;
+}
+
+/** Maps each TypeKind to its member AST node type. */
+export interface AstMemberKindMap {
+  data: Attribute;
+  choice: ChoiceOption;
+  enum: RosettaEnumValue;
+}
+
+/** Union of all AST member types. */
+export type AstMemberType = AstMemberKindMap[TypeKind];
+
+/** Union of all AST node types. */
+export type AstNodeType = AstNodeKindMap[TypeKind];
+
 // ---------------------------------------------------------------------------
 // Graph Data Types
 // ---------------------------------------------------------------------------
 
-export type TypeKind = 'data' | 'choice' | 'enum';
+export type TypeKind = keyof AstNodeKindMap;
 
 export type EdgeKind = 'extends' | 'attribute-ref' | 'choice-option' | 'enum-extends';
 
-export interface MemberDisplay {
+/**
+ * Display-oriented member representation with optional AST source provenance.
+ * `source` carries the original Langium AST member node preserving rich metadata
+ * (annotations, synonyms, labels, doc-references, rule-references, etc.).
+ */
+export interface MemberDisplay<M = AstMemberType> {
   name: string;
   typeName?: string;
   cardinality?: string;
   isOverride: boolean;
+  /** Source AST member node — preserves full Langium type information. */
+  source?: M;
 }
 
-export interface TypeNodeData {
-  kind: TypeKind;
+/**
+ * Data payload carried by every graph node. Generic over `K extends TypeKind`
+ * so that `source` is automatically narrowed to the correct AST type.
+ *
+ * The index signature `[key: string]: unknown` is required for compatibility
+ * with ReactFlow's `Node<T extends Record<string, unknown>>` constraint.
+ * While this allows arbitrary properties at runtime, TypeScript will still
+ * catch typos in declared property names during development.
+ */
+export interface TypeNodeData<K extends TypeKind = TypeKind> {
+  kind: K;
   name: string;
   namespace: string;
   definition?: string;
-  members: MemberDisplay[];
+  members: Array<MemberDisplay<AstMemberKindMap[K]>>;
   parentName?: string;
   hasExternalRefs: boolean;
   errors: ValidationError[];
+  /** Source AST node — preserves full Langium type information. */
+  source?: AstNodeKindMap[K];
+  /** Required for ReactFlow compatibility: Node<T> requires T extends Record<string, unknown> */
+  [key: string]: unknown;
 }
 
+/**
+ * Data payload for graph edges.
+ *
+ * The index signature is required for compatibility with ReactFlow's
+ * `Edge<T extends Record<string, unknown>>` constraint.
+ */
 export interface EdgeData {
   kind: EdgeKind;
   label?: string;
   cardinality?: string;
+  /** Required for ReactFlow compatibility: Edge<T> requires T extends Record<string, unknown> */
+  [key: string]: unknown;
 }
 
 export interface ValidationError {
@@ -215,3 +275,38 @@ export declare function computeLayout(
   edges: Array<import('@xyflow/react').Edge<EdgeData>>,
   options?: LayoutOptions
 ): Array<import('@xyflow/react').Node<TypeNodeData>>;
+
+// ---------------------------------------------------------------------------
+// Namespace Explorer Types
+// ---------------------------------------------------------------------------
+
+export interface NamespaceTreeNode {
+  namespace: string;
+  types: NamespaceTypeEntry[];
+  totalCount: number;
+  dataCount: number;
+  choiceCount: number;
+  enumCount: number;
+}
+
+export interface NamespaceTypeEntry {
+  nodeId: string;
+  name: string;
+  kind: TypeKind;
+}
+
+export interface VisibilityState {
+  /** Namespaces whose types are currently visible on the graph. */
+  expandedNamespaces: Set<string>;
+  /** Individual nodes hidden within expanded namespaces. */
+  hiddenNodeIds: Set<string>;
+  /** Whether the explorer panel is open. */
+  explorerOpen: boolean;
+}
+
+/**
+ * Build a namespace tree from graph nodes for the explorer panel.
+ */
+export declare function buildNamespaceTree(
+  nodes: Array<import('@xyflow/react').Node<TypeNodeData>>
+): NamespaceTreeNode[];
