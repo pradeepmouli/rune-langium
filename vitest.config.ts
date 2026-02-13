@@ -1,5 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
+// Root vitest config for core packages only.
+// Note: visual-editor and apps have their own vitest.config.ts with browser environment.
+// Run `pnpm test` at the root to execute all tests across all packages via `pnpm -r run test`.
+
 export default defineConfig({
   test: {
     globals: true,
