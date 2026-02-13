@@ -12,7 +12,6 @@
 
 import type { Transport } from '@codemirror/lsp-client';
 import { createWebSocketTransport } from './ws-transport.js';
-import { createWorkerTransport } from './worker-transport.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -105,10 +104,30 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
 
   /** Fall back to the embedded Worker transport. */
   function tryWorker(): Transport {
-    const transport = createWorkerTransport();
-    setState({ mode: 'embedded', status: 'connected' });
-    currentTransport = transport;
-    return transport;
+    // The in-browser LSP server requires @lspeasy/core which depends on
+    // Node.js-only modules (node:events, node:crypto). Until a browser-
+    // compatible LSP core is available, we cannot embed the server in a
+    // Worker. Report the error so the UI shows "disconnected" status.
+    console.warn(
+      '[TransportProvider] WebSocket connection failed and embedded Worker transport is not available. Start the LSP server with: pnpm --filter @rune-langium/lsp-server start'
+    );
+    setState({
+      mode: 'disconnected',
+      status: 'error',
+      error: new Error('LSP server unavailable — start the external server on ws://localhost:3001')
+    });
+    // Return a no-op transport so callers don't crash
+    return {
+      send() {
+        /* no-op */
+      },
+      subscribe() {
+        /* no-op */
+      },
+      unsubscribe() {
+        /* no-op */
+      }
+    };
   }
 
   /** Main connection flow: WS first → Worker fallback. */

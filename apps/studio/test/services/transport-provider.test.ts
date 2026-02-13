@@ -10,15 +10,9 @@ vi.mock('../../src/services/ws-transport.js', () => ({
   createWebSocketTransport: vi.fn()
 }));
 
-vi.mock('../../src/services/worker-transport.js', () => ({
-  createWorkerTransport: vi.fn()
-}));
-
 import { createWebSocketTransport } from '../../src/services/ws-transport.js';
-import { createWorkerTransport } from '../../src/services/worker-transport.js';
 
 const mockWsTransport = vi.mocked(createWebSocketTransport);
-const mockWorkerTransport = vi.mocked(createWorkerTransport);
 
 function makeFakeTransport() {
   return {
@@ -67,10 +61,8 @@ describe('createTransportProvider', () => {
     provider.dispose();
   });
 
-  it('falls back to Worker when WebSocket fails', async () => {
-    const workerTransport = makeFakeTransport();
+  it('falls back to no-op transport when WebSocket fails (embedded server unavailable)', async () => {
     mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
-    mockWorkerTransport.mockReturnValueOnce(workerTransport);
 
     const provider = createTransportProvider({
       wsUri: 'ws://localhost:3001',
@@ -79,9 +71,13 @@ describe('createTransportProvider', () => {
     });
     const transport = await provider.getTransport();
 
-    expect(transport).toBe(workerTransport);
-    expect(provider.getState().mode).toBe('embedded');
-    expect(provider.getState().status).toBe('connected');
+    // Returns a no-op transport with send/subscribe/unsubscribe
+    expect(typeof transport.send).toBe('function');
+    expect(typeof transport.subscribe).toBe('function');
+    expect(typeof transport.unsubscribe).toBe('function');
+    // State reflects that embedded is unavailable
+    expect(provider.getState().mode).toBe('disconnected');
+    expect(provider.getState().status).toBe('error');
 
     provider.dispose();
   });
@@ -123,11 +119,9 @@ describe('createTransportProvider', () => {
     provider.dispose();
   });
 
-  it('reconnect retries WebSocket', async () => {
-    const workerTransport = makeFakeTransport();
+  it('reconnect retries WebSocket after fallback', async () => {
     const wsTransport = makeFakeTransport();
     mockWsTransport.mockRejectedValueOnce(new Error('fail'));
-    mockWorkerTransport.mockReturnValueOnce(workerTransport);
 
     const provider = createTransportProvider({
       wsUri: 'ws://localhost:3001',
@@ -135,7 +129,8 @@ describe('createTransportProvider', () => {
       maxReconnectAttempts: 0
     });
     await provider.getTransport();
-    expect(provider.getState().mode).toBe('embedded');
+    expect(provider.getState().mode).toBe('disconnected');
+    expect(provider.getState().status).toBe('error');
 
     // Now WebSocket is available
     mockWsTransport.mockResolvedValueOnce(wsTransport);
