@@ -179,8 +179,8 @@ App (LSP client lifecycle)
 
 ### AD-LSP1: Worker Transport Infeasible — Graceful No-op Fallback
 
-**Status**: Decided  
-**Date**: 2025-07-12  
+**Status**: Decided
+**Date**: 2025-07-12
 **Context**: `@lspeasy/core` imports `node:events` and `node:crypto`, which are Node.js built-in modules. When Vite bundles a SharedWorker or regular Worker that transitively imports these modules, the build fails with `"EventEmitter" is not exported by "__vite-browser-external"`. This is a fundamental platform mismatch, not a configuration issue.
 
 **Decision**: Remove the static import of `worker-transport.ts` from `transport-provider.ts`. Replace the worker fallback path with a graceful no-op transport that returns `{ send(){}, subscribe(){}, unsubscribe(){} }` and sets the connection state to `{ mode: 'disconnected', status: 'error' }`. Console warning explains how to start the external LSP server.
@@ -193,8 +193,8 @@ App (LSP client lifecycle)
 
 ### AD-LSP2: Two-Way Editing Data Flow
 
-**Status**: Decided  
-**Date**: 2025-07-12  
+**Status**: Decided
+**Date**: 2025-07-12
 **Context**: Source editor and graph editor must stay synchronized bidirectionally. Naive approaches (e.g., recreating CodeMirror on every render, using object identity for deps) caused infinite loops.
 
 **Decision**: Two separate data flows with stable ref patterns:
