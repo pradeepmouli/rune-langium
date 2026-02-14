@@ -47,6 +47,36 @@ export interface SourceEditorProps {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a stable, unique ID for a tab from a file path.
+ * Uses hex encoding to handle special characters and ensure uniqueness.
+ */
+function getTabId(path: string): string {
+  // Convert each Unicode code point to hex for a stable, unique, HTML-safe ID
+  let encoded = '';
+  for (const char of path) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) {
+      continue;
+    }
+    // Keep ASCII alphanumeric chars as-is, encode others as hex
+    if (
+      (codePoint >= 48 && codePoint <= 57) || // 0-9
+      (codePoint >= 65 && codePoint <= 90) || // A-Z
+      (codePoint >= 97 && codePoint <= 122)   // a-z
+    ) {
+      encoded += char;
+    } else {
+      encoded += codePoint.toString(16).padStart(2, '0');
+    }
+  }
+  return `tab-${encoded}`;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -198,8 +228,11 @@ export function SourceEditor({
         {files.map((file) => (
           <button
             key={file.path}
+            id={getTabId(file.path)}
             role="tab"
             aria-selected={file.path === selectedPath}
+            aria-controls="editor-tabpanel"
+            tabIndex={file.path === selectedPath ? 0 : -1}
             className={cn(
               'px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors',
               'hover:text-text-primary',
@@ -217,8 +250,10 @@ export function SourceEditor({
 
       {/* Editor container */}
       <div
+        id="editor-tabpanel"
         className="flex-1 overflow-hidden"
         role="tabpanel"
+        aria-labelledby={selectedPath ? getTabId(selectedPath) : undefined}
         data-testid="source-editor-container"
         ref={editorContainerRef}
       />
