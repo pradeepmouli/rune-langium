@@ -158,7 +158,8 @@ function isUpdateMode(): boolean {
   return (
     process.argv.includes('--update-snapshots') ||
     process.argv.includes('-u') ||
-    process.env.UPDATE_SNAPSHOTS === 'true'
+    process.env.UPDATE_SNAPSHOTS === 'true' ||
+    process.env.UPDATE_SNAPSHOTS === '1'
   );
 }
 

@@ -52,16 +52,20 @@ export interface SourceEditorProps {
 
 /**
  * Generate a stable, unique ID for a tab from a file path.
- * Uses URI encoding to handle special characters and ensure uniqueness.
+ * Uses hex encoding to handle special characters and ensure uniqueness.
  */
 function getTabId(path: string): string {
-  // Use encodeURIComponent for Unicode-safe encoding, then make it ID-safe
-  const encoded = encodeURIComponent(path)
-    .replace(/[^a-zA-Z0-9]/g, (char) => {
-      // Convert special chars to hex representation
+  // Convert each character to hex for a stable, unique, HTML-safe ID
+  const encoded = Array.from(path)
+    .map((char) => {
       const code = char.charCodeAt(0);
-      return code.toString(16);
-    });
+      // Keep alphanumeric chars as-is, encode others as hex
+      if (/[a-zA-Z0-9]/.test(char)) {
+        return char;
+      }
+      return code.toString(16).padStart(2, '0');
+    })
+    .join('');
   return `tab-${encoded}`;
 }
 
