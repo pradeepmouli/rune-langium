@@ -324,10 +324,10 @@ test.describe('Visual Regression', () => {
     await loadModel(page, [{ name: 'demo.rosetta', content: ROSETTA_SIMPLE }]);
     await page.waitForSelector('[data-testid="namespace-explorer"]', { timeout: 5000 });
 
-    // Expand all to see types
+    // Expand all to see types (force: true because ResizablePanelGroup can intercept pointer events)
     const expandBtn = page.getByTestId('expand-all');
     if (await expandBtn.isVisible()) {
-      await expandBtn.click();
+      await expandBtn.click({ force: true });
       await page.waitForTimeout(300);
     }
 
@@ -365,10 +365,10 @@ test.describe('Visual Regression', () => {
 
     await loadModel(page, [{ name: 'demo.rosetta', content: ROSETTA_SIMPLE }]);
 
-    // Open source panel
+    // Open source panel (use { state: 'attached' } because ResizablePanel layout is async)
     await page.getByTitle('Toggle source view').click();
-    await page.waitForSelector('[data-testid="source-editor"]', { timeout: 5000 });
-    await page.waitForTimeout(500);
+    await page.waitForSelector('[data-testid="source-editor"]', { state: 'attached', timeout: 5000 });
+    await page.waitForTimeout(1000);
 
     // Capture screenshot
     await saveScreenshot(page, '04-source-editor');

@@ -251,7 +251,7 @@ export function EditorPage({
   }, []);
 
   return (
-    <div className="flex flex-col h-full" data-testid="editor-page">
+    <div className="flex flex-col h-full overflow-hidden" data-testid="editor-page">
       {/* Toolbar */}
       <nav
         className="flex items-center justify-between px-3 py-1.5 bg-surface-raised gap-2"
@@ -299,77 +299,74 @@ export function EditorPage({
       </nav>
       <Separator />
 
-      {/* Main content — resizable panels */}
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
-        {/* Namespace Explorer */}
+      {/* Main content — explorer sidebar + resizable graph/source */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Namespace Explorer — fixed sidebar */}
         {explorerOpen && (
-          <>
-            <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-              <aside
-                className="h-full overflow-hidden flex flex-col bg-surface-raised"
-                aria-label="Namespace explorer"
-              >
-                <ScrollArea className="flex-1">
-                  <NamespaceExplorerPanel
-                    nodes={allGraphNodes}
-                    expandedNamespaces={expandedNamespaces}
-                    hiddenNodeIds={hiddenNodeIds}
-                    onToggleNamespace={handleToggleNamespace}
-                    onToggleNode={handleToggleNode}
-                    onExpandAll={handleExpandAll}
-                    onCollapseAll={handleCollapseAll}
-                    onSelectNode={handleExplorerSelectNode}
+          <aside
+            className="w-[280px] min-w-[200px] max-w-[400px] h-full overflow-hidden flex flex-col bg-surface-raised border-r border-border-default"
+            aria-label="Namespace explorer"
+          >
+            <ScrollArea className="flex-1">
+              <NamespaceExplorerPanel
+                nodes={allGraphNodes}
+                expandedNamespaces={expandedNamespaces}
+                hiddenNodeIds={hiddenNodeIds}
+                onToggleNamespace={handleToggleNamespace}
+                onToggleNode={handleToggleNode}
+                onExpandAll={handleExpandAll}
+                onCollapseAll={handleCollapseAll}
+                onSelectNode={handleExplorerSelectNode}
+              />
+            </ScrollArea>
+          </aside>
+        )}
+
+        {/* Graph + Source — resizable split */}
+        <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0">
+          <ResizablePanel id="graph" defaultSize={showSource ? 65 : 100}>
+            <div className="relative h-full" ref={graphContainerRef}>
+              <RuneTypeGraph
+                ref={graphRef}
+                models={models as unknown[]}
+                config={{
+                  layout: { direction: 'TB' },
+                  showControls: true,
+                  showMinimap: true,
+                  readOnly: false
+                }}
+                callbacks={{
+                  onNodeSelect: handleNodeSelect,
+                  onNodeDoubleClick: handleNodeDoubleClick,
+                  onModelChanged: handleModelChanged
+                }}
+                visibilityState={visibilityState}
+              />
+            </div>
+          </ResizablePanel>
+
+          {/* Source panel (toggleable) — keep studio-editor-page__source class for CodeMirror scoping */}
+          {showSource && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel id="source" defaultSize={35} minSize={20} maxSize={50}>
+                <aside
+                  className="studio-editor-page__source h-full overflow-auto"
+                  aria-label="Source editor"
+                >
+                  <SourceEditor
+                    files={files}
+                    activeFile={activeEditorFile}
+                    lspClient={lspClient}
+                    onFileSelect={(path) => setActiveEditorFile(path)}
+                    onContentChange={handleSourceChange}
                   />
-                </ScrollArea>
-              </aside>
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-          </>
-        )}
-
-        {/* Graph area */}
-        <ResizablePanel defaultSize={showSource ? 50 : 80}>
-          <div className="relative h-full" ref={graphContainerRef}>
-            <RuneTypeGraph
-              ref={graphRef}
-              models={models as unknown[]}
-              config={{
-                layout: { direction: 'TB' },
-                showControls: true,
-                showMinimap: true,
-                readOnly: false
-              }}
-              callbacks={{
-                onNodeSelect: handleNodeSelect,
-                onNodeDoubleClick: handleNodeDoubleClick,
-                onModelChanged: handleModelChanged
-              }}
-              visibilityState={visibilityState}
-            />
-          </div>
-        </ResizablePanel>
-
-        {/* Source panel (toggleable) — keep studio-editor-page__source class for CodeMirror scoping */}
-        {showSource && (
-          <>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={30} minSize={20} maxSize={40}>
-              <aside
-                className="studio-editor-page__source h-full overflow-auto"
-                aria-label="Source editor"
-              >
-                <SourceEditor
-                  files={files}
-                  activeFile={activeEditorFile}
-                  lspClient={lspClient}
-                  onFileSelect={(path) => setActiveEditorFile(path)}
-                  onContentChange={handleSourceChange}
-                />
-              </aside>
-            </ResizablePanel>
-          </>
-        )}
-      </ResizablePanelGroup>
+                </aside>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+      </div>
 
       {/* Diagnostics panel (toggleable) */}
       {showDiagnostics && (
