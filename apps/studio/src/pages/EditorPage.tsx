@@ -28,7 +28,6 @@ import type { TransportState } from '../services/transport-provider.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 
-
 export interface EditorPageProps {
   models: RosettaModel[];
   files: WorkspaceFile[];

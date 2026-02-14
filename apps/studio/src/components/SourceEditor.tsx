@@ -66,7 +66,7 @@ function getTabId(path: string): string {
     if (
       (codePoint >= 48 && codePoint <= 57) || // 0-9
       (codePoint >= 65 && codePoint <= 90) || // A-Z
-      (codePoint >= 97 && codePoint <= 122)   // a-z
+      (codePoint >= 97 && codePoint <= 122) // a-z
     ) {
       encoded += char;
     } else {

@@ -150,7 +150,7 @@ async function captureDomSnapshot(
 const SNAPSHOT_DIR = path.join(__dirname, '__snapshots__');
 const SCREENSHOT_DIR = path.join(__dirname, '__screenshots__');
 
-/** 
+/**
  * Check if we're in snapshot update mode (via --update-snapshots or -u flag).
  * Checks both process.argv and Playwright's UPDATE_SNAPSHOTS environment variable.
  */
@@ -398,7 +398,10 @@ test.describe('Visual Regression', () => {
 
     // Open source panel (use { state: 'attached' } because ResizablePanel layout is async)
     await page.getByTitle('Toggle source view').click();
-    await page.waitForSelector('[data-testid="source-editor"]', { state: 'attached', timeout: 5000 });
+    await page.waitForSelector('[data-testid="source-editor"]', {
+      state: 'attached',
+      timeout: 5000
+    });
     await page.waitForTimeout(1000);
 
     // Capture screenshot
