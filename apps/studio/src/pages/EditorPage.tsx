@@ -18,11 +18,13 @@ import { SourceEditor } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
+import { Button } from '../components/ui/button.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
+import { cn } from '@/lib/utils.js';
 
 export interface EditorPageProps {
   models: RosettaModel[];
@@ -246,43 +248,47 @@ export function EditorPage({
   }, []);
 
   return (
-    <div className="studio-editor-page" data-testid="editor-page">
+    <div className="flex flex-col h-full" data-testid="editor-page">
       {/* Toolbar */}
-      <div className="studio-editor-page__toolbar">
-        <div className="studio-editor-page__toolbar-left">
-          <button
-            className={`studio-toolbar-button ${explorerOpen ? 'studio-toolbar-button--active' : ''}`}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-surface-raised)] border-b border-[var(--color-border-default)] gap-2">
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant={explorerOpen ? 'default' : 'secondary'}
+            size="sm"
             onClick={() => setExplorerOpen((v) => !v)}
             title="Toggle namespace explorer"
           >
             Explorer
-          </button>
-          <button className="studio-toolbar-button" onClick={handleFitView} title="Fit to view">
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
             Fit View
-          </button>
-          <button
-            className="studio-toolbar-button"
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleRelayout}
             title="Re-run auto layout"
           >
             Re-layout
-          </button>
-          <button
-            className={`studio-toolbar-button ${showSource ? 'studio-toolbar-button--active' : ''}`}
+          </Button>
+          <Button
+            variant={showSource ? 'default' : 'secondary'}
+            size="sm"
             onClick={() => setShowSource(!showSource)}
             title="Toggle source view"
           >
             Source
-          </button>
-          <button
-            className={`studio-toolbar-button ${showDiagnostics ? 'studio-toolbar-button--active' : ''}`}
+          </Button>
+          <Button
+            variant={showDiagnostics ? 'default' : 'secondary'}
+            size="sm"
             onClick={() => setShowDiagnostics(!showDiagnostics)}
             title="Toggle diagnostics panel"
           >
             Problems{totalErrors + totalWarnings > 0 ? ` (${totalErrors + totalWarnings})` : ''}
-          </button>
+          </Button>
         </div>
-        <div className="studio-editor-page__toolbar-right">
+        <div className="flex items-center gap-1.5">
           <ExportMenu
             getSerializedFiles={getSerializedFiles}
             getGraphElement={getGraphElement}
@@ -292,10 +298,10 @@ export function EditorPage({
       </div>
 
       {/* Main content */}
-      <div className="studio-editor-page__content">
+      <div className="flex-1 flex overflow-hidden">
         {/* Namespace Explorer */}
         {explorerOpen && (
-          <div className="studio-editor-page__explorer">
+          <div className="w-[280px] min-w-[200px] max-w-[400px] border-r border-[var(--color-border-default)] overflow-hidden flex flex-col bg-[var(--color-surface-raised)] resize-x">
             <NamespaceExplorerPanel
               nodes={allGraphNodes}
               expandedNamespaces={expandedNamespaces}
@@ -311,7 +317,7 @@ export function EditorPage({
 
         {/* Graph area */}
         <div
-          className={`studio-editor-page__graph ${showSource ? 'studio-editor-page__graph--with-source' : ''}`}
+          className={cn("relative", showSource ? "flex-[2]" : "flex-1")}
           ref={graphContainerRef}
         >
           <RuneTypeGraph
@@ -332,9 +338,9 @@ export function EditorPage({
           />
         </div>
 
-        {/* Source panel (toggleable) */}
+        {/* Source panel (toggleable) — keep studio-editor-page__source class for CodeMirror scoping */}
         {showSource && (
-          <div className="studio-editor-page__source">
+          <div className="studio-editor-page__source flex-1 border-l border-[var(--color-border-default)] overflow-auto max-w-[480px] min-w-[240px]">
             <SourceEditor
               files={files}
               activeFile={activeEditorFile}
@@ -348,7 +354,7 @@ export function EditorPage({
 
       {/* Diagnostics panel (toggleable) */}
       {showDiagnostics && (
-        <div className="studio-editor-page__diagnostics">
+        <div className="shrink-0">
           <DiagnosticsPanel
             fileDiagnostics={fileDiagnostics}
             onNavigate={(uri, line, _char) => {
@@ -368,7 +374,7 @@ export function EditorPage({
       )}
 
       {/* Status bar */}
-      <div className="studio-editor-page__status">
+      <div className="flex items-center gap-4 px-3 py-1 text-sm text-[var(--color-text-muted)] bg-[var(--color-surface-raised)] border-t border-[var(--color-border-default)]">
         <span>{models.length} model(s) loaded</span>
         <span>{files.filter((f) => f.dirty).length} modified</span>
         {selectedNode && <span>Selected: {selectedNode}</span>}

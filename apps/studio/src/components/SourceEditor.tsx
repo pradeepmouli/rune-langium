@@ -17,6 +17,7 @@ import { defaultKeymap } from '@codemirror/commands';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
+import { cn } from '@/lib/utils.js';
 
 // Re-export pathToUri for backward compatibility
 export { pathToUri } from '../utils/uri.js';
@@ -177,34 +178,42 @@ export function SourceEditor({
   // Empty state
   if (files.length === 0) {
     return (
-      <div className="studio-source-editor studio-source-editor--empty" data-testid="source-editor">
+      <div
+        className="flex flex-col items-center justify-center h-full bg-[var(--color-surface-base)] text-[var(--color-text-muted)]"
+        data-testid="source-editor"
+      >
         <p>No files loaded</p>
       </div>
     );
   }
 
   return (
-    <div className="studio-source-editor" data-testid="source-editor">
+    <div className="flex flex-col h-full bg-[var(--color-surface-base)]" data-testid="source-editor">
       {/* Tab bar */}
-      <div className="studio-source-editor__tabs">
+      <div className="flex overflow-x-auto bg-[var(--color-surface-raised)] border-b border-[var(--color-border-default)] gap-px min-h-[32px]">
         {files.map((file) => (
           <button
             key={file.path}
-            className={`studio-source-editor__tab ${
-              file.path === selectedPath ? 'studio-source-editor__tab--active' : ''
-            }`}
+            className={cn(
+              "px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors",
+              "hover:text-[var(--color-text-primary)]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1",
+              file.path === selectedPath
+                ? "text-[var(--color-accent)] border-b-[var(--color-accent)]"
+                : "text-[var(--color-text-secondary)]"
+            )}
             onClick={() => handleFileSelect(file.path)}
             title={file.path}
           >
             {file.name}
-            {file.dirty && <span className="studio-source-editor__dirty"> ●</span>}
+            {file.dirty && <span className="text-[var(--color-warning)] text-xs"> ●</span>}
           </button>
         ))}
       </div>
 
       {/* Editor container */}
       <div
-        className="studio-source-editor__editor"
+        className="flex-1 overflow-hidden"
         data-testid="source-editor-container"
         ref={editorContainerRef}
       />

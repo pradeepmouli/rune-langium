@@ -7,6 +7,7 @@
 
 import { useCallback } from 'react';
 import { downloadFile, downloadRosettaFiles, exportImage } from '../services/export.js';
+import { Button } from './ui/button.js';
 
 export interface ExportMenuProps {
   /** Callback to get the current serialized .rosetta content per file. */
@@ -55,31 +56,34 @@ export function ExportMenu({ getSerializedFiles, getGraphElement, hasModels }: E
   }, [getGraphElement]);
 
   return (
-    <div className="studio-export-menu" data-testid="export-menu">
-      <button
-        className="studio-export-menu__button"
+    <div className="flex gap-1" data-testid="export-menu">
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={handleExportRosetta}
         disabled={!hasModels}
         title="Download .rosetta files"
       >
         Export .rosetta
-      </button>
-      <button
-        className="studio-export-menu__button"
+      </Button>
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={handleExportSvg}
         disabled={!hasModels}
         title="Export graph as SVG"
       >
         Export SVG
-      </button>
-      <button
-        className="studio-export-menu__button"
+      </Button>
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={handleExportPng}
         disabled={!hasModels}
         title="Export graph as PNG"
       >
         Export PNG
-      </button>
+      </Button>
     </div>
   );
 }
