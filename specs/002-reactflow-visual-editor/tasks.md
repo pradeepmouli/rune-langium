@@ -15,15 +15,15 @@ description: "Task list for feature implementation"
 
 ## Constitution Check
 
-- [ ] T001 Add deterministic fixture loader for visual-editor tests in packages/visual-editor/test/helpers/fixture-loader.ts
-- [ ] T002 Add conformance tests against vendored CDM corpus in packages/visual-editor/test/conformance/cdm-corpus-graph.test.ts
-- [ ] T003 Add round-trip conformance tests (edit → serialize → parse) in packages/visual-editor/test/conformance/roundtrip.test.ts
-- [ ] T004 Add validation parity coverage for S-01/S-02/S-04 in packages/visual-editor/test/validation/validation-parity.test.ts
-- [ ] T005 Add performance benchmarks for layout + render at 500 nodes in packages/visual-editor/test/benchmarks/perf.bench.ts
-- [ ] T006 Add compatibility/migration notes for visual-editor public API in packages/visual-editor/README.md
-- [ ] T096 Add parse latency benchmarks (<200ms single-file, <5s full corpus) in packages/core/test/benchmarks/parse-perf.bench.ts
-- [ ] T097 Add studio parser web worker (parse/parseWorkspace) in apps/studio/src/workers/parser-worker.ts
-- [ ] T098 Wire studio workspace parsing through worker (fallback to main thread) in apps/studio/src/services/workspace.ts
+- [X] T001 Add deterministic fixture loader for visual-editor tests in packages/visual-editor/test/helpers/fixture-loader.ts
+- [X] T002 Add conformance tests against vendored CDM corpus in packages/visual-editor/test/conformance/cdm-corpus-graph.test.ts
+- [X] T003 Add round-trip conformance tests (edit → serialize → parse) in packages/visual-editor/test/conformance/roundtrip.test.ts
+- [X] T004 Add validation parity coverage for S-01/S-02/S-04 in packages/visual-editor/test/validation/validation-parity.test.ts
+- [X] T005 Add performance benchmarks for layout + render at 500 nodes in packages/visual-editor/test/benchmarks/perf.bench.ts
+- [X] T006 Add compatibility/migration notes for visual-editor public API in packages/visual-editor/README.md
+- [X] T096 Add parse latency benchmarks (<200ms single-file, <5s full corpus) in packages/core/test/benchmarks/parse-perf.bench.ts
+- [X] T097 Add studio parser web worker (parse/parseWorkspace) in apps/studio/src/workers/parser-worker.ts
+- [X] T098 Wire studio workspace parsing through worker (fallback to main thread) in apps/studio/src/services/workspace.ts
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -37,19 +37,19 @@ description: "Task list for feature implementation"
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T007 Update pnpm workspaces to include apps/* in pnpm-workspace.yaml
-- [ ] T008 [P] Create package skeleton for component library in packages/visual-editor/package.json
-- [ ] T009 [P] Create TypeScript config for component library in packages/visual-editor/tsconfig.json
-- [ ] T010 [P] Add visual-editor entrypoints in packages/visual-editor/src/index.ts
-- [ ] T011 [P] Add base styles export in packages/visual-editor/src/styles.css
-- [ ] T012 [P] Add visual-editor README scaffolding in packages/visual-editor/README.md
-- [ ] T013 [P] Create app skeleton for studio in apps/studio/package.json
-- [ ] T014 [P] Create Vite + React setup in apps/studio/vite.config.ts
-- [ ] T015 [P] Add studio TS config in apps/studio/tsconfig.json
-- [ ] T016 [P] Add studio HTML entry in apps/studio/index.html
-- [ ] T017 [P] Add studio main entry in apps/studio/src/main.tsx
-- [ ] T018 [P] Add studio app shell in apps/studio/src/App.tsx
-- [ ] T019 Add root scripts/filters for new workspaces in package.json (build/test/dev/lint as needed)
+- [X] T007 Update pnpm workspaces to include apps/* in pnpm-workspace.yaml
+- [X] T008 [P] Create package skeleton for component library in packages/visual-editor/package.json
+- [X] T009 [P] Create TypeScript config for component library in packages/visual-editor/tsconfig.json
+- [X] T010 [P] Add visual-editor entrypoints in packages/visual-editor/src/index.ts
+- [X] T011 [P] Add base styles export in packages/visual-editor/src/styles.css
+- [X] T012 [P] Add visual-editor README scaffolding in packages/visual-editor/README.md
+- [X] T013 [P] Create app skeleton for studio in apps/studio/package.json
+- [X] T014 [P] Create Vite + React setup in apps/studio/vite.config.ts
+- [X] T015 [P] Add studio TS config in apps/studio/tsconfig.json
+- [X] T016 [P] Add studio HTML entry in apps/studio/index.html
+- [X] T017 [P] Add studio main entry in apps/studio/src/main.tsx
+- [X] T018 [P] Add studio app shell in apps/studio/src/App.tsx
+- [X] T019 Add root scripts/filters for new workspaces in package.json (build/test/dev/lint as needed)
 
 ---
 
@@ -59,17 +59,17 @@ description: "Task list for feature implementation"
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T020 Add shared editor types aligned to contracts in packages/visual-editor/src/types.ts
-- [ ] T021 [P] Add node/edge type registries in packages/visual-editor/src/components/nodes/index.ts
-- [ ] T022 [P] Add edge type registries in packages/visual-editor/src/components/edges/index.ts
-- [ ] T023 Add AST→graph adapter skeleton in packages/visual-editor/src/adapters/ast-to-graph.ts
-- [ ] T024 Add layout engine interface + dagre implementation skeleton in packages/visual-editor/src/layout/dagre-layout.ts
-- [ ] T025 [P] Add layout worker scaffold in packages/visual-editor/src/layout/layout-worker.ts
-- [ ] T026 Add minimal RuneTypeGraph scaffold (ReactFlow canvas + props) in packages/visual-editor/src/components/RuneTypeGraph.tsx
-- [ ] T027 [P] Add editor zustand store scaffold in packages/visual-editor/src/store/editor-store.ts
-- [ ] T028 [P] Add undo/redo middleware setup with zundo in packages/visual-editor/src/store/history.ts
-- [ ] T029 [P] Add test harness setup for React components in packages/visual-editor/test/setup.ts
-- [ ] T030 [P] Add Vitest config (if package-local needed) in packages/visual-editor/vitest.config.ts
+- [X] T020 Add shared editor types aligned to contracts in packages/visual-editor/src/types.ts
+- [X] T021 [P] Add node/edge type registries in packages/visual-editor/src/components/nodes/index.ts
+- [X] T022 [P] Add edge type registries in packages/visual-editor/src/components/edges/index.ts
+- [X] T023 Add AST→graph adapter skeleton in packages/visual-editor/src/adapters/ast-to-graph.ts
+- [X] T024 Add layout engine interface + dagre implementation skeleton in packages/visual-editor/src/layout/dagre-layout.ts
+- [X] T025 [P] Add layout worker scaffold in packages/visual-editor/src/layout/layout-worker.ts
+- [X] T026 Add minimal RuneTypeGraph scaffold (ReactFlow canvas + props) in packages/visual-editor/src/components/RuneTypeGraph.tsx
+- [X] T027 [P] Add editor zustand store scaffold in packages/visual-editor/src/store/editor-store.ts
+- [X] T028 [P] Add undo/redo middleware setup with zundo in packages/visual-editor/src/store/history.ts
+- [X] T029 [P] Add test harness setup for React components in packages/visual-editor/test/setup.ts
+- [X] T030 [P] Add Vitest config (if package-local needed) in packages/visual-editor/vitest.config.ts
 
 **Checkpoint**: Foundation ready — user story implementation can now begin
 
@@ -83,21 +83,21 @@ description: "Task list for feature implementation"
 
 ### Tests for User Story 1 (mandatory)
 
-- [ ] T031 [P] [US1] Add AST→graph adapter unit tests in packages/visual-editor/test/adapters/ast-to-graph.test.ts
-- [ ] T032 [P] [US1] Add dagre layout unit tests in packages/visual-editor/test/layout/dagre-layout.test.ts
-- [ ] T033 [P] [US1] Add RuneTypeGraph render smoke test in packages/visual-editor/test/components/RuneTypeGraph.test.tsx
+- [X] T031 [P] [US1] Add AST→graph adapter unit tests in packages/visual-editor/test/adapters/ast-to-graph.test.ts
+- [X] T032 [P] [US1] Add dagre layout unit tests in packages/visual-editor/test/layout/dagre-layout.test.ts
+- [X] T033 [P] [US1] Add RuneTypeGraph render smoke test in packages/visual-editor/test/components/RuneTypeGraph.test.tsx
 
 ### Implementation for User Story 1
 
-- [ ] T034 [US1] Implement AST→graph mapping for Data/Choice/Enum in packages/visual-editor/src/adapters/ast-to-graph.ts
-- [ ] T035 [P] [US1] Implement Data node UI in packages/visual-editor/src/components/nodes/DataNode.tsx
-- [ ] T036 [P] [US1] Implement Choice node UI in packages/visual-editor/src/components/nodes/ChoiceNode.tsx
-- [ ] T037 [P] [US1] Implement Enum node UI in packages/visual-editor/src/components/nodes/EnumNode.tsx
-- [ ] T038 [P] [US1] Implement Inheritance edge UI in packages/visual-editor/src/components/edges/InheritanceEdge.tsx
-- [ ] T039 [P] [US1] Implement Reference edge UI in packages/visual-editor/src/components/edges/ReferenceEdge.tsx
-- [ ] T040 [US1] Implement dagre computeLayout and apply positions in packages/visual-editor/src/layout/dagre-layout.ts
-- [ ] T041 [US1] Wire nodeTypes/edgeTypes + layout into RuneTypeGraph in packages/visual-editor/src/components/RuneTypeGraph.tsx
-- [ ] T042 [US1] Export RuneTypeGraph + helper APIs from packages/visual-editor/src/index.ts
+- [X] T034 [US1] Implement AST→graph mapping for Data/Choice/Enum in packages/visual-editor/src/adapters/ast-to-graph.ts
+- [X] T035 [P] [US1] Implement Data node UI in packages/visual-editor/src/components/nodes/DataNode.tsx
+- [X] T036 [P] [US1] Implement Choice node UI in packages/visual-editor/src/components/nodes/ChoiceNode.tsx
+- [X] T037 [P] [US1] Implement Enum node UI in packages/visual-editor/src/components/nodes/EnumNode.tsx
+- [X] T038 [P] [US1] Implement Inheritance edge UI in packages/visual-editor/src/components/edges/InheritanceEdge.tsx
+- [X] T039 [P] [US1] Implement Reference edge UI in packages/visual-editor/src/components/edges/ReferenceEdge.tsx
+- [X] T040 [US1] Implement dagre computeLayout and apply positions in packages/visual-editor/src/layout/dagre-layout.ts
+- [X] T041 [US1] Wire nodeTypes/edgeTypes + layout into RuneTypeGraph in packages/visual-editor/src/components/RuneTypeGraph.tsx
+- [X] T042 [US1] Export RuneTypeGraph + helper APIs from packages/visual-editor/src/index.ts
 
 **Checkpoint**: US1 delivers a read-only, correctly laid-out graph for a single model input
 
@@ -111,18 +111,18 @@ description: "Task list for feature implementation"
 
 ### Tests for User Story 2 (mandatory)
 
-- [ ] T043 [P] [US2] Add store selection/search tests in packages/visual-editor/test/store/editor-store.test.ts
-- [ ] T044 [P] [US2] Add detail panel rendering tests in packages/visual-editor/test/components/DetailPanel.test.tsx
+- [X] T043 [P] [US2] Add store selection/search tests in packages/visual-editor/test/store/editor-store.test.ts
+- [X] T044 [P] [US2] Add detail panel rendering tests in packages/visual-editor/test/components/DetailPanel.test.tsx
 
 ### Implementation for User Story 2
 
-- [ ] T045 [P] [US2] Implement detail panel UI in packages/visual-editor/src/components/panels/DetailPanel.tsx
-- [ ] T046 [P] [US2] Implement search panel UI in packages/visual-editor/src/components/panels/SearchPanel.tsx
-- [ ] T047 [P] [US2] Implement toolbar panel UI (fit view, relayout) in packages/visual-editor/src/components/panels/ToolbarPanel.tsx
-- [ ] T048 [US2] Implement selection + detail panel state in packages/visual-editor/src/store/editor-store.ts
-- [ ] T049 [US2] Implement search + highlight behavior in packages/visual-editor/src/store/editor-store.ts
-- [ ] T050 [US2] Implement filters (namespace/kind/namePattern/hideOrphans) in packages/visual-editor/src/store/editor-store.ts
-- [ ] T051 [US2] Wire panels into RuneTypeGraph layout in packages/visual-editor/src/components/RuneTypeGraph.tsx
+- [X] T045 [P] [US2] Implement detail panel UI in packages/visual-editor/src/components/panels/DetailPanel.tsx
+- [X] T046 [P] [US2] Implement search panel UI in packages/visual-editor/src/components/panels/SearchPanel.tsx
+- [X] T047 [P] [US2] Implement toolbar panel UI (fit view, relayout) in packages/visual-editor/src/components/panels/ToolbarPanel.tsx
+- [X] T048 [US2] Implement selection + detail panel state in packages/visual-editor/src/store/editor-store.ts
+- [X] T049 [US2] Implement search + highlight behavior in packages/visual-editor/src/store/editor-store.ts
+- [X] T050 [US2] Implement filters (namespace/kind/namePattern/hideOrphans) in packages/visual-editor/src/store/editor-store.ts
+- [X] T051 [US2] Wire panels into RuneTypeGraph layout in packages/visual-editor/src/components/RuneTypeGraph.tsx
 
 **Checkpoint**: US2 makes CDM-scale graphs usable via search, filters, and inspectable details
 
@@ -136,16 +136,16 @@ description: "Task list for feature implementation"
 
 ### Tests for User Story 3 (mandatory)
 
-- [ ] T052 [P] [US3] Add public API/ref behavior tests in packages/visual-editor/test/public-api/ref-api.test.tsx
+- [X] T052 [P] [US3] Add public API/ref behavior tests in packages/visual-editor/test/public-api/ref-api.test.tsx
 
 ### Implementation for User Story 3
 
-- [ ] T053 [US3] Implement config merging and defaults in packages/visual-editor/src/components/RuneTypeGraph.tsx
-- [ ] T054 [US3] Implement callbacks wiring (onNodeSelect/onEdgeSelect/etc.) in packages/visual-editor/src/components/RuneTypeGraph.tsx
-- [ ] T055 [US3] Implement imperative ref API (fitView/focusNode/search/filters/relayout/export) in packages/visual-editor/src/components/RuneTypeGraph.tsx
-- [ ] T056 [US3] Align exported types with contracts in packages/visual-editor/src/types.ts
-- [ ] T057 [US3] Document usage + configuration in packages/visual-editor/README.md
-- [ ] T058 [US3] Add usage example snippet to docs/EXAMPLES.md
+- [X] T053 [US3] Implement config merging and defaults in packages/visual-editor/src/components/RuneTypeGraph.tsx
+- [X] T054 [US3] Implement callbacks wiring (onNodeSelect/onEdgeSelect/etc.) in packages/visual-editor/src/components/RuneTypeGraph.tsx
+- [X] T055 [US3] Implement imperative ref API (fitView/focusNode/search/filters/relayout/export) in packages/visual-editor/src/components/RuneTypeGraph.tsx
+- [X] T056 [US3] Align exported types with contracts in packages/visual-editor/src/types.ts
+- [X] T057 [US3] Document usage + configuration in packages/visual-editor/README.md
+- [X] T058 [US3] Add usage example snippet to docs/EXAMPLES.md
 
 **Checkpoint**: US3 makes the visual editor consumable as a library with a clear, tested API
 
@@ -159,23 +159,23 @@ description: "Task list for feature implementation"
 
 ### Tests for User Story 4 (mandatory)
 
-- [ ] T059 [P] [US4] Add edit command tests (create/rename/delete) in packages/visual-editor/test/editing/edit-commands.test.ts
-- [ ] T060 [P] [US4] Add round-trip tests for edits in packages/visual-editor/test/editing/roundtrip-edits.test.ts
+- [X] T059 [P] [US4] Add edit command tests (create/rename/delete) in packages/visual-editor/test/editing/edit-commands.test.ts
+- [X] T060 [P] [US4] Add round-trip tests for edits in packages/visual-editor/test/editing/roundtrip-edits.test.ts
 
 ### Implementation for User Story 4
 
-- [ ] T061 [US4] Implement AST→text serializer for types/attributes in packages/core/src/serializer/rosetta-serializer.ts
-- [ ] T062 [US4] Export serializer from core public API in packages/core/src/index.ts
-- [ ] T063 [US4] Implement graph→AST command adapter in packages/visual-editor/src/adapters/graph-to-ast.ts
-- [ ] T064 [US4] Implement editor commands (create/delete/rename type) in packages/visual-editor/src/store/editor-store.ts
-- [ ] T065 [US4] Implement attribute editing commands in packages/visual-editor/src/store/editor-store.ts
-- [ ] T066 [US4] Implement inheritance edge editing (set/clear extends) in packages/visual-editor/src/store/editor-store.ts
-- [ ] T067 [US4] Implement undo/redo wiring with zundo in packages/visual-editor/src/store/history.ts
-- [ ] T068 [P] [US4] Implement inline type creator UI in packages/visual-editor/src/components/editors/TypeCreator.tsx
-- [ ] T069 [P] [US4] Implement attribute editor UI in packages/visual-editor/src/components/editors/AttributeEditor.tsx
-- [ ] T070 [P] [US4] Implement cardinality editor UI in packages/visual-editor/src/components/editors/CardinalityEditor.tsx
-- [ ] T071 [US4] Wire editing UI + readOnly flag into RuneTypeGraph in packages/visual-editor/src/components/RuneTypeGraph.tsx
-- [ ] T072 [US4] Implement exportRosetta() via core serializer in packages/visual-editor/src/components/RuneTypeGraph.tsx
+- [X] T061 [US4] Implement AST→text serializer for types/attributes in packages/core/src/serializer/rosetta-serializer.ts
+- [X] T062 [US4] Export serializer from core public API in packages/core/src/index.ts
+- [X] T063 [US4] Implement graph→AST command adapter in packages/visual-editor/src/adapters/graph-to-ast.ts
+- [X] T064 [US4] Implement editor commands (create/delete/rename type) in packages/visual-editor/src/store/editor-store.ts
+- [X] T065 [US4] Implement attribute editing commands in packages/visual-editor/src/store/editor-store.ts
+- [X] T066 [US4] Implement inheritance edge editing (set/clear extends) in packages/visual-editor/src/store/editor-store.ts
+- [X] T067 [US4] Implement undo/redo wiring with zundo in packages/visual-editor/src/store/history.ts
+- [X] T068 [P] [US4] Implement inline type creator UI in packages/visual-editor/src/components/editors/TypeCreator.tsx
+- [X] T069 [P] [US4] Implement attribute editor UI in packages/visual-editor/src/components/editors/AttributeEditor.tsx
+- [X] T070 [P] [US4] Implement cardinality editor UI in packages/visual-editor/src/components/editors/CardinalityEditor.tsx
+- [X] T071 [US4] Wire editing UI + readOnly flag into RuneTypeGraph in packages/visual-editor/src/components/RuneTypeGraph.tsx
+- [X] T072 [US4] Implement exportRosetta() via core serializer in packages/visual-editor/src/components/RuneTypeGraph.tsx
 
 **Checkpoint**: US4 enables real model changes with undo/redo and parseable `.rosetta` output
 
@@ -189,19 +189,36 @@ description: "Task list for feature implementation"
 
 ### Tests for User Story 5 (mandatory)
 
-- [ ] T073 [P] [US5] Add circular inheritance prevention tests in packages/visual-editor/test/validation/circular-inheritance.test.ts
-- [ ] T074 [P] [US5] Add duplicate name prevention tests in packages/visual-editor/test/validation/duplicate-names.test.ts
-- [ ] T075 [P] [US5] Add invalid cardinality validation tests in packages/visual-editor/test/validation/cardinality.test.ts
+- [X] T073 [P] [US5] Add circular inheritance prevention tests in packages/visual-editor/test/validation/circular-inheritance.test.ts
+- [X] T074 [P] [US5] Add duplicate name prevention tests in packages/visual-editor/test/validation/duplicate-names.test.ts
+- [X] T075 [P] [US5] Add invalid cardinality validation tests in packages/visual-editor/test/validation/cardinality.test.ts
 
 ### Implementation for User Story 5
 
-- [ ] T076 [US5] Implement edit-time validator wrapper around core validator in packages/visual-editor/src/validation/edit-validator.ts
-- [ ] T077 [US5] Integrate validation into edit commands (block/apply) in packages/visual-editor/src/store/editor-store.ts
-- [ ] T078 [US5] Attach validation errors to nodes/edges in packages/visual-editor/src/adapters/ast-to-graph.ts
-- [ ] T079 [US5] Display inline validation errors in node components in packages/visual-editor/src/components/nodes/DataNode.tsx
-- [ ] T080 [US5] Implement delete warning for referenced types in packages/visual-editor/src/store/editor-store.ts
+- [X] T076 [US5] Implement edit-time validator wrapper around core validator in packages/visual-editor/src/validation/edit-validator.ts
+- [X] T077 [US5] Integrate validation into edit commands (block/apply) in packages/visual-editor/src/store/editor-store.ts
+- [X] T078 [US5] Attach validation errors to nodes/edges in packages/visual-editor/src/adapters/ast-to-graph.ts
+- [X] T079 [US5] Display inline validation errors in node components in packages/visual-editor/src/components/nodes/DataNode.tsx
+- [X] T080 [US5] Implement delete warning for referenced types in packages/visual-editor/src/store/editor-store.ts
 
 **Checkpoint**: US5 prevents creating broken models and surfaces parity-aligned errors
+
+---
+
+## Phase 7b: AST Source Provenance (Post-MVP Enhancement)
+
+**Goal**: Preserve rich Langium AST type information through the graph pipeline so that downstream consumers can access annotations, conditions, synonyms, type parameters, and other metadata without creating a separate type taxonomy.
+
+- [X] T104 [US1] Add generic AST-aware types: `AstNodeKindMap`, `AstMemberKindMap`, `AstNodeType`, `AstMemberType` in packages/visual-editor/src/types.ts
+- [X] T105 [US1] Make `TypeNodeData<K>` generic with `source?: AstNodeKindMap[K]` in packages/visual-editor/src/types.ts
+- [X] T106 [US1] Make `MemberDisplay<M>` generic with `source?: M` in packages/visual-editor/src/types.ts
+- [X] T107 [US1] Rewrite ast-to-graph.ts with real AST type guards (`isData`, `isChoice`, `isRosettaEnumeration`) and populate `source` refs in packages/visual-editor/src/adapters/ast-to-graph.ts
+- [X] T108 [US4] Update graph-to-ast.ts Synthetic* interfaces with `source?` fields and pass-through in packages/visual-editor/src/adapters/graph-to-ast.ts
+- [X] T109 [US3] Promote `@rune-langium/core` from devDependency to dependency in packages/visual-editor/package.json
+- [X] T110 [US3] Export `AstNodeKindMap`, `AstMemberKindMap`, `AstNodeType`, `AstMemberType` from packages/visual-editor/src/index.ts
+- [X] T111 [P] [US1] Add AST source provenance tests (13 tests) in packages/visual-editor/test/adapters/ast-source-provenance.test.ts
+
+**Checkpoint**: AST source provenance — rich type information flows through the entire graph pipeline
 
 ---
 
@@ -213,24 +230,24 @@ description: "Task list for feature implementation"
 
 ### Tests for User Story 6 (mandatory)
 
-- [ ] T081 [P] [US6] Add workspace service unit tests in apps/studio/test/services/workspace.test.ts
-- [ ] T082 [P] [US6] Add Playwright E2E test for load → edit → export in apps/studio/test/e2e/load-edit-export.spec.ts
+- [X] T081 [P] [US6] Add workspace service unit tests in apps/studio/test/services/workspace.test.ts
+- [X] T082 [P] [US6] Add Playwright E2E test for load → edit → export in apps/studio/test/e2e/load-edit-export.spec.ts
 
 ### Implementation for User Story 6
 
-- [ ] T083 [US6] Implement workspace service (load files, track dirty state) in apps/studio/src/services/workspace.ts
-- [ ] T084 [P] [US6] Implement file loader UI (drag/drop + picker) in apps/studio/src/components/FileLoader.tsx
-- [ ] T085 [P] [US6] Implement source view panel in apps/studio/src/components/SourceView.tsx
-- [ ] T086 [P] [US6] Implement export menu UI in apps/studio/src/components/ExportMenu.tsx
-- [ ] T087 [US6] Implement export service (image + rosetta + zip download) in apps/studio/src/services/export.ts
-- [ ] T088 [US6] Implement editor page layout embedding RuneTypeGraph in apps/studio/src/pages/EditorPage.tsx
-- [ ] T089 [US6] Wire load/save/export flows in apps/studio/src/App.tsx
-- [ ] T090 [US6] Add basic app styling + layout CSS in apps/studio/src/styles.css
-- [ ] T099 [P] [US6] Add directory selection support (File System Access API and/or <input webkitdirectory> fallback) in apps/studio/src/components/FileLoader.tsx
-- [ ] T100 [US6] Implement cross-file resolution via @rune-langium/core parseWorkspace() and verify edges connect across files in apps/studio/src/services/workspace.ts
-- [ ] T101 [P] [US6] Add multi-file workspace fixture test covering cross-file references in apps/studio/test/services/workspace.test.ts
-- [ ] T102 [US6] Detect external file changes + offer keep/reload choice in apps/studio/src/App.tsx + apps/studio/src/services/workspace.ts
-- [ ] T103 [P] [US6] Extend Playwright flow to cover directory selection + cross-file load in apps/studio/test/e2e/load-edit-export.spec.ts
+- [X] T083 [US6] Implement workspace service (load files, track dirty state) in apps/studio/src/services/workspace.ts
+- [X] T084 [P] [US6] Implement file loader UI (drag/drop + picker) in apps/studio/src/components/FileLoader.tsx
+- [X] T085 [P] [US6] Implement source view panel in apps/studio/src/components/SourceView.tsx
+- [X] T086 [P] [US6] Implement export menu UI in apps/studio/src/components/ExportMenu.tsx
+- [X] T087 [US6] Implement export service (image + rosetta + zip download) in apps/studio/src/services/export.ts
+- [X] T088 [US6] Implement editor page layout embedding RuneTypeGraph in apps/studio/src/pages/EditorPage.tsx
+- [X] T089 [US6] Wire load/save/export flows in apps/studio/src/App.tsx
+- [X] T090 [US6] Add basic app styling + layout CSS in apps/studio/src/styles.css
+- [X] T099 [P] [US6] Add directory selection support (File System Access API and/or <input webkitdirectory> fallback) in apps/studio/src/components/FileLoader.tsx
+- [X] T100 [US6] Implement cross-file resolution via @rune-langium/core parseWorkspace() and verify edges connect across files in apps/studio/src/services/workspace.ts
+- [X] T101 [P] [US6] Add multi-file workspace fixture test covering cross-file references in apps/studio/test/services/workspace.test.ts
+- [X] T102 [US6] Detect external file changes + offer keep/reload choice in apps/studio/src/App.tsx + apps/studio/src/services/workspace.ts
+- [X] T103 [P] [US6] Extend Playwright flow to cover directory selection + cross-file load in apps/studio/test/e2e/load-edit-export.spec.ts
 
 **Checkpoint**: US6 provides a usable standalone application for non-developer users
 
@@ -240,11 +257,11 @@ description: "Task list for feature implementation"
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T091 [P] Add quickstart verification notes and update commands in specs/002-reactflow-visual-editor/quickstart.md
-- [ ] T092 [P] Add docs for new packages/apps in docs/WORKSPACE.md
-- [ ] T093 Add root-level Playwright config updates (if needed for apps/studio) in playwright.config.ts
-- [ ] T094 Run lint/format adjustments for new React/TSX code in oxlintrc.json (as needed)
-- [ ] T095 Add CI task updates for building/testing new workspaces in .github/workflows/ci.yml
+- [X] T091 [P] Add quickstart verification notes and update commands in specs/002-reactflow-visual-editor/quickstart.md
+- [X] T092 [P] Add docs for new packages/apps in docs/WORKSPACE.md
+- [X] T093 Add root-level Playwright config updates (if needed for apps/studio) in playwright.config.ts
+- [X] T094 Run lint/format adjustments for new React/TSX code in oxlintrc.json (as needed)
+- [X] T095 Add CI task updates for building/testing new workspaces in .github/workflows/ci.yml
 
 ---
 

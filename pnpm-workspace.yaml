@@ -1,2 +1,8 @@
 packages:
-  - 'packages/*'
+  - packages/*
+  - apps/*
+
+overrides:
+  '@lspeasy/client': link:../lspy/packages/client
+  '@lspeasy/core': link:../lspy/packages/core
+  '@lspeasy/server': link:../lspy/packages/server

@@ -21,7 +21,7 @@ Build a ReactFlow-based visual editor for the Rune DSL type hierarchy, delivered
 - `@rune-langium/core` workspace:* (parser, AST types, validator)
 **Storage**: Browser-only; File System Access API for standalone app, no backend
 **Testing**: Vitest (unit/integration), React Testing Library (component tests), Playwright (E2E for standalone app)
-**Build**: Vite 6.x (standalone app), tsc (component library)
+**Build**: Vite 6.x (standalone app), tsgo (component library)
 **Target Platform**: Modern browsers (ES2020+, same as core parser)
 **Project Type**: Monorepo — 2 new packages + 1 new app
 **Performance Goals**: Graph renders 500+ nodes with smooth pan/zoom (60fps interaction); auto-layout < 2s for 500 nodes; initial load < 3s
@@ -171,6 +171,23 @@ Zustand is used internally by ReactFlow and recommended by the ReactFlow team. Z
 - **Existing files**: Use CST-preserving edits (targeted TextEdit operations on the source text) to maintain formatting and comments
 - **New types created visually**: Use the custom serializer to generate `.rosetta` text from AST nodes
 - **Export**: Full re-serialization of the complete model, producing semantically equivalent but freshly-formatted output
+
+### AD-6: AST Source Provenance — Generic Typed Graph Model
+
+Graph types (`TypeNodeData`, `MemberDisplay`) are generic over the Langium AST kind so that
+rich type information flows through the pipeline without creating a separate taxonomy:
+
+- `TypeNodeData<K extends TypeKind>` carries `source?: AstNodeKindMap[K]` — the original AST node
+- `MemberDisplay<M = AstMemberType>` carries `source?: M` — the original AST member node
+- `AstNodeKindMap` maps `data→Data`, `choice→Choice`, `enum→RosettaEnumeration`
+- `AstMemberKindMap` maps `data→Attribute`, `choice→ChoiceOption`, `enum→RosettaEnumValue`
+- `ast-to-graph.ts` populates `source` using real Langium type guards (`isData`, `isChoice`, `isRosettaEnumeration`)
+- `graph-to-ast.ts` Synthetic* interfaces carry `source?` for pass-through to downstream consumers
+- `@rune-langium/core` is a **runtime dependency** (not just devDependency) of `@rune-langium/visual-editor`
+
+This preserves all annotations, conditions, synonyms, labels, doc-references, type parameters, and
+other metadata that the previous adapter layer was dropping. The `source?` fields are optional, so
+new types created via the graph editor have `undefined` source — no tight coupling is forced.
 
 ## Implementation Phases
 

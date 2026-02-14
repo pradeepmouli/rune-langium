@@ -1,0 +1,54 @@
+{
+  "name": "@rune-langium/lsp-server",
+  "version": "0.1.0",
+  "description": "LSP server for the Rune DSL, powered by Langium and @lspeasy/server",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "rune-lsp-server": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsgo -b",
+    "clean": "rm -rf dist",
+    "dev": "tsgo -b --watch",
+    "lint": "oxlint .",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@lspeasy/core": "link:../../../lspy/packages/core",
+    "@lspeasy/server": "link:../../../lspy/packages/server",
+    "@rune-langium/core": "workspace:*",
+    "langium": "^4.2.1",
+    "vscode-languageserver": "~9.0.1",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@lspeasy/client": "link:../../../lspy/packages/client",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pradeepmouli/rune-langium.git",
+    "directory": "packages/lsp-server"
+  }
+}

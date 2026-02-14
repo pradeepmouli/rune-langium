@@ -1,0 +1,92 @@
+{
+  "name": "05-diagnostics-panel",
+  "timestamp": "2026-02-14T23:09:11.058Z",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "elements": [
+    {
+      "selector": "[data-testid=\"diagnostics-panel\"]",
+      "tagName": "section",
+      "textContent": "No problems detected",
+      "className": "flex flex-col items-center justify-center p-3 max-h-[200px]",
+      "styles": {
+        "color": "rgb(226, 232, 240)",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderColor": "rgb(226, 232, 240)",
+        "borderWidth": "0px",
+        "borderRadius": "0px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "padding": "12px",
+        "margin": "0px",
+        "gap": "normal",
+        "display": "flex",
+        "flexDirection": "column",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "width": "1280px",
+        "height": "54.1406px",
+        "minWidth": "auto",
+        "maxWidth": "none",
+        "opacity": "1",
+        "boxShadow": "none",
+        "outline": "rgb(226, 232, 240) none 0px"
+      },
+      "childCount": 2,
+      "visible": true
+    },
+    {
+      "selector": "[data-testid=\"diagnostics-panel\"] [data-slot=\"separator\"]",
+      "tagName": "div",
+      "textContent": "",
+      "className": "bg-border-default shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
+      "styles": {
+        "color": "rgb(226, 232, 240)",
+        "backgroundColor": "rgb(51, 65, 85)",
+        "borderColor": "rgb(226, 232, 240)",
+        "borderWidth": "0px",
+        "borderRadius": "0px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "padding": "0px",
+        "margin": "0px",
+        "gap": "normal",
+        "display": "block",
+        "flexDirection": "row",
+        "alignItems": "normal",
+        "justifyContent": "normal",
+        "width": "1256px",
+        "height": "1px",
+        "minWidth": "auto",
+        "maxWidth": "none",
+        "opacity": "1",
+        "boxShadow": "none",
+        "outline": "rgb(226, 232, 240) none 0px"
+      },
+      "childCount": 0,
+      "visible": true
+    },
+    {
+      "selector": "[data-testid=\"diagnostics-panel\"] [data-slot=\"badge\"]",
+      "tagName": "",
+      "textContent": "",
+      "className": "",
+      "styles": {},
+      "childCount": 0,
+      "visible": false
+    },
+    {
+      "selector": "[data-testid=\"diagnostics-panel\"] [data-slot=\"scroll-area\"]",
+      "tagName": "",
+      "textContent": "",
+      "className": "",
+      "styles": {},
+      "childCount": 0,
+      "visible": false
+    }
+  ]
+}
