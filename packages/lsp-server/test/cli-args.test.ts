@@ -1,6 +1,6 @@
 /**
  * Unit tests for CLI argument parsing.
- * 
+ *
  * Note: These tests only test the parseArgs function in isolation.
  * Full integration tests for the CLI require @lspeasy/* dependencies.
  */
@@ -41,9 +41,11 @@ describe('parseArgs (port validation)', () => {
 
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    processExitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null | undefined): never => {
-      throw new Error(`process.exit(${code})`) as never;
-    });
+    processExitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((code?: string | number | null | undefined): never => {
+        throw new Error(`process.exit(${code})`) as never;
+      });
   });
 
   afterEach(() => {
@@ -78,9 +80,7 @@ describe('parseArgs (port validation)', () => {
 
   it('rejects non-numeric port values', () => {
     expect(() => parseArgsForTest(['--port', 'abc'])).toThrow('process.exit(1)');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Invalid port: "abc"')
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid port: "abc"'));
   });
 
   it('rejects NaN-producing port values', () => {
@@ -92,30 +92,22 @@ describe('parseArgs (port validation)', () => {
 
   it('rejects negative port values', () => {
     expect(() => parseArgsForTest(['--port', '-1'])).toThrow('process.exit(1)');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Invalid port: "-1"')
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid port: "-1"'));
   });
 
   it('rejects zero port value', () => {
     expect(() => parseArgsForTest(['--port', '0'])).toThrow('process.exit(1)');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Invalid port: "0"')
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid port: "0"'));
   });
 
   it('rejects port values above 65535', () => {
     expect(() => parseArgsForTest(['--port', '99999'])).toThrow('process.exit(1)');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Invalid port: "99999"')
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid port: "99999"'));
   });
 
   it('rejects port value at upper boundary + 1', () => {
     expect(() => parseArgsForTest(['--port', '65536'])).toThrow('process.exit(1)');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Invalid port: "65536"')
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid port: "65536"'));
   });
 
   it('shows helpful error message for invalid ports', () => {
@@ -125,5 +117,3 @@ describe('parseArgs (port validation)', () => {
     );
   });
 });
-
-

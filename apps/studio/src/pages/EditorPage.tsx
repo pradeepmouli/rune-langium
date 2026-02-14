@@ -7,11 +7,7 @@
  */
 
 import { useRef, useCallback, useState, useMemo } from 'react';
-import {
-  RuneTypeGraph,
-  NamespaceExplorerPanel,
-  astToGraph
-} from '@rune-langium/visual-editor';
+import { RuneTypeGraph, NamespaceExplorerPanel, astToGraph } from '@rune-langium/visual-editor';
 import type { RuneTypeGraphRef, VisibilityState, TypeGraphNode } from '@rune-langium/visual-editor';
 import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
@@ -20,14 +16,18 @@ import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
 import { Button } from '../components/ui/button.js';
 import { Separator } from '../components/ui/separator.js';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../components/ui/resizable.js';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle
+} from '../components/ui/resizable.js';
 import { ScrollArea } from '../components/ui/scroll-area.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
-import { cn } from '@/lib/utils.js';
+
 
 export interface EditorPageProps {
   models: RosettaModel[];
@@ -253,7 +253,10 @@ export function EditorPage({
   return (
     <div className="flex flex-col h-full" data-testid="editor-page">
       {/* Toolbar */}
-      <nav className="flex items-center justify-between px-3 py-1.5 bg-surface-raised gap-2" aria-label="Editor toolbar">
+      <nav
+        className="flex items-center justify-between px-3 py-1.5 bg-surface-raised gap-2"
+        aria-label="Editor toolbar"
+      >
         <div className="flex items-center gap-1.5">
           <Button
             variant={explorerOpen ? 'default' : 'secondary'}
@@ -266,12 +269,7 @@ export function EditorPage({
           <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
             Fit View
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleRelayout}
-            title="Re-run auto layout"
-          >
+          <Button variant="secondary" size="sm" onClick={handleRelayout} title="Re-run auto layout">
             Re-layout
           </Button>
           <Button
@@ -307,7 +305,10 @@ export function EditorPage({
         {explorerOpen && (
           <>
             <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
-              <aside className="h-full overflow-hidden flex flex-col bg-surface-raised" aria-label="Namespace explorer">
+              <aside
+                className="h-full overflow-hidden flex flex-col bg-surface-raised"
+                aria-label="Namespace explorer"
+              >
                 <ScrollArea className="flex-1">
                   <NamespaceExplorerPanel
                     nodes={allGraphNodes}
@@ -328,10 +329,7 @@ export function EditorPage({
 
         {/* Graph area */}
         <ResizablePanel defaultSize={showSource ? 50 : 80}>
-          <div
-            className="relative h-full"
-            ref={graphContainerRef}
-          >
+          <div className="relative h-full" ref={graphContainerRef}>
             <RuneTypeGraph
               ref={graphRef}
               models={models as unknown[]}
@@ -356,7 +354,10 @@ export function EditorPage({
           <>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={30} minSize={20} maxSize={40}>
-              <aside className="studio-editor-page__source h-full overflow-auto" aria-label="Source editor">
+              <aside
+                className="studio-editor-page__source h-full overflow-auto"
+                aria-label="Source editor"
+              >
                 <SourceEditor
                   files={files}
                   activeFile={activeEditorFile}
@@ -374,7 +375,7 @@ export function EditorPage({
       {showDiagnostics && (
         <DiagnosticsPanel
           fileDiagnostics={fileDiagnostics}
-          onNavigate={(uri, line, _char) => {
+          onNavigate={(uri, _line, _char) => {
             // Normalise URI to a path for comparison (strip file:// prefix)
             const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
             const fileName = normPath.split('/').pop() ?? normPath;

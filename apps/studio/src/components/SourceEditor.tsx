@@ -190,19 +190,21 @@ export function SourceEditor({
   return (
     <section className="flex flex-col h-full bg-surface-base" data-testid="source-editor">
       {/* Tab bar */}
-      <nav className="flex overflow-x-auto bg-surface-raised border-b border-border-default gap-px min-h-[32px]" role="tablist" aria-label="Open files">
+      <nav
+        className="flex overflow-x-auto bg-surface-raised border-b border-border-default gap-px min-h-[32px]"
+        role="tablist"
+        aria-label="Open files"
+      >
         {files.map((file) => (
           <button
             key={file.path}
             role="tab"
             aria-selected={file.path === selectedPath}
             className={cn(
-              "px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors",
-              "hover:text-text-primary",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1",
-              file.path === selectedPath
-                ? "text-accent border-b-accent"
-                : "text-text-secondary"
+              'px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors',
+              'hover:text-text-primary',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
+              file.path === selectedPath ? 'text-accent border-b-accent' : 'text-text-secondary'
             )}
             onClick={() => handleFileSelect(file.path)}
             title={file.path}

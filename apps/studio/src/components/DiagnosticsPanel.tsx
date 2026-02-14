@@ -100,9 +100,9 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
                 <button
                   key={`${uri}-${idx}`}
                   className={cn(
-                    "flex items-center gap-2 w-full px-3 py-1 pl-5 text-sm text-text-primary bg-transparent border-none cursor-pointer text-left",
-                    "hover:bg-surface-raised",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+                    'flex items-center gap-2 w-full px-3 py-1 pl-5 text-sm text-text-primary bg-transparent border-none cursor-pointer text-left',
+                    'hover:bg-surface-raised',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1'
                   )}
                   onClick={() =>
                     onNavigate?.(uri, diag.range.start.line, diag.range.start.character)
@@ -111,10 +111,10 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
                 >
                   <span
                     className={cn(
-                      "shrink-0 text-xs",
-                      sev === 'error' && "text-error",
-                      sev === 'warning' && "text-warning",
-                      sev === 'info' && "text-info"
+                      'shrink-0 text-xs',
+                      sev === 'error' && 'text-error',
+                      sev === 'warning' && 'text-warning',
+                      sev === 'info' && 'text-info'
                     )}
                   >
                     {sev === 'error' ? '\u25cf' : sev === 'warning' ? '\u25b2' : '\u2139'}

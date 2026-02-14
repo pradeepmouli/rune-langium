@@ -47,7 +47,7 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
     <output className="inline-flex items-center gap-1.5 text-sm text-text-secondary" role="status">
       <span
         className={cn(
-          "w-2 h-2 rounded-full shrink-0",
+          'w-2 h-2 rounded-full shrink-0',
           DOT_COLORS[state.status] ?? DOT_COLORS['disconnected']
         )}
       />
@@ -56,9 +56,7 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
         {modeLabel && state.status === 'connected' ? ` (${modeLabel})` : ''}
       </span>
       {state.status === 'error' && state.error && (
-        <span className="text-error text-xs">
-          {state.error.message}
-        </span>
+        <span className="text-error text-xs">{state.error.message}</span>
       )}
       {showReconnect && (
         <Button

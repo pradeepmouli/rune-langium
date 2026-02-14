@@ -59,8 +59,8 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
   return (
     <section
       className={cn(
-        "flex items-center justify-center h-full p-8 transition-colors",
-        isDragging && "bg-accent-muted"
+        'flex items-center justify-center h-full p-8 transition-colors',
+        isDragging && 'bg-accent-muted'
       )}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -69,9 +69,7 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
       aria-label="File loader"
     >
       <div className="text-center max-w-[480px]">
-        <p className="text-2xl font-semibold text-text-heading mb-2">
-          Load Rune DSL Models
-        </p>
+        <p className="text-2xl font-semibold text-text-heading mb-2">Load Rune DSL Models</p>
         <p className="text-md text-text-secondary mb-6">
           Drag and drop .rosetta files here, or use the buttons below
         </p>
@@ -79,11 +77,7 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
           <Button size="lg" onClick={() => fileInputRef.current?.click()}>
             Select Files
           </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={() => dirInputRef.current?.click()}
-          >
+          <Button variant="secondary" size="lg" onClick={() => dirInputRef.current?.click()}>
             Select Folder
           </Button>
         </div>
