@@ -11,6 +11,7 @@ import '@rune-langium/visual-editor/styles.css';
 import { FileLoader } from './components/FileLoader.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Button } from './components/ui/button.js';
+import { Separator } from './components/ui/separator.js';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles } from './services/workspace.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
@@ -107,15 +108,15 @@ export function App() {
   const hasErrors = errors.size > 0;
 
   return (
-    <div className="studio-app flex flex-col h-full font-sans text-[var(--color-text-primary)] bg-[var(--color-surface-base)]">
-      <header className="flex items-center justify-between px-4 py-2 bg-[var(--color-surface-raised)] border-b border-[var(--color-border-default)] min-h-[44px]">
-        <h1 className="text-lg font-semibold text-[var(--color-text-heading)]">Rune DSL Studio</h1>
+    <div className="studio-app flex flex-col h-full font-sans text-text-primary bg-surface-base">
+      <header className="flex items-center justify-between px-4 py-2 bg-surface-raised min-h-[44px]">
+        <h1 className="text-lg font-semibold text-text-heading">Rune DSL Studio</h1>
         {files.length > 0 && (
           <div className="flex items-center gap-3">
-            <span className="text-base text-[var(--color-text-secondary)]">
+            <span className="text-base text-text-secondary">
               {files.length} file(s)
               {hasErrors && (
-                <span className="text-[var(--color-error)]" title="Parse errors detected">
+                <span className="text-error" title="Parse errors detected">
                   {' '}
                   · {errors.size} with errors
                 </span>
@@ -127,10 +128,11 @@ export function App() {
           </div>
         )}
       </header>
+      <Separator />
 
       <main className="flex-1 overflow-hidden relative">
         {loading && (
-          <div className="flex items-center justify-center h-full text-[var(--color-text-secondary)] text-md">
+          <div className="flex items-center justify-center h-full text-text-secondary text-md">
             <p>Parsing files…</p>
           </div>
         )}

@@ -30,10 +30,10 @@ const MODE_LABELS: Record<string, string> = {
 };
 
 const DOT_COLORS: Record<string, string> = {
-  connected: 'bg-[var(--color-success)]',
-  connecting: 'bg-[var(--color-warning)] animate-[pulse-dot_1.5s_ease-in-out_infinite]',
-  disconnected: 'bg-[var(--color-text-muted)]',
-  error: 'bg-[var(--color-error)]'
+  connected: 'bg-success',
+  connecting: 'bg-warning animate-[pulse-dot_1.5s_ease-in-out_infinite]',
+  disconnected: 'bg-text-muted',
+  error: 'bg-error'
 };
 
 export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) {
@@ -44,7 +44,7 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
     onReconnect !== undefined && state.status !== 'connected' && state.status !== 'connecting';
 
   return (
-    <div className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]" role="status">
+    <output className="inline-flex items-center gap-1.5 text-sm text-text-secondary" role="status">
       <span
         className={cn(
           "w-2 h-2 rounded-full shrink-0",
@@ -56,7 +56,7 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
         {modeLabel && state.status === 'connected' ? ` (${modeLabel})` : ''}
       </span>
       {state.status === 'error' && state.error && (
-        <span className="text-[var(--color-error)] text-xs">
+        <span className="text-error text-xs">
           {state.error.message}
         </span>
       )}
@@ -71,6 +71,6 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
           Reconnect
         </Button>
       )}
-    </div>
+    </output>
   );
 }

@@ -178,45 +178,48 @@ export function SourceEditor({
   // Empty state
   if (files.length === 0) {
     return (
-      <div
-        className="flex flex-col items-center justify-center h-full bg-[var(--color-surface-base)] text-[var(--color-text-muted)]"
+      <section
+        className="flex flex-col items-center justify-center h-full bg-surface-base text-text-muted"
         data-testid="source-editor"
       >
         <p>No files loaded</p>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--color-surface-base)]" data-testid="source-editor">
+    <section className="flex flex-col h-full bg-surface-base" data-testid="source-editor">
       {/* Tab bar */}
-      <div className="flex overflow-x-auto bg-[var(--color-surface-raised)] border-b border-[var(--color-border-default)] gap-px min-h-[32px]">
+      <nav className="flex overflow-x-auto bg-surface-raised border-b border-border-default gap-px min-h-[32px]" role="tablist" aria-label="Open files">
         {files.map((file) => (
           <button
             key={file.path}
+            role="tab"
+            aria-selected={file.path === selectedPath}
             className={cn(
               "px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors",
-              "hover:text-[var(--color-text-primary)]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1",
+              "hover:text-text-primary",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1",
               file.path === selectedPath
-                ? "text-[var(--color-accent)] border-b-[var(--color-accent)]"
-                : "text-[var(--color-text-secondary)]"
+                ? "text-accent border-b-accent"
+                : "text-text-secondary"
             )}
             onClick={() => handleFileSelect(file.path)}
             title={file.path}
           >
             {file.name}
-            {file.dirty && <span className="text-[var(--color-warning)] text-xs"> ●</span>}
+            {file.dirty && <span className="text-warning text-xs"> ●</span>}
           </button>
         ))}
-      </div>
+      </nav>
 
       {/* Editor container */}
       <div
         className="flex-1 overflow-hidden"
+        role="tabpanel"
         data-testid="source-editor-container"
         ref={editorContainerRef}
       />
-    </div>
+    </section>
   );
 }

@@ -19,6 +19,9 @@ import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
 import { Button } from '../components/ui/button.js';
+import { Separator } from '../components/ui/separator.js';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../components/ui/resizable.js';
+import { ScrollArea } from '../components/ui/scroll-area.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
@@ -250,7 +253,7 @@ export function EditorPage({
   return (
     <div className="flex flex-col h-full" data-testid="editor-page">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-surface-raised)] border-b border-[var(--color-border-default)] gap-2">
+      <nav className="flex items-center justify-between px-3 py-1.5 bg-surface-raised gap-2" aria-label="Editor toolbar">
         <div className="flex items-center gap-1.5">
           <Button
             variant={explorerOpen ? 'default' : 'secondary'}
@@ -295,91 +298,105 @@ export function EditorPage({
             hasModels={models.length > 0}
           />
         </div>
-      </div>
+      </nav>
+      <Separator />
 
-      {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main content — resizable panels */}
+      <ResizablePanelGroup direction="horizontal" className="flex-1">
         {/* Namespace Explorer */}
         {explorerOpen && (
-          <div className="w-[280px] min-w-[200px] max-w-[400px] border-r border-[var(--color-border-default)] overflow-hidden flex flex-col bg-[var(--color-surface-raised)] resize-x">
-            <NamespaceExplorerPanel
-              nodes={allGraphNodes}
-              expandedNamespaces={expandedNamespaces}
-              hiddenNodeIds={hiddenNodeIds}
-              onToggleNamespace={handleToggleNamespace}
-              onToggleNode={handleToggleNode}
-              onExpandAll={handleExpandAll}
-              onCollapseAll={handleCollapseAll}
-              onSelectNode={handleExplorerSelectNode}
-            />
-          </div>
+          <>
+            <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
+              <aside className="h-full overflow-hidden flex flex-col bg-surface-raised" aria-label="Namespace explorer">
+                <ScrollArea className="flex-1">
+                  <NamespaceExplorerPanel
+                    nodes={allGraphNodes}
+                    expandedNamespaces={expandedNamespaces}
+                    hiddenNodeIds={hiddenNodeIds}
+                    onToggleNamespace={handleToggleNamespace}
+                    onToggleNode={handleToggleNode}
+                    onExpandAll={handleExpandAll}
+                    onCollapseAll={handleCollapseAll}
+                    onSelectNode={handleExplorerSelectNode}
+                  />
+                </ScrollArea>
+              </aside>
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+          </>
         )}
 
         {/* Graph area */}
-        <div
-          className={cn("relative", showSource ? "flex-[2]" : "flex-1")}
-          ref={graphContainerRef}
-        >
-          <RuneTypeGraph
-            ref={graphRef}
-            models={models as unknown[]}
-            config={{
-              layout: { direction: 'TB' },
-              showControls: true,
-              showMinimap: true,
-              readOnly: false
-            }}
-            callbacks={{
-              onNodeSelect: handleNodeSelect,
-              onNodeDoubleClick: handleNodeDoubleClick,
-              onModelChanged: handleModelChanged
-            }}
-            visibilityState={visibilityState}
-          />
-        </div>
+        <ResizablePanel defaultSize={showSource ? 50 : 80}>
+          <div
+            className="relative h-full"
+            ref={graphContainerRef}
+          >
+            <RuneTypeGraph
+              ref={graphRef}
+              models={models as unknown[]}
+              config={{
+                layout: { direction: 'TB' },
+                showControls: true,
+                showMinimap: true,
+                readOnly: false
+              }}
+              callbacks={{
+                onNodeSelect: handleNodeSelect,
+                onNodeDoubleClick: handleNodeDoubleClick,
+                onModelChanged: handleModelChanged
+              }}
+              visibilityState={visibilityState}
+            />
+          </div>
+        </ResizablePanel>
 
         {/* Source panel (toggleable) — keep studio-editor-page__source class for CodeMirror scoping */}
         {showSource && (
-          <div className="studio-editor-page__source flex-1 border-l border-[var(--color-border-default)] overflow-auto max-w-[480px] min-w-[240px]">
-            <SourceEditor
-              files={files}
-              activeFile={activeEditorFile}
-              lspClient={lspClient}
-              onFileSelect={(path) => setActiveEditorFile(path)}
-              onContentChange={handleSourceChange}
-            />
-          </div>
+          <>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={30} minSize={20} maxSize={40}>
+              <aside className="studio-editor-page__source h-full overflow-auto" aria-label="Source editor">
+                <SourceEditor
+                  files={files}
+                  activeFile={activeEditorFile}
+                  lspClient={lspClient}
+                  onFileSelect={(path) => setActiveEditorFile(path)}
+                  onContentChange={handleSourceChange}
+                />
+              </aside>
+            </ResizablePanel>
+          </>
         )}
-      </div>
+      </ResizablePanelGroup>
 
       {/* Diagnostics panel (toggleable) */}
       {showDiagnostics && (
-        <div className="shrink-0">
-          <DiagnosticsPanel
-            fileDiagnostics={fileDiagnostics}
-            onNavigate={(uri, line, _char) => {
-              // Normalise URI to a path for comparison (strip file:// prefix)
-              const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
-              const fileName = normPath.split('/').pop() ?? normPath;
-              const file = files.find(
-                (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
-              );
-              if (file) {
-                setActiveEditorFile(file.path ?? file.name);
-                if (!showSource) setShowSource(true);
-              }
-            }}
-          />
-        </div>
+        <DiagnosticsPanel
+          fileDiagnostics={fileDiagnostics}
+          onNavigate={(uri, line, _char) => {
+            // Normalise URI to a path for comparison (strip file:// prefix)
+            const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
+            const fileName = normPath.split('/').pop() ?? normPath;
+            const file = files.find(
+              (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
+            );
+            if (file) {
+              setActiveEditorFile(file.path ?? file.name);
+              if (!showSource) setShowSource(true);
+            }
+          }}
+        />
       )}
 
       {/* Status bar */}
-      <div className="flex items-center gap-4 px-3 py-1 text-sm text-[var(--color-text-muted)] bg-[var(--color-surface-raised)] border-t border-[var(--color-border-default)]">
+      <Separator />
+      <footer className="flex items-center gap-4 px-3 py-1 text-sm text-text-muted bg-surface-raised">
         <span>{models.length} model(s) loaded</span>
         <span>{files.filter((f) => f.dirty).length} modified</span>
         {selectedNode && <span>Selected: {selectedNode}</span>}
         {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
-      </div>
+      </footer>
     </div>
   );
 }

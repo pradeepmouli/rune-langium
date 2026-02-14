@@ -12,7 +12,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "flex items-center gap-1 rounded-[var(--radius-lg)] bg-[var(--color-surface-raised)] p-1",
+      "flex items-center gap-1 rounded-lg bg-surface-raised p-1",
       className
     )}
     {...props}
@@ -27,8 +27,8 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "rounded-[var(--color-radius-md)] px-3 py-1.5 text-sm",
-      "data-[state=active]:bg-[var(--color-surface-overlay)] data-[state=active]:text-[var(--color-text-heading)]",
+      "rounded-md px-3 py-1.5 text-sm",
+      "data-[state=active]:bg-surface-overlay data-[state=active]:text-text-heading",
       className
     )}
     {...props}
