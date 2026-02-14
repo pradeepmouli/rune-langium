@@ -151,10 +151,10 @@ const SNAPSHOT_DIR = path.join(__dirname, '__snapshots__');
 const SCREENSHOT_DIR = path.join(__dirname, '__screenshots__');
 
 /** 
- * Check if we're in update mode (via --update-snapshots or -u flag).
+ * Check if we're in snapshot update mode (via --update-snapshots or -u flag).
  * Checks both process.argv and Playwright's UPDATE_SNAPSHOTS environment variable.
  */
-function isUpdateMode(): boolean {
+function isSnapshotUpdateMode(): boolean {
   return (
     process.argv.includes('--update-snapshots') ||
     process.argv.includes('-u') ||
@@ -281,7 +281,7 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('01-file-loader');
 
     if (!baseline) {
-      if (isUpdateMode()) {
+      if (isSnapshotUpdateMode()) {
         saveSnapshot(snapshot);
         console.log('  Baseline saved: 01-file-loader');
         return;
@@ -319,7 +319,7 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('02-editor-page');
 
     if (!baseline) {
-      if (isUpdateMode()) {
+      if (isSnapshotUpdateMode()) {
         saveSnapshot(snapshot);
         console.log('  Baseline saved: 02-editor-page');
         return;
@@ -367,7 +367,7 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('03-namespace-explorer');
 
     if (!baseline) {
-      if (isUpdateMode()) {
+      if (isSnapshotUpdateMode()) {
         saveSnapshot(snapshot);
         console.log('  Baseline saved: 03-namespace-explorer');
         return;
@@ -408,7 +408,7 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('04-source-editor');
 
     if (!baseline) {
-      if (isUpdateMode()) {
+      if (isSnapshotUpdateMode()) {
         saveSnapshot(snapshot);
         console.log('  Baseline saved: 04-source-editor');
         return;
@@ -449,7 +449,7 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('05-diagnostics-panel');
 
     if (!baseline) {
-      if (isUpdateMode()) {
+      if (isSnapshotUpdateMode()) {
         saveSnapshot(snapshot);
         console.log('  Baseline saved: 05-diagnostics-panel');
         return;
