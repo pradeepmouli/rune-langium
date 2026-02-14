@@ -52,11 +52,13 @@ export interface SourceEditorProps {
 
 /**
  * Generate a stable, unique ID for a tab from a file path.
- * Uses base64 encoding to avoid collisions from special character sanitization.
+ * Uses URL-safe base64 encoding to handle Unicode filenames and avoid collisions.
  */
 function getTabId(path: string): string {
-  // Use base64 encoding to ensure uniqueness while keeping IDs valid HTML identifiers
-  const encoded = btoa(path).replace(/[+/=]/g, (char) => {
+  // Use TextEncoder for Unicode-safe encoding, then base64 encode
+  const bytes = new TextEncoder().encode(path);
+  const binString = Array.from(bytes, (byte) => String.fromCodePoint(byte)).join('');
+  const encoded = btoa(binString).replace(/[+/=]/g, (char) => {
     if (char === '+') return '-';
     if (char === '/') return '_';
     return ''; // Remove padding '='
