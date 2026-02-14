@@ -151,7 +151,7 @@ const SNAPSHOT_DIR = path.join(__dirname, '__snapshots__');
 const SCREENSHOT_DIR = path.join(__dirname, '__screenshots__');
 
 /** 
- * Check if we're in update mode (via --update-snapshots flag).
+ * Check if we're in update mode (via --update-snapshots or -u flag).
  * Checks both process.argv and Playwright's UPDATE_SNAPSHOTS environment variable.
  */
 function isUpdateMode(): boolean {
