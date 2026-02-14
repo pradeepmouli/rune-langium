@@ -1,4 +1,6 @@
 /* @rune-langium/studio — App styles (T090) */
+@import "tailwindcss";
+@import "@rune-langium/design-system/theme.css";
 
 /* ---------- Reset ---------- */
 * {
