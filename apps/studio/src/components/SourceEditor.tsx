@@ -204,7 +204,7 @@ export function SourceEditor({
 
       {/* Editor container */}
       <div
-        className="studio-source-editor__content"
+        className="studio-source-editor__editor"
         data-testid="source-editor-container"
         ref={editorContainerRef}
       />

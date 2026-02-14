@@ -1,4 +1,6 @@
 /* @rune-langium/studio — App styles (T090) */
+@import "tailwindcss";
+@import "@rune-langium/design-system/theme.css";
 
 /* ---------- Reset ---------- */
 * {
@@ -705,8 +707,7 @@ html, body, #root {
   border-bottom-color: #3b82f6;
 }
 
-.studio-source-editor__dirty::after {
-  content: ' ●';
+.studio-source-editor__dirty {
   color: #f59e0b;
   font-size: 10px;
 }
@@ -767,6 +768,11 @@ html, body, #root {
 .studio-connection-status__reconnect:hover {
   color: #e2e8f0;
   border-color: #64748b;
+}
+
+.studio-connection-status__error {
+  color: #f87171;
+  font-size: 11px;
 }
 
 /* ---------- Diagnostics Panel ---------- */
@@ -878,4 +884,411 @@ html, body, #root {
 /* ---------- Diagnostics Panel in Layout ---------- */
 .studio-editor-page__diagnostics {
   flex-shrink: 0;
+}
+
+/* ---------- Dark-theme overrides for visual-editor graph nodes ---------- */
+.studio-app .rune-node {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.studio-app .rune-node-header {
+  border-bottom-color: #334155;
+}
+
+.studio-app .rune-node-member-name {
+  color: #e2e8f0;
+}
+
+.studio-app .rune-node-member-type {
+  color: #94a3b8;
+}
+
+.studio-app .rune-node-member-cardinality {
+  color: #64748b;
+}
+
+/* Data node — dark theme */
+.studio-app .rune-node-data {
+  border-color: #3b82f6;
+}
+
+.studio-app .rune-node-data .rune-node-header {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+.studio-app .rune-node-data .rune-node-kind-badge {
+  background: rgba(59, 130, 246, 0.25);
+  color: #93c5fd;
+}
+
+/* Choice node — dark theme */
+.studio-app .rune-node-choice {
+  border-color: #f59e0b;
+}
+
+.studio-app .rune-node-choice .rune-node-header {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+}
+
+.studio-app .rune-node-choice .rune-node-kind-badge {
+  background: rgba(245, 158, 11, 0.25);
+  color: #fcd34d;
+}
+
+/* Enum node — dark theme */
+.studio-app .rune-node-enum {
+  border-color: #22c55e;
+}
+
+.studio-app .rune-node-enum .rune-node-header {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+}
+
+.studio-app .rune-node-enum .rune-node-kind-badge {
+  background: rgba(34, 197, 94, 0.25);
+  color: #86efac;
+}
+
+/* Node errors — dark theme */
+.studio-app .rune-node-errors {
+  background: rgba(239, 68, 68, 0.1);
+  border-left-color: #ef4444;
+  color: #fca5a5;
+}
+
+/* Selection & search highlight — dark theme */
+.studio-app .rune-node-selected {
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+.studio-app .rune-node-search-match {
+  box-shadow: 0 0 0 2px #eab308;
+}
+
+/* Panels inside graph — dark theme */
+.studio-app .rune-panel {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.studio-app .rune-panel-header {
+  color: #f1f5f9;
+}
+
+.studio-app .rune-search-input {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.studio-app .rune-search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.studio-app .rune-toolbar-button {
+  background: #334155;
+  border-color: #475569;
+  color: #cbd5e1;
+}
+
+.studio-app .rune-toolbar-button:hover {
+  background: #475569;
+  color: #f1f5f9;
+}
+
+.studio-app .rune-detail-label {
+  color: #64748b;
+}
+
+.studio-app .rune-detail-value {
+  color: #e2e8f0;
+}
+
+/* ---------- Dark-theme ReactFlow controls & minimap ---------- */
+.studio-app .react-flow__controls {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.studio-app .react-flow__controls button {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+  fill: #cbd5e1;
+}
+
+.studio-app .react-flow__controls button:hover {
+  background: #334155;
+}
+
+.studio-app .react-flow__controls button svg {
+  fill: #cbd5e1;
+}
+
+.studio-app .react-flow__minimap {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.studio-app .react-flow__minimap-mask {
+  fill: rgba(59, 130, 246, 0.15);
+}
+
+.studio-app .react-flow__minimap-node {
+  fill: #475569;
+  stroke: none;
+}
+
+.studio-app .react-flow__background pattern circle {
+  fill: #334155;
+}
+
+/* ReactFlow handle visibility on dark nodes */
+.studio-app .react-flow__handle {
+  width: 6px;
+  height: 6px;
+  background: #64748b;
+  border: 1px solid #475569;
+}
+
+.studio-app .react-flow__handle:hover {
+  background: #3b82f6;
+}
+
+/* ---------- Toolbar button active+hover fix ---------- */
+.studio-toolbar-button--active:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+/* ---------- Focus-visible outlines for keyboard navigation ---------- */
+.studio-toolbar-button:focus-visible,
+.studio-header__button:focus-visible,
+.studio-file-loader__button:focus-visible,
+.studio-export-menu__button:focus-visible,
+.studio-source-editor__tab:focus-visible,
+.studio-source-view__tab:focus-visible,
+.ns-explorer__action-btn:focus-visible,
+.ns-row__chevron:focus-visible,
+.ns-row__visibility:focus-visible,
+.ns-type__visibility:focus-visible,
+.studio-diag__item:focus-visible,
+.studio-connection-status__reconnect:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+/* Suppress default outline when not keyboard-focused */
+.studio-toolbar-button:focus:not(:focus-visible),
+.studio-header__button:focus:not(:focus-visible),
+.studio-file-loader__button:focus:not(:focus-visible),
+.studio-export-menu__button:focus:not(:focus-visible),
+.studio-source-editor__tab:focus:not(:focus-visible),
+.ns-explorer__action-btn:focus:not(:focus-visible),
+.ns-row__chevron:focus:not(:focus-visible),
+.ns-row__visibility:focus:not(:focus-visible),
+.ns-type__visibility:focus:not(:focus-visible),
+.studio-diag__item:focus:not(:focus-visible),
+.studio-connection-status__reconnect:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---------- ToolbarPanel select dropdown — dark theme ---------- */
+.studio-app .rune-toolbar-select {
+  background: #334155;
+  border-color: #475569;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.studio-app .rune-toolbar-select:hover {
+  background: #475569;
+  color: #f1f5f9;
+}
+
+.studio-app .rune-toolbar-select:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+/* ---------- SearchPanel result count & filter layout ---------- */
+.rune-search-panel__results {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #718096;
+}
+
+.studio-app .rune-search-panel__results {
+  color: #94a3b8;
+}
+
+.rune-search-panel__filter-section {
+  margin-top: 8px;
+}
+
+.rune-search-panel__filter-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.rune-search-panel__orphan-toggle {
+  margin-top: 8px;
+}
+
+.rune-search-panel__orphan-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.studio-app .rune-search-panel__orphan-label {
+  color: #cbd5e1;
+}
+
+/* ---------- DetailPanel member list ---------- */
+.rune-detail-members {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rune-detail-member {
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.rune-detail-member-type {
+  color: #718096;
+  font-style: italic;
+}
+
+.rune-detail-member-card {
+  color: #a0aec0;
+  font-size: 11px;
+}
+
+.studio-app .rune-detail-member-type {
+  color: #94a3b8;
+}
+
+.studio-app .rune-detail-member-card {
+  color: #64748b;
+}
+
+/* ---------- TypeCreator & AttributeEditor — dark-themed ---------- */
+.rune-type-creator,
+.rune-attribute-editor {
+  padding: 12px;
+  font-size: 13px;
+}
+
+.rune-type-creator__header,
+.rune-attribute-editor__header {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.studio-app .rune-type-creator__header,
+.studio-app .rune-attribute-editor__header {
+  color: #f1f5f9;
+}
+
+.rune-type-creator__form,
+.rune-attribute-editor__form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rune-type-creator__kind,
+.rune-type-creator__name,
+.rune-type-creator__namespace,
+.rune-attribute-editor__name,
+.rune-attribute-editor__type,
+.rune-attribute-editor__card {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  outline: none;
+}
+
+.studio-app .rune-type-creator__kind,
+.studio-app .rune-type-creator__name,
+.studio-app .rune-type-creator__namespace,
+.studio-app .rune-attribute-editor__name,
+.studio-app .rune-attribute-editor__type,
+.studio-app .rune-attribute-editor__card {
+  background: #0f172a;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.studio-app .rune-type-creator__kind:focus,
+.studio-app .rune-type-creator__name:focus,
+.studio-app .rune-type-creator__namespace:focus,
+.studio-app .rune-attribute-editor__name:focus,
+.studio-app .rune-attribute-editor__type:focus,
+.studio-app .rune-attribute-editor__card:focus {
+  border-color: #3b82f6;
+}
+
+.rune-type-creator__submit,
+.rune-attribute-editor__submit {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #ffffff;
+  background: #3b82f6;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.rune-type-creator__submit:hover,
+.rune-attribute-editor__submit:hover {
+  background: #2563eb;
+}
+
+.rune-type-creator__submit:disabled,
+.rune-attribute-editor__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rune-type-creator__cancel,
+.rune-attribute-editor__cancel {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.studio-app .rune-type-creator__cancel,
+.studio-app .rune-attribute-editor__cancel {
+  color: #94a3b8;
+}
+
+.rune-type-creator__cancel:hover,
+.rune-attribute-editor__cancel:hover {
+  background: #334155;
 }

@@ -24,6 +24,7 @@
     "@codemirror/view": "^6.39.14",
     "@lspeasy/core": "link:../../../lspy/packages/core",
     "@rune-langium/core": "workspace:*",
+    "@rune-langium/design-system": "workspace:*",
     "@rune-langium/lsp-server": "workspace:*",
     "@rune-langium/visual-editor": "workspace:*",
     "@xyflow/react": "^12.10.0",
@@ -33,13 +34,15 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.56.1",
+    "@tailwindcss/vite": "^4.1.18",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "jsdom": "^28.0.0",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"

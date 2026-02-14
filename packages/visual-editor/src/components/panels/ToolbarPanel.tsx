@@ -32,9 +32,9 @@ export function ToolbarPanel({ onFitView, onRelayout, currentDirection }: Toolba
         Layout
       </button>
       <select
+        className="rune-toolbar-select"
         value={currentDirection}
         onChange={(e) => handleDirectionChange(e.target.value as LayoutDirection)}
-        style={{ fontSize: 12, padding: '4px 6px' }}
       >
         <option value="TB">Top → Bottom</option>
         <option value="LR">Left → Right</option>
