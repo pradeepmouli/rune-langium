@@ -5,6 +5,8 @@
 import { useCallback, useRef, useState } from 'react';
 import type { WorkspaceFile } from '../services/workspace.js';
 import { readFileList } from '../services/workspace.js';
+import { Button } from './ui/button.js';
+import { cn } from '@/lib/utils.js';
 
 export interface FileLoaderProps {
   onFilesLoaded: (files: WorkspaceFile[]) => void;
@@ -55,31 +57,29 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
   );
 
   return (
-    <div
-      className={`studio-file-loader ${isDragging ? 'studio-file-loader--dragging' : ''}`}
+    <section
+      className={cn(
+        'flex items-center justify-center h-full p-8 transition-colors',
+        isDragging && 'bg-accent-muted'
+      )}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       data-testid="file-loader"
+      aria-label="File loader"
     >
-      <div className="studio-file-loader__content">
-        <p className="studio-file-loader__title">Load Rune DSL Models</p>
-        <p className="studio-file-loader__hint">
+      <div className="text-center max-w-[480px]">
+        <p className="text-2xl font-semibold text-text-heading mb-2">Load Rune DSL Models</p>
+        <p className="text-md text-text-secondary mb-6">
           Drag and drop .rosetta files here, or use the buttons below
         </p>
-        <div className="studio-file-loader__actions">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="studio-file-loader__button"
-          >
+        <div className="flex gap-3 justify-center">
+          <Button size="lg" onClick={() => fileInputRef.current?.click()}>
             Select Files
-          </button>
-          <button
-            onClick={() => dirInputRef.current?.click()}
-            className="studio-file-loader__button studio-file-loader__button--secondary"
-          >
+          </Button>
+          <Button variant="secondary" size="lg" onClick={() => dirInputRef.current?.click()}>
             Select Folder
-          </button>
+          </Button>
         </div>
         {/* Visually hidden — NOT display:none, Chrome blocks .click() on those */}
         <input
@@ -99,6 +99,6 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
           style={{ position: 'absolute', width: 0, height: 0, opacity: 0, overflow: 'hidden' }}
         />
       </div>
-    </div>
+    </section>
   );
 }

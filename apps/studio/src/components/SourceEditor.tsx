@@ -17,6 +17,7 @@ import { defaultKeymap } from '@codemirror/commands';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
+import { cn } from '@/lib/utils.js';
 
 // Re-export pathToUri for backward compatibility
 export { pathToUri } from '../utils/uri.js';
@@ -43,6 +44,20 @@ export interface SourceEditorProps {
   onContentChange?: (path: string, content: string) => void;
   /** LSP client service (injected). */
   lspClient?: LspClientService;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a stable, unique ID for a tab from a file path.
+ * Uses encodeURIComponent so that all non-alphanumerics are encoded with
+ * '%' delimiters, avoiding collisions with literal alphanumeric sequences.
+ */
+function getTabId(path: string): string {
+  const encoded = encodeURIComponent(path);
+  return `tab-${encoded}`;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -177,37 +192,55 @@ export function SourceEditor({
   // Empty state
   if (files.length === 0) {
     return (
-      <div className="studio-source-editor studio-source-editor--empty" data-testid="source-editor">
+      <section
+        className="flex flex-col items-center justify-center h-full bg-surface-base text-text-muted"
+        data-testid="source-editor"
+      >
         <p>No files loaded</p>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="studio-source-editor" data-testid="source-editor">
+    <section className="flex flex-col h-full bg-surface-base" data-testid="source-editor">
       {/* Tab bar */}
-      <div className="studio-source-editor__tabs">
+      <nav
+        className="flex overflow-x-auto bg-surface-raised border-b border-border-default gap-px min-h-[32px]"
+        role="tablist"
+        aria-label="Open files"
+      >
         {files.map((file) => (
           <button
             key={file.path}
-            className={`studio-source-editor__tab ${
-              file.path === selectedPath ? 'studio-source-editor__tab--active' : ''
-            }`}
+            id={getTabId(file.path)}
+            role="tab"
+            aria-selected={file.path === selectedPath}
+            aria-controls="editor-tabpanel"
+            tabIndex={file.path === selectedPath ? 0 : -1}
+            className={cn(
+              'px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors',
+              'hover:text-text-primary',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
+              file.path === selectedPath ? 'text-accent border-b-accent' : 'text-text-secondary'
+            )}
             onClick={() => handleFileSelect(file.path)}
             title={file.path}
           >
             {file.name}
-            {file.dirty && <span className="studio-source-editor__dirty"> ●</span>}
+            {file.dirty && <span className="text-warning text-xs"> ●</span>}
           </button>
         ))}
-      </div>
+      </nav>
 
       {/* Editor container */}
       <div
-        className="studio-source-editor__editor"
+        id="editor-tabpanel"
+        className="flex-1 overflow-hidden"
+        role="tabpanel"
+        aria-labelledby={selectedPath ? getTabId(selectedPath) : undefined}
         data-testid="source-editor-container"
         ref={editorContainerRef}
       />
-    </div>
+    </section>
   );
 }

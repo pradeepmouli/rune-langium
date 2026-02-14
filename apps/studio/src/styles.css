@@ -1,220 +1,24 @@
 /* @rune-langium/studio — App styles (T090) */
-@import "tailwindcss";
-@import "@rune-langium/design-system/theme.css";
+@import 'tailwindcss';
+@import '@rune-langium/design-system/theme.css';
 
 /* ---------- Reset ---------- */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 
-html, body, #root {
-  width: 100%;
-  height: 100%;
-}
-
-/* ---------- App shell ---------- */
-.studio-app {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #e2e8f0;
-  background: #0f172a;
-}
-
-/* ---------- Header ---------- */
-.studio-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
-  min-height: 44px;
-}
-
-.studio-header__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #f1f5f9;
-}
-
-.studio-header__actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.studio-header__info {
-  font-size: 13px;
-  color: #94a3b8;
-}
-
-.studio-header__errors {
-  color: #f87171;
-}
-
-.studio-header__button {
-  padding: 4px 12px;
-  font-size: 13px;
-  color: #e2e8f0;
-  background: #334155;
-  border: 1px solid #475569;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.studio-header__button:hover {
-  background: #475569;
-}
-
-/* ---------- Main ---------- */
-.studio-main {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
-
-/* ---------- Loading ---------- */
-.studio-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #94a3b8;
-  font-size: 14px;
-}
-
-/* ---------- File Loader ---------- */
-.studio-file-loader {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  padding: 32px;
-  transition: background 0.2s;
-}
-
-.studio-file-loader--dragging {
-  background: rgba(59, 130, 246, 0.1);
-}
-
-.studio-file-loader__content {
-  text-align: center;
-  max-width: 480px;
-}
-
-.studio-file-loader__title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #f1f5f9;
-  margin-bottom: 8px;
-}
-
-.studio-file-loader__hint {
-  font-size: 14px;
-  color: #94a3b8;
-  margin-bottom: 24px;
-}
-
-.studio-file-loader__actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-}
-
-.studio-file-loader__button {
-  padding: 10px 24px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #ffffff;
-  background: #3b82f6;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.studio-file-loader__button:hover {
-  background: #2563eb;
-}
-
-.studio-file-loader__button--secondary {
-  background: #334155;
-  border: 1px solid #475569;
-}
-
-.studio-file-loader__button--secondary:hover {
-  background: #475569;
-}
-
-/* ---------- Editor Page ---------- */
-.studio-editor-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.studio-editor-page__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
-  gap: 8px;
-}
-
-.studio-editor-page__toolbar-left,
-.studio-editor-page__toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.studio-toolbar-button {
-  padding: 4px 10px;
-  font-size: 12px;
-  color: #cbd5e1;
-  background: #334155;
-  border: 1px solid #475569;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.studio-toolbar-button:hover {
-  background: #475569;
-  color: #f1f5f9;
-}
-
-.studio-toolbar-button--active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
-}
-
-.studio-editor-page__content {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+  }
 }
 
 /* ---------- Namespace Explorer ---------- */
-.studio-editor-page__explorer {
-  width: 280px;
-  min-width: 200px;
-  max-width: 400px;
-  border-right: 1px solid #334155;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  background: #1e293b;
-  resize: horizontal;
-}
-
 .ns-explorer {
   display: flex;
   flex-direction: column;
@@ -469,35 +273,7 @@ html, body, #root {
   margin-left: 2px;
 }
 
-.studio-editor-page__graph {
-  flex: 1;
-  position: relative;
-}
-
-.studio-editor-page__graph--with-source {
-  flex: 2;
-}
-
-.studio-editor-page__source {
-  flex: 1;
-  border-left: 1px solid #334155;
-  overflow: auto;
-  max-width: 480px;
-  min-width: 240px;
-}
-
-.studio-editor-page__status {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 4px 12px;
-  font-size: 12px;
-  color: #64748b;
-  background: #1e293b;
-  border-top: 1px solid #334155;
-}
-
-/* ---------- Source View ---------- */
+/* ---------- Source View (legacy read-only) ---------- */
 .studio-source-view {
   display: flex;
   flex-direction: column;
@@ -566,39 +342,14 @@ html, body, #root {
   padding: 24px;
 }
 
-/* ---------- Export Menu ---------- */
-.studio-export-menu {
-  display: flex;
-  gap: 4px;
-}
-
-.studio-export-menu__button {
-  padding: 4px 10px;
-  font-size: 12px;
-  color: #cbd5e1;
-  background: #334155;
-  border: 1px solid #475569;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.studio-export-menu__button:hover:not(:disabled) {
-  background: #475569;
-  color: #f1f5f9;
-}
-
-.studio-export-menu__button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ---------- CodeMirror Editor (T043) ---------- */
+/* ---------- CodeMirror Editor (T043) — dark theme ---------- */
 .studio-editor-page__source .cm-editor {
   height: 100%;
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.5;
+  background: #0f172a;
+  color: #e2e8f0;
 }
 
 .studio-editor-page__source .cm-editor .cm-scroller {
@@ -632,12 +383,6 @@ html, body, #root {
   caret-color: #e2e8f0;
 }
 
-/* CM dark theme overrides */
-.studio-editor-page__source .cm-editor {
-  background: #0f172a;
-  color: #e2e8f0;
-}
-
 .studio-editor-page__source .cm-editor .cm-tooltip {
   background: #1e293b;
   border: 1px solid #475569;
@@ -669,221 +414,32 @@ html, body, #root {
   text-underline-offset: 3px;
 }
 
-/* ---------- Source Editor Tab Bar ---------- */
-.studio-source-editor {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: #0f172a;
-}
-
-.studio-source-editor__tabs {
-  display: flex;
-  overflow-x: auto;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
-  gap: 1px;
-  min-height: 32px;
-}
-
-.studio-source-editor__tab {
-  padding: 6px 14px;
-  font-size: 12px;
-  color: #94a3b8;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.15s;
-}
-
-.studio-source-editor__tab:hover {
-  color: #e2e8f0;
-}
-
-.studio-source-editor__tab--active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
-}
-
-.studio-source-editor__dirty {
-  color: #f59e0b;
-  font-size: 10px;
-}
-
-.studio-source-editor__editor {
-  flex: 1;
-  overflow: hidden;
-}
-
-/* ---------- Connection Status ---------- */
-.studio-connection-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.studio-connection-status__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.studio-connection-status__dot--connected {
-  background: #4ade80;
-}
-
-.studio-connection-status__dot--connecting {
-  background: #fbbf24;
-  animation: pulse-dot 1.5s ease-in-out infinite;
-}
-
-.studio-connection-status__dot--disconnected {
-  background: #64748b;
-}
-
-.studio-connection-status__dot--error {
-  background: #f87171;
-}
-
+/* ---------- Connecting dot animation ---------- */
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
-.studio-connection-status__reconnect {
-  padding: 2px 8px;
-  font-size: 11px;
-  color: #94a3b8;
-  background: transparent;
-  border: 1px solid #475569;
-  border-radius: 3px;
-  cursor: pointer;
+/* ---------- Focus-visible for namespace explorer ---------- */
+.ns-explorer__action-btn:focus-visible,
+.ns-row__chevron:focus-visible,
+.ns-row__visibility:focus-visible,
+.ns-type__visibility:focus-visible,
+.studio-source-view__tab:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
 }
 
-.studio-connection-status__reconnect:hover {
-  color: #e2e8f0;
-  border-color: #64748b;
-}
-
-.studio-connection-status__error {
-  color: #f87171;
-  font-size: 11px;
-}
-
-/* ---------- Diagnostics Panel ---------- */
-.studio-diag-panel {
-  display: flex;
-  flex-direction: column;
-  max-height: 200px;
-  overflow: hidden;
-  border-top: 1px solid #334155;
-  background: #0f172a;
-}
-
-.studio-diag-panel--empty {
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-}
-
-.studio-diag-panel__empty {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.studio-diag-panel__summary {
-  display: flex;
-  gap: 12px;
-  padding: 6px 12px;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
-  font-size: 12px;
-}
-
-.studio-diag-panel__count--error {
-  color: #f87171;
-}
-
-.studio-diag-panel__count--warning {
-  color: #fbbf24;
-}
-
-.studio-diag-panel__list {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.studio-diag-panel__file-group {
-  border-bottom: 1px solid #1e293b;
-}
-
-.studio-diag-panel__file-header {
-  padding: 4px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-  background: #1e293b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.studio-diag__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 12px 4px 20px;
-  font-size: 12px;
-  color: #e2e8f0;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-}
-
-.studio-diag__item:hover {
-  background: #1e293b;
-}
-
-.studio-diag__icon {
-  flex-shrink: 0;
-  font-size: 10px;
-}
-
-.studio-diag__icon--error {
-  color: #f87171;
-}
-
-.studio-diag__icon--warning {
-  color: #fbbf24;
-}
-
-.studio-diag__icon--info {
-  color: #60a5fa;
-}
-
-.studio-diag__message {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-diag__location {
-  flex-shrink: 0;
-  color: #64748b;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 11px;
-}
-
-/* ---------- Diagnostics Panel in Layout ---------- */
-.studio-editor-page__diagnostics {
-  flex-shrink: 0;
+.ns-explorer__action-btn:focus:not(:focus-visible),
+.ns-row__chevron:focus:not(:focus-visible),
+.ns-row__visibility:focus:not(:focus-visible),
+.ns-type__visibility:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* ---------- Dark-theme overrides for visual-editor graph nodes ---------- */
@@ -1065,45 +621,6 @@ html, body, #root {
 
 .studio-app .react-flow__handle:hover {
   background: #3b82f6;
-}
-
-/* ---------- Toolbar button active+hover fix ---------- */
-.studio-toolbar-button--active:hover {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #ffffff;
-}
-
-/* ---------- Focus-visible outlines for keyboard navigation ---------- */
-.studio-toolbar-button:focus-visible,
-.studio-header__button:focus-visible,
-.studio-file-loader__button:focus-visible,
-.studio-export-menu__button:focus-visible,
-.studio-source-editor__tab:focus-visible,
-.studio-source-view__tab:focus-visible,
-.ns-explorer__action-btn:focus-visible,
-.ns-row__chevron:focus-visible,
-.ns-row__visibility:focus-visible,
-.ns-type__visibility:focus-visible,
-.studio-diag__item:focus-visible,
-.studio-connection-status__reconnect:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 1px;
-}
-
-/* Suppress default outline when not keyboard-focused */
-.studio-toolbar-button:focus:not(:focus-visible),
-.studio-header__button:focus:not(:focus-visible),
-.studio-file-loader__button:focus:not(:focus-visible),
-.studio-export-menu__button:focus:not(:focus-visible),
-.studio-source-editor__tab:focus:not(:focus-visible),
-.ns-explorer__action-btn:focus:not(:focus-visible),
-.ns-row__chevron:focus:not(:focus-visible),
-.ns-row__visibility:focus:not(:focus-visible),
-.ns-type__visibility:focus:not(:focus-visible),
-.studio-diag__item:focus:not(:focus-visible),
-.studio-connection-status__reconnect:focus:not(:focus-visible) {
-  outline: none;
 }
 
 /* ---------- ToolbarPanel select dropdown — dark theme ---------- */

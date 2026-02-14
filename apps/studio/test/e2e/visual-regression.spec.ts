@@ -1,10 +1,8 @@
 /**
  * Visual regression tests — Capture and compare UI structure + computed styles.
  *
- * Uses DOM snapshots (HTML structure + computed styles on key elements) rather
- * than pixel screenshots to verify visual consistency during CSS/Tailwind migrations.
- * This approach is more robust across environments and directly validates that
- * the correct CSS properties are applied.
+ * Uses DOM snapshots (HTML structure + computed styles on key elements) AND
+ * pixel screenshots to verify visual consistency during CSS/Tailwind migrations.
  *
  * Run with: pnpm test:e2e --grep "Visual Regression"
  *
@@ -14,7 +12,7 @@
  *   3. Run without --update-snapshots to compare
  */
 
-import { test, expect, type Page, type Locator } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -47,26 +45,34 @@ choice PersonOrRole:
   RoleEnum
 `;
 
-const ROSETTA_MULTI_NS = `namespace org.example
-version "1.0.0"
-
-type Account:
-  id string (1..1)
-  owner string (1..1)
-`;
-
 // ────────────────────────────────────────────────────────────────────────────
 // Snapshot helpers
 // ────────────────────────────────────────────────────────────────────────────
 
 /** CSS properties we care about for visual regression */
 const STYLE_PROPS = [
-  'color', 'backgroundColor', 'borderColor', 'borderWidth', 'borderRadius',
-  'fontSize', 'fontWeight', 'fontFamily',
-  'padding', 'margin', 'gap',
-  'display', 'flexDirection', 'alignItems', 'justifyContent',
-  'width', 'height', 'minWidth', 'maxWidth',
-  'opacity', 'boxShadow', 'outline'
+  'color',
+  'backgroundColor',
+  'borderColor',
+  'borderWidth',
+  'borderRadius',
+  'fontSize',
+  'fontWeight',
+  'fontFamily',
+  'padding',
+  'margin',
+  'gap',
+  'display',
+  'flexDirection',
+  'alignItems',
+  'justifyContent',
+  'width',
+  'height',
+  'minWidth',
+  'maxWidth',
+  'opacity',
+  'boxShadow',
+  'outline'
 ] as const;
 
 interface ElementSnapshot {
@@ -115,9 +121,7 @@ async function captureDomSnapshot(
         const computed = window.getComputedStyle(el);
         const styles: Record<string, string> = {};
         for (const prop of styleProps) {
-          styles[prop] = computed.getPropertyValue(
-            prop.replace(/([A-Z])/g, '-$1').toLowerCase()
-          );
+          styles[prop] = computed.getPropertyValue(prop.replace(/([A-Z])/g, '-$1').toLowerCase());
         }
         const rect = el.getBoundingClientRect();
         results.push({
@@ -144,6 +148,20 @@ async function captureDomSnapshot(
 }
 
 const SNAPSHOT_DIR = path.join(__dirname, '__snapshots__');
+const SCREENSHOT_DIR = path.join(__dirname, '__screenshots__');
+
+/**
+ * Check if we're in snapshot update mode (via --update-snapshots or -u flag).
+ * Checks both process.argv and Playwright's UPDATE_SNAPSHOTS environment variable.
+ */
+function isSnapshotUpdateMode(): boolean {
+  return (
+    process.argv.includes('--update-snapshots') ||
+    process.argv.includes('-u') ||
+    process.env.UPDATE_SNAPSHOTS === 'true' ||
+    process.env.UPDATE_SNAPSHOTS === '1'
+  );
+}
 
 /** Save a DOM snapshot to disk */
 function saveSnapshot(snapshot: DomSnapshot): void {
@@ -161,6 +179,17 @@ function loadSnapshot(name: string): DomSnapshot | null {
   return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 }
 
+/** Save a screenshot */
+async function saveScreenshot(page: Page, name: string): Promise<void> {
+  if (!fs.existsSync(SCREENSHOT_DIR)) {
+    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+  }
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, `${name}.png`),
+    fullPage: true
+  });
+}
+
 /** Helper to load model into the editor */
 async function loadModel(page: Page, files: Array<{ name: string; content: string }>) {
   const fileInput = page.locator('input[type="file"][accept=".rosetta"]');
@@ -176,35 +205,34 @@ async function loadModel(page: Page, files: Array<{ name: string; content: strin
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Selectors to snapshot per screen
+// Selectors to snapshot per screen (updated for Tailwind + semantic HTML)
 // ────────────────────────────────────────────────────────────────────────────
 
 const FILE_LOADER_SELECTORS = [
-  '.studio-app',
-  '.studio-header',
-  '.studio-header__title',
-  '.studio-file-loader',
-  '.studio-file-loader__title',
-  '.studio-file-loader__hint',
-  '.studio-file-loader__button',
-  '.studio-file-loader__button--secondary'
+  '.studio-app', // Root container (kept for scoping)
+  '.studio-app > header', // App header
+  '.studio-app > header h1', // Title
+  '[data-testid="file-loader"]', // File loader section
+  '[data-testid="file-loader"] p:first-of-type', // Main heading
+  '[data-testid="file-loader"] p:nth-of-type(2)', // Subtitle text
+  '[data-testid="file-loader"] [data-slot="button"]' // Primary button
 ];
 
 const EDITOR_PAGE_SELECTORS = [
-  '.studio-app',
-  '.studio-header',
-  '.studio-editor-page',
-  '.studio-editor-page__toolbar',
-  '.studio-editor-page__explorer',
-  '.studio-editor-page__graph',
-  '.studio-editor-page__status',
-  '.studio-toolbar-button',
-  '.studio-connection-status',
-  '.studio-connection-status__dot'
+  '.studio-app', // Root container
+  '.studio-app > header', // App header
+  '[data-testid="editor-page"]', // Editor page root
+  '[data-testid="editor-page"] > nav', // Toolbar
+  '[data-testid="editor-page"] [data-slot="separator"]', // Separator
+  '[data-testid="editor-page"] [data-slot="resizable-panel-group"]', // Panel group
+  '[data-testid="editor-page"] > footer', // Status bar
+  '[data-testid="editor-page"] [data-slot="button"]', // Toolbar buttons
+  '[data-testid="export-menu"]', // Export menu
+  '[role="status"]' // Connection status
 ];
 
 const NAMESPACE_EXPLORER_SELECTORS = [
-  '.ns-explorer',
+  '[data-testid="namespace-explorer"]',
   '.ns-explorer__header',
   '.ns-explorer__title',
   '.ns-explorer__count',
@@ -218,17 +246,18 @@ const NAMESPACE_EXPLORER_SELECTORS = [
 ];
 
 const SOURCE_EDITOR_SELECTORS = [
-  '.studio-source-editor',
-  '.studio-source-editor__tabs',
-  '.studio-source-editor__tab',
-  '.studio-source-editor__editor',
-  '.cm-editor'
+  '[data-testid="source-editor"]', // Source editor section
+  '[data-testid="source-editor"] > nav', // Tab bar nav
+  '[data-testid="source-editor"] > nav [role="tab"]', // Tab buttons
+  '[data-testid="source-editor-container"]', // Editor container
+  '.cm-editor' // CodeMirror editor
 ];
 
 const DIAGNOSTICS_SELECTORS = [
-  '.studio-diag-panel',
-  '.studio-diag-panel__summary',
-  '.studio-diag-panel__empty'
+  '[data-testid="diagnostics-panel"]', // Panel section
+  '[data-testid="diagnostics-panel"] [data-slot="separator"]', // Separator
+  '[data-testid="diagnostics-panel"] [data-slot="badge"]', // Badge
+  '[data-testid="diagnostics-panel"] [data-slot="scroll-area"]' // ScrollArea
 ];
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -238,19 +267,29 @@ const DIAGNOSTICS_SELECTORS = [
 test.describe('Visual Regression', () => {
   test.setTimeout(60_000);
 
-  test('01 — file loader styles', async ({ page }) => {
+  test('01 — file loader screen', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(500);
     await expect(page.getByTestId('file-loader')).toBeVisible();
 
+    // Capture screenshot
+    await saveScreenshot(page, '01-file-loader');
+
+    // Capture DOM snapshot
     const snapshot = await captureDomSnapshot(page, '01-file-loader', FILE_LOADER_SELECTORS);
     const baseline = loadSnapshot('01-file-loader');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 01-file-loader');
-      return;
+      if (isSnapshotUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 01-file-loader');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 01-file-loader. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     // Compare each element's styles
@@ -265,20 +304,30 @@ test.describe('Visual Regression', () => {
     }
   });
 
-  test('02 — editor page layout and styles', async ({ page }) => {
+  test('02 — editor page layout', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(300);
 
     await loadModel(page, [{ name: 'demo.rosetta', content: ROSETTA_SIMPLE }]);
 
+    // Capture screenshot
+    await saveScreenshot(page, '02-editor-page');
+
+    // Capture DOM snapshot
     const snapshot = await captureDomSnapshot(page, '02-editor-page', EDITOR_PAGE_SELECTORS);
     const baseline = loadSnapshot('02-editor-page');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 02-editor-page');
-      return;
+      if (isSnapshotUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 02-editor-page');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 02-editor-page. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     for (let i = 0; i < snapshot.elements.length; i++) {
@@ -292,7 +341,7 @@ test.describe('Visual Regression', () => {
     }
   });
 
-  test('03 — namespace explorer styles', async ({ page }) => {
+  test('03 — namespace explorer', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(300);
@@ -300,12 +349,15 @@ test.describe('Visual Regression', () => {
     await loadModel(page, [{ name: 'demo.rosetta', content: ROSETTA_SIMPLE }]);
     await page.waitForSelector('[data-testid="namespace-explorer"]', { timeout: 5000 });
 
-    // Expand all to see types
+    // Expand all to see types (force: true because ResizablePanelGroup can intercept pointer events)
     const expandBtn = page.getByTestId('expand-all');
     if (await expandBtn.isVisible()) {
-      await expandBtn.click();
+      await expandBtn.click({ force: true });
       await page.waitForTimeout(300);
     }
+
+    // Capture screenshot
+    await saveScreenshot(page, '03-namespace-explorer');
 
     const snapshot = await captureDomSnapshot(
       page,
@@ -315,9 +367,15 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('03-namespace-explorer');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 03-namespace-explorer');
-      return;
+      if (isSnapshotUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 03-namespace-explorer');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 03-namespace-explorer. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     for (let i = 0; i < snapshot.elements.length; i++) {
@@ -331,25 +389,37 @@ test.describe('Visual Regression', () => {
     }
   });
 
-  test('04 — source editor styles', async ({ page }) => {
+  test('04 — source editor panel', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(300);
 
     await loadModel(page, [{ name: 'demo.rosetta', content: ROSETTA_SIMPLE }]);
 
-    // Open source panel
+    // Open source panel (use { state: 'attached' } because ResizablePanel layout is async)
     await page.getByTitle('Toggle source view').click();
-    await page.waitForSelector('[data-testid="source-editor"]', { timeout: 5000 });
-    await page.waitForTimeout(500);
+    await page.waitForSelector('[data-testid="source-editor"]', {
+      state: 'attached',
+      timeout: 5000
+    });
+    await page.waitForTimeout(1000);
+
+    // Capture screenshot
+    await saveScreenshot(page, '04-source-editor');
 
     const snapshot = await captureDomSnapshot(page, '04-source-editor', SOURCE_EDITOR_SELECTORS);
     const baseline = loadSnapshot('04-source-editor');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 04-source-editor');
-      return;
+      if (isSnapshotUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 04-source-editor');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 04-source-editor. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     for (let i = 0; i < snapshot.elements.length; i++) {
@@ -363,7 +433,7 @@ test.describe('Visual Regression', () => {
     }
   });
 
-  test('05 — diagnostics panel styles', async ({ page }) => {
+  test('05 — diagnostics panel', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(300);
@@ -375,17 +445,22 @@ test.describe('Visual Regression', () => {
     await page.waitForSelector('[data-testid="diagnostics-panel"]', { timeout: 5000 });
     await page.waitForTimeout(300);
 
-    const snapshot = await captureDomSnapshot(
-      page,
-      '05-diagnostics-panel',
-      DIAGNOSTICS_SELECTORS
-    );
+    // Capture screenshot
+    await saveScreenshot(page, '05-diagnostics-panel');
+
+    const snapshot = await captureDomSnapshot(page, '05-diagnostics-panel', DIAGNOSTICS_SELECTORS);
     const baseline = loadSnapshot('05-diagnostics-panel');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 05-diagnostics-panel');
-      return;
+      if (isSnapshotUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 05-diagnostics-panel');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 05-diagnostics-panel. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     for (let i = 0; i < snapshot.elements.length; i++) {

@@ -6,6 +6,8 @@
  */
 
 import type { TransportState } from '../services/transport-provider.js';
+import { cn } from '@/lib/utils.js';
+import { Button } from './ui/button.js';
 
 export interface ConnectionStatusProps {
   /** Transport state to display. */
@@ -16,7 +18,7 @@ export interface ConnectionStatusProps {
 
 const STATUS_LABELS: Record<string, string> = {
   disconnected: 'Disconnected',
-  connecting: 'Connecting…',
+  connecting: 'Connecting\u2026',
   connected: 'Connected',
   error: 'Error'
 };
@@ -27,6 +29,13 @@ const MODE_LABELS: Record<string, string> = {
   embedded: 'Embedded'
 };
 
+const DOT_COLORS: Record<string, string> = {
+  connected: 'bg-success',
+  connecting: 'bg-warning animate-[pulse-dot_1.5s_ease-in-out_infinite]',
+  disconnected: 'bg-text-muted',
+  error: 'bg-error'
+};
+
 export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) {
   const statusLabel = STATUS_LABELS[state.status] ?? state.status;
   const modeLabel = MODE_LABELS[state.mode] ?? state.mode;
@@ -34,29 +43,32 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
   const showReconnect =
     onReconnect !== undefined && state.status !== 'connected' && state.status !== 'connecting';
 
-  const dotClass = `studio-connection-status__dot studio-connection-status__dot--${state.status}`;
-
   return (
-    <div className="studio-connection-status" role="status">
-      <span className={dotClass} />
+    <output className="inline-flex items-center gap-1.5 text-sm text-text-secondary" role="status">
+      <span
+        className={cn(
+          'w-2 h-2 rounded-full shrink-0',
+          DOT_COLORS[state.status] ?? DOT_COLORS['disconnected']
+        )}
+      />
       <span>
         {statusLabel}
         {modeLabel && state.status === 'connected' ? ` (${modeLabel})` : ''}
       </span>
       {state.status === 'error' && state.error && (
-        <span className="studio-connection-status__error">
-          {state.error.message}
-        </span>
+        <span className="text-error text-xs">{state.error.message}</span>
       )}
       {showReconnect && (
-        <button
-          className="studio-connection-status__reconnect"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onReconnect}
           aria-label="Reconnect"
+          className="h-5 px-2 text-xs"
         >
           Reconnect
-        </button>
+        </Button>
       )}
-    </div>
+    </output>
   );
 }

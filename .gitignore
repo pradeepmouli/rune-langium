@@ -18,3 +18,9 @@ coverage/
 # Vendored fixture snapshots (CDM corpus, Rune DSL built-in types)
 # Fetched by scripts/update-fixtures.sh — not published to npm
 .resources/
+
+# Playwright test artifacts (root-level stale runs)
+test/e2e/__snapshots__/
+test/e2e/__screenshots__/
+test-results/
+playwright-report/

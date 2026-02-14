@@ -7,17 +7,21 @@
  */
 
 import { useRef, useCallback, useState, useMemo } from 'react';
-import {
-  RuneTypeGraph,
-  NamespaceExplorerPanel,
-  astToGraph
-} from '@rune-langium/visual-editor';
+import { RuneTypeGraph, NamespaceExplorerPanel, astToGraph } from '@rune-langium/visual-editor';
 import type { RuneTypeGraphRef, VisibilityState, TypeGraphNode } from '@rune-langium/visual-editor';
 import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
+import { Button } from '../components/ui/button.js';
+import { Separator } from '../components/ui/separator.js';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle
+} from '../components/ui/resizable.js';
+import { ScrollArea } from '../components/ui/scroll-area.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
@@ -246,134 +250,150 @@ export function EditorPage({
   }, []);
 
   return (
-    <div className="studio-editor-page" data-testid="editor-page">
+    <div className="flex flex-col h-full overflow-hidden" data-testid="editor-page">
       {/* Toolbar */}
-      <div className="studio-editor-page__toolbar">
-        <div className="studio-editor-page__toolbar-left">
-          <button
-            className={`studio-toolbar-button ${explorerOpen ? 'studio-toolbar-button--active' : ''}`}
+      <nav
+        className="flex items-center justify-between px-3 py-1.5 bg-surface-raised gap-2"
+        aria-label="Editor toolbar"
+      >
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant={explorerOpen ? 'default' : 'secondary'}
+            size="sm"
             onClick={() => setExplorerOpen((v) => !v)}
             title="Toggle namespace explorer"
           >
             Explorer
-          </button>
-          <button className="studio-toolbar-button" onClick={handleFitView} title="Fit to view">
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
             Fit View
-          </button>
-          <button
-            className="studio-toolbar-button"
-            onClick={handleRelayout}
-            title="Re-run auto layout"
-          >
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleRelayout} title="Re-run auto layout">
             Re-layout
-          </button>
-          <button
-            className={`studio-toolbar-button ${showSource ? 'studio-toolbar-button--active' : ''}`}
+          </Button>
+          <Button
+            variant={showSource ? 'default' : 'secondary'}
+            size="sm"
             onClick={() => setShowSource(!showSource)}
             title="Toggle source view"
           >
             Source
-          </button>
-          <button
-            className={`studio-toolbar-button ${showDiagnostics ? 'studio-toolbar-button--active' : ''}`}
+          </Button>
+          <Button
+            variant={showDiagnostics ? 'default' : 'secondary'}
+            size="sm"
             onClick={() => setShowDiagnostics(!showDiagnostics)}
             title="Toggle diagnostics panel"
           >
             Problems{totalErrors + totalWarnings > 0 ? ` (${totalErrors + totalWarnings})` : ''}
-          </button>
+          </Button>
         </div>
-        <div className="studio-editor-page__toolbar-right">
+        <div className="flex items-center gap-1.5">
           <ExportMenu
             getSerializedFiles={getSerializedFiles}
             getGraphElement={getGraphElement}
             hasModels={models.length > 0}
           />
         </div>
-      </div>
+      </nav>
+      <Separator />
 
-      {/* Main content */}
-      <div className="studio-editor-page__content">
-        {/* Namespace Explorer */}
+      {/* Main content — explorer sidebar + resizable graph/source */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Namespace Explorer — fixed sidebar */}
         {explorerOpen && (
-          <div className="studio-editor-page__explorer">
-            <NamespaceExplorerPanel
-              nodes={allGraphNodes}
-              expandedNamespaces={expandedNamespaces}
-              hiddenNodeIds={hiddenNodeIds}
-              onToggleNamespace={handleToggleNamespace}
-              onToggleNode={handleToggleNode}
-              onExpandAll={handleExpandAll}
-              onCollapseAll={handleCollapseAll}
-              onSelectNode={handleExplorerSelectNode}
-            />
-          </div>
+          <aside
+            className="w-[280px] min-w-[200px] max-w-[400px] h-full overflow-hidden flex flex-col bg-surface-raised border-r border-border-default"
+            aria-label="Namespace explorer"
+          >
+            <ScrollArea className="flex-1">
+              <NamespaceExplorerPanel
+                nodes={allGraphNodes}
+                expandedNamespaces={expandedNamespaces}
+                hiddenNodeIds={hiddenNodeIds}
+                onToggleNamespace={handleToggleNamespace}
+                onToggleNode={handleToggleNode}
+                onExpandAll={handleExpandAll}
+                onCollapseAll={handleCollapseAll}
+                onSelectNode={handleExplorerSelectNode}
+              />
+            </ScrollArea>
+          </aside>
         )}
 
-        {/* Graph area */}
-        <div
-          className={`studio-editor-page__graph ${showSource ? 'studio-editor-page__graph--with-source' : ''}`}
-          ref={graphContainerRef}
-        >
-          <RuneTypeGraph
-            ref={graphRef}
-            models={models as unknown[]}
-            config={{
-              layout: { direction: 'TB' },
-              showControls: true,
-              showMinimap: true,
-              readOnly: false
-            }}
-            callbacks={{
-              onNodeSelect: handleNodeSelect,
-              onNodeDoubleClick: handleNodeDoubleClick,
-              onModelChanged: handleModelChanged
-            }}
-            visibilityState={visibilityState}
-          />
-        </div>
+        {/* Graph + Source — resizable split */}
+        <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0">
+          <ResizablePanel id="graph" defaultSize={showSource ? 65 : 100}>
+            <div className="relative h-full" ref={graphContainerRef}>
+              <RuneTypeGraph
+                ref={graphRef}
+                models={models as unknown[]}
+                config={{
+                  layout: { direction: 'TB' },
+                  showControls: true,
+                  showMinimap: true,
+                  readOnly: false
+                }}
+                callbacks={{
+                  onNodeSelect: handleNodeSelect,
+                  onNodeDoubleClick: handleNodeDoubleClick,
+                  onModelChanged: handleModelChanged
+                }}
+                visibilityState={visibilityState}
+              />
+            </div>
+          </ResizablePanel>
 
-        {/* Source panel (toggleable) */}
-        {showSource && (
-          <div className="studio-editor-page__source">
-            <SourceEditor
-              files={files}
-              activeFile={activeEditorFile}
-              lspClient={lspClient}
-              onFileSelect={(path) => setActiveEditorFile(path)}
-              onContentChange={handleSourceChange}
-            />
-          </div>
-        )}
+          {/* Source panel (toggleable) — keep studio-editor-page__source class for CodeMirror scoping */}
+          {showSource && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel id="source" defaultSize={35} minSize={20} maxSize={50}>
+                <aside
+                  className="studio-editor-page__source h-full overflow-auto"
+                  aria-label="Source editor"
+                >
+                  <SourceEditor
+                    files={files}
+                    activeFile={activeEditorFile}
+                    lspClient={lspClient}
+                    onFileSelect={(path) => setActiveEditorFile(path)}
+                    onContentChange={handleSourceChange}
+                  />
+                </aside>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
       </div>
 
       {/* Diagnostics panel (toggleable) */}
       {showDiagnostics && (
-        <div className="studio-editor-page__diagnostics">
-          <DiagnosticsPanel
-            fileDiagnostics={fileDiagnostics}
-            onNavigate={(uri, line, _char) => {
-              // Normalise URI to a path for comparison (strip file:// prefix)
-              const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
-              const fileName = normPath.split('/').pop() ?? normPath;
-              const file = files.find(
-                (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
-              );
-              if (file) {
-                setActiveEditorFile(file.path ?? file.name);
-                if (!showSource) setShowSource(true);
-              }
-            }}
-          />
-        </div>
+        <DiagnosticsPanel
+          fileDiagnostics={fileDiagnostics}
+          onNavigate={(uri, _line, _char) => {
+            // Normalise URI to a path for comparison (strip file:// prefix)
+            const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
+            const fileName = normPath.split('/').pop() ?? normPath;
+            const file = files.find(
+              (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
+            );
+            if (file) {
+              setActiveEditorFile(file.path ?? file.name);
+              if (!showSource) setShowSource(true);
+            }
+          }}
+        />
       )}
 
       {/* Status bar */}
-      <div className="studio-editor-page__status">
+      <Separator />
+      <footer className="flex items-center gap-4 px-3 py-1 text-sm text-text-muted bg-surface-raised">
         <span>{models.length} model(s) loaded</span>
         <span>{files.filter((f) => f.dirty).length} modified</span>
         {selectedNode && <span>Selected: {selectedNode}</span>}
         {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
-      </div>
+      </footer>
     </div>
   );
 }
