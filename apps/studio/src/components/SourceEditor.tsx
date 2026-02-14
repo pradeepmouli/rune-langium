@@ -47,6 +47,24 @@ export interface SourceEditorProps {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a stable, unique ID for a tab from a file path.
+ * Uses base64 encoding to avoid collisions from special character sanitization.
+ */
+function getTabId(path: string): string {
+  // Use base64 encoding to ensure uniqueness while keeping IDs valid HTML identifiers
+  const encoded = btoa(path).replace(/[+/=]/g, (char) => {
+    if (char === '+') return '-';
+    if (char === '/') return '_';
+    return ''; // Remove padding '='
+  });
+  return `tab-${encoded}`;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -198,7 +216,7 @@ export function SourceEditor({
         {files.map((file) => (
           <button
             key={file.path}
-            id={`tab-${file.path.replace(/[^a-zA-Z0-9]/g, '-')}`}
+            id={getTabId(file.path)}
             role="tab"
             aria-selected={file.path === selectedPath}
             aria-controls="editor-tabpanel"
@@ -223,7 +241,7 @@ export function SourceEditor({
         id="editor-tabpanel"
         className="flex-1 overflow-hidden"
         role="tabpanel"
-        aria-labelledby={selectedPath ? `tab-${selectedPath.replace(/[^a-zA-Z0-9]/g, '-')}` : undefined}
+        aria-labelledby={selectedPath ? getTabId(selectedPath) : undefined}
         data-testid="source-editor-container"
         ref={editorContainerRef}
       />
