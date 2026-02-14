@@ -55,19 +55,24 @@ export interface SourceEditorProps {
  * Uses hex encoding to handle special characters and ensure uniqueness.
  */
 function getTabId(path: string): string {
-  // Convert each character to hex for a stable, unique, HTML-safe ID
-  const encoded = Array.from(path)
-    .map((char) => {
-      const code = char.charCodeAt(0);
-      // Keep alphanumeric chars as-is, encode others as hex
-      if ((code >= 48 && code <= 57) || // 0-9
-          (code >= 65 && code <= 90) || // A-Z
-          (code >= 97 && code <= 122)) { // a-z
-        return char;
-      }
-      return code.toString(16).padStart(2, '0');
-    })
-    .join('');
+  // Convert each Unicode code point to hex for a stable, unique, HTML-safe ID
+  let encoded = '';
+  for (const char of path) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) {
+      continue;
+    }
+    // Keep ASCII alphanumeric chars as-is, encode others as hex
+    if (
+      (codePoint >= 48 && codePoint <= 57) || // 0-9
+      (codePoint >= 65 && codePoint <= 90) || // A-Z
+      (codePoint >= 97 && codePoint <= 122)   // a-z
+    ) {
+      encoded += char;
+    } else {
+      encoded += codePoint.toString(16).padStart(2, '0');
+    }
+  }
   return `tab-${encoded}`;
 }
 
