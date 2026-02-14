@@ -198,8 +198,11 @@ export function SourceEditor({
         {files.map((file) => (
           <button
             key={file.path}
+            id={`tab-${file.path.replace(/[^a-zA-Z0-9]/g, '-')}`}
             role="tab"
             aria-selected={file.path === selectedPath}
+            aria-controls="editor-tabpanel"
+            tabIndex={file.path === selectedPath ? 0 : -1}
             className={cn(
               'px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors',
               'hover:text-text-primary',
@@ -217,8 +220,10 @@ export function SourceEditor({
 
       {/* Editor container */}
       <div
+        id="editor-tabpanel"
         className="flex-1 overflow-hidden"
         role="tabpanel"
+        aria-labelledby={selectedPath ? `tab-${selectedPath.replace(/[^a-zA-Z0-9]/g, '-')}` : undefined}
         data-testid="source-editor-container"
         ref={editorContainerRef}
       />

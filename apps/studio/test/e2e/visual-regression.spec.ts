@@ -150,6 +150,11 @@ async function captureDomSnapshot(
 const SNAPSHOT_DIR = path.join(__dirname, '__snapshots__');
 const SCREENSHOT_DIR = path.join(__dirname, '__screenshots__');
 
+/** Check if we're in update mode (via --update-snapshots flag) */
+function isUpdateMode(): boolean {
+  return process.argv.includes('--update-snapshots') || process.argv.includes('-u');
+}
+
 /** Save a DOM snapshot to disk */
 function saveSnapshot(snapshot: DomSnapshot): void {
   if (!fs.existsSync(SNAPSHOT_DIR)) {
@@ -268,9 +273,15 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('01-file-loader');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 01-file-loader');
-      return;
+      if (isUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 01-file-loader');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 01-file-loader. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     // Compare each element's styles
@@ -300,9 +311,15 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('02-editor-page');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 02-editor-page');
-      return;
+      if (isUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 02-editor-page');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 02-editor-page. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     for (let i = 0; i < snapshot.elements.length; i++) {
@@ -342,9 +359,15 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('03-namespace-explorer');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 03-namespace-explorer');
-      return;
+      if (isUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 03-namespace-explorer');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 03-namespace-explorer. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     for (let i = 0; i < snapshot.elements.length; i++) {
@@ -377,9 +400,15 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('04-source-editor');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 04-source-editor');
-      return;
+      if (isUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 04-source-editor');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 04-source-editor. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     for (let i = 0; i < snapshot.elements.length; i++) {
@@ -412,9 +441,15 @@ test.describe('Visual Regression', () => {
     const baseline = loadSnapshot('05-diagnostics-panel');
 
     if (!baseline) {
-      saveSnapshot(snapshot);
-      console.log('  Baseline saved: 05-diagnostics-panel');
-      return;
+      if (isUpdateMode()) {
+        saveSnapshot(snapshot);
+        console.log('  Baseline saved: 05-diagnostics-panel');
+        return;
+      } else {
+        throw new Error(
+          'Missing baseline snapshot for 05-diagnostics-panel. Run with --update-snapshots to create it.'
+        );
+      }
     }
 
     for (let i = 0; i < snapshot.elements.length; i++) {
