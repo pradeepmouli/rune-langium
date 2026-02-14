@@ -60,7 +60,9 @@ function getTabId(path: string): string {
     .map((char) => {
       const code = char.charCodeAt(0);
       // Keep alphanumeric chars as-is, encode others as hex
-      if (/[a-zA-Z0-9]/.test(char)) {
+      if ((code >= 48 && code <= 57) || // 0-9
+          (code >= 65 && code <= 90) || // A-Z
+          (code >= 97 && code <= 122)) { // a-z
         return char;
       }
       return code.toString(16).padStart(2, '0');
