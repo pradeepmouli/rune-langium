@@ -16,6 +16,7 @@ These forms are surfaced in the studio as a right-side panel that opens when a u
 ### Session 2026-02-15
 
 - Q: Where should the editor form panel appear in the studio layout? → A: Right-side panel that opens when a node is selected (collapsible, resizable like existing panes). The existing `DetailPanel` component (currently not wired into the studio) serves as the starting point to be evolved into the editable form.
+- Q: When should editor form changes commit to the model? → A: Auto-save with debounce — changes apply automatically after a short idle pause (consistent with the existing 500ms debounced re-parse in the source editor). No explicit "Save" button required; undo/redo via Zundo serves as the safety net.
 
 ---
 
@@ -125,7 +126,7 @@ As a **modeler switching between visual and source editing**, I want changes mad
 
 1. **Given** a change is made in an editor form, **When** the change is committed, **Then** the corresponding `.rosetta` source updates within 1 second and the source editor reflects the change
 2. **Given** a change is made in the source editor to an element currently displayed in an editor form, **When** the source is re-parsed, **Then** the editor form updates to reflect the source change
-3. **Given** the source editor has unsaved changes that conflict with a form edit, **When** the user attempts to edit via the form, **Then** the system warns the user about the conflict and allows them to choose which version to keep
+3. **Given** the source editor has pending changes that conflict with a debounced form edit, **When** both edits target the same element, **Then** the most recent edit wins and the earlier pending change is discarded, with undo available to recover
 
 ---
 
@@ -160,6 +161,7 @@ As a **modeler switching between visual and source editing**, I want changes mad
 - **FR-013**: The expression editor for functions MUST support arithmetic, comparison, feature access, conditional, and logical operations
 - **FR-014**: Attribute type selectors MUST include both built-in types (`string`, `date`, `int`, `number`, `boolean`, `time`, `date-time`) and user-defined types from the workspace
 - **FR-015**: The editor forms MUST be keyboard-accessible — Enter to submit inline edits, Escape to cancel, Tab to navigate between fields
+- **FR-016**: Editor form changes MUST auto-save with debounce — changes apply to the model automatically after a short idle pause, with no explicit "Save" button required
 
 ### Constitution Alignment
 
