@@ -17,6 +17,7 @@ These forms are surfaced in the studio as a right-side panel that opens when a u
 
 - Q: Where should the editor form panel appear in the studio layout? → A: Right-side panel that opens when a node is selected (collapsible, resizable like existing panes). The existing `DetailPanel` component (currently not wired into the studio) serves as the starting point to be evolved into the editable form.
 - Q: When should editor form changes commit to the model? → A: Auto-save with debounce — changes apply automatically after a short idle pause (consistent with the existing 500ms debounced re-parse in the source editor). No explicit "Save" button required; undo/redo via Zundo serves as the safety net.
+- Q: When a user renames a type, how should references be handled? → A: Automatically cascade — all references to the renamed type (in attributes, choice options, inheritance) update throughout the model, similar to IDE "Rename Symbol" refactoring.
 
 ---
 
@@ -132,7 +133,7 @@ As a **modeler switching between visual and source editing**, I want changes mad
 
 ### Edge Cases
 
-- What happens when the user renames a type that is referenced by other types' attributes or choice options? The system must update or warn about broken references.
+- What happens when the user renames a type that is referenced by other types' attributes or choice options? The system automatically cascades the rename to all references throughout the model (attributes, choice options, inheritance).
 - What happens when the user attempts to set a parent type that would create a circular inheritance chain? The system must prevent this with a clear error message (existing validation already handles this).
 - What happens when the user enters a duplicate type name within the same namespace? The system must prevent this with a clear error message (existing validation already handles this).
 - What happens when the user removes all attributes from a type or all values from an enum? The system should allow it, as empty types and enums are valid in Rune DSL.
@@ -162,6 +163,7 @@ As a **modeler switching between visual and source editing**, I want changes mad
 - **FR-014**: Attribute type selectors MUST include both built-in types (`string`, `date`, `int`, `number`, `boolean`, `time`, `date-time`) and user-defined types from the workspace
 - **FR-015**: The editor forms MUST be keyboard-accessible — Enter to submit inline edits, Escape to cancel, Tab to navigate between fields
 - **FR-016**: Editor form changes MUST auto-save with debounce — changes apply to the model automatically after a short idle pause, with no explicit "Save" button required
+- **FR-017**: When a type or enum is renamed via the editor form, the system MUST automatically cascade the rename to all references throughout the model (attribute types, choice options, inheritance relationships)
 
 ### Constitution Alignment
 
