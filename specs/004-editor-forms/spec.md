@@ -9,7 +9,13 @@
 
 Structured editor forms that allow users to edit Rune DSL elements (types, enumerations, choices, and functions) through dedicated form-based interfaces instead of raw source code. Each element kind gets a purpose-built editor panel with fields, controls, and sub-editors appropriate to that kind. The forms provide the same editing capabilities as the source code editor but through a guided, structured UI that reduces syntax errors and makes the model more accessible to non-technical users.
 
-These forms are surfaced in the studio when a user selects a node in the visual graph or navigates to an element through the namespace explorer. They replace or augment the existing read-only detail panel with fully interactive editing controls.
+These forms are surfaced in the studio as a right-side panel that opens when a user selects a node in the visual graph or navigates to an element through the namespace explorer. The panel is collapsible and resizable, consistent with the existing pane layout. It evolves the unused `DetailPanel` component into a fully interactive editing surface.
+
+## Clarifications
+
+### Session 2026-02-15
+
+- Q: Where should the editor form panel appear in the studio layout? → A: Right-side panel that opens when a node is selected (collapsible, resizable like existing panes). The existing `DetailPanel` component (currently not wired into the studio) serves as the starting point to be evolved into the editable form.
 
 ---
 
@@ -189,5 +195,5 @@ As a **modeler switching between visual and source editing**, I want changes mad
 - The existing `graph-to-ast` adapter and serializer can produce valid `.rosetta` source from synthetic AST models, and this infrastructure will be extended rather than replaced.
 - The existing Zustand editor store's editing actions (`renameType`, `addAttribute`, `removeAttribute`, `updateCardinality`, `setInheritance`) will serve as the mutation layer for form edits, with new actions added as needed.
 - Function expression editing is scoped to simple expressions (arithmetic, comparison, feature access, conditionals). Complex multi-step operations, loops, or nested function calls are out of scope for this feature.
-- The editor forms will be displayed in a panel within the existing studio layout (replacing or extending the current DetailPanel), not as modal dialogs.
+- The editor forms will be displayed in a collapsible, resizable right-side panel within the existing studio layout, evolving the currently unwired `DetailPanel` component. They are not modal dialogs.
 - Undo/redo is already implemented via Zundo in the editor store and will automatically cover form-based edits that go through the store's mutation actions.
