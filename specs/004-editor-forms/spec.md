@@ -49,7 +49,7 @@ As a **modeler defining enumerations for a financial data model**, I want to sel
 
 **Why this priority**: Enumerations are heavily used in financial models (currency codes, day count conventions, etc.) and have a straightforward editing surface that delivers high value with moderate complexity.
 
-**Independent Test**: Load a `.rosetta` file containing a `enum CurrencyEnum` with values. Select the enum node. Verify the form allows adding, removing, and reordering enum values, and setting display names for each value.
+**Independent Test**: Load a `.rosetta` file containing a `enum CurrencyEnum` with values. Select the enum node. Verify the form allows adding, removing, reordering, and editing enum values, and setting display names for each value.
 
 **Acceptance Scenarios**:
 
@@ -138,7 +138,7 @@ As a **modeler switching between visual and source editing**, I want changes mad
 - What happens when the user enters a duplicate type name within the same namespace? The system must prevent this with a clear error message (existing validation already handles this).
 - What happens when the user removes all attributes from a type or all values from an enum? The system should allow it, as empty types and enums are valid in Rune DSL.
 - What happens when the user edits a type that was loaded from a read-only or external source? The system should indicate that the element is read-only and disable editing controls.
-- What happens when the form is open and another user or process changes the underlying model? The form should detect the change and refresh, preserving any unsaved edits with a notification.
+- What happens when the form is open and another user or process changes the underlying model? The form should detect the change and refresh. The most recent edit wins; the earlier pending change is discarded, with undo available to recover.
 - What happens when the user enters an invalid expression in the function expression editor? The system should show inline validation errors and prevent saving until the expression is valid.
 
 ---
@@ -160,7 +160,7 @@ As a **modeler switching between visual and source editing**, I want changes mad
 - **FR-011**: The system MUST support undo/redo for all form-based edits
 - **FR-012**: The system MUST prevent editing of read-only or externally-sourced elements and visually indicate their read-only status
 - **FR-013**: The expression editor for functions MUST support arithmetic, comparison, feature access, conditional, and logical operations
-- **FR-014**: Attribute type selectors MUST include both built-in types (`string`, `date`, `int`, `number`, `boolean`, `time`, `date-time`) and user-defined types from the workspace
+- **FR-014**: Attribute type selectors MUST include both built-in types (`string`, `date`, `int`, `number`, `boolean`, `time`, `dateTime`, `zonedDateTime`) and user-defined types from the workspace
 - **FR-015**: The editor forms MUST be keyboard-accessible — Enter to submit inline edits, Escape to cancel, Tab to navigate between fields
 - **FR-016**: Editor form changes MUST auto-save with debounce — changes apply to the model automatically after a short idle pause, with no explicit "Save" button required
 - **FR-017**: When a type or enum is renamed via the editor form, the system MUST automatically cascade the rename to all references throughout the model (attribute types, choice options, inheritance relationships)
@@ -178,7 +178,7 @@ As a **modeler switching between visual and source editing**, I want changes mad
 - **Editor Form**: A structured panel displaying editable fields for a selected DSL element. One form variant per element kind (Data, Enumeration, Choice, Function).
 - **Metadata Section**: A shared sub-component within all editor forms providing fields for description, synonyms (as annotations), and comments.
 - **Type Selector**: A searchable dropdown component that lists available types (built-in and user-defined) from the current workspace, used for parent type selection and attribute type assignment.
-- **Expression Editor**: A specialized sub-editor within the Function editor form that provides syntax-aware editing for Rune expressions with validation and autocompletion.
+- **Expression Editor**: A specialized sub-editor within the Function editor form that provides syntax-aware editing for Rune expressions with validation and autocompletion for type names, feature paths, and built-in functions.
 - **Attribute Row**: A single row in the Data type editor representing one attribute, with inline controls for name, type, cardinality, and removal.
 - **Enum Value Row**: A single row in the Enumeration editor representing one enum value, with inline controls for name, display name, and removal.
 
@@ -190,7 +190,7 @@ As a **modeler switching between visual and source editing**, I want changes mad
 - **SC-002**: Users can add 5 enum values to an enumeration through the editor form in under 60 seconds
 - **SC-003**: 100% of edits made through editor forms produce valid `.rosetta` source when serialized (no syntax errors introduced by form editing)
 - **SC-004**: All form-based edits appear in the visual graph and source editor within 1 second of the edit being committed
-- **SC-005**: Users can discover and use the editor forms without external documentation — the forms are self-explanatory through labels, placeholders, and contextual hints
+- **SC-005**: Users can discover and use the editor forms without external documentation — the forms are self-explanatory through labels, placeholder text in empty fields, and tooltips on icon-only buttons
 - **SC-006**: All editor form interactions are accessible via keyboard (Tab navigation, Enter to submit, Escape to cancel)
 - **SC-007**: Editor forms handle models with 400+ types without perceptible lag when opening or switching between elements
 
