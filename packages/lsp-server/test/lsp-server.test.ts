@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PassThrough } from 'node:stream';
-import { StdioTransport } from '@lspeasy/core';
+import { StdioTransport } from '@lspeasy/core/node';
 import { LSPClient } from '@lspeasy/client';
 import { createRuneLspServer } from '../src/rune-dsl-server.js';
 import type { RuneLspServer } from '../src/rune-dsl-server.js';
