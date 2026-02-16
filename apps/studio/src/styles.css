@@ -837,55 +837,55 @@
 /* ---------- Editor Form Panel — Dark Theme (T038) ---------- */
 
 /* Form inputs — dark background with visible borders */
-[data-slot="enum-form"] input,
-[data-slot="function-form"] input,
-[data-slot="data-type-form"] input {
+[data-slot='enum-form'] input,
+[data-slot='function-form'] input,
+[data-slot='data-type-form'] input {
   background-color: var(--color-surface-default, #1e293b);
   color: var(--color-text-default, #e2e8f0);
   border-color: var(--color-border-default, #334155);
 }
 
 /* Focus rings on form inputs */
-[data-slot="enum-form"] input:focus,
-[data-slot="function-form"] input:focus,
-[data-slot="data-type-form"] input:focus,
-[data-slot="expression-editor"]:focus {
+[data-slot='enum-form'] input:focus,
+[data-slot='function-form'] input:focus,
+[data-slot='data-type-form'] input:focus,
+[data-slot='expression-editor']:focus {
   border-color: var(--color-primary, #3b82f6);
   box-shadow: 0 0 0 1px var(--color-primary, #3b82f6);
 }
 
 /* Expression textarea */
-[data-slot="expression-editor"] {
+[data-slot='expression-editor'] {
   background-color: var(--color-surface-default, #1e293b);
   color: var(--color-text-default, #e2e8f0);
 }
 
 /* Section borders (between form sections) */
-[data-slot="enum-form"] section,
-[data-slot="function-form"] section,
-[data-slot="choice-form"] section,
-[data-slot="data-type-form"] section {
+[data-slot='enum-form'] section,
+[data-slot='function-form'] section,
+[data-slot='choice-form'] section,
+[data-slot='data-type-form'] section {
   border-color: var(--color-border-default, #334155);
 }
 
 /* Panel header sticky overlay */
-[data-slot="panel-header"] {
+[data-slot='panel-header'] {
   background-color: var(--color-surface-overlay, #1e293b);
   border-color: var(--color-border-default, #334155);
 }
 
 /* Disabled form controls */
-[data-slot="enum-form"] input:disabled,
-[data-slot="function-form"] input:disabled,
-[data-slot="data-type-form"] input:disabled,
-[data-slot="expression-editor"]:disabled {
+[data-slot='enum-form'] input:disabled,
+[data-slot='function-form'] input:disabled,
+[data-slot='data-type-form'] input:disabled,
+[data-slot='expression-editor']:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   background-color: var(--color-surface-inset, #0f172a);
 }
 
 /* Kind badges — consistent across themes */
-[data-slot="kind-badge"] {
+[data-slot='kind-badge'] {
   font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.02em;
