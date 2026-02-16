@@ -53,8 +53,8 @@
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
-    "@lspeasy/client": "^1.0.1",
-    "@lspeasy/core": "^1.0.1",
+    "@lspeasy/client": "^1.1.0",
+    "@lspeasy/core": "^1.1.0",
     "camelcase": "^9.0.0"
   }
 }

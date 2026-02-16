@@ -29,15 +29,15 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
-    "@lspeasy/core": "^1.0.1",
-    "@lspeasy/server": "^1.0.1",
+    "@lspeasy/core": "^1.1.0",
+    "@lspeasy/server": "^1.1.0",
     "@rune-langium/core": "workspace:*",
     "langium": "^4.2.1",
     "vscode-languageserver": "~9.0.1",
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@lspeasy/client": "^1.0.1",
+    "@lspeasy/client": "^1.1.0",
     "@types/ws": "^8.18.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
