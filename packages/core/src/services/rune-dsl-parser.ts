@@ -468,7 +468,6 @@ function findExpressionEnd(text: string, start: number): number {
             // The line after the comment continues the expression
             i = past - 1; // -1 because the main loop will i++ or handle this position
             preCommentEnd = -1;
-            i = nlEnd;
             continue;
           }
           return exprEnd();

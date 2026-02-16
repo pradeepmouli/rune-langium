@@ -1,5 +1,5 @@
 import { createRuneDslServices } from '../packages/core/dist/index.js';
-import { URI } from '../packages/core/node_modules/langium/lib/index.js';
+import { URI } from 'langium';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,7 +15,7 @@ for (const f of files) {
   const text = fs.readFileSync(path.join(cdmDir, f), 'utf-8');
   const doc = services.shared.workspace.LangiumDocumentFactory.fromString(
     text,
-    URI.file(`/tmp/${f}`)
+    URI.file(path.join(cdmDir, f))
   );
   services.shared.workspace.LangiumDocuments.addDocument(doc);
 }
