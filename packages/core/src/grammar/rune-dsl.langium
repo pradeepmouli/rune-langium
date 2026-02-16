@@ -396,8 +396,59 @@ PrimaryExpression infers RosettaExpression:
     | RosettaLiteralRule
     | EmptyLiteral
     | ListLiteralRule
-    | '(' Expression ')'
+    | '(' Expression
+        (
+            ')' // regular parenthesized expression
+            | {infer RosettaOnlyExistsExpression.args+=current}
+              (',' args+=Expression)+ ')' 'only' 'exists'
+              // multi-arg only-exists: (a, b, c) only exists
+        )
     | QualifiedNamePrimary
+    // "Without argument" unary operations — these appear at the start of
+    // an expression (e.g., inside ImplicitInlineFunction bodies after 'then').
+    // The argument is null; a post-parse derived state service fills in 'item'.
+    | {infer RosettaExistsExpression} modifier=ExistsModifier? operator='exists'
+    | {infer RosettaAbsentExpression} 'is' operator='absent'
+    | {infer RosettaOnlyElement} operator='only-element'
+    | {infer RosettaCountOperation} operator='count'
+    | {infer FlattenOperation} operator='flatten'
+    | {infer DistinctOperation} operator='distinct'
+    | {infer ReverseOperation} operator='reverse'
+    | {infer FirstOperation} operator='first'
+    | {infer LastOperation} operator='last'
+    | {infer SumOperation} operator='sum'
+    | {infer OneOfOperation} operator='one-of'
+    | {infer ToStringOperation} operator='to-string'
+    | {infer ToNumberOperation} operator='to-number'
+    | {infer ToIntOperation} operator='to-int'
+    | {infer ToTimeOperation} operator='to-time'
+    | {infer ToEnumOperation} operator='to-enum' enumeration=[RosettaEnumeration:QualifiedName]
+    | {infer ToDateOperation} operator='to-date'
+    | {infer ToDateTimeOperation} operator='to-date-time'
+    | {infer ToZonedDateTimeOperation} operator='to-zoned-date-time'
+    // "Without argument" functional operations:
+    | {infer SortOperation} operator='sort' function=InlineFunction?
+    | {infer MinOperation} operator='min' function=InlineFunction?
+    | {infer MaxOperation} operator='max' function=InlineFunction?
+    | {infer ReduceOperation} operator='reduce' function=InlineFunction?
+    | {infer FilterOperation} operator='filter' function=InlineFunction?
+    | {infer MapOperation} operator='extract' function=InlineFunction?
+    // "Without left" binary operations (e.g., 'then default False'):
+    | {infer RosettaContainsExpression} operator='contains' right=UnaryOperation
+    | {infer RosettaDisjointExpression} operator='disjoint' right=UnaryOperation
+    | {infer DefaultOperation} operator='default' right=UnaryOperation
+    | {infer JoinOperation} operator='join' right=UnaryOperation?
+    // "Without left" equality/comparison (e.g., 'then all = True'):
+    | {infer EqualityOperation} (cardMod=CardinalityModifier)? operator=('=' | '<>') right=AdditiveOperation
+    | {infer ComparisonOperation} (cardMod=CardinalityModifier)? operator=('>=' | '<=' | '>' | '<') right=AdditiveOperation
+    // Standalone choice operation (no left argument):
+    // e.g., `optional choice dateAdjustments, dateAdjustmentsReference`
+    | {infer ChoiceOperation} necessity=Necessity operator='choice'
+        attributes+=[Attribute:ValidID] (',' attributes+=[Attribute:ValidID])*
+    // Standalone switch operation (no left argument):
+    // e.g., `(switch Type1 then expr, default empty)`
+    | {infer SwitchOperation} operator='switch'
+        cases+=SwitchCaseOrDefault (',' cases+=SwitchCaseOrDefault)*
 ;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -467,6 +518,8 @@ InlineFunction:
     (parameters+=ClosureParameter (',' parameters+=ClosureParameter)*)? '[' body=Expression ']'
 ;
 
+// Bare-or-bracket function body for extract/filter/reduce.
+// Bracket form: `[body]` or `param [body]`  — same as InlineFunction.
 ImplicitInlineFunction infers InlineFunction:
     body=OrOperation
 ;
@@ -537,13 +590,13 @@ RosettaSynonym:
 
 RosettaSynonymBody:
     (
-        'value' (values+=RosettaSynonymValue ',')* values+=RosettaSynonymValue
+        'value' values+=RosettaSynonymValue (',' values+=RosettaSynonymValue)*
             (mappingLogic=RosettaMapping)?
-            ('meta' (metaValues+=STRING ',')* metaValues+=STRING)?
-        | 'hint' (hints+=STRING ',')* hints+=STRING
+            ('meta' metaValues+=STRING (',' metaValues+=STRING)*)?
+        | 'hint' hints+=STRING (',' hints+=STRING)*
         | 'merge' merge=RosettaMergeSynonymValue
         | mappingLogic=RosettaMappingSetTo
-        | 'meta' (metaValues+=STRING ',')* metaValues+=STRING
+        | 'meta' metaValues+=STRING (',' metaValues+=STRING)*
     )
     ('dateFormat' format=STRING)?
     ('pattern' patternMatch=STRING patternReplace=STRING)?
@@ -664,7 +717,7 @@ DocumentRationale:
 ;
 
 RegulatoryDocumentReference:
-    body=[RosettaBody:QualifiedName] corpusList+=[RosettaCorpus:QualifiedName]+
+    body=[RosettaBody:QualifiedName] corpusList+=[RosettaCorpus:QualifiedName]
     segments+=RosettaSegmentRef*
 ;
 
@@ -677,8 +730,10 @@ RosettaBody:
 ;
 
 RosettaCorpus:
-    'corpus' corpusType=ID (body=[RosettaBody:QualifiedName])?
-    (displayName=STRING)? RosettaNamed RosettaDefinable?
+    'corpus' corpusType=ID
+    (displayName=STRING)?
+    (body=[RosettaBody:QualifiedName] name=ValidID | name=ValidID)
+    RosettaDefinable?
 ;
 
 RosettaSegment:

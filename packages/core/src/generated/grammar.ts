@@ -4684,8 +4684,61 @@ export const RuneDslGrammar = (): Grammar =>
                 "arguments": []
               },
               {
-                "$type": "Keyword",
-                "value": ")"
+                "$type": "Alternatives",
+                "elements": [
+                  {
+                    "$type": "Keyword",
+                    "value": ")"
+                  },
+                  {
+                    "$type": "Group",
+                    "elements": [
+                      {
+                        "$type": "Action",
+                        "inferredType": {
+                          "$type": "InferredType",
+                          "name": "RosettaOnlyExistsExpression"
+                        },
+                        "feature": "args",
+                        "operator": "+="
+                      },
+                      {
+                        "$type": "Group",
+                        "elements": [
+                          {
+                            "$type": "Keyword",
+                            "value": ","
+                          },
+                          {
+                            "$type": "Assignment",
+                            "feature": "args",
+                            "operator": "+=",
+                            "terminal": {
+                              "$type": "RuleCall",
+                              "rule": {
+                                "$ref": "#/rules@51"
+                              },
+                              "arguments": []
+                            }
+                          }
+                        ],
+                        "cardinality": "+"
+                      },
+                      {
+                        "$type": "Keyword",
+                        "value": ")"
+                      },
+                      {
+                        "$type": "Keyword",
+                        "value": "only"
+                      },
+                      {
+                        "$type": "Keyword",
+                        "value": "exists"
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           },
@@ -4695,6 +4748,1035 @@ export const RuneDslGrammar = (): Grammar =>
               "$ref": "#/rules@61"
             },
             "arguments": []
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "RosettaExistsExpression"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "modifier",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@63"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "exists"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "RosettaAbsentExpression"
+                }
+              },
+              {
+                "$type": "Keyword",
+                "value": "is"
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "absent"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "RosettaOnlyElement"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "only-element"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "RosettaCountOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "count"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "FlattenOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "flatten"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "DistinctOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "distinct"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ReverseOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "reverse"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "FirstOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "first"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "LastOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "last"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "SumOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "sum"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "OneOfOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "one-of"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ToStringOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "to-string"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ToNumberOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "to-number"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ToIntOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "to-int"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ToTimeOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "to-time"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ToEnumOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "to-enum"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "enumeration",
+                "operator": "=",
+                "terminal": {
+                  "$type": "CrossReference",
+                  "type": {
+                    "$ref": "#/rules@22/inferredType"
+                  },
+                  "terminal": {
+                    "$type": "RuleCall",
+                    "rule": {
+                      "$ref": "#/rules@132"
+                    },
+                    "arguments": []
+                  },
+                  "deprecatedSyntax": false,
+                  "isMulti": false
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ToDateOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "to-date"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ToDateTimeOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "to-date-time"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ToZonedDateTimeOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "to-zoned-date-time"
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "SortOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "sort"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "function",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@69"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "MinOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "min"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "function",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@69"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "MaxOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "max"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "function",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@69"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ReduceOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "reduce"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "function",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@69"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "FilterOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "filter"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "function",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@69"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "MapOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "extract"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "function",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@69"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "RosettaContainsExpression"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "contains"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "right",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@59"
+                  },
+                  "arguments": []
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "RosettaDisjointExpression"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "disjoint"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "right",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@59"
+                  },
+                  "arguments": []
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "DefaultOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "default"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "right",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@59"
+                  },
+                  "arguments": []
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "JoinOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "join"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "right",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@59"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "EqualityOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "cardMod",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@62"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Alternatives",
+                  "elements": [
+                    {
+                      "$type": "Keyword",
+                      "value": "="
+                    },
+                    {
+                      "$type": "Keyword",
+                      "value": "<>"
+                    }
+                  ]
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "right",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@56"
+                  },
+                  "arguments": []
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ComparisonOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "cardMod",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@62"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "?"
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Alternatives",
+                  "elements": [
+                    {
+                      "$type": "Keyword",
+                      "value": ">="
+                    },
+                    {
+                      "$type": "Keyword",
+                      "value": "<="
+                    },
+                    {
+                      "$type": "Keyword",
+                      "value": ">"
+                    },
+                    {
+                      "$type": "Keyword",
+                      "value": "<"
+                    }
+                  ]
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "right",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@56"
+                  },
+                  "arguments": []
+                }
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ChoiceOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "necessity",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@64"
+                  },
+                  "arguments": []
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "choice"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "attributes",
+                "operator": "+=",
+                "terminal": {
+                  "$type": "CrossReference",
+                  "type": {
+                    "$ref": "#/rules@21"
+                  },
+                  "terminal": {
+                    "$type": "RuleCall",
+                    "rule": {
+                      "$ref": "#/rules@135"
+                    },
+                    "arguments": []
+                  },
+                  "deprecatedSyntax": false,
+                  "isMulti": false
+                }
+              },
+              {
+                "$type": "Group",
+                "elements": [
+                  {
+                    "$type": "Keyword",
+                    "value": ","
+                  },
+                  {
+                    "$type": "Assignment",
+                    "feature": "attributes",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "CrossReference",
+                      "type": {
+                        "$ref": "#/rules@21"
+                      },
+                      "terminal": {
+                        "$type": "RuleCall",
+                        "rule": {
+                          "$ref": "#/rules@135"
+                        },
+                        "arguments": []
+                      },
+                      "deprecatedSyntax": false,
+                      "isMulti": false
+                    }
+                  }
+                ],
+                "cardinality": "*"
+              }
+            ]
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "SwitchOperation"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "switch"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "cases",
+                "operator": "+=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@65"
+                  },
+                  "arguments": []
+                }
+              },
+              {
+                "$type": "Group",
+                "elements": [
+                  {
+                    "$type": "Keyword",
+                    "value": ","
+                  },
+                  {
+                    "$type": "Assignment",
+                    "feature": "cases",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@65"
+                      },
+                      "arguments": []
+                    }
+                  }
+                ],
+                "cardinality": "*"
+              }
+            ]
           }
         ]
       },
@@ -6048,8 +7130,24 @@ export const RuneDslGrammar = (): Grammar =>
                     "value": "value"
                   },
                   {
+                    "$type": "Assignment",
+                    "feature": "values",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@85"
+                      },
+                      "arguments": []
+                    }
+                  },
+                  {
                     "$type": "Group",
                     "elements": [
+                      {
+                        "$type": "Keyword",
+                        "value": ","
+                      },
                       {
                         "$type": "Assignment",
                         "feature": "values",
@@ -6061,25 +7159,9 @@ export const RuneDslGrammar = (): Grammar =>
                           },
                           "arguments": []
                         }
-                      },
-                      {
-                        "$type": "Keyword",
-                        "value": ","
                       }
                     ],
                     "cardinality": "*"
-                  },
-                  {
-                    "$type": "Assignment",
-                    "feature": "values",
-                    "operator": "+=",
-                    "terminal": {
-                      "$type": "RuleCall",
-                      "rule": {
-                        "$ref": "#/rules@85"
-                      },
-                      "arguments": []
-                    }
                   },
                   {
                     "$type": "Assignment",
@@ -6102,8 +7184,24 @@ export const RuneDslGrammar = (): Grammar =>
                         "value": "meta"
                       },
                       {
+                        "$type": "Assignment",
+                        "feature": "metaValues",
+                        "operator": "+=",
+                        "terminal": {
+                          "$type": "RuleCall",
+                          "rule": {
+                            "$ref": "#/rules@2"
+                          },
+                          "arguments": []
+                        }
+                      },
+                      {
                         "$type": "Group",
                         "elements": [
+                          {
+                            "$type": "Keyword",
+                            "value": ","
+                          },
                           {
                             "$type": "Assignment",
                             "feature": "metaValues",
@@ -6115,25 +7213,9 @@ export const RuneDslGrammar = (): Grammar =>
                               },
                               "arguments": []
                             }
-                          },
-                          {
-                            "$type": "Keyword",
-                            "value": ","
                           }
                         ],
                         "cardinality": "*"
-                      },
-                      {
-                        "$type": "Assignment",
-                        "feature": "metaValues",
-                        "operator": "+=",
-                        "terminal": {
-                          "$type": "RuleCall",
-                          "rule": {
-                            "$ref": "#/rules@2"
-                          },
-                          "arguments": []
-                        }
                       }
                     ],
                     "cardinality": "?"
@@ -6148,8 +7230,24 @@ export const RuneDslGrammar = (): Grammar =>
                     "value": "hint"
                   },
                   {
+                    "$type": "Assignment",
+                    "feature": "hints",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@2"
+                      },
+                      "arguments": []
+                    }
+                  },
+                  {
                     "$type": "Group",
                     "elements": [
+                      {
+                        "$type": "Keyword",
+                        "value": ","
+                      },
                       {
                         "$type": "Assignment",
                         "feature": "hints",
@@ -6161,25 +7259,9 @@ export const RuneDslGrammar = (): Grammar =>
                           },
                           "arguments": []
                         }
-                      },
-                      {
-                        "$type": "Keyword",
-                        "value": ","
                       }
                     ],
                     "cardinality": "*"
-                  },
-                  {
-                    "$type": "Assignment",
-                    "feature": "hints",
-                    "operator": "+=",
-                    "terminal": {
-                      "$type": "RuleCall",
-                      "rule": {
-                        "$ref": "#/rules@2"
-                      },
-                      "arguments": []
-                    }
                   }
                 ]
               },
@@ -6224,8 +7306,24 @@ export const RuneDslGrammar = (): Grammar =>
                     "value": "meta"
                   },
                   {
+                    "$type": "Assignment",
+                    "feature": "metaValues",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@2"
+                      },
+                      "arguments": []
+                    }
+                  },
+                  {
                     "$type": "Group",
                     "elements": [
+                      {
+                        "$type": "Keyword",
+                        "value": ","
+                      },
                       {
                         "$type": "Assignment",
                         "feature": "metaValues",
@@ -6237,25 +7335,9 @@ export const RuneDslGrammar = (): Grammar =>
                           },
                           "arguments": []
                         }
-                      },
-                      {
-                        "$type": "Keyword",
-                        "value": ","
                       }
                     ],
                     "cardinality": "*"
-                  },
-                  {
-                    "$type": "Assignment",
-                    "feature": "metaValues",
-                    "operator": "+=",
-                    "terminal": {
-                      "$type": "RuleCall",
-                      "rule": {
-                        "$ref": "#/rules@2"
-                      },
-                      "arguments": []
-                    }
                   }
                 ]
               }
@@ -7761,8 +8843,7 @@ export const RuneDslGrammar = (): Grammar =>
               },
               "deprecatedSyntax": false,
               "isMulti": false
-            },
-            "cardinality": "+"
+            }
           },
           {
             "$type": "Assignment",
@@ -7894,27 +8975,6 @@ export const RuneDslGrammar = (): Grammar =>
           },
           {
             "$type": "Assignment",
-            "feature": "body",
-            "operator": "=",
-            "terminal": {
-              "$type": "CrossReference",
-              "type": {
-                "$ref": "#/rules@108"
-              },
-              "terminal": {
-                "$type": "RuleCall",
-                "rule": {
-                  "$ref": "#/rules@132"
-                },
-                "arguments": []
-              },
-              "deprecatedSyntax": false,
-              "isMulti": false
-            },
-            "cardinality": "?"
-          },
-          {
-            "$type": "Assignment",
             "feature": "displayName",
             "operator": "=",
             "terminal": {
@@ -7927,11 +8987,58 @@ export const RuneDslGrammar = (): Grammar =>
             "cardinality": "?"
           },
           {
-            "$type": "RuleCall",
-            "rule": {
-              "$ref": "#/rules@31"
-            },
-            "arguments": []
+            "$type": "Alternatives",
+            "elements": [
+              {
+                "$type": "Group",
+                "elements": [
+                  {
+                    "$type": "Assignment",
+                    "feature": "body",
+                    "operator": "=",
+                    "terminal": {
+                      "$type": "CrossReference",
+                      "type": {
+                        "$ref": "#/rules@108"
+                      },
+                      "terminal": {
+                        "$type": "RuleCall",
+                        "rule": {
+                          "$ref": "#/rules@132"
+                        },
+                        "arguments": []
+                      },
+                      "deprecatedSyntax": false,
+                      "isMulti": false
+                    }
+                  },
+                  {
+                    "$type": "Assignment",
+                    "feature": "name",
+                    "operator": "=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@135"
+                      },
+                      "arguments": []
+                    }
+                  }
+                ]
+              },
+              {
+                "$type": "Assignment",
+                "feature": "name",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@135"
+                  },
+                  "arguments": []
+                }
+              }
+            ]
           },
           {
             "$type": "RuleCall",

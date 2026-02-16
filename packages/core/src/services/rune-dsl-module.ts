@@ -14,6 +14,7 @@ import {
 import { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from '../generated/module.js';
 import { RuneDslScopeProvider } from './rune-dsl-scope-provider.js';
 import { RuneDslValidator } from './rune-dsl-validator.js';
+import { createRuneDslParser } from './rune-dsl-parser.js';
 
 /**
  * Union type for all services available in the Rune DSL language.
@@ -26,6 +27,9 @@ export type RuneDslServices = LangiumCoreServices;
  * Override or register custom services here (validators, scoping, etc.).
  */
 export const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServices> = {
+  parser: {
+    LangiumParser: (services) => createRuneDslParser(services)
+  },
   references: {
     ScopeProvider: (services) => new RuneDslScopeProvider(services)
   }

@@ -1,0 +1,72 @@
+{
+  "name": "@rune-langium/visual-editor",
+  "version": "0.1.0",
+  "description": "ReactFlow-based visual editor component library for Rune DSL type hierarchies",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.test.tsx"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "build": "tsc -b && cp src/styles.css dist/styles.css",
+    "clean": "rm -rf dist",
+    "dev": "tsc -b --watch",
+    "lint": "oxlint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^2.0.4",
+    "@rune-langium/core": "workspace:*",
+    "@xyflow/react": "^12.10.0",
+    "zundo": "^2.3.0",
+    "zustand": "^5.0.11"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^28.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pradeepmouli/rune-langium.git",
+    "directory": "packages/visual-editor"
+  },
+  "keywords": [
+    "rune",
+    "rosetta",
+    "dsl",
+    "visual-editor",
+    "reactflow",
+    "graph",
+    "type-hierarchy"
+  ]
+}

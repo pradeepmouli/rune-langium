@@ -59,7 +59,7 @@ describe('Synonym Parsing (T090)', () => {
       `);
       const model = result.value;
       const data = model.elements[0] as Data;
-      expect(data.attributes[0].name).toBe('bar');
+      expect(data.attributes[0]?.name).toBe('bar');
     });
 
     it('should parse synonyms with path', async () => {

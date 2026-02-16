@@ -2,6 +2,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, extname } from 'node:path';
 import { parse } from '@rune-langium/core';
 import type { ParseResult } from '@rune-langium/core';
+import { URI } from 'langium';
 
 export interface ParseCommandOptions {
   json?: boolean;
@@ -48,7 +49,7 @@ export async function runParse(paths: string[], options: ParseCommandOptions): P
 
   for (const file of files) {
     const content = await readFile(file, 'utf-8');
-    const result: ParseResult = await parse(content, `file:///${file}`);
+    const result: ParseResult = await parse(content, URI.file(file).toString());
     const errors = [
       ...result.lexerErrors.map(
         (e) => `${relative(process.cwd(), file)}:${e.line ?? 0}:${e.column ?? 0}: ${e.message}`

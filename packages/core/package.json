@@ -18,17 +18,17 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsgo -b",
     "clean": "rm -rf dist",
-    "dev": "tsc -b --watch",
+    "dev": "tsgo -b --watch",
     "generate": "langium generate",
     "lint": "oxlint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsgo --noEmit"
   },
   "dependencies": {
-    "langium": "^4.2.0"
+    "langium": "^4.2.1"
   },
   "devDependencies": {
     "langium-cli": "^4.2.0",

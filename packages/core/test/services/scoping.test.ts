@@ -117,7 +117,7 @@ describe('Scoping', () => {
       const model = result.value;
       const enumType = model.elements[0] as RosettaEnumeration;
       expect(enumType.enumValues).toHaveLength(3);
-      expect(enumType.enumValues[0].name).toBe('USD');
+      expect(enumType.enumValues[0]!.name).toBe('USD');
     });
   });
 
@@ -139,8 +139,8 @@ describe('Scoping', () => {
       const person = model.elements[1] as Data;
       expect(person.name).toBe('Person');
       const addressAttr = person.attributes[1];
-      expect(addressAttr.name).toBe('address');
-      expect(addressAttr.typeCall?.type?.$refText).toBe('Address');
+      expect(addressAttr?.name).toBe('address');
+      expect(addressAttr?.typeCall?.type?.$refText).toBe('Address');
     });
 
     it('should resolve extends references', async () => {

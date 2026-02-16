@@ -1,15 +1,14 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "allowJs": false,
     "sourceMap": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
     "noPropertyAccessFromIndexSignature": true,
     "verbatimModuleSyntax": true,
     "noEmit": false,
@@ -26,6 +25,5 @@
     "composite": true,
     "incremental": true
   },
-  "include": ["src"],
   "exclude": ["node_modules", "dist", "build", "coverage"]
 }

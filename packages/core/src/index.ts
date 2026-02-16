@@ -10,9 +10,22 @@ export { createRuneDslServices, RuneDslModule } from './services/rune-dsl-module
 export type { RuneDslServices } from './services/rune-dsl-module.js';
 export { RuneDslScopeProvider } from './services/rune-dsl-scope-provider.js';
 export { RuneDslValidator } from './services/rune-dsl-validator.js';
+export {
+  RuneDslParser,
+  createRuneDslParser,
+  insertImplicitBrackets
+} from './services/rune-dsl-parser.js';
 
-// Generated module essentials
+// Generated module essentials — needed for LSP server integration
 export { RuneDslLanguageMetaData } from './generated/module.js';
+export { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from './generated/module.js';
+
+// Serializer
+export {
+  serializeModel,
+  serializeElement,
+  serializeModels
+} from './serializer/rosetta-serializer.js';
 
 // Utility functions
 export {
