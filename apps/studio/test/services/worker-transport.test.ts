@@ -10,6 +10,8 @@ class MockMessagePort {
   onmessage: ((e: MessageEvent) => void) | null = null;
   started = false;
   sent: unknown[] = [];
+  private messageListeners: ((e: MessageEvent) => void)[] = [];
+  private errorListeners: ((e: Event) => void)[] = [];
 
   start() {
     this.started = true;
@@ -19,8 +21,31 @@ class MockMessagePort {
     this.sent.push(data);
   }
 
-  simulateMessage(data: string) {
-    this.onmessage?.(new MessageEvent('message', { data }));
+  addEventListener(type: string, listener: (e: MessageEvent) => void) {
+    if (type === 'message') {
+      this.messageListeners.push(listener);
+    } else if (type === 'messageerror' || type === 'error') {
+      this.errorListeners.push(listener as unknown as (e: Event) => void);
+    }
+  }
+
+  removeEventListener(type: string, listener: (e: MessageEvent) => void) {
+    if (type === 'message') {
+      const idx = this.messageListeners.indexOf(listener);
+      if (idx >= 0) this.messageListeners.splice(idx, 1);
+    } else if (type === 'messageerror' || type === 'error') {
+      const idx = this.errorListeners.indexOf(listener as unknown as (e: Event) => void);
+      if (idx >= 0) this.errorListeners.splice(idx, 1);
+    }
+  }
+
+  simulateMessage(data: unknown) {
+    const event = new MessageEvent('message', { data });
+    // Call both direct handler and event listeners
+    this.onmessage?.(event);
+    for (const listener of this.messageListeners) {
+      listener(event);
+    }
   }
 }
 
@@ -66,18 +91,33 @@ describe('createWorkerTransport', () => {
 
     transport.send('{"jsonrpc":"2.0","id":1}');
 
-    expect(worker.port.sent).toEqual(['{"jsonrpc":"2.0","id":1}']);
+    // Should send envelope with clientId and message object
+    expect(worker.port.sent).toHaveLength(1);
+    const envelope = worker.port.sent[0] as { clientId: string; message: unknown };
+    expect(envelope).toHaveProperty('clientId');
+    expect(envelope).toHaveProperty('message');
+    expect(envelope.message).toEqual({ jsonrpc: '2.0', id: 1 });
   });
 
-  it('delivers incoming messages to subscribers', () => {
+  it('delivers incoming messages to subscribers', async () => {
     const transport = createWorkerTransport();
     const worker = MockSharedWorker.instances[0]!;
     const handler = vi.fn();
 
     transport.subscribe(handler);
-    worker.port.simulateMessage('{"jsonrpc":"2.0","result":null}');
+    
+    // Wait a tick for subscription to be set up
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    // Simulate receiving a valid JSON-RPC response message
+    worker.port.simulateMessage({
+      jsonrpc: '2.0',
+      id: 1,
+      result: null
+    });
 
-    expect(handler).toHaveBeenCalledWith('{"jsonrpc":"2.0","result":null}');
+    // Handler should receive the stringified message
+    expect(handler).toHaveBeenCalledWith('{"jsonrpc":"2.0","id":1,"result":null}');
   });
 
   it('unsubscribes handlers', () => {
@@ -87,7 +127,12 @@ describe('createWorkerTransport', () => {
 
     transport.subscribe(handler);
     transport.unsubscribe(handler);
-    worker.port.simulateMessage('data');
+    
+    worker.port.simulateMessage({
+      jsonrpc: '2.0',
+      id: 1,
+      result: null
+    });
 
     expect(handler).not.toHaveBeenCalled();
   });
@@ -100,11 +145,33 @@ describe('createWorkerTransport', () => {
       static instances: MockWorker[] = [];
       onmessage: ((e: MessageEvent) => void) | null = null;
       sent: unknown[] = [];
+      private messageListeners: ((e: MessageEvent) => void)[] = [];
+      private errorListeners: ((e: Event) => void)[] = [];
+
       constructor(public url: URL | string) {
         MockWorker.instances.push(this);
       }
+
       postMessage(data: unknown) {
         this.sent.push(data);
+      }
+
+      addEventListener(type: string, listener: (e: MessageEvent) => void) {
+        if (type === 'message') {
+          this.messageListeners.push(listener);
+        } else if (type === 'error') {
+          this.errorListeners.push(listener as unknown as (e: Event) => void);
+        }
+      }
+
+      removeEventListener(type: string, listener: (e: MessageEvent) => void) {
+        if (type === 'message') {
+          const idx = this.messageListeners.indexOf(listener);
+          if (idx >= 0) this.messageListeners.splice(idx, 1);
+        } else if (type === 'error') {
+          const idx = this.errorListeners.indexOf(listener as unknown as (e: Event) => void);
+          if (idx >= 0) this.errorListeners.splice(idx, 1);
+        }
       }
     }
     vi.stubGlobal('Worker', MockWorker);
