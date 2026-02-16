@@ -50,6 +50,13 @@ jobs:
         if: steps.fixture-cache.outputs.cache-hit != 'true'
         run: bash scripts/update-fixtures.sh
 
+      - name: Generate Langium artifacts
+        run: pnpm run generate
+        continue-on-error: true
+
+      - name: Build
+        run: pnpm run build
+
       - name: Type check
         run: pnpm run type-check
 
@@ -58,13 +65,6 @@ jobs:
 
       - name: Format check
         run: pnpm run format:check
-
-      - name: Generate Langium artifacts
-        run: pnpm run generate
-        continue-on-error: true
-
-      - name: Build
-        run: pnpm run build
 
       - name: Test
         run: pnpm run test

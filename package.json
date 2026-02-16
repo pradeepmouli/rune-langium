@@ -26,6 +26,7 @@
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "fresh": "pnpm clean:all && pnpm install",
+    "generate": "pnpm --filter @rune-langium/core run generate",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
     "test": "pnpm -r run test",
