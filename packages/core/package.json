@@ -28,7 +28,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "langium": "^4.2.0"
+    "langium": "^4.2.1"
   },
   "devDependencies": {
     "langium-cli": "^4.2.0",

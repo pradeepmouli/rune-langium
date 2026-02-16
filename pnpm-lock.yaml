@@ -48,8 +48,8 @@ importers:
         specifier: ^13.1.0
         version: 13.1.0
       langium:
-        specifier: ^4.2.0
-        version: 4.2.0
+        specifier: ^4.2.1
+        version: 4.2.1
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -58,8 +58,8 @@ importers:
   packages/core:
     dependencies:
       langium:
-        specifier: ^4.2.0
-        version: 4.2.0
+        specifier: ^4.2.1
+        version: 4.2.1
     devDependencies:
       langium-cli:
         specifier: ^4.2.0
@@ -918,8 +918,8 @@ packages:
   langium-railroad@4.2.0:
     resolution: {integrity: sha512-LYR22GV14iz0GTUtR91pZY6yNImYRk1HbAuHBP8k8GESMcSkCJh+iewJooH9k8H8dJOteXvvI7aFkz6rfU9oLQ==}
 
-  langium@4.2.0:
-    resolution: {integrity: sha512-SoXTYrTyA9x0CjVoguZfB9NIbj2RwQ7KpltHyJwB7jyzbnfHkqw5Alf9A1JtIqouT7fZv4xMCCy+7CoIYGV65w==}
+  langium@4.2.1:
+    resolution: {integrity: sha512-zu9QWmjpzJcomzdJQAHgDVhLGq5bLosVak1KVa40NzQHXfqr4eAHupvnPOVXEoLkg6Ocefvf/93d//SB7du4YQ==}
     engines: {node: '>=20.10.0', npm: '>=10.2.3'}
 
   lint-staged@16.2.7:
@@ -2160,16 +2160,16 @@ snapshots:
       commander: 14.0.3
       fs-extra: 11.3.3
       jsonschema: 1.5.0
-      langium: 4.2.0
+      langium: 4.2.1
       langium-railroad: 4.2.0
       lodash: 4.17.23
 
   langium-railroad@4.2.0:
     dependencies:
-      langium: 4.2.0
+      langium: 4.2.1
       railroad-diagrams: 1.0.0
 
-  langium@4.2.0:
+  langium@4.2.1:
     dependencies:
       chevrotain: 11.1.1
       chevrotain-allstar: 0.3.1(chevrotain@11.1.1)
