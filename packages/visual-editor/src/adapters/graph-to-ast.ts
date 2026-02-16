@@ -43,6 +43,8 @@ export interface SyntheticData {
   superType?: { ref?: { name?: string }; $refText?: string };
   attributes: SyntheticAttribute[];
   conditions: never[];
+  /** Synonym strings extracted from TypeNodeData.synonyms. */
+  synonyms?: string[];
   /** Original AST node when available. */
   source?: Data;
 }
@@ -61,6 +63,8 @@ export interface SyntheticChoice {
   name: string;
   definition?: string;
   attributes: SyntheticChoiceOption[];
+  /** Synonym strings extracted from TypeNodeData.synonyms. */
+  synonyms?: string[];
   /** Original AST node when available. */
   source?: Choice;
 }
@@ -77,6 +81,8 @@ export interface SyntheticEnum {
   definition?: string;
   parent?: { ref?: { name?: string }; $refText?: string };
   enumValues: SyntheticEnumValue[];
+  /** Synonym strings extracted from TypeNodeData.synonyms. */
+  synonyms?: string[];
   /** Original AST node when available. */
   source?: RosettaEnumeration;
 }
@@ -144,7 +150,7 @@ function memberToEnumValue(member: MemberDisplay): SyntheticEnumValue {
   return {
     name: member.name,
     definition: enumVal?.definition,
-    display: enumVal?.display,
+    display: member.displayName ?? enumVal?.display,
     source: enumVal
   };
 }
@@ -213,6 +219,7 @@ export function graphToModels(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): S
           superType: parentName ? { ref: { name: parentName }, $refText: parentName } : undefined,
           attributes: data.members.map(memberToAttribute),
           conditions: [],
+          synonyms: data.synonyms,
           source: data.source as Data | undefined
         };
         elements.push(element);
@@ -222,6 +229,7 @@ export function graphToModels(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): S
           name: data.name,
           definition: data.definition,
           attributes: data.members.map(memberToChoiceOption),
+          synonyms: data.synonyms,
           source: data.source as Choice | undefined
         };
         elements.push(element);
@@ -236,6 +244,7 @@ export function graphToModels(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): S
           definition: data.definition,
           parent: parentName ? { ref: { name: parentName }, $refText: parentName } : undefined,
           enumValues: data.members.map(memberToEnumValue),
+          synonyms: data.synonyms,
           source: data.source as RosettaEnumeration | undefined
         };
         elements.push(element);

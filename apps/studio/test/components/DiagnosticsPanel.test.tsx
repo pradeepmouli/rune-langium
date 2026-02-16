@@ -103,8 +103,8 @@ describe('DiagnosticsPanel', () => {
       <DiagnosticsPanel fileDiagnostics={diags} onNavigate={onNavigate} />
     );
 
-    const errorIcons = container.querySelectorAll('.studio-diag__icon--error');
-    const warningIcons = container.querySelectorAll('.studio-diag__icon--warning');
+    const errorIcons = container.querySelectorAll('.text-error');
+    const warningIcons = container.querySelectorAll('.text-warning');
     expect(errorIcons.length).toBe(1);
     expect(warningIcons.length).toBe(1);
   });

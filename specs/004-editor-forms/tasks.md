@@ -9,11 +9,11 @@
 
 ## Constitution Check
 
-- [ ] CC-001 All form mutations flow through typed store actions → graph-to-ast → typed Langium AST; no opaque string manipulation (DSL Fidelity)
-- [ ] CC-002 Test fixtures use vendored .rosetta files from .resources/cdm/ — deterministic and offline (Deterministic Fixtures)
-- [ ] CC-003 Validation rules S-05, S-06, S-07 are subsets of Xtext parity rules; no new rules beyond parity scope (Validation Parity)
-- [ ] CC-004 Form field updates < 200ms; rename cascade < 1ms at CDM scale (400 nodes); re-parsing runs in web worker (Performance)
-- [ ] CC-005 Existing inline editors (TypeCreator, AttributeEditor, CardinalityEditor) preserved unchanged; DetailPanel read-only mode retained via readOnly prop (Reversibility)
+- [X] CC-001 All form mutations flow through typed store actions → graph-to-ast → typed Langium AST; no opaque string manipulation (DSL Fidelity)
+- [X] CC-002 Test fixtures use vendored .rosetta files from .resources/cdm/ — deterministic and offline (Deterministic Fixtures)
+- [X] CC-003 Validation rules S-05, S-06, S-07 are subsets of Xtext parity rules; no new rules beyond parity scope (Validation Parity)
+- [X] CC-004 Form field updates < 200ms; rename cascade < 1ms at CDM scale (400 nodes); re-parsing runs in web worker (Performance)
+- [X] CC-005 Existing inline editors (TypeCreator, AttributeEditor, CardinalityEditor) preserved unchanged; DetailPanel read-only mode retained via readOnly prop (Reversibility)
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -34,14 +34,14 @@
 
 **Purpose**: Install new npm packages and add shadcn/ui components needed by the editor forms
 
-- [ ] T001 Install npm dependencies (cmdk, @radix-ui/react-popover, @radix-ui/react-collapsible, @radix-ui/react-label, @radix-ui/react-select) in apps/studio via `pnpm --filter @rune-langium/studio add`
-- [ ] T002 [P] Add shadcn/ui token alias `@theme inline` block (mapping shadcn variable names to Rune design tokens per research.md R-02) to apps/studio/src/styles.css
-- [ ] T003 [P] Add shadcn Label component to apps/studio/src/components/ui/label.tsx
-- [ ] T004 [P] Add shadcn Select component to apps/studio/src/components/ui/select.tsx
-- [ ] T005 [P] Add shadcn Textarea component to apps/studio/src/components/ui/textarea.tsx
-- [ ] T006 [P] Add shadcn Collapsible component to apps/studio/src/components/ui/collapsible.tsx
-- [ ] T007 [P] Add shadcn Popover component to apps/studio/src/components/ui/popover.tsx
-- [ ] T008 [P] Add shadcn Command component (cmdk-based, for searchable dropdown) to apps/studio/src/components/ui/command.tsx
+- [X] T001 Install npm dependencies (cmdk, @radix-ui/react-popover, @radix-ui/react-collapsible, @radix-ui/react-label, @radix-ui/react-select) in apps/studio via `pnpm --filter @rune-langium/studio add`
+- [X] T002 [P] Add shadcn/ui token alias `@theme inline` block (mapping shadcn variable names to Rune design tokens per research.md R-02) to apps/studio/src/styles.css
+- [X] T003 [P] Add shadcn Label component to apps/studio/src/components/ui/label.tsx
+- [X] T004 [P] Add shadcn Select component to apps/studio/src/components/ui/select.tsx
+- [X] T005 [P] Add shadcn Textarea component to apps/studio/src/components/ui/textarea.tsx
+- [X] T006 [P] Add shadcn Collapsible component to apps/studio/src/components/ui/collapsible.tsx
+- [X] T007 [P] Add shadcn Popover component to apps/studio/src/components/ui/popover.tsx
+- [X] T008 [P] Add shadcn Command component (cmdk-based, for searchable dropdown) to apps/studio/src/components/ui/command.tsx
 
 ---
 
@@ -53,26 +53,26 @@
 
 ### Tests for Foundational (write FIRST, must FAIL before implementation)
 
-- [ ] T042 [P] Unit tests for store actions: test addEnumValue, removeEnumValue, updateEnumValue, setEnumParent, addChoiceOption, removeChoiceOption, updateDefinition, updateComments, addSynonym, removeSynonym, updateAttribute, reorderAttribute, reorderEnumValue against a loaded graph fixture in packages/visual-editor/test/store/editor-store-actions.test.ts
-- [ ] T043 [P] Unit tests for rename cascade: test renameType updates target node name+ID, all member typeName/parentName references, all edge source/target/labels/IDs, selectedNodeId — with CDM-scale fixture (400 nodes) in packages/visual-editor/test/store/rename-cascade.test.ts
-- [ ] T044 [P] Unit tests for validation rules: test S-05 duplicate enum values, S-06 empty names, S-07 invalid name chars, expression parse-validation in packages/visual-editor/test/validation/edit-validator.test.ts
-- [ ] T045 [P] Unit tests for useAutoSave hook: test debounce timing with vi.useFakeTimers, flush-on-unmount, rapid value changes in packages/visual-editor/test/hooks/useAutoSave.test.ts
+- [X] T042 [P] Unit tests for store actions: test addEnumValue, removeEnumValue, updateEnumValue, setEnumParent, addChoiceOption, removeChoiceOption, updateDefinition, updateComments, addSynonym, removeSynonym, updateAttribute, reorderAttribute, reorderEnumValue against a loaded graph fixture in packages/visual-editor/test/store/editor-store-actions.test.ts
+- [X] T043 [P] Unit tests for rename cascade: test renameType updates target node name+ID, all member typeName/parentName references, all edge source/target/labels/IDs, selectedNodeId — with CDM-scale fixture (400 nodes) in packages/visual-editor/test/store/rename-cascade.test.ts
+- [X] T044 [P] Unit tests for validation rules: test S-05 duplicate enum values, S-06 empty names, S-07 invalid name chars, expression parse-validation in packages/visual-editor/test/validation/edit-validator.test.ts
+- [X] T045 [P] Unit tests for useAutoSave hook: test debounce timing with vi.useFakeTimers, flush-on-unmount, rapid value changes in packages/visual-editor/test/hooks/useAutoSave.test.ts
 
 ### Implementation for Foundational
 
-- [ ] T009 Extend TypeNodeData with `synonyms?: string[]` and `isReadOnly?: boolean` fields; extend MemberDisplay with `displayName?: string` field in packages/visual-editor/src/types.ts
-- [ ] T010 Add TypeOption interface, EditorFormActions callback interface, and BUILTIN_TYPES constant (string, int, number, boolean, date, time, dateTime, zonedDateTime) to packages/visual-editor/src/types.ts
-- [ ] T011 Wire Zundo temporal() middleware into createEditorStore using double-call syntax for TypeScript inference with existing temporalOptions in packages/visual-editor/src/store/editor-store.ts
-- [ ] T012 [P] Create useAutoSave hook (setTimeout/clearTimeout with ref-based latest value, configurable delay defaulting to 500ms, flush-on-unmount) in packages/visual-editor/src/hooks/useAutoSave.ts
-- [ ] T013 [P] Export useTemporalStore selector hook and convenience helpers (useCanUndo, useCanRedo, useUndo, useRedo) from packages/visual-editor/src/store/history.ts
-- [ ] T014 Add 13 new store actions to EditorActions and implement them in createEditorStore: updateAttribute, reorderAttribute, addEnumValue, removeEnumValue, updateEnumValue, reorderEnumValue, setEnumParent, addChoiceOption, removeChoiceOption, updateDefinition, updateComments, addSynonym, removeSynonym in packages/visual-editor/src/store/editor-store.ts
-- [ ] T015 Update renameType action with cascade logic: rename target node name + ID, update all other nodes' member typeName and parentName references, update all edge source/target/labels/IDs, update selectedNodeId — single atomic set() call in packages/visual-editor/src/store/editor-store.ts
-- [ ] T016 [P] Add validation rules S-05 (duplicate enum value names within an enum), S-06 (empty type/enum/choice name), S-07 (invalid name characters per Rune DSL identifier rules), and expression parse-validation helper for function expressions (validates expression text via web worker parse pipeline, returns error/success) to packages/visual-editor/src/validation/edit-validator.ts
-- [ ] T017 [P] Update ast-to-graph adapter to populate TypeNodeData.synonyms from source.synonyms array, TypeNodeData.isReadOnly from source origin, MemberDisplay.displayName from RosettaEnumValue.display in packages/visual-editor/src/adapters/ast-to-graph.ts
-- [ ] T018 [P] Update graph-to-ast adapter to read TypeNodeData.synonyms for synonym annotation synthesis and MemberDisplay.displayName for enum value displayName syntax in packages/visual-editor/src/adapters/graph-to-ast.ts
-- [ ] T019 Build TypeSelector component: composition-based (accepts renderTrigger/renderPopover props so host app injects shadcn Popover + Command); with type-ahead search, kind-colored badges (blue=data, amber=choice, green=enum, gray=builtin), grouped by kind then namespace, allowClear option, max-height 300px with scroll in packages/visual-editor/src/components/editors/TypeSelector.tsx
-- [ ] T020 [P] Build CardinalityPicker component: 4 preset toggle buttons (1..1, 0..1, 0..*, 1..*) with active state + custom input field with validateCardinality() validation in packages/visual-editor/src/components/editors/CardinalityPicker.tsx
-- [ ] T021 [P] Build MetadataSection component: collapsible section with "Metadata" header (default expanded), auto-resize textarea for description with placeholder, auto-resize textarea for comments with placeholder, synonym tag-list with inline add input and × remove buttons in packages/visual-editor/src/components/editors/MetadataSection.tsx
+- [X] T009 Extend TypeNodeData with `synonyms?: string[]` and `isReadOnly?: boolean` fields; extend MemberDisplay with `displayName?: string` field in packages/visual-editor/src/types.ts
+- [X] T010 Add TypeOption interface, EditorFormActions callback interface, and BUILTIN_TYPES constant (string, int, number, boolean, date, time, dateTime, zonedDateTime) to packages/visual-editor/src/types.ts
+- [X] T011 Wire Zundo temporal() middleware into createEditorStore using double-call syntax for TypeScript inference with existing temporalOptions in packages/visual-editor/src/store/editor-store.ts
+- [X] T012 [P] Create useAutoSave hook (setTimeout/clearTimeout with ref-based latest value, configurable delay defaulting to 500ms, flush-on-unmount) in packages/visual-editor/src/hooks/useAutoSave.ts
+- [X] T013 [P] Export useTemporalStore selector hook and convenience helpers (useCanUndo, useCanRedo, useUndo, useRedo) from packages/visual-editor/src/store/history.ts
+- [X] T014 Add 13 new store actions to EditorActions and implement them in createEditorStore: updateAttribute, reorderAttribute, addEnumValue, removeEnumValue, updateEnumValue, reorderEnumValue, setEnumParent, addChoiceOption, removeChoiceOption, updateDefinition, updateComments, addSynonym, removeSynonym in packages/visual-editor/src/store/editor-store.ts
+- [X] T015 Update renameType action with cascade logic: rename target node name + ID, update all other nodes' member typeName and parentName references, update all edge source/target/labels/IDs, update selectedNodeId — single atomic set() call in packages/visual-editor/src/store/editor-store.ts
+- [X] T016 [P] Add validation rules S-05 (duplicate enum value names within an enum), S-06 (empty type/enum/choice name), S-07 (invalid name characters per Rune DSL identifier rules), and expression parse-validation helper for function expressions (validates expression text via web worker parse pipeline, returns error/success) to packages/visual-editor/src/validation/edit-validator.ts
+- [X] T017 [P] Update ast-to-graph adapter to populate TypeNodeData.synonyms from source.synonyms array, TypeNodeData.isReadOnly from source origin, MemberDisplay.displayName from RosettaEnumValue.display in packages/visual-editor/src/adapters/ast-to-graph.ts
+- [X] T018 [P] Update graph-to-ast adapter to read TypeNodeData.synonyms for synonym annotation synthesis and MemberDisplay.displayName for enum value displayName syntax in packages/visual-editor/src/adapters/graph-to-ast.ts
+- [X] T019 Build TypeSelector component: composition-based (accepts renderTrigger/renderPopover props so host app injects shadcn Popover + Command); with type-ahead search, kind-colored badges (blue=data, amber=choice, green=enum, gray=builtin), grouped by kind then namespace, allowClear option, max-height 300px with scroll in packages/visual-editor/src/components/editors/TypeSelector.tsx
+- [X] T020 [P] Build CardinalityPicker component: 4 preset toggle buttons (1..1, 0..1, 0..*, 1..*) with active state + custom input field with validateCardinality() validation in packages/visual-editor/src/components/editors/CardinalityPicker.tsx
+- [X] T021 [P] Build MetadataSection component: collapsible section with "Metadata" header (default expanded), auto-resize textarea for description with placeholder, auto-resize textarea for comments with placeholder, synonym tag-list with inline add input and × remove buttons in packages/visual-editor/src/components/editors/MetadataSection.tsx
 
 **Checkpoint**: Foundation ready — types extended, store enriched with 13 new actions and 1 modified (renameType cascade), adapters updated, validation rules added, shared components (TypeSelector, CardinalityPicker, MetadataSection) built. User story implementation can now begin.
 
@@ -88,17 +88,17 @@
 
 ### Tests for User Story 1 (write FIRST, must FAIL before implementation)
 
-- [ ] T046 [P] [US1] Unit tests for AttributeRow: test name/type/cardinality rendering, auto-save debounce, remove callback, drag reorder callback, override badge display in packages/visual-editor/test/editors/AttributeRow.test.tsx
-- [ ] T047 [P] [US1] Integration tests for DataTypeForm: test form renders all fields for a loaded Data type, rename triggers renameType, parent type selection triggers setInheritance, add/remove/reorder attribute round-trip in packages/visual-editor/test/editors/DataTypeForm.test.tsx
-- [ ] T048 [P] [US1] Integration tests for EditorFormPanel: test dispatch by kind (data→DataTypeForm, readOnly→DetailPanel, null→empty), accessibility attributes, Escape key closes in packages/visual-editor/test/editors/EditorFormPanel.test.tsx
+- [X] T046 [P] [US1] Unit tests for AttributeRow: test name/type/cardinality rendering, auto-save debounce, remove callback, drag reorder callback, override badge display in packages/visual-editor/test/editors/AttributeRow.test.tsx
+- [X] T047 [P] [US1] Integration tests for DataTypeForm: test form renders all fields for a loaded Data type, rename triggers renameType, parent type selection triggers setInheritance, add/remove/reorder attribute round-trip in packages/visual-editor/test/editors/DataTypeForm.test.tsx
+- [X] T048 [P] [US1] Integration tests for EditorFormPanel: test dispatch by kind (data→DataTypeForm, readOnly→DetailPanel, null→empty), accessibility attributes, Escape key closes in packages/visual-editor/test/editors/EditorFormPanel.test.tsx
 
 ### Implementation for User Story 1
 
-- [ ] T022 [P] [US1] Build AttributeRow component: inline row with drag handle (⠿), name input, TypeSelector for attribute type, CardinalityPicker, remove button; name and type auto-save with 500ms debounce via useAutoSave; drag-and-drop reorder via onReorder callback; override attributes show dimmed "override" badge in packages/visual-editor/src/components/editors/AttributeRow.tsx
-- [ ] T023 [US1] Build DataTypeForm component: compose header section (editable name + "Data" blue badge), inheritance section (TypeSelector with allowClear for parent type, immediate commit), attributes section (AttributeRow list + "Add Attribute" button), and MetadataSection at bottom in packages/visual-editor/src/components/editors/DataTypeForm.tsx
-- [ ] T024 [US1] Build EditorFormPanel dispatch component: render DataTypeForm when kind='data', DetailPanel when readOnly=true, empty state when nodeData=null; scrollable content with sticky header showing name + kind badge; role="complementary" with aria-label; Escape key closes panel in packages/visual-editor/src/components/panels/EditorFormPanel.tsx
-- [ ] T025 [US1] Update editor component barrel exports to re-export all new components (TypeSelector, CardinalityPicker, MetadataSection, AttributeRow, DataTypeForm, EditorFormPanel) in packages/visual-editor/src/components/editors/index.ts
-- [ ] T026 [US1] Wire EditorFormPanel into EditorPage: add right-side ResizablePanel, add toolbar toggle button ("Editor" icon), construct EditorFormActions from store actions, pass availableTypes from graph nodes + BUILTIN_TYPES, connect selectedNodeId to node data lookup in apps/studio/src/pages/EditorPage.tsx
+- [X] T022 [P] [US1] Build AttributeRow component: inline row with drag handle (⠿), name input, TypeSelector for attribute type, CardinalityPicker, remove button; name and type auto-save with 500ms debounce via useAutoSave; drag-and-drop reorder via onReorder callback; override attributes show dimmed "override" badge in packages/visual-editor/src/components/editors/AttributeRow.tsx
+- [X] T023 [US1] Build DataTypeForm component: compose header section (editable name + "Data" blue badge), inheritance section (TypeSelector with allowClear for parent type, immediate commit), attributes section (AttributeRow list + "Add Attribute" button), and MetadataSection at bottom in packages/visual-editor/src/components/editors/DataTypeForm.tsx
+- [X] T024 [US1] Build EditorFormPanel dispatch component: render DataTypeForm when kind='data', DetailPanel when readOnly=true, empty state when nodeData=null; scrollable content with sticky header showing name + kind badge; role="complementary" with aria-label; Escape key closes panel in packages/visual-editor/src/components/panels/EditorFormPanel.tsx
+- [X] T025 [US1] Update editor component barrel exports to re-export all new components (TypeSelector, CardinalityPicker, MetadataSection, AttributeRow, DataTypeForm, EditorFormPanel) in packages/visual-editor/src/components/editors/index.ts
+- [X] T026 [US1] Wire EditorFormPanel into EditorPage: add right-side ResizablePanel, add toolbar toggle button ("Editor" icon), construct EditorFormActions from store actions, pass availableTypes from graph nodes + BUILTIN_TYPES, connect selectedNodeId to node data lookup in apps/studio/src/pages/EditorPage.tsx
 
 **Checkpoint**: Data type editing via forms is fully functional. Metadata editing (US5) works for data types. Select a node → edit in form → graph updates. This is the MVP.
 
@@ -112,14 +112,14 @@
 
 ### Tests for User Story 2 (write FIRST, must FAIL before implementation)
 
-- [ ] T049 [P] [US2] Unit tests for EnumValueRow: test name/displayName rendering, auto-save debounce, remove callback, drag reorder callback, empty name validation in packages/visual-editor/test/editors/EnumValueRow.test.tsx
-- [ ] T050 [P] [US2] Integration tests for EnumForm: test form renders all fields for a loaded Enum, add/remove/reorder values, set display names, parent enum selection in packages/visual-editor/test/editors/EnumForm.test.tsx
+- [X] T049 [P] [US2] Unit tests for EnumValueRow: test name/displayName rendering, auto-save debounce, remove callback, drag reorder callback, empty name validation in packages/visual-editor/test/editors/EnumValueRow.test.tsx
+- [X] T050 [P] [US2] Integration tests for EnumForm: test form renders all fields for a loaded Enum, add/remove/reorder values, set display names, parent enum selection in packages/visual-editor/test/editors/EnumForm.test.tsx
 
 ### Implementation for User Story 2
 
-- [ ] T027 [P] [US2] Build EnumValueRow component: inline row with drag handle (⠿), value name input, optional display name input (placeholder "Display name (optional)"), remove button; both fields auto-save with 500ms debounce; drag-and-drop reorder via onReorder callback; empty value name shows red border in packages/visual-editor/src/components/editors/EnumValueRow.tsx
-- [ ] T028 [US2] Build EnumForm component: compose header (editable name + "Enum" green badge), parent enum section (TypeSelector filtered to kind='enum' with allowClear), enum values section (EnumValueRow list + "Add Value" button with auto-focus on new row), MetadataSection at bottom in packages/visual-editor/src/components/editors/EnumForm.tsx
-- [ ] T029 [US2] Add 'enum' kind dispatch to EditorFormPanel → EnumForm; update barrel exports in packages/visual-editor/src/components/panels/EditorFormPanel.tsx and packages/visual-editor/src/components/editors/index.ts
+- [X] T027 [P] [US2] Build EnumValueRow component: inline row with drag handle (⠿), value name input, optional display name input (placeholder "Display name (optional)"), remove button; both fields auto-save with 500ms debounce; drag-and-drop reorder via onReorder callback; empty value name shows red border in packages/visual-editor/src/components/editors/EnumValueRow.tsx
+- [X] T028 [US2] Build EnumForm component: compose header (editable name + "Enum" green badge), parent enum section (TypeSelector filtered to kind='enum' with allowClear), enum values section (EnumValueRow list + "Add Value" button with auto-focus on new row), MetadataSection at bottom in packages/visual-editor/src/components/editors/EnumForm.tsx
+- [X] T029 [US2] Add 'enum' kind dispatch to EditorFormPanel → EnumForm; update barrel exports in packages/visual-editor/src/components/panels/EditorFormPanel.tsx and packages/visual-editor/src/components/editors/index.ts
 
 **Checkpoint**: Enum editing via forms is fully functional. Select an enum node → edit values, display names, parent enum via form → graph updates.
 
@@ -133,13 +133,13 @@
 
 ### Tests for User Story 3 (write FIRST, must FAIL before implementation)
 
-- [ ] T051 [P] [US3] Integration tests for ChoiceForm: test form renders all options for a loaded Choice, add option creates member + edge, remove option removes member + edge in packages/visual-editor/test/editors/ChoiceForm.test.tsx
+- [X] T051 [P] [US3] Integration tests for ChoiceForm: test form renders all options for a loaded Choice, add option creates member + edge, remove option removes member + edge in packages/visual-editor/test/editors/ChoiceForm.test.tsx
 
 ### Implementation for User Story 3
 
-- [ ] T030 [P] [US3] Build ChoiceOptionRow component: read-only type label with kind-colored badge, remove button; removing an option removes both the member AND the choice-option edge in packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx
-- [ ] T031 [US3] Build ChoiceForm component: compose header (editable name + "Choice" amber badge), options section (ChoiceOptionRow list + inline TypeSelector for "Add Option" that creates member + edge), MetadataSection at bottom; choices have NO parent/inheritance in packages/visual-editor/src/components/editors/ChoiceForm.tsx
-- [ ] T032 [US3] Add 'choice' kind dispatch to EditorFormPanel → ChoiceForm; update barrel exports in packages/visual-editor/src/components/panels/EditorFormPanel.tsx and packages/visual-editor/src/components/editors/index.ts
+- [X] T030 [P] [US3] Build ChoiceOptionRow component: read-only type label with kind-colored badge, remove button; removing an option removes both the member AND the choice-option edge in packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx
+- [X] T031 [US3] Build ChoiceForm component: compose header (editable name + "Choice" amber badge), options section (ChoiceOptionRow list + inline TypeSelector for "Add Option" that creates member + edge), MetadataSection at bottom; choices have NO parent/inheritance in packages/visual-editor/src/components/editors/ChoiceForm.tsx
+- [X] T032 [US3] Add 'choice' kind dispatch to EditorFormPanel → ChoiceForm; update barrel exports in packages/visual-editor/src/components/panels/EditorFormPanel.tsx and packages/visual-editor/src/components/editors/index.ts
 
 **Checkpoint**: Choice editing via forms is fully functional. Select a choice node → manage options → graph edges update.
 
@@ -153,15 +153,15 @@
 
 ### Tests for User Story 4 (write FIRST, must FAIL before implementation)
 
-- [ ] T052 [P] [US4] Integration tests for FunctionForm: test form renders inputs/output/expression for a loaded Function, add/remove input params, change output type, expression textarea validation (valid/invalid), autocompletion popup triggers on type in packages/visual-editor/test/editors/FunctionForm.test.tsx
+- [X] T052 [P] [US4] Integration tests for FunctionForm: test form renders inputs/output/expression for a loaded Function, add/remove input params, change output type, expression textarea validation (valid/invalid), autocompletion popup triggers on type in packages/visual-editor/test/editors/FunctionForm.test.tsx
 
 ### Implementation for User Story 4
 
-- [ ] T033 [US4] Add FunctionDisplayData interface (name, definition, inputs, output, expressionText, synonyms) to packages/visual-editor/src/types.ts; extend TypeKind with 'func' (i.e., `'data' | 'choice' | 'enum' | 'func'`)
-- [ ] T034 [US4] Add function store actions to EditorActions and implement them in createEditorStore: addInputParam(nodeId, paramName, typeName), removeInputParam(nodeId, paramName), updateOutputType(nodeId, typeName), updateExpression(nodeId, expressionText) in packages/visual-editor/src/store/editor-store.ts
-- [ ] T035 [US4] Build FunctionForm component: compose header (editable name + "Function" purple badge), input parameters section (rows with name input + TypeSelector, "Add Input" button), output type section (TypeSelector), expression editor section (textarea with parse-and-validate on blur using expression validation helper from T016, autocompletion for type names/feature paths/built-in functions via T053 hook, red border + error message for invalid expressions), MetadataSection at bottom in packages/visual-editor/src/components/editors/FunctionForm.tsx
-- [ ] T053 [US4] Build useExpressionAutocomplete hook: given cursor position and expression text, derive completion candidates (type names from availableTypes, feature paths from selected input types, built-in function names); return filtered suggestions for popup rendering; wire into FunctionForm expression editor as an inline completion popup in packages/visual-editor/src/hooks/useExpressionAutocomplete.ts
-- [ ] T036 [US4] Add 'func' kind dispatch to EditorFormPanel → FunctionForm; update barrel exports in packages/visual-editor/src/components/panels/EditorFormPanel.tsx and packages/visual-editor/src/components/editors/index.ts
+- [X] T033 [US4] Add FunctionDisplayData interface (name, definition, inputs, output, expressionText, synonyms) to packages/visual-editor/src/types.ts; extend TypeKind with 'func' (i.e., `'data' | 'choice' | 'enum' | 'func'`)
+- [X] T034 [US4] Add function store actions to EditorActions and implement them in createEditorStore: addInputParam(nodeId, paramName, typeName), removeInputParam(nodeId, paramName), updateOutputType(nodeId, typeName), updateExpression(nodeId, expressionText) in packages/visual-editor/src/store/editor-store.ts
+- [X] T035 [US4] Build FunctionForm component: compose header (editable name + "Function" purple badge), input parameters section (rows with name input + TypeSelector, "Add Input" button), output type section (TypeSelector), expression editor section (textarea with parse-and-validate on blur using expression validation helper from T016, autocompletion for type names/feature paths/built-in functions via T053 hook, red border + error message for invalid expressions), MetadataSection at bottom in packages/visual-editor/src/components/editors/FunctionForm.tsx
+- [X] T053 [US4] Build useExpressionAutocomplete hook: given cursor position and expression text, derive completion candidates (type names from availableTypes, feature paths from selected input types, built-in function names); return filtered suggestions for popup rendering; wire into FunctionForm expression editor as an inline completion popup in packages/visual-editor/src/hooks/useExpressionAutocomplete.ts
+- [X] T036 [US4] Add 'func' kind dispatch to EditorFormPanel → FunctionForm; update barrel exports in packages/visual-editor/src/components/panels/EditorFormPanel.tsx and packages/visual-editor/src/components/editors/index.ts
 
 **Checkpoint**: Function editing via forms is fully functional with autocompletion. CodeMirror (P2b) and visual blocks (P2c) are deferred.
 
@@ -175,7 +175,7 @@
 
 ### Implementation for User Story 6
 
-- [ ] T037 [US6] Wire bidirectional sync: add store subscription (or useEffect) that triggers graph-to-ast serialization → source editor content update when nodes/edges change from form edits; verify reverse path (source edit → web worker re-parse → ast-to-graph → store update → form refresh) works correctly with new fields (synonyms, displayName) in apps/studio/src/pages/EditorPage.tsx
+- [X] T037 [US6] Wire bidirectional sync: add store subscription (or useEffect) that triggers graph-to-ast serialization → source editor content update when nodes/edges change from form edits; verify reverse path (source edit → web worker re-parse → ast-to-graph → store update → form refresh) works correctly with new fields (synonyms, displayName) in apps/studio/src/pages/EditorPage.tsx
 
 **Checkpoint**: Bidirectional synchronization between editor forms and source editor is functional. Edits in either direction propagate within 1 second.
 
@@ -185,10 +185,10 @@
 
 **Purpose**: Final cleanup, style refinements, and cross-story verification
 
-- [ ] T038 [P] Add dark-theme editor form styles (form field focus rings, input backgrounds, section borders, badge colors, disabled states) to apps/studio/src/styles.css
-- [ ] T039 [P] Update visual-editor package public API exports to include all new components, hooks, and types in packages/visual-editor/src/index.ts
-- [ ] T040 Run `pnpm run lint` and fix any issues across all modified files
-- [ ] T041 Run quickstart.md validation: verify all 22 implementation steps are addressed and each phase checkpoint passes
+- [X] T038 [P] Add dark-theme editor form styles (form field focus rings, input backgrounds, section borders, badge colors, disabled states) to apps/studio/src/styles.css
+- [X] T039 [P] Update visual-editor package public API exports to include all new components, hooks, and types in packages/visual-editor/src/index.ts
+- [X] T040 Run `pnpm run lint` and fix any issues across all modified files
+- [X] T041 Run quickstart.md validation: verify all 22 implementation steps are addressed and each phase checkpoint passes
 
 ---
 

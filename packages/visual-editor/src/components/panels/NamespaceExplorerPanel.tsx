@@ -43,13 +43,15 @@ export interface NamespaceExplorerPanelProps {
 const KIND_ICONS: Record<TypeKind, string> = {
   data: '\u{1F4E6}', // 📦
   choice: '\u{1F500}', // 🔀
-  enum: '\u{1F3F7}' // 🏷️
+  enum: '\u{1F3F7}', // 🏷️
+  func: '\u{1D453}' // 𝑓
 };
 
 const KIND_LABELS: Record<TypeKind, string> = {
   data: 'Data',
   choice: 'Choice',
-  enum: 'Enum'
+  enum: 'Enum',
+  func: 'Function'
 };
 
 // ---------------------------------------------------------------------------

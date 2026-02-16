@@ -28,6 +28,7 @@ import type {
   SyntheticChoice,
   SyntheticEnum
 } from '../adapters/graph-to-ast.js';
+import { validateGraph } from '../validation/edit-validator.js';
 import { createEditorStore } from '../store/editor-store.js';
 import type {
   RuneTypeGraphProps,
@@ -37,7 +38,9 @@ import type {
   TypeGraphEdge,
   GraphFilters,
   LayoutOptions,
-  TypeKind
+  TypeKind,
+  ValidationError,
+  MemberDisplay
 } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -309,6 +312,439 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
           }
           callbacks?.onModelChanged?.(result);
           return result;
+        },
+
+        // --- Editor form ref API (T026) ---
+
+        getNodeData(nodeId: string): TypeNodeData | null {
+          const node = nodes.find((n) => n.id === nodeId);
+          return node?.data ?? null;
+        },
+
+        getNodes(): TypeGraphNode[] {
+          return nodes;
+        },
+
+        renameType(nodeId: string, newName: string) {
+          if (mergedConfig.readOnly) return;
+          const node = nodes.find((n) => n.id === nodeId);
+          if (!node) return;
+          const oldName = node.data.name;
+          const newId = `${node.data.namespace}::${newName}`;
+
+          setNodes((prev) =>
+            prev.map((n) => {
+              if (n.id === nodeId) {
+                return { ...n, id: newId, data: { ...n.data, name: newName } };
+              }
+              // Cascade: update member references
+              const updatedMembers = n.data.members.map((m) => ({
+                ...m,
+                typeName: m.typeName === oldName ? newName : m.typeName,
+                ...(n.data.parentName === oldName ? {} : {})
+              }));
+              const updatedParent = n.data.parentName === oldName ? newName : n.data.parentName;
+              return {
+                ...n,
+                data: { ...n.data, members: updatedMembers, parentName: updatedParent }
+              };
+            })
+          );
+
+          setEdges((prev) =>
+            prev.map((e) => ({
+              ...e,
+              id: e.id.replace(nodeId, newId),
+              source: e.source === nodeId ? newId : e.source,
+              target: e.target === nodeId ? newId : e.target,
+              data: e.data
+                ? {
+                    ...e.data,
+                    label: e.data.label === oldName ? newName : e.data.label
+                  }
+                : e.data
+            }))
+          );
+        },
+
+        updateAttribute(
+          nodeId: string,
+          oldName: string,
+          newName: string,
+          typeName: string,
+          cardinality: string
+        ) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      members: n.data.members.map((m) =>
+                        m.name === oldName
+                          ? {
+                              ...m,
+                              name: newName,
+                              typeName,
+                              cardinality: cardinality.includes('(')
+                                ? cardinality
+                                : `(${cardinality})`
+                            }
+                          : m
+                      )
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
+        addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string) {
+          if (mergedConfig.readOnly) return;
+          const newMember: MemberDisplay = {
+            name: attrName,
+            typeName,
+            cardinality: cardinality.includes('(') ? cardinality : `(${cardinality})`,
+            isOverride: false
+          };
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? { ...n, data: { ...n.data, members: [...n.data.members, newMember] } }
+                : n
+            )
+          );
+        },
+
+        removeAttribute(nodeId: string, attrName: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      members: n.data.members.filter((m) => m.name !== attrName)
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
+        reorderAttribute(nodeId: string, fromIndex: number, toIndex: number) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) => {
+              if (n.id !== nodeId) return n;
+              const members = [...n.data.members];
+              const [moved] = members.splice(fromIndex, 1);
+              if (moved) members.splice(toIndex, 0, moved);
+              return { ...n, data: { ...n.data, members } };
+            })
+          );
+        },
+
+        setInheritance(childId: string, parentId: string | null) {
+          if (mergedConfig.readOnly) return;
+          const childNode = nodes.find((n) => n.id === childId);
+          if (!childNode) return;
+
+          // Remove old extends edge
+          setEdges((prev) =>
+            prev.filter(
+              (e) =>
+                !(
+                  e.source === childId &&
+                  (e.data?.kind === 'extends' || e.data?.kind === 'enum-extends')
+                )
+            )
+          );
+
+          if (parentId) {
+            const parentNode = nodes.find((n) => n.id === parentId);
+            if (parentNode) {
+              setNodes((prev) =>
+                prev.map((n) =>
+                  n.id === childId
+                    ? { ...n, data: { ...n.data, parentName: parentNode.data.name } }
+                    : n
+                )
+              );
+              const edgeKind = childNode.data.kind === 'enum' ? 'enum-extends' : 'extends';
+              setEdges((prev) => [
+                ...prev,
+                {
+                  id: `${childId}-${edgeKind}-${parentId}`,
+                  source: childId,
+                  target: parentId,
+                  type: 'inheritance',
+                  data: { kind: edgeKind }
+                }
+              ]);
+            }
+          } else {
+            setNodes((prev) =>
+              prev.map((n) =>
+                n.id === childId ? { ...n, data: { ...n.data, parentName: undefined } } : n
+              )
+            );
+          }
+        },
+
+        updateDefinition(nodeId: string, definition: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, definition } } : n))
+          );
+        },
+
+        updateComments(nodeId: string, comments: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, comments } } : n))
+          );
+        },
+
+        addSynonym(nodeId: string, synonym: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? { ...n, data: { ...n.data, synonyms: [...(n.data.synonyms ?? []), synonym] } }
+                : n
+            )
+          );
+        },
+
+        removeSynonym(nodeId: string, index: number) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      synonyms: (n.data.synonyms ?? []).filter((_, i) => i !== index)
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
+        validate(): ValidationError[] {
+          return validateGraph(nodes, edges);
+        },
+
+        updateCardinality(nodeId: string, attrName: string, cardinality: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      members: n.data.members.map((m) =>
+                        m.name === attrName
+                          ? {
+                              ...m,
+                              cardinality: cardinality.includes('(')
+                                ? cardinality
+                                : `(${cardinality})`
+                            }
+                          : m
+                      )
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
+        addEnumValue(nodeId: string, valueName: string, displayName?: string) {
+          if (mergedConfig.readOnly) return;
+          const newMember: MemberDisplay = {
+            name: valueName,
+            isOverride: false,
+            displayName
+          };
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? { ...n, data: { ...n.data, members: [...n.data.members, newMember] } }
+                : n
+            )
+          );
+        },
+
+        removeEnumValue(nodeId: string, valueName: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      members: n.data.members.filter((m) => m.name !== valueName)
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
+        updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      members: n.data.members.map((m) =>
+                        m.name === oldName ? { ...m, name: newName, displayName } : m
+                      )
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
+        reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) => {
+              if (n.id !== nodeId) return n;
+              const members = [...n.data.members];
+              const [moved] = members.splice(fromIndex, 1);
+              if (moved) members.splice(toIndex, 0, moved);
+              return { ...n, data: { ...n.data, members } };
+            })
+          );
+        },
+
+        setEnumParent(nodeId: string, parentId: string | null) {
+          // Delegate to setInheritance — same logic applies
+          this.setInheritance(nodeId, parentId);
+        },
+
+        addChoiceOption(nodeId: string, typeName: string) {
+          if (mergedConfig.readOnly) return;
+          const newMember: MemberDisplay = {
+            name: typeName.toLowerCase(),
+            typeName,
+            isOverride: false
+          };
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? { ...n, data: { ...n.data, members: [...n.data.members, newMember] } }
+                : n
+            )
+          );
+          // Add choice-option edge
+          const targetNode = nodes.find((n) => n.data.name === typeName);
+          if (targetNode) {
+            setEdges((prev) => [
+              ...prev,
+              {
+                id: `${nodeId}-choice-${targetNode.id}`,
+                source: nodeId,
+                target: targetNode.id,
+                type: 'choice',
+                data: { kind: 'choice-option' as const, label: typeName }
+              }
+            ]);
+          }
+        },
+
+        removeChoiceOption(nodeId: string, typeName: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      members: n.data.members.filter((m) => m.typeName !== typeName)
+                    }
+                  }
+                : n
+            )
+          );
+          setEdges((prev) =>
+            prev.filter(
+              (e) =>
+                !(
+                  e.source === nodeId &&
+                  e.data?.kind === 'choice-option' &&
+                  e.data?.label === typeName
+                )
+            )
+          );
+        },
+
+        addInputParam(nodeId: string, paramName: string, typeName: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      members: [
+                        ...n.data.members,
+                        { name: paramName, typeName, cardinality: '(1..1)', isOverride: false }
+                      ]
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
+        removeInputParam(nodeId: string, paramName: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      members: n.data.members.filter((m) => m.name !== paramName)
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
+        updateOutputType(nodeId: string, typeName: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId ? { ...n, data: { ...n.data, outputType: typeName } } : n
+            )
+          );
+        },
+
+        updateExpression(nodeId: string, expressionText: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, expressionText } } : n))
+          );
         }
       }),
       [nodes, edges, models, mergedConfig, fitView, setCenter, setNodes, setEdges, callbacks]

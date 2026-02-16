@@ -3,6 +3,6 @@ packages:
   - apps/*
 
 overrides:
-  '@lspeasy/client': link:../lspy/packages/client
-  '@lspeasy/core': link:../lspy/packages/core
-  '@lspeasy/server': link:../lspy/packages/server
+  '@lspeasy/client': ^1.0.1
+  '@lspeasy/core': ^1.0.1
+  '@lspeasy/server': ^1.0.1

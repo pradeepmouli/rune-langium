@@ -5,9 +5,12 @@
  * applying edit commands to prevent invalid operations.
  *
  * These wrap / complement the core RuneDslValidator rules:
- * - S-01: No duplicate attributes
+ * - S-01: No duplicate attributes / type names
  * - S-02: Circular inheritance detection
  * - S-04: Cardinality bounds
+ * - S-05: No duplicate enum value names within an enum
+ * - S-06: Empty type/enum/choice name
+ * - S-07: Invalid name characters per Rune DSL identifier rules
  */
 
 import type { TypeGraphNode, TypeGraphEdge, ValidationError } from '../types.js';
@@ -118,6 +121,109 @@ export function validateCardinality(input: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Duplicate enum value detection (S-05)
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if an enum value name already exists within the specified enum node.
+ */
+export function detectDuplicateEnumValue(
+  valueName: string,
+  nodeId: string,
+  nodes: TypeGraphNode[]
+): boolean {
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node || node.data.kind !== 'enum') return false;
+  return node.data.members.some((m) => m.name === valueName);
+}
+
+// ---------------------------------------------------------------------------
+// Empty name detection (S-06)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate that a name is non-empty after trimming whitespace.
+ *
+ * Returns null if valid, or an error message string if invalid.
+ */
+export function validateNotEmpty(name: string, context = 'Name'): string | null {
+  if (!name || !name.trim()) {
+    return `${context} cannot be empty`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Invalid identifier characters (S-07)
+// ---------------------------------------------------------------------------
+
+/**
+ * Valid Rune DSL identifier pattern.
+ *
+ * Identifiers must start with a letter or underscore and contain
+ * only letters, digits, and underscores.
+ */
+const RUNE_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+/**
+ * Validate that a name conforms to Rune DSL identifier rules.
+ *
+ * Returns null if valid, or an error message string if invalid.
+ */
+export function validateIdentifier(name: string): string | null {
+  if (!name || !name.trim()) {
+    return 'Name cannot be empty';
+  }
+  if (!RUNE_IDENTIFIER_PATTERN.test(name)) {
+    return `Invalid identifier: "${name}". Must start with a letter or underscore and contain only letters, digits, and underscores.`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Expression parse-validation (placeholder)
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of validating a Rune DSL expression.
+ */
+export interface ExpressionValidationResult {
+  valid: boolean;
+  error?: string;
+}
+
+/**
+ * Validate an expression string.
+ *
+ * This is a lightweight client-side check. Full parsing validation
+ * runs in the web worker parse pipeline. This function performs basic
+ * structural checks (balanced parentheses, non-empty).
+ *
+ * @param expression - The expression text to validate.
+ * @returns Validation result with error message if invalid.
+ */
+export function validateExpression(expression: string): ExpressionValidationResult {
+  if (!expression || !expression.trim()) {
+    return { valid: false, error: 'Expression cannot be empty' };
+  }
+
+  // Check balanced parentheses
+  let depth = 0;
+  for (const ch of expression) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (depth < 0) {
+      return { valid: false, error: 'Unbalanced parentheses: unexpected ")"' };
+    }
+  }
+  if (depth !== 0) {
+    return { valid: false, error: 'Unbalanced parentheses: missing ")"' };
+  }
+
+  return { valid: true };
+}
+
+// ---------------------------------------------------------------------------
 // Aggregate validation
 // ---------------------------------------------------------------------------
 
@@ -196,6 +302,50 @@ export function validateGraph(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): V
         });
       }
       attrNames.add(member.name);
+    }
+  }
+
+  // S-05: Check for duplicate enum value names within each enum
+  for (const node of nodes) {
+    if (node.data.kind !== 'enum') continue;
+    const valueNames = new Set<string>();
+    for (const member of node.data.members) {
+      if (valueNames.has(member.name)) {
+        errors.push({
+          nodeId: node.id,
+          severity: 'error',
+          message: `Duplicate enum value: "${member.name}"`,
+          ruleId: 'S-05'
+        });
+      }
+      valueNames.add(member.name);
+    }
+  }
+
+  // S-06: Check for empty type names
+  for (const node of nodes) {
+    if (!node.data.name || !node.data.name.trim()) {
+      errors.push({
+        nodeId: node.id,
+        severity: 'error',
+        message: 'Type name cannot be empty',
+        ruleId: 'S-06'
+      });
+    }
+  }
+
+  // S-07: Check for invalid name characters
+  for (const node of nodes) {
+    if (node.data.name && node.data.name.trim()) {
+      const identError = validateIdentifier(node.data.name);
+      if (identError) {
+        errors.push({
+          nodeId: node.id,
+          severity: 'error',
+          message: identError,
+          ruleId: 'S-07'
+        });
+      }
     }
   }
 
