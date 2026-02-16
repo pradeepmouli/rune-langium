@@ -117,7 +117,7 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
 
   // ---- Expression editing --------------------------------------------------
 
-  const expressionText = (data as Record<string, unknown>)['expressionText'] as string | undefined;
+  const expressionText = data.expressionText;
   const [localExpression, setLocalExpression] = useState(expressionText ?? '');
   const [expressionError, setExpressionError] = useState<string | null>(null);
 
@@ -145,7 +145,7 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
 
   // ---- Output type ---------------------------------------------------------
 
-  const outputType = (data as Record<string, unknown>)['outputType'] as string | undefined;
+  const outputType = data.outputType;
 
   function handleOutputTypeSelect(value: string | null) {
     if (value) {
@@ -243,7 +243,7 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
         <div data-slot="input-list" className="flex flex-col gap-0.5" role="list">
           {data.members.map((member: MemberDisplay, i: number) => (
             <InputParamRow
-              key={`${member.name}-${i}`}
+              key={`${nodeId}-param-${member.name}-${i}`}
               member={member}
               nodeId={nodeId}
               availableTypes={availableTypes}
@@ -325,7 +325,7 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
       {/* Metadata */}
       <MetadataSection
         definition={data.definition ?? ''}
-        comments={''}
+        comments={data.comments ?? ''}
         synonyms={data.synonyms ?? []}
         onDefinitionChange={handleDefinitionChange}
         onCommentsChange={handleCommentsChange}

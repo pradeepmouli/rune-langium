@@ -105,6 +105,12 @@ export interface TypeNodeData<K extends TypeKind = TypeKind> {
   synonyms?: string[];
   /** Whether this element is read-only (from external/locked source). */
   isReadOnly?: boolean;
+  /** Comments/annotations text for this element. */
+  comments?: string;
+  /** Output type name (functions only). */
+  outputType?: string;
+  /** Expression text (functions only). */
+  expressionText?: string;
   /** Source AST node — preserves full Langium type information. */
   source?: AstNodeKindMap[K];
   /** Required for ReactFlow compatibility: Node<T> requires T extends Record<string, unknown> */

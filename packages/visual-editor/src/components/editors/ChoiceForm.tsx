@@ -174,7 +174,7 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
       {/* Metadata */}
       <MetadataSection
         definition={data.definition ?? ''}
-        comments={''}
+        comments={data.comments ?? ''}
         synonyms={data.synonyms ?? []}
         onDefinitionChange={handleDefinitionChange}
         onCommentsChange={handleCommentsChange}

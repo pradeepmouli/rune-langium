@@ -213,7 +213,8 @@ function buildDataNode(data: Data, namespace: string, nodeId: string): TypeGraph
       synonyms: synonyms.length > 0 ? synonyms : undefined,
       hasExternalRefs: false,
       errors: [],
-      source: data
+      source: data,
+      isReadOnly: false
     } as TypeNodeData<'data'>
   };
 }
@@ -237,7 +238,8 @@ function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): Typ
       synonyms: synonyms.length > 0 ? synonyms : undefined,
       hasExternalRefs: false,
       errors: [],
-      source: choice
+      source: choice,
+      isReadOnly: false
     } as TypeNodeData<'choice'>
   };
 }
@@ -270,7 +272,8 @@ function buildEnumNode(
       synonyms: synonyms.length > 0 ? synonyms : undefined,
       hasExternalRefs: false,
       errors: [],
-      source: enumType
+      source: enumType,
+      isReadOnly: false
     } as TypeNodeData<'enum'>
   };
 }
@@ -327,9 +330,15 @@ export function astToGraph(
   }
 
   // Second pass: create edges
-  // Build a lookup from type name → node ID
+  // Build a lookup from type name → node ID.
+  // We key by both the bare name and the namespace-qualified ID
+  // so cross-namespace references resolve correctly and same-name
+  // types in different namespaces don't collide.
   const nameToNodeId = new Map<string, string>();
   for (const node of nodes) {
+    // Namespace-qualified key (always unique)
+    nameToNodeId.set(node.id, node.id);
+    // Bare-name key (last-write wins if duplicate across namespaces)
     nameToNodeId.set(node.data.name, node.id);
   }
 

@@ -6,7 +6,7 @@
  * Synonym add/remove are immediate (no debounce needed).
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 
 // ---------------------------------------------------------------------------
@@ -56,6 +56,15 @@ export function MetadataSection({
   const [localDefinition, setLocalDefinition] = useState(definition);
   const [localComments, setLocalComments] = useState(comments);
   const [synonymInput, setSynonymInput] = useState('');
+
+  // Sync local state when props change (e.g., node selection change, undo/redo)
+  useEffect(() => {
+    setLocalDefinition(definition);
+  }, [definition]);
+
+  useEffect(() => {
+    setLocalComments(comments);
+  }, [comments]);
 
   // Debounced auto-save for description
   const debouncedDefinitionSave = useAutoSave(onDefinitionChange, 500);

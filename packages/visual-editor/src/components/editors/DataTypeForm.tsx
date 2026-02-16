@@ -179,7 +179,7 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
         <div data-slot="attribute-list" className="flex flex-col gap-0.5">
           {data.members.map((member: MemberDisplay, i: number) => (
             <AttributeRow
-              key={`${member.name}-${i}`}
+              key={`${nodeId}-attr-${member.name}-${i}`}
               member={member}
               nodeId={nodeId}
               index={i}
@@ -201,7 +201,7 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
       {/* Metadata */}
       <MetadataSection
         definition={data.definition ?? ''}
-        comments={''}
+        comments={data.comments ?? ''}
         synonyms={data.synonyms ?? []}
         onDefinitionChange={handleDefinitionChange}
         onCommentsChange={handleCommentsChange}

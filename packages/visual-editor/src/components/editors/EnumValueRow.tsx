@@ -8,7 +8,7 @@
  * @module
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 
 // ---------------------------------------------------------------------------
@@ -51,6 +51,15 @@ function EnumValueRow({
   const [localName, setLocalName] = useState(initialName);
   const [localDisplayName, setLocalDisplayName] = useState(initialDisplayName ?? '');
 
+  // Sync local state when props change (e.g., undo/redo, node switch)
+  useEffect(() => {
+    setLocalName(initialName);
+  }, [initialName]);
+
+  useEffect(() => {
+    setLocalDisplayName(initialDisplayName ?? '');
+  }, [initialDisplayName]);
+
   // Auto-save commits name + displayName together after 500ms idle
   const debouncedUpdate = useAutoSave<{ name: string; displayName: string }>(
     useCallback(
@@ -80,12 +89,40 @@ function EnumValueRow({
     onRemove(nodeId, initialName);
   }
 
+  // ---- Drag handlers (reorder) --------------------------------------------
+
+  function handleDragStart(e: React.DragEvent) {
+    e.dataTransfer.setData('text/plain', String(index));
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const fromIndex = Number(e.dataTransfer.getData('text/plain'));
+    if (!Number.isNaN(fromIndex) && fromIndex !== index) {
+      onReorder(nodeId, fromIndex, index);
+    }
+  }
+
   // ---- Render -------------------------------------------------------------
 
   const isEmpty = localName.trim() === '';
 
   return (
-    <div data-slot="enum-value-row" className="flex items-center gap-1.5 py-1" role="listitem">
+    <div
+      data-slot="enum-value-row"
+      className="flex items-center gap-1.5 py-1"
+      role="listitem"
+      draggable={!disabled}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {/* Drag handle */}
       <span
         data-slot="drag-handle"

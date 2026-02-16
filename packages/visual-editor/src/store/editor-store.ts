@@ -370,19 +370,32 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             isOverride: false
           };
 
-          set((state) => ({
-            nodes: state.nodes.map((n) =>
+          set((state) => {
+            const targetNodeId = state.nodes.find((n) => n.data.name === typeName)?.id;
+
+            const updatedNodes = state.nodes.map((n) =>
               n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      members: [...n.data.members, newMember]
-                    }
-                  }
+                ? { ...n, data: { ...n.data, members: [...n.data.members, newMember] } }
                 : n
-            )
-          }));
+            );
+
+            if (targetNodeId && targetNodeId !== nodeId) {
+              const newEdge: TypeGraphEdge = {
+                id: `${nodeId}--attribute-ref--${attrName}--${targetNodeId}`,
+                source: nodeId,
+                target: targetNodeId,
+                type: 'attribute-ref',
+                data: {
+                  kind: 'attribute-ref' as const,
+                  label: attrName,
+                  cardinality: formatCardinalityString(cardinality)
+                } as EdgeData
+              };
+              return { nodes: updatedNodes, edges: [...state.edges, newEdge] };
+            }
+
+            return { nodes: updatedNodes };
+          });
         },
 
         removeAttribute(nodeId: string, attrName: string) {
@@ -397,6 +410,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                     }
                   }
                 : n
+            ),
+            edges: state.edges.filter(
+              (e) =>
+                !(
+                  e.source === nodeId &&
+                  e.data?.kind === 'attribute-ref' &&
+                  e.data?.label === attrName
+                )
             )
           }));
         },
@@ -480,8 +501,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           typeName: string,
           cardinality: string
         ) {
-          set((state) => ({
-            nodes: state.nodes.map((n) =>
+          set((state) => {
+            const updatedNodes = state.nodes.map((n) =>
               n.id === nodeId
                 ? {
                     ...n,
@@ -500,8 +521,37 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                     }
                   }
                 : n
-            )
-          }));
+            );
+
+            // Remove old attribute-ref edge for the old attribute name
+            const filteredEdges = state.edges.filter(
+              (e) =>
+                !(
+                  e.source === nodeId &&
+                  e.data?.kind === 'attribute-ref' &&
+                  e.data?.label === oldName
+                )
+            );
+
+            // Add new attribute-ref edge if target exists
+            const targetNodeId = state.nodes.find((n) => n.data.name === typeName)?.id;
+            if (targetNodeId && targetNodeId !== nodeId) {
+              const newEdge: TypeGraphEdge = {
+                id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
+                source: nodeId,
+                target: targetNodeId,
+                type: 'attribute-ref',
+                data: {
+                  kind: 'attribute-ref' as const,
+                  label: newName,
+                  cardinality: formatCardinalityString(cardinality)
+                } as EdgeData
+              };
+              return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
+            }
+
+            return { nodes: updatedNodes, edges: filteredEdges };
+          });
         },
 
         reorderAttribute(nodeId: string, fromIndex: number, toIndex: number) {

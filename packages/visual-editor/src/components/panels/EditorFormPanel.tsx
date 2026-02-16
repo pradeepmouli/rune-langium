@@ -15,7 +15,8 @@
  * @module
  */
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, Component } from 'react';
+import type { ReactNode, ErrorInfo } from 'react';
 import { DataTypeForm } from '../editors/DataTypeForm.js';
 import { EnumForm } from '../editors/EnumForm.js';
 import { ChoiceForm } from '../editors/ChoiceForm.js';
@@ -23,6 +24,52 @@ import { FunctionForm } from '../editors/FunctionForm.js';
 import { DetailPanel } from './DetailPanel.js';
 import { getKindBadgeClasses, getKindLabel } from '../editors/TypeSelector.js';
 import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
+
+// ---------------------------------------------------------------------------
+// Error Boundary
+// ---------------------------------------------------------------------------
+
+interface FormErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class FormErrorBoundary extends Component<
+  { children: ReactNode; nodeId: string | null },
+  FormErrorBoundaryState
+> {
+  constructor(props: { children: ReactNode; nodeId: string | null }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): FormErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[EditorFormPanel] Render error:', error, info.componentStack);
+  }
+
+  componentDidUpdate(prevProps: { nodeId: string | null }) {
+    // Reset error state when a different node is selected
+    if (prevProps.nodeId !== this.props.nodeId && this.state.hasError) {
+      this.setState({ hasError: false, error: null });
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center p-4 gap-2 text-sm text-muted-foreground">
+          <p className="font-medium text-destructive">Failed to render editor form</p>
+          <p className="text-xs">{this.state.error?.message}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -193,7 +240,7 @@ function EditorFormPanel({
 
       {/* Scrollable content */}
       <div data-slot="panel-content" className="flex-1 overflow-y-auto">
-        {renderForm()}
+        <FormErrorBoundary nodeId={nodeId}>{renderForm()}</FormErrorBoundary>
       </div>
     </aside>
   );

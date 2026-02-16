@@ -172,7 +172,7 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
         <div data-slot="value-list" className="flex flex-col gap-0.5" role="list">
           {data.members.map((member: MemberDisplay, i: number) => (
             <EnumValueRow
-              key={`${member.name}-${i}`}
+              key={`${nodeId}-val-${member.name}-${i}`}
               name={member.name}
               displayName={member.displayName}
               nodeId={nodeId}
@@ -194,7 +194,7 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
       {/* Metadata */}
       <MetadataSection
         definition={data.definition ?? ''}
-        comments={''}
+        comments={data.comments ?? ''}
         synonyms={data.synonyms ?? []}
         onDefinitionChange={handleDefinitionChange}
         onCommentsChange={handleCommentsChange}

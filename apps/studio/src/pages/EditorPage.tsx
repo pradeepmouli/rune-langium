@@ -6,7 +6,7 @@
  * of read-only SourceView.
  */
 
-import { useRef, useCallback, useState, useMemo } from 'react';
+import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
 import {
   RuneTypeGraph,
   NamespaceExplorerPanel,
@@ -86,7 +86,7 @@ export function EditorPage({
   }, [models]);
 
   // Initialize visibility on first load / model change
-  useMemo(() => {
+  useEffect(() => {
     if (models.length === 0) return;
     const LARGE_MODEL_THRESHOLD = 100;
     const shouldCollapse = totalElementCount > LARGE_MODEL_THRESHOLD;
@@ -109,8 +109,7 @@ export function EditorPage({
       setHiddenNodeIds(new Set<string>());
       setVisibilityInitialized(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models, totalElementCount]);
+  }, [models, totalElementCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // All graph nodes (unpositionally) for the explorer tree
   const allGraphNodes: TypeGraphNode[] = useMemo(() => {
@@ -179,7 +178,7 @@ export function EditorPage({
 
   // --- Stable ref for files (prevents stale closure in handleSourceChange) ---
   const filesRef = useRef(files);
-  useMemo(() => {
+  useEffect(() => {
     filesRef.current = files;
   }, [files]);
 
@@ -235,10 +234,10 @@ export function EditorPage({
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics, totalErrors, totalWarnings } = useDiagnosticsStore();
 
-  const handleNodeSelect = useCallback((nodeId: string | undefined, _nodeData?: unknown) => {
+  const handleNodeSelect = useCallback((nodeId: string, nodeData?: TypeNodeData) => {
     setSelectedNode(nodeId ?? null);
-    if (nodeId && _nodeData) {
-      setSelectedNodeData(_nodeData as TypeNodeData);
+    if (nodeId && nodeData) {
+      setSelectedNodeData(nodeData);
       setShowEditor(true);
     } else {
       setSelectedNodeData(null);
