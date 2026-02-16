@@ -6,9 +6,22 @@
  * of read-only SourceView.
  */
 
-import { useRef, useCallback, useState, useMemo } from 'react';
-import { RuneTypeGraph, NamespaceExplorerPanel, astToGraph } from '@rune-langium/visual-editor';
-import type { RuneTypeGraphRef, VisibilityState, TypeGraphNode } from '@rune-langium/visual-editor';
+import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
+import {
+  RuneTypeGraph,
+  NamespaceExplorerPanel,
+  EditorFormPanel,
+  astToGraph,
+  BUILTIN_TYPES
+} from '@rune-langium/visual-editor';
+import type {
+  RuneTypeGraphRef,
+  VisibilityState,
+  TypeGraphNode,
+  TypeNodeData,
+  TypeOption,
+  EditorFormActions
+} from '@rune-langium/visual-editor';
 import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
@@ -49,7 +62,9 @@ export function EditorPage({
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const [showSource, setShowSource] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [selectedNodeData, setSelectedNodeData] = useState<TypeNodeData | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
 
   // --- Namespace visibility state ---
@@ -71,7 +86,7 @@ export function EditorPage({
   }, [models]);
 
   // Initialize visibility on first load / model change
-  useMemo(() => {
+  useEffect(() => {
     if (models.length === 0) return;
     const LARGE_MODEL_THRESHOLD = 100;
     const shouldCollapse = totalElementCount > LARGE_MODEL_THRESHOLD;
@@ -94,8 +109,7 @@ export function EditorPage({
       setHiddenNodeIds(new Set<string>());
       setVisibilityInitialized(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models, totalElementCount]);
+  }, [models, totalElementCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // All graph nodes (unpositionally) for the explorer tree
   const allGraphNodes: TypeGraphNode[] = useMemo(() => {
@@ -164,7 +178,7 @@ export function EditorPage({
 
   // --- Stable ref for files (prevents stale closure in handleSourceChange) ---
   const filesRef = useRef(files);
-  useMemo(() => {
+  useEffect(() => {
     filesRef.current = files;
   }, [files]);
 
@@ -220,8 +234,14 @@ export function EditorPage({
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics, totalErrors, totalWarnings } = useDiagnosticsStore();
 
-  const handleNodeSelect = useCallback((nodeId: string | undefined, _nodeData?: unknown) => {
+  const handleNodeSelect = useCallback((nodeId: string, nodeData?: TypeNodeData) => {
     setSelectedNode(nodeId ?? null);
+    if (nodeId && nodeData) {
+      setSelectedNodeData(nodeData);
+      setShowEditor(true);
+    } else {
+      setSelectedNodeData(null);
+    }
   }, []);
 
   const handleNodeDoubleClick = useCallback(
@@ -240,6 +260,56 @@ export function EditorPage({
   }, []);
 
   const getGraphElement = useCallback(() => graphContainerRef.current, []);
+
+  // --- Available types for editor form TypeSelector ---
+  const availableTypes: TypeOption[] = useMemo(() => {
+    const builtinOptions: TypeOption[] = BUILTIN_TYPES.map((t) => ({
+      value: `builtin::${t}`,
+      label: t,
+      kind: 'builtin' as const
+    }));
+    const graphOptions: TypeOption[] = allGraphNodes.map((n) => ({
+      value: n.id,
+      label: n.data.name,
+      kind: n.data.kind,
+      namespace: n.data.namespace
+    }));
+    return [...builtinOptions, ...graphOptions];
+  }, [allGraphNodes]);
+
+  // --- Editor form actions wired through graphRef ---
+  const editorActions: EditorFormActions = useMemo(
+    () => ({
+      renameType: (nodeId, newName) => graphRef.current?.renameType(nodeId, newName),
+      deleteType: (nodeId) => graphRef.current?.deleteType(nodeId),
+      updateDefinition: (nodeId, def) => graphRef.current?.updateDefinition(nodeId, def),
+      updateComments: (nodeId, comments) => graphRef.current?.updateComments(nodeId, comments),
+      addSynonym: (nodeId, synonym) => graphRef.current?.addSynonym(nodeId, synonym),
+      removeSynonym: (nodeId, index) => graphRef.current?.removeSynonym(nodeId, index),
+      addAttribute: (nodeId, name, type, card) =>
+        graphRef.current?.addAttribute(nodeId, name, type, card),
+      removeAttribute: (nodeId, name) => graphRef.current?.removeAttribute(nodeId, name),
+      updateAttribute: (nodeId, oldN, newN, type, card) =>
+        graphRef.current?.updateAttribute(nodeId, oldN, newN, type, card),
+      reorderAttribute: (nodeId, from, to) => graphRef.current?.reorderAttribute(nodeId, from, to),
+      setInheritance: (childId, parentId) => graphRef.current?.setInheritance(childId, parentId),
+      addEnumValue: (nodeId, name, display) =>
+        graphRef.current?.addEnumValue(nodeId, name, display),
+      removeEnumValue: (nodeId, name) => graphRef.current?.removeEnumValue(nodeId, name),
+      updateEnumValue: (nodeId, oldN, newN, display) =>
+        graphRef.current?.updateEnumValue(nodeId, oldN, newN, display),
+      reorderEnumValue: (nodeId, from, to) => graphRef.current?.reorderEnumValue(nodeId, from, to),
+      setEnumParent: (nodeId, parentId) => graphRef.current?.setEnumParent(nodeId, parentId),
+      addChoiceOption: (nodeId, type) => graphRef.current?.addChoiceOption(nodeId, type),
+      removeChoiceOption: (nodeId, type) => graphRef.current?.removeChoiceOption(nodeId, type),
+      addInputParam: (nodeId, name, type) => graphRef.current?.addInputParam(nodeId, name, type),
+      removeInputParam: (nodeId, name) => graphRef.current?.removeInputParam(nodeId, name),
+      updateOutputType: (nodeId, type) => graphRef.current?.updateOutputType(nodeId, type),
+      updateExpression: (nodeId, expr) => graphRef.current?.updateExpression(nodeId, expr),
+      validate: () => graphRef.current?.validate() ?? []
+    }),
+    []
+  );
 
   const handleFitView = useCallback(() => {
     graphRef.current?.fitView();
@@ -270,6 +340,14 @@ export function EditorPage({
           </Button>
           <Button variant="secondary" size="sm" onClick={handleRelayout} title="Re-run auto layout">
             Re-layout
+          </Button>
+          <Button
+            variant={showEditor ? 'default' : 'secondary'}
+            size="sm"
+            onClick={() => setShowEditor(!showEditor)}
+            title="Toggle editor form panel"
+          >
+            Editor
           </Button>
           <Button
             variant={showSource ? 'default' : 'secondary'}
@@ -322,7 +400,7 @@ export function EditorPage({
         )}
 
         {/* Graph + Source — resizable split */}
-        <ResizablePanelGroup direction="horizontal" className="flex-1 min-w-0">
+        <ResizablePanelGroup orientation="horizontal" className="flex-1 min-w-0">
           <ResizablePanel id="graph" defaultSize={showSource ? 65 : 100}>
             <div className="relative h-full" ref={graphContainerRef}>
               <RuneTypeGraph
@@ -361,6 +439,22 @@ export function EditorPage({
                     onContentChange={handleSourceChange}
                   />
                 </aside>
+              </ResizablePanel>
+            </>
+          )}
+
+          {/* Editor form panel (toggleable) */}
+          {showEditor && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel id="editor-form" defaultSize={30} minSize={20} maxSize={45}>
+                <EditorFormPanel
+                  nodeData={selectedNodeData}
+                  nodeId={selectedNode}
+                  availableTypes={availableTypes}
+                  actions={editorActions}
+                  onClose={() => setShowEditor(false)}
+                />
               </ResizablePanel>
             </>
           )}

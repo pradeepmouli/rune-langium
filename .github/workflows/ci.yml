@@ -30,6 +30,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Determine CDM fixture cache key
+        id: fixture-versions
+        run: |
+          CDM_TAG=$(grep -m1 '^CDM_TAG=' scripts/update-fixtures.sh | cut -d'"' -f2)
+          RUNE_TAG=$(grep -m1 '^RUNE_TAG=' scripts/update-fixtures.sh | cut -d'"' -f2)
+          echo "cdm-tag=$CDM_TAG" >> "$GITHUB_OUTPUT"
+          echo "rune-tag=$RUNE_TAG" >> "$GITHUB_OUTPUT"
+          echo "cache-key=fixtures-cdm-${CDM_TAG}-rune-${RUNE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache CDM / Rune DSL fixtures
+        id: fixture-cache
+        uses: actions/cache@v4
+        with:
+          path: .resources
+          key: ${{ steps.fixture-versions.outputs.cache-key }}
+
+      - name: Download CDM / Rune DSL fixtures
+        if: steps.fixture-cache.outputs.cache-hit != 'true'
+        run: bash scripts/update-fixtures.sh
+
       - name: Type check
         run: pnpm run type-check
 

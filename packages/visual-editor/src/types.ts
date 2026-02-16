@@ -13,6 +13,7 @@ import type {
   Data,
   Choice,
   RosettaEnumeration,
+  RosettaFunction,
   Attribute,
   ChoiceOption,
   RosettaEnumValue
@@ -27,6 +28,7 @@ export interface AstNodeKindMap {
   data: Data;
   choice: Choice;
   enum: RosettaEnumeration;
+  func: RosettaFunction;
 }
 
 /** Maps each `TypeKind` to its member AST node type. */
@@ -34,6 +36,7 @@ export interface AstMemberKindMap {
   data: Attribute;
   choice: ChoiceOption;
   enum: RosettaEnumValue;
+  func: Attribute;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +65,8 @@ export interface MemberDisplay<M = AstMemberType> {
   typeName?: string;
   cardinality?: string;
   isOverride: boolean;
+  /** Display name for enum values. Separate from typeName to avoid false edge references. */
+  displayName?: string;
   /** Source AST member node — preserves full Langium type information. */
   source?: M;
 }
@@ -96,6 +101,16 @@ export interface TypeNodeData<K extends TypeKind = TypeKind> {
   parentName?: string;
   hasExternalRefs: boolean;
   errors: ValidationError[];
+  /** Editable synonym values for this element. */
+  synonyms?: string[];
+  /** Whether this element is read-only (from external/locked source). */
+  isReadOnly?: boolean;
+  /** Comments/annotations text for this element. */
+  comments?: string;
+  /** Output type name (functions only). */
+  outputType?: string;
+  /** Expression text (functions only). */
+  expressionText?: string;
   /** Source AST node — preserves full Langium type information. */
   source?: AstNodeKindMap[K];
   /** Required for ReactFlow compatibility: Node<T> requires T extends Record<string, unknown> */
@@ -123,6 +138,78 @@ export interface ValidationError {
   ruleId?: string;
   line?: number;
   column?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Editor Form Types
+// ---------------------------------------------------------------------------
+
+/** Built-in primitive types available in the Rune DSL. */
+export const BUILTIN_TYPES = [
+  'string',
+  'int',
+  'number',
+  'boolean',
+  'date',
+  'time',
+  'dateTime',
+  'zonedDateTime'
+] as const;
+
+/** A type option for searchable type selectors. */
+export interface TypeOption {
+  /** Node ID, or special ID for built-in types. */
+  value: string;
+  /** Display label (type name). */
+  label: string;
+  /** Type kind for badge coloring. */
+  kind: TypeKind | 'builtin';
+  /** Namespace for grouping in the dropdown. */
+  namespace?: string;
+}
+
+/** Callback interface exposing all editor form store actions. */
+export interface EditorFormActions {
+  // --- Type operations (all kinds) ---
+  renameType(nodeId: string, newName: string): void;
+  deleteType(nodeId: string): void;
+  updateDefinition(nodeId: string, definition: string): void;
+  updateComments(nodeId: string, comments: string): void;
+  addSynonym(nodeId: string, synonym: string): void;
+  removeSynonym(nodeId: string, index: number): void;
+
+  // --- Data type operations ---
+  addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string): void;
+  removeAttribute(nodeId: string, attrName: string): void;
+  updateAttribute(
+    nodeId: string,
+    oldName: string,
+    newName: string,
+    typeName: string,
+    cardinality: string
+  ): void;
+  reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
+  setInheritance(childId: string, parentId: string | null): void;
+
+  // --- Enum operations ---
+  addEnumValue(nodeId: string, valueName: string, displayName?: string): void;
+  removeEnumValue(nodeId: string, valueName: string): void;
+  updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string): void;
+  reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number): void;
+  setEnumParent(nodeId: string, parentId: string | null): void;
+
+  // --- Choice operations ---
+  addChoiceOption(nodeId: string, typeName: string): void;
+  removeChoiceOption(nodeId: string, typeName: string): void;
+
+  // --- Function operations ---
+  addInputParam(nodeId: string, paramName: string, typeName: string): void;
+  removeInputParam(nodeId: string, paramName: string): void;
+  updateOutputType(nodeId: string, typeName: string): void;
+  updateExpression(nodeId: string, expressionText: string): void;
+
+  // --- Validation ---
+  validate(): ValidationError[];
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +296,64 @@ export interface RuneTypeGraphRef {
   undo(): void;
   redo(): void;
   exportRosetta(): Map<string, string>;
+
+  // --- Editor form ref API (T026) ---
+  /** Get current data for a node by ID (returns null if not found). */
+  getNodeData(nodeId: string): TypeNodeData | null;
+  /** Get all current nodes (for building availableTypes list). */
+  getNodes(): TypeGraphNode[];
+  /** Rename a type with CASCADE: updates node ID, all member refs, all edges. */
+  renameType(nodeId: string, newName: string): void;
+  /** Update a specific attribute on a node. */
+  updateAttribute(
+    nodeId: string,
+    oldName: string,
+    newName: string,
+    typeName: string,
+    cardinality: string
+  ): void;
+  /** Add an attribute to a node. */
+  addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string): void;
+  /** Remove an attribute from a node. */
+  removeAttribute(nodeId: string, attrName: string): void;
+  /** Reorder attributes within a node. */
+  reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
+  /** Set or clear inheritance for a node. */
+  setInheritance(childId: string, parentId: string | null): void;
+  /** Update the definition (description) of a node. */
+  updateDefinition(nodeId: string, definition: string): void;
+  /** Update the comments on a node. */
+  updateComments(nodeId: string, comments: string): void;
+  /** Add a synonym to a node. */
+  addSynonym(nodeId: string, synonym: string): void;
+  /** Remove a synonym from a node by index. */
+  removeSynonym(nodeId: string, index: number): void;
+  /** Validate the current graph and return errors. */
+  validate(): ValidationError[];
+  /** Update cardinality on a specific attribute. */
+  updateCardinality(nodeId: string, attrName: string, cardinality: string): void;
+  /** Add an enum value. */
+  addEnumValue(nodeId: string, valueName: string, displayName?: string): void;
+  /** Remove an enum value. */
+  removeEnumValue(nodeId: string, valueName: string): void;
+  /** Update an enum value. */
+  updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string): void;
+  /** Reorder enum values. */
+  reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number): void;
+  /** Set or clear parent enum. */
+  setEnumParent(nodeId: string, parentId: string | null): void;
+  /** Add a choice option. */
+  addChoiceOption(nodeId: string, typeName: string): void;
+  /** Remove a choice option. */
+  removeChoiceOption(nodeId: string, typeName: string): void;
+  /** Add an input parameter to a function. */
+  addInputParam(nodeId: string, paramName: string, typeName: string): void;
+  /** Remove an input parameter from a function. */
+  removeInputParam(nodeId: string, paramName: string): void;
+  /** Update a function's output type. */
+  updateOutputType(nodeId: string, typeName: string): void;
+  /** Update a function's expression text. */
+  updateExpression(nodeId: string, expressionText: string): void;
 }
 
 // ---------------------------------------------------------------------------

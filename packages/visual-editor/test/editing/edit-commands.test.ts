@@ -123,7 +123,8 @@ describe('Edit Commands', () => {
       state.renameType(nodeId, 'RenamedType');
 
       const updated = store.getState();
-      const node = updated.nodes.find((n) => n.id === nodeId);
+      // After T015, renameType cascades the node ID
+      const node = updated.nodes.find((n) => n.data.name === 'RenamedType');
       expect(node).toBeDefined();
       expect(node!.data.name).toBe('RenamedType');
       expect(node!.data.name).not.toBe(oldName);

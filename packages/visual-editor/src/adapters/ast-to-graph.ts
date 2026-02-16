@@ -146,9 +146,45 @@ function choiceOptionToMember(opt: ChoiceOption): MemberDisplay<ChoiceOption> {
 function enumValueToMember(val: RosettaEnumValue): MemberDisplay<RosettaEnumValue> {
   return {
     name: val.name,
+    displayName: val.display,
     isOverride: false,
     source: val
   };
+}
+
+/**
+ * Extract synonym strings from Data/Choice RosettaClassSynonym objects.
+ *
+ * Each synonym has a `.value?.name` with optional `.value?.path`.
+ */
+function extractClassSynonyms(
+  synonyms: Array<{ value?: { name?: string; path?: string } }>
+): string[] {
+  return synonyms
+    .map((s) => {
+      const name = s.value?.name;
+      const path = s.value?.path;
+      if (!name) return undefined;
+      return path ? `${name}->${path}` : name;
+    })
+    .filter((s): s is string => s !== undefined);
+}
+
+/**
+ * Extract synonym strings from RosettaEnumeration RosettaSynonym objects.
+ *
+ * Each synonym has a `.body.values` array of RosettaSynonymValueBase.
+ */
+function extractEnumSynonyms(
+  synonyms: Array<{ body?: { values?: Array<{ name?: string; path?: string }> } }>
+): string[] {
+  return synonyms
+    .flatMap((s) => s.body?.values ?? [])
+    .map((v) => {
+      if (!v.name) return undefined;
+      return v.path ? `${v.name}->${v.path}` : v.name;
+    })
+    .filter((s): s is string => s !== undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +195,9 @@ function buildDataNode(data: Data, namespace: string, nodeId: string): TypeGraph
   const members = (data.attributes ?? []).map(dataAttributeToMember);
   const parentRef = data.superType;
   const parentName = parentRef?.ref?.name ?? parentRef?.$refText;
+  const synonyms = extractClassSynonyms(
+    (data.synonyms ?? []) as Array<{ value?: { name?: string; path?: string } }>
+  );
 
   return {
     id: nodeId,
@@ -171,15 +210,20 @@ function buildDataNode(data: Data, namespace: string, nodeId: string): TypeGraph
       definition: data.definition,
       members,
       parentName,
+      synonyms: synonyms.length > 0 ? synonyms : undefined,
       hasExternalRefs: false,
       errors: [],
-      source: data
+      source: data,
+      isReadOnly: false
     } as TypeNodeData<'data'>
   };
 }
 
 function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): TypeGraphNode {
   const members = (choice.attributes ?? []).map(choiceOptionToMember);
+  const synonyms = extractClassSynonyms(
+    (choice.synonyms ?? []) as Array<{ value?: { name?: string; path?: string } }>
+  );
 
   return {
     id: nodeId,
@@ -191,9 +235,11 @@ function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): Typ
       namespace,
       definition: choice.definition,
       members,
+      synonyms: synonyms.length > 0 ? synonyms : undefined,
       hasExternalRefs: false,
       errors: [],
-      source: choice
+      source: choice,
+      isReadOnly: false
     } as TypeNodeData<'choice'>
   };
 }
@@ -206,6 +252,11 @@ function buildEnumNode(
   const members = (enumType.enumValues ?? []).map(enumValueToMember);
   const parentRef = enumType.parent;
   const parentName = parentRef?.ref?.name ?? parentRef?.$refText;
+  const synonyms = extractEnumSynonyms(
+    (enumType.synonyms ?? []) as Array<{
+      body?: { values?: Array<{ name?: string; path?: string }> };
+    }>
+  );
 
   return {
     id: nodeId,
@@ -218,9 +269,11 @@ function buildEnumNode(
       definition: enumType.definition,
       members,
       parentName,
+      synonyms: synonyms.length > 0 ? synonyms : undefined,
       hasExternalRefs: false,
       errors: [],
-      source: enumType
+      source: enumType,
+      isReadOnly: false
     } as TypeNodeData<'enum'>
   };
 }
@@ -277,9 +330,15 @@ export function astToGraph(
   }
 
   // Second pass: create edges
-  // Build a lookup from type name → node ID
+  // Build a lookup from type name → node ID.
+  // We key by both the bare name and the namespace-qualified ID
+  // so cross-namespace references resolve correctly and same-name
+  // types in different namespaces don't collide.
   const nameToNodeId = new Map<string, string>();
   for (const node of nodes) {
+    // Namespace-qualified key (always unique)
+    nameToNodeId.set(node.id, node.id);
+    // Bare-name key (last-write wins if duplicate across namespaces)
     nameToNodeId.set(node.data.name, node.id);
   }
 

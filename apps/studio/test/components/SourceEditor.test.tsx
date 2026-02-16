@@ -91,7 +91,7 @@ describe('SourceEditor', () => {
     it('highlights active tab', () => {
       render(<SourceEditor files={sampleFiles} activeFile="/workspace/types.rosetta" />);
       const typesTab = screen.getByText('types.rosetta').closest('button')!;
-      expect(typesTab.className).toContain('active');
+      expect(typesTab.getAttribute('aria-selected')).toBe('true');
     });
   });
 
@@ -107,7 +107,7 @@ describe('SourceEditor', () => {
       render(<SourceEditor files={sampleFiles} />);
       fireEvent.click(screen.getByText('types.rosetta'));
       const typesTab = screen.getByText('types.rosetta').closest('button')!;
-      expect(typesTab.className).toContain('active');
+      expect(typesTab.getAttribute('aria-selected')).toBe('true');
     });
   });
 
