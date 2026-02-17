@@ -30,6 +30,9 @@ export function createWorkerTransport(): Transport {
     // Generate a unique client ID for this connection
     const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+    // Start the port before creating the transport
+    worker.port.start();
+
     const transport = new SharedWorkerTransport({
       port: worker.port,
       clientId
@@ -43,10 +46,14 @@ export function createWorkerTransport(): Transport {
 
     return {
       send(message: string) {
-        const parsed = JSON.parse(message) as Message;
-        transport.send(parsed).catch((err) => {
-          console.error('[worker-transport] Send error:', err);
-        });
+        try {
+          const parsed = JSON.parse(message) as Message;
+          transport.send(parsed).catch((err) => {
+            console.error('[worker-transport] Send error:', err);
+          });
+        } catch (err) {
+          console.error('[worker-transport] JSON parse error:', err);
+        }
       },
       subscribe(handler: (value: string) => void) {
         handlers.push(handler);
@@ -76,10 +83,14 @@ export function createWorkerTransport(): Transport {
 
   return {
     send(message: string) {
-      const parsed = JSON.parse(message) as Message;
-      transport.send(parsed).catch((err) => {
-        console.error('[worker-transport] Send error:', err);
-      });
+      try {
+        const parsed = JSON.parse(message) as Message;
+        transport.send(parsed).catch((err) => {
+          console.error('[worker-transport] Send error:', err);
+        });
+      } catch (err) {
+        console.error('[worker-transport] JSON parse error:', err);
+      }
     },
     subscribe(handler: (value: string) => void) {
       handlers.push(handler);

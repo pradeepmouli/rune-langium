@@ -23,26 +23,51 @@ import { createRuneLspServer } from '@rune-langium/lsp-server';
  *
  * Each tab/connection creates an independent server so that
  * workspace state is isolated between tabs.
+ *
+ * The client generates a unique clientId and sends messages wrapped
+ * in envelopes. We extract the clientId from the first message and
+ * use it to create a matching SharedWorkerTransport for proper routing.
  */
 function servePort(port: MessagePort): void {
-  // Generate a unique client ID for this connection
-  const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  // Wait for the first message to extract the clientId from the envelope
+  const handleFirstMessage = (e: MessageEvent) => {
+    const data = e.data;
+    
+    // Check if this is an envelope with clientId
+    let clientId: string;
+    if (data && typeof data === 'object' && 'clientId' in data && typeof data.clientId === 'string') {
+      clientId = data.clientId;
+    } else {
+      // Fallback: generate a clientId if the client didn't send one
+      clientId = `server-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      console.warn('[lsp-worker] No clientId in first message, using generated ID:', clientId);
+    }
 
-  const transport = new SharedWorkerTransport({
-    port,
-    clientId
-  });
+    // Remove the first message handler
+    port.removeEventListener('message', handleFirstMessage);
 
-  const { listen } = createRuneLspServer();
-  listen(transport).catch((err) => {
-    console.error('[lsp-worker] LSP listen error:', err);
-  });
+    // Create transport with matching clientId
+    const transport = new SharedWorkerTransport({
+      port,
+      clientId
+    });
 
-  // Clean up transport when port encounters an error so the server
-  // instance can be garbage-collected when the tab disconnects.
-  port.addEventListener('messageerror', () => {
-    transport.close().catch(() => {});
-  });
+    const { listen } = createRuneLspServer();
+    listen(transport).catch((err) => {
+      console.error('[lsp-worker] LSP listen error:', err);
+    });
+
+    // Clean up transport when port encounters an error so the server
+    // instance can be garbage-collected when the tab disconnects.
+    port.addEventListener('messageerror', () => {
+      transport.close().catch(() => {});
+    });
+
+    // Re-dispatch the first message to the transport so it gets processed
+    port.dispatchEvent(new MessageEvent('message', { data }));
+  };
+
+  port.addEventListener('message', handleFirstMessage);
 }
 
 // Detect whether we are running as SharedWorker or dedicated Worker.
