@@ -58,9 +58,19 @@ if ('onconnect' in self) {
 } else {
   // Dedicated Worker — single connection through global scope.
   const workerScope = self as unknown as DedicatedWorkerGlobalScope;
-  
+
+  // Adapt the worker global scope to a Worker-like interface expected by
+  // DedicatedWorkerTransport, without claiming the scope itself is a Worker.
+  const workerLike = {
+    postMessage: (...args: Parameters<DedicatedWorkerGlobalScope['postMessage']>) =>
+      workerScope.postMessage(...args),
+    addEventListener: workerScope.addEventListener.bind(workerScope),
+    removeEventListener: workerScope.removeEventListener.bind(workerScope),
+    dispatchEvent: workerScope.dispatchEvent.bind(workerScope),
+  } as unknown as Worker;
+
   const transport = new DedicatedWorkerTransport({
-    worker: workerScope as unknown as Worker
+    worker: workerLike
   });
 
   const { listen } = createRuneLspServer();
