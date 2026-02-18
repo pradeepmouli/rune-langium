@@ -52,6 +52,9 @@
     "pnpm": ">=10.0.0"
   },
   "packageManager": "pnpm@10.28.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
   "dependencies": {
     "@lspeasy/client": "^1.1.0",
     "@lspeasy/core": "^1.1.0",
