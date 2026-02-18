@@ -299,6 +299,34 @@ function buildFunctionNode(
   const outputAttr = func.output;
   const outputType = outputAttr?.typeCall?.type?.$refText;
 
+  // Extract expression text from the function body using CST nodes.
+  // A function body consists of alias (shortcut) declarations, conditions,
+  // and operations (set/add), each of which carries a Langium CST node
+  // whose `.text` property gives the original source text.
+  const bodyParts: string[] = [];
+
+  for (const shortcut of func.shortcuts ?? []) {
+    const text = shortcut.$cstNode?.text;
+    if (text) bodyParts.push(text.trim());
+  }
+
+  for (const condition of func.conditions ?? []) {
+    const text = condition.$cstNode?.text;
+    if (text) bodyParts.push(text.trim());
+  }
+
+  for (const op of func.operations ?? []) {
+    const text = op.$cstNode?.text;
+    if (text) bodyParts.push(text.trim());
+  }
+
+  for (const postCond of func.postConditions ?? []) {
+    const text = postCond.$cstNode?.text;
+    if (text) bodyParts.push(text.trim());
+  }
+
+  const expressionText = bodyParts.length > 0 ? bodyParts.join('\n') : undefined;
+
   return {
     id: nodeId,
     type: 'func',
@@ -310,6 +338,7 @@ function buildFunctionNode(
       definition: func.definition,
       members,
       outputType,
+      expressionText,
       hasExternalRefs: false,
       errors: [],
       source: func,
