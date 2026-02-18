@@ -71,7 +71,9 @@ export function NamespaceExplorerPanel({
   hiddenRefCounts
 }: NamespaceExplorerPanelProps): React.JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
-  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
+  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(
+    () => new Set(nodes.map((n) => n.data.namespace))
+  );
 
   // Build and filter the namespace tree
   const fullTree = useMemo(() => buildNamespaceTree(nodes), [nodes]);

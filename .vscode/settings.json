@@ -9,5 +9,10 @@
   "chat.tools.terminal.autoApprove": {
     ".specify/scripts/bash/": true,
     ".specify/scripts/powershell/": true
+  },
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "files.associations": {
+    "*.css": "tailwindcss"
   }
 }

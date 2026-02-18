@@ -6,19 +6,19 @@
  */
 
 import { useCallback } from 'react';
-import { downloadFile, downloadRosettaFiles, exportImage } from '../services/export.js';
+import { downloadFile, downloadRosettaFiles } from '../services/export.js';
 import { Button } from './ui/button.js';
 
 export interface ExportMenuProps {
   /** Callback to get the current serialized .rosetta content per file. */
   getSerializedFiles: () => Map<string, string>;
-  /** Callback to get the graph container element for image export. */
-  getGraphElement?: () => HTMLElement | null;
+  /** Callback to export the graph as an image blob. */
+  exportImage?: (format: 'svg' | 'png') => Promise<Blob>;
   /** Whether there are any loaded models to export. */
   hasModels: boolean;
 }
 
-export function ExportMenu({ getSerializedFiles, getGraphElement, hasModels }: ExportMenuProps) {
+export function ExportMenu({ getSerializedFiles, exportImage, hasModels }: ExportMenuProps) {
   const handleExportRosetta = useCallback(() => {
     const files = getSerializedFiles();
     if (files.size === 0) return;
@@ -32,28 +32,26 @@ export function ExportMenu({ getSerializedFiles, getGraphElement, hasModels }: E
   }, [getSerializedFiles]);
 
   const handleExportSvg = useCallback(async () => {
-    const el = getGraphElement?.();
-    if (!el) return;
-    const blob = await exportImage(el, 'svg');
+    if (!exportImage) return;
+    const blob = await exportImage('svg');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'rune-graph.svg';
     a.click();
     URL.revokeObjectURL(url);
-  }, [getGraphElement]);
+  }, [exportImage]);
 
   const handleExportPng = useCallback(async () => {
-    const el = getGraphElement?.();
-    if (!el) return;
-    const blob = await exportImage(el, 'png');
+    if (!exportImage) return;
+    const blob = await exportImage('png');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'rune-graph.png';
     a.click();
     URL.revokeObjectURL(url);
-  }, [getGraphElement]);
+  }, [exportImage]);
 
   return (
     <menu className="flex gap-1 list-none m-0 p-0" data-testid="export-menu">

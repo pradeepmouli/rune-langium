@@ -8,7 +8,7 @@
  * @module
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { TypeSelector } from './TypeSelector.js';
 import { CardinalityPicker } from './CardinalityPicker.js';
@@ -86,7 +86,12 @@ function AttributeRow({
 
   function handleTypeSelect(value: string | null) {
     if (!value) return;
-    onUpdate(nodeId, member.name, localName, value, member.cardinality ?? '(1..1)');
+    // Resolve option value (ID) to its display label for storage.
+    // The store uses typeName as a display string, not the option's
+    // internal value (e.g., 'builtin::string' → 'string').
+    const option = availableTypes.find((o) => o.value === value);
+    const typeName = option?.label ?? value;
+    onUpdate(nodeId, member.name, localName, typeName, member.cardinality ?? '(1..1)');
   }
 
   // ---- Cardinality (immediate from picker) ---------------------------------
@@ -120,6 +125,17 @@ function AttributeRow({
   function handleRemove() {
     onRemove(nodeId, member.name);
   }
+
+  // ---- Resolve typeName (label) to option value for TypeSelector ----------
+
+  const typeValue = useMemo(() => {
+    const name = member.typeName ?? '';
+    // Try exact value match first, then label match
+    const byValue = availableTypes.find((o) => o.value === name);
+    if (byValue) return byValue.value;
+    const byLabel = availableTypes.find((o) => o.label === name);
+    return byLabel?.value ?? name;
+  }, [member.typeName, availableTypes]);
 
   // ---- Render --------------------------------------------------------------
 
@@ -160,7 +176,7 @@ function AttributeRow({
       {/* Type selector */}
       <div data-slot="attribute-type" className="w-28 shrink-0">
         <TypeSelector
-          value={member.typeName ?? ''}
+          value={typeValue}
           options={availableTypes}
           onSelect={handleTypeSelect}
           disabled={disabled}

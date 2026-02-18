@@ -12,6 +12,7 @@ import { FileLoader } from './components/FileLoader.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Button } from './components/ui/button.js';
 import { Separator } from './components/ui/separator.js';
+import { Spinner } from './components/ui/spinner.js';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles } from './services/workspace.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
@@ -132,7 +133,8 @@ export function App() {
 
       <main className="flex-1 overflow-hidden relative">
         {loading && (
-          <div className="flex items-center justify-center h-full text-text-secondary text-md">
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-text-secondary text-md">
+            <Spinner className="h-8 w-8 text-accent" />
             <p>Parsing files…</p>
           </div>
         )}

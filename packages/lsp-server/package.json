@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsgo -b",
     "clean": "rm -rf dist",
-    "dev": "tsgo -b --watch",
+    "dev": "tsgo -b && node --watch-path=dist dist/cli.js",
     "lint": "oxlint .",
     "start": "node dist/cli.js",
     "test": "vitest run",

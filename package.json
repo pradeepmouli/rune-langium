@@ -22,6 +22,7 @@
     "clean": "pnpm -r run clean && rm -rf node_modules/.cache",
     "clean:all": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
     "dev": "pnpm -r --parallel run dev",
+    "dev:lsp": "pnpm --filter @rune-langium/lsp-server dev",
     "dev:studio": "pnpm --filter @rune-langium/studio dev",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
