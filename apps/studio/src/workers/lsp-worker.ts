@@ -4,96 +4,120 @@
  * LSP Worker entry point (T010).
  *
  * Runs the Rune DSL LSP server inside a SharedWorker (preferred)
- * or a dedicated Worker (fallback). Each connected port gets its
- * own @lspeasy/core Transport that bridges MessagePort ↔ LSPServer.
+ * or a dedicated Worker (fallback). Uses native @lspeasy/core
+ * transports for MessagePort ↔ LSPServer communication.
  *
- * Protocol:
- *   - Incoming messages on the port are JSON-RPC strings from
- *     @codemirror/lsp-client.
- *   - The Transport parses them into Message objects for @lspeasy.
- *   - Outgoing messages from the server are serialised back to
- *     JSON strings and posted to the port.
+ * In SharedWorker mode, each connected port gets its own LSP server
+ * instance so that workspace state is isolated between tabs.
  */
 
-import type { Message, Transport } from '@lspeasy/core';
+import type { Transport, Message } from '@lspeasy/core';
+import { DedicatedWorkerTransport } from '@lspeasy/core';
 import { createRuneLspServer } from '@rune-langium/lsp-server';
 
 // ────────────────────────────────────────────────────────────────────────────
-// Port → Transport adapter
+// Port Transport Adapter
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Create an @lspeasy/core Transport backed by a MessagePort or
- * the global Worker scope (self.postMessage / self.onmessage).
+ * Create a simple Transport for a MessagePort that unwraps envelopes.
+ * 
+ * The client side uses SharedWorkerTransport which sends envelopes with
+ * {clientId, message}. This adapter unwraps those envelopes and passes
+ * plain Message objects to the LSP server.
  */
-function createPortTransport(
-  postFn: (data: string) => void,
-  onMessageFn: (handler: (data: string) => void) => void,
-  onErrorFn?: (handler: (err: Error) => void) => void
-): Transport {
+function createPortTransport(port: MessagePort): Transport {
+  const messageHandlers = new Set<(message: Message) => void>();
+  const errorHandlers = new Set<(error: Error) => void>();
+  const closeHandlers = new Set<() => void>();
   let connected = true;
-  const messageHandlers: ((message: Message) => void)[] = [];
-  const errorHandlers: ((error: Error) => void)[] = [];
-  const closeHandlers: (() => void)[] = [];
 
-  // Wire up incoming messages (JSON strings → Message objects)
-  onMessageFn((data: string) => {
+  const handleMessage = (e: MessageEvent) => {
+    if (!connected) return;
+
     try {
-      const msg = JSON.parse(data) as Message;
-      for (const h of messageHandlers) h(msg);
+      const data = e.data;
+      let message: Message;
+
+      // Unwrap envelope if present
+      if (data && typeof data === 'object' && 'clientId' in data && 'message' in data) {
+        message = data.message as Message;
+      } else {
+        // Plain message (for backwards compatibility or direct communication)
+        message = data as Message;
+      }
+
+      for (const handler of messageHandlers) {
+        handler(message);
+      }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      for (const h of errorHandlers) h(error);
+      for (const handler of errorHandlers) {
+        handler(error);
+      }
     }
-  });
+  };
 
-  if (onErrorFn) {
-    onErrorFn((err: Error) => {
-      for (const h of errorHandlers) h(err);
-    });
-  }
+  const handleError = () => {
+    const error = new Error('MessagePort error');
+    for (const handler of errorHandlers) {
+      handler(error);
+    }
+  };
+
+  port.addEventListener('message', handleMessage);
+  port.addEventListener('messageerror', handleError);
 
   return {
     async send(message: Message): Promise<void> {
       if (!connected) {
         throw new Error('Transport is closed');
       }
-      postFn(JSON.stringify(message));
+      // Send plain message (client will wrap in envelope if needed)
+      port.postMessage(message);
     },
 
     onMessage(handler: (message: Message) => void) {
-      messageHandlers.push(handler);
+      messageHandlers.add(handler);
       return {
-        dispose() {
-          const idx = messageHandlers.indexOf(handler);
-          if (idx >= 0) messageHandlers.splice(idx, 1);
+        dispose: () => {
+          messageHandlers.delete(handler);
         }
       };
     },
 
     onError(handler: (error: Error) => void) {
-      errorHandlers.push(handler);
+      errorHandlers.add(handler);
       return {
-        dispose() {
-          const idx = errorHandlers.indexOf(handler);
-          if (idx >= 0) errorHandlers.splice(idx, 1);
+        dispose: () => {
+          errorHandlers.delete(handler);
         }
       };
     },
 
     onClose(handler: () => void) {
-      closeHandlers.push(handler);
+      closeHandlers.add(handler);
       return {
-        dispose() {
-          const idx = closeHandlers.indexOf(handler);
-          if (idx >= 0) closeHandlers.splice(idx, 1);
+        dispose: () => {
+          closeHandlers.delete(handler);
         }
       };
     },
 
     async close(): Promise<void> {
+      if (!connected) return;
+      
       connected = false;
-      for (const h of closeHandlers) h();
+      port.removeEventListener('message', handleMessage);
+      port.removeEventListener('messageerror', handleError);
+      
+      for (const handler of closeHandlers) {
+        handler();
+      }
+      
+      messageHandlers.clear();
+      errorHandlers.clear();
+      closeHandlers.clear();
     },
 
     isConnected(): boolean {
@@ -113,28 +137,14 @@ function createPortTransport(
  * workspace state is isolated between tabs.
  */
 function servePort(port: MessagePort): void {
-  const transport = createPortTransport(
-    (data) => port.postMessage(data),
-    (handler) => {
-      port.onmessage = (e: MessageEvent) => {
-        const raw = typeof e.data === 'string' ? e.data : String(e.data);
-        handler(raw);
-      };
-    },
-    (handler) => {
-      port.addEventListener('messageerror', () => {
-        handler(new Error('MessagePort messageerror'));
-      });
-    }
-  );
+  const transport = createPortTransport(port);
 
   const { listen } = createRuneLspServer();
   listen(transport).catch((err) => {
     console.error('[lsp-worker] LSP listen error:', err);
   });
 
-  // Clean up transport when port encounters an error so the server
-  // instance can be garbage-collected when the tab disconnects.
+  // Clean up transport when port encounters an error
   port.addEventListener('messageerror', () => {
     transport.close().catch(() => {});
   });
@@ -153,15 +163,20 @@ if ('onconnect' in self) {
 } else {
   // Dedicated Worker — single connection through global scope.
   const workerScope = self as unknown as DedicatedWorkerGlobalScope;
-  const transport = createPortTransport(
-    (data) => workerScope.postMessage(data),
-    (handler) => {
-      workerScope.onmessage = (e: MessageEvent) => {
-        const raw = typeof e.data === 'string' ? e.data : String(e.data);
-        handler(raw);
-      };
-    }
-  );
+
+  // Adapt the worker global scope to a Worker-like interface expected by
+  // DedicatedWorkerTransport, without claiming the scope itself is a Worker.
+  const workerLike = {
+    postMessage: (...args: Parameters<DedicatedWorkerGlobalScope['postMessage']>) =>
+      workerScope.postMessage(...args),
+    addEventListener: workerScope.addEventListener.bind(workerScope),
+    removeEventListener: workerScope.removeEventListener.bind(workerScope),
+    dispatchEvent: workerScope.dispatchEvent.bind(workerScope),
+  } as unknown as Worker;
+
+  const transport = new DedicatedWorkerTransport({
+    worker: workerLike
+  });
 
   const { listen } = createRuneLspServer();
   listen(transport).catch((err) => {

@@ -5,20 +5,20 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@lspeasy/client': ^1.0.1
-  '@lspeasy/core': ^1.0.1
-  '@lspeasy/server': ^1.0.1
+  '@lspeasy/client': ^1.1.0
+  '@lspeasy/core': ^1.1.0
+  '@lspeasy/server': ^1.1.0
 
 importers:
 
   .:
     dependencies:
       '@lspeasy/client':
-        specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        specifier: ^1.1.0
+        version: 1.1.0(ws@8.19.0)(zod@3.25.76)
       '@lspeasy/core':
-        specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        specifier: ^1.1.0
+        version: 1.1.0(ws@8.19.0)(zod@3.25.76)
       camelcase:
         specifier: ^9.0.0
         version: 9.0.0
@@ -78,8 +78,8 @@ importers:
         specifier: ^6.39.14
         version: 6.39.14
       '@lspeasy/core':
-        specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        specifier: ^1.1.0
+        version: 1.1.0(ws@8.19.0)(zod@3.25.76)
       '@radix-ui/react-collapsible':
         specifier: ^1.1.12
         version: 1.1.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -224,11 +224,11 @@ importers:
   packages/lsp-server:
     dependencies:
       '@lspeasy/core':
-        specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        specifier: ^1.1.0
+        version: 1.1.0(ws@8.19.0)(zod@3.25.76)
       '@lspeasy/server':
-        specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        specifier: ^1.1.0
+        version: 1.1.0(ws@8.19.0)(zod@3.25.76)
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../core
@@ -243,8 +243,8 @@ importers:
         version: 8.19.0
     devDependencies:
       '@lspeasy/client':
-        specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        specifier: ^1.1.0
+        version: 1.1.0(ws@8.19.0)(zod@3.25.76)
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -751,14 +751,14 @@ packages:
   '@lezer/lr@1.4.8':
     resolution: {integrity: sha512-bPWa0Pgx69ylNlMlPvBPryqeLYQjyJjqPx+Aupm5zydLIF3NE+6MMLT8Yi23Bd9cif9VS00aUebn+6fDIGBcDA==}
 
-  '@lspeasy/client@1.0.1':
-    resolution: {integrity: sha512-OhqJL4586LfzlgxRE2w5wBVheLGV//sdj2c2j5zaH4KMUsxTVFr1F0GfVLZTqEJ02ucVprTOvvX/TqnFU9n3jA==}
+  '@lspeasy/client@1.1.0':
+    resolution: {integrity: sha512-nzggUulKRdNC02kOMbzPOOHFSpUaIPwNA1at3jeCja8k4zFyb4TRId5TJjhfwOFWiu7Nxa5zBLi/exaHuXQVSw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       zod: ^3.25.0
 
-  '@lspeasy/core@1.0.1':
-    resolution: {integrity: sha512-pIzHr5vUr9XYTBLp1+ka/CqLJS6Rhm1nP4xpCyyi8b9RVcTIzJ2AnY5aGm6uC4XZHwhQXENhPQbtfMCXTLojiw==}
+  '@lspeasy/core@1.1.0':
+    resolution: {integrity: sha512-Nf494LOR+94tqYZRa7VnA/WW/ZhptSid59/lR2qC38XFZkvy7qs11LJ+Rt525KBQPzayibdsigR/ZY+QyqhYhw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       ws: ^8.19.0
@@ -767,8 +767,8 @@ packages:
       ws:
         optional: true
 
-  '@lspeasy/server@1.0.1':
-    resolution: {integrity: sha512-MZF9Acv4/4/g0ZKiPuHyZ3y6vHy49Dmnq4TCqE803l7K1N4TvFXRnNQrB3a4fySpSZW5X+aiad7oQxYyHstSYg==}
+  '@lspeasy/server@1.1.0':
+    resolution: {integrity: sha512-OPtdP3IySjQHEPbiNaynMiLiJuoh6QxtfZAA3t3mY2uK9jMWpxp5g70IEMDh4EgqiqQReYJ1GlU6w1pO0JI6RA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       zod: ^3.25.0
@@ -3656,22 +3656,22 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.1
 
-  '@lspeasy/client@1.0.1(ws@8.19.0)(zod@3.25.76)':
+  '@lspeasy/client@1.1.0(ws@8.19.0)(zod@3.25.76)':
     dependencies:
-      '@lspeasy/core': 1.0.1(ws@8.19.0)(zod@3.25.76)
+      '@lspeasy/core': 1.1.0(ws@8.19.0)(zod@3.25.76)
       zod: 3.25.76
     transitivePeerDependencies:
       - ws
 
-  '@lspeasy/core@1.0.1(ws@8.19.0)(zod@3.25.76)':
+  '@lspeasy/core@1.1.0(ws@8.19.0)(zod@3.25.76)':
     dependencies:
       zod: 3.25.76
     optionalDependencies:
       ws: 8.19.0
 
-  '@lspeasy/server@1.0.1(ws@8.19.0)(zod@3.25.76)':
+  '@lspeasy/server@1.1.0(ws@8.19.0)(zod@3.25.76)':
     dependencies:
-      '@lspeasy/core': 1.0.1(ws@8.19.0)(zod@3.25.76)
+      '@lspeasy/core': 1.1.0(ws@8.19.0)(zod@3.25.76)
       zod: 3.25.76
     transitivePeerDependencies:
       - ws
