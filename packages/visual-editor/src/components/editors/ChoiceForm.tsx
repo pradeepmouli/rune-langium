@@ -1,6 +1,9 @@
 /**
  * ChoiceForm — structured editor form for a Choice node.
  *
+ * Uses react-hook-form with zodResolver for validation, and
+ * design-system UI primitives (Input, Badge, Form*) for rendering.
+ *
  * Sections:
  * 1. Header: editable name + "Choice" amber badge
  * 2. Options: ChoiceOptionRow list + inline TypeSelector for "Add Option"
@@ -11,11 +14,24 @@
  * @module
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage
+} from '@rune-langium/design-system/ui/form';
+import { Input } from '@rune-langium/design-system/ui/input';
+import { Badge } from '@rune-langium/design-system/ui/badge';
 import { ChoiceOptionRow } from './ChoiceOptionRow.js';
-import { TypeSelector, getKindBadgeClasses } from './TypeSelector.js';
+import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { choiceFormSchema, type ChoiceFormValues } from '../../schemas/form-schemas.js';
 import type { TypeNodeData, TypeOption, EditorFormActions, MemberDisplay } from '../../types.js';
 
 // ---------------------------------------------------------------------------
@@ -38,15 +54,20 @@ export interface ChoiceFormProps {
 // ---------------------------------------------------------------------------
 
 function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) {
-  // ---- Name editing --------------------------------------------------------
+  // ---- react-hook-form setup -----------------------------------------------
 
-  const [localName, setLocalName] = useState(data.name);
-  const nameInputRef = useRef<HTMLInputElement>(null);
+  const form = useForm<ChoiceFormValues>({
+    resolver: zodResolver(choiceFormSchema),
+    defaultValues: { name: data.name },
+    mode: 'onChange'
+  });
 
-  // Sync localName when node selection changes
+  // Sync form when node selection / undo-redo changes props
   useEffect(() => {
-    setLocalName(data.name);
-  }, [data.name]);
+    form.reset({ name: data.name });
+  }, [data.name, form]);
+
+  // ---- Name auto-save (debounced) ------------------------------------------
 
   const commitName = useCallback(
     (newName: string) => {
@@ -59,12 +80,6 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
 
   const debouncedName = useAutoSave(commitName, 500);
 
-  function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value;
-    setLocalName(val);
-    debouncedName(val);
-  }
-
   // ---- Option callbacks ----------------------------------------------------
 
   function handleRemoveOption(nId: string, typeName: string) {
@@ -73,7 +88,6 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
 
   function handleAddOption(value: string | null) {
     if (value) {
-      // Extract the type label from the option value (format: "namespace::name")
       const label = availableTypes.find((opt) => opt.value === value)?.label;
       if (label) {
         actions.addChoiceOption(nodeId, label);
@@ -112,76 +126,86 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
   // ---- Render --------------------------------------------------------------
 
   return (
-    <div data-slot="choice-form" className="flex flex-col gap-4 p-4">
-      {/* Header: Name + Badge */}
-      <div data-slot="form-header" className="flex items-center gap-2">
-        <input
-          ref={nameInputRef}
-          data-slot="type-name-input"
-          type="text"
-          value={localName}
-          onChange={handleNameChange}
-          className="flex-1 text-lg font-semibold bg-transparent border-b border-transparent
-            focus:border-border-emphasis focus:outline-none px-1 py-0.5"
-          placeholder="Choice name"
-          aria-label="Choice type name"
-        />
-        <span
-          data-slot="kind-badge"
-          className={`text-xs font-medium px-2 py-0.5 rounded ${getKindBadgeClasses('choice')}`}
-        >
-          Choice
-        </span>
-      </div>
-
-      {/* Options */}
-      <section data-slot="options-section" className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-muted-foreground">
-            Options ({data.members.length})
-          </label>
-        </div>
-
-        <div data-slot="option-list" className="flex flex-col gap-0.5">
-          {data.members.map((member: MemberDisplay, i: number) => (
-            <ChoiceOptionRow
-              key={`${member.typeName}-${i}`}
-              typeName={member.typeName ?? member.name}
-              nodeId={nodeId}
-              availableTypes={availableTypes}
-              onRemove={handleRemoveOption}
-            />
-          ))}
-
-          {data.members.length === 0 && (
-            <p className="text-xs text-muted-foreground italic py-2 text-center">
-              No options defined. Use the selector below to add one.
-            </p>
-          )}
-        </div>
-
-        {/* Add Option via TypeSelector */}
-        <div data-slot="add-option" className="mt-1">
-          <TypeSelector
-            value=""
-            options={addableTypes}
-            onSelect={handleAddOption}
-            placeholder="Add option..."
+    <Form {...form}>
+      <div data-slot="choice-form" className="flex flex-col gap-4 p-4">
+        {/* Header: Name + Badge */}
+        <div data-slot="form-header" className="flex items-center gap-2">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem className="flex-1">
+                <FormControl>
+                  <Input
+                    {...field}
+                    data-slot="type-name-input"
+                    onChange={(e) => {
+                      field.onChange(e);
+                      debouncedName(e.target.value);
+                    }}
+                    className="text-lg font-semibold bg-transparent border-b border-transparent
+                      focus-visible:border-border-emphasis focus-visible:ring-0 shadow-none
+                      px-1 py-0.5 h-auto rounded-none"
+                    placeholder="Choice name"
+                    aria-label="Choice type name"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
+          <Badge variant="choice">Choice</Badge>
         </div>
-      </section>
 
-      {/* Metadata */}
-      <MetadataSection
-        definition={data.definition ?? ''}
-        comments={data.comments ?? ''}
-        synonyms={data.synonyms ?? []}
-        onDefinitionChange={handleDefinitionChange}
-        onCommentsChange={handleCommentsChange}
-        onAddSynonym={handleAddSynonym}
-        onRemoveSynonym={handleRemoveSynonym}
-      />
-    </div>
+        {/* Options */}
+        <section data-slot="options-section" className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <FormLabel className="text-xs font-medium text-muted-foreground">
+              Options ({data.members.length})
+            </FormLabel>
+          </div>
+
+          <div data-slot="option-list" className="flex flex-col gap-0.5">
+            {data.members.map((member: MemberDisplay, i: number) => (
+              <ChoiceOptionRow
+                key={`${member.typeName}-${i}`}
+                typeName={member.typeName ?? member.name}
+                nodeId={nodeId}
+                availableTypes={availableTypes}
+                onRemove={handleRemoveOption}
+              />
+            ))}
+
+            {data.members.length === 0 && (
+              <p className="text-xs text-muted-foreground italic py-2 text-center">
+                No options defined. Use the selector below to add one.
+              </p>
+            )}
+          </div>
+
+          {/* Add Option via TypeSelector */}
+          <div data-slot="add-option" className="mt-1">
+            <TypeSelector
+              value=""
+              options={addableTypes}
+              onSelect={handleAddOption}
+              placeholder="Add option..."
+            />
+          </div>
+        </section>
+
+        {/* Metadata */}
+        <MetadataSection
+          definition={data.definition ?? ''}
+          comments={data.comments ?? ''}
+          synonyms={data.synonyms ?? []}
+          onDefinitionChange={handleDefinitionChange}
+          onCommentsChange={handleCommentsChange}
+          onAddSynonym={handleAddSynonym}
+          onRemoveSynonym={handleRemoveSynonym}
+        />
+      </div>
+    </Form>
   );
 }
 

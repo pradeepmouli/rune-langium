@@ -15,10 +15,10 @@ importers:
     dependencies:
       '@lspeasy/client':
         specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        version: 1.0.1(ws@8.19.0)(zod@4.3.6)
       '@lspeasy/core':
         specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        version: 1.0.1(ws@8.19.0)(zod@4.3.6)
       camelcase:
         specifier: ^9.0.0
         version: 9.0.0
@@ -79,7 +79,7 @@ importers:
         version: 6.39.14
       '@lspeasy/core':
         specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        version: 1.0.1(ws@8.19.0)(zod@4.3.6)
       '@radix-ui/react-collapsible':
         specifier: ^1.1.12
         version: 1.1.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -219,16 +219,60 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/design-system: {}
+  packages/design-system:
+    dependencies:
+      '@hookform/resolvers':
+        specifier: ^5.2.2
+        version: 5.2.2(react-hook-form@7.71.1(react@19.2.4))
+      '@radix-ui/react-label':
+        specifier: ^2.1.8
+        version: 2.1.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@radix-ui/react-slot':
+        specifier: ^1.2.4
+        version: 1.2.4(@types/react@19.2.14)(react@19.2.4)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^0.564.0
+        version: 0.564.0(react@19.2.4)
+      react:
+        specifier: '>=18.0.0'
+        version: 19.2.4
+      react-dom:
+        specifier: '>=18.0.0'
+        version: 19.2.4(react@19.2.4)
+      react-hook-form:
+        specifier: ^7.71.1
+        version: 7.71.1(react@19.2.4)
+      tailwind-merge:
+        specifier: ^3.4.0
+        version: 3.4.0
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/lsp-server:
     dependencies:
       '@lspeasy/core':
         specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        version: 1.0.1(ws@8.19.0)(zod@4.3.6)
       '@lspeasy/server':
         specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        version: 1.0.1(ws@8.19.0)(zod@4.3.6)
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../core
@@ -244,7 +288,7 @@ importers:
     devDependencies:
       '@lspeasy/client':
         specifier: ^1.0.1
-        version: 1.0.1(ws@8.19.0)(zod@3.25.76)
+        version: 1.0.1(ws@8.19.0)(zod@4.3.6)
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -260,12 +304,24 @@ importers:
       '@dagrejs/dagre':
         specifier: ^2.0.4
         version: 2.0.4
+      '@hookform/resolvers':
+        specifier: ^5.2.2
+        version: 5.2.2(react-hook-form@7.71.1(react@19.2.4))
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../core
+      '@rune-langium/design-system':
+        specifier: workspace:*
+        version: link:../design-system
       '@xyflow/react':
         specifier: ^12.10.0
         version: 12.10.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react-hook-form:
+        specifier: ^7.71.1
+        version: 7.71.1(react@19.2.4)
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
       zundo:
         specifier: ^2.3.0
         version: 2.3.0(zustand@5.0.11(@types/react@19.2.14)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4)))
@@ -716,6 +772,11 @@ packages:
 
   '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
+
+  '@hookform/resolvers@5.2.2':
+    resolution: {integrity: sha512-A/IxlMLShx3KjV/HeTcTfaMxdwy690+L/ZADoeaTltLx+CVuzkeVIPuybK3jrRfw7YZnmdKsVVHAlEPIAEUNlA==}
+    peerDependencies:
+      react-hook-form: ^7.55.0
 
   '@inquirer/external-editor@1.0.3':
     resolution: {integrity: sha512-RWbSrDiYmO4LbejWY7ttpxczuwQyZLBUyygsA9Nsv95hpzUWwnNTVQmAq3xuh7vNwCp07UTmE5i11XAEExx4RA==}
@@ -1564,6 +1625,9 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@standard-schema/utils@0.3.0':
+    resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
 
   '@tailwindcss/node@4.1.18':
     resolution: {integrity: sha512-DoR7U1P7iYhw16qJ49fgXUlry1t4CpXeErJHnQ44JgTSKMaZUdf17cfn5mHchfJ4KRBZRFA/Coo+MUF5+gOaCQ==}
@@ -2638,6 +2702,12 @@ packages:
     peerDependencies:
       react: ^19.2.4
 
+  react-hook-form@7.71.1:
+    resolution: {integrity: sha512-9SUJKCGKo8HUSsCO+y0CtqkqI5nNuaDqTxyqPsZPqIwudpj4rCrAz/jZV+jn57bx5gtZKOh3neQu94DXMc+w5w==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      react: ^16.8.0 || ^17 || ^18 || ^19
+
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
 
@@ -3096,8 +3166,8 @@ packages:
     engines: {node: '>= 14.6'}
     hasBin: true
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
   zundo@2.3.0:
     resolution: {integrity: sha512-4GXYxXA17SIKYhVbWHdSEU04P697IMyVGXrC2TnzoyohEAWytFNOKqOp5gTGvaW93F/PM5Y0evbGtOPF0PWQwQ==}
@@ -3620,6 +3690,11 @@ snapshots:
 
   '@floating-ui/utils@0.2.10': {}
 
+  '@hookform/resolvers@5.2.2(react-hook-form@7.71.1(react@19.2.4))':
+    dependencies:
+      '@standard-schema/utils': 0.3.0
+      react-hook-form: 7.71.1(react@19.2.4)
+
   '@inquirer/external-editor@1.0.3(@types/node@25.2.3)':
     dependencies:
       chardet: 2.1.1
@@ -3656,23 +3731,23 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.1
 
-  '@lspeasy/client@1.0.1(ws@8.19.0)(zod@3.25.76)':
+  '@lspeasy/client@1.0.1(ws@8.19.0)(zod@4.3.6)':
     dependencies:
-      '@lspeasy/core': 1.0.1(ws@8.19.0)(zod@3.25.76)
-      zod: 3.25.76
+      '@lspeasy/core': 1.0.1(ws@8.19.0)(zod@4.3.6)
+      zod: 4.3.6
     transitivePeerDependencies:
       - ws
 
-  '@lspeasy/core@1.0.1(ws@8.19.0)(zod@3.25.76)':
+  '@lspeasy/core@1.0.1(ws@8.19.0)(zod@4.3.6)':
     dependencies:
-      zod: 3.25.76
+      zod: 4.3.6
     optionalDependencies:
       ws: 8.19.0
 
-  '@lspeasy/server@1.0.1(ws@8.19.0)(zod@3.25.76)':
+  '@lspeasy/server@1.0.1(ws@8.19.0)(zod@4.3.6)':
     dependencies:
-      '@lspeasy/core': 1.0.1(ws@8.19.0)(zod@3.25.76)
-      zod: 3.25.76
+      '@lspeasy/core': 1.0.1(ws@8.19.0)(zod@4.3.6)
+      zod: 4.3.6
     transitivePeerDependencies:
       - ws
 
@@ -4297,6 +4372,8 @@ snapshots:
     optional: true
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@standard-schema/utils@0.3.0': {}
 
   '@tailwindcss/node@4.1.18':
     dependencies:
@@ -5382,6 +5459,10 @@ snapshots:
       react: 19.2.4
       scheduler: 0.27.0
 
+  react-hook-form@7.71.1(react@19.2.4):
+    dependencies:
+      react: 19.2.4
+
   react-is@17.0.2: {}
 
   react-refresh@0.18.0: {}
@@ -5769,7 +5850,7 @@ snapshots:
 
   yaml@2.8.2: {}
 
-  zod@3.25.76: {}
+  zod@4.3.6: {}
 
   zundo@2.3.0(zustand@5.0.11(@types/react@19.2.14)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))):
     dependencies:

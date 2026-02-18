@@ -2,12 +2,43 @@
   "name": "@rune-langium/design-system",
   "version": "0.1.0",
   "private": true,
-  "description": "Shared design tokens and theme for Rune DSL tooling",
+  "description": "Shared design tokens, theme, and UI primitives for Rune DSL tooling",
   "type": "module",
   "exports": {
     "./theme.css": "./src/theme.css",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./utils": "./src/utils.ts",
+    "./ui/form": "./src/ui/form.tsx",
+    "./ui/input": "./src/ui/input.tsx",
+    "./ui/label": "./src/ui/label.tsx",
+    "./ui/textarea": "./src/ui/textarea.tsx",
+    "./ui/badge": "./src/ui/badge.tsx"
   },
-  "files": ["src"],
-  "license": "MIT"
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.564.0",
+    "react-hook-form": "^7.71.1",
+    "tailwind-merge": "^3.4.0",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
 }

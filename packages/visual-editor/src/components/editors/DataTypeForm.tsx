@@ -1,6 +1,9 @@
 /**
  * DataTypeForm — structured editor form for a Data type node.
  *
+ * Uses react-hook-form with zodResolver for validation, and
+ * design-system UI primitives (Input, Badge, Form*) for rendering.
+ *
  * Sections:
  * 1. Header: editable name + "Data" blue badge
  * 2. Inheritance: TypeSelector for parent type (clearable)
@@ -10,11 +13,24 @@
  * @module
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage
+} from '@rune-langium/design-system/ui/form';
+import { Input } from '@rune-langium/design-system/ui/input';
+import { Badge } from '@rune-langium/design-system/ui/badge';
 import { AttributeRow } from './AttributeRow.js';
-import { TypeSelector, getKindBadgeClasses } from './TypeSelector.js';
+import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { dataTypeFormSchema, type DataTypeFormValues } from '../../schemas/form-schemas.js';
 import type { TypeNodeData, TypeOption, EditorFormActions, MemberDisplay } from '../../types.js';
 
 // ---------------------------------------------------------------------------
@@ -37,15 +53,20 @@ export interface DataTypeFormProps {
 // ---------------------------------------------------------------------------
 
 function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormProps) {
-  // ---- Name editing --------------------------------------------------------
+  // ---- react-hook-form setup -----------------------------------------------
 
-  const [localName, setLocalName] = useState(data.name);
-  const nameInputRef = useRef<HTMLInputElement>(null);
+  const form = useForm<DataTypeFormValues>({
+    resolver: zodResolver(dataTypeFormSchema),
+    defaultValues: { name: data.name, parentName: data.parentName ?? '' },
+    mode: 'onChange'
+  });
 
-  // Sync localName when node selection changes
+  // Sync form when node selection / undo-redo changes props
   useEffect(() => {
-    setLocalName(data.name);
-  }, [data.name]);
+    form.reset({ name: data.name, parentName: data.parentName ?? '' });
+  }, [data.name, data.parentName, form]);
+
+  // ---- Name auto-save (debounced) ------------------------------------------
 
   const commitName = useCallback(
     (newName: string) => {
@@ -57,12 +78,6 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
   );
 
   const debouncedName = useAutoSave(commitName, 500);
-
-  function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value;
-    setLocalName(val);
-    debouncedName(val);
-  }
 
   // ---- Inheritance ---------------------------------------------------------
 
@@ -118,7 +133,6 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
     (opt) => (opt.kind === 'data' || opt.kind === 'builtin') && opt.label !== data.name
   );
 
-  // Find current parent value (if any)
   const parentValue = data.parentName
     ? (availableTypes.find((opt) => opt.label === data.parentName)?.value ?? null)
     : null;
@@ -126,89 +140,99 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
   // ---- Render --------------------------------------------------------------
 
   return (
-    <div data-slot="data-type-form" className="flex flex-col gap-4 p-4">
-      {/* Header: Name + Badge */}
-      <div data-slot="form-header" className="flex items-center gap-2">
-        <input
-          ref={nameInputRef}
-          data-slot="type-name-input"
-          type="text"
-          value={localName}
-          onChange={handleNameChange}
-          className="flex-1 text-lg font-semibold bg-transparent border-b border-transparent
-            focus:border-border-emphasis focus:outline-none px-1 py-0.5"
-          placeholder="Type name"
-          aria-label="Data type name"
+    <Form {...form}>
+      <div data-slot="data-type-form" className="flex flex-col gap-4 p-4">
+        {/* Header: Name + Badge */}
+        <div data-slot="form-header" className="flex items-center gap-2">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem className="flex-1">
+                <FormControl>
+                  <Input
+                    {...field}
+                    data-slot="type-name-input"
+                    onChange={(e) => {
+                      field.onChange(e);
+                      debouncedName(e.target.value);
+                    }}
+                    className="text-lg font-semibold bg-transparent border-b border-transparent
+                      focus-visible:border-border-emphasis focus-visible:ring-0 shadow-none
+                      px-1 py-0.5 h-auto rounded-none"
+                    placeholder="Type name"
+                    aria-label="Data type name"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Badge variant="data">Data</Badge>
+        </div>
+
+        {/* Inheritance */}
+        <section data-slot="inheritance-section" className="flex flex-col gap-1.5">
+          <FormLabel className="text-xs font-medium text-muted-foreground">Extends</FormLabel>
+          <TypeSelector
+            value={parentValue ?? ''}
+            options={parentOptions}
+            onSelect={handleParentSelect}
+            placeholder="Select parent type..."
+            allowClear
+          />
+        </section>
+
+        {/* Attributes */}
+        <section data-slot="attributes-section" className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <FormLabel className="text-xs font-medium text-muted-foreground">
+              Attributes ({data.members.length})
+            </FormLabel>
+            <button
+              data-slot="add-attribute-btn"
+              type="button"
+              onClick={handleAddAttribute}
+              className="text-xs text-primary hover:underline"
+            >
+              + Add Attribute
+            </button>
+          </div>
+
+          <div data-slot="attribute-list" className="flex flex-col gap-0.5">
+            {data.members.map((member: MemberDisplay, i: number) => (
+              <AttributeRow
+                key={`${nodeId}-attr-${member.name}-${i}`}
+                member={member}
+                nodeId={nodeId}
+                index={i}
+                availableTypes={availableTypes}
+                onUpdate={handleUpdateAttribute}
+                onRemove={handleRemoveAttribute}
+                onReorder={handleReorderAttribute}
+              />
+            ))}
+
+            {data.members.length === 0 && (
+              <p className="text-xs text-muted-foreground italic py-2 text-center">
+                No attributes defined. Click &quot;+ Add Attribute&quot; to create one.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Metadata */}
+        <MetadataSection
+          definition={data.definition ?? ''}
+          comments={data.comments ?? ''}
+          synonyms={data.synonyms ?? []}
+          onDefinitionChange={handleDefinitionChange}
+          onCommentsChange={handleCommentsChange}
+          onAddSynonym={handleAddSynonym}
+          onRemoveSynonym={handleRemoveSynonym}
         />
-        <span
-          data-slot="kind-badge"
-          className={`text-xs font-medium px-2 py-0.5 rounded ${getKindBadgeClasses('data')}`}
-        >
-          Data
-        </span>
       </div>
-
-      {/* Inheritance */}
-      <section data-slot="inheritance-section" className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Extends</label>
-        <TypeSelector
-          value={parentValue ?? ''}
-          options={parentOptions}
-          onSelect={handleParentSelect}
-          placeholder="Select parent type..."
-          allowClear
-        />
-      </section>
-
-      {/* Attributes */}
-      <section data-slot="attributes-section" className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-muted-foreground">
-            Attributes ({data.members.length})
-          </label>
-          <button
-            data-slot="add-attribute-btn"
-            type="button"
-            onClick={handleAddAttribute}
-            className="text-xs text-primary hover:underline"
-          >
-            + Add Attribute
-          </button>
-        </div>
-
-        <div data-slot="attribute-list" className="flex flex-col gap-0.5">
-          {data.members.map((member: MemberDisplay, i: number) => (
-            <AttributeRow
-              key={`${nodeId}-attr-${member.name}-${i}`}
-              member={member}
-              nodeId={nodeId}
-              index={i}
-              availableTypes={availableTypes}
-              onUpdate={handleUpdateAttribute}
-              onRemove={handleRemoveAttribute}
-              onReorder={handleReorderAttribute}
-            />
-          ))}
-
-          {data.members.length === 0 && (
-            <p className="text-xs text-muted-foreground italic py-2 text-center">
-              No attributes defined. Click "+ Add Attribute" to create one.
-            </p>
-          )}
-        </div>
-      </section>
-
-      {/* Metadata */}
-      <MetadataSection
-        definition={data.definition ?? ''}
-        comments={data.comments ?? ''}
-        synonyms={data.synonyms ?? []}
-        onDefinitionChange={handleDefinitionChange}
-        onCommentsChange={handleCommentsChange}
-        onAddSynonym={handleAddSynonym}
-        onRemoveSynonym={handleRemoveSynonym}
-      />
-    </div>
+    </Form>
   );
 }
 

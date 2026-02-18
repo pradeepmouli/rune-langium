@@ -99,7 +99,7 @@ describe('DataTypeForm', () => {
       />
     );
 
-    const badge = container.querySelector('[data-slot="kind-badge"]');
+    const badge = container.querySelector('[data-slot="badge"]');
     expect(badge?.textContent).toBe('Data');
   });
 
