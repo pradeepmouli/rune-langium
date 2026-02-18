@@ -17,6 +17,7 @@ import type {
   Data,
   Choice,
   RosettaEnumeration,
+  RosettaFunction,
   Attribute,
   ChoiceOption,
   RosettaEnumValue
@@ -34,7 +35,7 @@ export interface SyntheticModel {
   imports: never[];
 }
 
-export type SyntheticElement = SyntheticData | SyntheticChoice | SyntheticEnum;
+export type SyntheticElement = SyntheticData | SyntheticChoice | SyntheticEnum | SyntheticFunction;
 
 export interface SyntheticData {
   $type: 'Data';
@@ -93,6 +94,16 @@ export interface SyntheticEnumValue {
   display?: string;
   /** Original AST node when available. */
   source?: RosettaEnumValue;
+}
+
+export interface SyntheticFunction {
+  $type: 'RosettaFunction';
+  name: string;
+  definition?: string;
+  inputs: SyntheticAttribute[];
+  output?: SyntheticAttribute;
+  /** Original AST node when available. */
+  source?: RosettaFunction;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +257,24 @@ export function graphToModels(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): S
           enumValues: data.members.map(memberToEnumValue),
           synonyms: data.synonyms,
           source: data.source as RosettaEnumeration | undefined
+        };
+        elements.push(element);
+      } else if (data.kind === 'func') {
+        const outputTypeName = data.outputType ?? 'string';
+        const element: SyntheticFunction = {
+          $type: 'RosettaFunction',
+          name: data.name,
+          definition: data.definition,
+          inputs: data.members.map(memberToAttribute),
+          output: {
+            name: 'output',
+            override: false,
+            typeCall: {
+              type: { ref: { name: outputTypeName }, $refText: outputTypeName }
+            },
+            card: { inf: 1, sup: 1, unbounded: false }
+          },
+          source: data.source as RosettaFunction | undefined
         };
         elements.push(element);
       }

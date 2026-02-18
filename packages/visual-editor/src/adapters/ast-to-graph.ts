@@ -1,7 +1,7 @@
 /**
  * AST → ReactFlow graph adapter.
  *
- * Transforms Rune DSL typed AST (Data, Choice, RosettaEnumeration)
+ * Transforms Rune DSL typed AST (Data, Choice, RosettaEnumeration, RosettaFunction)
  * into ReactFlow nodes and edges for visualization.
  *
  * Source AST nodes are attached to each graph node and member so that
@@ -13,6 +13,7 @@ import {
   isData,
   isChoice,
   isRosettaEnumeration,
+  isRosettaFunction,
   isRosettaBasicType,
   isRosettaRecordType
 } from '@rune-langium/core';
@@ -22,6 +23,7 @@ import type {
   Data,
   Choice,
   RosettaEnumeration,
+  RosettaFunction,
   Attribute,
   ChoiceOption,
   RosettaEnumValue
@@ -152,6 +154,16 @@ function enumValueToMember(val: RosettaEnumValue): MemberDisplay<RosettaEnumValu
   };
 }
 
+function functionInputToMember(attr: Attribute): MemberDisplay<Attribute> {
+  return {
+    name: attr.name,
+    typeName: attr.typeCall?.type?.$refText,
+    cardinality: attr.card ? formatCardinality(attr.card) : undefined,
+    isOverride: false,
+    source: attr
+  };
+}
+
 /**
  * Extract synonym strings from Data/Choice RosettaClassSynonym objects.
  *
@@ -278,6 +290,34 @@ function buildEnumNode(
   };
 }
 
+function buildFunctionNode(
+  func: RosettaFunction,
+  namespace: string,
+  nodeId: string
+): TypeGraphNode {
+  const members = (func.inputs ?? []).map(functionInputToMember);
+  const outputAttr = func.output;
+  const outputType = outputAttr?.typeCall?.type?.$refText;
+
+  return {
+    id: nodeId,
+    type: 'func',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'func',
+      name: func.name,
+      namespace,
+      definition: func.definition,
+      members,
+      outputType,
+      hasExternalRefs: false,
+      errors: [],
+      source: func,
+      isReadOnly: false
+    } as TypeNodeData<'func'>
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -324,6 +364,11 @@ export function astToGraph(
         if (!passesFilter('enum', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         nodes.push(buildEnumNode(element, namespace, nodeId));
+        nodeIdSet.add(nodeId);
+      } else if (isRosettaFunction(element)) {
+        if (!passesFilter('func', namespace, name, filters)) continue;
+        const nodeId = makeNodeId(namespace, name);
+        nodes.push(buildFunctionNode(element, namespace, nodeId));
         nodeIdSet.add(nodeId);
       }
     }
@@ -399,11 +444,50 @@ export function astToGraph(
         }
       }
     }
+
+    // Function input/output type reference edges
+    if (nodeData.kind === 'func') {
+      // Input parameter type references
+      for (const member of nodeData.members) {
+        if (member.typeName) {
+          const targetNodeId = nameToNodeId.get(member.typeName);
+          if (targetNodeId && targetNodeId !== node.id) {
+            edges.push({
+              id: `${node.id}--attribute-ref--${member.name}--${targetNodeId}`,
+              source: node.id,
+              target: targetNodeId,
+              type: 'attribute-ref',
+              data: {
+                kind: 'attribute-ref',
+                label: member.name,
+                cardinality: member.cardinality
+              }
+            });
+          }
+        }
+      }
+      // Output type reference
+      if (nodeData.outputType) {
+        const targetNodeId = nameToNodeId.get(nodeData.outputType);
+        if (targetNodeId && targetNodeId !== node.id) {
+          edges.push({
+            id: `${node.id}--attribute-ref--output--${targetNodeId}`,
+            source: node.id,
+            target: targetNodeId,
+            type: 'attribute-ref',
+            data: {
+              kind: 'attribute-ref',
+              label: 'output'
+            }
+          });
+        }
+      }
+    }
   }
 
   // Update hasExternalRefs now that we know all node IDs
   for (const node of nodes) {
-    if (node.data.kind === 'data') {
+    if (node.data.kind === 'data' || node.data.kind === 'func') {
       node.data.hasExternalRefs = node.data.members.some(
         (m) => m.typeName && !nameToNodeId.has(m.typeName)
       );

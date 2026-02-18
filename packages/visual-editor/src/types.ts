@@ -367,6 +367,7 @@ export interface NamespaceTreeNode {
   dataCount: number;
   choiceCount: number;
   enumCount: number;
+  funcCount: number;
 }
 
 export interface NamespaceTypeEntry {
