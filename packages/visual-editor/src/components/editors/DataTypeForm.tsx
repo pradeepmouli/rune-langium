@@ -31,7 +31,8 @@ import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { dataTypeFormSchema, type DataTypeFormValues } from '../../schemas/form-schemas.js';
-import type { TypeNodeData, TypeOption, EditorFormActions, MemberDisplay } from '../../types.js';
+import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
+import type { MemberDisplay } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -44,8 +45,8 @@ export interface DataTypeFormProps {
   data: TypeNodeData<'data'>;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
-  /** All editor form action callbacks. */
-  actions: EditorFormActions;
+  /** Data-specific editor form action callbacks. */
+  actions: EditorFormActions<'data'>;
 }
 
 // ---------------------------------------------------------------------------

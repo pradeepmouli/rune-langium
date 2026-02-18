@@ -92,7 +92,7 @@ export interface MemberDisplay<M = AstMemberType> {
  * const generic: TypeNodeData = node.data;
  * ```
  */
-export interface TypeNodeData<K extends TypeKind = TypeKind> {
+export type TypeNodeData<K extends TypeKind = TypeKind> = {
   kind: K;
   name: string;
   namespace: string;
@@ -100,6 +100,7 @@ export interface TypeNodeData<K extends TypeKind = TypeKind> {
   members: Array<MemberDisplay<AstMemberKindMap[K]>>;
   parentName?: string;
   hasExternalRefs: boolean;
+
   errors: ValidationError[];
   /** Editable synonym values for this element. */
   synonyms?: string[];
@@ -108,14 +109,14 @@ export interface TypeNodeData<K extends TypeKind = TypeKind> {
   /** Comments/annotations text for this element. */
   comments?: string;
   /** Output type name (functions only). */
-  outputType?: string;
+  outputType?: K extends 'func' ? string : undefined;
   /** Expression text (functions only). */
-  expressionText?: string;
+  expressionText?: K extends 'func' ? string : undefined;
   /** Source AST node — preserves full Langium type information. */
   source?: AstNodeKindMap[K];
   /** Required for ReactFlow compatibility: Node<T> requires T extends Record<string, unknown> */
   [key: string]: unknown;
-}
+};
 
 /**
  * Data payload for graph edges.
@@ -168,17 +169,23 @@ export interface TypeOption {
   namespace?: string;
 }
 
-/** Callback interface exposing all editor form store actions. */
-export interface EditorFormActions {
-  // --- Type operations (all kinds) ---
+// ---------------------------------------------------------------------------
+// Kind-specific form action interfaces
+// ---------------------------------------------------------------------------
+
+/** Actions shared by all type kinds. */
+export interface CommonFormActions {
   renameType(nodeId: string, newName: string): void;
   deleteType(nodeId: string): void;
   updateDefinition(nodeId: string, definition: string): void;
   updateComments(nodeId: string, comments: string): void;
   addSynonym(nodeId: string, synonym: string): void;
   removeSynonym(nodeId: string, index: number): void;
+  validate(): ValidationError[];
+}
 
-  // --- Data type operations ---
+/** Data type–specific editor actions. */
+export interface DataFormActions extends CommonFormActions {
   addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string): void;
   removeAttribute(nodeId: string, attrName: string): void;
   updateAttribute(
@@ -190,27 +197,70 @@ export interface EditorFormActions {
   ): void;
   reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
   setInheritance(childId: string, parentId: string | null): void;
+}
 
-  // --- Enum operations ---
+/** Enum-specific editor actions. */
+export interface EnumFormActions extends CommonFormActions {
   addEnumValue(nodeId: string, valueName: string, displayName?: string): void;
   removeEnumValue(nodeId: string, valueName: string): void;
   updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string): void;
   reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number): void;
   setEnumParent(nodeId: string, parentId: string | null): void;
+}
 
-  // --- Choice operations ---
+/** Choice-specific editor actions. */
+export interface ChoiceFormActions extends CommonFormActions {
   addChoiceOption(nodeId: string, typeName: string): void;
   removeChoiceOption(nodeId: string, typeName: string): void;
+}
 
-  // --- Function operations ---
+/** Function-specific editor actions. */
+export interface FuncFormActions extends CommonFormActions {
   addInputParam(nodeId: string, paramName: string, typeName: string): void;
   removeInputParam(nodeId: string, paramName: string): void;
   updateOutputType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
-
-  // --- Validation ---
-  validate(): ValidationError[];
 }
+
+/** Maps each `TypeKind` to its form actions interface. */
+export interface FormActionsKindMap {
+  data: DataFormActions;
+  enum: EnumFormActions;
+  choice: ChoiceFormActions;
+  func: FuncFormActions;
+}
+
+/** Intersection of all kind-specific actions (every method available). */
+export type AllEditorFormActions = DataFormActions &
+  EnumFormActions &
+  ChoiceFormActions &
+  FuncFormActions;
+
+/**
+ * Kind-aware editor form actions.
+ *
+ * When parameterized with a specific kind (e.g. `EditorFormActions<'data'>`),
+ * only that kind's actions + common actions are available.
+ *
+ * When unparameterized (`EditorFormActions`), resolves to the full intersection
+ * of all kind-specific actions for backward compatibility.
+ *
+ * @example
+ * ```ts
+ * // Narrow — DataTypeForm only sees data + common actions
+ * const dataActions: EditorFormActions<'data'>;
+ * dataActions.addAttribute(...); // ✅
+ * dataActions.addEnumValue(...); // ❌ compile error
+ *
+ * // Full — EditorFormPanel passes the complete set
+ * const allActions: EditorFormActions;
+ * allActions.addAttribute(...); // ✅
+ * allActions.addEnumValue(...); // ✅
+ * ```
+ */
+export type EditorFormActions<K extends TypeKind = TypeKind> = [TypeKind] extends [K]
+  ? AllEditorFormActions
+  : FormActionsKindMap[K];
 
 // ---------------------------------------------------------------------------
 // Configuration

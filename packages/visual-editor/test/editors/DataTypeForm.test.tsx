@@ -13,7 +13,9 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DataTypeForm } from '../../src/components/editors/DataTypeForm.js';
 import type { TypeNodeData, TypeOption, EditorFormActions } from '../../src/types.js';
 
-function makeActions(overrides: Partial<EditorFormActions> = {}): EditorFormActions {
+function makeActions(
+  overrides: Partial<EditorFormActions<'data'>> = {}
+): EditorFormActions<'data'> {
   return {
     renameType: vi.fn(),
     deleteType: vi.fn(),
@@ -26,17 +28,6 @@ function makeActions(overrides: Partial<EditorFormActions> = {}): EditorFormActi
     updateAttribute: vi.fn(),
     reorderAttribute: vi.fn(),
     setInheritance: vi.fn(),
-    addEnumValue: vi.fn(),
-    removeEnumValue: vi.fn(),
-    updateEnumValue: vi.fn(),
-    reorderEnumValue: vi.fn(),
-    setEnumParent: vi.fn(),
-    addChoiceOption: vi.fn(),
-    removeChoiceOption: vi.fn(),
-    addInputParam: vi.fn(),
-    removeInputParam: vi.fn(),
-    updateOutputType: vi.fn(),
-    updateExpression: vi.fn(),
     validate: vi.fn(() => []),
     ...overrides
   };

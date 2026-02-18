@@ -47,8 +47,8 @@ export interface FunctionFormProps {
   data: TypeNodeData<'func'>;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
-  /** All editor form action callbacks. */
-  actions: EditorFormActions;
+  /** Function-specific editor form action callbacks. */
+  actions: EditorFormActions<'func'>;
 }
 
 // ---------------------------------------------------------------------------

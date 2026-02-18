@@ -7,9 +7,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "jsx": "react-jsx",
-    "composite": false,
-    "incremental": false,
-    "noEmit": true
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist"]

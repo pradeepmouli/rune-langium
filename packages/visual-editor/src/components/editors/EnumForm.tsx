@@ -44,8 +44,8 @@ export interface EnumFormProps {
   data: TypeNodeData<'enum'>;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
-  /** All editor form action callbacks. */
-  actions: EditorFormActions;
+  /** Enum-specific editor form action callbacks. */
+  actions: EditorFormActions<'enum'>;
 }
 
 // ---------------------------------------------------------------------------

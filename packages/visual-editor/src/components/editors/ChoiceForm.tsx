@@ -45,8 +45,8 @@ export interface ChoiceFormProps {
   data: TypeNodeData<'choice'>;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
-  /** All editor form action callbacks. */
-  actions: EditorFormActions;
+  /** Choice-specific editor form action callbacks. */
+  actions: EditorFormActions<'choice'>;
 }
 
 // ---------------------------------------------------------------------------
