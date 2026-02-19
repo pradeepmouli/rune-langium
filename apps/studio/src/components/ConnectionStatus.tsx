@@ -6,8 +6,8 @@
  */
 
 import type { TransportState } from '../services/transport-provider.js';
-import { cn } from '@/lib/utils.js';
-import { Button } from './ui/button.js';
+import { cn } from '@rune-langium/design-system/utils';
+import { Button } from '@rune-langium/design-system/ui/button';
 
 export interface ConnectionStatusProps {
   /** Transport state to display. */

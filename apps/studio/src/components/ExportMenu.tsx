@@ -7,7 +7,7 @@
 
 import { useCallback } from 'react';
 import { downloadFile, downloadRosettaFiles } from '../services/export.js';
-import { Button } from './ui/button.js';
+import { Button } from '@rune-langium/design-system/ui/button';
 
 export interface ExportMenuProps {
   /** Callback to get the current serialized .rosetta content per file. */

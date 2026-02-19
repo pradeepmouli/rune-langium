@@ -129,7 +129,7 @@ function servePort(port: MessagePort): void {
   );
 
   const { listen } = createRuneLspServer();
-  listen(transport).catch((err) => {
+  listen(transport).catch((err: unknown) => {
     console.error('[lsp-worker] LSP listen error:', err);
   });
 
@@ -164,7 +164,7 @@ if ('onconnect' in self) {
   );
 
   const { listen } = createRuneLspServer();
-  listen(transport).catch((err) => {
+  listen(transport).catch((err: unknown) => {
     console.error('[lsp-worker] LSP listen error:', err);
   });
 }

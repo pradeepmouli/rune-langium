@@ -7,7 +7,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
-    "declaration": false,
+    "declaration": true,
     "sourceMap": true,
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,
@@ -17,10 +17,9 @@
     "resolveJsonModule": true,
     "noUncheckedIndexedAccess": true,
     "jsx": "react-jsx",
-    "composite": false,
-    "incremental": false,
+    "composite": true,
     "declarationMap": false,
-    "noEmit": true,
+    "emitDeclarationOnly": true,
     "paths": {
       "@/*": ["./src/*"]
     }

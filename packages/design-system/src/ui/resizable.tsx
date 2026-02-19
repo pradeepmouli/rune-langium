@@ -1,7 +1,13 @@
+/**
+ * Resizable — shadcn/ui Resizable panels wrapping react-resizable-panels.
+ *
+ * @module
+ */
+
 import { GripVerticalIcon } from 'lucide-react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 
-import { cn } from '@/lib/utils.js';
+import { cn } from '../utils.js';
 
 function ResizablePanelGroup({
   className,
@@ -46,3 +52,4 @@ function ResizableHandle({
 }
 
 export { ResizablePanelGroup, ResizablePanel, ResizableHandle };
+export type { PanelImperativeHandle } from 'react-resizable-panels';

@@ -1,7 +1,13 @@
+/**
+ * Command — shadcn/ui Command wrapping cmdk.
+ *
+ * @module
+ */
+
 import { Command as CommandPrimitive } from 'cmdk';
 import { Search } from 'lucide-react';
 
-import { cn } from '@/lib/utils.js';
+import { cn } from '../utils.js';
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (

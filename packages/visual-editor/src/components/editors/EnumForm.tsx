@@ -2,7 +2,7 @@
  * EnumForm — structured editor form for an Enumeration node.
  *
  * Uses react-hook-form with zodResolver for validation, and
- * design-system UI primitives (Input, Badge, Form*) for rendering.
+ * design-system UI primitives (Input, Badge, Field*) for rendering.
  *
  * Sections:
  * 1. Header: editable name + "Enum" green badge
@@ -14,16 +14,16 @@
  */
 
 import { useCallback, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage
-} from '@rune-langium/design-system/ui/form';
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet
+} from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { EnumValueRow } from './EnumValueRow.js';
@@ -134,99 +134,100 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
   // ---- Render --------------------------------------------------------------
 
   return (
-    <Form {...form}>
-      <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
-        {/* Header: Name + Badge */}
-        <div data-slot="form-header" className="flex items-center gap-2">
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormControl>
-                  <Input
-                    {...field}
-                    data-slot="type-name-input"
-                    onChange={(e) => {
-                      field.onChange(e);
-                      debouncedName(e.target.value);
-                    }}
-                    className="text-lg font-semibold bg-transparent border-b border-transparent
-                      focus-visible:border-border-emphasis focus-visible:ring-0 shadow-none
-                      px-1 py-0.5 h-auto rounded-none"
-                    placeholder="Enum name"
-                    aria-label="Enum type name"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <Badge variant="enum">Enum</Badge>
-        </div>
-
-        {/* Parent Enum */}
-        <section data-slot="parent-section" className="flex flex-col gap-1.5">
-          <FormLabel className="text-xs font-medium text-muted-foreground">Extends</FormLabel>
-          <TypeSelector
-            value={parentValue ?? ''}
-            options={parentOptions}
-            onSelect={handleParentSelect}
-            placeholder="Select parent enum..."
-            allowClear
-          />
-        </section>
-
-        {/* Enum Values */}
-        <section data-slot="values-section" className="flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <FormLabel className="text-xs font-medium text-muted-foreground">
-              Values ({data.members.length})
-            </FormLabel>
-            <button
-              data-slot="add-value-btn"
-              type="button"
-              onClick={handleAddValue}
-              className="text-xs text-primary hover:underline"
-            >
-              + Add Value
-            </button>
-          </div>
-
-          <div data-slot="value-list" className="flex flex-col gap-0.5" role="list">
-            {data.members.map((member: MemberDisplay, i: number) => (
-              <EnumValueRow
-                key={`${nodeId}-val-${member.name}-${i}`}
-                name={member.name}
-                displayName={member.displayName}
-                nodeId={nodeId}
-                index={i}
-                onUpdate={handleUpdateValue}
-                onRemove={handleRemoveValue}
-                onReorder={handleReorderValue}
+    <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
+      {/* Header: Name + Badge */}
+      <div data-slot="form-header" className="flex items-center gap-2">
+        <Controller
+          control={form.control}
+          name="name"
+          render={({ field, fieldState }) => (
+            <Field className="flex-1">
+              <Input
+                {...field}
+                id={field.name}
+                data-slot="type-name-input"
+                aria-invalid={fieldState.invalid}
+                onChange={(e) => {
+                  field.onChange(e);
+                  debouncedName(e.target.value);
+                }}
+                className="text-lg font-semibold bg-transparent border-b border-transparent
+                  focus-visible:border-border-emphasis focus-visible:ring-0 shadow-none
+                  px-1 py-0.5 h-auto rounded-none"
+                placeholder="Enum name"
+                aria-label="Enum type name"
               />
-            ))}
-
-            {data.members.length === 0 && (
-              <p className="text-xs text-muted-foreground italic py-2 text-center">
-                No values defined. Click &quot;+ Add Value&quot; to create one.
-              </p>
-            )}
-          </div>
-        </section>
-
-        {/* Metadata */}
-        <MetadataSection
-          definition={data.definition ?? ''}
-          comments={data.comments ?? ''}
-          synonyms={data.synonyms ?? []}
-          onDefinitionChange={handleDefinitionChange}
-          onCommentsChange={handleCommentsChange}
-          onAddSynonym={handleAddSynonym}
-          onRemoveSynonym={handleRemoveSynonym}
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
+          )}
         />
+        <Badge variant="enum">Enum</Badge>
       </div>
-    </Form>
+
+      {/* Parent Enum */}
+      <FieldSet className="gap-1.5">
+        <FieldLegend variant="label" className="mb-0 text-muted-foreground">
+          Extends
+        </FieldLegend>
+        <TypeSelector
+          value={parentValue ?? ''}
+          options={parentOptions}
+          onSelect={handleParentSelect}
+          placeholder="Select parent enum..."
+          allowClear
+        />
+      </FieldSet>
+
+      {/* Enum Values */}
+      <FieldSet className="gap-1">
+        <FieldLegend
+          variant="label"
+          className="mb-0 text-muted-foreground flex items-center justify-between"
+        >
+          <span>Values ({data.members.length})</span>
+          <button
+            data-slot="add-value-btn"
+            type="button"
+            onClick={handleAddValue}
+            className="text-xs text-primary hover:underline font-normal"
+          >
+            + Add Value
+          </button>
+        </FieldLegend>
+
+        <FieldGroup className="gap-0.5">
+          {data.members.map((member: MemberDisplay, i: number) => (
+            <EnumValueRow
+              key={`${nodeId}-val-${member.name}-${i}`}
+              name={member.name}
+              displayName={member.displayName}
+              nodeId={nodeId}
+              index={i}
+              onUpdate={handleUpdateValue}
+              onRemove={handleRemoveValue}
+              onReorder={handleReorderValue}
+            />
+          ))}
+
+          {data.members.length === 0 && (
+            <p className="text-xs text-muted-foreground italic py-2 text-center">
+              No values defined. Click &quot;+ Add Value&quot; to create one.
+            </p>
+          )}
+        </FieldGroup>
+      </FieldSet>
+
+      {/* Metadata */}
+      <MetadataSection
+        definition={data.definition ?? ''}
+        comments={data.comments ?? ''}
+        synonyms={data.synonyms ?? []}
+        onDefinitionChange={handleDefinitionChange}
+        onCommentsChange={handleCommentsChange}
+        onAddSynonym={handleAddSynonym}
+        onRemoveSynonym={handleRemoveSynonym}
+      />
+    </div>
   );
 }
 

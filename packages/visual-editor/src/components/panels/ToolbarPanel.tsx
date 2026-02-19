@@ -4,6 +4,13 @@
 
 import { useCallback } from 'react';
 import type { LayoutDirection } from '../../types.js';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@rune-langium/design-system/ui/select';
 
 export interface ToolbarPanelProps {
   onFitView: () => void;
@@ -31,16 +38,20 @@ export function ToolbarPanel({ onFitView, onRelayout, currentDirection }: Toolba
       >
         Layout
       </button>
-      <select
-        className="rune-toolbar-select"
+      <Select
         value={currentDirection}
-        onChange={(e) => handleDirectionChange(e.target.value as LayoutDirection)}
+        onValueChange={(val) => handleDirectionChange(val as LayoutDirection)}
       >
-        <option value="TB">Top → Bottom</option>
-        <option value="LR">Left → Right</option>
-        <option value="BT">Bottom → Top</option>
-        <option value="RL">Right → Left</option>
-      </select>
+        <SelectTrigger className="rune-toolbar-select">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="TB">Top → Bottom</SelectItem>
+          <SelectItem value="LR">Left → Right</SelectItem>
+          <SelectItem value="BT">Bottom → Top</SelectItem>
+          <SelectItem value="RL">Right → Left</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }

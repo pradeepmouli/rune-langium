@@ -167,7 +167,7 @@ function AttributeRow({
         value={localName}
         onChange={handleNameChange}
         disabled={disabled}
-        className="flex-1 min-w-0 px-1.5 py-0.5 text-sm border border-transparent rounded
+        className="flex-1 min-w-28 px-1.5 py-0.5 text-sm border border-transparent rounded
           focus:border-border-emphasis focus:outline-none bg-transparent"
         placeholder="name"
         aria-label={`Attribute name: ${member.name}`}

@@ -1,7 +1,13 @@
+/**
+ * Select — shadcn/ui Select wrapping @radix-ui/react-select.
+ *
+ * @module
+ */
+
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 
-import { cn } from '@/lib/utils.js';
+import { cn } from '../utils.js';
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root data-slot="select" {...props} />;

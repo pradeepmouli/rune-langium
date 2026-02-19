@@ -6,10 +6,10 @@
  */
 
 import type { LspDiagnostic } from '../store/diagnostics-store.js';
-import { Badge } from './ui/badge.js';
-import { ScrollArea } from './ui/scroll-area.js';
-import { Separator } from './ui/separator.js';
-import { cn } from '@/lib/utils.js';
+import { Badge } from '@rune-langium/design-system/ui/badge';
+import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
+import { Separator } from '@rune-langium/design-system/ui/separator';
+import { cn } from '@rune-langium/design-system/utils';
 
 export interface DiagnosticsPanelProps {
   fileDiagnostics: Map<string, LspDiagnostic[]>;

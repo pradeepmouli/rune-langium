@@ -18,8 +18,7 @@
     "resolveJsonModule": true,
     "noUncheckedIndexedAccess": true,
     "jsx": "react-jsx",
-    "composite": false,
-    "incremental": false
+    "composite": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist", "test"]

@@ -1,3 +1,9 @@
+/**
+ * Collapsible — shadcn/ui Collapsible wrapping @radix-ui/react-collapsible.
+ *
+ * @module
+ */
+
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
 
 function Collapsible({ ...props }: React.ComponentProps<typeof CollapsiblePrimitive.Root>) {

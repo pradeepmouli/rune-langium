@@ -7,7 +7,7 @@
  */
 
 import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
-import type { PanelImperativeHandle } from 'react-resizable-panels';
+import type { PanelImperativeHandle } from '@rune-langium/design-system/ui/resizable';
 import {
   RuneTypeGraph,
   NamespaceExplorerPanel,
@@ -28,14 +28,14 @@ import { SourceEditor } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
-import { Button } from '../components/ui/button.js';
-import { Separator } from '../components/ui/separator.js';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { Separator } from '@rune-langium/design-system/ui/separator';
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle
-} from '../components/ui/resizable.js';
-import { ScrollArea } from '../components/ui/scroll-area.js';
+} from '@rune-langium/design-system/ui/resizable';
+import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import type { WorkspaceFile } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';

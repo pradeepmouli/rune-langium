@@ -3,12 +3,21 @@
  *
  * Uses composition-based architecture: accepts `renderTrigger` and
  * `renderPopover` render-props so the host app can inject shadcn
- * Popover + Command primitives. Falls back to a basic `<select>`
+ * Popover + Command primitives. Falls back to a shadcn Select
  * when render-props are not provided.
  */
 
 import { useState, useMemo } from 'react';
 import type { TypeOption, TypeKind } from '../../types.js';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue
+} from '@rune-langium/design-system/ui/select';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -110,7 +119,7 @@ export function getKindLabel(kind: TypeKind | 'builtin'): string {
  *
  * When `renderTrigger` and `renderPopover` are provided, uses composition
  * to inject host app UI primitives (e.g., shadcn Popover + Command).
- * Otherwise falls back to a basic native `<select>`.
+ * Otherwise falls back to a shadcn Select.
  */
 export function TypeSelector({
   value,
@@ -207,24 +216,30 @@ export function TypeSelector({
     );
   }
 
-  // Fallback mode: native <select>
+  // Fallback mode: shadcn Select
+  const NONE_SENTINEL = '__none__';
   return (
-    <select
-      value={value ?? ''}
-      onChange={(e) => handleSelect(e.target.value || null)}
+    <Select
+      value={value ?? NONE_SENTINEL}
+      onValueChange={(val) => handleSelect(val === NONE_SENTINEL ? null : val)}
       disabled={disabled}
-      data-slot="type-selector"
     >
-      <option value="">{allowClear ? '— None —' : placeholder}</option>
-      {groups.map((group) => (
-        <optgroup key={group.label} label={group.label}>
-          {group.options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              [{getKindLabel(opt.kind)}] {opt.label}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+      <SelectTrigger data-slot="type-selector">
+        <SelectValue placeholder={allowClear ? '— None —' : placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {allowClear && <SelectItem value={NONE_SENTINEL}>— None —</SelectItem>}
+        {groups.map((group) => (
+          <SelectGroup key={group.label}>
+            <SelectLabel>{group.label}</SelectLabel>
+            {group.options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                [{getKindLabel(opt.kind)}] {opt.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

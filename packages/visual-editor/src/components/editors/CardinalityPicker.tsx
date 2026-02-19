@@ -26,10 +26,10 @@ export interface CardinalityPickerProps {
 // ---------------------------------------------------------------------------
 
 const PRESETS = [
-  { label: '1..1', value: '(1..1)' },
-  { label: '0..1', value: '(0..1)' },
-  { label: '0..*', value: '(0..*)' },
-  { label: '1..*', value: '(1..*)' }
+  { label: '1', value: '(1..1)' },
+  { label: '0 or 1', value: '(0..1)' },
+  { label: '0 or more', value: '(0..*)' },
+  { label: '1 or more', value: '(1..*)' }
 ] as const;
 
 // ---------------------------------------------------------------------------

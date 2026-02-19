@@ -4,6 +4,13 @@
 
 import { useState, useCallback, memo } from 'react';
 import type { TypeKind } from '../../types.js';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@rune-langium/design-system/ui/select';
 
 export interface TypeCreatorProps {
   onCreateType: (kind: TypeKind, name: string, namespace: string) => void;
@@ -42,16 +49,16 @@ export const TypeCreator = memo(function TypeCreator({
     <div className="rune-type-creator" data-testid="type-creator">
       <div className="rune-type-creator__header">Create Type</div>
       <div className="rune-type-creator__form">
-        <select
-          value={kind}
-          onChange={(e) => setKind(e.target.value as TypeKind)}
-          className="rune-type-creator__kind"
-          aria-label="Type kind"
-        >
-          <option value="data">Data</option>
-          <option value="choice">Choice</option>
-          <option value="enum">Enum</option>
-        </select>
+        <Select value={kind} onValueChange={(val) => setKind(val as TypeKind)}>
+          <SelectTrigger className="rune-type-creator__kind" aria-label="Type kind">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="data">Data</SelectItem>
+            <SelectItem value="choice">Choice</SelectItem>
+            <SelectItem value="enum">Enum</SelectItem>
+          </SelectContent>
+        </Select>
         <input
           type="text"
           value={name}

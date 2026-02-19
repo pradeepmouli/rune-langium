@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import { Field, FieldLabel, FieldGroup } from '@rune-langium/design-system/ui/field';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 
 // ---------------------------------------------------------------------------
@@ -120,12 +121,10 @@ export function MetadataSection({
       </button>
 
       {expanded && (
-        <div className="mt-2 space-y-3">
+        <FieldGroup className="mt-2 gap-3">
           {/* Description */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">
-              Description
-            </label>
+          <Field>
+            <FieldLabel className="text-xs text-text-secondary">Description</FieldLabel>
             <textarea
               value={localDefinition}
               onChange={handleDefinitionChange}
@@ -141,11 +140,11 @@ export function MetadataSection({
                 resize-y"
               style={{ fieldSizing: 'content' } as React.CSSProperties}
             />
-          </div>
+          </Field>
 
           {/* Comments */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">Comments</label>
+          <Field>
+            <FieldLabel className="text-xs text-text-secondary">Comments</FieldLabel>
             <textarea
               value={localComments}
               onChange={handleCommentsChange}
@@ -161,11 +160,11 @@ export function MetadataSection({
                 resize-y"
               style={{ fieldSizing: 'content' } as React.CSSProperties}
             />
-          </div>
+          </Field>
 
           {/* Synonyms */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">Synonyms</label>
+          <Field>
+            <FieldLabel className="text-xs text-text-secondary">Synonyms</FieldLabel>
             <div className="flex flex-wrap gap-1.5 mb-1.5">
               {synonyms.map((synonym, index) => (
                 <span
@@ -213,8 +212,8 @@ export function MetadataSection({
                 </button>
               </div>
             )}
-          </div>
-        </div>
+          </Field>
+        </FieldGroup>
       )}
     </div>
   );

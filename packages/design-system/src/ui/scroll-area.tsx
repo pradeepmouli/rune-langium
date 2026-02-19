@@ -1,6 +1,12 @@
+/**
+ * ScrollArea — shadcn/ui ScrollArea wrapping @radix-ui/react-scroll-area.
+ *
+ * @module
+ */
+
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
 
-import { cn } from '@/lib/utils.js';
+import { cn } from '../utils.js';
 
 function ScrollArea({
   className,

@@ -1,6 +1,12 @@
+/**
+ * Tooltip — shadcn/ui Tooltip wrapping @radix-ui/react-tooltip.
+ *
+ * @module
+ */
+
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 
-import { cn } from '@/lib/utils.js';
+import { cn } from '../utils.js';
 
 function TooltipProvider({
   delayDuration = 0,

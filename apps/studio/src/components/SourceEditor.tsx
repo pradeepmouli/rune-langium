@@ -17,7 +17,7 @@ import { defaultKeymap } from '@codemirror/commands';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
-import { cn } from '@/lib/utils.js';
+import { cn } from '@rune-langium/design-system/utils';
 
 // Re-export pathToUri for backward compatibility
 export { pathToUri } from '../utils/uri.js';

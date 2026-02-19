@@ -1,6 +1,12 @@
+/**
+ * Separator — shadcn/ui Separator wrapping @radix-ui/react-separator.
+ *
+ * @module
+ */
+
 import * as SeparatorPrimitive from '@radix-ui/react-separator';
 
-import { cn } from '@/lib/utils.js';
+import { cn } from '../utils.js';
 
 function Separator({
   className,

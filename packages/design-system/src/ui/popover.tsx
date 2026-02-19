@@ -1,6 +1,12 @@
+/**
+ * Popover — shadcn/ui Popover wrapping @radix-ui/react-popover.
+ *
+ * @module
+ */
+
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 
-import { cn } from '@/lib/utils.js';
+import { cn } from '../utils.js';
 
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;

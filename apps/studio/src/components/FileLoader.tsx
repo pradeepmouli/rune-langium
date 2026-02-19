@@ -5,8 +5,8 @@
 import { useCallback, useRef, useState } from 'react';
 import type { WorkspaceFile } from '../services/workspace.js';
 import { readFileList } from '../services/workspace.js';
-import { Button } from './ui/button.js';
-import { cn } from '@/lib/utils.js';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { cn } from '@rune-langium/design-system/utils';
 
 export interface FileLoaderProps {
   onFilesLoaded: (files: WorkspaceFile[]) => void;
