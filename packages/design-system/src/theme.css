@@ -1,91 +1,17 @@
 /**
- * Rune DSL Design System — Theme tokens as CSS custom properties.
+ * Rune DSL Design System — Standard shadcn/ui theme for Tailwind v4.
  *
- * Import this file into any app that needs the Rune design language.
- * Works standalone or as a Tailwind v4 @theme source.
- *
- * Color scale: Slate palette for neutral tones,
- * plus semantic colors for each domain type (Data, Choice, Enum).
+ * This file is imported AFTER `@import 'tailwindcss'` by the consuming app.
+ * It provides:
+ *  1. shadcn @theme inline bridge (--color-* → var(--*))
+ *  2. Domain-specific color tokens (data/choice/enum/func/status)
+ *  3. :root / .dark color palettes
+ *  4. Base layer defaults
  */
 
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
-/*---break---
- */
 @custom-variant dark (&:is(.dark *));
 
-@theme {
-  /* ── Semantic: Data type (blue) ─────────────────────────────── */
-  --color-data: #3b82f6;
-  --color-data-bg: rgba(59, 130, 246, 0.15);
-  --color-data-text: #93c5fd;
-  --color-data-badge: rgba(59, 130, 246, 0.25);
-
-  /* ── Semantic: Choice type (amber) ──────────────────────────── */
-  --color-choice: #f59e0b;
-  --color-choice-bg: rgba(245, 158, 11, 0.15);
-  --color-choice-text: #fcd34d;
-  --color-choice-badge: rgba(245, 158, 11, 0.25);
-
-  /* ── Semantic: Enum type (green) ────────────────────────────── */
-  --color-enum: #22c55e;
-  --color-enum-bg: rgba(34, 197, 94, 0.15);
-  --color-enum-text: #86efac;
-  --color-enum-badge: rgba(34, 197, 94, 0.25);
-
-  /* ── Semantic: Function type (purple) ────────────────────────── */
-  --color-func: #a855f7;
-  --color-func-bg: rgba(168, 85, 247, 0.15);
-  --color-func-text: #d8b4fe;
-  --color-func-badge: rgba(168, 85, 247, 0.25);
-
-  /* ── Edge / graph chrome ─────────────────────────────────────── */
-  --color-edge-ref: #94a3b8;
-
-  /* ── Layout ──────────────────────────────────────────────────── */
-  --sidebar-width: 280px;
-  --sidebar-min-width: 200px;
-  --sidebar-max-width: 400px;
-
-  /* ── Status ─────────────────────────────────────────────────── */
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-info: #38bdf8;
-
-  /* ── Typography ─────────────────────────────────────────────── */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
-
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 15px;
-  --text-xl: 16px;
-  --text-2xl: 20px;
-
-  /* ── Spacing ────────────────────────────────────────────────── */
-  --space-0: 0px;
-  --space-1: 2px;
-  --space-2: 4px;
-  --space-3: 6px;
-  --space-4: 8px;
-  --space-5: 10px;
-  --space-6: 12px;
-  --space-8: 16px;
-  --space-10: 24px;
-  --space-12: 32px;
-
-  /* ── Shadows ────────────────────────────────────────────────── */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-/*---break---
- */
-
+/* ── shadcn semantic bridge ─────────────────────────────────────── */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -109,6 +35,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -125,7 +52,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  /* ── Node chrome (reference shadcn semantic vars) ─────────────── */
+}
+
+/* ── Domain-specific tokens (not part of shadcn) ──────────────── */
+@theme inline {
   --color-node-bg: var(--card);
   --color-node-border: var(--input);
   --color-node-text: var(--foreground);
@@ -136,9 +66,34 @@
   --color-edge-label-text: var(--muted-foreground);
 }
 
-/*---break---
- */
+@theme {
+  --color-data: #3b82f6;
+  --color-data-bg: rgba(59, 130, 246, 0.15);
+  --color-data-text: #93c5fd;
+  --color-data-badge: rgba(59, 130, 246, 0.25);
 
+  --color-choice: #f59e0b;
+  --color-choice-bg: rgba(245, 158, 11, 0.15);
+  --color-choice-text: #fcd34d;
+  --color-choice-badge: rgba(245, 158, 11, 0.25);
+
+  --color-enum: #22c55e;
+  --color-enum-bg: rgba(34, 197, 94, 0.15);
+  --color-enum-text: #86efac;
+  --color-enum-badge: rgba(34, 197, 94, 0.25);
+
+  --color-func: #a855f7;
+  --color-func-bg: rgba(168, 85, 247, 0.15);
+  --color-func-text: #d8b4fe;
+  --color-func-badge: rgba(168, 85, 247, 0.25);
+
+  --color-edge-ref: #94a3b8;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-info: #38bdf8;
+}
+
+/* ── Color palette ────────────────────────────────────────────── */
 :root {
   --radius: 0.375rem;
   --background: oklch(0.129 0.042 264.695);
@@ -156,6 +111,7 @@
   --accent: oklch(0.279 0.041 260.031);
   --accent-foreground: oklch(0.984 0.003 247.858);
   --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.488 0.243 264.376);
@@ -173,9 +129,6 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.488 0.243 264.376);
 }
-
-/*---break---
- */
 
 .dark {
   --background: oklch(0.129 0.042 264.695);
@@ -193,6 +146,7 @@
   --accent: oklch(0.279 0.041 260.031);
   --accent-foreground: oklch(0.984 0.003 247.858);
   --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.488 0.243 264.376);
@@ -211,9 +165,7 @@
   --sidebar-ring: oklch(0.488 0.243 264.376);
 }
 
-/*---break---
- */
-
+/* ── Base layer ───────────────────────────────────────────────── */
 @layer base {
   * {
     @apply border-border outline-ring/50;

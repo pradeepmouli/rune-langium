@@ -14,11 +14,11 @@ importers:
   .:
     dependencies:
       '@lspeasy/client':
-        specifier: ^2.0.1
-        version: 2.0.1(ws@8.19.0)
+        specifier: ^1.0.1
+        version: 1.1.0(ws@8.19.0)(zod@4.3.6)
       '@lspeasy/core':
-        specifier: ^2.0.0
-        version: 2.0.0(ws@8.19.0)
+        specifier: ^1.0.1
+        version: 1.1.0(ws@8.19.0)(zod@4.3.6)
       camelcase:
         specifier: ^9.0.0
         version: 9.0.0
@@ -78,8 +78,8 @@ importers:
         specifier: ^6.39.14
         version: 6.39.14
       '@lspeasy/core':
-        specifier: ^2.0.0
-        version: 2.0.0(ws@8.19.0)
+        specifier: ^1.0.1
+        version: 1.1.0(ws@8.19.0)(zod@4.3.6)
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -135,6 +135,9 @@ importers:
       tailwindcss:
         specifier: ^4.2.0
         version: 4.2.0
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -265,11 +268,11 @@ importers:
   packages/lsp-server:
     dependencies:
       '@lspeasy/core':
-        specifier: ^2.0.0
-        version: 2.0.0(ws@8.19.0)
+        specifier: ^1.0.1
+        version: 1.1.0(ws@8.19.0)(zod@4.3.6)
       '@lspeasy/server':
-        specifier: ^2.0.1
-        version: 2.0.1(ws@8.19.0)
+        specifier: ^1.0.1
+        version: 1.1.0(ws@8.19.0)(zod@4.3.6)
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../core
@@ -284,8 +287,8 @@ importers:
         version: 8.19.0
     devDependencies:
       '@lspeasy/client':
-        specifier: ^2.0.1
-        version: 2.0.1(ws@8.19.0)
+        specifier: ^1.0.1
+        version: 1.1.0(ws@8.19.0)(zod@4.3.6)
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -926,9 +929,11 @@ packages:
   '@lezer/lr@1.4.8':
     resolution: {integrity: sha512-bPWa0Pgx69ylNlMlPvBPryqeLYQjyJjqPx+Aupm5zydLIF3NE+6MMLT8Yi23Bd9cif9VS00aUebn+6fDIGBcDA==}
 
-  '@lspeasy/client@2.0.1':
-    resolution: {integrity: sha512-AtQsml7jTA5NFjPgozpW3OeBVpw7Eq4bScJGCV0F6VHwDLH7dg982Cz1K7rPxkMtqdQBOVw02+5s/XgVRreQJQ==}
+  '@lspeasy/client@1.1.0':
+    resolution: {integrity: sha512-nzggUulKRdNC02kOMbzPOOHFSpUaIPwNA1at3jeCja8k4zFyb4TRId5TJjhfwOFWiu7Nxa5zBLi/exaHuXQVSw==}
     engines: {node: '>=20.0.0'}
+    peerDependencies:
+      zod: ^3.25.0
 
   '@lspeasy/core@1.1.0':
     resolution: {integrity: sha512-Nf494LOR+94tqYZRa7VnA/WW/ZhptSid59/lR2qC38XFZkvy7qs11LJ+Rt525KBQPzayibdsigR/ZY+QyqhYhw==}
@@ -940,18 +945,11 @@ packages:
       ws:
         optional: true
 
-  '@lspeasy/core@2.0.0':
-    resolution: {integrity: sha512-TU2oF914xHJuiaudUHpcwJm6ncznrpbxm0aGO0YBMxfSeVBhwcHtI7ZoWBSenYo7tAlD3+I3lMT+7EQVZ948nw==}
+  '@lspeasy/server@1.1.0':
+    resolution: {integrity: sha512-OPtdP3IySjQHEPbiNaynMiLiJuoh6QxtfZAA3t3mY2uK9jMWpxp5g70IEMDh4EgqiqQReYJ1GlU6w1pO0JI6RA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
-      ws: ^8.19.0
-    peerDependenciesMeta:
-      ws:
-        optional: true
-
-  '@lspeasy/server@2.0.1':
-    resolution: {integrity: sha512-BMKisviFuV08iTnGCURIGe6kSFIXKL2eqK0zMiq+8AZImeKKSyBwbqUn+WHWywCKQU4RR5VCZjkPsZPYxx+/kw==}
-    engines: {node: '>=20.0.0'}
+      zod: ^3.25.0
 
   '@manypkg/find-root@1.1.0':
     resolution: {integrity: sha512-mki5uBvhHzO8kYYix/WRy2WX8S3B5wdVSc9D6KcU5lQNglP2yt58/VfLuAK49glRXChosY8ap2oJ1qgma3GUVA==}
@@ -5199,10 +5197,9 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.1
 
-  '@lspeasy/client@2.0.1(ws@8.19.0)':
+  '@lspeasy/client@1.1.0(ws@8.19.0)(zod@4.3.6)':
     dependencies:
       '@lspeasy/core': 1.1.0(ws@8.19.0)(zod@4.3.6)
-    optionalDependencies:
       zod: 4.3.6
     transitivePeerDependencies:
       - ws
@@ -5213,15 +5210,9 @@ snapshots:
     optionalDependencies:
       ws: 8.19.0
 
-  '@lspeasy/core@2.0.0(ws@8.19.0)':
-    optionalDependencies:
-      ws: 8.19.0
-      zod: 4.3.6
-
-  '@lspeasy/server@2.0.1(ws@8.19.0)':
+  '@lspeasy/server@1.1.0(ws@8.19.0)(zod@4.3.6)':
     dependencies:
       '@lspeasy/core': 1.1.0(ws@8.19.0)(zod@4.3.6)
-    optionalDependencies:
       zod: 4.3.6
     transitivePeerDependencies:
       - ws

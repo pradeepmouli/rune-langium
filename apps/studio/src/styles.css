@@ -1,6 +1,11 @@
 /* @rune-langium/studio — App styles */
 @import 'tailwindcss';
+@import 'tw-animate-css';
 @import '../../../packages/design-system/src/theme.css';
+
+/* Ensure Tailwind scans workspace packages for utility classes */
+@source "../../../packages/design-system/src";
+@source "../../../packages/visual-editor/src";
 
 /* ---------- Reset ---------- */
 @layer base {
