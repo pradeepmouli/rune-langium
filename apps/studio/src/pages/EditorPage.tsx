@@ -73,6 +73,8 @@ export function EditorPage({
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
   /** Tracks file paths explicitly opened in the source editor (by node navigation). */
   const [openedFilePaths, setOpenedFilePaths] = useState<Set<string>>(new Set<string>());
+  /** Pending reveal to fire after source files update. */
+  const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
 
   // --- Namespace visibility state ---
   const [explorerOpen, setExplorerOpen] = useState(true);
@@ -159,7 +161,7 @@ export function EditorPage({
 
   const expandEditor = useCallback(() => {
     if (editorPanelRef.current?.isCollapsed()) {
-      editorPanelRef.current.resize('30%');
+      editorPanelRef.current.expand();
       setShowEditor(true);
     }
   }, []);
@@ -243,7 +245,10 @@ export function EditorPage({
           node.data.source as { $cstNode?: { range?: { start?: { line?: number } } } }
         )?.$cstNode;
         if (cstNode?.range?.start?.line !== undefined) {
-          sourceEditorRef.current?.revealLine(cstNode.range.start.line + 1, filePath);
+          const line = cstNode.range.start.line + 1;
+          if (filePath) {
+            pendingRevealRef.current = { line, filePath };
+          }
         }
       }
     },
@@ -275,6 +280,37 @@ export function EditorPage({
   const sourceEditorFiles = useMemo(
     () => files.filter((f) => openedFilePaths.has(f.path)),
     [files, openedFilePaths]
+  );
+
+  // Fire pending reveal after sourceEditorFiles updates with the target file
+  useEffect(() => {
+    const pending = pendingRevealRef.current;
+    if (!pending) return;
+    const exists = sourceEditorFiles.some((f) => f.path === pending.filePath);
+    if (exists) {
+      pendingRevealRef.current = null;
+      // Defer to next frame so SourceEditor has processed the new files prop
+      requestAnimationFrame(() => {
+        sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
+      });
+    }
+  }, [sourceEditorFiles]);
+
+  /** Close a file tab (remove from openedFilePaths). */
+  const closeFileInSource = useCallback(
+    (filePath: string) => {
+      setOpenedFilePaths((prev) => {
+        const next = new Set(prev);
+        next.delete(filePath);
+        return next;
+      });
+      // If the closed file was active, switch to the nearest remaining tab
+      if (activeEditorFile === filePath) {
+        const remaining = files.filter((f) => openedFilePaths.has(f.path) && f.path !== filePath);
+        setActiveEditorFile(remaining[0]?.path);
+      }
+    },
+    [files, openedFilePaths, activeEditorFile]
   );
 
   // --- Collapsible panel toggle helpers ---
@@ -319,8 +355,10 @@ export function EditorPage({
           nodeData.source as { $cstNode?: { range?: { start?: { line?: number } } } }
         )?.$cstNode;
         if (cstNode?.range?.start?.line !== undefined) {
-          // CST lines are 0-based, CodeMirror is 1-based
-          sourceEditorRef.current?.revealLine(cstNode.range.start.line + 1, filePath);
+          const line = cstNode.range.start.line + 1;
+          if (filePath) {
+            pendingRevealRef.current = { line, filePath };
+          }
         }
       } else {
         setSelectedNodeData(null);
@@ -542,6 +580,7 @@ export function EditorPage({
                 activeFile={activeEditorFile}
                 lspClient={lspClient}
                 onFileSelect={(path) => setActiveEditorFile(path)}
+                onFileClose={closeFileInSource}
                 onContentChange={handleSourceChange}
               />
             </aside>

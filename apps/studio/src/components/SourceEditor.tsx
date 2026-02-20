@@ -48,6 +48,8 @@ export interface SourceEditorProps {
   activeFile?: string;
   /** Called when user switches tabs. */
   onFileSelect?: (path: string) => void;
+  /** Called when a tab close button is clicked. */
+  onFileClose?: (path: string) => void;
   /** Called when editor content changes. */
   onContentChange?: (path: string, content: string) => void;
   /** LSP client service (injected). */
@@ -91,12 +93,22 @@ function scrollToLine(view: EditorView | null, line: number): void {
 // ────────────────────────────────────────────────────────────────────────────
 
 export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(function SourceEditor(
-  { files, activeFile, onFileSelect, onContentChange, lspClient },
+  { files, activeFile, onFileSelect, onFileClose, onContentChange, lspClient },
   ref
 ) {
   const [selectedPath, setSelectedPath] = useState<string>(activeFile ?? files[0]?.path ?? '');
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+
+  // Sync selectedPath when activeFile prop changes externally
+  useEffect(() => {
+    if (activeFile && activeFile !== selectedPath) {
+      const exists = files.some((f) => f.path === activeFile);
+      if (exists) {
+        setSelectedPath(activeFile);
+      }
+    }
+  }, [activeFile, files]);
 
   // Expose imperative handle for programmatic navigation
   useImperativeHandle(
@@ -259,25 +271,57 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
         aria-label="Open files"
       >
         {files.map((file) => (
-          <button
+          <div
             key={file.path}
-            id={getTabId(file.path)}
-            role="tab"
-            aria-selected={file.path === selectedPath}
-            aria-controls="editor-tabpanel"
-            tabIndex={file.path === selectedPath ? 0 : -1}
             className={cn(
-              'px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors',
-              'hover:text-foreground',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-              file.path === selectedPath ? 'text-primary border-b-primary' : 'text-muted-foreground'
+              'group flex items-center gap-0.5 border-b-2 border-b-transparent transition-colors',
+              file.path === selectedPath ? 'border-b-primary' : ''
             )}
-            onClick={() => handleFileSelect(file.path)}
-            title={file.path}
           >
-            {file.name}
-            {file.dirty && <span className="text-warning text-xs"> ●</span>}
-          </button>
+            <button
+              id={getTabId(file.path)}
+              role="tab"
+              aria-selected={file.path === selectedPath}
+              aria-controls="editor-tabpanel"
+              tabIndex={file.path === selectedPath ? 0 : -1}
+              className={cn(
+                'pl-3 pr-1 py-1.5 text-sm bg-transparent border-none cursor-pointer whitespace-nowrap transition-colors',
+                'hover:text-foreground',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                file.path === selectedPath ? 'text-primary' : 'text-muted-foreground'
+              )}
+              onClick={() => handleFileSelect(file.path)}
+              title={file.path}
+            >
+              {file.name}
+              {file.dirty && <span className="text-warning text-xs"> ●</span>}
+            </button>
+            {onFileClose && (
+              <button
+                type="button"
+                aria-label={`Close ${file.name}`}
+                className={cn(
+                  'shrink-0 p-0.5 rounded-sm text-muted-foreground transition-colors',
+                  'hover:text-foreground hover:bg-muted',
+                  'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                  file.path === selectedPath && 'opacity-60'
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFileClose(file.path);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path
+                    d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
         ))}
       </nav>
 
