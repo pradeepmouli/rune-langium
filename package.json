@@ -53,7 +53,7 @@
     "node": ">=20.0.0",
     "pnpm": ">=10.0.0"
   },
-  "packageManager": "pnpm@10.28.0",
+  "packageManager": "pnpm@10.6.2",
   "dependencies": {
     "@lspeasy/client": "^2.0.1",
     "@lspeasy/core": "^2.0.0",
