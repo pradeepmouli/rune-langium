@@ -221,7 +221,11 @@ export function EditorPage({
       for (const element of model.elements ?? []) {
         const name = element.name ?? 'unknown';
         const nodeId = `${ns}::${name}`;
-        map.set(nodeId, files[i]!.path);
+        // astToGraph keeps the first node encountered for duplicate nodeId values.
+        // Keep first-write semantics here so source-file resolution matches the graph.
+        if (!map.has(nodeId)) {
+          map.set(nodeId, files[i]!.path);
+        }
       }
     }
     return map;
