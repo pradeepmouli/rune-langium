@@ -164,8 +164,8 @@ describe('EditorFormPanel', () => {
 
     const panel = screen.getByRole('complementary');
     expect(panel.getAttribute('aria-label')).toBe('Details for Trade');
-    // DetailPanel shows Kind label
-    expect(screen.getByText('Kind')).toBeDefined();
+    // DetailPanel shows namespace label
+    expect(screen.getByText('Namespace')).toBeDefined();
   });
 
   it('renders DetailPanel for unknown kind', () => {
@@ -178,8 +178,8 @@ describe('EditorFormPanel', () => {
       />
     );
 
-    // Falls through to DetailPanel default case — shows Kind label
-    expect(screen.getByText('Kind')).toBeDefined();
+    // Falls through to DetailPanel default case — shows Namespace label
+    expect(screen.getByText('Namespace')).toBeDefined();
   });
 
   // ---- Sticky header ------------------------------------------------------

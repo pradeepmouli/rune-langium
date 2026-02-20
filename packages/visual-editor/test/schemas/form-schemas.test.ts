@@ -93,16 +93,20 @@ describe('enumValueSchema', () => {
 
 describe('dataTypeFormSchema', () => {
   it('rejects empty name', () => {
-    expect(() => dataTypeFormSchema.parse({ name: '' })).toThrow();
+    expect(() => dataTypeFormSchema.parse({ name: '', members: [] })).toThrow();
   });
 
   it('accepts name and empty parentName', () => {
-    const result = dataTypeFormSchema.parse({ name: 'Trade', parentName: '' });
-    expect(result).toEqual({ name: 'Trade', parentName: '' });
+    const result = dataTypeFormSchema.parse({ name: 'Trade', parentName: '', members: [] });
+    expect(result).toEqual({ name: 'Trade', parentName: '', members: [] });
   });
 
   it('accepts name and parentName', () => {
-    const result = dataTypeFormSchema.parse({ name: 'CreditTrade', parentName: 'Trade' });
+    const result = dataTypeFormSchema.parse({
+      name: 'CreditTrade',
+      parentName: 'Trade',
+      members: []
+    });
     expect(result.parentName).toBe('Trade');
   });
 });
@@ -189,7 +193,8 @@ describe('runtime conformance with TypeNodeData', () => {
     // Extract only the form-surface fields
     const result = dataTypeFormSchema.parse({
       name: nodeData.name,
-      parentName: nodeData.parentName
+      parentName: nodeData.parentName,
+      members: []
     });
     expect(result.name).toBe('Trade');
     expect(result.parentName).toBe('Event');

@@ -22,9 +22,9 @@
     "*.css"
   ],
   "scripts": {
-    "build": "tsc -b && cp src/styles.css dist/styles.css",
+    "build": "tsgo -b && cp src/styles.css dist/styles.css",
     "clean": "rm -rf dist",
-    "dev": "tsc -b --watch",
+    "dev": "tsgo -b --watch",
     "lint": "oxlint .",
     "test": "vitest run",
     "test:watch": "vitest",

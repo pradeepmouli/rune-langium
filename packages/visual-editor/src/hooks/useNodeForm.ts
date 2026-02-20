@@ -71,7 +71,11 @@ export function useNodeForm<T extends FieldValues>({
   useEffect(() => {
     if (prevResetKeyRef.current !== resetKey) {
       prevResetKeyRef.current = resetKey;
-      form.reset(defaults as any);
+      // keepDirtyValues preserves in-flight user edits while applying
+      // external changes (undo/redo, graph confirmations). Node-switching
+      // should be handled via key= prop on the form component to force
+      // a full remount with fresh defaultValues.
+      form.reset(defaults as any, { keepDirtyValues: true });
     }
   }, [resetKey, defaults, form]);
 

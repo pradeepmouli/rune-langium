@@ -26,6 +26,21 @@ export const metadataSchema = z.object({
 export type MetadataValues = z.infer<typeof metadataSchema>;
 
 // ---------------------------------------------------------------------------
+// Member (shared attribute/value shape for useFieldArray)
+// ---------------------------------------------------------------------------
+
+/** Schema for a single member in a useFieldArray-managed list. */
+export const memberSchema = z.object({
+  name: z.string(),
+  typeName: z.string(),
+  cardinality: z.string(),
+  isOverride: z.boolean(),
+  displayName: z.string().optional()
+});
+
+export type MemberValues = z.infer<typeof memberSchema>;
+
+// ---------------------------------------------------------------------------
 // Attribute (member of Data type)
 // ---------------------------------------------------------------------------
 
@@ -54,10 +69,19 @@ export type EnumValueValues = z.infer<typeof enumValueSchema>;
 // DataTypeForm
 // ---------------------------------------------------------------------------
 
-/** Schema for the Data type header fields (name + parent). */
+/** Metadata fields shared by all form schemas (definition, comments, synonyms). */
+const metadataFields = {
+  definition: z.string(),
+  comments: z.string(),
+  synonyms: z.array(z.string())
+};
+
+/** Full schema for the Data type form (name + parent + members + metadata). */
 export const dataTypeFormSchema = z.object({
   name: z.string().min(1, 'Type name is required'),
-  parentName: z.string()
+  parentName: z.string(),
+  members: z.array(memberSchema),
+  ...metadataFields
 });
 
 export type DataTypeFormValues = z.infer<typeof dataTypeFormSchema>;
@@ -66,10 +90,12 @@ export type DataTypeFormValues = z.infer<typeof dataTypeFormSchema>;
 // EnumForm
 // ---------------------------------------------------------------------------
 
-/** Schema for the Enum type header fields (name + parent). */
+/** Schema for the Enum type form (name + parent + members + metadata). */
 export const enumFormSchema = z.object({
   name: z.string().min(1, 'Enum name is required'),
-  parentName: z.string()
+  parentName: z.string(),
+  members: z.array(memberSchema),
+  ...metadataFields
 });
 
 export type EnumFormValues = z.infer<typeof enumFormSchema>;
@@ -78,9 +104,11 @@ export type EnumFormValues = z.infer<typeof enumFormSchema>;
 // ChoiceForm
 // ---------------------------------------------------------------------------
 
-/** Schema for the Choice type header fields (name only). */
+/** Schema for the Choice type form (name + members + metadata). */
 export const choiceFormSchema = z.object({
-  name: z.string().min(1, 'Choice name is required')
+  name: z.string().min(1, 'Choice name is required'),
+  members: z.array(memberSchema),
+  ...metadataFields
 });
 
 export type ChoiceFormValues = z.infer<typeof choiceFormSchema>;
@@ -89,11 +117,13 @@ export type ChoiceFormValues = z.infer<typeof choiceFormSchema>;
 // FunctionForm
 // ---------------------------------------------------------------------------
 
-/** Schema for the Function type header + expression fields. */
+/** Schema for the Function type form (name + output + expression + members + metadata). */
 export const functionFormSchema = z.object({
   name: z.string().min(1, 'Function name is required'),
   outputType: z.string(),
-  expressionText: z.string()
+  expressionText: z.string(),
+  members: z.array(memberSchema),
+  ...metadataFields
 });
 
 export type FunctionFormValues = z.infer<typeof functionFormSchema>;
@@ -141,6 +171,9 @@ type _AttrCheck = AttributeValues extends Pick<MemberDisplay, keyof AttributeVal
 type _EnumValCheck =
   EnumValueValues extends Pick<MemberDisplay, keyof EnumValueValues> ? true : never;
 
+/** MemberValues fields must exist on MemberDisplay. */
+type _MemberCheck = MemberValues extends Pick<MemberDisplay, keyof MemberValues> ? true : never;
+
 // Force TypeScript to evaluate the assertions (unused vars are fine — these are type-only)
 export type ConformanceChecks = {
   dataForm: _DataFormCheck;
@@ -150,4 +183,5 @@ export type ConformanceChecks = {
   metadata: _MetaCheck;
   attribute: _AttrCheck;
   enumValue: _EnumValCheck;
+  member: _MemberCheck;
 };

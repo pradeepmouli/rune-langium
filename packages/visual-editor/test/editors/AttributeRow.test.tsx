@@ -11,8 +11,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { useForm, FormProvider } from 'react-hook-form';
 import { AttributeRow } from '../../src/components/editors/AttributeRow.js';
 import type { MemberDisplay, TypeOption } from '../../src/types.js';
+import type { MemberValues } from '../../src/schemas/form-schemas.js';
 
 const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' },
@@ -30,6 +32,29 @@ function baseMember(overrides: Partial<MemberDisplay> = {}): MemberDisplay {
   };
 }
 
+/** Convert MemberDisplay to MemberValues for the form. */
+function toMemberValues(m: MemberDisplay): MemberValues {
+  return {
+    name: m.name,
+    typeName: m.typeName ?? 'string',
+    cardinality: m.cardinality ?? '(1..1)',
+    isOverride: m.isOverride,
+    displayName: m.displayName
+  };
+}
+
+/** Wrapper that provides FormProvider context required by AttributeRow. */
+function FormWrapper({
+  members,
+  children
+}: {
+  members: MemberValues[];
+  children: React.ReactNode;
+}) {
+  const methods = useForm({ defaultValues: { members } });
+  return <FormProvider {...methods}>{children}</FormProvider>;
+}
+
 describe('AttributeRow', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -43,17 +68,19 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
+    const member = baseMember();
 
     render(
-      <AttributeRow
-        member={baseMember()}
-        nodeId="node-1"
-        index={0}
-        availableTypes={AVAILABLE_TYPES}
-        onUpdate={onUpdate}
-        onRemove={onRemove}
-        onReorder={onReorder}
-      />
+      <FormWrapper members={[toMemberValues(member)]}>
+        <AttributeRow
+          index={0}
+          committedName={member.name}
+          availableTypes={AVAILABLE_TYPES}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onReorder={onReorder}
+        />
+      </FormWrapper>
     );
 
     const nameInput = screen.getByLabelText(/attribute name/i);
@@ -65,17 +92,19 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
+    const member = baseMember();
 
     render(
-      <AttributeRow
-        member={baseMember()}
-        nodeId="node-1"
-        index={0}
-        availableTypes={AVAILABLE_TYPES}
-        onUpdate={onUpdate}
-        onRemove={onRemove}
-        onReorder={onReorder}
-      />
+      <FormWrapper members={[toMemberValues(member)]}>
+        <AttributeRow
+          index={0}
+          committedName={member.name}
+          availableTypes={AVAILABLE_TYPES}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onReorder={onReorder}
+        />
+      </FormWrapper>
     );
 
     const nameInput = screen.getByLabelText(/attribute name/i);
@@ -89,47 +118,51 @@ describe('AttributeRow', () => {
     });
 
     expect(onUpdate).toHaveBeenCalledOnce();
-    expect(onUpdate).toHaveBeenCalledWith('node-1', 'tradeDate', 'executionDate', 'date', '(1..1)');
+    expect(onUpdate).toHaveBeenCalledWith(0, 'tradeDate', 'executionDate', 'date', '(1..1)');
   });
 
   it('calls onRemove when remove button is clicked', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
+    const member = baseMember();
 
     render(
-      <AttributeRow
-        member={baseMember()}
-        nodeId="node-1"
-        index={0}
-        availableTypes={AVAILABLE_TYPES}
-        onUpdate={onUpdate}
-        onRemove={onRemove}
-        onReorder={onReorder}
-      />
+      <FormWrapper members={[toMemberValues(member)]}>
+        <AttributeRow
+          index={0}
+          committedName={member.name}
+          availableTypes={AVAILABLE_TYPES}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onReorder={onReorder}
+        />
+      </FormWrapper>
     );
 
     const removeBtn = screen.getByLabelText(/remove attribute/i);
     fireEvent.click(removeBtn);
 
-    expect(onRemove).toHaveBeenCalledWith('node-1', 'tradeDate');
+    expect(onRemove).toHaveBeenCalledWith(0);
   });
 
   it('shows override badge for override attributes', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
+    const member = baseMember({ isOverride: true });
 
     render(
-      <AttributeRow
-        member={baseMember({ isOverride: true })}
-        nodeId="node-1"
-        index={0}
-        availableTypes={AVAILABLE_TYPES}
-        onUpdate={onUpdate}
-        onRemove={onRemove}
-        onReorder={onReorder}
-      />
+      <FormWrapper members={[toMemberValues(member)]}>
+        <AttributeRow
+          index={0}
+          committedName={member.name}
+          availableTypes={AVAILABLE_TYPES}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onReorder={onReorder}
+        />
+      </FormWrapper>
     );
 
     expect(screen.getByText('override')).toBeDefined();
@@ -139,17 +172,19 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
+    const member = baseMember({ isOverride: true });
 
     render(
-      <AttributeRow
-        member={baseMember({ isOverride: true })}
-        nodeId="node-1"
-        index={0}
-        availableTypes={AVAILABLE_TYPES}
-        onUpdate={onUpdate}
-        onRemove={onRemove}
-        onReorder={onReorder}
-      />
+      <FormWrapper members={[toMemberValues(member)]}>
+        <AttributeRow
+          index={0}
+          committedName={member.name}
+          availableTypes={AVAILABLE_TYPES}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onReorder={onReorder}
+        />
+      </FormWrapper>
     );
 
     const removeBtn = screen.getByLabelText(/remove attribute/i);
@@ -160,17 +195,19 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
+    const member = baseMember();
 
     const { container } = render(
-      <AttributeRow
-        member={baseMember()}
-        nodeId="node-1"
-        index={0}
-        availableTypes={AVAILABLE_TYPES}
-        onUpdate={onUpdate}
-        onRemove={onRemove}
-        onReorder={onReorder}
-      />
+      <FormWrapper members={[toMemberValues(member)]}>
+        <AttributeRow
+          index={0}
+          committedName={member.name}
+          availableTypes={AVAILABLE_TYPES}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onReorder={onReorder}
+        />
+      </FormWrapper>
     );
 
     const handle = container.querySelector('[data-slot="drag-handle"]');
@@ -182,18 +219,20 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
+    const member = baseMember();
 
     render(
-      <AttributeRow
-        member={baseMember()}
-        nodeId="node-1"
-        index={0}
-        availableTypes={AVAILABLE_TYPES}
-        onUpdate={onUpdate}
-        onRemove={onRemove}
-        onReorder={onReorder}
-        disabled
-      />
+      <FormWrapper members={[toMemberValues(member)]}>
+        <AttributeRow
+          index={0}
+          committedName={member.name}
+          availableTypes={AVAILABLE_TYPES}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onReorder={onReorder}
+          disabled
+        />
+      </FormWrapper>
     );
 
     const nameInput = screen.getByLabelText(/attribute name/i);

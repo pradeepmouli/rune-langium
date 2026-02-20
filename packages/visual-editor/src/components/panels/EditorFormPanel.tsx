@@ -166,6 +166,7 @@ function EditorFormPanel({
       case 'data':
         return (
           <DataTypeForm
+            key={nodeId!}
             nodeId={nodeId!}
             data={nodeData as TypeNodeData<'data'>}
             availableTypes={availableTypes}
@@ -176,6 +177,7 @@ function EditorFormPanel({
       case 'enum':
         return (
           <EnumForm
+            key={nodeId!}
             nodeId={nodeId!}
             data={nodeData as TypeNodeData<'enum'>}
             availableTypes={availableTypes}
@@ -186,6 +188,7 @@ function EditorFormPanel({
       case 'choice':
         return (
           <ChoiceForm
+            key={nodeId!}
             nodeId={nodeId!}
             data={nodeData as TypeNodeData<'choice'>}
             availableTypes={availableTypes}
@@ -196,6 +199,7 @@ function EditorFormPanel({
       case 'func':
         return (
           <FunctionForm
+            key={nodeId!}
             nodeId={nodeId!}
             data={nodeData as TypeNodeData<'func'>}
             availableTypes={availableTypes}

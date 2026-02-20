@@ -21,7 +21,8 @@
   ],
   "scripts": {
     "build": "tsgo -b",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "type-check": "tsgo --noEmit"
   },
   "dependencies": {
     "@rune-langium/core": "workspace:*",
