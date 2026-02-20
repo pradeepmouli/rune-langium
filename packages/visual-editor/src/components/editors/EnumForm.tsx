@@ -124,10 +124,10 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
   }, [nodeId, actions, append]);
 
   const handleRemoveValue = useCallback(
-    (index: number) => {
-      const committed = committedRef.current.members[index];
+    (i: number) => {
+      const committed = committedRef.current.members[i];
       if (committed) {
-        remove(index);
+        remove(i);
         actions.removeEnumValue(nodeId, committed.name);
       }
     },
@@ -143,7 +143,7 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
   );
 
   const handleUpdateValue = useCallback(
-    (_index: number, oldName: string, newName: string, displayName?: string) => {
+    (_nodeId: string, oldName: string, newName: string, displayName?: string) => {
       actions.updateEnumValue(nodeId, oldName, newName, displayName);
     },
     [nodeId, actions]
@@ -261,10 +261,11 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
               <EnumValueRow
                 key={field.id}
                 index={i}
-                committedName={committedRef.current.members[i]?.name ?? ''}
-                committedDisplayName={committedRef.current.members[i]?.displayName ?? ''}
+                name={committedRef.current.members[i]?.name ?? ''}
+                displayName={committedRef.current.members[i]?.displayName ?? ''}
+                nodeId={nodeId}
                 onUpdate={handleUpdateValue}
-                onRemove={handleRemoveValue}
+                onRemove={() => handleRemoveValue(i)}
                 onReorder={handleReorderValue}
               />
             ))}
