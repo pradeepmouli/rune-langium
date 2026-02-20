@@ -71,6 +71,8 @@ export function EditorPage({
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedNodeData, setSelectedNodeData] = useState<TypeNodeData | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
+  /** Tracks file paths explicitly opened in the source editor (by node navigation). */
+  const [openedFilePaths, setOpenedFilePaths] = useState<Set<string>>(new Set<string>());
 
   // --- Namespace visibility state ---
   const [explorerOpen, setExplorerOpen] = useState(true);
@@ -147,23 +149,20 @@ export function EditorPage({
     setHiddenNodeIds(new Set<string>());
   }, []);
 
-  const handleExplorerSelectNode = useCallback(
-    (nodeId: string) => {
-      graphRef.current?.focusNode(nodeId);
+  // --- Collapsible panel expand helpers (needed by navigation handlers) ---
+  const expandSource = useCallback(() => {
+    if (sourcePanelRef.current?.isCollapsed()) {
+      sourcePanelRef.current.resize('35%');
+      setShowSource(true);
+    }
+  }, []);
 
-      // Also navigate source editor to the node's definition
-      const node = allGraphNodes.find((n) => n.id === nodeId);
-      if (node?.data.source) {
-        const cstNode = (
-          node.data.source as { $cstNode?: { range?: { start?: { line?: number } } } }
-        )?.$cstNode;
-        if (cstNode?.range?.start?.line !== undefined) {
-          sourceEditorRef.current?.revealLine(cstNode.range.start.line + 1);
-        }
-      }
-    },
-    [allGraphNodes]
-  );
+  const expandEditor = useCallback(() => {
+    if (editorPanelRef.current?.isCollapsed()) {
+      editorPanelRef.current.resize('30%');
+      setShowEditor(true);
+    }
+  }, []);
 
   // --- Stable ref for files (prevents stale closure in handleSourceChange) ---
   const filesRef = useRef(files);
@@ -202,6 +201,55 @@ export function EditorPage({
     return map;
   }, [models, files]);
 
+  /** Resolve which workspace file contains a given node (by namespace mapping). */
+  const resolveNodeFile = useCallback(
+    (nodeData: TypeNodeData): string | undefined => {
+      const ns = nodeData.namespace;
+      return namespaceToFile.get(ns);
+    },
+    [namespaceToFile]
+  );
+
+  /** Open a file in the source editor tabs (adds to openedFilePaths). */
+  const openFileInSource = useCallback((filePath: string) => {
+    setOpenedFilePaths((prev) => {
+      if (prev.has(filePath)) return prev;
+      const next = new Set(prev);
+      next.add(filePath);
+      return next;
+    });
+    setActiveEditorFile(filePath);
+  }, []);
+
+  const handleExplorerSelectNode = useCallback(
+    (nodeId: string) => {
+      graphRef.current?.focusNode(nodeId);
+
+      const node = allGraphNodes.find((n) => n.id === nodeId);
+      if (!node) return;
+
+      // Synchronise selection state with graph + editor form
+      setSelectedNode(nodeId);
+      setSelectedNodeData(node.data);
+      expandEditor();
+
+      // Resolve the node's source file and open it in the source tabs
+      // (but do NOT auto-expand the source panel — user must click Source or double-click)
+      if (node.data.source) {
+        const filePath = resolveNodeFile(node.data);
+        if (filePath) openFileInSource(filePath);
+
+        const cstNode = (
+          node.data.source as { $cstNode?: { range?: { start?: { line?: number } } } }
+        )?.$cstNode;
+        if (cstNode?.range?.start?.line !== undefined) {
+          sourceEditorRef.current?.revealLine(cstNode.range.start.line + 1, filePath);
+        }
+      }
+    },
+    [allGraphNodes, expandEditor, resolveNodeFile, openFileInSource]
+  );
+
   const handleModelChanged = useCallback(
     (serialized: Map<string, string>) => {
       const currentFiles = filesRef.current;
@@ -223,7 +271,13 @@ export function EditorPage({
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics, totalErrors, totalWarnings } = useDiagnosticsStore();
 
-  // --- Collapsible panel toggle / expand helpers ---
+  /** Only pass files that the user has explicitly opened (via node selection). */
+  const sourceEditorFiles = useMemo(
+    () => files.filter((f) => openedFilePaths.has(f.path)),
+    [files, openedFilePaths]
+  );
+
+  // --- Collapsible panel toggle helpers ---
   const toggleSource = useCallback(() => {
     const panel = sourcePanelRef.current;
     if (!panel) return;
@@ -248,20 +302,6 @@ export function EditorPage({
     }
   }, []);
 
-  const expandSource = useCallback(() => {
-    if (sourcePanelRef.current?.isCollapsed()) {
-      sourcePanelRef.current.resize('35%');
-      setShowSource(true);
-    }
-  }, []);
-
-  const expandEditor = useCallback(() => {
-    if (editorPanelRef.current?.isCollapsed()) {
-      editorPanelRef.current.resize('30%');
-      setShowEditor(true);
-    }
-  }, []);
-
   const handleNodeSelect = useCallback(
     (nodeId: string, nodeData?: TypeNodeData) => {
       setSelectedNode(nodeId ?? null);
@@ -269,19 +309,24 @@ export function EditorPage({
         setSelectedNodeData(nodeData);
         expandEditor();
 
+        // Resolve the node's source file and open it in the source tabs
+        // (but do NOT auto-expand the source panel)
+        const filePath = resolveNodeFile(nodeData);
+        if (filePath) openFileInSource(filePath);
+
         // Navigate source editor to the AST node's definition line
         const cstNode = (
           nodeData.source as { $cstNode?: { range?: { start?: { line?: number } } } }
         )?.$cstNode;
         if (cstNode?.range?.start?.line !== undefined) {
           // CST lines are 0-based, CodeMirror is 1-based
-          sourceEditorRef.current?.revealLine(cstNode.range.start.line + 1);
+          sourceEditorRef.current?.revealLine(cstNode.range.start.line + 1, filePath);
         }
       } else {
         setSelectedNodeData(null);
       }
     },
-    [expandEditor]
+    [expandEditor, resolveNodeFile, openFileInSource]
   );
 
   const handleNodeDoubleClick = useCallback(
@@ -444,6 +489,7 @@ export function EditorPage({
                 nodes={allGraphNodes}
                 expandedNamespaces={expandedNamespaces}
                 hiddenNodeIds={hiddenNodeIds}
+                selectedNodeId={selectedNode}
                 onToggleNamespace={handleToggleNamespace}
                 onToggleNode={handleToggleNode}
                 onExpandAll={handleExpandAll}
@@ -492,7 +538,7 @@ export function EditorPage({
             >
               <SourceEditor
                 ref={sourceEditorRef}
-                files={files}
+                files={sourceEditorFiles}
                 activeFile={activeEditorFile}
                 lspClient={lspClient}
                 onFileSelect={(path) => setActiveEditorFile(path)}
@@ -539,7 +585,8 @@ export function EditorPage({
               (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
             );
             if (file) {
-              setActiveEditorFile(file.path ?? file.name);
+              const path = file.path ?? file.name;
+              openFileInSource(path);
               expandSource();
             }
           }}

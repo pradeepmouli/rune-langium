@@ -62,6 +62,8 @@ export interface NamespaceExplorerPanelProps {
   onCollapseAll: () => void;
   /** Called when a node is clicked to select it in the graph. */
   onSelectNode?: (nodeId: string) => void;
+  /** Currently selected node ID (for highlighting). */
+  selectedNodeId?: string | null;
   /** Optional className for outer container. */
   className?: string;
   /** Total edge count for cross-namespace reference detection. */
@@ -102,6 +104,7 @@ export function NamespaceExplorerPanel({
   nodes,
   expandedNamespaces,
   hiddenNodeIds,
+  selectedNodeId,
   onToggleNamespace,
   onToggleNode,
   onExpandAll,
@@ -218,6 +221,7 @@ export function NamespaceExplorerPanel({
                 onToggleTreeExpand={() => toggleTreeExpand(entry.namespace)}
                 onToggleNode={onToggleNode}
                 onSelectNode={onSelectNode}
+                selectedNodeId={selectedNodeId}
               />
             ))}
           </div>
@@ -237,6 +241,7 @@ interface NamespaceRowProps {
   isTreeExpanded: boolean;
   hiddenNodeIds: Set<string>;
   hiddenRefCounts?: Map<string, number>;
+  selectedNodeId?: string | null;
   onToggleGraphVisibility: () => void;
   onToggleTreeExpand: () => void;
   onToggleNode: (nodeId: string) => void;
@@ -249,6 +254,7 @@ function NamespaceRow({
   isTreeExpanded,
   hiddenNodeIds,
   hiddenRefCounts,
+  selectedNodeId,
   onToggleGraphVisibility,
   onToggleTreeExpand,
   onToggleNode,
@@ -314,11 +320,17 @@ function NamespaceRow({
             const refCount = hiddenRefCounts?.get(type.nodeId) ?? 0;
             const KindIcon = KIND_ICON_MAP[type.kind];
 
+            const isSelected = type.nodeId === selectedNodeId;
+
             return (
               <div
                 key={type.nodeId}
                 className={`flex items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
-                  isVisible ? 'text-foreground' : 'text-muted-foreground opacity-60'
+                  isSelected
+                    ? 'bg-accent text-accent-foreground'
+                    : isVisible
+                      ? 'text-foreground'
+                      : 'text-muted-foreground opacity-60'
                 }`}
                 data-testid={`ns-type-${type.nodeId}`}
               >
