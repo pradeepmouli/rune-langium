@@ -11,7 +11,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { FormProvider, useForm } from 'react-hook-form';
 import { EnumValueRow } from '../../src/components/editors/EnumValueRow.js';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function baseProps(overrides: Record<string, unknown> = {}) {
   return {
@@ -26,6 +31,36 @@ function baseProps(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** Wraps the component in a FormProvider seeded with member values from props. */
+function Wrapper({
+  name,
+  displayName,
+  children
+}: {
+  name: string;
+  displayName: string;
+  children: React.ReactNode;
+}) {
+  const form = useForm({
+    defaultValues: {
+      members: [{ name, displayName, typeName: '', cardinality: '', isOverride: false }]
+    }
+  });
+  return <FormProvider {...form}>{children}</FormProvider>;
+}
+
+function renderRow(props: ReturnType<typeof baseProps>) {
+  return render(
+    <Wrapper name={props.name as string} displayName={props.displayName as string}>
+      <EnumValueRow {...props} />
+    </Wrapper>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe('EnumValueRow', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -36,7 +71,7 @@ describe('EnumValueRow', () => {
   });
 
   it('renders name and display name inputs', () => {
-    render(<EnumValueRow {...baseProps()} />);
+    renderRow(baseProps());
 
     const nameInput = screen.getByLabelText(/value name/i);
     expect(nameInput).toBeDefined();
@@ -49,7 +84,7 @@ describe('EnumValueRow', () => {
 
   it('debounces name changes with 500ms delay', () => {
     const props = baseProps();
-    render(<EnumValueRow {...props} />);
+    renderRow(props);
 
     const nameInput = screen.getByLabelText(/value name/i);
     fireEvent.change(nameInput, { target: { value: 'US_Dollar' } });
@@ -67,7 +102,7 @@ describe('EnumValueRow', () => {
 
   it('debounces display name changes', () => {
     const props = baseProps();
-    render(<EnumValueRow {...props} />);
+    renderRow(props);
 
     const displayInput = screen.getByPlaceholderText(/display name/i);
     fireEvent.change(displayInput, { target: { value: 'United States Dollar' } });
@@ -84,7 +119,7 @@ describe('EnumValueRow', () => {
 
   it('calls onRemove when remove button is clicked', () => {
     const props = baseProps();
-    render(<EnumValueRow {...props} />);
+    renderRow(props);
 
     const removeBtn = screen.getByLabelText(/remove value/i);
     fireEvent.click(removeBtn);
@@ -93,7 +128,7 @@ describe('EnumValueRow', () => {
   });
 
   it('renders drag handle', () => {
-    const { container } = render(<EnumValueRow {...baseProps()} />);
+    const { container } = renderRow(baseProps());
 
     const handle = container.querySelector('[data-slot="drag-handle"]');
     expect(handle).toBeDefined();
@@ -101,14 +136,14 @@ describe('EnumValueRow', () => {
   });
 
   it('shows red border for empty name', () => {
-    const { container } = render(<EnumValueRow {...baseProps({ name: '' })} />);
+    renderRow(baseProps({ name: '' }));
 
     const nameInput = screen.getByLabelText(/value name/i);
     expect(nameInput.className).toContain('border-red');
   });
 
   it('disables inputs when disabled prop is true', () => {
-    render(<EnumValueRow {...baseProps({ disabled: true })} />);
+    renderRow(baseProps({ disabled: true }));
 
     const nameInput = screen.getByLabelText(/value name/i);
     expect(nameInput).toHaveProperty('disabled', true);
