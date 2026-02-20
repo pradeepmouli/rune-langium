@@ -35,7 +35,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
-    "@xyflow/react": "^12.10.0",
+    "@xyflow/react": "^12.10.1",
     "react-hook-form": "^7.71.1",
     "zod": "^4.3.6",
     "zundo": "^2.3.0",

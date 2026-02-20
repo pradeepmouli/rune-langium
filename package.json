@@ -33,17 +33,18 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "type-check": "pnpm -r run type-check",
-    "ui:add": "pnpm --filter @rune-langium/design-system exec shadcn add"
+    "ui:add": "pnpm --filter @rune-langium/design-system exec shadcn add",
+    "prepare": "simple-git-hooks"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
     "@types/node": "^25.3.0",
-    "@typescript/native-preview": "7.0.0-dev.20260218.1",
+    "@typescript/native-preview": "7.0.0-dev.20260219.1",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
     "lint-staged": "^16.2.7",
-    "oxfmt": "^0.33.0",
-    "oxlint": "^1.48.0",
+    "oxfmt": "^0.34.0",
+    "oxlint": "^1.49.0",
     "simple-git-hooks": "^2.13.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
@@ -54,8 +55,12 @@
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
-    "@lspeasy/client": "^1.1.0",
-    "@lspeasy/core": "^1.1.0",
+    "@lspeasy/client": "^2.0.1",
+    "@lspeasy/core": "^2.0.0",
     "camelcase": "^9.0.0"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged",
+    "pre-push": "pnpm run type-check"
   }
 }
