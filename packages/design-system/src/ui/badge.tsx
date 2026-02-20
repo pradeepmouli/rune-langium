@@ -22,7 +22,11 @@ const badgeVariants = cva('inline-flex items-center rounded-sm px-2 py-0.5 text-
       data: 'bg-blue-500/15 text-blue-300 border border-blue-500/25',
       enum: 'bg-green-500/15 text-green-300 border border-green-500/25',
       choice: 'bg-amber-500/15 text-amber-300 border border-amber-500/25',
-      func: 'bg-purple-500/15 text-purple-300 border border-purple-500/25'
+      func: 'bg-purple-500/15 text-purple-300 border border-purple-500/25',
+      record: 'bg-teal-500/15 text-teal-300 border border-teal-500/25',
+      typeAlias: 'bg-slate-500/15 text-slate-300 border border-slate-500/25',
+      basicType: 'bg-gray-500/15 text-gray-300 border border-gray-500/25',
+      annotation: 'bg-rose-500/15 text-rose-300 border border-rose-500/25'
     }
   },
   defaultVariants: {

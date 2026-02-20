@@ -86,6 +86,10 @@ const KIND_BADGE_COLORS: Record<TypeKind | 'builtin', string> = {
   choice: 'bg-amber-500/20 text-amber-400',
   enum: 'bg-green-500/20 text-green-400',
   func: 'bg-purple-500/20 text-purple-400',
+  record: 'bg-teal-500/20 text-teal-400',
+  typeAlias: 'bg-slate-500/20 text-slate-400',
+  basicType: 'bg-gray-500/20 text-gray-400',
+  annotation: 'bg-rose-500/20 text-rose-400',
   builtin: 'bg-gray-500/20 text-gray-400'
 };
 
@@ -95,6 +99,10 @@ const KIND_DOT_COLORS: Record<TypeKind | 'builtin', string> = {
   choice: 'bg-amber-400',
   enum: 'bg-green-400',
   func: 'bg-purple-400',
+  record: 'bg-teal-400',
+  typeAlias: 'bg-slate-400',
+  basicType: 'bg-gray-400',
+  annotation: 'bg-rose-400',
   builtin: 'bg-gray-400'
 };
 
@@ -114,6 +122,10 @@ export function getKindLabel(kind: TypeKind | 'builtin'): string {
     choice: 'Choice',
     enum: 'Enum',
     func: 'Function',
+    record: 'Record',
+    typeAlias: 'Type Alias',
+    basicType: 'Basic Type',
+    annotation: 'Annotation',
     builtin: 'Built-in'
   };
   return labels[kind] ?? 'Unknown';

@@ -115,6 +115,10 @@ export interface EditorActions {
   updateComments(nodeId: string, comments: string): void;
   addSynonym(nodeId: string, synonym: string): void;
   removeSynonym(nodeId: string, index: number): void;
+
+  // --- Annotation operations ---
+  addAnnotation(nodeId: string, annotationName: string): void;
+  removeAnnotation(nodeId: string, index: number): void;
 }
 
 export type EditorStore = EditorState & EditorActions;
@@ -827,6 +831,42 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                     data: {
                       ...n.data,
                       synonyms: (n.data.synonyms ?? []).filter((_, i) => i !== index)
+                    }
+                  }
+                : n
+            )
+          }));
+        },
+
+        // -----------------------------------------------------------------------
+        // Annotation operations
+        // -----------------------------------------------------------------------
+
+        addAnnotation(nodeId: string, annotationName: string) {
+          set((state) => ({
+            nodes: state.nodes.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      annotations: [...(n.data.annotations ?? []), { name: annotationName }]
+                    }
+                  }
+                : n
+            )
+          }));
+        },
+
+        removeAnnotation(nodeId: string, index: number) {
+          set((state) => ({
+            nodes: state.nodes.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      annotations: (n.data.annotations ?? []).filter((_, i) => i !== index)
                     }
                   }
                 : n

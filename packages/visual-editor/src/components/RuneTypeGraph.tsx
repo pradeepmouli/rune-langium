@@ -559,6 +559,40 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
           );
         },
 
+        addAnnotation(nodeId: string, annotationName: string) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      annotations: [...(n.data.annotations ?? []), { name: annotationName }]
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
+        removeAnnotation(nodeId: string, index: number) {
+          if (mergedConfig.readOnly) return;
+          setNodes((prev) =>
+            prev.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      annotations: (n.data.annotations ?? []).filter((_, i) => i !== index)
+                    }
+                  }
+                : n
+            )
+          );
+        },
+
         validate(): ValidationError[] {
           return validateGraph(nodes, edges);
         },

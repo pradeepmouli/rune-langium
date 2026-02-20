@@ -25,7 +25,9 @@ import type {
 } from '@rune-langium/visual-editor';
 import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
+import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
+import { ExpressionEditor } from '../components/ExpressionEditor.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -60,6 +62,7 @@ export function EditorPage({
   onReconnect
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
+  const sourceEditorRef = useRef<SourceEditorRef>(null);
   const sourcePanelRef = useRef<PanelImperativeHandle>(null);
   const editorPanelRef = useRef<PanelImperativeHandle>(null);
   const [showSource, setShowSource] = useState(false);
@@ -144,9 +147,23 @@ export function EditorPage({
     setHiddenNodeIds(new Set<string>());
   }, []);
 
-  const handleExplorerSelectNode = useCallback((nodeId: string) => {
-    graphRef.current?.focusNode(nodeId);
-  }, []);
+  const handleExplorerSelectNode = useCallback(
+    (nodeId: string) => {
+      graphRef.current?.focusNode(nodeId);
+
+      // Also navigate source editor to the node's definition
+      const node = allGraphNodes.find((n) => n.id === nodeId);
+      if (node?.data.source) {
+        const cstNode = (
+          node.data.source as { $cstNode?: { range?: { start?: { line?: number } } } }
+        )?.$cstNode;
+        if (cstNode?.range?.start?.line !== undefined) {
+          sourceEditorRef.current?.revealLine(cstNode.range.start.line + 1);
+        }
+      }
+    },
+    [allGraphNodes]
+  );
 
   // --- Stable ref for files (prevents stale closure in handleSourceChange) ---
   const filesRef = useRef(files);
@@ -251,6 +268,15 @@ export function EditorPage({
       if (nodeId && nodeData) {
         setSelectedNodeData(nodeData);
         expandEditor();
+
+        // Navigate source editor to the AST node's definition line
+        const cstNode = (
+          nodeData.source as { $cstNode?: { range?: { start?: { line?: number } } } }
+        )?.$cstNode;
+        if (cstNode?.range?.start?.line !== undefined) {
+          // CST lines are 0-based, CodeMirror is 1-based
+          sourceEditorRef.current?.revealLine(cstNode.range.start.line + 1);
+        }
       } else {
         setSelectedNodeData(null);
       }
@@ -333,6 +359,8 @@ export function EditorPage({
       removeInputParam: (nodeId, name) => graphRef.current?.removeInputParam(nodeId, name),
       updateOutputType: (nodeId, type) => graphRef.current?.updateOutputType(nodeId, type),
       updateExpression: (nodeId, expr) => graphRef.current?.updateExpression(nodeId, expr),
+      addAnnotation: (nodeId, name) => graphRef.current?.addAnnotation(nodeId, name),
+      removeAnnotation: (nodeId, index) => graphRef.current?.removeAnnotation(nodeId, index),
       validate: () => graphRef.current?.validate() ?? []
     }),
     []
@@ -463,6 +491,7 @@ export function EditorPage({
               aria-label="Source editor"
             >
               <SourceEditor
+                ref={sourceEditorRef}
                 files={files}
                 activeFile={activeEditorFile}
                 lspClient={lspClient}
@@ -487,6 +516,8 @@ export function EditorPage({
               nodeId={selectedNode}
               availableTypes={availableTypes}
               actions={editorActions}
+              allNodes={allGraphNodes}
+              renderExpressionEditor={(props) => <ExpressionEditor {...props} />}
               onClose={() => {
                 editorPanelRef.current?.collapse();
                 setShowEditor(false);

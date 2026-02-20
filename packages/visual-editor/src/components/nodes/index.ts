@@ -8,9 +8,14 @@ import type { NodeTypes } from '@xyflow/react';
 import { DataNode } from './DataNode.js';
 import { ChoiceNode } from './ChoiceNode.js';
 import { EnumNode } from './EnumNode.js';
+import { GenericNode } from './GenericNode.js';
 
 export const nodeTypes: NodeTypes = {
   data: DataNode,
   choice: ChoiceNode,
-  enum: EnumNode
+  enum: EnumNode,
+  record: GenericNode,
+  typeAlias: GenericNode,
+  basicType: GenericNode,
+  annotation: GenericNode
 };

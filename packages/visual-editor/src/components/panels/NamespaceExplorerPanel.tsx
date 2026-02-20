@@ -22,7 +22,11 @@ import {
   GitBranch,
   Tag,
   FunctionSquare,
-  Link
+  Link,
+  Layers,
+  ArrowRightLeft,
+  Atom,
+  StickyNote
 } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -72,14 +76,22 @@ const KIND_ICON_MAP: Record<TypeKind, React.ElementType> = {
   data: Package,
   choice: GitBranch,
   enum: Tag,
-  func: FunctionSquare
+  func: FunctionSquare,
+  record: Layers,
+  typeAlias: ArrowRightLeft,
+  basicType: Atom,
+  annotation: StickyNote
 };
 
 const KIND_LABELS: Record<TypeKind, string> = {
   data: 'Data',
   choice: 'Choice',
   enum: 'Enum',
-  func: 'Function'
+  func: 'Function',
+  record: 'Record',
+  typeAlias: 'Type Alias',
+  basicType: 'Basic Type',
+  annotation: 'Annotation'
 };
 
 // ---------------------------------------------------------------------------

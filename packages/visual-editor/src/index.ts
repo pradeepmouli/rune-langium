@@ -62,6 +62,7 @@ export type {
   TypeNodeData,
   EdgeData,
   ValidationError,
+  ExpressionEditorSlotProps,
   TypeOption,
   CommonFormActions,
   DataFormActions,

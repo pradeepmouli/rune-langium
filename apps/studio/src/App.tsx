@@ -17,6 +17,7 @@ import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles } from './services/workspace.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
+import { BASE_TYPE_FILES } from './resources/base-types.js';
 
 export function App() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
@@ -64,9 +65,11 @@ export function App() {
 
   const handleFilesLoaded = useCallback(async (loadedFiles: WorkspaceFile[]) => {
     setLoading(true);
-    setFiles(loadedFiles);
+    // Prepend system base-type files so cross-references resolve
+    const allFiles: WorkspaceFile[] = [...BASE_TYPE_FILES.map((f) => ({ ...f })), ...loadedFiles];
+    setFiles(allFiles);
 
-    const result = await parseWorkspaceFiles(loadedFiles);
+    const result = await parseWorkspaceFiles(allFiles);
     setModels(result.models);
     setErrors(result.errors);
     setLoading(false);
@@ -107,6 +110,7 @@ export function App() {
   }, []);
 
   const hasErrors = errors.size > 0;
+  const userFiles = files.filter((f) => !f.readOnly);
 
   return (
     <div className="studio-app flex flex-col h-full font-sans text-foreground bg-background">
@@ -115,7 +119,7 @@ export function App() {
         {files.length > 0 && (
           <div className="flex items-center gap-3">
             <span className="text-base text-muted-foreground">
-              {files.length} file(s)
+              {userFiles.length} file(s)
               {hasErrors && (
                 <span className="text-destructive" title="Parse errors detected">
                   {' '}
@@ -139,9 +143,9 @@ export function App() {
           </div>
         )}
 
-        {!loading && files.length === 0 && <FileLoader onFilesLoaded={handleFilesLoaded} />}
+        {!loading && userFiles.length === 0 && <FileLoader onFilesLoaded={handleFilesLoaded} />}
 
-        {!loading && files.length > 0 && (
+        {!loading && userFiles.length > 0 && (
           <EditorPage
             models={models as import('@rune-langium/core').RosettaModel[]}
             files={files}

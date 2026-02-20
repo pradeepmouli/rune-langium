@@ -9,7 +9,15 @@
  * and cross-file navigation.
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  useImperativeHandle,
+  forwardRef
+} from 'react';
 import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, type Extension } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
@@ -46,6 +54,12 @@ export interface SourceEditorProps {
   lspClient?: LspClientService;
 }
 
+/** Imperative handle exposed by SourceEditor for programmatic navigation. */
+export interface SourceEditorRef {
+  /** Scroll to a line in the specified (or current) file and highlight it. */
+  revealLine(line: number, filePath?: string): void;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────────────
@@ -60,20 +74,55 @@ function getTabId(path: string): string {
   return `tab-${encoded}`;
 }
 
+/** Scroll to a 1-based line number and highlight it briefly. */
+function scrollToLine(view: EditorView | null, line: number): void {
+  if (!view) return;
+  const clampedLine = Math.max(1, Math.min(line, view.state.doc.lines));
+  const lineInfo = view.state.doc.line(clampedLine);
+  view.dispatch({
+    selection: { anchor: lineInfo.from },
+    effects: EditorView.scrollIntoView(lineInfo.from, { y: 'center' })
+  });
+  view.focus();
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────────────────────────────────
 
-export function SourceEditor({
-  files,
-  activeFile,
-  onFileSelect,
-  onContentChange,
-  lspClient
-}: SourceEditorProps) {
+export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(function SourceEditor(
+  { files, activeFile, onFileSelect, onContentChange, lspClient },
+  ref
+) {
   const [selectedPath, setSelectedPath] = useState<string>(activeFile ?? files[0]?.path ?? '');
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+
+  // Expose imperative handle for programmatic navigation
+  useImperativeHandle(
+    ref,
+    () => ({
+      revealLine(line: number, filePath?: string) {
+        // If a different file is specified, switch to it first
+        if (filePath && filePath !== selectedPath) {
+          const target = files.find((f) => f.path === filePath || f.name === filePath);
+          if (target) {
+            setSelectedPath(target.path);
+            onFileSelect?.(target.path);
+            // Schedule the scroll after the editor is recreated for the new file
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                scrollToLine(editorViewRef.current, line);
+              });
+            });
+            return;
+          }
+        }
+        scrollToLine(editorViewRef.current, line);
+      }
+    }),
+    [files, selectedPath, onFileSelect]
+  );
 
   // Track content per file for document model
   const contentMapRef = useRef<Map<string, string>>(new Map());
@@ -243,4 +292,4 @@ export function SourceEditor({
       />
     </section>
   );
-}
+});
