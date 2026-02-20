@@ -34,7 +34,10 @@
     "test:watch": "vitest",
     "type-check": "pnpm -r run type-check",
     "ui:add": "pnpm --filter @rune-langium/design-system exec shadcn add",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "pnpm run build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
