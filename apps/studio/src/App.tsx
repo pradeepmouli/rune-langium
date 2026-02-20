@@ -68,6 +68,7 @@ export function App() {
     // Prepend system base-type files so cross-references resolve
     const allFiles: WorkspaceFile[] = [...BASE_TYPE_FILES.map((f) => ({ ...f })), ...loadedFiles];
     setFiles(allFiles);
+    lspClientRef.current?.syncWorkspaceFiles(allFiles);
 
     const result = await parseWorkspaceFiles(allFiles);
     setModels(result.models);
@@ -81,6 +82,7 @@ export function App() {
    */
   const handleFilesChange = useCallback((updatedFiles: WorkspaceFile[]) => {
     setFiles(updatedFiles);
+    lspClientRef.current?.syncWorkspaceFiles(updatedFiles);
 
     // Debounced reparse — wait for typing to settle
     if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);

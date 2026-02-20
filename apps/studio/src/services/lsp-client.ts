@@ -10,12 +10,14 @@
 
 import { LSPClient, languageServerExtensions } from '@codemirror/lsp-client';
 import type { Extension } from '@codemirror/state';
+import { Text } from '@codemirror/state';
 import {
   createTransportProvider,
   type TransportProvider,
   type TransportProviderOptions
 } from './transport-provider.js';
 import type { LspDiagnostic } from '../types/diagnostics.js';
+import { pathToUri } from '../utils/uri.js';
 
 export type { LspDiagnostic } from '../types/diagnostics.js';
 
@@ -37,6 +39,8 @@ export interface LspClientService {
   isInitialized(): boolean;
   /** Subscribe to diagnostics (for graph bridge). Returns unsubscribe fn. */
   onDiagnostics(handler: (uri: string, diagnostics: LspDiagnostic[]) => void): () => void;
+  /** Keep the server-side workspace in sync with loaded files (for cross-file refs). */
+  syncWorkspaceFiles(files: Array<{ path: string; content: string }>): void;
   /** Force reconnect (tries WebSocket first). */
   reconnect(): Promise<void>;
   /** Clean up all resources. */
@@ -52,6 +56,7 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
     opts?.transportProvider ?? createTransportProvider(opts?.transportOptions);
   let client: LSPClient | null = null;
   let initialized = false;
+  const workspaceSnapshot = new Map<string, { version: number; content: string }>();
 
   const diagnosticHandlers: ((uri: string, diagnostics: LspDiagnostic[]) => void)[] = [];
 
@@ -82,6 +87,17 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
       client = buildClient();
       client.connect(transport);
       initialized = true;
+
+      // Re-open all tracked workspace files after reconnect.
+      for (const [uri, entry] of workspaceSnapshot) {
+        client.didOpen({
+          uri,
+          languageId: 'rosetta',
+          version: entry.version,
+          doc: Text.of(entry.content.split('\n')),
+          getView: () => null
+        });
+      }
     },
 
     async disconnect(): Promise<void> {
@@ -109,6 +125,49 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
       };
     },
 
+    syncWorkspaceFiles(files: Array<{ path: string; content: string }>): void {
+      const nextUris = new Set<string>();
+
+      for (const file of files) {
+        const uri = pathToUri(file.path);
+        nextUris.add(uri);
+
+        const prev = workspaceSnapshot.get(uri);
+        if (!prev) {
+          workspaceSnapshot.set(uri, { version: 0, content: file.content });
+          if (client && initialized) {
+            client.didOpen({
+              uri,
+              languageId: 'rosetta',
+              version: 0,
+              doc: Text.of(file.content.split('\n')),
+              getView: () => null
+            });
+          }
+          continue;
+        }
+
+        if (prev.content !== file.content) {
+          const version = prev.version + 1;
+          workspaceSnapshot.set(uri, { version, content: file.content });
+          if (client && initialized) {
+            client.notification('textDocument/didChange', {
+              textDocument: { uri, version },
+              contentChanges: [{ text: file.content }]
+            });
+          }
+        }
+      }
+
+      for (const uri of [...workspaceSnapshot.keys()]) {
+        if (nextUris.has(uri)) continue;
+        workspaceSnapshot.delete(uri);
+        if (client && initialized) {
+          client.didClose(uri);
+        }
+      }
+    },
+
     async reconnect(): Promise<void> {
       if (client) {
         client.disconnect();
@@ -119,6 +178,17 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
       client = buildClient();
       client.connect(transport);
       initialized = true;
+
+      // Re-open all tracked workspace files after reconnect.
+      for (const [uri, entry] of workspaceSnapshot) {
+        client.didOpen({
+          uri,
+          languageId: 'rosetta',
+          version: entry.version,
+          doc: Text.of(entry.content.split('\n')),
+          getView: () => null
+        });
+      }
     },
 
     dispose(): void {
