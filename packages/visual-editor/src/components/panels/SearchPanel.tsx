@@ -1,10 +1,16 @@
 /**
  * SearchPanel — Search and filter UI panel.
  *
- * Provides a search input and filter controls for the graph.
+ * Provides a search input and filter controls for the graph
+ * using shadcn/ui primitives and lucide-react icons.
  */
 
 import { useCallback } from 'react';
+import { Search, Filter, EyeOff } from 'lucide-react';
+import { Input } from '@rune-langium/design-system/ui/input';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { Badge } from '@rune-langium/design-system/ui/badge';
+import { Separator } from '@rune-langium/design-system/ui/separator';
 import type { GraphFilters, TypeKind } from '../../types.js';
 
 export interface SearchPanelProps {
@@ -36,46 +42,72 @@ export function SearchPanel({
   }, [filters, onFiltersChange]);
 
   return (
-    <div className="rune-panel rune-search-panel">
-      <div className="rune-panel-header">Search</div>
-      <input
-        type="text"
-        className="rune-search-input"
-        placeholder="Search types..."
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
-      />
+    <div className="flex flex-col gap-3 p-3">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <Search className="size-4 text-muted-foreground" />
+        <span className="text-sm font-semibold">Search</span>
+      </div>
+
+      {/* Search input */}
+      <div className="relative">
+        <Input
+          type="text"
+          placeholder="Search types..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+        />
+      </div>
+
       {searchQuery && (
-        <div className="rune-search-panel__results">
+        <p className="text-xs text-muted-foreground">
           {resultCount} result{resultCount !== 1 ? 's' : ''}
-        </div>
+        </p>
       )}
-      <div className="rune-search-panel__filter-section">
-        <div className="rune-detail-label">Filter by Kind</div>
-        <div className="rune-search-panel__filter-buttons">
-          {(['data', 'choice', 'enum'] as TypeKind[]).map((kind) => (
-            <button
-              key={kind}
-              className={`rune-toolbar-button${
-                filters.kinds?.includes(kind) ? ' rune-toolbar-button-active' : ''
-              }`}
-              onClick={() => handleKindToggle(kind)}
-            >
-              {kind}
-            </button>
-          ))}
+
+      <Separator />
+
+      {/* Filter by kind */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-1.5">
+          <Filter className="size-3.5 text-muted-foreground" />
+          <span className="text-xs font-medium text-muted-foreground">Filter by Kind</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(['data', 'choice', 'enum', 'func'] as TypeKind[]).map((kind) => {
+            const isActive = filters.kinds?.includes(kind);
+            return (
+              <Button
+                key={kind}
+                variant={isActive ? 'default' : 'outline'}
+                size="xs"
+                onClick={() => handleKindToggle(kind)}
+                className="capitalize"
+              >
+                {kind}
+              </Button>
+            );
+          })}
         </div>
       </div>
-      <div className="rune-search-panel__orphan-toggle">
-        <label className="rune-search-panel__orphan-label">
-          <input
-            type="checkbox"
-            checked={filters.hideOrphans ?? false}
-            onChange={handleOrphansToggle}
-          />
-          Hide orphan nodes
-        </label>
-      </div>
+
+      <Separator />
+
+      {/* Orphan toggle */}
+      <Button
+        variant={filters.hideOrphans ? 'default' : 'outline'}
+        size="sm"
+        onClick={handleOrphansToggle}
+        className="w-full justify-start gap-2"
+      >
+        <EyeOff className="size-3.5" />
+        Hide orphan nodes
+        {filters.hideOrphans && (
+          <Badge variant="secondary" className="ml-auto">
+            On
+          </Badge>
+        )}
+      </Button>
     </div>
   );
 }

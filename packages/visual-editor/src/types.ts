@@ -19,6 +19,8 @@ import type {
   RosettaEnumValue
 } from '@rune-langium/core';
 
+export type ExtractKind<T> = T extends { $type: infer K } ? K : never;
+
 // ---------------------------------------------------------------------------
 // AST ↔ Graph kind mappings
 // ---------------------------------------------------------------------------

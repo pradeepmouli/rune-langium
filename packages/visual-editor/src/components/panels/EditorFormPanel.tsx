@@ -17,12 +17,15 @@
 
 import { useEffect, useCallback, useRef, Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
+import { X } from 'lucide-react';
+import { Badge } from '@rune-langium/design-system/ui/badge';
+import { Button } from '@rune-langium/design-system/ui/button';
 import { DataTypeForm } from '../editors/DataTypeForm.js';
 import { EnumForm } from '../editors/EnumForm.js';
 import { ChoiceForm } from '../editors/ChoiceForm.js';
 import { FunctionForm } from '../editors/FunctionForm.js';
 import { DetailPanel } from './DetailPanel.js';
-import { getKindBadgeClasses, getKindLabel } from '../editors/TypeSelector.js';
+import { getKindLabel } from '../editors/TypeSelector.js';
 import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
 
 // ---------------------------------------------------------------------------
@@ -221,20 +224,19 @@ function EditorFormPanel({
           border-b bg-muted"
       >
         <span className="text-sm font-semibold truncate">{nodeData.name}</span>
-        <span
-          className={`text-xs font-medium px-1.5 py-0.5 rounded shrink-0 ${getKindBadgeClasses(nodeData.kind)}`}
-        >
+        <Badge variant={nodeData.kind as 'data' | 'enum' | 'choice' | 'func'}>
           {getKindLabel(nodeData.kind)}
-        </span>
+        </Badge>
         {onClose && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={onClose}
             className="ml-auto text-muted-foreground hover:text-foreground"
             aria-label="Close editor panel"
           >
-            ✕
-          </button>
+            <X className="size-4" />
+          </Button>
         )}
       </div>
 
