@@ -1,18 +1,17 @@
 /**
  * EnumValueRow — inline editable row for a single enumeration value.
  *
- * Reads/writes form state via `useFormContext` (provided by the parent
- * FormProvider in EnumForm). Eliminates local `useState` so there are
- * no stale-closure issues when the parent form resets.
+ * Uses local state (name + displayName) and debounces commits via
+ * useAutoSave. Does not depend on react-hook-form FormProvider so it
+ * can be used standalone or inside any parent form.
  *
- * Renders: drag handle (⠇) | value name input | display name input | remove button.
+ * Renders: drag handle (⠿) | value name input | display name input | remove button.
  * Name/displayName changes are debounced (500 ms). Empty names show a red border.
  *
  * @module
  */
 
-import { useCallback } from 'react';
-import { useFormContext, Controller } from 'react-hook-form';
+import { useState, useCallback } from 'react';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 
 // ---------------------------------------------------------------------------
@@ -20,16 +19,18 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 // ---------------------------------------------------------------------------
 
 export interface EnumValueRowProps {
-  /** Index position of this member in the useFieldArray. */
+  /** Current value name (used as initial state and committed reference). */
+  name: string;
+  /** Current display name (used as initial state). */
+  displayName: string;
+  /** Node ID of the parent Enum — forwarded to callbacks for store dispatch. */
+  nodeId: string;
+  /** Index position of this member in the list. */
   index: number;
-  /** Last-committed value name (for graph action diffing). */
-  committedName: string;
-  /** Last-committed display name (for graph action diffing). */
-  committedDisplayName: string;
   /** Commit value name/displayName changes to the graph. */
-  onUpdate: (index: number, oldName: string, newName: string, displayName?: string) => void;
-  /** Remove this enum value by index. */
-  onRemove: (index: number) => void;
+  onUpdate: (nodeId: string, oldName: string, newName: string, displayName?: string) => void;
+  /** Remove this enum value. */
+  onRemove: (nodeId: string, valueName: string) => void;
   /** Reorder (drag) callback; fromIndex → toIndex. */
   onReorder: (fromIndex: number, toIndex: number) => void;
   /** Whether the row is disabled. */
@@ -41,27 +42,25 @@ export interface EnumValueRowProps {
 // ---------------------------------------------------------------------------
 
 function EnumValueRow({
+  name,
+  displayName,
+  nodeId,
   index,
-  committedName,
-  committedDisplayName,
   onUpdate,
   onRemove,
   onReorder,
   disabled = false
 }: EnumValueRowProps) {
-  const { control, getValues, watch } = useFormContext();
-  const prefix = `members.${index}`;
-
-  const localName: string = watch(`${prefix}.name`);
+  const [localName, setLocalName] = useState(name);
+  const [localDisplayName, setLocalDisplayName] = useState(displayName);
 
   // ---- Name auto-save (debounced) ------------------------------------------
 
   const commitNameChange = useCallback(
     (newName: string) => {
-      const displayName: string = getValues(`${prefix}.displayName`) ?? '';
-      onUpdate(index, committedName, newName, displayName || undefined);
+      onUpdate(nodeId, name, newName, localDisplayName || undefined);
     },
-    [index, committedName, prefix, getValues, onUpdate]
+    [nodeId, name, localDisplayName, onUpdate]
   );
 
   const debouncedName = useAutoSave(commitNameChange, 500);
@@ -70,10 +69,9 @@ function EnumValueRow({
 
   const commitDisplayName = useCallback(
     (newDisplayName: string) => {
-      const name: string = getValues(`${prefix}.name`);
-      onUpdate(index, committedName, name, newDisplayName || undefined);
+      onUpdate(nodeId, name, localName, newDisplayName || undefined);
     },
-    [index, committedName, prefix, getValues, onUpdate]
+    [nodeId, name, localName, onUpdate]
   );
 
   const debouncedDisplayName = useAutoSave(commitDisplayName, 500);
@@ -100,7 +98,7 @@ function EnumValueRow({
 
   // ---- Render -------------------------------------------------------------
 
-  const isEmpty = (localName ?? '').trim() === '';
+  const isEmpty = localName.trim() === '';
 
   return (
     <div
@@ -118,61 +116,47 @@ function EnumValueRow({
         className="cursor-grab text-muted-foreground text-xs select-none shrink-0"
         aria-hidden="true"
       >
-        ⠇
+        ⠿
       </span>
 
-      {/* Value name via Controller */}
-      <Controller
-        control={control}
-        name={`${prefix}.name`}
-        render={({ field }) => (
-          <input
-            type="text"
-            value={field.value ?? ''}
-            onChange={(e) => {
-              field.onChange(e);
-              debouncedName(e.target.value);
-            }}
-            onBlur={field.onBlur}
-            disabled={disabled}
-            aria-label={`Value name for ${committedName || 'new value'}`}
-            placeholder="Value name"
-            className={`flex-1 min-w-0 px-2 py-1 text-sm rounded
-              bg-transparent border
-              ${isEmpty ? 'border-red-500' : 'border-border'}
-              focus:outline-none focus:ring-1 focus:ring-ring`}
-          />
-        )}
+      {/* Value name input */}
+      <input
+        type="text"
+        value={localName}
+        onChange={(e) => {
+          setLocalName(e.target.value);
+          debouncedName(e.target.value);
+        }}
+        disabled={disabled}
+        aria-label={`Value name for ${name || 'new value'}`}
+        placeholder="Value name"
+        className={`flex-1 min-w-0 px-2 py-1 text-sm rounded
+          bg-transparent border
+          ${isEmpty ? 'border-red-500' : 'border-border'}
+          focus:outline-none focus:ring-1 focus:ring-ring`}
       />
 
-      {/* Display name via Controller */}
-      <Controller
-        control={control}
-        name={`${prefix}.displayName`}
-        render={({ field }) => (
-          <input
-            type="text"
-            value={field.value ?? ''}
-            onChange={(e) => {
-              field.onChange(e);
-              debouncedDisplayName(e.target.value);
-            }}
-            onBlur={field.onBlur}
-            disabled={disabled}
-            placeholder="Display name (optional)"
-            className="flex-1 min-w-0 px-2 py-1 text-sm rounded
-              bg-transparent border border-border
-              focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        )}
+      {/* Display name input */}
+      <input
+        type="text"
+        value={localDisplayName}
+        onChange={(e) => {
+          setLocalDisplayName(e.target.value);
+          debouncedDisplayName(e.target.value);
+        }}
+        disabled={disabled}
+        placeholder="Display name (optional)"
+        className="flex-1 min-w-0 px-2 py-1 text-sm rounded
+          bg-transparent border border-border
+          focus:outline-none focus:ring-1 focus:ring-ring"
       />
 
       {/* Remove button */}
       <button
         type="button"
-        onClick={() => onRemove(index)}
+        onClick={() => onRemove(nodeId, name)}
         disabled={disabled}
-        aria-label={`Remove value ${committedName || 'unnamed'}`}
+        aria-label={`Remove value ${name || 'unnamed'}`}
         className="shrink-0 p-1 text-muted-foreground hover:text-destructive
           disabled:opacity-50 disabled:cursor-not-allowed"
       >
