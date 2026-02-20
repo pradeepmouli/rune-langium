@@ -6,29 +6,6 @@
  */
 
 export const colors = {
-  surface: {
-    base: '#0f172a',
-    raised: '#1e293b',
-    overlay: '#334155',
-    sunken: '#020617'
-  },
-  border: {
-    default: '#334155',
-    muted: '#1e293b',
-    emphasis: '#475569'
-  },
-  text: {
-    primary: '#e2e8f0',
-    heading: '#f1f5f9',
-    secondary: '#94a3b8',
-    muted: '#64748b'
-  },
-  accent: {
-    DEFAULT: '#3b82f6',
-    hover: '#2563eb',
-    muted: 'rgba(59, 130, 246, 0.15)',
-    text: '#93c5fd'
-  },
   data: {
     DEFAULT: '#3b82f6',
     bg: 'rgba(59, 130, 246, 0.15)',
@@ -47,12 +24,19 @@ export const colors = {
     text: '#86efac',
     badge: 'rgba(34, 197, 94, 0.25)'
   },
+  func: {
+    DEFAULT: '#a855f7',
+    bg: 'rgba(168, 85, 247, 0.15)',
+    text: '#d8b4fe',
+    badge: 'rgba(168, 85, 247, 0.25)'
+  },
+  edge: {
+    ref: '#94a3b8'
+  },
   status: {
     success: '#4ade80',
     warning: '#fbbf24',
     error: '#f87171',
-    errorBg: 'rgba(239, 68, 68, 0.1)',
-    errorText: '#fca5a5',
     info: '#38bdf8'
   }
 } as const;

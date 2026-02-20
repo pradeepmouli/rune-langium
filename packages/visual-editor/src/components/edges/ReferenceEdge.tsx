@@ -9,6 +9,7 @@ import { memo } from 'react';
 import { BaseEdge, getBezierPath, EdgeLabelRenderer } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
 import type { EdgeData } from '../../types.js';
+import { colors } from '@rune-langium/design-system/tokens';
 
 export const ReferenceEdge = memo(function ReferenceEdge({
   id,
@@ -40,7 +41,7 @@ export const ReferenceEdge = memo(function ReferenceEdge({
         id={id}
         path={edgePath}
         style={{
-          stroke: isAttributeRef ? '#718096' : '#ed8936',
+          stroke: isAttributeRef ? colors.edge.ref : colors.choice.DEFAULT,
           strokeWidth: 1.5,
           strokeDasharray: isAttributeRef ? '5 3' : undefined,
           ...style
@@ -52,19 +53,13 @@ export const ReferenceEdge = memo(function ReferenceEdge({
           <div
             style={{
               position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              fontSize: 11,
-              background: '#ffffff',
-              padding: '1px 4px',
-              borderRadius: 3,
-              border: '1px solid #e2e8f0',
-              pointerEvents: 'all'
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`
             }}
-            className="nodrag nopan"
+            className="rune-edge-label nodrag nopan"
           >
             {edgeData.label}
             {edgeData.cardinality && (
-              <span style={{ color: '#a0aec0', marginLeft: 4 }}>{edgeData.cardinality}</span>
+              <span className="rune-edge-label__cardinality">{edgeData.cardinality}</span>
             )}
           </div>
         </EdgeLabelRenderer>

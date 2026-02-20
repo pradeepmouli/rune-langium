@@ -26,10 +26,10 @@ export interface CardinalityPickerProps {
 // ---------------------------------------------------------------------------
 
 const PRESETS = [
-  { label: '1', value: '(1..1)' },
-  { label: '0 or 1', value: '(0..1)' },
-  { label: '0 or more', value: '(0..*)' },
-  { label: '1 or more', value: '(1..*)' }
+  { label: '1..1', value: '(1..1)' },
+  { label: '0..1', value: '(0..1)' },
+  { label: '0..*', value: '(0..*)' },
+  { label: '1..*', value: '(1..*)' }
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ export function CardinalityPicker({
   );
 
   return (
-    <div data-slot="cardinality-picker" className="flex items-center gap-1">
+    <div data-slot="cardinality-picker" className="flex items-center gap-0.5">
       {PRESETS.map((preset) => (
         <button
           key={preset.label}
@@ -115,9 +115,9 @@ export function CardinalityPicker({
           disabled={disabled}
           data-active={isPresetActive(preset) || undefined}
           aria-pressed={isPresetActive(preset)}
-          className="rounded px-1.5 py-0.5 text-xs font-mono transition-colors
-            data-[active]:bg-accent-emphasis data-[active]:text-text-on-emphasis
-            hover:bg-surface-raised disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded border border-border px-1.5 py-0.5 text-xs font-mono transition-colors
+            data-active:bg-primary data-active:text-primary-foreground data-active:border-primary
+            hover:bg-card hover:border-input disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {preset.label}
         </button>
@@ -129,8 +129,8 @@ export function CardinalityPicker({
         disabled={disabled}
         data-active={showCustom || undefined}
         aria-label="Custom cardinality"
-        className="rounded px-1.5 py-0.5 text-xs transition-colors
-          data-[active]:bg-surface-raised hover:bg-surface-raised
+        className="rounded border border-border px-1 py-0.5 text-xs transition-colors
+          data-active:bg-card data-active:border-input hover:bg-card hover:border-input
           disabled:opacity-50 disabled:cursor-not-allowed"
       >
         ···
@@ -152,11 +152,11 @@ export function CardinalityPicker({
             aria-label="Custom cardinality"
             aria-invalid={!!customError}
             className={`w-20 rounded border px-1.5 py-0.5 text-xs font-mono
-              bg-surface-base outline-none
+              bg-background outline-none
               focus:ring-1 focus:ring-ring
-              ${customError ? 'border-status-error' : 'border-border-emphasis'}`}
+              ${customError ? 'border-destructive' : 'border-input'}`}
           />
-          {customError && <span className="text-xs text-status-error">{customError}</span>}
+          {customError && <span className="text-xs text-destructive">{customError}</span>}
         </div>
       )}
     </div>

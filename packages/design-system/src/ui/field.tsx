@@ -1,25 +1,11 @@
-/**
- * Field — shadcn/ui Field component family for composing accessible forms.
- *
- * Provides Field, FieldLabel, FieldDescription, FieldError, FieldContent,
- * FieldGroup, FieldSet, FieldLegend, FieldTitle, and FieldSeparator.
- *
- * Used with react-hook-form's Controller for declarative form building
- * with Zod validation — see https://ui.shadcn.com/docs/forms/react-hook-form
- *
- * @module
- */
+'use client';
 
-import * as React from 'react';
 import { useMemo } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { cn } from '../utils.js';
-import { Label } from './label.js';
-
-// ---------------------------------------------------------------------------
-// FieldSet
-// ---------------------------------------------------------------------------
+import { cn } from '../utils';
+import { Label } from './label';
+import { Separator } from './separator';
 
 function FieldSet({ className, ...props }: React.ComponentProps<'fieldset'>) {
   return (
@@ -34,10 +20,6 @@ function FieldSet({ className, ...props }: React.ComponentProps<'fieldset'>) {
     />
   );
 }
-
-// ---------------------------------------------------------------------------
-// FieldLegend
-// ---------------------------------------------------------------------------
 
 function FieldLegend({
   className,
@@ -59,10 +41,6 @@ function FieldLegend({
   );
 }
 
-// ---------------------------------------------------------------------------
-// FieldGroup
-// ---------------------------------------------------------------------------
-
 function FieldGroup({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
@@ -75,10 +53,6 @@ function FieldGroup({ className, ...props }: React.ComponentProps<'div'>) {
     />
   );
 }
-
-// ---------------------------------------------------------------------------
-// Field
-// ---------------------------------------------------------------------------
 
 const fieldVariants = cva('group/field flex w-full gap-3 data-[invalid=true]:text-destructive', {
   variants: {
@@ -117,10 +91,6 @@ function Field({
   );
 }
 
-// ---------------------------------------------------------------------------
-// FieldContent
-// ---------------------------------------------------------------------------
-
 function FieldContent({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
@@ -130,10 +100,6 @@ function FieldContent({ className, ...props }: React.ComponentProps<'div'>) {
     />
   );
 }
-
-// ---------------------------------------------------------------------------
-// FieldLabel
-// ---------------------------------------------------------------------------
 
 function FieldLabel({ className, ...props }: React.ComponentProps<typeof Label>) {
   return (
@@ -150,10 +116,6 @@ function FieldLabel({ className, ...props }: React.ComponentProps<typeof Label>)
   );
 }
 
-// ---------------------------------------------------------------------------
-// FieldTitle
-// ---------------------------------------------------------------------------
-
 function FieldTitle({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
@@ -166,10 +128,6 @@ function FieldTitle({ className, ...props }: React.ComponentProps<'div'>) {
     />
   );
 }
-
-// ---------------------------------------------------------------------------
-// FieldDescription
-// ---------------------------------------------------------------------------
 
 function FieldDescription({ className, ...props }: React.ComponentProps<'p'>) {
   return (
@@ -186,15 +144,13 @@ function FieldDescription({ className, ...props }: React.ComponentProps<'p'>) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// FieldSeparator
-// ---------------------------------------------------------------------------
-
 function FieldSeparator({
   children,
   className,
   ...props
-}: React.ComponentProps<'div'> & { children?: React.ReactNode }) {
+}: React.ComponentProps<'div'> & {
+  children?: React.ReactNode;
+}) {
   return (
     <div
       data-slot="field-separator"
@@ -205,7 +161,7 @@ function FieldSeparator({
       )}
       {...props}
     >
-      <hr className="absolute inset-0 top-1/2 border-t" />
+      <Separator className="absolute inset-0 top-1/2" />
       {children && (
         <span
           className="bg-background text-muted-foreground relative mx-auto block w-fit px-2"
@@ -217,10 +173,6 @@ function FieldSeparator({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// FieldError
-// ---------------------------------------------------------------------------
 
 function FieldError({
   className,
@@ -241,7 +193,7 @@ function FieldError({
 
     const uniqueErrors = [...new Map(errors.map((error) => [error?.message, error])).values()];
 
-    if (uniqueErrors?.length === 1) {
+    if (uniqueErrors?.length == 1) {
       return uniqueErrors[0]?.message;
     }
 
@@ -270,13 +222,13 @@ function FieldError({
 
 export {
   Field,
-  FieldContent,
+  FieldLabel,
   FieldDescription,
   FieldError,
   FieldGroup,
-  FieldLabel,
   FieldLegend,
   FieldSeparator,
   FieldSet,
+  FieldContent,
   FieldTitle
 };

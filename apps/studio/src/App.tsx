@@ -109,15 +109,15 @@ export function App() {
   const hasErrors = errors.size > 0;
 
   return (
-    <div className="studio-app flex flex-col h-full font-sans text-text-primary bg-surface-base">
-      <header className="flex items-center justify-between px-4 py-2 bg-surface-raised min-h-[44px]">
-        <h1 className="text-lg font-semibold text-text-heading">Rune DSL Studio</h1>
+    <div className="studio-app flex flex-col h-full font-sans text-foreground bg-background">
+      <header className="flex items-center justify-between px-4 py-2 bg-card min-h-[44px]">
+        <h1 className="text-lg font-semibold text-foreground">Rune DSL Studio</h1>
         {files.length > 0 && (
           <div className="flex items-center gap-3">
-            <span className="text-base text-text-secondary">
+            <span className="text-base text-muted-foreground">
               {files.length} file(s)
               {hasErrors && (
-                <span className="text-error" title="Parse errors detected">
+                <span className="text-destructive" title="Parse errors detected">
                   {' '}
                   · {errors.size} with errors
                 </span>
@@ -133,8 +133,8 @@ export function App() {
 
       <main className="flex-1 overflow-hidden relative">
         {loading && (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-text-secondary text-md">
-            <Spinner className="h-8 w-8 text-accent" />
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md">
+            <Spinner className="h-8 w-8 text-primary" />
             <p>Parsing files…</p>
           </div>
         )}

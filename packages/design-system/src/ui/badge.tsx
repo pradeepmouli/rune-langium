@@ -7,18 +7,18 @@
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { cn } from '../utils.js';
+import { cn } from '../utils';
 
 const badgeVariants = cva('inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium', {
   variants: {
     variant: {
-      default: 'bg-accent text-white',
-      secondary: 'bg-surface-overlay text-text-secondary border border-border-default',
-      destructive: 'bg-error text-white',
-      outline: 'text-text-primary border border-border-emphasis',
+      default: 'bg-primary text-primary-foreground',
+      secondary: 'bg-muted text-muted-foreground border border-border',
+      destructive: 'bg-destructive text-destructive-foreground',
+      outline: 'text-foreground border border-input',
       success: 'bg-enum-badge text-enum-text',
       warning: 'bg-choice-badge text-choice-text',
-      error: 'bg-error-bg text-error-text',
+      error: 'bg-destructive/10 text-destructive',
       data: 'bg-blue-500/15 text-blue-300 border border-blue-500/25',
       enum: 'bg-green-500/15 text-green-300 border border-green-500/25',
       choice: 'bg-amber-500/15 text-amber-300 border border-amber-500/25',

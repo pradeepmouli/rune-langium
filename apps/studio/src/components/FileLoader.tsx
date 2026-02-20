@@ -60,7 +60,7 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
     <section
       className={cn(
         'flex items-center justify-center h-full p-8 transition-colors',
-        isDragging && 'bg-accent-muted'
+        isDragging && 'bg-primary/15'
       )}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -69,8 +69,8 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
       aria-label="File loader"
     >
       <div className="text-center max-w-[480px]">
-        <p className="text-2xl font-semibold text-text-heading mb-2">Load Rune DSL Models</p>
-        <p className="text-md text-text-secondary mb-6">
+        <p className="text-2xl font-semibold text-foreground mb-2">Load Rune DSL Models</p>
+        <p className="text-md text-muted-foreground mb-6">
           Drag and drop .rosetta files here, or use the buttons below
         </p>
         <div className="flex gap-3 justify-center">

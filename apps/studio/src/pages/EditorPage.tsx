@@ -267,6 +267,17 @@ export function EditorPage({
     [expandSource]
   );
 
+  // Keep the editor form in sync when node data changes (e.g. attribute
+  // type or cardinality edited via the form itself).
+  const handleNodeDataChanged = useCallback(
+    (nodeId: string, data: TypeNodeData) => {
+      if (nodeId === selectedNode) {
+        setSelectedNodeData(data);
+      }
+    },
+    [selectedNode]
+  );
+
   const getSerializedFiles = useCallback((): Map<string, string> => {
     const rosettaText = graphRef.current?.exportRosetta?.();
     if (!rosettaText || rosettaText.size === 0) return new Map();
@@ -339,7 +350,7 @@ export function EditorPage({
     <div className="flex flex-col h-full overflow-hidden" data-testid="editor-page">
       {/* Toolbar */}
       <nav
-        className="flex items-center justify-between px-3 py-1.5 bg-surface-raised gap-2"
+        className="flex items-center justify-between px-3 py-1.5 bg-card gap-2"
         aria-label="Editor toolbar"
       >
         <div className="flex items-center gap-1.5">
@@ -397,7 +408,7 @@ export function EditorPage({
         {/* Namespace Explorer — fixed sidebar */}
         {explorerOpen && (
           <aside
-            className="w-[280px] min-w-[200px] max-w-[400px] h-full overflow-hidden flex flex-col bg-surface-raised border-r border-border-default"
+            className="w-(--sidebar-width) min-w-(--sidebar-min-width) max-w-(--sidebar-max-width) h-full overflow-hidden flex flex-col bg-card border-r border-border"
             aria-label="Namespace explorer"
           >
             <ScrollArea className="flex-1">
@@ -430,7 +441,8 @@ export function EditorPage({
               callbacks={{
                 onNodeSelect: handleNodeSelect,
                 onNodeDoubleClick: handleNodeDoubleClick,
-                onModelChanged: handleModelChanged
+                onModelChanged: handleModelChanged,
+                onNodeDataChanged: handleNodeDataChanged
               }}
               visibilityState={visibilityState}
             />
@@ -505,7 +517,7 @@ export function EditorPage({
 
       {/* Status bar */}
       <Separator />
-      <footer className="flex items-center gap-4 px-3 py-1 text-sm text-text-muted bg-surface-raised">
+      <footer className="flex items-center gap-4 px-3 py-1 text-sm text-muted-foreground bg-card">
         <span>{models.length} model(s) loaded</span>
         <span>{files.filter((f) => f.dirty).length} modified</span>
         {selectedNode && <span>Selected: {selectedNode}</span>}

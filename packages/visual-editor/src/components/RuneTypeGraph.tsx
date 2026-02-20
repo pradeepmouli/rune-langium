@@ -202,6 +202,28 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
       [callbacks]
     );
 
+    // Detect node-data mutations and notify the parent so bound forms
+    // stay in sync (fixes stale selectedNodeData after edits).
+    const prevNodeDataRef = useRef<Map<string, TypeNodeData>>(new Map());
+
+    useEffect(() => {
+      const prevMap = prevNodeDataRef.current;
+      const newMap = new Map<string, TypeNodeData>();
+
+      for (const node of nodes) {
+        newMap.set(node.id, node.data);
+        // Only notify after initial population (prevMap non-empty)
+        if (prevMap.size > 0) {
+          const prevData = prevMap.get(node.id);
+          if (prevData && prevData !== node.data) {
+            callbacks?.onNodeDataChanged?.(node.id, node.data);
+          }
+        }
+      }
+
+      prevNodeDataRef.current = newMap;
+    }, [nodes, callbacks]);
+
     // Imperative ref API
     useImperativeHandle(
       ref,

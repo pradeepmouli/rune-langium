@@ -57,7 +57,7 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
         aria-label="Diagnostics"
       >
         <Separator />
-        <p className="text-text-muted text-sm pt-3">No problems detected</p>
+        <p className="text-muted-foreground text-sm pt-3">No problems detected</p>
       </section>
     );
   }
@@ -70,7 +70,7 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
     >
       <Separator />
       {/* Summary bar */}
-      <div className="flex gap-3 px-3 py-1.5 bg-surface-raised text-sm">
+      <div className="flex gap-3 px-3 py-1.5 bg-card text-sm">
         {totalErrors > 0 && (
           <Badge variant="error">
             {totalErrors} error{totalErrors !== 1 ? 's' : ''}
@@ -87,8 +87,8 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
       {/* Diagnostics list grouped by file */}
       <ScrollArea className="flex-1">
         {Array.from(fileDiagnostics.entries()).map(([uri, diags]) => (
-          <div key={uri} className="border-b border-border-muted">
-            <div className="px-3 py-1 text-xs font-semibold text-text-secondary bg-surface-raised uppercase tracking-wider">
+          <div key={uri} className="border-b border-border">
+            <div className="px-3 py-1 text-xs font-semibold text-muted-foreground bg-card uppercase tracking-wider">
               {extractFileName(uri)}
             </div>
             {diags.map((diag, idx) => {
@@ -100,9 +100,9 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
                 <button
                   key={`${uri}-${idx}`}
                   className={cn(
-                    'flex items-center gap-2 w-full px-3 py-1 pl-5 text-sm text-text-primary bg-transparent border-none cursor-pointer text-left',
-                    'hover:bg-surface-raised',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1'
+                    'flex items-center gap-2 w-full px-3 py-1 pl-5 text-sm text-foreground bg-transparent border-none cursor-pointer text-left',
+                    'hover:bg-card',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1'
                   )}
                   onClick={() =>
                     onNavigate?.(uri, diag.range.start.line, diag.range.start.character)
@@ -112,7 +112,7 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
                   <span
                     className={cn(
                       'shrink-0 text-xs',
-                      sev === 'error' && 'text-error',
+                      sev === 'error' && 'text-destructive',
                       sev === 'warning' && 'text-warning',
                       sev === 'info' && 'text-info'
                     )}
@@ -122,7 +122,7 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
                   <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                     {diag.message}
                   </span>
-                  <span className="shrink-0 text-text-muted font-mono text-xs">
+                  <span className="shrink-0 text-muted-foreground font-mono text-xs">
                     {line}:{col}
                   </span>
                 </button>

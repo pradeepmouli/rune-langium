@@ -218,7 +218,7 @@ function EditorFormPanel({
       <div
         data-slot="panel-header"
         className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3
-          border-b bg-surface-overlay"
+          border-b bg-muted"
       >
         <span className="text-sm font-semibold truncate">{nodeData.name}</span>
         <span

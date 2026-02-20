@@ -57,7 +57,7 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
   // ---- react-hook-form setup -----------------------------------------------
 
   const form = useForm<ChoiceFormValues>({
-    resolver: zodResolver(choiceFormSchema),
+    resolver: zodResolver(choiceFormSchema as any),
     defaultValues: { name: data.name },
     mode: 'onChange'
   });
@@ -144,7 +144,7 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
                   debouncedName(e.target.value);
                 }}
                 className="text-lg font-semibold bg-transparent border-b border-transparent
-                  focus-visible:border-border-emphasis focus-visible:ring-0 shadow-none
+                  focus-visible:border-input focus-visible:ring-0 shadow-none
                   px-1 py-0.5 h-auto rounded-none"
                 placeholder="Choice name"
                 aria-label="Choice type name"

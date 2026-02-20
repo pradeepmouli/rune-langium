@@ -57,7 +57,7 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
   // ---- react-hook-form setup -----------------------------------------------
 
   const form = useForm<DataTypeFormValues>({
-    resolver: zodResolver(dataTypeFormSchema),
+    resolver: zodResolver(dataTypeFormSchema as any),
     defaultValues: { name: data.name, parentName: data.parentName ?? '' },
     mode: 'onChange'
   });
@@ -159,7 +159,7 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
                   debouncedName(e.target.value);
                 }}
                 className="text-lg font-semibold bg-transparent border-b border-transparent
-                  focus-visible:border-border-emphasis focus-visible:ring-0 shadow-none
+                  focus-visible:border-input focus-visible:ring-0 shadow-none
                   px-1 py-0.5 h-auto rounded-none"
                 placeholder="Type name"
                 aria-label="Data type name"
@@ -196,13 +196,15 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
             data-slot="add-attribute-btn"
             type="button"
             onClick={handleAddAttribute}
-            className="text-xs text-primary hover:underline font-normal"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary
+              border border-border rounded px-2 py-0.5
+              hover:bg-card hover:border-input transition-colors"
           >
             + Add Attribute
           </button>
         </FieldLegend>
 
-        <FieldGroup className="gap-0.5">
+        <FieldGroup className="gap-1">
           {data.members.map((member: MemberDisplay, i: number) => (
             <AttributeRow
               key={`${nodeId}-attr-${member.name}-${i}`}

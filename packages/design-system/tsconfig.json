@@ -2,14 +2,17 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "target": "ES2020",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "outDir": "dist",
     "rootDir": "src",
     "jsx": "react-jsx",
     "declaration": true,
     "declarationMap": true,
-    "composite": true
+    "composite": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist"]

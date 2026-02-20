@@ -89,6 +89,15 @@ const KIND_BADGE_COLORS: Record<TypeKind | 'builtin', string> = {
   builtin: 'bg-gray-500/20 text-gray-400'
 };
 
+/** Solid dot colors for inline type indicators. */
+const KIND_DOT_COLORS: Record<TypeKind | 'builtin', string> = {
+  data: 'bg-blue-400',
+  choice: 'bg-amber-400',
+  enum: 'bg-green-400',
+  func: 'bg-purple-400',
+  builtin: 'bg-gray-400'
+};
+
 /**
  * Returns badge CSS classes for a given type kind.
  */
@@ -224,7 +233,7 @@ export function TypeSelector({
       onValueChange={(val) => handleSelect(val === NONE_SENTINEL ? null : val)}
       disabled={disabled}
     >
-      <SelectTrigger data-slot="type-selector">
+      <SelectTrigger data-slot="type-selector" className="h-7 text-xs px-2">
         <SelectValue placeholder={allowClear ? '— None —' : placeholder} />
       </SelectTrigger>
       <SelectContent>
@@ -234,7 +243,13 @@ export function TypeSelector({
             <SelectLabel>{group.label}</SelectLabel>
             {group.options.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
-                [{getKindLabel(opt.kind)}] {opt.label}
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={`inline-block size-2 rounded-full shrink-0 ${KIND_DOT_COLORS[opt.kind] ?? KIND_DOT_COLORS.builtin}`}
+                    aria-hidden="true"
+                  />
+                  {opt.label}
+                </span>
               </SelectItem>
             ))}
           </SelectGroup>

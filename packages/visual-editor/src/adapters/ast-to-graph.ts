@@ -382,21 +382,25 @@ export function astToGraph(
       if (isData(element)) {
         if (!passesFilter('data', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
+        if (nodeIdSet.has(nodeId)) continue;
         nodes.push(buildDataNode(element, namespace, nodeId));
         nodeIdSet.add(nodeId);
       } else if (isChoice(element)) {
         if (!passesFilter('choice', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
+        if (nodeIdSet.has(nodeId)) continue;
         nodes.push(buildChoiceNode(element, namespace, nodeId));
         nodeIdSet.add(nodeId);
       } else if (isRosettaEnumeration(element)) {
         if (!passesFilter('enum', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
+        if (nodeIdSet.has(nodeId)) continue;
         nodes.push(buildEnumNode(element, namespace, nodeId));
         nodeIdSet.add(nodeId);
       } else if (isRosettaFunction(element)) {
         if (!passesFilter('func', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
+        if (nodeIdSet.has(nodeId)) continue;
         nodes.push(buildFunctionNode(element, namespace, nodeId));
         nodeIdSet.add(nodeId);
       }

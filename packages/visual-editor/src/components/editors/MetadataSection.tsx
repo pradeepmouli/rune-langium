@@ -109,22 +109,22 @@ export function MetadataSection({
   );
 
   return (
-    <div data-slot="metadata-section" className="border-t border-border-default mt-3 pt-3">
+    <div data-slot="metadata-section" className="border-t border-border mt-3 pt-3">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between text-sm font-medium text-text-primary"
+        className="flex w-full items-center justify-between text-sm font-medium text-foreground"
         aria-expanded={expanded}
       >
         <span>Metadata</span>
-        <span className="text-xs text-text-secondary">{expanded ? '▾' : '▸'}</span>
+        <span className="text-xs text-muted-foreground">{expanded ? '▾' : '▸'}</span>
       </button>
 
       {expanded && (
         <FieldGroup className="mt-2 gap-3">
           {/* Description */}
           <Field>
-            <FieldLabel className="text-xs text-text-secondary">Description</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Description</FieldLabel>
             <textarea
               value={localDefinition}
               onChange={handleDefinitionChange}
@@ -132,9 +132,9 @@ export function MetadataSection({
               placeholder="Add a description..."
               rows={2}
               data-slot="metadata-description"
-              className="w-full rounded border border-border-emphasis bg-surface-base
-                px-2 py-1.5 text-sm text-text-primary
-                placeholder:text-text-tertiary
+              className="w-full rounded border border-input bg-background
+                px-2 py-1.5 text-sm text-foreground
+                placeholder:text-muted-foreground
                 focus:ring-1 focus:ring-ring focus:outline-none
                 disabled:opacity-50 disabled:cursor-not-allowed
                 resize-y"
@@ -144,7 +144,7 @@ export function MetadataSection({
 
           {/* Comments */}
           <Field>
-            <FieldLabel className="text-xs text-text-secondary">Comments</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Comments</FieldLabel>
             <textarea
               value={localComments}
               onChange={handleCommentsChange}
@@ -152,9 +152,9 @@ export function MetadataSection({
               placeholder="Add comments..."
               rows={2}
               data-slot="metadata-comments"
-              className="w-full rounded border border-border-emphasis bg-surface-base
-                px-2 py-1.5 text-sm text-text-primary
-                placeholder:text-text-tertiary
+              className="w-full rounded border border-input bg-background
+                px-2 py-1.5 text-sm text-foreground
+                placeholder:text-muted-foreground
                 focus:ring-1 focus:ring-ring focus:outline-none
                 disabled:opacity-50 disabled:cursor-not-allowed
                 resize-y"
@@ -164,13 +164,13 @@ export function MetadataSection({
 
           {/* Synonyms */}
           <Field>
-            <FieldLabel className="text-xs text-text-secondary">Synonyms</FieldLabel>
+            <FieldLabel className="text-xs text-muted-foreground">Synonyms</FieldLabel>
             <div className="flex flex-wrap gap-1.5 mb-1.5">
               {synonyms.map((synonym, index) => (
                 <span
                   key={`${synonym}-${index}`}
-                  className="inline-flex items-center gap-1 rounded bg-surface-raised
-                    px-2 py-0.5 text-xs text-text-primary"
+                  className="inline-flex items-center gap-1 rounded bg-card
+                    px-2 py-0.5 text-xs text-foreground"
                 >
                   {synonym}
                   {!readOnly && (
@@ -178,7 +178,7 @@ export function MetadataSection({
                       type="button"
                       onClick={() => onRemoveSynonym(index)}
                       aria-label={`Remove synonym "${synonym}"`}
-                      className="text-text-tertiary hover:text-status-error transition-colors"
+                      className="text-muted-foreground hover:text-destructive transition-colors"
                     >
                       ×
                     </button>
@@ -195,17 +195,17 @@ export function MetadataSection({
                   onKeyDown={handleSynonymKeyDown}
                   placeholder="Add synonym..."
                   data-slot="metadata-synonym-input"
-                  className="flex-1 rounded border border-border-emphasis bg-surface-base
-                    px-2 py-1 text-xs text-text-primary
-                    placeholder:text-text-tertiary
+                  className="flex-1 rounded border border-input bg-background
+                    px-2 py-1 text-xs text-foreground
+                    placeholder:text-muted-foreground
                     focus:ring-1 focus:ring-ring focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleAddSynonym}
                   disabled={!synonymInput.trim()}
-                  className="rounded bg-surface-raised px-2 py-1 text-xs text-text-primary
-                    hover:bg-surface-overlay transition-colors
+                  className="rounded bg-card px-2 py-1 text-xs text-foreground
+                    hover:bg-muted transition-colors
                     disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Add

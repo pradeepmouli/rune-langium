@@ -109,7 +109,7 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
   // ---- react-hook-form setup -----------------------------------------------
 
   const form = useForm<FunctionFormValues>({
-    resolver: zodResolver(functionFormSchema),
+    resolver: zodResolver(functionFormSchema as any),
     defaultValues: {
       name: data.name,
       outputType: data.outputType ?? '',
@@ -240,7 +240,7 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
                   debouncedName(e.target.value);
                 }}
                 className="text-lg font-semibold bg-transparent border-b border-transparent
-                  focus-visible:border-border-emphasis focus-visible:ring-0 shadow-none
+                  focus-visible:border-input focus-visible:ring-0 shadow-none
                   px-1 py-0.5 h-auto rounded-none"
                 placeholder="Function name"
                 aria-label="Function type name"
@@ -299,7 +299,9 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
             data-slot="add-input-btn"
             type="button"
             onClick={handleAddInput}
-            className="text-xs text-primary hover:underline whitespace-nowrap"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary
+              border border-border rounded px-2 py-0.5
+              hover:bg-card hover:border-input transition-colors whitespace-nowrap"
           >
             + Add Input
           </button>

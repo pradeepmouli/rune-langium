@@ -56,7 +56,7 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
   // ---- react-hook-form setup -----------------------------------------------
 
   const form = useForm<EnumFormValues>({
-    resolver: zodResolver(enumFormSchema),
+    resolver: zodResolver(enumFormSchema as any),
     defaultValues: { name: data.name, parentName: data.parentName ?? '' },
     mode: 'onChange'
   });
@@ -152,7 +152,7 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
                   debouncedName(e.target.value);
                 }}
                 className="text-lg font-semibold bg-transparent border-b border-transparent
-                  focus-visible:border-border-emphasis focus-visible:ring-0 shadow-none
+                  focus-visible:border-input focus-visible:ring-0 shadow-none
                   px-1 py-0.5 h-auto rounded-none"
                 placeholder="Enum name"
                 aria-label="Enum type name"
@@ -189,7 +189,9 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
             data-slot="add-value-btn"
             type="button"
             onClick={handleAddValue}
-            className="text-xs text-primary hover:underline font-normal"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary
+              border border-border rounded px-2 py-0.5
+              hover:bg-card hover:border-input transition-colors"
           >
             + Add Value
           </button>

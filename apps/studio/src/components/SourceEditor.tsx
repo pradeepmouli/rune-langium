@@ -193,7 +193,7 @@ export function SourceEditor({
   if (files.length === 0) {
     return (
       <section
-        className="flex flex-col items-center justify-center h-full bg-surface-base text-text-muted"
+        className="flex flex-col items-center justify-center h-full bg-background text-muted-foreground"
         data-testid="source-editor"
       >
         <p>No files loaded</p>
@@ -202,10 +202,10 @@ export function SourceEditor({
   }
 
   return (
-    <section className="flex flex-col h-full bg-surface-base" data-testid="source-editor">
+    <section className="flex flex-col h-full bg-background" data-testid="source-editor">
       {/* Tab bar */}
       <nav
-        className="flex overflow-x-auto bg-surface-raised border-b border-border-default gap-px min-h-[32px]"
+        className="flex overflow-x-auto bg-card border-b border-border gap-px min-h-[32px]"
         role="tablist"
         aria-label="Open files"
       >
@@ -219,9 +219,9 @@ export function SourceEditor({
             tabIndex={file.path === selectedPath ? 0 : -1}
             className={cn(
               'px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors',
-              'hover:text-text-primary',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
-              file.path === selectedPath ? 'text-accent border-b-accent' : 'text-text-secondary'
+              'hover:text-foreground',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+              file.path === selectedPath ? 'text-primary border-b-primary' : 'text-muted-foreground'
             )}
             onClick={() => handleFileSelect(file.path)}
             title={file.path}

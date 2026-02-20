@@ -318,6 +318,8 @@ export interface RuneTypeGraphCallbacks {
   onTypeDeleted?: (nodeId: string) => void;
   onModelChanged?: (serialized: Map<string, string>) => void;
   onValidationChange?: (errors: ValidationError[]) => void;
+  /** Called when a node's data changes due to an edit action. */
+  onNodeDataChanged?: (nodeId: string, data: TypeNodeData) => void;
 }
 
 // ---------------------------------------------------------------------------
