@@ -185,7 +185,7 @@ export function EditorPage({
   );
 
   // --- Graph → Source: wire onModelChanged ---
-  // Build namespace → file path mapping for reverse sync
+  // Build namespace → file path mapping for reverse sync (handleModelChanged)
   const namespaceToFile = useMemo(() => {
     const map = new Map<string, string>();
     for (let i = 0; i < models.length; i++) {
@@ -203,13 +203,37 @@ export function EditorPage({
     return map;
   }, [models, files]);
 
-  /** Resolve which workspace file contains a given node (by namespace mapping). */
+  // Build nodeId → file path mapping for precise node→file resolution.
+  // Unlike namespaceToFile, this does not collide when files share a namespace.
+  const nodeIdToFilePath = useMemo(() => {
+    const map = new Map<string, string>();
+    for (let i = 0; i < models.length && i < files.length; i++) {
+      const model = models[i] as {
+        name?: string | { segments?: string[] };
+        elements?: Array<{ name?: string }>;
+      };
+      let ns = 'unknown';
+      if (typeof model.name === 'string') {
+        ns = model.name;
+      } else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
+        ns = (model.name as { segments: string[] }).segments.join('.');
+      }
+      for (const element of model.elements ?? []) {
+        const name = element.name ?? 'unknown';
+        const nodeId = `${ns}::${name}`;
+        map.set(nodeId, files[i]!.path);
+      }
+    }
+    return map;
+  }, [models, files]);
+
+  /** Resolve which workspace file contains a given node (by unique nodeId). */
   const resolveNodeFile = useCallback(
     (nodeData: TypeNodeData): string | undefined => {
-      const ns = nodeData.namespace;
-      return namespaceToFile.get(ns);
+      const nodeId = `${nodeData.namespace}::${nodeData.name}`;
+      return nodeIdToFilePath.get(nodeId);
     },
-    [namespaceToFile]
+    [nodeIdToFilePath]
   );
 
   /** Open a file in the source editor tabs (adds to openedFilePaths). */
