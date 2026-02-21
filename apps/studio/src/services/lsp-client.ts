@@ -127,6 +127,8 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
 
     syncWorkspaceFiles(files: Array<{ path: string; content: string }>): void {
       const nextUris = new Set<string>();
+      const changedUris = new Set<string>();
+      let addedCount = 0;
 
       for (const file of files) {
         const uri = pathToUri(file.path);
@@ -135,6 +137,8 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
         const prev = workspaceSnapshot.get(uri);
         if (!prev) {
           workspaceSnapshot.set(uri, { version: 0, content: file.content });
+          addedCount++;
+          changedUris.add(uri);
           if (client && initialized) {
             client.didOpen({
               uri,
@@ -150,6 +154,7 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
         if (prev.content !== file.content) {
           const version = prev.version + 1;
           workspaceSnapshot.set(uri, { version, content: file.content });
+          changedUris.add(uri);
           if (client && initialized) {
             client.notification('textDocument/didChange', {
               textDocument: { uri, version },
@@ -164,6 +169,22 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
         workspaceSnapshot.delete(uri);
         if (client && initialized) {
           client.didClose(uri);
+        }
+      }
+
+      // When many files are newly opened, early-opened files may have been
+      // validated before all dependencies were present. Force a no-op content
+      // refresh across unchanged files so diagnostics are recomputed with the
+      // complete workspace loaded.
+      if (client && initialized && addedCount > 0) {
+        for (const [uri, entry] of workspaceSnapshot) {
+          if (changedUris.has(uri)) continue;
+          const version = entry.version + 1;
+          workspaceSnapshot.set(uri, { version, content: entry.content });
+          client.notification('textDocument/didChange', {
+            textDocument: { uri, version },
+            contentChanges: [{ text: entry.content }]
+          });
         }
       }
     },
