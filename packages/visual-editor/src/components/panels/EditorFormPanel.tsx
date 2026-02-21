@@ -15,7 +15,7 @@
  * @module
  */
 
-import { useEffect, useCallback, useRef, useMemo, Component } from 'react';
+import { useEffect, useCallback, useRef, Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
