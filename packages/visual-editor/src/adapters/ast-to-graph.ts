@@ -242,7 +242,12 @@ function extractEnumSynonyms(
 // Per-kind node builders
 // ---------------------------------------------------------------------------
 
-function buildDataNode(data: Data, namespace: string, nodeId: string): TypeGraphNode {
+function buildDataNode(
+  data: Data,
+  namespace: string,
+  nodeId: string,
+  isReadOnly = false
+): TypeGraphNode {
   const members = (data.attributes ?? []).map(dataAttributeToMember);
   const parentRef = data.superType;
   const parentName = parentRef?.ref?.name ?? parentRef?.$refText;
@@ -269,12 +274,17 @@ function buildDataNode(data: Data, namespace: string, nodeId: string): TypeGraph
       hasExternalRefs: false,
       errors: [],
       source: data,
-      isReadOnly: false
+      isReadOnly
     } as TypeNodeData<'data'>
   };
 }
 
-function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): TypeGraphNode {
+function buildChoiceNode(
+  choice: Choice,
+  namespace: string,
+  nodeId: string,
+  isReadOnly = false
+): TypeGraphNode {
   const members = (choice.attributes ?? []).map(choiceOptionToMember);
   const synonyms = extractClassSynonyms(
     (choice.synonyms ?? []) as Array<{ value?: { name?: string; path?: string } }>
@@ -294,7 +304,7 @@ function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): Typ
       hasExternalRefs: false,
       errors: [],
       source: choice,
-      isReadOnly: false
+      isReadOnly
     } as TypeNodeData<'choice'>
   };
 }
@@ -302,7 +312,8 @@ function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): Typ
 function buildEnumNode(
   enumType: RosettaEnumeration,
   namespace: string,
-  nodeId: string
+  nodeId: string,
+  isReadOnly = false
 ): TypeGraphNode {
   const members = (enumType.enumValues ?? []).map(enumValueToMember);
   const parentRef = enumType.parent;
@@ -332,7 +343,7 @@ function buildEnumNode(
       hasExternalRefs: false,
       errors: [],
       source: enumType,
-      isReadOnly: false
+      isReadOnly
     } as TypeNodeData<'enum'>
   };
 }
@@ -340,7 +351,8 @@ function buildEnumNode(
 function buildFunctionNode(
   func: RosettaFunction,
   namespace: string,
-  nodeId: string
+  nodeId: string,
+  isReadOnly = false
 ): TypeGraphNode {
   const members = (func.inputs ?? []).map(functionInputToMember);
   const outputAttr = func.output;
@@ -394,7 +406,7 @@ function buildFunctionNode(
       hasExternalRefs: false,
       errors: [],
       source: func,
-      isReadOnly: false
+      isReadOnly
     } as TypeNodeData<'func'>
   };
 }
@@ -522,6 +534,11 @@ export function astToGraph(
     const m = model as RosettaModel;
     const namespace = getNamespace(m);
     const elements: RosettaRootElement[] = (m.elements ?? []) as RosettaRootElement[];
+    // Derive read-only status from the document URI: system:// URIs are immutable
+    const modelUri = (
+      m as unknown as { $document?: { uri?: { toString(): string } } }
+    ).$document?.uri?.toString();
+    const isReadOnly = modelUri?.startsWith('system://') ?? false;
 
     for (const element of elements) {
       const name = (element as { name?: string }).name ?? 'unknown';
@@ -530,25 +547,25 @@ export function astToGraph(
         if (!passesFilter('data', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildDataNode(element, namespace, nodeId));
+        nodes.push(buildDataNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isChoice(element)) {
         if (!passesFilter('choice', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildChoiceNode(element, namespace, nodeId));
+        nodes.push(buildChoiceNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isRosettaEnumeration(element)) {
         if (!passesFilter('enum', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildEnumNode(element, namespace, nodeId));
+        nodes.push(buildEnumNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isRosettaFunction(element)) {
         if (!passesFilter('func', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildFunctionNode(element, namespace, nodeId));
+        nodes.push(buildFunctionNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isRosettaRecordType(element)) {
         if (!passesFilter('record', namespace, name, filters)) continue;

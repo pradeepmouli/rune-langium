@@ -214,4 +214,62 @@ describe('astToGraph', () => {
       expect(enumNodes.length).toBe(1);
     });
   });
+
+  describe('TypeAlias types', () => {
+    it('creates a typeAlias node and a type-alias-ref edge to the target type', async () => {
+      const source = `
+        namespace test.aliases
+        version "1.0.0"
+
+        basicType string
+
+        typeAlias ShortText: string
+      `;
+      const result = await parse(source);
+      const { nodes, edges } = astToGraph(result.value);
+
+      const aliasNode = nodes.find((n) => n.data.kind === 'typeAlias');
+      expect(aliasNode).toBeDefined();
+      expect(aliasNode!.data.name).toBe('ShortText');
+      expect(aliasNode!.type).toBe('typeAlias');
+
+      const aliasEdge = edges.find((e) => e.data?.kind === 'type-alias-ref');
+      expect(aliasEdge).toBeDefined();
+      expect(aliasEdge!.type).toBe('type-alias-ref');
+      expect(aliasEdge!.source).toBe(aliasNode!.id);
+      // Edge id should consistently use --type-alias-ref-- segment
+      expect(aliasEdge!.id).toContain('--type-alias-ref--');
+    });
+  });
+
+  describe('isReadOnly from document URI', () => {
+    it('marks nodes as isReadOnly when model has a system:// URI', async () => {
+      const result = await parse(
+        `
+        namespace com.rosetta.model
+        version "1.0.0"
+
+        basicType string
+        basicType number
+        basicType boolean
+        basicType date
+        basicType dateTime
+        `,
+        'system://com.rosetta.model/basictypes.rosetta'
+      );
+      const { nodes } = astToGraph(result.value);
+
+      expect(nodes.length).toBeGreaterThan(0);
+      expect(nodes.every((n) => n.data.isReadOnly === true)).toBe(true);
+    });
+
+    it('marks nodes as NOT isReadOnly when model has a regular URI', async () => {
+      const result = await parse(SIMPLE_INHERITANCE_SOURCE, 'file:///workspace/model.rosetta');
+      const { nodes } = astToGraph(result.value);
+
+      const dataNodes = nodes.filter((n) => n.data.kind === 'data');
+      expect(dataNodes.length).toBeGreaterThan(0);
+      expect(dataNodes.every((n) => n.data.isReadOnly === false)).toBe(true);
+    });
+  });
 });

@@ -7,7 +7,7 @@
 #
 # Defaults:
 #   CDM tag:     7.0.0-dev.83
-#   Rune tag:    9.76.1
+#   Rune tag:    9.76.2
 #   Rune FpML:   main
 #
 # These fixtures are used for conformance and grammar parity tests.
@@ -46,6 +46,7 @@ resolve_clone_ref() {
   fi
 
   for ref in "${candidates[@]}"; do
+    rm -rf "$target_dir"
     if git clone --depth 1 --branch "$ref" --single-branch --filter=blob:none "$repo" "$target_dir" 2>/dev/null; then
       echo "$ref"
       return 0
