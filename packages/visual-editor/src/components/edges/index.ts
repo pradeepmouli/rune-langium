@@ -12,5 +12,6 @@ export const edgeTypes: EdgeTypes = {
   extends: InheritanceEdge,
   'attribute-ref': ReferenceEdge,
   'choice-option': ReferenceEdge,
-  'enum-extends': InheritanceEdge
+  'enum-extends': InheritanceEdge,
+  'type-alias-ref': ReferenceEdge
 };

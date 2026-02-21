@@ -696,8 +696,8 @@ export function astToGraph(
           id: `${node.id}--type-alias-ref--${targetNodeId}`,
           source: node.id,
           target: targetNodeId,
-          type: 'attribute-ref',
-          data: { kind: 'attribute-ref' }
+          type: 'type-alias-ref',
+          data: { kind: 'type-alias-ref' }
         });
       }
     }
