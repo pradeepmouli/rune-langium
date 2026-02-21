@@ -39,6 +39,8 @@ export interface SourceEditorFile {
   path: string;
   content: string;
   dirty: boolean;
+  /** When true, the file is a system/built-in file and cannot be edited. */
+  readOnly?: boolean;
 }
 
 export interface SourceEditorProps {
@@ -191,19 +193,22 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
 
   // Build extensions — uses refs for callbacks to keep extensions stable
   const buildExtensions = useCallback(
-    (filePath: string): Extension[] => {
-      const exts: Extension[] = [
-        basicSetup,
-        keymap.of(defaultKeymap),
-        runeDslLanguage(),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
-            const content = update.state.doc.toString();
-            contentMapRef.current.set(filePath, content);
-            onContentChangeRef.current?.(filePath, content);
-          }
-        })
-      ];
+    (filePath: string, isReadOnly: boolean): Extension[] => {
+      const exts: Extension[] = [basicSetup, keymap.of(defaultKeymap), runeDslLanguage()];
+
+      if (isReadOnly) {
+        exts.push(EditorState.readOnly.of(true));
+      } else {
+        exts.push(
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              const content = update.state.doc.toString();
+              contentMapRef.current.set(filePath, content);
+              onContentChangeRef.current?.(filePath, content);
+            }
+          })
+        );
+      }
 
       // Wire LSP plugin if client is available
       if (lspClient?.isInitialized()) {
@@ -231,7 +236,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
 
     const state = EditorState.create({
       doc: content,
-      extensions: buildExtensions(currentFile.path)
+      extensions: buildExtensions(currentFile.path, currentFile.readOnly ?? false)
     });
 
     const view = new EditorView({
@@ -294,9 +299,21 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
               title={file.path}
             >
               {file.name}
+              {file.readOnly && (
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  aria-label="read-only"
+                  className="inline-block ml-1 opacity-60"
+                >
+                  <path d="M11 7V5a3 3 0 0 0-6 0v2H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1zm-5 0V5a2 2 0 1 1 4 0v2H6zm2 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
+                </svg>
+              )}
               {file.dirty && <span className="text-warning text-xs"> ●</span>}
             </button>
-            {onFileClose && (
+            {onFileClose && !file.readOnly && (
               <button
                 type="button"
                 aria-label={`Close ${file.name}`}

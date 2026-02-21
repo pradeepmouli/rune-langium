@@ -286,7 +286,7 @@ function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] 
                 displayName={committedRef.current.members[i]?.displayName ?? ''}
                 nodeId={nodeId}
                 onUpdate={handleUpdateValue}
-                onRemove={(_nodeId, valueName) => handleRemoveValue(i, valueName)}
+                onRemove={() => handleRemoveValue(i)}
                 onReorder={handleReorderValue}
               />
             ))}
