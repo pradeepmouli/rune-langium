@@ -14,9 +14,14 @@ import type {
   Choice,
   RosettaEnumeration,
   RosettaFunction,
+  RosettaRecordType,
+  RosettaTypeAlias,
+  RosettaBasicType,
+  Annotation,
   Attribute,
   ChoiceOption,
-  RosettaEnumValue
+  RosettaEnumValue,
+  RosettaRecordFeature
 } from '@rune-langium/core';
 
 export type ExtractKind<T> = T extends { $type: infer K } ? K : never;
@@ -31,6 +36,10 @@ export interface AstNodeKindMap {
   choice: Choice;
   enum: RosettaEnumeration;
   func: RosettaFunction;
+  record: RosettaRecordType;
+  typeAlias: RosettaTypeAlias;
+  basicType: RosettaBasicType;
+  annotation: Annotation;
 }
 
 /** Maps each `TypeKind` to its member AST node type. */
@@ -39,6 +48,10 @@ export interface AstMemberKindMap {
   choice: ChoiceOption;
   enum: RosettaEnumValue;
   func: Attribute;
+  record: RosettaRecordFeature;
+  typeAlias: never;
+  basicType: never;
+  annotation: Attribute;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,7 +66,12 @@ export type AstMemberType = AstMemberKindMap[TypeKind];
 /** Union of all AST node types carried by graph nodes. */
 export type AstNodeType = AstNodeKindMap[TypeKind];
 
-export type EdgeKind = 'extends' | 'attribute-ref' | 'choice-option' | 'enum-extends';
+export type EdgeKind =
+  | 'extends'
+  | 'attribute-ref'
+  | 'choice-option'
+  | 'enum-extends'
+  | 'type-alias-ref';
 
 /**
  * Display-oriented representation of a single member (attribute / option / value).
@@ -104,6 +122,8 @@ export type TypeNodeData<K extends TypeKind = TypeKind> = {
   hasExternalRefs: boolean;
 
   errors: ValidationError[];
+  /** Annotations applied to this element (e.g. [metadata], [deprecated]). */
+  annotations?: AnnotationDisplay[];
   /** Editable synonym values for this element. */
   synonyms?: string[];
   /** Whether this element is read-only (from external/locked source). */
@@ -134,6 +154,14 @@ export interface EdgeData {
   [key: string]: unknown;
 }
 
+/** Display representation of an annotation applied to a type. */
+export interface AnnotationDisplay {
+  /** Annotation name (e.g. 'metadata', 'deprecated'). */
+  name: string;
+  /** Optional attribute qualification (e.g. 'key' for [metadata key]). */
+  attribute?: string;
+}
+
 export interface ValidationError {
   nodeId: string;
   severity: 'error' | 'warning' | 'info';
@@ -141,6 +169,26 @@ export interface ValidationError {
   ruleId?: string;
   line?: number;
   column?: number;
+}
+
+/**
+ * Props provided to the expression editor render-prop slot.
+ *
+ * `packages/visual-editor` is editor-agnostic — the host app provides
+ * the actual editor implementation (e.g. CodeMirror, Monaco) via a
+ * `renderExpressionEditor` prop on `FunctionForm`.
+ */
+export interface ExpressionEditorSlotProps {
+  /** Current expression text. */
+  value: string;
+  /** Called on every keystroke / change. */
+  onChange: (value: string) => void;
+  /** Called when the editor loses focus — triggers validation & commit. */
+  onBlur: () => void;
+  /** Validation error message (null when valid). */
+  error?: string | null;
+  /** Placeholder text shown when the editor is empty. */
+  placeholder?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -166,7 +214,7 @@ export interface TypeOption {
   /** Display label (type name). */
   label: string;
   /** Type kind for badge coloring. */
-  kind: TypeKind | 'builtin';
+  kind: TypeKind | 'builtin' | 'record' | 'typeAlias' | 'basicType' | 'annotation';
   /** Namespace for grouping in the dropdown. */
   namespace?: string;
 }
@@ -183,6 +231,8 @@ export interface CommonFormActions {
   updateComments(nodeId: string, comments: string): void;
   addSynonym(nodeId: string, synonym: string): void;
   removeSynonym(nodeId: string, index: number): void;
+  addAnnotation(nodeId: string, annotationName: string): void;
+  removeAnnotation(nodeId: string, index: number): void;
   validate(): ValidationError[];
 }
 
@@ -230,6 +280,10 @@ export interface FormActionsKindMap {
   enum: EnumFormActions;
   choice: ChoiceFormActions;
   func: FuncFormActions;
+  record: CommonFormActions;
+  typeAlias: CommonFormActions;
+  basicType: CommonFormActions;
+  annotation: CommonFormActions;
 }
 
 /** Intersection of all kind-specific actions (every method available). */
@@ -408,6 +462,10 @@ export interface RuneTypeGraphRef {
   updateOutputType(nodeId: string, typeName: string): void;
   /** Update a function's expression text. */
   updateExpression(nodeId: string, expressionText: string): void;
+  /** Add an annotation to a node. */
+  addAnnotation(nodeId: string, annotationName: string): void;
+  /** Remove an annotation from a node by index. */
+  removeAnnotation(nodeId: string, index: number): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -428,6 +486,8 @@ export interface NamespaceTypeEntry {
   nodeId: string;
   name: string;
   kind: TypeKind;
+  /** Whether this entry is from a system/base-type file (read-only). */
+  isSystem?: boolean;
 }
 
 export interface VisibilityState {

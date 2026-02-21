@@ -29,10 +29,13 @@ import { Badge } from '@rune-langium/design-system/ui/badge';
 import { EnumValueRow } from './EnumValueRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
+import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useNodeForm } from '../../hooks/useNodeForm.js';
 import { enumFormSchema, type EnumFormValues } from '../../schemas/form-schemas.js';
 import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
+import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,13 +72,15 @@ export interface EnumFormProps {
   availableTypes: TypeOption[];
   /** Enum-specific editor form action callbacks. */
   actions: EditorFormActions<'enum'>;
+  /** Inherited member groups from ancestors. */
+  inheritedGroups?: InheritedGroup[];
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
+function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] }: EnumFormProps) {
   // ---- Form setup (full model via useNodeForm) -----------------------------
 
   const resetKey = useMemo(() => JSON.stringify(toFormValues(data)), [data]);
@@ -124,10 +129,10 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
   }, [nodeId, actions, append]);
 
   const handleRemoveValue = useCallback(
-    (index: number) => {
-      const committed = committedRef.current.members[index];
+    (i: number) => {
+      const committed = committedRef.current.members[i];
       if (committed) {
-        remove(index);
+        remove(i);
         actions.removeEnumValue(nodeId, committed.name);
       }
     },
@@ -143,7 +148,7 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
   );
 
   const handleUpdateValue = useCallback(
-    (_index: number, oldName: string, newName: string, displayName?: string) => {
+    (_nodeId: string, oldName: string, newName: string, displayName?: string) => {
       actions.updateEnumValue(nodeId, oldName, newName, displayName);
     },
     [nodeId, actions]
@@ -175,6 +180,22 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
   const handleRemoveSynonym = useCallback(
     (index: number) => {
       actions.removeSynonym(nodeId, index);
+    },
+    [nodeId, actions]
+  );
+
+  // ---- Annotation callbacks ------------------------------------------------
+
+  const handleAddAnnotation = useCallback(
+    (annotationName: string) => {
+      actions.addAnnotation(nodeId, annotationName);
+    },
+    [nodeId, actions]
+  );
+
+  const handleRemoveAnnotation = useCallback(
+    (index: number) => {
+      actions.removeAnnotation(nodeId, index);
     },
     [nodeId, actions]
   );
@@ -261,10 +282,11 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
               <EnumValueRow
                 key={field.id}
                 index={i}
-                committedName={committedRef.current.members[i]?.name ?? ''}
-                committedDisplayName={committedRef.current.members[i]?.displayName ?? ''}
+                name={committedRef.current.members[i]?.name ?? ''}
+                displayName={committedRef.current.members[i]?.displayName ?? ''}
+                nodeId={nodeId}
                 onUpdate={handleUpdateValue}
-                onRemove={handleRemoveValue}
+                onRemove={() => handleRemoveValue(i)}
                 onReorder={handleReorderValue}
               />
             ))}
@@ -276,6 +298,16 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
             )}
           </FieldGroup>
         </FieldSet>
+
+        {/* Inherited Members */}
+        <InheritedMembersSection groups={inheritedGroups} />
+
+        {/* Annotations */}
+        <AnnotationSection
+          annotations={data.annotations ?? []}
+          onAdd={handleAddAnnotation}
+          onRemove={handleRemoveAnnotation}
+        />
 
         {/* Metadata */}
         <MetadataSection

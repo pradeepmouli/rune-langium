@@ -26,7 +26,14 @@ import { ChoiceForm } from '../editors/ChoiceForm.js';
 import { FunctionForm } from '../editors/FunctionForm.js';
 import { DetailPanel } from './DetailPanel.js';
 import { getKindLabel } from '../editors/TypeSelector.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
+import { useInheritedMembers } from '../../hooks/useInheritedMembers.js';
+import type {
+  TypeNodeData,
+  TypeOption,
+  EditorFormActions,
+  TypeGraphNode,
+  ExpressionEditorSlotProps
+} from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Error Boundary
@@ -89,6 +96,13 @@ export interface EditorFormPanelProps {
   availableTypes: TypeOption[];
   /** All editor form actions. */
   actions: EditorFormActions;
+  /** All graph nodes (for inherited member resolution). */
+  allNodes?: TypeGraphNode[];
+  /**
+   * Optional render-prop for a rich expression editor in FunctionForm.
+   * When omitted, FunctionForm renders a plain `<Textarea>` fallback.
+   */
+  renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
   /** Called when the panel requests to close (e.g., Escape key). */
   onClose?: () => void;
 }
@@ -103,9 +117,13 @@ function EditorFormPanel({
   isReadOnly = false,
   availableTypes,
   actions,
+  allNodes = [],
+  renderExpressionEditor,
   onClose
 }: EditorFormPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
+
+  const inheritedGroups = useInheritedMembers(nodeData, allNodes);
 
   // ---- Escape key closes panel --------------------------------------------
 
@@ -171,6 +189,7 @@ function EditorFormPanel({
             data={nodeData as TypeNodeData<'data'>}
             availableTypes={availableTypes}
             actions={actions}
+            inheritedGroups={inheritedGroups}
           />
         );
 
@@ -182,6 +201,7 @@ function EditorFormPanel({
             data={nodeData as TypeNodeData<'enum'>}
             availableTypes={availableTypes}
             actions={actions}
+            inheritedGroups={inheritedGroups}
           />
         );
 
@@ -204,6 +224,7 @@ function EditorFormPanel({
             data={nodeData as TypeNodeData<'func'>}
             availableTypes={availableTypes}
             actions={actions}
+            renderExpressionEditor={renderExpressionEditor}
           />
         );
 
@@ -228,9 +249,7 @@ function EditorFormPanel({
           border-b bg-muted"
       >
         <span className="text-sm font-semibold truncate">{nodeData.name}</span>
-        <Badge variant={nodeData.kind as 'data' | 'enum' | 'choice' | 'func'}>
-          {getKindLabel(nodeData.kind)}
-        </Badge>
+        <Badge variant={nodeData.kind}>{getKindLabel(nodeData.kind)}</Badge>
         {onClose && (
           <Button
             variant="ghost"

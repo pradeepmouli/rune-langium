@@ -15,6 +15,8 @@ export interface WorkspaceFile {
   path: string;
   content: string;
   dirty: boolean;
+  /** When true, the file is a system/built-in file and cannot be edited. */
+  readOnly?: boolean;
 }
 
 export interface WorkspaceState {

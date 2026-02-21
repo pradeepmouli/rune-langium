@@ -71,9 +71,9 @@ export type EnumValueValues = z.infer<typeof enumValueSchema>;
 
 /** Metadata fields shared by all form schemas (definition, comments, synonyms). */
 const metadataFields = {
-  definition: z.string(),
-  comments: z.string(),
-  synonyms: z.array(z.string())
+  definition: z.string().optional(),
+  comments: z.string().optional(),
+  synonyms: z.array(z.string()).optional()
 };
 
 /** Full schema for the Data type form (name + parent + members + metadata). */
@@ -94,7 +94,7 @@ export type DataTypeFormValues = z.infer<typeof dataTypeFormSchema>;
 export const enumFormSchema = z.object({
   name: z.string().min(1, 'Enum name is required'),
   parentName: z.string(),
-  members: z.array(memberSchema),
+  members: z.array(memberSchema).default([]),
   ...metadataFields
 });
 
@@ -107,7 +107,7 @@ export type EnumFormValues = z.infer<typeof enumFormSchema>;
 /** Schema for the Choice type form (name + members + metadata). */
 export const choiceFormSchema = z.object({
   name: z.string().min(1, 'Choice name is required'),
-  members: z.array(memberSchema),
+  members: z.array(memberSchema).default([]),
   ...metadataFields
 });
 
@@ -122,7 +122,7 @@ export const functionFormSchema = z.object({
   name: z.string().min(1, 'Function name is required'),
   outputType: z.string(),
   expressionText: z.string(),
-  members: z.array(memberSchema),
+  members: z.array(memberSchema).optional(),
   ...metadataFields
 });
 

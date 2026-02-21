@@ -15,7 +15,9 @@ import {
   isRosettaEnumeration,
   isRosettaFunction,
   isRosettaBasicType,
-  isRosettaRecordType
+  isRosettaRecordType,
+  isRosettaTypeAlias,
+  isAnnotation
 } from '@rune-langium/core';
 import type {
   RosettaModel,
@@ -24,9 +26,15 @@ import type {
   Choice,
   RosettaEnumeration,
   RosettaFunction,
+  RosettaRecordType,
+  RosettaTypeAlias,
+  RosettaBasicType,
+  Annotation,
   Attribute,
   ChoiceOption,
-  RosettaEnumValue
+  RosettaEnumValue,
+  RosettaRecordFeature,
+  AnnotationRef
 } from '@rune-langium/core';
 import type {
   TypeGraphNode,
@@ -35,7 +43,8 @@ import type {
   EdgeData,
   MemberDisplay,
   GraphFilters,
-  TypeKind
+  TypeKind,
+  AnnotationDisplay
 } from '../types.js';
 
 /**
@@ -164,6 +173,36 @@ function functionInputToMember(attr: Attribute): MemberDisplay<Attribute> {
   };
 }
 
+function recordFeatureToMember(feat: RosettaRecordFeature): MemberDisplay<RosettaRecordFeature> {
+  return {
+    name: feat.name,
+    typeName: feat.typeCall?.type?.$refText,
+    isOverride: false,
+    source: feat
+  };
+}
+
+function annotationAttributeToMember(attr: Attribute): MemberDisplay<Attribute> {
+  return {
+    name: attr.name,
+    typeName: attr.typeCall?.type?.$refText,
+    cardinality: attr.card ? formatCardinality(attr.card) : undefined,
+    isOverride: false,
+    source: attr
+  };
+}
+
+/**
+ * Extract annotation references from an AST node's annotations array.
+ */
+function extractAnnotations(annotations: AnnotationRef[] | undefined): AnnotationDisplay[] {
+  if (!annotations || annotations.length === 0) return [];
+  return annotations.map((ref) => ({
+    name: ref.annotation?.$refText ?? ref.annotation?.ref?.name ?? 'unknown',
+    attribute: ref.attribute?.$refText
+  }));
+}
+
 /**
  * Extract synonym strings from Data/Choice RosettaClassSynonym objects.
  *
@@ -203,12 +242,20 @@ function extractEnumSynonyms(
 // Per-kind node builders
 // ---------------------------------------------------------------------------
 
-function buildDataNode(data: Data, namespace: string, nodeId: string): TypeGraphNode {
+function buildDataNode(
+  data: Data,
+  namespace: string,
+  nodeId: string,
+  isReadOnly = false
+): TypeGraphNode {
   const members = (data.attributes ?? []).map(dataAttributeToMember);
   const parentRef = data.superType;
   const parentName = parentRef?.ref?.name ?? parentRef?.$refText;
   const synonyms = extractClassSynonyms(
     (data.synonyms ?? []) as Array<{ value?: { name?: string; path?: string } }>
+  );
+  const annotations = extractAnnotations(
+    (data as unknown as { annotations?: AnnotationRef[] }).annotations
   );
 
   return {
@@ -223,15 +270,21 @@ function buildDataNode(data: Data, namespace: string, nodeId: string): TypeGraph
       members,
       parentName,
       synonyms: synonyms.length > 0 ? synonyms : undefined,
+      annotations: annotations.length > 0 ? annotations : undefined,
       hasExternalRefs: false,
       errors: [],
       source: data,
-      isReadOnly: false
+      isReadOnly
     } as TypeNodeData<'data'>
   };
 }
 
-function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): TypeGraphNode {
+function buildChoiceNode(
+  choice: Choice,
+  namespace: string,
+  nodeId: string,
+  isReadOnly = false
+): TypeGraphNode {
   const members = (choice.attributes ?? []).map(choiceOptionToMember);
   const synonyms = extractClassSynonyms(
     (choice.synonyms ?? []) as Array<{ value?: { name?: string; path?: string } }>
@@ -251,7 +304,7 @@ function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): Typ
       hasExternalRefs: false,
       errors: [],
       source: choice,
-      isReadOnly: false
+      isReadOnly
     } as TypeNodeData<'choice'>
   };
 }
@@ -259,7 +312,8 @@ function buildChoiceNode(choice: Choice, namespace: string, nodeId: string): Typ
 function buildEnumNode(
   enumType: RosettaEnumeration,
   namespace: string,
-  nodeId: string
+  nodeId: string,
+  isReadOnly = false
 ): TypeGraphNode {
   const members = (enumType.enumValues ?? []).map(enumValueToMember);
   const parentRef = enumType.parent;
@@ -268,6 +322,9 @@ function buildEnumNode(
     (enumType.synonyms ?? []) as Array<{
       body?: { values?: Array<{ name?: string; path?: string }> };
     }>
+  );
+  const annotations = extractAnnotations(
+    (enumType as unknown as { annotations?: AnnotationRef[] }).annotations
   );
 
   return {
@@ -282,10 +339,11 @@ function buildEnumNode(
       members,
       parentName,
       synonyms: synonyms.length > 0 ? synonyms : undefined,
+      annotations: annotations.length > 0 ? annotations : undefined,
       hasExternalRefs: false,
       errors: [],
       source: enumType,
-      isReadOnly: false
+      isReadOnly
     } as TypeNodeData<'enum'>
   };
 }
@@ -293,7 +351,8 @@ function buildEnumNode(
 function buildFunctionNode(
   func: RosettaFunction,
   namespace: string,
-  nodeId: string
+  nodeId: string,
+  isReadOnly = false
 ): TypeGraphNode {
   const members = (func.inputs ?? []).map(functionInputToMember);
   const outputAttr = func.output;
@@ -327,6 +386,10 @@ function buildFunctionNode(
 
   const expressionText = bodyParts.length > 0 ? bodyParts.join('\n') : undefined;
 
+  const annotations = extractAnnotations(
+    (func as unknown as { annotations?: AnnotationRef[] }).annotations
+  );
+
   return {
     id: nodeId,
     type: 'func',
@@ -339,11 +402,107 @@ function buildFunctionNode(
       members,
       outputType,
       expressionText,
+      annotations: annotations.length > 0 ? annotations : undefined,
       hasExternalRefs: false,
       errors: [],
       source: func,
-      isReadOnly: false
+      isReadOnly
     } as TypeNodeData<'func'>
+  };
+}
+
+function buildRecordNode(
+  record: RosettaRecordType,
+  namespace: string,
+  nodeId: string
+): TypeGraphNode {
+  const members = (record.features ?? []).map(recordFeatureToMember);
+
+  return {
+    id: nodeId,
+    type: 'record',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'record',
+      name: record.name,
+      namespace,
+      definition: record.definition,
+      members,
+      hasExternalRefs: false,
+      errors: [],
+      source: record,
+      isReadOnly: true
+    } as TypeNodeData<'record'>
+  };
+}
+
+function buildTypeAliasNode(
+  alias: RosettaTypeAlias,
+  namespace: string,
+  nodeId: string
+): TypeGraphNode {
+  const targetType = alias.typeCall?.type?.$refText;
+
+  return {
+    id: nodeId,
+    type: 'typeAlias',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'typeAlias',
+      name: alias.name,
+      namespace,
+      definition: alias.definition,
+      members: [],
+      parentName: targetType,
+      hasExternalRefs: false,
+      errors: [],
+      source: alias,
+      isReadOnly: true
+    } as TypeNodeData<'typeAlias'>
+  };
+}
+
+function buildBasicTypeNode(
+  basic: RosettaBasicType,
+  namespace: string,
+  nodeId: string
+): TypeGraphNode {
+  return {
+    id: nodeId,
+    type: 'basicType',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'basicType',
+      name: basic.name,
+      namespace,
+      definition: basic.definition,
+      members: [],
+      hasExternalRefs: false,
+      errors: [],
+      source: basic,
+      isReadOnly: true
+    } as TypeNodeData<'basicType'>
+  };
+}
+
+function buildAnnotationNode(ann: Annotation, namespace: string, nodeId: string): TypeGraphNode {
+  const members = (ann.attributes ?? []).map(annotationAttributeToMember);
+
+  return {
+    id: nodeId,
+    type: 'annotation',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'annotation',
+      name: ann.name,
+      namespace,
+      definition: ann.definition,
+      members,
+      hasExternalRefs: false,
+      errors: [],
+      source: ann,
+      isReadOnly: true
+    } as TypeNodeData<'annotation'>
   };
 }
 
@@ -375,6 +534,11 @@ export function astToGraph(
     const m = model as RosettaModel;
     const namespace = getNamespace(m);
     const elements: RosettaRootElement[] = (m.elements ?? []) as RosettaRootElement[];
+    // Derive read-only status from the document URI: system:// URIs are immutable
+    const modelUri = (
+      m as unknown as { $document?: { uri?: { toString(): string } } }
+    ).$document?.uri?.toString();
+    const isReadOnly = modelUri?.startsWith('system://') ?? false;
 
     for (const element of elements) {
       const name = (element as { name?: string }).name ?? 'unknown';
@@ -383,25 +547,49 @@ export function astToGraph(
         if (!passesFilter('data', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildDataNode(element, namespace, nodeId));
+        nodes.push(buildDataNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isChoice(element)) {
         if (!passesFilter('choice', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildChoiceNode(element, namespace, nodeId));
+        nodes.push(buildChoiceNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isRosettaEnumeration(element)) {
         if (!passesFilter('enum', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildEnumNode(element, namespace, nodeId));
+        nodes.push(buildEnumNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isRosettaFunction(element)) {
         if (!passesFilter('func', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildFunctionNode(element, namespace, nodeId));
+        nodes.push(buildFunctionNode(element, namespace, nodeId, isReadOnly));
+        nodeIdSet.add(nodeId);
+      } else if (isRosettaRecordType(element)) {
+        if (!passesFilter('record', namespace, name, filters)) continue;
+        const nodeId = makeNodeId(namespace, name);
+        if (nodeIdSet.has(nodeId)) continue;
+        nodes.push(buildRecordNode(element, namespace, nodeId));
+        nodeIdSet.add(nodeId);
+      } else if (isRosettaTypeAlias(element)) {
+        if (!passesFilter('typeAlias', namespace, name, filters)) continue;
+        const nodeId = makeNodeId(namespace, name);
+        if (nodeIdSet.has(nodeId)) continue;
+        nodes.push(buildTypeAliasNode(element, namespace, nodeId));
+        nodeIdSet.add(nodeId);
+      } else if (isRosettaBasicType(element)) {
+        if (!passesFilter('basicType', namespace, name, filters)) continue;
+        const nodeId = makeNodeId(namespace, name);
+        if (nodeIdSet.has(nodeId)) continue;
+        nodes.push(buildBasicTypeNode(element, namespace, nodeId));
+        nodeIdSet.add(nodeId);
+      } else if (isAnnotation(element)) {
+        if (!passesFilter('annotation', namespace, name, filters)) continue;
+        const nodeId = makeNodeId(namespace, name);
+        if (nodeIdSet.has(nodeId)) continue;
+        nodes.push(buildAnnotationNode(element, namespace, nodeId));
         nodeIdSet.add(nodeId);
       }
     }
@@ -478,6 +666,42 @@ export function astToGraph(
       }
     }
 
+    // Record feature type reference edges
+    if (nodeData.kind === 'record') {
+      for (const member of nodeData.members) {
+        if (member.typeName) {
+          const targetNodeId = nameToNodeId.get(member.typeName);
+          if (targetNodeId && targetNodeId !== node.id) {
+            edges.push({
+              id: `${node.id}--attribute-ref--${member.name}--${targetNodeId}`,
+              source: node.id,
+              target: targetNodeId,
+              type: 'attribute-ref',
+              data: {
+                kind: 'attribute-ref',
+                label: member.name,
+                cardinality: member.cardinality
+              }
+            });
+          }
+        }
+      }
+    }
+
+    // Type alias target reference edge
+    if (nodeData.kind === 'typeAlias' && nodeData.parentName) {
+      const targetNodeId = nameToNodeId.get(nodeData.parentName);
+      if (targetNodeId && targetNodeId !== node.id) {
+        edges.push({
+          id: `${node.id}--type-alias-ref--${targetNodeId}`,
+          source: node.id,
+          target: targetNodeId,
+          type: 'type-alias-ref',
+          data: { kind: 'type-alias-ref' }
+        });
+      }
+    }
+
     // Function input/output type reference edges
     if (nodeData.kind === 'func') {
       // Input parameter type references
@@ -520,7 +744,7 @@ export function astToGraph(
 
   // Update hasExternalRefs now that we know all node IDs
   for (const node of nodes) {
-    if (node.data.kind === 'data' || node.data.kind === 'func') {
+    if (node.data.kind === 'data' || node.data.kind === 'func' || node.data.kind === 'record') {
       node.data.hasExternalRefs = node.data.members.some(
         (m) => m.typeName && !nameToNodeId.has(m.typeName)
       );
