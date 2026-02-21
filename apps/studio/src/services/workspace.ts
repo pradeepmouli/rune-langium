@@ -78,14 +78,18 @@ function workerRequest<T extends ParseResponse | ParseWorkspaceResponse>(
  * Parse a single .rosetta file and return the model.
  * Tries the web worker first; falls back to main-thread parsing.
  */
-export async function parseFile(content: string): Promise<{ model: unknown; errors: string[] }> {
+export async function parseFile(
+  content: string,
+  uri?: string
+): Promise<{ model: unknown; errors: string[] }> {
   // Try worker first (T098)
   try {
     const id = String(++requestId);
     const response = await workerRequest<ParseResponse>({
       type: 'parse',
       id,
-      content
+      content,
+      uri
     });
     return { model: response.model, errors: response.errors };
   } catch {
@@ -94,7 +98,7 @@ export async function parseFile(content: string): Promise<{ model: unknown; erro
 
   // Main-thread fallback
   try {
-    const result = await parse(content);
+    const result = await parse(content, uri);
     const errors: string[] = [];
     if (result.parserErrors && result.parserErrors.length > 0) {
       for (const err of result.parserErrors) {
@@ -140,7 +144,7 @@ export async function parseWorkspaceFiles(
   const errors = new Map<string, string[]>();
 
   for (const file of files) {
-    const result = await parseFile(file.content);
+    const result = await parseFile(file.content, file.path);
     if (result.model) {
       models.push(result.model);
     }

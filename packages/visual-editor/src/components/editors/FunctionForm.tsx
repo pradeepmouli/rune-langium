@@ -32,6 +32,7 @@ import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { AnnotationSection } from './AnnotationSection.js';
+import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useNodeForm } from '../../hooks/useNodeForm.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
@@ -44,6 +45,7 @@ import type {
   MemberDisplay,
   ExpressionEditorSlotProps
 } from '../../types.js';
+import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,6 +83,8 @@ export interface FunctionFormProps {
   availableTypes: TypeOption[];
   /** Function-specific editor form action callbacks. */
   actions: EditorFormActions<'func'>;
+  /** Inherited member groups from super-function (if any). */
+  inheritedGroups?: InheritedGroup[];
   /**
    * Optional render-prop for a rich expression editor (e.g. CodeMirror).
    * When omitted, a plain `<Textarea>` is rendered as fallback.
@@ -147,6 +151,7 @@ function FunctionForm({
   data,
   availableTypes,
   actions,
+  inheritedGroups = [],
   renderExpressionEditor
 }: FunctionFormProps) {
   // ---- Form setup (full model via useNodeForm) -----------------------------
@@ -455,6 +460,9 @@ function FunctionForm({
           onAdd={handleAddAnnotation}
           onRemove={handleRemoveAnnotation}
         />
+
+        {/* Inherited members (from super-function, if applicable) */}
+        <InheritedMembersSection groups={inheritedGroups} />
 
         {/* Metadata */}
         <MetadataSection

@@ -414,7 +414,8 @@ function buildFunctionNode(
 function buildRecordNode(
   record: RosettaRecordType,
   namespace: string,
-  nodeId: string
+  nodeId: string,
+  isReadOnly = false
 ): TypeGraphNode {
   const members = (record.features ?? []).map(recordFeatureToMember);
 
@@ -431,7 +432,7 @@ function buildRecordNode(
       hasExternalRefs: false,
       errors: [],
       source: record,
-      isReadOnly: true
+      isReadOnly
     } as TypeNodeData<'record'>
   };
 }
@@ -439,7 +440,8 @@ function buildRecordNode(
 function buildTypeAliasNode(
   alias: RosettaTypeAlias,
   namespace: string,
-  nodeId: string
+  nodeId: string,
+  isReadOnly = false
 ): TypeGraphNode {
   const targetType = alias.typeCall?.type?.$refText;
 
@@ -457,7 +459,7 @@ function buildTypeAliasNode(
       hasExternalRefs: false,
       errors: [],
       source: alias,
-      isReadOnly: true
+      isReadOnly
     } as TypeNodeData<'typeAlias'>
   };
 }
@@ -465,7 +467,8 @@ function buildTypeAliasNode(
 function buildBasicTypeNode(
   basic: RosettaBasicType,
   namespace: string,
-  nodeId: string
+  nodeId: string,
+  isReadOnly = false
 ): TypeGraphNode {
   return {
     id: nodeId,
@@ -480,12 +483,17 @@ function buildBasicTypeNode(
       hasExternalRefs: false,
       errors: [],
       source: basic,
-      isReadOnly: true
+      isReadOnly
     } as TypeNodeData<'basicType'>
   };
 }
 
-function buildAnnotationNode(ann: Annotation, namespace: string, nodeId: string): TypeGraphNode {
+function buildAnnotationNode(
+  ann: Annotation,
+  namespace: string,
+  nodeId: string,
+  isReadOnly = false
+): TypeGraphNode {
   const members = (ann.attributes ?? []).map(annotationAttributeToMember);
 
   return {
@@ -501,7 +509,7 @@ function buildAnnotationNode(ann: Annotation, namespace: string, nodeId: string)
       hasExternalRefs: false,
       errors: [],
       source: ann,
-      isReadOnly: true
+      isReadOnly
     } as TypeNodeData<'annotation'>
   };
 }
@@ -571,25 +579,25 @@ export function astToGraph(
         if (!passesFilter('record', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildRecordNode(element, namespace, nodeId));
+        nodes.push(buildRecordNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isRosettaTypeAlias(element)) {
         if (!passesFilter('typeAlias', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildTypeAliasNode(element, namespace, nodeId));
+        nodes.push(buildTypeAliasNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isRosettaBasicType(element)) {
         if (!passesFilter('basicType', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildBasicTypeNode(element, namespace, nodeId));
+        nodes.push(buildBasicTypeNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       } else if (isAnnotation(element)) {
         if (!passesFilter('annotation', namespace, name, filters)) continue;
         const nodeId = makeNodeId(namespace, name);
         if (nodeIdSet.has(nodeId)) continue;
-        nodes.push(buildAnnotationNode(element, namespace, nodeId));
+        nodes.push(buildAnnotationNode(element, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       }
     }
@@ -611,8 +619,8 @@ export function astToGraph(
   for (const node of nodes) {
     const nodeData = node.data;
 
-    // Inheritance edges (extends)
-    if (nodeData.parentName) {
+    // Inheritance edges (extends) — skip typeAlias, which uses type-alias-ref instead
+    if (nodeData.parentName && nodeData.kind !== 'typeAlias') {
       const parentNodeId = nameToNodeId.get(nodeData.parentName);
       if (parentNodeId) {
         const edgeKind: EdgeData['kind'] = nodeData.kind === 'enum' ? 'enum-extends' : 'extends';

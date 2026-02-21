@@ -224,9 +224,18 @@ function EditorFormPanel({
             data={nodeData as TypeNodeData<'func'>}
             availableTypes={availableTypes}
             actions={actions}
+            inheritedGroups={inheritedGroups}
             renderExpressionEditor={renderExpressionEditor}
           />
         );
+
+      // record, typeAlias, basicType, and annotation are currently view-only;
+      // full editor forms for these kinds are tracked for a future iteration.
+      case 'record':
+      case 'typeAlias':
+      case 'basicType':
+      case 'annotation':
+        return <DetailPanel nodeData={nodeData} />;
 
       default:
         return <DetailPanel nodeData={nodeData} />;
