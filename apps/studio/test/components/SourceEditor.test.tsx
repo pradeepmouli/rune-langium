@@ -34,7 +34,8 @@ vi.mock('@codemirror/state', () => ({
   EditorState: {
     create: vi.fn().mockReturnValue({
       doc: { toString: () => '' }
-    })
+    }),
+    readOnly: { of: vi.fn().mockReturnValue([]) }
   }
 }));
 
@@ -139,6 +140,57 @@ describe('SourceEditor', () => {
       render(<SourceEditor files={sampleFiles} />);
       // Completion is handled by @codemirror/lsp-client's serverCompletion extension
       expect(screen.getByTestId('source-editor-container')).toBeInTheDocument();
+    });
+  });
+
+  describe('read-only files', () => {
+    const readOnlyFile = {
+      name: 'system.rosetta',
+      path: 'system://com.rosetta.model/system.rosetta',
+      content: 'namespace com.rosetta.model',
+      dirty: false,
+      readOnly: true
+    };
+    const editableFile = {
+      name: 'model.rosetta',
+      path: '/workspace/model.rosetta',
+      content: 'namespace foo',
+      dirty: false
+    };
+
+    it('shows lock icon for read-only tab', () => {
+      render(<SourceEditor files={[readOnlyFile, editableFile]} />);
+      const systemTab = screen.getByText('system.rosetta').closest('button')!;
+      expect(within(systemTab).getByLabelText('read-only')).toBeInTheDocument();
+    });
+
+    it('does not show lock icon for regular tab', () => {
+      render(<SourceEditor files={[readOnlyFile, editableFile]} />);
+      const modelTab = screen.getByText('model.rosetta').closest('button')!;
+      expect(within(modelTab).queryByLabelText('read-only')).not.toBeInTheDocument();
+    });
+
+    it('hides close button for read-only tab when onFileClose is provided', () => {
+      const onFileClose = vi.fn();
+      render(<SourceEditor files={[readOnlyFile, editableFile]} onFileClose={onFileClose} />);
+      // Read-only tab: no close button
+      expect(screen.queryByLabelText('Close system.rosetta')).not.toBeInTheDocument();
+      // Editable tab: close button present
+      expect(screen.getByLabelText('Close model.rosetta')).toBeInTheDocument();
+    });
+
+    it('applies read-only EditorState extension when read-only file is active', async () => {
+      const { EditorState } = vi.mocked(await import('@codemirror/state'));
+      const onContentChange = vi.fn();
+      render(
+        <SourceEditor
+          files={[readOnlyFile]}
+          activeFile={readOnlyFile.path}
+          onContentChange={onContentChange}
+        />
+      );
+      // EditorState.readOnly.of should have been called with true
+      expect(EditorState.readOnly.of).toHaveBeenCalledWith(true);
     });
   });
 });

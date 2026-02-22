@@ -29,10 +29,13 @@ import { Badge } from '@rune-langium/design-system/ui/badge';
 import { AttributeRow } from './AttributeRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
+import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useNodeForm } from '../../hooks/useNodeForm.js';
 import { dataTypeFormSchema, type DataTypeFormValues } from '../../schemas/form-schemas.js';
 import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
+import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,13 +72,21 @@ export interface DataTypeFormProps {
   availableTypes: TypeOption[];
   /** Data-specific editor form action callbacks. */
   actions: EditorFormActions<'data'>;
+  /** Inherited member groups from ancestors. */
+  inheritedGroups?: InheritedGroup[];
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormProps) {
+function DataTypeForm({
+  nodeId,
+  data,
+  availableTypes,
+  actions,
+  inheritedGroups = []
+}: DataTypeFormProps) {
   // ---- Form setup (full model via useNodeForm) -----------------------------
 
   const resetKey = useMemo(() => JSON.stringify(toFormValues(data)), [data]);
@@ -179,6 +190,22 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
     [nodeId, actions]
   );
 
+  // ---- Annotation callbacks ------------------------------------------------
+
+  const handleAddAnnotation = useCallback(
+    (annotationName: string) => {
+      actions.addAnnotation(nodeId, annotationName);
+    },
+    [nodeId, actions]
+  );
+
+  const handleRemoveAnnotation = useCallback(
+    (index: number) => {
+      actions.removeAnnotation(nodeId, index);
+    },
+    [nodeId, actions]
+  );
+
   // ---- Resolve parent type option for display ------------------------------
 
   const parentOptions = availableTypes.filter(
@@ -276,6 +303,16 @@ function DataTypeForm({ nodeId, data, availableTypes, actions }: DataTypeFormPro
             )}
           </FieldGroup>
         </FieldSet>
+
+        {/* Inherited Members */}
+        <InheritedMembersSection groups={inheritedGroups} />
+
+        {/* Annotations */}
+        <AnnotationSection
+          annotations={data.annotations ?? []}
+          onAdd={handleAddAnnotation}
+          onRemove={handleRemoveAnnotation}
+        />
 
         {/* Metadata */}
         <MetadataSection

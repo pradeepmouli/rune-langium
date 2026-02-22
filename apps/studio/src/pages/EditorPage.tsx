@@ -25,7 +25,9 @@ import type {
 } from '@rune-langium/visual-editor';
 import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
+import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
+import { ExpressionEditor } from '../components/ExpressionEditor.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -60,6 +62,7 @@ export function EditorPage({
   onReconnect
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
+  const sourceEditorRef = useRef<SourceEditorRef>(null);
   const sourcePanelRef = useRef<PanelImperativeHandle>(null);
   const editorPanelRef = useRef<PanelImperativeHandle>(null);
   const [showSource, setShowSource] = useState(false);
@@ -68,6 +71,10 @@ export function EditorPage({
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedNodeData, setSelectedNodeData] = useState<TypeNodeData | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
+  /** Tracks file paths explicitly opened in the source editor (by node navigation). */
+  const [openedFilePaths, setOpenedFilePaths] = useState<Set<string>>(new Set<string>());
+  /** Pending reveal to fire after source files update. */
+  const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
 
   // --- Namespace visibility state ---
   const [explorerOpen, setExplorerOpen] = useState(true);
@@ -144,8 +151,19 @@ export function EditorPage({
     setHiddenNodeIds(new Set<string>());
   }, []);
 
-  const handleExplorerSelectNode = useCallback((nodeId: string) => {
-    graphRef.current?.focusNode(nodeId);
+  // --- Collapsible panel expand helpers (needed by navigation handlers) ---
+  const expandSource = useCallback(() => {
+    if (sourcePanelRef.current?.isCollapsed()) {
+      sourcePanelRef.current.resize('35%');
+      setShowSource(true);
+    }
+  }, []);
+
+  const expandEditor = useCallback(() => {
+    if (editorPanelRef.current?.isCollapsed()) {
+      editorPanelRef.current.expand();
+      setShowEditor(true);
+    }
   }, []);
 
   // --- Stable ref for files (prevents stale closure in handleSourceChange) ---
@@ -167,7 +185,7 @@ export function EditorPage({
   );
 
   // --- Graph → Source: wire onModelChanged ---
-  // Build namespace → file path mapping for reverse sync
+  // Build namespace → file path mapping for reverse sync (handleModelChanged)
   const namespaceToFile = useMemo(() => {
     const map = new Map<string, string>();
     for (let i = 0; i < models.length; i++) {
@@ -184,6 +202,86 @@ export function EditorPage({
     }
     return map;
   }, [models, files]);
+
+  // Build nodeId → file path mapping for precise node→file resolution.
+  // Unlike namespaceToFile, this does not collide when files share a namespace.
+  const nodeIdToFilePath = useMemo(() => {
+    const map = new Map<string, string>();
+    for (let i = 0; i < models.length && i < files.length; i++) {
+      const model = models[i] as {
+        name?: string | { segments?: string[] };
+        elements?: Array<{ name?: string }>;
+      };
+      let ns = 'unknown';
+      if (typeof model.name === 'string') {
+        ns = model.name;
+      } else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
+        ns = (model.name as { segments: string[] }).segments.join('.');
+      }
+      for (const element of model.elements ?? []) {
+        const name = element.name ?? 'unknown';
+        const nodeId = `${ns}::${name}`;
+        // astToGraph keeps the first node encountered for duplicate nodeId values.
+        // Keep first-write semantics here so source-file resolution matches the graph.
+        if (!map.has(nodeId)) {
+          map.set(nodeId, files[i]!.path);
+        }
+      }
+    }
+    return map;
+  }, [models, files]);
+
+  /** Resolve which workspace file contains a given node (by unique nodeId). */
+  const resolveNodeFile = useCallback(
+    (nodeData: TypeNodeData): string | undefined => {
+      const nodeId = `${nodeData.namespace}::${nodeData.name}`;
+      return nodeIdToFilePath.get(nodeId);
+    },
+    [nodeIdToFilePath]
+  );
+
+  /** Open a file in the source editor tabs (adds to openedFilePaths). */
+  const openFileInSource = useCallback((filePath: string) => {
+    setOpenedFilePaths((prev) => {
+      if (prev.has(filePath)) return prev;
+      const next = new Set(prev);
+      next.add(filePath);
+      return next;
+    });
+    setActiveEditorFile(filePath);
+  }, []);
+
+  const handleExplorerSelectNode = useCallback(
+    (nodeId: string) => {
+      graphRef.current?.focusNode(nodeId);
+
+      const node = allGraphNodes.find((n) => n.id === nodeId);
+      if (!node) return;
+
+      // Synchronise selection state with graph + editor form
+      setSelectedNode(nodeId);
+      setSelectedNodeData(node.data);
+      expandEditor();
+
+      // Resolve the node's source file and open it in the source tabs
+      // (but do NOT auto-expand the source panel — user must click Source or double-click)
+      if (node.data.source) {
+        const filePath = resolveNodeFile(node.data);
+        if (filePath) openFileInSource(filePath);
+
+        const cstNode = (
+          node.data.source as { $cstNode?: { range?: { start?: { line?: number } } } }
+        )?.$cstNode;
+        if (cstNode?.range?.start?.line !== undefined) {
+          const line = cstNode.range.start.line + 1;
+          if (filePath) {
+            pendingRevealRef.current = { line, filePath };
+          }
+        }
+      }
+    },
+    [allGraphNodes, expandEditor, resolveNodeFile, openFileInSource]
+  );
 
   const handleModelChanged = useCallback(
     (serialized: Map<string, string>) => {
@@ -206,7 +304,44 @@ export function EditorPage({
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics, totalErrors, totalWarnings } = useDiagnosticsStore();
 
-  // --- Collapsible panel toggle / expand helpers ---
+  /** Only pass files that the user has explicitly opened (via node selection). */
+  const sourceEditorFiles = useMemo(
+    () => files.filter((f) => openedFilePaths.has(f.path)),
+    [files, openedFilePaths]
+  );
+
+  // Fire pending reveal after sourceEditorFiles updates with the target file
+  useEffect(() => {
+    const pending = pendingRevealRef.current;
+    if (!pending) return;
+    const exists = sourceEditorFiles.some((f) => f.path === pending.filePath);
+    if (exists) {
+      pendingRevealRef.current = null;
+      // Defer to next frame so SourceEditor has processed the new files prop
+      requestAnimationFrame(() => {
+        sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
+      });
+    }
+  }, [sourceEditorFiles]);
+
+  /** Close a file tab (remove from openedFilePaths). */
+  const closeFileInSource = useCallback(
+    (filePath: string) => {
+      setOpenedFilePaths((prev) => {
+        const next = new Set(prev);
+        next.delete(filePath);
+        return next;
+      });
+      // If the closed file was active, switch to the nearest remaining tab
+      if (activeEditorFile === filePath) {
+        const remaining = files.filter((f) => openedFilePaths.has(f.path) && f.path !== filePath);
+        setActiveEditorFile(remaining[0]?.path);
+      }
+    },
+    [files, openedFilePaths, activeEditorFile]
+  );
+
+  // --- Collapsible panel toggle helpers ---
   const toggleSource = useCallback(() => {
     const panel = sourcePanelRef.current;
     if (!panel) return;
@@ -231,31 +366,33 @@ export function EditorPage({
     }
   }, []);
 
-  const expandSource = useCallback(() => {
-    if (sourcePanelRef.current?.isCollapsed()) {
-      sourcePanelRef.current.resize('35%');
-      setShowSource(true);
-    }
-  }, []);
-
-  const expandEditor = useCallback(() => {
-    if (editorPanelRef.current?.isCollapsed()) {
-      editorPanelRef.current.resize('30%');
-      setShowEditor(true);
-    }
-  }, []);
-
   const handleNodeSelect = useCallback(
     (nodeId: string, nodeData?: TypeNodeData) => {
       setSelectedNode(nodeId ?? null);
       if (nodeId && nodeData) {
         setSelectedNodeData(nodeData);
         expandEditor();
+
+        // Resolve the node's source file and open it in the source tabs
+        // (but do NOT auto-expand the source panel)
+        const filePath = resolveNodeFile(nodeData);
+        if (filePath) openFileInSource(filePath);
+
+        // Navigate source editor to the AST node's definition line
+        const cstNode = (
+          nodeData.source as { $cstNode?: { range?: { start?: { line?: number } } } }
+        )?.$cstNode;
+        if (cstNode?.range?.start?.line !== undefined) {
+          const line = cstNode.range.start.line + 1;
+          if (filePath) {
+            pendingRevealRef.current = { line, filePath };
+          }
+        }
       } else {
         setSelectedNodeData(null);
       }
     },
-    [expandEditor]
+    [expandEditor, resolveNodeFile, openFileInSource]
   );
 
   const handleNodeDoubleClick = useCallback(
@@ -333,6 +470,8 @@ export function EditorPage({
       removeInputParam: (nodeId, name) => graphRef.current?.removeInputParam(nodeId, name),
       updateOutputType: (nodeId, type) => graphRef.current?.updateOutputType(nodeId, type),
       updateExpression: (nodeId, expr) => graphRef.current?.updateExpression(nodeId, expr),
+      addAnnotation: (nodeId, name) => graphRef.current?.addAnnotation(nodeId, name),
+      removeAnnotation: (nodeId, index) => graphRef.current?.removeAnnotation(nodeId, index),
       validate: () => graphRef.current?.validate() ?? []
     }),
     []
@@ -416,6 +555,7 @@ export function EditorPage({
                 nodes={allGraphNodes}
                 expandedNamespaces={expandedNamespaces}
                 hiddenNodeIds={hiddenNodeIds}
+                selectedNodeId={selectedNode}
                 onToggleNamespace={handleToggleNamespace}
                 onToggleNode={handleToggleNode}
                 onExpandAll={handleExpandAll}
@@ -463,10 +603,12 @@ export function EditorPage({
               aria-label="Source editor"
             >
               <SourceEditor
-                files={files}
+                ref={sourceEditorRef}
+                files={sourceEditorFiles}
                 activeFile={activeEditorFile}
                 lspClient={lspClient}
                 onFileSelect={(path) => setActiveEditorFile(path)}
+                onFileClose={closeFileInSource}
                 onContentChange={handleSourceChange}
               />
             </aside>
@@ -487,6 +629,8 @@ export function EditorPage({
               nodeId={selectedNode}
               availableTypes={availableTypes}
               actions={editorActions}
+              allNodes={allGraphNodes}
+              renderExpressionEditor={(props) => <ExpressionEditor {...props} />}
               onClose={() => {
                 editorPanelRef.current?.collapse();
                 setShowEditor(false);
@@ -508,7 +652,8 @@ export function EditorPage({
               (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
             );
             if (file) {
-              setActiveEditorFile(file.path ?? file.name);
+              const path = file.path ?? file.name;
+              openFileInSource(path);
               expandSource();
             }
           }}

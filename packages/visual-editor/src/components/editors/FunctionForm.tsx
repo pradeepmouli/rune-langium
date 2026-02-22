@@ -16,6 +16,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from 'react';
+import type { ReactNode } from 'react';
 import { FormProvider, Controller } from 'react-hook-form';
 import {
   Field,
@@ -30,12 +31,21 @@ import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
+import { AnnotationSection } from './AnnotationSection.js';
+import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useNodeForm } from '../../hooks/useNodeForm.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
 import { validateExpression } from '../../validation/edit-validator.js';
 import { functionFormSchema, type FunctionFormValues } from '../../schemas/form-schemas.js';
-import type { TypeNodeData, TypeOption, EditorFormActions, MemberDisplay } from '../../types.js';
+import type {
+  TypeNodeData,
+  TypeOption,
+  EditorFormActions,
+  MemberDisplay,
+  ExpressionEditorSlotProps
+} from '../../types.js';
+import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,6 +83,13 @@ export interface FunctionFormProps {
   availableTypes: TypeOption[];
   /** Function-specific editor form action callbacks. */
   actions: EditorFormActions<'func'>;
+  /** Inherited member groups from super-function (if any). */
+  inheritedGroups?: InheritedGroup[];
+  /**
+   * Optional render-prop for a rich expression editor (e.g. CodeMirror).
+   * When omitted, a plain `<Textarea>` is rendered as fallback.
+   */
+  renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +146,14 @@ function InputParamRow({
 // FunctionForm
 // ---------------------------------------------------------------------------
 
-function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormProps) {
+function FunctionForm({
+  nodeId,
+  data,
+  availableTypes,
+  actions,
+  inheritedGroups = [],
+  renderExpressionEditor
+}: FunctionFormProps) {
   // ---- Form setup (full model via useNodeForm) -----------------------------
 
   const resetKey = useMemo(() => JSON.stringify(toFormValues(data)), [data]);
@@ -255,6 +279,22 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
     [nodeId, actions]
   );
 
+  // ---- Annotation callbacks ------------------------------------------------
+
+  const handleAddAnnotation = useCallback(
+    (annotationName: string) => {
+      actions.addAnnotation(nodeId, annotationName);
+    },
+    [nodeId, actions]
+  );
+
+  const handleRemoveAnnotation = useCallback(
+    (index: number) => {
+      actions.removeAnnotation(nodeId, index);
+    },
+    [nodeId, actions]
+  );
+
   // ---- Render --------------------------------------------------------------
 
   return (
@@ -370,24 +410,40 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
               >
                 Expression
               </FieldLabel>
-              <Textarea
-                {...field}
-                id="expressionText"
-                data-slot="expression-editor"
-                aria-invalid={fieldState.invalid}
-                onBlur={() => {
-                  field.onBlur();
-                  handleExpressionBlur();
-                }}
-                onChange={(e) => {
-                  field.onChange(e);
-                  if (expressionError) setExpressionError(null);
-                }}
-                rows={4}
-                className={`text-sm font-mono resize-y ${expressionError ? 'border-red-500' : ''}`}
-                placeholder="Enter function expression..."
-                aria-label="Function expression"
-              />
+              {renderExpressionEditor ? (
+                renderExpressionEditor({
+                  value: field.value,
+                  onChange: (val: string) => {
+                    field.onChange(val);
+                    if (expressionError) setExpressionError(null);
+                  },
+                  onBlur: () => {
+                    field.onBlur();
+                    handleExpressionBlur();
+                  },
+                  error: expressionError,
+                  placeholder: 'Enter function expression...'
+                })
+              ) : (
+                <Textarea
+                  {...field}
+                  id="expressionText"
+                  data-slot="expression-editor"
+                  aria-invalid={fieldState.invalid}
+                  onBlur={() => {
+                    field.onBlur();
+                    handleExpressionBlur();
+                  }}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    if (expressionError) setExpressionError(null);
+                  }}
+                  rows={4}
+                  className={`text-sm font-mono resize-y ${expressionError ? 'border-red-500' : ''}`}
+                  placeholder="Enter function expression..."
+                  aria-label="Function expression"
+                />
+              )}
               {expressionError && (
                 <p data-slot="expression-error" className="text-xs text-red-500 mt-0.5">
                   {expressionError}
@@ -397,6 +453,16 @@ function FunctionForm({ nodeId, data, availableTypes, actions }: FunctionFormPro
             </Field>
           )}
         />
+
+        {/* Annotations */}
+        <AnnotationSection
+          annotations={data.annotations ?? []}
+          onAdd={handleAddAnnotation}
+          onRemove={handleRemoveAnnotation}
+        />
+
+        {/* Inherited members (from super-function, if applicable) */}
+        <InheritedMembersSection groups={inheritedGroups} />
 
         {/* Metadata */}
         <MetadataSection
