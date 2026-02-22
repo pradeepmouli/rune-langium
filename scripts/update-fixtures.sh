@@ -8,7 +8,7 @@
 # Defaults:
 #   CDM tag:     7.0.0-dev.83
 #   Rune tag:    9.76.1
-#   Rune FpML:   main
+#   Rune FpML:   master
 #
 # These fixtures are used for conformance and grammar parity tests.
 # They are excluded from the published npm package via package.json "files".
@@ -20,7 +20,7 @@ FPML_REPO="https://github.com/rosetta-models/rune-fpml.git"
 
 CDM_TAG="7.0.0-dev.83"
 RUNE_TAG="9.76.2"
-FPML_TAG="main"
+FPML_TAG="master"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -43,6 +43,11 @@ resolve_clone_ref() {
   local candidates=("$requested_ref")
   if [[ "$requested_ref" != v* ]]; then
     candidates+=("v$requested_ref")
+  fi
+  if [[ "$requested_ref" == "main" ]]; then
+    candidates+=("master")
+  elif [[ "$requested_ref" == "master" ]]; then
+    candidates+=("main")
   fi
 
   for ref in "${candidates[@]}"; do
