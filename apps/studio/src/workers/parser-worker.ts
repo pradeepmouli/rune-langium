@@ -12,6 +12,8 @@ export interface ParseRequest {
   type: 'parse';
   id: string;
   content: string;
+  /** Optional document URI (e.g. system:// for base-type files). */
+  uri?: string;
 }
 
 export interface ParseWorkspaceRequest {
@@ -44,7 +46,7 @@ export type WorkerResponse = ParseResponse | ParseWorkspaceResponse;
 
 async function handleParse(req: ParseRequest): Promise<ParseResponse> {
   try {
-    const result = await parse(req.content);
+    const result = await parse(req.content, req.uri);
     const errors: string[] = [];
     if (result.parserErrors?.length) {
       for (const err of result.parserErrors) {
@@ -68,7 +70,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
 
   for (const file of req.files) {
     try {
-      const result = await parse(file.content);
+      const result = await parse(file.content, file.name);
       if (result.value) models.push(result.value);
       if (result.parserErrors?.length) {
         errors[file.name] = result.parserErrors.map((e) => e.message);
