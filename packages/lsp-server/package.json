@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@lspeasy/core": "^1.1.0",
-    "@lspeasy/server": "^1.1.0",
+    "@lspeasy/server": "^2.0.1",
     "@rune-langium/core": "workspace:*",
     "langium": "^4.2.1",
     "vscode-languageserver": "~9.0.1",
