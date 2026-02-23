@@ -39,6 +39,24 @@ pnpm run lint
 pnpm run format
 ```
 
+### Fixture Snapshots
+
+Integration tests and Studio scenarios rely on vendored `.rosetta` fixtures under `.resources/`.
+
+```bash
+# Refresh all vendored fixtures (CDM + Rune DSL + Rune FpML)
+bash scripts/update-fixtures.sh
+
+# Override refs when needed
+bash scripts/update-fixtures.sh --cdm-tag 7.0.0-dev.83 --rune-tag 9.76.2 --fpml-tag master
+```
+
+This populates:
+
+- `.resources/cdm`
+- `.resources/rune-dsl`
+- `.resources/rune-fpml`
+
 ## Project Structure
 
 This project uses pnpm workspaces for managing multiple packages:
