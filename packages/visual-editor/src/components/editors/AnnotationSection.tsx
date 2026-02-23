@@ -11,11 +11,6 @@ import { useCallback, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger
-} from '@rune-langium/design-system/ui/collapsible';
 import type { AnnotationDisplay } from '../../types.js';
 
 export interface AnnotationSectionProps {
