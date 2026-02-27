@@ -243,51 +243,46 @@ formRegistry.add(schema.shape.superType, {
 
 **b) CLI `--component-config <file>` flag — unified config for CLI and runtime**
 
-A single config file serves both the CLI (build-time codegen) and `@zod-to-form/react` (runtime rendering). The config is generic over the component module type `T`, which lets TypeScript validate `component` names against the module's actual exports at compile time:
+**b) CLI `--component-config <file>` flag — unified config for CLI and runtime**
+
+A single config file serves both the CLI (build-time codegen) and `@zod-to-form/react` (runtime rendering). `components` is a plain module path string — the runtime does `await import(config.components)`, the CLI reads it for the emitted import statement. Both consumers use the same field; no per-fieldType `import` needed.
 
 ```typescript
 type ZodToFormComponentConfig<T extends Record<string, unknown> = Record<string, ComponentType>> = {
-  components: () => Promise<T>;             // top-level lazy module loader
+  components: string;                           // module path — runtime: await import(this); CLI: import source
   fieldTypes: Record<string, ComponentEntry<T>>;
   fields?: Record<string, FieldOverride>;
 };
 
 type ComponentEntry<T extends Record<string, unknown>> = {
-  component: keyof T & string;  // validated against T's exports — CLI emits as JSX tag name
-  import: string;               // CLI emits as import statement
-  render?: () => Promise<ComponentType<any>>;  // escape hatch: overrides T[component] lookup
+  component: keyof T & string;                 // validated against T's exports at compile time
+  render?: () => Promise<ComponentType<any>>;  // escape hatch: overrides mod[component] lookup
 };
 ```
 
-At render time the renderer does `(await config.components())[entry.component]`. If the resolved value is not a function it throws:
+At render time: `const mod = await import(config.components); const Component = mod[entry.component]`. If the resolved value is not a function it throws:
 
 ```
-ZodToFormComponentConfig: 'TypeSelectro' is not a function in the loaded module.
-Got: undefined. Check 'component' matches a named export of the module.
+ZodToFormComponentConfig: 'TypeSelectro' is not a function in '@rune-langium/visual-editor/components'.
+Got: undefined. Check 'component' matches a named export.
 ```
 
-(Typos like `'TypeSelectro'` are also caught earlier at compile time since `component` is `keyof T`.)
+Typos like `'TypeSelectro'` are also caught earlier at compile time since `component: keyof T`.
 
-**Config example** (`.ts` — type-checked, jiti-safe):
+**Config example** — `.ts` and `.json` are now structurally identical (pure string data):
 
 ```typescript
 // component-config.ts
 import type { ZodToFormComponentConfig } from '@zod-to-form/cli';
 
-// Type alias for the module — purely in type space, jiti never sees it
+// Type alias for the module — type space only, erased at compile time
 type VisualModule = typeof import('@rune-langium/visual-editor/components');
 
 export default {
-  components: () => import('@rune-langium/visual-editor/components'),  // lazy loader
+  components: '@rune-langium/visual-editor/components',   // string — CLI & runtime both read this
   fieldTypes: {
-    'cross-ref': {
-      component: 'TypeSelector',           // TS error if not a named export of VisualModule
-      import: '@rune-langium/visual-editor/components',
-    },
-    'cardinality': {
-      component: 'CardinalityPicker',      // TS error if not a named export of VisualModule
-      import: '@rune-langium/visual-editor/components',
-    },
+    'cross-ref':   { component: 'TypeSelector' },         // TS error if not a VisualModule export
+    'cardinality': { component: 'CardinalityPicker' },    // TS error if not a VisualModule export
   },
   fields: {
     'DataForm.superType':     { fieldType: 'cross-ref', props: { refType: 'Data' } },
@@ -296,17 +291,25 @@ export default {
 } satisfies ZodToFormComponentConfig<VisualModule>;
 ```
 
-`component: keyof T & string` replaces both `render` and the closure pattern — the string is reused as CLI codegen input and as the module key at runtime. No async closures, no redundancy.
+```json
+{
+  "components": "@rune-langium/visual-editor/components",
+  "fieldTypes": {
+    "cross-ref":   { "component": "TypeSelector" },
+    "cardinality": { "component": "CardinalityPicker" }
+  },
+  "fields": {
+    "DataForm.superType": { "fieldType": "cross-ref", "props": { "refType": "Data" } }
+  }
+}
+```
 
-`components` at the top level is called once; the resulting `Promise<T>` is cached and shared across all field type lookups.
-
-**`render` escape hatch** — when the export key differs from the desired JSX tag, or when the component needs wrapping:
+**`render` escape hatch** — for cases where the export key differs from the JSX tag, or the component needs wrapping:
 
 ```typescript
 fieldTypes: {
   'cross-ref': {
     component: 'TypeSelector',
-    import: '@rune-langium/visual-editor/components',
     render: async () => {
       const { TypeSelector } = await import('@rune-langium/visual-editor/components');
       return (props: any) => <TypeSelector {...props} mode="inline" />;
@@ -315,20 +318,7 @@ fieldTypes: {
 }
 ```
 
-`render` must be a function — passing a non-function throws immediately.
-
-**`.json` format** (CLI-only, no `render`/`components`):
-
-```json
-{
-  "fieldTypes": {
-    "cross-ref": { "component": "TypeSelector", "import": "@rune-langium/visual-editor/components" }
-  },
-  "fields": {
-    "DataForm.superType": { "fieldType": "cross-ref", "props": { "refType": "Data" } }
-  }
-}
-```
+`render` must be a function — a non-function value throws immediately.
 
 The runtime renderer accepts the config directly; CLI accepts it as a file path:
 
@@ -344,18 +334,18 @@ zod-to-form generate --schema ./schemas.ts --out ./forms/ \
 
 **Why this is jiti-safe:**
 
-- `type VisualModule = typeof import(...)` — type alias; erased at transform time. `jiti` never sees it.
+- `type VisualModule = typeof import(...)` — type alias; erased at compile time. `jiti` never sees it.
 - `import type { ... }` — stripped at transform time; `jiti` never executes it.
-- `components: () => import(...)` — function definition inline in the object literal; `jiti` parses but never calls it.
-- `component: 'TypeSelector'` — plain string literal; no module code involved.
+- `components: '@rune-langium/visual-editor/components'` — plain string literal.
+- `component: 'TypeSelector'` — plain string literal.
 
-Result: `jiti` sees only string literals and an object literal with function-definition values. No browser code is executed during CLI processing.
+Result: `jiti` sees only an object literal of string values. The config is inert data.
 
 For fields matched by the config, the CLI emits the correct import and component name:
 
 ```tsx
 // Generated output
-import { TypeSelector } from '@rune-langium/visual-editor/components/TypeSelector';
+import { TypeSelector } from '@rune-langium/visual-editor/components';
 
 <TypeSelector name="superType" control={control} refType="Data" />
 ```
@@ -379,13 +369,13 @@ Exported from `@zod-to-form/core/processors`. Both the CLI and runtime renderer 
 
 - `formRegistry.add(field, { fieldType: 'cross-ref', props: { refType: 'Data' } })` → `field.component === 'cross-ref'` in walker output
 - CLI with `--component-config` resolves `'cross-ref'` → correct component name and emits the matching import
-- Runtime `<ZodForm componentConfig={...}>` resolves the component via `(await config.components())[entry.component]` and renders it
-- Both `.json` and `.ts` config files accepted; `.ts` executed via `jiti`
-- `.ts` config using `type VisualModule = typeof import(...)` + inline `components: () => import(...)` + `component: 'ExportName'` executes safely under `jiti` with no browser-import failures
+- Runtime `<ZodForm componentConfig={...}>` resolves the component via `(await import(config.components))[entry.component]` and renders it; the module Promise is cached after the first load
+- CLI reads `config.components` (string) as the import path and `entry.component` as the named export for codegen
+- Both `.json` and `.ts` config files accepted and structurally identical — `.ts` executed via `jiti`
+- `.ts` config is fully inert under `jiti`: only string literals and a type alias (`type VisualModule = typeof import(...)`) which is erased at compile time
 - `component: 'BadName'` that is not a named export of `T` produces a TypeScript compile error (since `component: keyof T & string`)
-- Resolved `mod[entry.component]` that is not a function at runtime throws a clear error naming the field type and the bad value
-- `render` (escape hatch) must be a function — passing a non-function throws immediately
-- `components` at top level is called once by the renderer; the resulting Promise is cached and shared across all field type lookups (no repeated dynamic imports)
+- `(await import(config.components))[entry.component]` that is not a function at runtime throws a clear error naming the field type, the bad key, and the module path
+- `render` escape hatch, if provided, must be a function — a non-function throws immediately
 - `ZodToFormComponentConfig<T>`, `ComponentEntry<T>` exported from `@zod-to-form/cli` for use with `satisfies`
 - CLI without `--component-config` falls back to plain `<input>` for all string fields
 - `crossRefProcessor` importable from `@zod-to-form/core/processors`
