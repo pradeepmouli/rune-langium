@@ -106,6 +106,18 @@ flowchart LR
 - Produce deterministic generated forms that are immediately usable with custom widgets.
 - Validate migration safety by moving one form first and preserving coexistence.
 
+### Inputs and Outputs by Stage
+
+| Stage | Primary Inputs | Primary Outputs |
+|---|---|---|
+| Form-surface projection | Rune DSL grammar, typed model definitions, projection rules | Projected form-surface schema definitions |
+| Schema validation layer | Projected schemas, cross-reference options | Cross-reference validation factory variants |
+| Conformance verification | Generated schemas, typed model definitions | Pass/fail conformance signal for schema/model alignment |
+| Component mapping | Widget export surface, field-type and field-path mapping rules | Validated component mapping configuration |
+| Form scaffolding | Generated schemas, component mapping, auto-save mode | Deterministic generated form components |
+| Runtime enablement | Generated forms, runtime dependencies, component module resolution | Executable runtime form rendering path |
+| Incremental migration | Existing hand-authored form behavior, generated/runtime path | One migrated form with behavior parity and coexistence |
+
 ---
 
 ### Edge Cases
