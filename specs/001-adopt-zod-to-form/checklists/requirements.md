@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Adopt zod-to-form in Visual Editor
+# Specification Quality Checklist: Adopt generated form surfaces and zod-form runtime
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-02-27
@@ -31,5 +31,6 @@
 
 ## Notes
 
-- Validation completed in one iteration; no unresolved clarification markers.
+- Validation refreshed after incorporating incoming scope changes for generated schema surfaces and conformance checks.
+- No unresolved clarification markers remain.
 - Scope intentionally excludes wholesale replacement of existing hand-authored forms.

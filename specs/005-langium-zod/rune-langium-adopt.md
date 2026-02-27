@@ -1,13 +1,117 @@
 # rune-langium: @zod-to-form adoption
 
-**Prerequisite**: changes described in `zod-to-form-enhance.md` have been implemented in
-`@zod-to-form` `002-zodform-rune-integration`. All Phases 1–5 tasks are complete; only
-Phase 6 polish tasks remain open.
+## Prerequisites
 
-This spec covers the changes needed inside `rune-langium` to adopt the enhanced `@zod-to-form`
-APIs. The existing hand-written form components (`DataTypeForm`, `EnumForm`, etc.) are **not
+Two upstream packages have been enhanced and are now complete:
+
+| Package | Spec | Status |
+|---|---|---|
+| `langium-zod` | `002-rune-dsl-enhancements` | All phases complete (T001–T045 `[x]`) |
+| `@zod-to-form` | `002-zodform-rune-integration` | Phases 1–5 complete; Phase 6 polish open |
+
+**`langium-zod` additions now available:**
+- `--strip-internals` — removes `$container`, `$cstNode`, `$document`, `$containerProperty`, `$containerIndex` from every schema
+- `--projection <file>` — picks specific fields per type using a JSON config
+- `--include <csv>` / `--exclude <csv>` — filter which grammar types are generated
+- `--cross-ref-validation` — emits `create*Schema(refs)` factories and `*SchemaRefs` interfaces; `zRef()` always exported
+- `--conformance --ast-types <path>` — generates a `.conformance.ts` file with bidirectional assignability checks against `ast.ts`
+
+This spec covers the changes needed inside `rune-langium` to adopt both sets of enhancements.
+The existing hand-written form components (`DataTypeForm`, `EnumForm`, etc.) are **not
 replaced** by this work — the scope is wiring the toolchain so generated forms are a viable
 alternative going forward.
+
+---
+
+## Change 0: Generate form-surface schemas via `langium-zod`
+
+**Why**: instead of hand-authoring `src/schemas/form-schemas.ts`, drive `langium-zod` to generate it from the Rune DSL grammar directly. This gives form schemas that stay in sync with the grammar as it evolves, include cross-ref validation factories, and can be verified against `ast.ts` at compile time.
+
+### Projection config
+
+**`packages/visual-editor/form-surfaces.json`** — specifies which fields each form needs:
+
+```json
+{
+  "defaults": {
+    "strip": ["$container", "$document", "$cstNode", "$containerProperty", "$containerIndex"]
+  },
+  "types": {
+    "Data": {
+      "fields": ["name", "superType", "description", "attributes"]
+    },
+    "RosettaEnumeration": {
+      "fields": ["name", "superEnum", "enumValues"]
+    },
+    "Attribute": {
+      "fields": ["name", "typeCall", "card"]
+    },
+    "RosettaFunction": {
+      "fields": ["name", "outputType", "parameters"]
+    },
+    "ChoiceType": {
+      "fields": ["name", "superType", "options"]
+    }
+  }
+}
+```
+
+Adjust field names to match the actual Rune grammar (`superType`, `superEnum`, `typeCall`, etc.).
+
+### Generate script
+
+**`packages/visual-editor/package.json`** — add `generate:schemas` script:
+
+```json
+"generate:schemas": "langium-zod generate \
+  --out src/generated/zod-schemas.ts \
+  --projection form-surfaces.json \
+  --cross-ref-validation \
+  --conformance --ast-types src/generated/ast.ts"
+```
+
+This produces two files:
+- `src/generated/zod-schemas.ts` — form-surface schemas with cross-ref factories
+- `src/generated/zod-schemas.conformance.ts` — compile-time assignability checks
+
+Both are checked into source control (deterministic from grammar + config inputs) and regenerated when the grammar or projection config changes. Add a comment header to suppress lint rules on the generated file if needed.
+
+### Generated output shape
+
+For a type with cross-reference fields (e.g., `RosettaEnumeration.superEnum`), the generator emits:
+
+```typescript
+// Static base schema — always emitted
+export const RosettaEnumerationSchema = z.object({
+  $type: z.literal('RosettaEnumeration'),
+  name: z.string(),
+  superEnum: z.string().optional(),   // cross-ref → factory adds .refine()
+  enumValues: z.array(EnumValueSchema).min(1),
+});
+
+// Factory — emitted when --cross-ref-validation is set
+export interface RosettaEnumerationSchemaRefs {
+  RosettaEnumeration?: string[];  // valid superEnum targets
+}
+
+export function createRosettaEnumerationSchema(refs: RosettaEnumerationSchemaRefs = {}) {
+  return RosettaEnumerationSchema.extend({
+    superEnum: z.string()
+      .refine(v => !v || !refs.RosettaEnumeration || refs.RosettaEnumeration.includes(v),
+              { message: 'Unknown RosettaEnumeration type' })
+      .optional(),
+  });
+}
+```
+
+### Acceptance criteria
+
+- `pnpm generate:schemas` runs without error and writes `src/generated/zod-schemas.ts`
+- Generated schemas contain only the projected fields (Langium internals absent)
+- Types with `+=Rule+` cardinality emit `.min(1)` on the array
+- Cross-ref fields get `create*Schema(refs)` factories and `*SchemaRefs` interfaces
+- `tsc --noEmit` on `zod-schemas.conformance.ts` passes (schemas match `ast.ts`)
+- Regenerating after a grammar field change causes a compile error in the conformance file
 
 ---
 
@@ -90,7 +194,7 @@ export default {
 } satisfies ZodToFormComponentConfig<VisualModule>;
 ```
 
-The `fields` keys follow the `@zod-to-form` convention `{schemaVariableName}.{fieldPath}`, matching the variable names in `src/schemas/form-schemas.ts`. The exact key format is determined by the `@zod-to-form/cli` processor — adjust once the CLI is available for testing.
+The `fields` keys follow the `@zod-to-form` convention `{schemaVariableName}.{fieldPath}`, matching the **generated** schema variable names from `src/generated/zod-schemas.ts` (produced by Change 0). The exact field names depend on the Rune grammar (e.g., `superEnum`, `superType`, `typeCall`) — adjust to match the actual generated schema exports.
 
 **Alternative: `defineComponentConfig` helper** — if the `satisfies` pattern becomes unwieldy with multiple schemas, use the typed helper exported from `@zod-to-form/cli`:
 
@@ -123,7 +227,7 @@ export default defineComponentConfig<VisualModule, EnumFormValues>({
 
 **Why**: add `--component-config` so the CLI emits `TypeSelector`/`CardinalityPicker` imports for cross-ref and cardinality fields instead of plain `<input>` elements; add `--mode auto-save` so generated forms emit `onValueChange` callbacks instead of submit-button handlers.
 
-The input schema changes from the full generated AST schema to the hand-authored form-surface schemas, which are already projected to the fields that matter for each form.
+The input schema is the **generated** `src/generated/zod-schemas.ts` from Change 0, not a hand-authored file. Each `zodform generate` invocation targets one schema export.
 
 **CLI signature** (each invocation generates one form component):
 
@@ -139,12 +243,15 @@ zodform generate \
 **`packages/visual-editor/package.json`** — update script (one invocation per form schema):
 
 ```json
+"generate:schemas": "langium-zod generate --out src/generated/zod-schemas.ts --projection form-surfaces.json --cross-ref-validation --conformance --ast-types src/generated/ast.ts",
 "scaffold:forms": "pnpm scaffold:enumForm && pnpm scaffold:dataTypeForm",
-"scaffold:enumForm": "zodform generate --schema src/schemas/form-schemas.ts --export enumFormSchema --out src/components/forms/generated --mode auto-save --component-config component-config.ts",
-"scaffold:dataTypeForm": "zodform generate --schema src/schemas/form-schemas.ts --export dataTypeFormSchema --out src/components/forms/generated --mode auto-save --component-config component-config.ts"
+"scaffold:enumForm": "zodform generate --schema src/generated/zod-schemas.ts --export RosettaEnumerationSchema --out src/components/forms/generated --mode auto-save --component-config component-config.ts",
+"scaffold:dataTypeForm": "zodform generate --schema src/generated/zod-schemas.ts --export DataSchema --out src/components/forms/generated --mode auto-save --component-config component-config.ts"
 ```
 
-The generated output goes into `src/components/forms/generated/` alongside the hand-written forms. Generated files are checked in (they are deterministic outputs from committed inputs) and regenerated whenever `form-schemas.ts` or `component-config.ts` changes.
+The generated form output goes into `src/components/forms/generated/`. Both `src/generated/zod-schemas.ts` and the form components are checked in (deterministic from grammar + config). Regenerate with `pnpm generate:schemas && pnpm scaffold:forms` when the grammar or projection config changes.
+
+**Note on export names**: `zodform generate` reads the named export as a `ZodObject`. Use the static base schema (e.g., `RosettaEnumerationSchema`), not the factory (`createRosettaEnumerationSchema`). The runtime wiring in Change 5 uses the factory for validation; the scaffold only needs the shape.
 
 ### Acceptance criteria
 
@@ -258,28 +365,43 @@ function ExternalDataSync<T>({ data, toValues }: { data: unknown; toValues: () =
 
 `EnumForm` is the migration target (fewest dependencies).
 
-**Schema scoping**: only `name` and `parentName` are tracked in form state for auto-save. The `members` array is managed directly through store callbacks (append/remove/reorder commit immediately) — it does NOT need to be part of the form's Zod schema. Including `members` in the schema would cause ZodForm to render a default `ArrayBlock` for it; excluding it is cleaner since no validation or auto-save is needed on the array.
+**Schema scoping**: only `name` and the cross-ref parent field are tracked in form state for auto-save. The `enumValues` array is managed directly through store callbacks (append/remove/reorder commit immediately) — it does NOT need to be part of the form's Zod schema. Including it would cause ZodForm to render a default `ArrayBlock`; excluding it is cleaner since no auto-save is needed on the array.
+
+**Using the cross-ref factory from Change 0**: `createRosettaEnumerationSchema(refs)` provides runtime cross-ref validation for the parent field. The schema is narrowed to the auto-save fields and memoized so `zodResolver` gets a stable reference:
 
 ```typescript
-// Only name + parentName tracked in form state; members use direct store callbacks
-const enumCoreSchema = enumFormSchema.pick({ name: true, parentName: true });
+import {
+  RosettaEnumerationSchema,
+  createRosettaEnumerationSchema,
+} from '../../generated/zod-schemas.js';
+
+// Narrow to auto-save fields; use factory for parent cross-ref validation
+const enumCoreSchema = useMemo(
+  () =>
+    createRosettaEnumerationSchema({ RosettaEnumeration: validParentNames })
+      .pick({ name: true, superEnum: true }),   // adjust field name to match grammar
+  [validParentNames]
+);
 type EnumCoreValues = z.infer<typeof enumCoreSchema>;
 ```
 
-The `formRegistry` configures TypeSelector for `parentName`:
+`validParentNames` comes from the store (list of enum names in the model); when it changes (undo/redo, new type added) the schema refreshes and `ExternalDataSync` resets the form.
+
+The `formRegistry` configures TypeSelector for the parent field:
 
 ```typescript
 const formRegistry = new MapFormRegistry();
-formRegistry.add(enumCoreSchema.shape.parentName, {
+// enumCoreSchema.shape key must match the actual grammar field name (e.g., superEnum)
+formRegistry.add(enumCoreSchema.shape.superEnum, {
   render: (_field, props) => {
     const p = props as { value: string; onChange: (v: string) => void };
     return (
       <TypeSelector
-        value={resolveValue(p.value)}
+        value={p.value}
         options={parentOptions}
         onSelect={(v) => {
-          p.onChange(resolveLabel(v));              // update form state
-          actions.setEnumParent(nodeId, v);         // update store immediately
+          p.onChange(v);                         // update form state (triggers onValueChange)
+          actions.setEnumParent(nodeId, v);      // update store immediately
         }}
         placeholder="Select parent enum..."
         allowClear
@@ -289,12 +411,12 @@ formRegistry.add(enumCoreSchema.shape.parentName, {
 });
 ```
 
-The `EnumValuesList` child accesses `control` from the shared `FormProvider` via `useFormContext`. Since `members` is not in `enumCoreSchema`, `useFieldArray` manages the array state independently of the Zod schema validation:
+The `EnumValuesList` child accesses `control` from the shared `FormProvider` via `useFormContext`. Since `enumValues` is not in `enumCoreSchema`, `useFieldArray` manages the array state independently of Zod schema validation:
 
 ```tsx
 function EnumValuesList({ nodeId, actions }) {
-  const { control } = useFormContext();  // members path not in enumCoreSchema — that's fine
-  const { fields, append, remove, move } = useFieldArray({ control, name: 'members' });
+  const { control } = useFormContext();  // enumValues path not in enumCoreSchema — fine
+  const { fields, append, remove, move } = useFieldArray({ control, name: 'enumValues' });
   // ... add/remove/reorder callbacks commit to store directly ...
 }
 ```
@@ -303,14 +425,18 @@ Full `EnumForm` shape:
 
 ```tsx
 <ZodForm
-  schema={enumCoreSchema}
-  defaultValues={{ name: data.name, parentName: data.parentName }}
-  onValueChange={handleNameParentCommit}   // debounced auto-save; valid only; post-mount only
+  schema={enumCoreSchema}                            // memoized factory result, narrowed
+  defaultValues={{ name: data.name, superEnum: data.superEnum }}
+  onValueChange={handleNameParentCommit}             // debounced auto-save; valid only; post-mount only
   mode="onChange"
   formRegistry={formRegistry}
+  componentConfig={componentConfig}                  // resolves TypeSelector via config
   className="flex flex-col gap-4 p-4"
 >
-  <ExternalDataSync data={data} toValues={() => ({ name: data.name, parentName: data.parentName })} />
+  <ExternalDataSync
+    data={data}
+    toValues={() => ({ name: data.name, superEnum: data.superEnum })}
+  />
   <EnumValuesList nodeId={nodeId} actions={actions} />
   <InheritedMembersSection groups={inheritedGroups} />
   <AnnotationSection ... />
@@ -318,18 +444,19 @@ Full `EnumForm` shape:
 </ZodForm>
 ```
 
-`handleNameParentCommit` applies the 500ms debounce (via `useAutoSave`) and commits `name`/`parentName` changes to the store.
+`handleNameParentCommit` applies the 500ms debounce (via `useAutoSave`) and commits `name`/`superEnum` changes to the store. Invalid states (e.g., typing a parent that doesn't exist) are suppressed by the factory's `.refine()` — `onValueChange` only fires when the schema parses successfully.
 
-**Migration order**: `EnumForm` → `ChoiceForm` → `DataTypeForm` → `FunctionForm`. The `MapFormRegistry` and `ExternalDataSync` utilities are shared across all migrations.
+**Migration order**: `EnumForm` → `ChoiceForm` → `DataTypeForm` → `FunctionForm`. The `MapFormRegistry` and `ExternalDataSync` utilities are shared across all migrations. Adjust field names (`superType`, `superEnum`, `typeCall`, etc.) to match the Rune grammar as confirmed from the generated schemas.
 
 ### Acceptance criteria
 
 - `MapFormRegistry` is importable from `packages/visual-editor/src/components/forms/`
 - At least one form (`EnumForm`) renders via `ZodForm` and behaves identically to the hand-written version
-- `TypeSelector` renders for `parentName` via `formRegistry` `render` override
-- `EnumValuesList` uses `useFieldArray({ control, name: 'members' })` from the shared `FormProvider`
-- Name/parentName changes auto-save via `onValueChange` with 500 ms debounce; `parentName` also commits immediately via `onSelect`
+- `TypeSelector` renders for the parent field via `formRegistry` `render` override
+- `EnumValuesList` uses `useFieldArray({ control, name: 'enumValues' })` from the shared `FormProvider`
+- Name/parent changes auto-save via `onValueChange` with 500 ms debounce; parent also commits immediately via `onSelect`
 - `onValueChange` is NOT called on initial mount, only after valid user-initiated changes
+- Typing an unknown parent name does NOT trigger `onValueChange` (blocked by `createRosettaEnumerationSchema` refine)
 - External data changes (undo/redo) reset the form via `ExternalDataSync` with `keepDirtyValues`
 - No regressions in hand-written forms (they coexist until fully migrated)
 
@@ -339,10 +466,23 @@ Full `EnumForm` shape:
 
 | Change | File(s) | Depends on |
 |---|---|---|
+| 0. Generate form-surface schemas | `package.json`, `form-surfaces.json` | `langium-zod` 002 (complete) |
 | 1. `/components` subpath | `package.json`, `src/components.ts` | — |
-| 2. `component-config.ts` | `component-config.ts` | Change 1; `zod-to-form` 002 Phase 2 |
-| 3. `scaffold:forms` update | `package.json` | Change 2; `zod-to-form` 002 Phases 3–5 |
+| 2. `component-config.ts` | `component-config.ts` | Change 0 (field names); Change 1 |
+| 3. `scaffold:forms` update | `package.json` | Changes 0 & 2; `zod-to-form` 002 Phases 3–5 |
 | 4. `@zod-to-form/react` dep | `package.json` | `zod-to-form` 002 Phases 4–5 |
-| 5. `ZodForm` wiring | form component files | Changes 1–4 |
+| 5. `ZodForm` wiring | form component files | Changes 0, 1–4 |
 
-Changes 1–4 are mechanical and low-risk. Change 5 is the integration point and should be done incrementally by form type.
+Changes 0–4 are mechanical and low-risk. Change 5 is the integration point and should be done incrementally by form type.
+
+### End-to-end pipeline (once all changes are done)
+
+```
+rune.langium grammar
+  → [langium-zod generate --projection form-surfaces.json --cross-ref-validation --conformance]
+  → src/generated/zod-schemas.ts     (form-surface schemas with create*Schema factories)
+  → src/generated/zod-schemas.conformance.ts  (compile-time drift detection)
+  → [zodform generate --schema src/generated/zod-schemas.ts --export XxxSchema --mode auto-save --component-config component-config.ts]
+  → src/components/forms/generated/XxxForm.tsx  (auto-save, TypeSelector wired for cross-ref fields)
+  → developer tunes layout, adds EnumValuesList child, passes createXxxSchema(refs) at runtime
+```
