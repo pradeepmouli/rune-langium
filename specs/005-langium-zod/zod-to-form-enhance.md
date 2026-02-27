@@ -241,47 +241,33 @@ formRegistry.add(schema.shape.superType, {
 
 `@zod-to-form/core` documents this convention. A `crossRef` processor sets `field.component = 'cross-ref'` (the field type token, not a component name) and copies `props.refType` through to `field.props`. The actual component name is resolved by the renderer or the CLI config, not the processor.
 
-**b) CLI `--component-config <file>` flag (codegen side)**
+**b) CLI `--component-config <file>` flag — unified config for CLI and runtime**
 
-A JSON config file that separates two concerns the CLI cannot resolve at runtime:
-- **what this field type is** → keyed by `FormMeta.fieldType` or explicit field path
-- **how to render it** → component name + import path (strings only)
+A single config file serves both the CLI (build-time codegen) and `@zod-to-form/react` (runtime rendering). The structure is identical between the two consumers; they simply read different fields:
 
-```json
-// component-config.json
-{
-  "fieldTypes": {
-    "cross-ref": {
-      "component": "TypeSelector",
-      "import": "@rune-langium/visual-editor/components/TypeSelector"
-    },
-    "cardinality": {
-      "component": "CardinalityPicker",
-      "import": "@rune-langium/visual-editor/components/CardinalityPicker"
-    }
-  },
-  "fields": {
-    "DataForm.superType":    { "fieldType": "cross-ref", "props": { "refType": "Data" } },
-    "AttributeForm.typeCall": { "fieldType": "cross-ref", "props": { "refType": "Data" } }
-  }
-}
-```
-
-The config file can be `.json` or `.ts`. The CLI resolves `.ts` configs via `jiti` (bundled as a dep, no user setup required), matching the pattern used by Vite and Tailwind v4:
+| Field | Who reads it | Type |
+|---|---|---|
+| `component` | CLI — emits as JSX tag name | `string` |
+| `import` | CLI — emits as import statement | `string` |
+| `render` | Runtime renderer — instantiates the component | `React.ComponentType` |
 
 ```typescript
-// component-config.ts — type-checked via `satisfies`
+// component-config.ts — one file, two consumers
+import { TypeSelector } from '@rune-langium/visual-editor/components/TypeSelector';
+import { CardinalityPicker } from '@rune-langium/visual-editor/components/CardinalityPicker';
 import type { ZodToFormComponentConfig } from '@zod-to-form/cli';
 
 export default {
   fieldTypes: {
     'cross-ref': {
-      component: 'TypeSelector',
-      import: '@rune-langium/visual-editor/components/TypeSelector',
+      component: 'TypeSelector',                                          // CLI
+      import: '@rune-langium/visual-editor/components/TypeSelector',      // CLI
+      render: TypeSelector,                                               // runtime
     },
     'cardinality': {
-      component: 'CardinalityPicker',
-      import: '@rune-langium/visual-editor/components/CardinalityPicker',
+      component: 'CardinalityPicker',                                     // CLI
+      import: '@rune-langium/visual-editor/components/CardinalityPicker', // CLI
+      render: CardinalityPicker,                                          // runtime
     },
   },
   fields: {
@@ -291,24 +277,44 @@ export default {
 } satisfies ZodToFormComponentConfig;
 ```
 
+The runtime renderer accepts the same config object directly — no separate component map needed:
+
+```tsx
+import componentConfig from './component-config';
+
+<ZodForm schema={schema} componentConfig={componentConfig} onValueChange={autoSave} />
+```
+
+The CLI accepts it as a file path:
+
 ```bash
 zod-to-form generate --schema ./schemas.ts \
   --out ./forms/ \
   --component-config ./component-config.ts   # .ts or .json, both accepted
 ```
 
+**`.json` format** (no `render` field — CLI-only use case):
+
+```json
+{
+  "fieldTypes": {
+    "cross-ref": { "component": "TypeSelector", "import": "..." }
+  },
+  "fields": {
+    "DataForm.superType": { "fieldType": "cross-ref", "props": { "refType": "Data" } }
+  }
+}
+```
+
+**CLI execution of `.ts` config via `jiti`:** When the config imports React components, `jiti` will attempt to execute those imports in Node.js. Components that import CSS or use browser globals (e.g. `window`, `document`) will fail. The CLI must handle this gracefully: if `jiti` execution of a `.ts` config throws, emit a clear error pointing to the offending import. Consumers with browser-only component libraries should use a separate entrypoint (e.g. `component-config.cli.ts`) that omits `render` and only includes the string fields.
+
 For fields matched by the config, the CLI emits the correct import and component name:
 
 ```tsx
-// Generated — import comes from component-config.json, not hard-coded
+// Generated output
 import { TypeSelector } from '@rune-langium/visual-editor/components/TypeSelector';
 
-// ...
-<TypeSelector
-  name="superType"
-  control={control}
-  refType="Data"
-/>
+<TypeSelector name="superType" control={control} refType="Data" />
 ```
 
 Fields not covered by the config fall back to the default input for their Zod type.
@@ -318,24 +324,25 @@ Fields not covered by the config fall back to the default input for their Zod ty
 ```typescript
 // packages/core/src/processors/cross-ref.ts
 export const crossRefProcessor: FormProcessor = (schema, ctx, field, params) => {
-  field.component = 'cross-ref';   // token, not a component name
+  field.component = 'cross-ref';   // token resolved to component by config
   const meta = ctx.formRegistry?.get(schema);
   if (meta?.props?.refType) field.props['refType'] = meta.props.refType;
 };
 ```
 
-Exported from `@zod-to-form/core/processors`. The CLI resolves `'cross-ref'` → actual component via `component-config.json`; the runtime renderer resolves it via its own component map.
+Exported from `@zod-to-form/core/processors`. Both the CLI and runtime renderer resolve the `'cross-ref'` token via the component config.
 
 ### Acceptance criteria
 
 - `formRegistry.add(field, { fieldType: 'cross-ref', props: { refType: 'Data' } })` → `field.component === 'cross-ref'` in walker output
 - CLI with `--component-config` resolves `'cross-ref'` → correct component name and emits the matching import
-- Both `.json` and `.ts` config files are accepted; `.ts` is executed via `jiti` with no user setup required
-- A `ZodToFormComponentConfig` type is exported from `@zod-to-form/cli` so `.ts` configs can use `satisfies` for compile-time validation
-- CLI without `--component-config` falls back to plain `<input>` for all string fields (no hard-coded component names in the CLI itself)
+- Runtime `<ZodForm componentConfig={...}>` renders `render` component for the matching field type
+- Both `.json` and `.ts` config files accepted by CLI; `.ts` executed via `jiti`
+- `.ts` config with browser-only imports that fail under `jiti` → CLI exits with a clear error and suggestion to use a CLI-only entrypoint
+- `ZodToFormComponentConfig` exported from `@zod-to-form/cli`; `render` field is optional (allows JSON configs and CLI-only `.ts` configs)
+- CLI without `--component-config` falls back to plain `<input>` for all string fields
 - `crossRefProcessor` importable from `@zod-to-form/core/processors`
-- Two projects using different component libraries can point `cross-ref` to different components via their own `component-config.json`
-- Fields not listed in config or registry continue to render as their default type
+- Two projects with different component libraries each provide their own config; no component names are hard-coded in `@zod-to-form` itself
 
 ---
 
