@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./components": {
+      "types": "./dist/components.d.ts",
+      "default": "./dist/components.js"
+    },
     "./styles.css": "./dist/styles.css"
   },
   "files": [
@@ -26,7 +30,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "dev": "tsgo -b --watch",
     "lint": "oxlint .",
-    "scaffold:forms": "zod-to-form generate --schema ../core/src/generated/zod-schemas.ts --out src/components/forms/generated",
+    "scaffold:forms": "zod-to-form generate --schema src/schemas/form-schemas.ts --out src/components/forms/generated --component-config component-config.ts --mode auto-save",
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsgo --noEmit",
@@ -34,6 +38,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
+    "@zod-to-form/react": "*",
     "@hookform/resolvers": "^5.2.2",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
