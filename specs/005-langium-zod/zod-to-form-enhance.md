@@ -217,17 +217,17 @@ interface DataFormProps {
 
 ---
 
-## Change 4 — Cross-reference field processor and CLI placeholder
+## Change 4 — Cross-reference field processor and CLI `--component-config`
 
 ### Problem
 
 When `langium-zod` with `--cross-ref-validation` generates a schema, cross-reference fields are `z.string()` with a `.refine()` validator. There is no schema-level signal to `@zod-to-form` that this field requires a `TypeSelector` (combobox with live model lookups) rather than a plain `<input type="text">`.
 
-The rune-langium visual editor uses a `TypeSelector` component (shadcn Combobox backed by a live type list) for all cross-reference fields. Currently this must be manually wired after scaffolding, field by field.
+Additionally, the CLI cannot accept a React component map directly — it runs in Node.js at build time, so it can only receive component **names and import paths as strings**, not component references. Any approach that hard-codes component names in the CLI is wrong; different consumers use different component libraries.
 
 ### Design
 
-**a) `FormMeta.fieldType: 'cross-ref'`**
+**a) `FormMeta.fieldType: 'cross-ref'` (runtime side)**
 
 Allow consumer code to tag a field as a cross-reference using `ZodFormRegistry`:
 
@@ -235,55 +235,107 @@ Allow consumer code to tag a field as a cross-reference using `ZodFormRegistry`:
 const formRegistry = z.registry<FormMeta>();
 formRegistry.add(schema.shape.superType, {
   fieldType: 'cross-ref',
-  props: { refType: 'Data' },     // which type collection to look up
+  props: { refType: 'Data' },   // which type collection to look up at runtime
 });
 ```
 
-`@zod-to-form/core` should document this convention. The `crossRef` processor (built or provided by the consumer) sets `field.component = 'TypeSelector'` and copies `props.refType` through to `field.props`.
+`@zod-to-form/core` documents this convention. A `crossRef` processor sets `field.component = 'cross-ref'` (the field type token, not a component name) and copies `props.refType` through to `field.props`. The actual component name is resolved by the renderer or the CLI config, not the processor.
 
-**b) CLI `--ref-types <map>` flag**
+**b) CLI `--component-config <file>` flag (codegen side)**
 
-A CLI flag that accepts a JSON map of field paths to ref type names, so the CLI can emit a named placeholder without runtime metadata:
+A JSON config file that separates two concerns the CLI cannot resolve at runtime:
+- **what this field type is** → keyed by `FormMeta.fieldType` or explicit field path
+- **how to render it** → component name + import path (strings only)
+
+```json
+// component-config.json
+{
+  "fieldTypes": {
+    "cross-ref": {
+      "component": "TypeSelector",
+      "import": "@rune-langium/visual-editor/components/TypeSelector"
+    },
+    "cardinality": {
+      "component": "CardinalityPicker",
+      "import": "@rune-langium/visual-editor/components/CardinalityPicker"
+    }
+  },
+  "fields": {
+    "DataForm.superType":    { "fieldType": "cross-ref", "props": { "refType": "Data" } },
+    "AttributeForm.typeCall": { "fieldType": "cross-ref", "props": { "refType": "Data" } }
+  }
+}
+```
+
+The config file can be `.json` or `.ts`. The CLI resolves `.ts` configs via `jiti` (bundled as a dep, no user setup required), matching the pattern used by Vite and Tailwind v4:
+
+```typescript
+// component-config.ts — type-checked via `satisfies`
+import type { ZodToFormComponentConfig } from '@zod-to-form/cli';
+
+export default {
+  fieldTypes: {
+    'cross-ref': {
+      component: 'TypeSelector',
+      import: '@rune-langium/visual-editor/components/TypeSelector',
+    },
+    'cardinality': {
+      component: 'CardinalityPicker',
+      import: '@rune-langium/visual-editor/components/CardinalityPicker',
+    },
+  },
+  fields: {
+    'DataForm.superType':     { fieldType: 'cross-ref', props: { refType: 'Data' } },
+    'AttributeForm.typeCall': { fieldType: 'cross-ref', props: { refType: 'Data' } },
+  },
+} satisfies ZodToFormComponentConfig;
+```
 
 ```bash
 zod-to-form generate --schema ./schemas.ts \
-  --ref-types '{"DataForm.superType":"Data","AttributeForm.typeCall":"Data"}'
+  --out ./forms/ \
+  --component-config ./component-config.ts   # .ts or .json, both accepted
 ```
 
-For fields listed in `--ref-types`, the CLI emits:
+For fields matched by the config, the CLI emits the correct import and component name:
 
 ```tsx
-{/* cross-ref: superType → Data — replace with TypeSelector */}
+// Generated — import comes from component-config.json, not hard-coded
+import { TypeSelector } from '@rune-langium/visual-editor/components/TypeSelector';
+
+// ...
 <TypeSelector
   name="superType"
   control={control}
   refType="Data"
-  placeholder="Select Data type..."
 />
 ```
 
-instead of a plain `<input>`.
+Fields not covered by the config fall back to the default input for their Zod type.
 
 **c) Built-in `crossRef` processor in `@zod-to-form/core`**
 
 ```typescript
 // packages/core/src/processors/cross-ref.ts
 export const crossRefProcessor: FormProcessor = (schema, ctx, field, params) => {
-  field.component = 'TypeSelector';
-  // refType comes from FormMeta.props.refType if registered
+  field.component = 'cross-ref';   // token, not a component name
   const meta = ctx.formRegistry?.get(schema);
   if (meta?.props?.refType) field.props['refType'] = meta.props.refType;
 };
 ```
 
-Exported from `@zod-to-form/core/processors` so consumers can include it in their processor map.
+Exported from `@zod-to-form/core/processors`. The CLI resolves `'cross-ref'` → actual component via `component-config.json`; the runtime renderer resolves it via its own component map.
 
 ### Acceptance criteria
 
-- `formRegistry.add(field, { fieldType: 'cross-ref', props: { refType: 'Data' } })` causes `field.component === 'TypeSelector'` in the walker output
-- CLI `--ref-types` flag causes the matching field to emit a `<TypeSelector>` stub instead of `<input>`
-- `crossRefProcessor` is importable from `@zod-to-form/core/processors`
-- Fields without cross-ref metadata continue to render as plain string inputs
+- `formRegistry.add(field, { fieldType: 'cross-ref', props: { refType: 'Data' } })` → `field.component === 'cross-ref'` in walker output
+- CLI with `--component-config` resolves `'cross-ref'` → correct component name and emits the matching import
+- Both `.json` and `.ts` config files are accepted; `.ts` is executed via `jiti` with no user setup required
+- A `ZodToFormComponentConfig` type is exported from `@zod-to-form/cli` so `.ts` configs can use `satisfies` for compile-time validation
+- CLI without `--component-config` falls back to plain `<input>` for all string fields (no hard-coded component names in the CLI itself)
+- `crossRefProcessor` importable from `@zod-to-form/core/processors`
+- Two projects using different component libraries can point `cross-ref` to different components via their own `component-config.json`
+- Fields not listed in config or registry continue to render as their default type
 
 ---
 
@@ -308,9 +360,9 @@ These changes are complementary to the `langium-zod` upstream spec:
 .langium grammar
   → [langium-zod --projection form-surfaces.json --cross-ref-validation]
   → projected zod-schemas.ts  (only form fields; with cross-ref refinements)
-  → [zod-to-form generate --mode auto-save --ref-types '...']
-  → DataTypeForm.tsx (auto-save, TypeSelector stubs for cross-refs)
-  → developer customises TypeSelector props and adds useAutoSave
+  → [zod-to-form generate --mode auto-save --component-config component-config.json]
+  → DataTypeForm.tsx (auto-save, TypeSelector imported + wired for cross-ref fields)
+  → developer adds useAutoSave hook and tunes field layouts
 ```
 
 ## Out of scope
