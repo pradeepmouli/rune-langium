@@ -306,7 +306,16 @@ zod-to-form generate --schema ./schemas.ts \
 }
 ```
 
-**CLI execution of `.ts` config via `jiti`:** When the config imports React components, `jiti` will attempt to execute those imports in Node.js. Components that import CSS or use browser globals (e.g. `window`, `document`) will fail. The CLI must handle this gracefully: if `jiti` execution of a `.ts` config throws, emit a clear error pointing to the offending import. Consumers with browser-only component libraries should use a separate entrypoint (e.g. `component-config.cli.ts`) that omits `render` and only includes the string fields.
+**CLI reading of `.ts` config — static AST extraction, not execution:**
+
+The CLI only needs `component` (string) and `import` (string) — both are static string literals in the config. Rather than executing the file (which would fail on browser-only imports like CSS or `window`), the CLI parses the TypeScript AST using the TypeScript Compiler API and extracts just those literal values. The `render` field is a runtime component reference; the CLI ignores it completely.
+
+This means:
+- No execution → no browser-import failures, regardless of what the config imports
+- No extra runtime dependency (`tsx`, `jiti`, etc.) needed
+- `component` and `import` values must be static string literals (no dynamic/computed values) — warn and skip if non-static
+
+For the rare case where a truly dynamic config is needed, consumers can use a `.json` config or pre-generate it as part of their build.
 
 For fields matched by the config, the CLI emits the correct import and component name:
 
@@ -337,9 +346,9 @@ Exported from `@zod-to-form/core/processors`. Both the CLI and runtime renderer 
 - `formRegistry.add(field, { fieldType: 'cross-ref', props: { refType: 'Data' } })` → `field.component === 'cross-ref'` in walker output
 - CLI with `--component-config` resolves `'cross-ref'` → correct component name and emits the matching import
 - Runtime `<ZodForm componentConfig={...}>` renders `render` component for the matching field type
-- Both `.json` and `.ts` config files accepted by CLI; `.ts` executed via `jiti`
-- `.ts` config with browser-only imports that fail under `jiti` → CLI exits with a clear error and suggestion to use a CLI-only entrypoint
-- `ZodToFormComponentConfig` exported from `@zod-to-form/cli`; `render` field is optional (allows JSON configs and CLI-only `.ts` configs)
+- Both `.json` and `.ts` config files accepted; `.ts` parsed via TypeScript Compiler API (static AST extraction, not execution)
+- `.ts` config with non-static (dynamic/computed) `component` or `import` values → CLI warns and skips that entry, falls back to default
+- `ZodToFormComponentConfig` exported from `@zod-to-form/cli`; `render` field is optional and ignored by CLI (runtime-only)
 - CLI without `--component-config` falls back to plain `<input>` for all string fields
 - `crossRefProcessor` importable from `@zod-to-form/core/processors`
 - Two projects with different component libraries each provide their own config; no component names are hard-coded in `@zod-to-form` itself
