@@ -31,7 +31,8 @@
   ],
   "scripts": {
     "type-check": "tsgo -p tsconfig.json --noEmit",
-    "build": "tsgo -p tsconfig.json"
+    "build": "tsgo -p tsconfig.json",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "license": "MIT",
   "dependencies": {

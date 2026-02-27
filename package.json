@@ -63,6 +63,11 @@
     "@lspeasy/core": "^2.0.0",
     "camelcase": "^9.0.0"
   },
+  "pnpm": {
+    "overrides": {
+      "x-to-zod": "^0.8.0"
+    }
+  },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged",
     "pre-push": "pnpm run type-check"

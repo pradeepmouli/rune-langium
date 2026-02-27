@@ -21,8 +21,9 @@
   ],
   "scripts": {
     "build": "tsgo -b",
-    "clean": "rm -rf dist",
-    "type-check": "tsgo --noEmit"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "type-check": "tsgo --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
     "@rune-langium/core": "workspace:*",

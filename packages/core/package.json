@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./zod-schemas": {
+      "types": "./dist/generated/zod-schemas.d.ts",
+      "default": "./dist/generated/zod-schemas.js"
     }
   },
   "files": [
@@ -19,19 +23,24 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsgo -b",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "dev": "tsgo -b --watch",
-    "generate": "langium generate",
+    "generate": "langium generate && langium-zod generate",
+    "generate:zod": "langium-zod generate",
     "lint": "oxlint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsgo --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "langium": "^4.2.1"
+    "langium": "^4.2.1",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "langium-cli": "^4.2.0",
+    "langium-zod": "file:/Users/pmouli/GitHub.nosync/langium-zod/packages/langium-zod",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   },
   "engines": {

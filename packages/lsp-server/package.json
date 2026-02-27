@@ -20,13 +20,14 @@
   ],
   "scripts": {
     "build": "tsgo -b",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "dev": "tsgo -b && node --watch-path=dist dist/cli.js",
     "lint": "oxlint .",
     "start": "node dist/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsgo --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
     "@lspeasy/core": "^2.0.0",

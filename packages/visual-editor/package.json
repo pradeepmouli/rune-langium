@@ -23,12 +23,13 @@
   ],
   "scripts": {
     "build": "tsgo -b && cp src/styles.css dist/styles.css",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "dev": "tsgo -b --watch",
     "lint": "oxlint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsgo --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
