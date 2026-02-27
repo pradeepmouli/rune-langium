@@ -1,4 +1,4 @@
-# Enhancement: Rune DSL Integration — Four Required Additions
+# Enhancement: Rune DSL Integration — Five Required Additions
 
 **Package**: `langium-zod`
 **Requested by**: [`rune-langium`](https://github.com/pradeepmouli/rune-langium) spec 005
@@ -8,14 +8,15 @@
 
 ## Summary
 
-Four additions are required to make `langium-zod` a complete, drop-in schema generator for the Rune DSL visual editor:
+Five additions are required to make `langium-zod` a complete, drop-in schema generator for the Rune DSL visual editor:
 
 1. **Bug fix** — `z.array().min(1)` for `+` cardinality rules (currently dropped silently)
 2. **Enhancement** — expose `--include` / `--exclude` as CLI flags (already in programmatic API, not wired to CLI)
 3. **New feature** — `--projection` / `--strip-internals` for form-surface schemas (pick specific fields, strip Langium internals)
 4. **New feature** — `--conformance` for compile-time type-assignability assertions against `ast.ts`
+5. **New feature** — `--cross-ref-validation` for runtime cross-reference validation against live AST node collections
 
-All four changes are independent and can be shipped in any order.
+All five changes are independent and can be shipped in any order.
 
 ---
 
@@ -180,6 +181,108 @@ langium-zod generate --conformance --ast-types src/generated/ast.ts --conformanc
 
 ---
 
+---
+
+## Change 5 — Cross-reference runtime validation
+
+### Problem
+
+Cross-references in Langium grammar (e.g. `superType=[Data]`) are currently emitted as plain `z.string()`. At runtime there is no way to know whether the ref text resolves to an actual node in the model — a form can silently save a broken reference like `"NonExistentType"`.
+
+Because Zod schemas are static objects, the live collection of valid targets cannot be baked into the generated file. It must be injected at the call site.
+
+### Design
+
+Two complementary mechanisms, both opt-in:
+
+**1. Schema factories** (generated via `--cross-ref-validation`)
+
+For every type that contains cross-reference fields, emit a `create*Schema(refs)` factory alongside the static `*Schema`. The factory uses `.extend()` + `.refine()` so the static schema remains usable as a base.
+
+```typescript
+// Generated output (alongside static DataSchema)
+
+export interface DataSchemaRefs {
+  Data?: string[];   // valid $refText values for the superType field
+}
+
+export function createDataSchema(refs: DataSchemaRefs = {}) {
+  return DataSchema.extend({
+    superType: z.string()
+      .refine(
+        v => !v || !refs.Data || refs.Data.includes(v),
+        { message: 'Unknown Data type' }
+      )
+      .optional(),
+  });
+}
+```
+
+Usage in the visual editor (memoized so `zodResolver` receives a stable reference):
+
+```tsx
+const schema = useMemo(
+  () => createDataSchema({ Data: model.dataTypes.map(d => d.name) }),
+  [model.dataTypes]
+);
+const form = useForm({ resolver: zodResolver(schema) });
+```
+
+**2. `zRef()` utility** (always exported, no flag required)
+
+A helper for manual schema construction or overriding individual fields:
+
+```typescript
+// Exported from 'langium-zod'
+export function zRef(
+  collection: string[] | (() => string[]),
+  message = 'Reference not found'
+): z.ZodString {
+  return z.string().refine(val => {
+    const items = typeof collection === 'function' ? collection() : collection;
+    return items.includes(val);
+  }, { message });
+}
+
+// Usage
+const schema = DataSchema.extend({
+  superType: zRef(() => store.dataTypes.map(d => d.name)).optional(),
+});
+```
+
+### Key design decisions
+
+| Decision | Rationale |
+|---|---|
+| Factory takes `string[]`, not `AstNode[]` | Keeps factories decoupled from Langium types; caller does `nodes.map(n => n.name)` |
+| Empty string / undefined always passes | Avoids false failures on optional refs that haven't been set yet |
+| Factory uses `.extend()` not full reconstruction | Static schema stays usable; projection / strip still apply to base |
+| `*SchemaRefs` interface exported | TypeScript consumers get autocomplete on which types to provide |
+| `zRef()` always available | Escape hatch for fields the generator can't automatically classify |
+
+### Files to add / change
+
+| File | Change |
+|---|---|
+| `generator.ts` | When `--cross-ref-validation` is set, emit `create*Schema(refs)` and `*SchemaRefs` interface alongside each schema that has cross-reference fields |
+| `ref-utils.ts` (new) | Export `zRef()` utility (unconditionally — no flag required) |
+| `api.ts` | Add `crossRefValidation?: boolean` to `ZodGeneratorConfig` |
+| `cli.ts` | Add `--cross-ref-validation` flag |
+| `index.ts` | Re-export `zRef` from `ref-utils.ts` |
+
+### Acceptance criteria
+
+- Without `--cross-ref-validation`: output is unchanged; no factories emitted
+- With `--cross-ref-validation`: every type with `≥1` cross-reference field gets a `create*Schema(refs)` factory and a `*SchemaRefs` interface
+- `createDataSchema({ Data: ['TypeA', 'TypeB'] })` — passing `'TypeA'` for `superType` validates; passing `'TypeC'` fails with message `'Unknown Data type'`
+- `createDataSchema()` (no refs provided) — all values pass (safe default; no false positives on missing context)
+- Optional cross-reference field with value `undefined` or `''` — passes regardless of refs
+- `zRef(['TypeA', 'TypeB'])` — passing `'TypeA'` validates; `'TypeC'` fails
+- `zRef()` is importable without any CLI flag being set
+- Factories compose with `--projection`: if a cross-ref field is stripped by projection, no factory refinement is emitted for it
+
+---
+
 ## Priority
 
 | # | Change | Priority | Notes |
@@ -188,10 +291,11 @@ langium-zod generate --conformance --ast-types src/generated/ast.ts --conformanc
 | 2 | CLI `--include` / `--exclude` | **P1** | Low effort, unblocks ergonomics |
 | 3 | Projection mode | **P1** | Blocks form-schema integration in `rune-langium` |
 | 4 | Conformance checks | **P2** | Safety net; not blocking initial integration |
+| 5 | Cross-ref runtime validation | **P2** | Needed for full form validation; `zRef()` utility unblocks manual use immediately |
 
 ## Out of scope
 
-- `Reference<T>` runtime resolution
+- Full `Reference<T>` object validation (ref text + resolved node) — cross-ref validation covers the ref text only
 - Fragment rule inlining
 - Zod v3 support
 - Schema generation for non-Langium types
