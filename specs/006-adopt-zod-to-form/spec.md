@@ -1,6 +1,6 @@
 # Feature Specification: Adopt generated form surfaces and zod-form runtime
 
-**Feature Branch**: `001-adopt-zod-to-form`
+**Feature Branch**: `006-adopt-zod-to-form`
 **Created**: 2026-02-27
 **Status**: Draft
 **Input**: User description: "Adopt langium-zod form-surface generation and enhanced @zod-to-form APIs in @rune-langium/visual-editor, including schema projection, component subpath exports, component config, scaffold updates, runtime dependency wiring, and initial EnumForm migration to the new form runtime."
