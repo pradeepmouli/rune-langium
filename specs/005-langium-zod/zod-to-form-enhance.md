@@ -243,32 +243,51 @@ formRegistry.add(schema.shape.superType, {
 
 **b) CLI `--component-config <file>` flag — unified config for CLI and runtime**
 
-A single config file serves both the CLI (build-time codegen) and `@zod-to-form/react` (runtime rendering). The structure is identical between the two consumers; they simply read different fields:
-
-| Field | Who reads it | Type |
-|---|---|---|
-| `component` | CLI — emits as JSX tag name | `string` |
-| `import` | CLI — emits as import statement | `string` |
-| `render` | Runtime renderer — instantiates the component | `React.ComponentType` |
+A single config file serves both the CLI (build-time codegen) and `@zod-to-form/react` (runtime rendering). The config shape:
 
 ```typescript
-// component-config.ts — jiti-safe: no static component imports
+interface ZodToFormComponentConfig {
+  components: () => Promise<Record<string, ComponentType>>;  // top-level lazy module loader
+  fieldTypes: Record<string, ComponentEntry>;
+  fields?: Record<string, FieldOverride>;
+}
+
+interface ComponentEntry {
+  component: string;                          // CLI: emits as JSX tag name
+  import: string;                             // CLI: emits as import statement
+  render: () => Promise<ComponentType<any>>;  // runtime: MUST be a function — throws if not
+}
+```
+
+`render` must always be a function. If a direct component reference is passed instead, the renderer throws:
+
+```
+ZodToFormComponentConfig: 'render' for field type 'cross-ref' must be a function.
+Got: object. Use: render: async () => (await components()).TypeSelector
+```
+
+**Config example** (`.ts` — type-checked, jiti-safe):
+
+```typescript
+// component-config.ts
 /// <reference types="@rune-langium/visual-editor" />
 import type { ZodToFormComponentConfig } from '@zod-to-form/cli';
 
+// Module-level const — jiti sees a function definition, never executes the import
+const components = () => import('@rune-langium/visual-editor/components');
+
 export default {
+  components,                                      // top-level: shared lazy loader
   fieldTypes: {
     'cross-ref': {
-      component: 'TypeSelector',                                          // CLI (string)
-      import: '@rune-langium/visual-editor/components/TypeSelector',      // CLI (string)
-      render: () => import('@rune-langium/visual-editor/components/TypeSelector')
-                      .then(m => m.TypeSelector),                         // runtime (lazy)
+      component: 'TypeSelector',                   // CLI (string)
+      import: '@rune-langium/visual-editor/components',  // CLI (string)
+      render: async () => (await components()).TypeSelector,   // runtime (lazy)
     },
     'cardinality': {
-      component: 'CardinalityPicker',                                     // CLI (string)
-      import: '@rune-langium/visual-editor/components/CardinalityPicker', // CLI (string)
-      render: () => import('@rune-langium/visual-editor/components/CardinalityPicker')
-                      .then(m => m.CardinalityPicker),                    // runtime (lazy)
+      component: 'CardinalityPicker',              // CLI (string)
+      import: '@rune-langium/visual-editor/components',  // CLI (string)
+      render: async () => (await components()).CardinalityPicker,  // runtime (lazy)
     },
   },
   fields: {
@@ -278,38 +297,14 @@ export default {
 } satisfies ZodToFormComponentConfig;
 ```
 
-`ZodToFormComponentConfig.render` accepts either a direct reference or a lazy loader — the runtime renderer handles both and caches the resolved component after the first call:
+`components` at the top level lets the renderer load the whole module once and cache the Promise — all `render` functions share the same underlying import.
 
-```typescript
-interface ComponentEntry {
-  component: string;
-  import: string;
-  render?: ComponentType<any> | (() => Promise<ComponentType<any>>);
-}
-```
-
-The runtime renderer accepts the same config object directly — no separate component map needed:
-
-```tsx
-import componentConfig from './component-config';
-
-<ZodForm schema={schema} componentConfig={componentConfig} onValueChange={autoSave} />
-```
-
-The CLI accepts it as a file path:
-
-```bash
-zod-to-form generate --schema ./schemas.ts \
-  --out ./forms/ \
-  --component-config ./component-config.ts   # .ts or .json, both accepted
-```
-
-**`.json` format** (no `render` field — CLI-only use case):
+**`.json` format** (CLI-only, no `render`/`components`):
 
 ```json
 {
   "fieldTypes": {
-    "cross-ref": { "component": "TypeSelector", "import": "..." }
+    "cross-ref": { "component": "TypeSelector", "import": "@rune-langium/visual-editor/components" }
   },
   "fields": {
     "DataForm.superType": { "fieldType": "cross-ref", "props": { "refType": "Data" } }
@@ -317,13 +312,26 @@ zod-to-form generate --schema ./schemas.ts \
 }
 ```
 
-**Why `/// <reference>` + lazy `render` keeps `jiti` safe:**
+The runtime renderer accepts the config directly; CLI accepts it as a file path:
 
-- `/// <reference types="..." />` is a TypeScript compiler directive — `jiti` treats it as a comment and ignores it entirely. TypeScript uses it to find the ambient type declarations for the package, enabling the `satisfies` check without a runtime import.
-- `import type { ... }` is stripped at compile/transform time — `jiti` never executes it.
-- `render: () => import(...)` is a function definition — `jiti` parses it but does not call it. No browser code is executed during CLI processing.
+```tsx
+import componentConfig from './component-config';
+<ZodForm schema={schema} componentConfig={componentConfig} onValueChange={autoSave} />
+```
 
-The result: `jiti` executes the config file safely (only string literals and function definitions), TypeScript still type-checks the whole file via the reference tag, and the runtime renderer lazy-loads components on first use.
+```bash
+zod-to-form generate --schema ./schemas.ts --out ./forms/ \
+  --component-config ./component-config.ts   # .ts or .json
+```
+
+**Why this is jiti-safe:**
+
+- `/// <reference types="..." />` — TypeScript compiler directive; `jiti` treats it as a comment, ignores it. TypeScript uses it to locate ambient type declarations for the `satisfies` check.
+- `import type { ... }` — stripped at transform time; `jiti` never executes it.
+- `const components = () => import(...)` — function definition; `jiti` parses but never calls it.
+- `render: async () => (await components()).X` — function definition closing over `components`; `jiti` parses but never calls it.
+
+Result: `jiti` sees only string literals and function definitions. No browser code is executed during CLI processing.
 
 For fields matched by the config, the CLI emits the correct import and component name:
 
@@ -355,9 +363,10 @@ Exported from `@zod-to-form/core/processors`. Both the CLI and runtime renderer 
 - CLI with `--component-config` resolves `'cross-ref'` → correct component name and emits the matching import
 - Runtime `<ZodForm componentConfig={...}>` renders `render` component for the matching field type
 - Both `.json` and `.ts` config files accepted; `.ts` executed via `jiti`
-- `.ts` config using `/// <reference types>` + lazy `render: () => import(...)` pattern executes safely under `jiti` with no browser-import failures
-- `ZodToFormComponentConfig` exported from `@zod-to-form/cli`; `render` is `ComponentType | (() => Promise<ComponentType>)` — both forms accepted by runtime renderer
-- Runtime renderer caches resolved lazy `render` components after first call (no repeated dynamic imports)
+- `.ts` config using `/// <reference types>` + module-level `const components = () => import(...)` + `render: async () => (await components()).X` pattern executes safely under `jiti` with no browser-import failures
+- `render` must be a function — passing a direct component reference throws a clear error with a corrective message
+- `components` at top level is called once by the renderer; the resulting Promise is cached and shared across all `render` calls (no repeated dynamic imports)
+- `ZodToFormComponentConfig` and `ComponentEntry` exported from `@zod-to-form/cli` for use with `satisfies`
 - CLI without `--component-config` falls back to plain `<input>` for all string fields
 - `crossRefProcessor` importable from `@zod-to-form/core/processors`
 - Two projects with different component libraries each provide their own config; no component names are hard-coded in `@zod-to-form` itself
