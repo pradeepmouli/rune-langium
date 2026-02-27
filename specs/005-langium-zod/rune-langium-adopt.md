@@ -146,37 +146,192 @@ Remove `@zod-to-form/cli` from `devDependencies` if it's only needed for the sca
 
 ---
 
-## Change 5: Wire generated forms in `EditorFormPanel`
+## Change 5: Wire `ZodForm` into existing form components
 
-**Why**: make generated forms available as an alternative to the hand-written forms. This is the only consumer-facing change — nothing else imports the generated files.
+**Why**: make `ZodForm` the form-state and field-rendering layer inside the existing form components, replacing `useNodeForm` + `FormProvider` + manual `Controller` wrappers. The store-action callbacks remain unchanged.
 
-**`packages/visual-editor/src/components/panels/EditorFormPanel.tsx`** — add generated form variants behind a feature flag or alongside existing forms:
+### Actual API (v0.2.3)
 
-```tsx
-import componentConfig from '../../component-config';
-import { ZodForm } from '@zod-to-form/react';
-import { dataTypeFormSchema } from '../../schemas/form-schemas';
+Inspecting the published package reveals:
 
-// Inside the panel, where the node type is 'data':
-<ZodForm
-  schema={dataTypeFormSchema}
-  values={toFormValues(node.data)}
-  componentConfig={componentConfig}
-  onValueChange={(values) => autoSave(values)}
-/>
+```typescript
+// ZodForm props — v0.2.3
+type ZodFormProps<TSchema extends ZodObject> = {
+  schema: TSchema;
+  onSubmit: (data: TSchema['_zod']['output']) => unknown;  // no onValueChange yet
+  defaultValues?: Partial<TSchema['_zod']['output']>;
+  components?: Partial<typeof defaultComponentMap>;         // component name → React component
+  formRegistry?: ZodFormRegistry;                          // field-level metadata/render overrides
+  processors?: Record<string, FormProcessor>;
+  className?: string;
+  children?: ReactNode;   // rendered INSIDE FormProvider — useFormContext() works here
+};
+
+// ZodFormRegistry — consumer must implement; z.registry<FormMeta>() satisfies it
+type ZodFormRegistry = {
+  get(schema: ZodType): FormMeta | undefined;
+  has(schema: ZodType): boolean;
+};
+
+// FormMeta — key field for custom rendering
+interface FormMeta {
+  fieldType?: string;
+  order?: number;
+  hidden?: boolean;   // skips rendering AND registration — field absent from form.watch()
+  gridColumn?: string;
+  render?: (field: FormField, props: unknown) => unknown;  // custom component per field
+}
 ```
 
-The `toFormValues()` and `autoSave()` functions are already implemented in the existing form hooks (`useNodeForm`, `useAutoSave`) — they are reused here.
+`ZodForm` wraps its output in `FormProvider`, so `children` can call `useFormContext()`, `useFieldArray`, etc.
 
-**Migration order**: start with the simplest form (`EnumForm` — name + parentName + values only), validate the generated output matches the hand-written behaviour, then migrate `ChoiceForm`, `DataTypeForm`, `FunctionForm` in that order.
+`hidden: true` removes the field from both the UI and `form.watch()`. This means hidden fields cannot be tracked by `AutoSaveHelper`. Fields intended for auto-save must be registered (not hidden), even if their rendering is overridden via `render`.
 
-Array fields (`members` via `useFieldArray`) are the most complex — the generated form handles them only if `@zod-to-form` supports `z.array(...)` with inline add/remove controls. Until then, keep hand-written array sections and compose them with the generated form for the scalar fields.
+### AutoSaveHelper pattern
+
+Since `onValueChange` is not yet on `ZodForm` (tracked in `zod-to-form-enhance` Change 2), auto-save is bridged via a null-rendering child:
+
+**`packages/visual-editor/src/components/forms/AutoSaveHelper.tsx`**:
+
+```tsx
+import { useEffect } from 'react';
+import { useFormContext } from 'react-hook-form';
+import { useAutoSave } from '../../hooks/useAutoSave.js';
+
+interface AutoSaveHelperProps<T> {
+  onCommit: (values: Partial<T>) => void;
+  delay?: number;
+}
+
+export function AutoSaveHelper<T>({ onCommit, delay = 500 }: AutoSaveHelperProps<T>) {
+  const form = useFormContext<T>();
+  const save = useAutoSave(onCommit, delay);
+  useEffect(() => {
+    const { unsubscribe } = form.watch((values) => save(values as Partial<T>));
+    return unsubscribe;
+  }, [form, save]);
+  return null;
+}
+```
+
+Once `zod-to-form-enhance` Change 2 ships `onValueChange` on `ZodForm`, `AutoSaveHelper` is retired and replaced with `onValueChange={handleCommit}` directly on `ZodForm`.
+
+### MapFormRegistry helper
+
+The library does not provide a concrete registry class — consumers create one. A reusable helper:
+
+**`packages/visual-editor/src/components/forms/MapFormRegistry.ts`**:
+
+```typescript
+import type { ZodFormRegistry, FormMeta } from '@zod-to-form/core';
+import type { ZodType } from 'zod';
+
+export class MapFormRegistry implements ZodFormRegistry {
+  private map = new Map<ZodType, FormMeta>();
+  add(schema: ZodType, meta: FormMeta): this {
+    this.map.set(schema, meta);
+    return this;
+  }
+  get(schema: ZodType): FormMeta | undefined { return this.map.get(schema); }
+  has(schema: ZodType): boolean { return this.map.has(schema); }
+}
+```
+
+### ExternalDataSync pattern
+
+`ZodForm` does not replicate `useNodeForm`'s `keepDirtyValues` reset-on-external-change. A child component restores this:
+
+```tsx
+function ExternalDataSync<T>({ data, toValues }: { data: unknown; toValues: () => T }) {
+  const form = useFormContext<T>();
+  const prevRef = useRef(data);
+  useEffect(() => {
+    if (prevRef.current !== data) {
+      prevRef.current = data;
+      form.reset(toValues(), { keepDirtyValues: true });
+    }
+  }, [data, form, toValues]);
+  return null;
+}
+```
+
+### Migration pattern for `EnumForm`
+
+`EnumForm` is the migration target (fewest dependencies). The schema is narrowed to fields ZodForm manages:
+
+```typescript
+// Only name + parentName tracked in form state; metadata uses direct store callbacks
+const enumCoreSchema = enumFormSchema.pick({ name: true, parentName: true, members: true });
+type EnumCoreValues = z.infer<typeof enumCoreSchema>;
+```
+
+The `formRegistry` configures TypeSelector for `parentName`. `members` is NOT hidden (hidden skips registration, breaking `useFieldArray`) — instead, `FieldRenderer` is intercepted via `render` to return null, while `useFieldArray` in a child registers the field independently:
+
+```typescript
+reg.add(enumCoreSchema.shape.parentName, {
+  render: (_field, props) => {
+    const p = props as { value: string; onChange: (v: string) => void };
+    return (
+      <TypeSelector
+        value={resolveValue(p.value)}
+        options={parentOptions}
+        onSelect={(v) => {
+          p.onChange(resolveLabel(v));   // update form state
+          actions.setEnumParent(nodeId, v);  // update store immediately
+        }}
+        placeholder="Select parent enum..."
+        allowClear
+      />
+    );
+  }
+});
+
+// Suppress ZodForm's ArrayBlock for members — EnumValuesList child renders it
+reg.add(enumCoreSchema.shape.members, {
+  render: () => null   // return null, not hidden: true, so useFieldArray can still register
+});
+```
+
+The `EnumValuesList` child accesses the shared `FormProvider` via `useFormContext`:
+
+```tsx
+function EnumValuesList({ nodeId, actions, committedRef }) {
+  const { control } = useFormContext<EnumCoreValues>();
+  const { fields, append, remove, move } = useFieldArray({ control, name: 'members' });
+  // ... same add/remove/reorder callbacks as before ...
+}
+```
+
+Full `EnumForm` shape:
+
+```tsx
+<ZodForm
+  schema={enumCoreSchema}
+  onSubmit={() => {}}
+  defaultValues={defaultValues}
+  components={{ Input }}      // design-system Input for name field
+  formRegistry={formRegistry}
+  className="flex flex-col gap-4 p-4"
+>
+  <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
+  <AutoSaveHelper<EnumCoreValues> onCommit={handleNameCommit} />
+  <EnumValuesList nodeId={nodeId} actions={actions} committedRef={committedRef} />
+  <InheritedMembersSection groups={inheritedGroups} />
+  <AnnotationSection ... />
+  <MetadataSection ... />   {/* direct store callbacks — not in form state */}
+</ZodForm>
+```
+
+**Migration order**: `EnumForm` → `ChoiceForm` → `DataTypeForm` → `FunctionForm`. The `MapFormRegistry` and `AutoSaveHelper` utilities are shared across all migrations.
 
 ### Acceptance criteria
 
-- At least one form (`EnumForm`) renders via `ZodForm` in the live editor and behaves identically to the hand-written version
-- `onValueChange` triggers auto-save with the same 500 ms debounce as `useAutoSave`
-- `TypeSelector` renders for `parentName`; `CardinalityPicker` renders for attribute `cardinality` fields
+- `AutoSaveHelper` and `MapFormRegistry` are importable from `packages/visual-editor/src/components/forms/`
+- At least one form (`EnumForm`) renders via `ZodForm` and behaves identically to the hand-written version
+- `TypeSelector` renders for `parentName` via `formRegistry.render`; `members` list renders via `EnumValuesList` child using `useFieldArray`
+- Name changes auto-save via `AutoSaveHelper` with 500 ms debounce; `parentName` commits immediately via `onSelect`
+- External data changes (undo/redo) reset the form via `ExternalDataSync` with `keepDirtyValues`
+- When `zod-to-form-enhance` Change 2 ships `onValueChange`, `AutoSaveHelper` is retired
 - No regressions in hand-written forms (they coexist until fully migrated)
 
 ---
