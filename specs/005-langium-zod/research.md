@@ -94,3 +94,87 @@ Header comment includes generation timestamp and grammar hash for traceability.
 - New `z.templateLiteral()` for pattern types (useful for qualified names)
 
 Import path: `import { z } from 'zod'` (v4 is the default export).
+
+---
+
+## R-6: Evaluation of Published `langium-zod` Package vs Spec 005
+
+**Date**: 2026-02-27
+**Decision**: Adopt `langium-zod` as the implementation foundation; build only the missing surface on top
+
+**Context**: The `langium-zod` npm package ([pradeepmouli/langium-zod](https://github.com/pradeepmouli/langium-zod)) implements a large portion of what spec 005 planned to build from scratch. It is already referenced as a local devDependency in `packages/core/package.json`. This section diffs the existing package against the spec.
+
+### Provided by `langium-zod` — spec tasks ELIMINATED
+
+| Spec task | langium-zod implementation | Notes |
+|---|---|---|
+| Grammar reader (P1-T4) | `extractor.ts` reads via `GrammarAST` | Works from `langium-config.json` |
+| Type dependency graph (P2-T1) | `extractor.ts` builds type graph | Internal to extractor |
+| Cycle detection (P2-T2) | `recursion-detector.ts` | Marks types needing `z.lazy()` |
+| Terminal mapping (P2-T4) | `type-mapper.ts` | ID/STRING → `z.string()`, INT → `z.number()`, boolean → `z.boolean()` |
+| Operator mapping (P2-T5) | `type-mapper.ts` | `?=` → optional, `+=` → array |
+| Cross-reference mapping (P2-T6) | `type-mapper.ts` | `ReferenceType` → `z.string()` |
+| `z.object()` emission (P2-T7) | `generator.ts` | Full object schemas emitted |
+| `z.lazy()` for cycles (P3-T1) | `generator.ts` | Confirmed — wraps back-edges and union refs in `z.lazy()` |
+| Discriminated unions (P3-T2) | `generator.ts` | Emits `z.discriminatedUnion('$type', [...])` ✅ |
+| `z.union()` for simple alternatives (P3-T2) | `generator.ts` | ✅ |
+| Import/header generation (P3-T4) | `generator.ts` | ✅ |
+| `--include`/`--exclude` filters (P4-T1) | `ZodGeneratorConfig.include`/`exclude` | Programmatic API; not confirmed as CLI flags |
+| CLI scaffolding (P1-T2, P1-T3) | `cli.ts` + `api.ts` | `langium-zod generate [--config] [--out]` |
+
+### Gaps — spec tasks STILL REQUIRED
+
+| Gap | Spec task | Detail |
+|---|---|---|
+| `z.array().min(1)` for `+` cardinality | P2-T5 | `generator.ts` emits `z.array()` for all arrays; `+` (one-or-more) not distinguished. Spec R-1 explicitly requires this. |
+| `--grammar <path>` direct CLI flag | P1-T2 | langium-zod uses `langium-config.json` indirectly; no direct `--grammar` path flag. Minor: the config-driven approach is equivalent in practice. |
+| `--projection` / form-surface mode | P4-T2 | No projection system exists. Must be built or handled via `--include` + field picking. |
+| Conformance check generation | P4-T3 | No `conformance.ts` equivalent. Must be built or remain manual type assertions. |
+| CLI `--include`/`--exclude` flags | P1-T2, P4-T1 | Present in programmatic API (`ZodGeneratorConfig`) but not confirmed as CLI flags — only `--config` and `--out` are documented CLI options. |
+
+### Alignment issues — action required before CI works
+
+| Issue | Location | Fix needed |
+|---|---|---|
+| Local machine path | `packages/core/package.json` devDependencies: `"langium-zod": "file:/Users/pmouli/..."` | Replace with published npm version (e.g. `"langium-zod": "^0.4.0"`) |
+| In-repo package plan | Spec planned `packages/langium-zod/` in-repo | Cancel P1–P3 tasks; adopt external package instead |
+
+### Recommended spec revision
+
+Given the above, the implementation plan should be revised:
+
+- **Cancel** Phase 1 (setup), Phase 2 (core generator), Phase 3 (advanced features): all covered by `langium-zod`
+- **Reduce** Phase 4 to: (a) patch `z.array().min(1)` for `+` cardinality via `regexOverrides` or a post-processor, and (b) build form-surface projection as a thin wrapper/config over `langium-zod`
+- **Revise** Phase 5 integration tests to test `langium-zod` directly against the Rune DSL grammar
+
+Estimated scope reduction: ~18 of 27 tasks eliminated or significantly reduced.
+
+---
+
+## R-7: Evaluation of `@zod-to-form` for UI Form Generation
+
+**Date**: 2026-02-27
+**Decision**: Add `@zod-to-form/cli` as a scaffolding devDependency; skip `@zod-to-form/react` runtime renderer for now
+
+**Context**: The `@zod-to-form` suite ([pradeepmouli/zodforms](https://github.com/pradeepmouli/zodforms), `001-zodforms` branch) publishes three packages: `@zod-to-form/core` (schema walker + processor registry), `@zod-to-form/react` (runtime form renderer), `@zod-to-form/cli` (static `.tsx` codegen).
+
+### `@zod-to-form/cli` — adopted as scaffolding tool
+
+Added to `packages/visual-editor` devDependencies. Script: `scaffold:forms`.
+
+**Rationale**: The CLI takes Zod schemas produced by `langium-zod` and generates `.tsx` boilerplate for new form types. This is a one-off scaffolding step — run when adding a new DSL concept (e.g. `RegulatoryRule`), get a starter component, then customize. No ongoing runtime coupling.
+
+The pipeline:
+```
+.langium grammar → [langium-zod generate] → zod-schemas.ts → [zod-to-form generate] → FormComponent.tsx (boilerplate)
+```
+
+### `@zod-to-form/react` — deferred
+
+**Rationale for skipping runtime renderer**:
+
+1. **Auto-save pattern mismatch**: Visual editor forms commit to the Zustand/Zundo store via 500ms debounced `useAutoSave`. The runtime renderer assumes a submit-button flow; wiring the auto-save pattern into its lifecycle is non-trivial.
+2. **Domain-specific widgets**: `TypeSelector` (live graph lookups), `CardinalityPicker` (preset buttons), `MetadataSection` (collapsible) are not standard inputs. `@zod-to-form/core`'s processor registry (the extension point for custom fields) has an empty `processors/` directory — the plugin API isn't documented yet.
+3. **Form schemas are projections**: The `dataTypeFormSchema` etc. are hand-crafted projections of the AST, not full-AST shapes. The `langium-zod` → `@zod-to-form/react` pipeline would produce forms for the complete AST, which is wider than what the editor needs.
+
+**Re-evaluate** when `@zod-to-form/core`'s processor registry is populated and custom field type registration is documented.
