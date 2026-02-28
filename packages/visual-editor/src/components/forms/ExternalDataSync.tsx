@@ -5,7 +5,7 @@
  * Renders null. When mounted inside a <FormProvider>, watches the `data`
  * reference for changes and calls `form.reset(toValues(), { keepDirtyValues: true })`
  * so that external updates (undo/redo, graph store pushes) are reflected in
- * pristine fields without overwriting in-progress user edits (FR-014).
+ * pristine fields without overwriting in-progress user edits (FR-016).
  *
  * Usage:
  *   <FormProvider {...form}>
