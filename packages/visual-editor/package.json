@@ -10,7 +10,11 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": "./dist/styles.css",
+    "./components": {
+      "types": "./dist/components.d.ts",
+      "default": "./dist/components.js"
+    }
   },
   "files": [
     "dist",
