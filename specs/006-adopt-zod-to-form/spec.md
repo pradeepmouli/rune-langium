@@ -135,7 +135,7 @@ flowchart LR
 
 ### Functional Requirements
 
-- **FR-001**: The visual editor package MUST expose a dedicated components module containing reusable form widgets required by generated forms.
+- **FR-001**: The visual editor package MUST expose a dedicated components module via a `package.json` `exports` map subpath (`"./components"`), making reusable form widgets resolvable as `@rune-langium/visual-editor/components`.
 - **FR-002**: The project MUST generate form-surface schemas from DSL sources using projection rules that restrict output to required form fields.
 - **FR-003**: Generated form-surface schemas MUST exclude internal framework metadata fields.
 - **FR-004**: Generated schemas MUST include cross-reference validation factory variants for types that contain cross-reference fields.
@@ -147,7 +147,7 @@ flowchart LR
 - **FR-010**: Generated forms MUST support value-change-driven auto-save interaction and MUST NOT require submit-button interaction.
 - **FR-011**: Generated output MUST render mapped domain fields with custom widgets and use default inputs for unmapped fields.
 - **FR-012**: The visual editor package MUST include all runtime dependencies required by generated forms.
-- **FR-013**: At least one existing hand-authored form MUST be migrated to the new runtime while preserving current user-visible behavior.
+- **FR-013**: `EnumForm` MUST be migrated to the new form runtime while preserving current user-visible behavior; it is the designated first migration target.
 - **FR-014**: The migrated form MUST preserve debounced auto-save behavior for core editable fields.
 - **FR-015**: The migrated form MUST continue supporting list-style member editing within the shared form context.
 - **FR-016**: The migrated form MUST handle external data refresh events by refreshing only pristine (unedited) fields; fields the user has actively edited MUST NOT be overwritten by incoming external updates, regardless of the update source.
@@ -163,12 +163,12 @@ flowchart LR
 
 ### Key Entities *(include if feature involves data)*
 
-- **Component Module Surface**: Named widget exports available to config and generated forms.
+- **Component Module Surface**: Named widget exports available to config and generated forms; exposed via the `"./components"` `exports` map subpath as `@rune-langium/visual-editor/components`.
 - **Form Projection Configuration**: Declarative selection of form-relevant fields per DSL type for generated schemas.
 - **Generated Form-Surface Schema Set**: Deterministic schema outputs and conformance artifacts derived from grammar and projection inputs.
 - **Component Mapping Configuration**: Declarative mapping of domain field types and schema field paths to widget names and optional widget props.
 - **Generated Form Artifact**: Checked-in deterministic form component output produced from schema and mapping inputs.
-- **Migrated Form Instance**: Existing editor form moved to the new runtime while retaining established behavior.
+- **Migrated Form Instance**: `EnumForm` — the existing hand-authored editor form designated as the first migration target; moved to the new runtime while retaining established behavior.
 - **External Data Sync State**: Mechanism for reconciling upstream model changes with local form edits.
 
 ## Success Criteria *(mandatory)*
