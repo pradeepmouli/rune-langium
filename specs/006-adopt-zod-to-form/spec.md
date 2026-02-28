@@ -150,7 +150,7 @@ flowchart LR
 - **FR-013**: At least one existing hand-authored form MUST be migrated to the new runtime while preserving current user-visible behavior.
 - **FR-014**: The migrated form MUST preserve debounced auto-save behavior for core editable fields.
 - **FR-015**: The migrated form MUST continue supporting list-style member editing within the shared form context.
-- **FR-016**: The migrated form MUST handle external data refresh events while preserving in-progress user edits when safe to do so.
+- **FR-016**: The migrated form MUST handle external data refresh events by refreshing only pristine (unedited) fields; fields the user has actively edited MUST NOT be overwritten by incoming external updates, regardless of the update source.
 - **FR-017**: Hand-authored non-migrated forms MUST continue to work unchanged during incremental rollout.
 
 ### Constitution Alignment
@@ -180,7 +180,7 @@ flowchart LR
 - **SC-003**: Conformance checks fail reliably when an intentional grammar/model mismatch is introduced and pass again after alignment is restored.
 - **SC-004**: Running the scaffold command produces all targeted generated forms successfully in a single run with zero manual post-generation edits required.
 - **SC-005**: In migrated-form verification scenarios, 100% of tested name/parent edits are persisted through auto-save within the existing debounce window.
-- **SC-006**: In migrated-form verification scenarios, 100% of tested external update events (including undo/redo) reconcile without data loss for unaffected dirty fields.
+- **SC-006**: In migrated-form verification scenarios, 100% of tested external update events (including undo/redo) reconcile by updating pristine fields and leaving dirty fields untouched; no dirty field value is overwritten by an incoming external update.
 - **SC-007**: No regressions are introduced in non-migrated forms during the migration release, as validated by existing form-focused test coverage and smoke checks.
 
 ## Assumptions
