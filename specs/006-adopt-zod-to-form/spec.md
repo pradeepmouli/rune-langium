@@ -5,6 +5,15 @@
 **Status**: Draft
 **Input**: User description: "Adopt langium-zod form-surface generation and enhanced @zod-to-form APIs in @rune-langium/visual-editor, including schema projection, component subpath exports, component config, scaffold updates, runtime dependency wiring, and initial EnumForm migration to the new form runtime."
 
+## Clarifications
+
+### Session 2026-02-28
+
+- Q: How should external model updates (e.g. undo/redo) interact with in-progress dirty form state? → A: Pristine (unedited) fields refresh immediately; dirty (user-edited) fields are never overwritten by incoming external updates.
+- Q: Which existing form is the designated first migration target for FR-013? → A: `EnumForm` — explicitly named as the first migration target.
+- Q: How should the component reuse surface be exposed from the visual editor package? → A: Via a `package.json` `exports` map subpath (`"./components"`), importable as `@rune-langium/visual-editor/components`.
+- Q: How should projection rules be authored? → A: TypeScript config file (e.g. `form-projection.config.ts`) — type-checked, colocated with the grammar workspace.
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -136,7 +145,7 @@ flowchart LR
 ### Functional Requirements
 
 - **FR-001**: The visual editor package MUST expose a dedicated components module via a `package.json` `exports` map subpath (`"./components"`), making reusable form widgets resolvable as `@rune-langium/visual-editor/components`.
-- **FR-002**: The project MUST generate form-surface schemas from DSL sources using projection rules that restrict output to required form fields.
+- **FR-002**: The project MUST generate form-surface schemas from DSL sources using projection rules defined in a TypeScript config file (e.g. `form-projection.config.ts`) that restrict output to required form fields.
 - **FR-003**: Generated form-surface schemas MUST exclude internal framework metadata fields.
 - **FR-004**: Generated schemas MUST include cross-reference validation factory variants for types that contain cross-reference fields.
 - **FR-005**: Generated schemas MUST include conformance checks against typed model definitions and fail validation on schema/model drift.
@@ -164,7 +173,7 @@ flowchart LR
 ### Key Entities *(include if feature involves data)*
 
 - **Component Module Surface**: Named widget exports available to config and generated forms; exposed via the `"./components"` `exports` map subpath as `@rune-langium/visual-editor/components`.
-- **Form Projection Configuration**: Declarative selection of form-relevant fields per DSL type for generated schemas.
+- **Form Projection Configuration**: Declarative TypeScript config file (e.g. `form-projection.config.ts`) that selects form-relevant fields per DSL type for generated schemas; type-checked at compile time alongside the grammar workspace.
 - **Generated Form-Surface Schema Set**: Deterministic schema outputs and conformance artifacts derived from grammar and projection inputs.
 - **Component Mapping Configuration**: Declarative mapping of domain field types and schema field paths to widget names and optional widget props.
 - **Generated Form Artifact**: Checked-in deterministic form component output produced from schema and mapping inputs.
