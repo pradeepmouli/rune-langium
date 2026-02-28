@@ -13,11 +13,11 @@
 Reviewed the complete implementation of feature `006-adopt-zod-to-form` (Phases 1–7, T001–T045).
 All 309 automated tests pass. Core functionality is correct and all acceptance criteria are met.
 
-One actionable improvement was identified: `@zod-to-form/react` v0.2.4 is available on npm but the
-lockfile pins to v0.2.3. Version 0.2.4 adds built-in `onValueChange` and `mode` options to
-`useZodForm`/`ZodForm`, which directly eliminates `useWatch + isMounted + useEffect` workarounds
-present in the two generated forms and restores the `mode: 'onChange'` validation behaviour dropped
-during the `EnumForm` migration.
+This PR upgrades `@zod-to-form/react` and `@zod-to-form/cli` to v0.2.4. Version 0.2.4 adds
+built-in `onValueChange` and `mode` options to `useZodForm`/`ZodForm`, which directly eliminates
+the previous `useWatch + isMounted + useEffect` workarounds present in the two generated forms and
+restores the `mode: 'onChange'` validation behaviour that had been temporarily lost during the
+`EnumForm` migration.
 
 `langium-zod` v0.5.0 is installed and fully leveraged.
 
