@@ -15,8 +15,8 @@
  * @module
  */
 
-import { useCallback, useRef, useMemo } from 'react';
-import { FormProvider, Controller } from 'react-hook-form';
+import { useCallback, useRef } from 'react';
+import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
 import {
   Field,
   FieldError,
@@ -32,7 +32,8 @@ import { MetadataSection } from './MetadataSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useNodeForm } from '../../hooks/useNodeForm.js';
+import { useZodForm } from '@zod-to-form/react';
+import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { enumFormSchema, type EnumFormValues } from '../../schemas/form-schemas.js';
 import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
@@ -81,17 +82,17 @@ export interface EnumFormProps {
 // ---------------------------------------------------------------------------
 
 function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] }: EnumFormProps) {
-  // ---- Form setup (full model via useNodeForm) -----------------------------
+  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
-  const resetKey = useMemo(() => JSON.stringify(toFormValues(data)), [data]);
-
-  const { form, members } = useNodeForm<EnumFormValues>({
-    schema: enumFormSchema,
-    defaultValues: () => toFormValues(data),
-    resetKey
+  const { form } = useZodForm(enumFormSchema, {
+    defaultValues: toFormValues(data),
+    mode: 'onChange'
   });
 
-  const { fields, append, remove, move } = members;
+  const { fields, append, remove, move } = useFieldArray({
+    control: form.control,
+    name: 'members'
+  });
 
   // Track the committed (graph-confirmed) data for diffing
   const committedRef = useRef(data);
@@ -214,6 +215,7 @@ function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] 
 
   return (
     <FormProvider {...form}>
+      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">

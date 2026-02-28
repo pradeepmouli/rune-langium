@@ -5,6 +5,16 @@
 **Status**: Draft
 **Input**: User description: "Adopt langium-zod form-surface generation and enhanced @zod-to-form APIs in @rune-langium/visual-editor, including schema projection, component subpath exports, component config, scaffold updates, runtime dependency wiring, and initial EnumForm migration to the new form runtime."
 
+## Clarifications
+
+### Session 2026-02-28
+
+- Q: How should external model updates (e.g. undo/redo) interact with in-progress dirty form state? → A: Pristine (unedited) fields refresh immediately; dirty (user-edited) fields are never overwritten by incoming external updates.
+- Q: Which existing form is the designated first migration target for FR-013? → A: `EnumForm` — explicitly named as the first migration target.
+- Q: How should the component reuse surface be exposed from the visual editor package? → A: Via a `package.json` `exports` map subpath (`"./components"`), importable as `@rune-langium/visual-editor/components`.
+- Q: How should projection rules be authored? → A: JSON projection config (e.g. `form-surfaces.json`) — colocated with the grammar workspace and consumed by langium-zod.
+- Q: How should stale generated artifacts be detected when grammar, projection config, or mapping config changes? → A: Git diff CI check — CI regenerates artifacts and fails if committed files differ from freshly generated ones.
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -126,7 +136,7 @@ flowchart LR
 - Projection config refers to fields that no longer exist in the grammar.
 - Conformance checks fail after grammar updates, indicating schema/model drift.
 - Cross-reference validation receives stale reference sets and rejects valid selections.
-- Generated forms are stale because schema/config changed but scaffold was not re-run.
+- Generated forms are stale because schema/config changed but scaffold was not re-run; detected by CI git-diff check failing on regeneration.
 - External model changes (undo/redo or concurrent updates) occur while user has dirty form state.
 - A field path expected to use a custom widget is omitted from field mappings.
 - Runtime cannot resolve form runtime package at app build or execution time.
@@ -135,8 +145,8 @@ flowchart LR
 
 ### Functional Requirements
 
-- **FR-001**: The visual editor package MUST expose a dedicated components module containing reusable form widgets required by generated forms.
-- **FR-002**: The project MUST generate form-surface schemas from DSL sources using projection rules that restrict output to required form fields.
+- **FR-001**: The visual editor package MUST expose a dedicated components module via a `package.json` `exports` map subpath (`"./components"`), making reusable form widgets resolvable as `@rune-langium/visual-editor/components`.
+- **FR-002**: The project MUST generate form-surface schemas from DSL sources using projection rules defined in a JSON projection config file (`form-surfaces.json`) consumed by `langium-zod generate --projection`, restricting output to required form fields. Compile-time field mapping is configured separately via a TypeScript component config file (`component-config.ts`) covered by FR-007.
 - **FR-003**: Generated form-surface schemas MUST exclude internal framework metadata fields.
 - **FR-004**: Generated schemas MUST include cross-reference validation factory variants for types that contain cross-reference fields.
 - **FR-005**: Generated schemas MUST include conformance checks against typed model definitions and fail validation on schema/model drift.
@@ -147,11 +157,12 @@ flowchart LR
 - **FR-010**: Generated forms MUST support value-change-driven auto-save interaction and MUST NOT require submit-button interaction.
 - **FR-011**: Generated output MUST render mapped domain fields with custom widgets and use default inputs for unmapped fields.
 - **FR-012**: The visual editor package MUST include all runtime dependencies required by generated forms.
-- **FR-013**: At least one existing hand-authored form MUST be migrated to the new runtime while preserving current user-visible behavior.
+- **FR-013**: `EnumForm` MUST be migrated to the new form runtime while preserving current user-visible behavior; it is the designated first migration target.
 - **FR-014**: The migrated form MUST preserve debounced auto-save behavior for core editable fields.
 - **FR-015**: The migrated form MUST continue supporting list-style member editing within the shared form context.
-- **FR-016**: The migrated form MUST handle external data refresh events while preserving in-progress user edits when safe to do so.
+- **FR-016**: The migrated form MUST handle external data refresh events by refreshing only pristine (unedited) fields; fields the user has actively edited MUST NOT be overwritten by incoming external updates, regardless of the update source.
 - **FR-017**: Hand-authored non-migrated forms MUST continue to work unchanged during incremental rollout.
+- **FR-018**: CI MUST regenerate all generated artifacts (schemas, conformance outputs, form components) and fail the build if any committed file differs from the freshly-regenerated output (`git diff --exit-code`).
 
 ### Constitution Alignment
 
@@ -163,12 +174,12 @@ flowchart LR
 
 ### Key Entities *(include if feature involves data)*
 
-- **Component Module Surface**: Named widget exports available to config and generated forms.
-- **Form Projection Configuration**: Declarative selection of form-relevant fields per DSL type for generated schemas.
+- **Component Module Surface**: Named widget exports available to config and generated forms; exposed via the `"./components"` `exports` map subpath as `@rune-langium/visual-editor/components`.
+- **Form Projection Configuration**: Declarative JSON file (`form-surfaces.json`) that selects form-relevant fields per DSL type for generated schemas; consumed by `langium-zod generate --projection`. Field-type-to-widget mapping is a separate TypeScript concern handled by the Component Mapping Configuration.
 - **Generated Form-Surface Schema Set**: Deterministic schema outputs and conformance artifacts derived from grammar and projection inputs.
 - **Component Mapping Configuration**: Declarative mapping of domain field types and schema field paths to widget names and optional widget props.
 - **Generated Form Artifact**: Checked-in deterministic form component output produced from schema and mapping inputs.
-- **Migrated Form Instance**: Existing editor form moved to the new runtime while retaining established behavior.
+- **Migrated Form Instance**: `EnumForm` — the existing hand-authored editor form designated as the first migration target; moved to the new runtime while retaining established behavior.
 - **External Data Sync State**: Mechanism for reconciling upstream model changes with local form edits.
 
 ## Success Criteria *(mandatory)*
@@ -180,8 +191,9 @@ flowchart LR
 - **SC-003**: Conformance checks fail reliably when an intentional grammar/model mismatch is introduced and pass again after alignment is restored.
 - **SC-004**: Running the scaffold command produces all targeted generated forms successfully in a single run with zero manual post-generation edits required.
 - **SC-005**: In migrated-form verification scenarios, 100% of tested name/parent edits are persisted through auto-save within the existing debounce window.
-- **SC-006**: In migrated-form verification scenarios, 100% of tested external update events (including undo/redo) reconcile without data loss for unaffected dirty fields.
+- **SC-006**: In migrated-form verification scenarios, 100% of tested external update events (including undo/redo) reconcile by updating pristine fields and leaving dirty fields untouched; no dirty field value is overwritten by an incoming external update.
 - **SC-007**: No regressions are introduced in non-migrated forms during the migration release, as validated by existing form-focused test coverage and smoke checks.
+- **SC-008**: CI regeneration check (`git diff --exit-code` after full generation) passes with zero diff on a clean checkout where all inputs and outputs are in sync; fails with a non-zero exit when any generated file is intentionally drifted from its inputs.
 
 ## Assumptions
 

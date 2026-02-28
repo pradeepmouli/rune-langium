@@ -10,7 +10,11 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": "./dist/styles.css",
+    "./components": {
+      "types": "./dist/components.d.ts",
+      "default": "./dist/components.js"
+    }
   },
   "files": [
     "dist",
@@ -26,7 +30,10 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "dev": "tsgo -b --watch",
     "lint": "oxlint .",
-    "scaffold:forms": "zod-to-form generate --schema ../core/src/generated/zod-schemas.ts --out src/components/forms/generated",
+    "generate:schemas": "langium-zod generate --config ../core/langium-config.json --out src/generated/zod-schemas.ts --strip-internals --projection form-surfaces.json --cross-ref-validation --conformance --ast-types ../core/src/generated/ast.ts --conformance-out src/generated/zod-schemas.conformance.ts",
+    "scaffold:forms": "pnpm scaffold:enumForm && pnpm scaffold:dataTypeForm",
+    "scaffold:enumForm": "zodform generate --schema src/generated/zod-schemas.ts --export RosettaEnumerationSchema --out src/components/forms/generated --ui unstyled --force",
+    "scaffold:dataTypeForm": "zodform generate --schema src/generated/zod-schemas.ts --export DataSchema --out src/components/forms/generated --ui unstyled --force",
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsgo --noEmit",
@@ -34,6 +41,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
+    "@zod-to-form/react": "^0.2.4",
     "@hookform/resolvers": "^5.2.2",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
@@ -53,7 +61,8 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@zod-to-form/cli": "*",
+    "@zod-to-form/cli": "^0.2.4",
+    "langium-zod": "^0.5.0",
     "jsdom": "^28.1.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
