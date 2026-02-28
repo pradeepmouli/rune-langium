@@ -41,7 +41,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
-    "@zod-to-form/react": "*",
+    "@zod-to-form/react": "^0.2.4",
     "@hookform/resolvers": "^5.2.2",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
@@ -61,7 +61,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@zod-to-form/cli": "*",
+    "@zod-to-form/cli": "^0.2.4",
     "langium-zod": "^0.5.0",
     "jsdom": "^28.1.0",
     "react": "^19.2.4",

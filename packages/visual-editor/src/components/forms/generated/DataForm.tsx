@@ -2,18 +2,17 @@
  * DataForm — auto-save form for Data type nodes.
  *
  * Hand-authored form with auto-save wiring (onValueChange fires on every
- * field change after mount). Uses TypeSelector for the cross-ref superType
+ * valid field change after mount). Uses TypeSelector for the cross-ref superType
  * field and standard <input> for unmapped text fields.
  *
  * Note: This file was authored to match what `zodform generate` would produce
  * extended with auto-save wiring and visual-editor widget mappings from
- * component-config.ts. The CLI (zodform v0.2.3) does not support --mode or
- * --component-config flags, so this form is hand-maintained.
+ * component-config.ts. Auto-save is implemented via useZodForm onValueChange
+ * (available in @zod-to-form/react ^0.2.4).
  */
 
-import { useEffect, useRef } from 'react';
-import { useForm, Controller, useWatch } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { Controller } from 'react-hook-form';
+import { useZodForm } from '@zod-to-form/react';
 import { DataSchema } from '../../../generated/zod-schemas.js';
 import { TypeSelector } from '../../editors/TypeSelector.js';
 import type { TypeOption } from '../../../types.js';
@@ -21,7 +20,7 @@ import type { TypeOption } from '../../../types.js';
 type FormData = (typeof DataSchema)['_zod']['output'];
 
 export interface DataFormProps {
-  /** Called on every field change after mount — drives auto-save to the graph store. */
+  /** Called on every valid field change after mount — drives auto-save to the graph store. */
   onValueChange: (data: FormData) => void;
   /** Initial values for the form fields. */
   defaultValues?: Partial<FormData>;
@@ -31,26 +30,14 @@ export interface DataFormProps {
 
 /**
  * Auto-save form for editing Data type fields.
- * Fires `onValueChange` on every change after mount (no submit button).
+ * Fires `onValueChange` on every valid change after mount (no submit button).
  */
 export function DataForm({ onValueChange, defaultValues, typeOptions = [] }: DataFormProps) {
-  const { register, control } = useForm<FormData>({
-    resolver: zodResolver(DataSchema),
-    defaultValues: defaultValues ?? { $type: 'Data', name: '' }
+  const { form } = useZodForm(DataSchema, {
+    defaultValues: defaultValues ?? { $type: 'Data', name: '' },
+    onValueChange
   });
-
-  // useWatch subscribes to all field changes and triggers re-renders
-  const values = useWatch({ control });
-
-  // Skip the initial mount render — only fire onValueChange on actual user changes
-  const isMounted = useRef(false);
-  useEffect(() => {
-    if (!isMounted.current) {
-      isMounted.current = true;
-      return;
-    }
-    onValueChange(values as unknown as FormData);
-  }, [values, onValueChange]);
+  const { register, control } = form;
 
   return (
     <form>

@@ -327,8 +327,8 @@ importers:
         specifier: ^12.10.1
         version: 12.10.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@zod-to-form/react':
-        specifier: '*'
-        version: 0.2.3(@hookform/resolvers@5.2.2(react-hook-form@7.71.1(react@19.2.4)))(react-hook-form@7.71.1(react@19.2.4))(react@19.2.4)(zod@4.3.6)
+        specifier: ^0.2.4
+        version: 0.2.4(@hookform/resolvers@5.2.2(react-hook-form@7.71.1(react@19.2.4)))(react-hook-form@7.71.1(react@19.2.4))(react@19.2.4)(zod@4.3.6)
       lucide-react:
         specifier: ^0.575.0
         version: 0.575.0(react@19.2.4)
@@ -358,8 +358,8 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       '@zod-to-form/cli':
-        specifier: '*'
-        version: 0.2.3(zod@4.3.6)
+        specifier: ^0.2.4
+        version: 0.2.4(zod@4.3.6)
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0(@noble/hashes@1.8.0)
@@ -2423,17 +2423,17 @@ packages:
   '@xyflow/system@0.0.75':
     resolution: {integrity: sha512-iXs+AGFLi8w/VlAoc/iSxk+CxfT6o64Uw/k0CKASOPqjqz6E0rb5jFZgJtXGZCpfQI6OQpu5EnumP5fGxQheaQ==}
 
-  '@zod-to-form/cli@0.2.3':
-    resolution: {integrity: sha512-sxT3pW8i9nIFRLngnSaWO5ag9wSFguDYxpqZaK/7qG11VLOZBo8iyA6STcn4LewKoTMYgythMMS2xckJUKyEjA==}
+  '@zod-to-form/cli@0.2.4':
+    resolution: {integrity: sha512-c2O2XKkZhMct/YHnuGOcj1QqWH4yVuvi6NES8eBe2vmYPiInPo577Uw08ITTEAv3owif1HBfbPY1U8Z7e6V2+A==}
     hasBin: true
 
-  '@zod-to-form/core@0.2.3':
-    resolution: {integrity: sha512-XEN02dyuNP8FwFB0WA3cTMMn3cNqD4+TTDQJ3p5cr+knGn+QmZeOdWEe5kCVLHF2AOBocBV28F2jsUaMMZ5JtQ==}
+  '@zod-to-form/core@0.2.4':
+    resolution: {integrity: sha512-9vWNdeGHe6dryC4rl3i5GshEAUFRy6XjHZ/bHXu2qeIhx5fc3uch/OHA/V1mJasYpw3ta3Tysi3LEg55DNkMXg==}
     peerDependencies:
       zod: ^4.0.0
 
-  '@zod-to-form/react@0.2.3':
-    resolution: {integrity: sha512-9W1AlWCAGiaGbcfNwZgr4aAbogJtPSjSo4B+9kiKbNM9zqqxEwIil3baLNW3XSwmM7+V0MZ8WMEKsU+FmJS2xg==}
+  '@zod-to-form/react@0.2.4':
+    resolution: {integrity: sha512-SJx9B345DQgBohLbqd4a2mfQz2hQLk1HBE/f0BadQylMy69xM3fXh4loq0Z66jcVcR1QazCZJKXuE48A92S4FQ==}
     peerDependencies:
       '@hookform/resolvers': ^5.0.0
       react: ^18.0.0 || ^19.0.0
@@ -6688,23 +6688,24 @@ snapshots:
       d3-selection: 3.0.0
       d3-zoom: 3.0.0
 
-  '@zod-to-form/cli@0.2.3(zod@4.3.6)':
+  '@zod-to-form/cli@0.2.4(zod@4.3.6)':
     dependencies:
-      '@zod-to-form/core': 0.2.3(zod@4.3.6)
+      '@zod-to-form/core': 0.2.4(zod@4.3.6)
       chokidar: 5.0.0
       commander: 14.0.3
       jiti: 2.6.1
+      type-fest: 5.4.4
     transitivePeerDependencies:
       - zod
 
-  '@zod-to-form/core@0.2.3(zod@4.3.6)':
+  '@zod-to-form/core@0.2.4(zod@4.3.6)':
     dependencies:
       zod: 4.3.6
 
-  '@zod-to-form/react@0.2.3(@hookform/resolvers@5.2.2(react-hook-form@7.71.1(react@19.2.4)))(react-hook-form@7.71.1(react@19.2.4))(react@19.2.4)(zod@4.3.6)':
+  '@zod-to-form/react@0.2.4(@hookform/resolvers@5.2.2(react-hook-form@7.71.1(react@19.2.4)))(react-hook-form@7.71.1(react@19.2.4))(react@19.2.4)(zod@4.3.6)':
     dependencies:
       '@hookform/resolvers': 5.2.2(react-hook-form@7.71.1(react@19.2.4))
-      '@zod-to-form/core': 0.2.3(zod@4.3.6)
+      '@zod-to-form/core': 0.2.4(zod@4.3.6)
       react: 19.2.4
       react-hook-form: 7.71.1(react@19.2.4)
       zod: 4.3.6

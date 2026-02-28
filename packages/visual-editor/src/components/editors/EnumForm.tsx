@@ -85,7 +85,8 @@ function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] 
   // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
   const { form } = useZodForm(enumFormSchema, {
-    defaultValues: toFormValues(data)
+    defaultValues: toFormValues(data),
+    mode: 'onChange'
   });
 
   const { fields, append, remove, move } = useFieldArray({
