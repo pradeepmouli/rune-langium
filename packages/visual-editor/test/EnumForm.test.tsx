@@ -1,7 +1,7 @@
 /**
  * Tests for EnumForm debounce behaviour and dirty-field preservation (T029).
  *
- * Covers FR-014 (keepDirtyValues) and FR-016 (debounce on rename):
+ * Covers FR-014 (debounce on rename) and FR-016 (keepDirtyValues / external update dirty-field preservation):
  * - renameType must NOT be called immediately on name change (debounce active)
  * - renameType must be called with the trimmed name after 500 ms
  * - When external data prop changes while the name field is dirty,
