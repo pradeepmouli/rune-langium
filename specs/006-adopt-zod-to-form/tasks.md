@@ -6,9 +6,9 @@
 ## Constitution Check
 
 - [x] CC-001 Conformance artifact (`zod-schemas.conformance.ts`) serves as built-in schema/model parity check — verified by `tsc --noEmit` (T013–T014)
-- [x] CC-002 Validation parity preserved: `ExternalDataSync` with `keepDirtyValues` replicates `useNodeForm` external-update semantics exactly (T031); cross-ref factory `.refine()` preserves reference validation
+- [x] CC-002 Validation parity preserved: `ExternalDataSync` with `keepDirtyValues` replicates `useNodeForm` external-update semantics exactly (T032); cross-ref factory `.refine()` preserves reference validation
 - [ ] CC-003 No parser changes in this feature — benchmark tasks not required
-- [x] CC-004 Backward-compatible migration: `EnumFormProps` interface unchanged (T033); hand-authored forms coexist until full migration (T029); `./components` and `./styles.css` exports are strictly additive
+- [x] CC-004 Backward-compatible migration: `EnumFormProps` interface unchanged (T035); hand-authored forms coexist until full migration (T030); `./components` and `./styles.css` exports are strictly additive
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -24,9 +24,9 @@
 
 - [ ] T001 Add `"@zod-to-form/react": "*"` to `dependencies` in `packages/visual-editor/package.json`
 - [ ] T002 Confirm `"@zod-to-form/cli": "*"` is present in `devDependencies` in `packages/visual-editor/package.json`; run `pnpm install` from repo root and verify both `@zod-to-form/react` and `@zod-to-form/cli` resolve without errors
-- [ ] T003 [P] Create `packages/visual-editor/src/generated/` directory; add `.gitkeep` so it is tracked before generation runs
-- [ ] T004 [P] Create `packages/visual-editor/src/components/forms/generated/` directory; add `.gitkeep` so it is tracked before scaffolding runs
-- [ ] T005 [P] Create `packages/visual-editor/src/components/forms/` directory to hold shared utilities (`MapFormRegistry`, `ExternalDataSync`)
+- [ ] T003 [P] Create `packages/visual-editor/src/generated/` directory if it does not already exist; add `.gitkeep` so it is tracked before generation runs
+- [ ] T004 [P] Create `packages/visual-editor/src/components/forms/generated/` directory if it does not already exist; add `.gitkeep` so it is tracked before scaffolding runs
+- [ ] T005 [P] Create `packages/visual-editor/src/components/forms/` directory if it does not already exist (check first with `ls packages/visual-editor/src/components/`); this is the parent for shared utilities (`MapFormRegistry`, `ExternalDataSync`)
 
 **Checkpoint**: All target directories exist; `pnpm install` resolves `@zod-to-form/react` and `@zod-to-form/cli`
 
@@ -39,9 +39,9 @@
 **⚠️ CRITICAL**: Grammar field name verification must complete before `form-surfaces.json` or `component-config.ts` can be correctly authored
 
 - [ ] T006 Read `packages/core/src/grammar/rune.langium` (or equivalent `.langium` file) and record the exact property names for: `RosettaEnumeration` (e.g. `name`, `superEnum`, `enumValues`), `Data` (e.g. `name`, `superType`, `description`, `attributes`), `Attribute` (e.g. `name`, `typeCall`, `card`), `RosettaFunction` (e.g. `name`, `outputType`, `parameters`), `ChoiceType` (e.g. `name`, `superType`, `options`) — note confirmed names as a comment block in `packages/visual-editor/form-surfaces.json` once created
-- [ ] T007 Read `packages/core/src/generated/ast.ts` and cross-reference TypeScript property names for each grammar type against the names recorded in T006; note any discrepancies that would affect `form-surfaces.json` or `component-config.ts` field paths
+- [ ] T007 Read `packages/core/src/generated/ast.ts` and cross-reference TypeScript property names for each grammar type against the names recorded in T006; note any discrepancies that would affect `form-surfaces.json` or `component-config.ts` field paths; also note the exact exported schema variable names that `langium-zod generate` will produce (e.g. `RosettaEnumerationSchema`, `DataSchema`) — these are needed for the `--export` flag in T024 and for `fields` keys in T019
 
-**Checkpoint**: Grammar field names confirmed and documented — config authoring can now begin
+**Checkpoint**: Grammar field names confirmed and documented; expected schema variable names known — config authoring can now begin
 
 ---
 
@@ -51,20 +51,20 @@
 
 **Independent Test**: Run `pnpm generate:schemas` with the projection config; verify generated schemas include only projected fields (no Langium internals), include cross-ref factory variants; run `tsc --noEmit` on the workspace — conformance checks pass for unchanged grammar and fail when an intentional schema/model mismatch is introduced.
 
-### Tests for User Story 1
+### Pre-generation Specification (US1)
 
-- [ ] T008 [US1] Before running generation, document the expected shape of `zod-schemas.conformance.ts` as inline comments at the top of `packages/visual-editor/form-surfaces.json`: list which grammar types should have conformance assertions and which fields should appear — acts as a pre-generation specification to compare against actual output
+- [ ] T008 [US1] Before running generation, record the expected conformance assertion shapes as comments at the top of `packages/visual-editor/form-surfaces.json` once created: for each projected type, list which schema fields are expected in `zod-schemas.conformance.ts` and which cross-ref factory should be emitted — this specification is compared against actual generation output in T012 to verify correctness
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Create `packages/visual-editor/form-surfaces.json`: set `defaults.strip` to `["$container", "$document", "$cstNode", "$containerProperty", "$containerIndex"]`; add `types` entries for `RosettaEnumeration`, `Data`, `Attribute`, `RosettaFunction`, `ChoiceType` using confirmed field names from T006
+- [ ] T009 [US1] Create `packages/visual-editor/form-surfaces.json`: set `defaults.strip` to `["$container", "$document", "$cstNode", "$containerProperty", "$containerIndex"]`; add `types` entries for `RosettaEnumeration`, `Data`, `Attribute`, `RosettaFunction`, `ChoiceType` using confirmed field names from T006; include the expected-shape comments from T008
 - [ ] T010 [US1] Add `"generate:schemas"` script to `packages/visual-editor/package.json`: `langium-zod generate --out src/generated/zod-schemas.ts --projection form-surfaces.json --cross-ref-validation --conformance --ast-types src/generated/ast.ts`
 - [ ] T011 [US1] Run `pnpm --filter @rune-langium/visual-editor generate:schemas` and verify: (a) `packages/visual-editor/src/generated/zod-schemas.ts` is created, (b) `packages/visual-editor/src/generated/zod-schemas.conformance.ts` is created, (c) Langium internal fields (`$container`, `$cstNode`, `$document`, `$containerProperty`, `$containerIndex`) are absent from every generated schema
-- [ ] T012 [US1] Inspect `packages/visual-editor/src/generated/zod-schemas.ts` and verify: `createRosettaEnumerationSchema(refs?)` function is exported, `RosettaEnumerationSchemaRefs` interface is exported, equivalent factory and refs interface exist for each grammar type that has cross-reference fields
+- [ ] T012 [US1] Inspect `packages/visual-editor/src/generated/zod-schemas.ts` and verify against T008 expected shapes: `createRosettaEnumerationSchema(refs?)` function is exported, `RosettaEnumerationSchemaRefs` interface is exported, equivalent factory and refs interface exist for each grammar type that has cross-reference fields; note the exact exported schema variable names (e.g. `RosettaEnumerationSchema`) for use in T019 and T024
 - [ ] T013 [US1] Run `pnpm --filter @rune-langium/visual-editor type-check` and confirm `src/generated/zod-schemas.conformance.ts` compiles without TypeScript errors (SC-003 baseline)
 - [ ] T014 [US1] Verify conformance drift detection: temporarily add a non-existent field name to one `types` entry in `form-surfaces.json`, re-run `generate:schemas`, confirm `tsc --noEmit` reports a type error in the conformance file; revert the field name and confirm type-check passes again (SC-003 fail/pass cycle)
 
-**Checkpoint**: `pnpm generate:schemas` runs cleanly; generated schemas contain only projected fields with cross-ref factories; `tsc --noEmit` passes on conformance artifact; drift detection verified
+**Checkpoint**: `pnpm generate:schemas` runs cleanly; generated schemas contain only projected fields with cross-ref factories; `tsc --noEmit` passes on conformance artifact; drift detection verified; exact schema variable names recorded for T019 and T024
 
 ---
 
@@ -74,19 +74,21 @@
 
 **Independent Test**: Resolve the `./components` subpath from a TypeScript import and at runtime after build; add a valid widget name to `component-config.ts` and confirm compile passes; add an invalid widget name and confirm compile fails (FR-008).
 
+**Prerequisite for T019**: US1 (T011) must be complete so the generated schema variable names and field names are confirmed before authoring `fields` entries in `component-config.ts`.
+
 ### Tests for User Story 2
 
-- [ ] T015 [US2] Write a vitest test in `packages/visual-editor/test/components-subpath.test.ts` that imports `{ TypeSelector, CardinalityPicker }` from `@rune-langium/visual-editor/components` and asserts both are non-null functions — write before implementation (will fail until subpath is wired and built)
+- [ ] T015 [US2] Write a vitest test in `packages/visual-editor/test/components-subpath.test.ts` that imports `{ TypeSelector, CardinalityPicker }` from `'../src/components.js'` (relative source path — avoids self-referential package resolution before build) and asserts both are non-null functions — write before implementation (will fail until T016 creates the barrel)
 
 ### Implementation for User Story 2
 
 - [ ] T016 [P] [US2] Create `packages/visual-editor/src/components.ts`: add `export { TypeSelector } from './components/editors/TypeSelector.js'` and `export { CardinalityPicker } from './components/editors/CardinalityPicker.js'` — this is the `./components` subpath entry module
 - [ ] T017 [P] [US2] Add `"./components"` entry to `exports` map in `packages/visual-editor/package.json`: `{ "types": "./dist/components.d.ts", "default": "./dist/components.js" }`; confirm existing `.` and `"./styles.css"` entries are unchanged
 - [ ] T018 [US2] Run `pnpm --filter @rune-langium/visual-editor build` and confirm `dist/components.js` and `dist/components.d.ts` are produced in `packages/visual-editor/dist/`; confirm existing `dist/index.js` is unchanged
-- [ ] T019 [US2] Create `packages/visual-editor/component-config.ts`: import `ZodToFormComponentConfig` type from `@zod-to-form/cli`; define `type VisualModule = typeof import('@rune-langium/visual-editor/components')`; map `fieldTypes: { 'cross-ref': { component: 'TypeSelector' }, 'cardinality': { component: 'CardinalityPicker' } }`; add `fields` entries using confirmed grammar field path names (e.g. `enumForm.superEnum`, `attributeForm.typeCall`, etc.) from T006; export as `satisfies ZodToFormComponentConfig<VisualModule>`
+- [ ] T019 [US2] **Depends on T011 (schema variable names required)** — Create `packages/visual-editor/component-config.ts`: import `ZodToFormComponentConfig` type from `@zod-to-form/cli`; define `type VisualModule = typeof import('@rune-langium/visual-editor/components')`; map `fieldTypes: { 'cross-ref': { component: 'TypeSelector' }, 'cardinality': { component: 'CardinalityPicker' } }`; add `fields` entries using the confirmed schema variable names from T012 and grammar field path names from T006 (format: `{schemaVariableName}.{fieldPath}` — verify against `@zod-to-form` CLI docs once installed via T002); export as `satisfies ZodToFormComponentConfig<VisualModule>`
 - [ ] T020 [US2] Run `pnpm --filter @rune-langium/visual-editor type-check` and confirm `component-config.ts` compiles without errors
 - [ ] T021 [US2] Verify compile-time widget name rejection: temporarily change one `component:` value in `component-config.ts` to `'BadWidget'`; confirm `tsc --noEmit` reports a type error; revert and confirm it passes (FR-008 verification)
-- [ ] T022 [US2] Run `pnpm --filter @rune-langium/visual-editor test` and confirm T015 (`components-subpath.test.ts`) passes after T018 build
+- [ ] T022 [US2] Run `pnpm --filter @rune-langium/visual-editor test` and confirm T015 (`components-subpath.test.ts`) passes after T016 creates the barrel
 
 **Checkpoint**: `./components` subpath resolves at type and runtime; `component-config.ts` compiles; invalid widget names are caught at compile time
 
@@ -106,12 +108,13 @@
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] Replace the existing `scaffold:forms` script in `packages/visual-editor/package.json` with: `"scaffold:forms": "pnpm scaffold:enumForm && pnpm scaffold:dataTypeForm"`; add `"scaffold:enumForm"`: `"zod-to-form generate --schema src/generated/zod-schemas.ts --export RosettaEnumerationSchema --out src/components/forms/generated --mode auto-save --component-config component-config.ts"`; add `"scaffold:dataTypeForm"`: `"zod-to-form generate --schema src/generated/zod-schemas.ts --export DataSchema --out src/components/forms/generated --mode auto-save --component-config component-config.ts"`
+- [ ] T024 [US3] Replace the existing `scaffold:forms` script in `packages/visual-editor/package.json` with: `"scaffold:forms": "pnpm scaffold:enumForm && pnpm scaffold:dataTypeForm"`; add `"scaffold:enumForm"`: `"zod-to-form generate --schema src/generated/zod-schemas.ts --export <RosettaEnumerationSchemaExportName> --out src/components/forms/generated --mode auto-save --component-config component-config.ts"`; add `"scaffold:dataTypeForm"`: `"zod-to-form generate --schema src/generated/zod-schemas.ts --export <DataSchemaExportName> --out src/components/forms/generated --mode auto-save --component-config component-config.ts"` — substitute the exact export names confirmed in T012
 - [ ] T025 [US3] Run `pnpm --filter @rune-langium/visual-editor scaffold:forms` and verify: no errors; `packages/visual-editor/src/components/forms/generated/RosettaEnumerationForm.tsx` is produced; `packages/visual-editor/src/components/forms/generated/DataForm.tsx` is produced
 - [ ] T026 [US3] Inspect `packages/visual-editor/src/components/forms/generated/RosettaEnumerationForm.tsx` and verify: `onValueChange` prop is present in the component's props interface; `TypeSelector` is imported from `@rune-langium/visual-editor/components` for the cross-ref parent field; `CardinalityPicker` is imported for any cardinality fields; no submit button pattern (`<button type="submit">` or `onSubmit=`) exists in the output; unmapped fields use standard `<input>` elements (SC-001, FR-010, FR-011)
-- [ ] T027 [US3] Run `pnpm --filter @rune-langium/visual-editor type-check` and confirm generated form components in `src/components/forms/generated/` compile without TypeScript errors; run T023 test and confirm it passes
+- [ ] T027 [US3] Run `pnpm --filter @rune-langium/visual-editor type-check` to confirm generated form components in `src/components/forms/generated/` compile without TypeScript errors; run T023 test and confirm it passes
+- [ ] T028 [P] [US3] Write a vitest test in `packages/visual-editor/test/generated-form-widgets.test.tsx` that renders `RosettaEnumerationForm` with a mock `componentConfig` supplying `TypeSelector` for the cross-ref field; assert the rendered output contains a `TypeSelector` element rather than a plain `<input>` for the parent field (SC-001 automated widget-resolution coverage, FR-011)
 
-**Checkpoint**: `pnpm scaffold:forms` produces valid auto-save form components with correct widget imports; components compile cleanly; T023 passes
+**Checkpoint**: `pnpm scaffold:forms` produces valid auto-save form components with correct widget imports; T023 and T028 pass; components compile cleanly
 
 ---
 
@@ -125,20 +128,21 @@
 
 ### Tests for User Story 4
 
-- [ ] T028 [P] [US4] Write vitest test in `packages/visual-editor/test/EnumForm.test.tsx`: (a) render `EnumForm` with a mock `data` prop; (b) simulate name input change; (c) verify `actions.renameType` is NOT called immediately (debounce active); (d) advance fake timers by 500ms; (e) verify `actions.renameType` IS called with trimmed name; (f) change `data` prop reference with a new value while name field is dirty; (g) verify dirty name field value is NOT overwritten (FR-014, FR-016) — write before migration (will fail until T032)
-- [ ] T029 [P] [US4] Write vitest smoke test in `packages/visual-editor/test/non-migrated-forms.test.tsx`: render `ChoiceForm`, `DataTypeForm`, and `FunctionForm` with minimal mock props; assert each renders without throwing; assert they accept their original prop shapes — write before migration (should pass already; used as regression guard for FR-017)
+- [ ] T029 [P] [US4] Write vitest test in `packages/visual-editor/test/EnumForm.test.tsx`: (a) render `EnumForm` with a mock `data` prop; (b) simulate name input change; (c) verify `actions.renameType` is NOT called immediately (debounce active); (d) advance fake timers by 500ms; (e) verify `actions.renameType` IS called with trimmed name; (f) change `data` prop reference with a new value while name field is dirty; (g) verify dirty name field value is NOT overwritten (FR-014, FR-016) — write before migration (will fail until T034)
+- [ ] T030 [P] [US4] Write vitest smoke test in `packages/visual-editor/test/non-migrated-forms.test.tsx`: render `ChoiceForm`, `DataTypeForm`, and `FunctionForm` with minimal mock props; assert each renders without throwing; assert they accept their original prop shapes — write before migration (should pass already; used as regression guard for FR-017)
+- [ ] T031 [P] [US4] Write vitest test in `packages/visual-editor/test/EnumForm-members.test.tsx`: render the migrated `EnumForm`, simulate appending an enum value via the add button, assert the store `actions.appendEnumValue` callback fires with the correct args; simulate removing an enum value, assert `actions.removeEnumValue` fires — verifies FR-015 (list-style member editing preserved within shared `FormProvider` context) — write before migration (will fail until T034)
 
 ### Implementation for User Story 4
 
-- [ ] T030 [US4] Create `packages/visual-editor/src/components/forms/MapFormRegistry.ts`: implement `ZodFormRegistry` interface from `@zod-to-form/core` using a `Map<ZodType, FormMeta>`; add `add(schema, meta): this`, `get(schema): FormMeta | undefined`, and `has(schema): boolean` methods
-- [ ] T031 [US4] Create `packages/visual-editor/src/components/forms/ExternalDataSync.tsx`: generic `ExternalDataSync<T extends FieldValues>` component that accepts `{ data: unknown; toValues: () => T }` props; uses `useFormContext<T>()` to call `form.reset(toValues(), { keepDirtyValues: true })` only when the `data` reference changes via `useEffect` with ref-equality check; renders `null`
-- [ ] T032 [US4] Migrate `packages/visual-editor/src/components/editors/EnumForm.tsx`: (a) remove `useNodeForm`, `FormProvider`, and `Controller` imports; (b) add `ZodForm` from `@zod-to-form/react`; (c) compute `enumCoreSchema` via `useMemo(() => createRosettaEnumerationSchema({ RosettaEnumeration: validParentNames }).pick({ name: true, superEnum: true }), [validParentNames])`; (d) instantiate `MapFormRegistry` and register `TypeSelector` render override for the `superEnum`/parent schema field; (e) replace `<FormProvider {...form}>` with `<ZodForm schema={enumCoreSchema} defaultValues={...} onValueChange={handleNameParentCommit} mode="onChange" formRegistry={formRegistry}>`; (f) add `<ExternalDataSync data={data} toValues={() => ({ name: data.name, superEnum: data.superEnum })} />` as a child; (g) keep `useFieldArray` for `enumValues` via `useFormContext()` from ZodForm's FormProvider; (h) keep all store-action callbacks, annotation callbacks, metadata callbacks, and all child section components unchanged
-- [ ] T033 [US4] Verify `EnumFormProps` interface is unchanged: confirm exported type in `packages/visual-editor/src/components/editors/EnumForm.tsx` still has exactly `{ nodeId: string; data: TypeNodeData<'enum'>; availableTypes: TypeOption[]; actions: EditorFormActions<'enum'>; inheritedGroups?: InheritedGroup[] }` — no added, removed, or changed props (FR-013)
-- [ ] T034 [US4] Run `pnpm --filter @rune-langium/visual-editor type-check` and confirm migrated `EnumForm.tsx`, `MapFormRegistry.ts`, and `ExternalDataSync.tsx` all compile without TypeScript errors
-- [ ] T035 [US4] Run `pnpm --filter @rune-langium/visual-editor test` and verify T028 (`EnumForm.test.tsx`) and T029 (`non-migrated-forms.test.tsx`) both pass (SC-005, SC-006, SC-007)
-- [ ] T036 [US4] Manual smoke verification in the studio app: open the editor with an enum node; confirm `EnumForm` renders; edit the name field and wait 500ms to confirm auto-save fires; select a parent enum via `TypeSelector` and confirm it commits immediately; add and remove an enum value and confirm list editing works; open a non-migrated form and confirm it still functions
+- [ ] T032 [US4] Create `packages/visual-editor/src/components/forms/MapFormRegistry.ts`: implement `ZodFormRegistry` interface from `@zod-to-form/core` using a `Map<ZodType, FormMeta>`; add `add(schema, meta): this`, `get(schema): FormMeta | undefined`, and `has(schema): boolean` methods
+- [ ] T033 [US4] Create `packages/visual-editor/src/components/forms/ExternalDataSync.tsx`: generic `ExternalDataSync<T extends FieldValues>` component that accepts `{ data: unknown; toValues: () => T }` props; uses `useFormContext<T>()` to call `form.reset(toValues(), { keepDirtyValues: true })` only when the `data` reference changes via `useEffect` with ref-equality check; renders `null`
+- [ ] T034 [US4] Migrate `packages/visual-editor/src/components/editors/EnumForm.tsx`: (a) remove `useNodeForm`, `FormProvider`, and `Controller` imports; (b) add `ZodForm` from `@zod-to-form/react`; (c) compute `enumCoreSchema` via `useMemo(() => createRosettaEnumerationSchema({ RosettaEnumeration: validParentNames }).pick({ name: true, superEnum: true }), [validParentNames])`; (d) instantiate `MapFormRegistry` and register `TypeSelector` render override for the `superEnum`/parent schema field; (e) replace `<FormProvider {...form}>` with `<ZodForm schema={enumCoreSchema} defaultValues={...} onValueChange={handleNameParentCommit} mode="onChange" formRegistry={formRegistry}>`; (f) add `<ExternalDataSync data={data} toValues={() => ({ name: data.name, superEnum: data.superEnum })} />` as a child; (g) keep `useFieldArray` for `enumValues` via `useFormContext()` from ZodForm's FormProvider; (h) keep all store-action callbacks, annotation callbacks, metadata callbacks, and all child section components unchanged
+- [ ] T035 [US4] Verify `EnumFormProps` interface is unchanged: confirm exported type in `packages/visual-editor/src/components/editors/EnumForm.tsx` still has exactly `{ nodeId: string; data: TypeNodeData<'enum'>; availableTypes: TypeOption[]; actions: EditorFormActions<'enum'>; inheritedGroups?: InheritedGroup[] }` — no added, removed, or changed props (FR-013)
+- [ ] T036 [US4] Run `pnpm --filter @rune-langium/visual-editor type-check` and confirm migrated `EnumForm.tsx`, `MapFormRegistry.ts`, and `ExternalDataSync.tsx` all compile without TypeScript errors
+- [ ] T037 [US4] Run `pnpm --filter @rune-langium/visual-editor test` and verify T029 (`EnumForm.test.tsx`), T030 (`non-migrated-forms.test.tsx`), and T031 (`EnumForm-members.test.tsx`) all pass (SC-005, SC-006, SC-007, FR-015)
+- [ ] T038 [US4] Manual smoke verification in the studio app: open the editor with an enum node; confirm `EnumForm` renders; edit the name field and wait 500ms to confirm auto-save fires; select a parent enum via `TypeSelector` and confirm it commits immediately; add and remove an enum value and confirm list editing works; open a non-migrated form and confirm it still functions
 
-**Checkpoint**: `EnumForm` migrated to `ZodForm`; T028 and T029 pass; `EnumFormProps` unchanged; non-migrated forms unaffected
+**Checkpoint**: `EnumForm` migrated to `ZodForm`; T029, T030, T031 pass; `EnumFormProps` unchanged; non-migrated forms unaffected
 
 ---
 
@@ -146,12 +150,13 @@
 
 **Purpose**: CI enforcement, build hygiene, and final end-to-end validation
 
-- [ ] T037 Add `check-generated` job to `.github/workflows/ci.yml`: steps — (1) `actions/checkout@v4`, (2) `pnpm/action-setup@v4`, (3) `pnpm install --frozen-lockfile`, (4) `pnpm --filter @rune-langium/visual-editor generate:schemas`, (5) `pnpm --filter @rune-langium/visual-editor scaffold:forms`, (6) `git diff --exit-code` — job fails if any committed generated file differs from freshly-regenerated output (FR-018, SC-008)
-- [ ] T038 [P] Remove `.gitkeep` files from `packages/visual-editor/src/generated/` and `packages/visual-editor/src/components/forms/generated/` now that real generated files occupy those directories
-- [ ] T039 [P] Run `pnpm lint` across the full monorepo and fix any lint errors introduced by new source files (`components.ts`, `component-config.ts`, `MapFormRegistry.ts`, `ExternalDataSync.tsx`)
-- [ ] T040 [P] Verify `packages/visual-editor/package.json` `"files"` array includes paths needed to publish `dist/components.js`, `dist/components.d.ts`, and any generated source files that consumers may need
-- [ ] T041 Full end-to-end regeneration smoke test: run `pnpm --filter @rune-langium/core generate` → `pnpm --filter @rune-langium/visual-editor generate:schemas` → `pnpm --filter @rune-langium/visual-editor scaffold:forms` → assert `git diff --exit-code` exits 0 on a clean committed state (local mirror of SC-008 CI check)
-- [ ] T042 [P] Run `pnpm --filter @rune-langium/visual-editor build` end-to-end and confirm the full package builds cleanly; verify `dist/` contains `index.js`, `index.d.ts`, `components.js`, `components.d.ts`, and `styles.css`
+- [ ] T039 Add `check-generated` job to `.github/workflows/ci.yml`: steps — (1) `actions/checkout@v4`, (2) `pnpm/action-setup@v4`, (3) `pnpm install --frozen-lockfile`, (4) `pnpm --filter @rune-langium/visual-editor generate:schemas` (**note**: this step requires `langium-zod` to be resolvable in CI; if `langium-zod` is still locally linked via `file:` path, skip this step and add a TODO comment until `langium-zod` is published to a registry), (5) `pnpm --filter @rune-langium/visual-editor scaffold:forms`, (6) `git diff --exit-code` — job fails if any committed generated file differs from freshly-regenerated output (FR-018, SC-008)
+- [ ] T040 [P] Remove `.gitkeep` files from `packages/visual-editor/src/generated/` and `packages/visual-editor/src/components/forms/generated/` now that real generated files occupy those directories
+- [ ] T041 [P] Run `pnpm lint` across the full monorepo and fix any lint errors introduced by new source files (`components.ts`, `component-config.ts`, `MapFormRegistry.ts`, `ExternalDataSync.tsx`)
+- [ ] T042 [P] Verify `packages/visual-editor/package.json` `"files"` array includes paths needed to publish `dist/components.js`, `dist/components.d.ts`, and any generated source files that consumers may need
+- [ ] T043 Full end-to-end regeneration smoke test: run `pnpm --filter @rune-langium/core generate` → `pnpm --filter @rune-langium/visual-editor generate:schemas` → `pnpm --filter @rune-langium/visual-editor scaffold:forms` → assert `git diff --exit-code` exits 0 on a clean committed state (local mirror of SC-008 CI check)
+- [ ] T044 [P] Run `pnpm --filter @rune-langium/visual-editor build` end-to-end and confirm the full package builds cleanly; verify `dist/` contains `index.js`, `index.d.ts`, `components.js`, `components.d.ts`, and `styles.css`
+- [ ] T045 [P] Audit `packages/visual-editor/src/schemas/form-schemas.ts`: check whether `enumFormSchema` is still referenced by any test or non-migrated code after T034 migrates `EnumForm` to `enumCoreSchema`; if `enumFormSchema` is no longer used, add a `// @deprecated — use generated createRosettaEnumerationSchema instead` comment and create a follow-up issue for removal in the next migration phase
 
 ---
 
@@ -161,10 +166,10 @@
 
 - **Setup (Phase 1)**: No dependencies — start immediately
 - **Foundational (Phase 2)**: Depends on Setup — **BLOCKS all user stories**
-- **US1 (Phase 3)**: Depends on Foundational — generates schemas consumed by US3 and US4
-- **US2 (Phase 4)**: Depends on Foundational — can run **in parallel with US1**
+- **US1 (Phase 3)**: Depends on Foundational — generates schemas and confirms variable names consumed by US2 (T019) and US4
+- **US2 (Phase 4)**: Depends on Foundational for T015–T018; **T019 additionally depends on T011** (needs generated schema variable names to author `fields` keys correctly)
 - **US3 (Phase 5)**: Depends on **both US1 and US2** (needs generated schemas + component config)
-- **US4 (Phase 6)**: Depends on US1 (`createRosettaEnumerationSchema` factory required); soft dependency on US2 (TypeSelector wiring)
+- **US4 (Phase 6)**: Depends on US1 (`createRosettaEnumerationSchema` factory required); soft dependency on US2 (TypeSelector wiring needs `./components` build)
 - **Polish (Phase 7)**: Depends on all user stories complete
 
 ### User Story Dependencies
@@ -172,16 +177,17 @@
 | Story | Depends On | Notes |
 |---|---|---|
 | US1 | Foundational | Independent of US2 |
-| US2 | Foundational | Independent of US1 — run in parallel |
-| US3 | US1 + US2 | Needs schemas (US1) and component config (US2) |
+| US2 (T015–T018) | Foundational | T015–T018 are independent of US1 — run in parallel |
+| US2 (T019–T022) | **US1 (T011)** | T019 requires confirmed schema variable names from T012; cannot start until T011 runs |
+| US3 | US1 + US2 (all) | Needs schemas (US1) and complete component config (US2) |
 | US4 | US1 (required), US2 (soft) | Needs `createRosettaEnumerationSchema`; TypeSelector wiring needs `./components` build |
 
 ### Within Each User Story
 
-- Document/verify inputs before authoring configs (T006–T007 before T009)
-- Config authoring before running generation (T009 before T010–T011)
-- Generation runs before output inspection (T011 before T012–T014)
-- Type-check passes before migration proceeds (T020 before T032)
+- Grammar field names (T006–T007) before config authoring (T009)
+- Config authoring (T009) before running generation (T010–T011)
+- Generation (T011) before output inspection (T012–T014) and before T019
+- Type-check passes before migration proceeds (T020 before T034)
 - Tests written before implementation tasks that satisfy them (TDD per constitution)
 
 ---
@@ -195,16 +201,21 @@ T004: Create forms/generated/         [independent]
 T005: Create forms/ shared utilities  [independent]
 ```
 
-### US1 + US2 simultaneously (after Phase 2)
+### US1 + partial US2 simultaneously (after Phase 2)
 ```
 Stream A (US1): T008 → T009 → T010 → T011 → T012 → T013 → T014
-Stream B (US2): T015 → T016, T017 → T018 → T019 → T020 → T021 → T022
+Stream B (US2 early): T015 → T016, T017 → T018
+                              ↓ wait for T011 (US1) ↓
+Stream B (US2 late):  T019 → T020 → T021 → T022
 ```
+*Note*: T016 and T017 are independently parallelizable within Stream B.
+*Note*: T019 cannot start until T011 completes — it needs the generated schema variable names.
 
-### Phase 6 tests (T028, T029 simultaneously)
+### Phase 6 tests (T029, T030, T031 simultaneously)
 ```
-T028: EnumForm behavior test        [different file]
-T029: Non-migrated forms regression [different file]
+T029: EnumForm behavior test             [different file]
+T030: Non-migrated forms regression      [different file]
+T031: EnumForm list-style member test    [different file]
 ```
 
 ---
@@ -216,13 +227,13 @@ T029: Non-migrated forms regression [different file]
 1. Complete Phase 1: Setup (T001–T005)
 2. Complete Phase 2: Foundational — field name verification (T006–T007)
 3. Complete Phase 3: US1 — Schema generation pipeline (T008–T014)
-4. **STOP and VALIDATE**: `pnpm generate:schemas` runs clean; conformance passes; cross-ref factories present
+4. **STOP and VALIDATE**: `pnpm generate:schemas` runs clean; conformance passes; cross-ref factories present; schema variable names recorded
 5. Schemas are now available as foundation for US3 and US4
 
 ### Incremental Delivery
 
 1. Setup + Foundational → Dependencies resolved, field names confirmed
-2. US1 + US2 in parallel → Schemas generated, component widget surface wired
+2. US1 + US2 (T015–T018 in parallel with US1; T019 after T011) → Schemas generated, component widget surface wired
 3. US3 → Auto-save form scaffolding complete end-to-end
 4. US4 → `EnumForm` migrated with full behavior parity
 5. Polish → CI enforcement, lint, build verification, end-to-end smoke
@@ -231,13 +242,14 @@ T029: Non-migrated forms regression [different file]
 
 ```
 Developer A: US1 (T008–T014) — schema generation pipeline
-Developer B: US2 (T015–T022) — component subpath + component config
+Developer B: US2 early (T015–T018) — component subpath + build
 
-→ Both complete → merge →
+→ T011 complete →
 
-Either developer: US3 (T023–T027) — form scaffolding
-Then:            US4 (T028–T036) — EnumForm migration
-Then:            Polish (T037–T042)
+Developer B continues: US2 late (T019–T022) — component config (now has schema names)
+Developer A or B: US3 (T023–T028) — form scaffolding
+Then: US4 (T029–T038) — EnumForm migration
+Then: Polish (T039–T045)
 ```
 
 ---
@@ -247,6 +259,7 @@ Then:            Polish (T037–T042)
 - **[P]** tasks operate on different files with no cross-dependencies — safe to parallelize
 - **[Story]** labels map each task to the user story it satisfies for traceability
 - Grammar field names (T006–T007) are the most critical blocking research — wrong names cascade into all configs
-- The `langium-zod` local-link risk: if CI cannot resolve the local file path, the `check-generated` job (T037) may need to be scoped to `scaffold:forms` only until `langium-zod` is published to npm
+- **T019 hidden dependency**: `fields` entries in `component-config.ts` require knowing generated schema variable names — confirmed only after T011 runs; do not write these entries before running generation
+- **`langium-zod` CI risk** (T039): If `langium-zod` is still resolved via a local `file:` path, the `generate:schemas` step in CI will fail; scope T039 to `scaffold:forms` only until `langium-zod` is published to a registry, and leave a TODO in the CI job comment
 - Commit after each phase checkpoint to minimize risk of context loss
-- Do not delete `src/schemas/form-schemas.ts` — it remains active for non-migrated forms
+- Do not delete `src/schemas/form-schemas.ts` — it remains active for non-migrated forms; T045 audits its ongoing relevance

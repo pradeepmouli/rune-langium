@@ -146,7 +146,7 @@ flowchart LR
 ### Functional Requirements
 
 - **FR-001**: The visual editor package MUST expose a dedicated components module via a `package.json` `exports` map subpath (`"./components"`), making reusable form widgets resolvable as `@rune-langium/visual-editor/components`.
-- **FR-002**: The project MUST generate form-surface schemas from DSL sources using projection rules defined in a TypeScript config file (e.g. `form-projection.config.ts`) that restrict output to required form fields.
+- **FR-002**: The project MUST generate form-surface schemas from DSL sources using projection rules defined in a JSON projection config file (`form-surfaces.json`) consumed by `langium-zod generate --projection`, restricting output to required form fields. Compile-time field mapping is configured separately via a TypeScript component config file (`component-config.ts`) covered by FR-007.
 - **FR-003**: Generated form-surface schemas MUST exclude internal framework metadata fields.
 - **FR-004**: Generated schemas MUST include cross-reference validation factory variants for types that contain cross-reference fields.
 - **FR-005**: Generated schemas MUST include conformance checks against typed model definitions and fail validation on schema/model drift.
@@ -175,7 +175,7 @@ flowchart LR
 ### Key Entities *(include if feature involves data)*
 
 - **Component Module Surface**: Named widget exports available to config and generated forms; exposed via the `"./components"` `exports` map subpath as `@rune-langium/visual-editor/components`.
-- **Form Projection Configuration**: Declarative TypeScript config file (e.g. `form-projection.config.ts`) that selects form-relevant fields per DSL type for generated schemas; type-checked at compile time alongside the grammar workspace.
+- **Form Projection Configuration**: Declarative JSON file (`form-surfaces.json`) that selects form-relevant fields per DSL type for generated schemas; consumed by `langium-zod generate --projection`. Field-type-to-widget mapping is a separate TypeScript concern handled by the Component Mapping Configuration.
 - **Generated Form-Surface Schema Set**: Deterministic schema outputs and conformance artifacts derived from grammar and projection inputs.
 - **Component Mapping Configuration**: Declarative mapping of domain field types and schema field paths to widget names and optional widget props.
 - **Generated Form Artifact**: Checked-in deterministic form component output produced from schema and mapping inputs.
