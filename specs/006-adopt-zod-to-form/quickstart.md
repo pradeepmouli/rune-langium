@@ -63,20 +63,16 @@ pnpm scaffold:forms
 This runs each form scaffold command:
 ```bash
 # EnumForm
-zod-to-form generate \
+zodform generate \
   --schema src/generated/zod-schemas.ts \
   --export RosettaEnumerationSchema \
-  --out src/components/forms/generated \
-  --mode auto-save \
-  --component-config component-config.ts
+  --out src/components/forms/generated
 
 # DataTypeForm
-zod-to-form generate \
+zodform generate \
   --schema src/generated/zod-schemas.ts \
   --export DataSchema \
-  --out src/components/forms/generated \
-  --mode auto-save \
-  --component-config component-config.ts
+  --out src/components/forms/generated
 ```
 
 **Outputs** (committed to source control):
