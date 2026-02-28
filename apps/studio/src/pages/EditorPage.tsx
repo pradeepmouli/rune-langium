@@ -82,24 +82,32 @@ export function EditorPage({
   const [hiddenNodeIds, setHiddenNodeIds] = useState<Set<string>>(new Set<string>());
   const [visibilityInitialized, setVisibilityInitialized] = useState(false);
 
-  // All graph nodes (unpositionally) for the explorer tree
+  // All graph nodes (user-defined only) for the explorer tree.
+  // Base-type files (readOnly) are excluded so the explorer only shows
+  // user namespaces; the full `models` prop is still passed to RuneTypeGraph
+  // so cross-references resolve correctly.
+  const userModels = useMemo(() => models.filter((_, i) => !files[i]?.readOnly), [models, files]);
   const allGraphNodes: TypeGraphNode[] = useMemo(() => {
-    if (models.length === 0) return [];
-    const { nodes } = astToGraph(models as unknown[]);
+    if (userModels.length === 0) return [];
+    const { nodes } = astToGraph(userModels as unknown[]);
     return nodes;
-  }, [models]);
+  }, [userModels]);
 
   // Initialize visibility on first load / model change.
-  // All namespaces expanded (visible in explorer) but all nodes hidden
-  // so the graph starts empty. Users toggle individual nodes on.
+  // Small models (≤ 10 nodes) start fully visible on the graph.
+  // Large models start empty so users can selectively show namespaces.
   useEffect(() => {
     if (allGraphNodes.length === 0) return;
 
     if (!visibilityInitialized) {
       const allNamespaces = new Set(allGraphNodes.map((n) => n.data.namespace));
-      const allNodeIds = new Set(allGraphNodes.map((n) => n.id));
+      const SMALL_MODEL_THRESHOLD = 10;
+      const initialHidden =
+        allGraphNodes.length <= SMALL_MODEL_THRESHOLD
+          ? new Set<string>()
+          : new Set(allGraphNodes.map((n) => n.id));
       setExpandedNamespaces(allNamespaces);
-      setHiddenNodeIds(allNodeIds);
+      setHiddenNodeIds(initialHidden);
       setVisibilityInitialized(true);
     }
   }, [allGraphNodes]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -498,6 +506,7 @@ export function EditorPage({
             size="sm"
             onClick={() => setExplorerOpen((v) => !v)}
             title="Toggle namespace explorer"
+            className="studio-toolbar-button"
           >
             Explorer
           </Button>

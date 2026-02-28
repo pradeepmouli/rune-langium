@@ -114,9 +114,9 @@ export function NamespaceExplorerPanel({
   hiddenRefCounts
 }: NamespaceExplorerPanelProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
-  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(
-    () => new Set(nodes.map((n) => n.data.namespace))
-  );
+  // Tree expansion (UI-only: shows/hides the type list per namespace).
+  // Starts collapsed so the first chevron click opens the namespace list.
+  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => new Set());
 
   // Build and filter the namespace tree
   const fullTree = useMemo(() => buildNamespaceTree(nodes), [nodes]);
@@ -161,7 +161,7 @@ export function NamespaceExplorerPanel({
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b">
           <span className="text-sm font-semibold">Explorer</span>
-          <Badge variant="secondary">
+          <Badge variant="secondary" className="ns-explorer__count">
             {visibleCount}/{totalTypes}
           </Badge>
         </div>
@@ -272,7 +272,7 @@ function NamespaceRow({
           size="icon-xs"
           onClick={onToggleTreeExpand}
           aria-label={isTreeExpanded ? 'Collapse tree' : 'Expand tree'}
-          className="shrink-0"
+          className="ns-row__chevron shrink-0"
         >
           {isTreeExpanded ? (
             <ChevronDown className="size-3.5" />
@@ -288,7 +288,7 @@ function NamespaceRow({
               size="icon-xs"
               onClick={onToggleGraphVisibility}
               aria-label={isGraphVisible ? 'Hide namespace from graph' : 'Show namespace on graph'}
-              className="shrink-0"
+              className="ns-row__visibility shrink-0"
             >
               {isGraphVisible ? (
                 <Eye className="size-3.5" />
@@ -307,7 +307,7 @@ function NamespaceRow({
           {entry.namespace}
         </span>
 
-        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+        <Badge variant="secondary" className="ns-row__badge text-[10px] px-1.5 py-0">
           {entry.totalCount}
         </Badge>
       </div>
@@ -348,7 +348,7 @@ function NamespaceRow({
                 <KindIcon className="size-3.5 shrink-0 text-muted-foreground" />
 
                 <span
-                  className="flex-1 truncate cursor-pointer hover:underline"
+                  className="ns-type__name flex-1 truncate cursor-pointer hover:underline"
                   onClick={() => onSelectNode?.(type.nodeId)}
                   title={`${type.name} [${KIND_LABELS[type.kind]}]`}
                 >

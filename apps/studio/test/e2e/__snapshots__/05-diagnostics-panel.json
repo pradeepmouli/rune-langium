@@ -1,6 +1,6 @@
 {
   "name": "05-diagnostics-panel",
-  "timestamp": "2026-02-14T23:09:11.058Z",
+  "timestamp": "2026-02-28T21:50:19.093Z",
   "viewport": {
     "width": 1280,
     "height": 720
@@ -12,14 +12,14 @@
       "textContent": "No problems detected",
       "className": "flex flex-col items-center justify-center p-3 max-h-[200px]",
       "styles": {
-        "color": "rgb(226, 232, 240)",
+        "color": "oklch(0.984 0.003 247.858)",
         "backgroundColor": "rgba(0, 0, 0, 0)",
-        "borderColor": "rgb(226, 232, 240)",
+        "borderColor": "oklch(1 0 0 / 0.1)",
         "borderWidth": "0px",
         "borderRadius": "0px",
         "fontSize": "16px",
         "fontWeight": "400",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontFamily": "ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
         "padding": "12px",
         "margin": "0px",
         "gap": "normal",
@@ -28,12 +28,12 @@
         "alignItems": "center",
         "justifyContent": "center",
         "width": "1280px",
-        "height": "54.1406px",
+        "height": "57px",
         "minWidth": "auto",
         "maxWidth": "none",
         "opacity": "1",
         "boxShadow": "none",
-        "outline": "rgb(226, 232, 240) none 0px"
+        "outline": "oklab(0.488 -0.0238138 -0.24183 / 0.5) none 0px"
       },
       "childCount": 2,
       "visible": true
@@ -42,16 +42,16 @@
       "selector": "[data-testid=\"diagnostics-panel\"] [data-slot=\"separator\"]",
       "tagName": "div",
       "textContent": "",
-      "className": "bg-border-default shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
+      "className": "bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
       "styles": {
-        "color": "rgb(226, 232, 240)",
-        "backgroundColor": "rgb(51, 65, 85)",
-        "borderColor": "rgb(226, 232, 240)",
+        "color": "oklch(0.984 0.003 247.858)",
+        "backgroundColor": "oklch(1 0 0 / 0.1)",
+        "borderColor": "oklch(1 0 0 / 0.1)",
         "borderWidth": "0px",
         "borderRadius": "0px",
         "fontSize": "16px",
         "fontWeight": "400",
-        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "fontFamily": "ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
         "padding": "0px",
         "margin": "0px",
         "gap": "normal",
@@ -65,7 +65,7 @@
         "maxWidth": "none",
         "opacity": "1",
         "boxShadow": "none",
-        "outline": "rgb(226, 232, 240) none 0px"
+        "outline": "oklab(0.488 -0.0238138 -0.24183 / 0.5) none 0px"
       },
       "childCount": 0,
       "visible": true
