@@ -97,10 +97,10 @@ jobs:
   # Runs generate:schemas, normalises formatting, then fails if any committed
   # generated file differs from the freshly-regenerated output.
   #
-  # Note: scaffold:forms is intentionally omitted because the zodform CLI v0.2.3
-  # does not support --mode auto-save, so hand-authored forms in
-  # src/components/forms/generated/ cannot be reproduced by the CLI.
-  # TODO: Add scaffold:forms check once the CLI supports auto-save mode.
+  # Note: scaffold:forms is still intentionally omitted even though @zod-to-form/cli
+  # is now pinned to v0.2.4+ with --mode auto-save support; hand-authored forms in
+  # src/components/forms/generated/ are not yet reproduced and checked in CI.
+  # TODO: Add scaffold:forms check using auto-save mode now that the CLI supports it.
   # ---------------------------------------------------------------------------
   check-generated:
     runs-on: ubuntu-latest
