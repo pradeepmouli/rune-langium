@@ -22,11 +22,11 @@
 
 **Purpose**: Package dependency updates and directory scaffolding required before any feature work begins
 
-- [ ] T001 Add `"@zod-to-form/react": "*"` to `dependencies` in `packages/visual-editor/package.json`
-- [ ] T002 Confirm `"@zod-to-form/cli": "*"` is present in `devDependencies` in `packages/visual-editor/package.json`; run `pnpm install` from repo root and verify both `@zod-to-form/react` and `@zod-to-form/cli` resolve without errors
-- [ ] T003 [P] Create `packages/visual-editor/src/generated/` directory if it does not already exist; add `.gitkeep` so it is tracked before generation runs
-- [ ] T004 [P] Create `packages/visual-editor/src/components/forms/generated/` directory if it does not already exist; add `.gitkeep` so it is tracked before scaffolding runs
-- [ ] T005 [P] Create `packages/visual-editor/src/components/forms/` directory if it does not already exist (check first with `ls packages/visual-editor/src/components/`); this is the parent for shared utilities (`MapFormRegistry`, `ExternalDataSync`)
+- [X] T001 Add `"@zod-to-form/react": "*"` to `dependencies` in `packages/visual-editor/package.json`
+- [X] T002 Confirm `"@zod-to-form/cli": "*"` is present in `devDependencies` in `packages/visual-editor/package.json`; run `pnpm install` from repo root and verify both `@zod-to-form/react` and `@zod-to-form/cli` resolve without errors (also updated `langium-zod` from broken local `file:` path to `^0.5.0` from npm)
+- [X] T003 [P] Create `packages/visual-editor/src/generated/` directory if it does not already exist; add `.gitkeep` so it is tracked before generation runs
+- [X] T004 [P] Create `packages/visual-editor/src/components/forms/generated/` directory if it does not already exist; add `.gitkeep` so it is tracked before scaffolding runs
+- [X] T005 [P] Create `packages/visual-editor/src/components/forms/` directory if it does not already exist (check first with `ls packages/visual-editor/src/components/`); this is the parent for shared utilities (`MapFormRegistry`, `ExternalDataSync`)
 
 **Checkpoint**: All target directories exist; `pnpm install` resolves `@zod-to-form/react` and `@zod-to-form/cli`
 
@@ -38,8 +38,8 @@
 
 **⚠️ CRITICAL**: Grammar field name verification must complete before `form-surfaces.json` or `component-config.ts` can be correctly authored
 
-- [ ] T006 Read `packages/core/src/grammar/rune.langium` (or equivalent `.langium` file) and record the exact property names for: `RosettaEnumeration` (e.g. `name`, `superEnum`, `enumValues`), `Data` (e.g. `name`, `superType`, `description`, `attributes`), `Attribute` (e.g. `name`, `typeCall`, `card`), `RosettaFunction` (e.g. `name`, `outputType`, `parameters`), `ChoiceType` (e.g. `name`, `superType`, `options`) — note confirmed names as a comment block in `packages/visual-editor/form-surfaces.json` once created
-- [ ] T007 Read `packages/core/src/generated/ast.ts` and cross-reference TypeScript property names for each grammar type against the names recorded in T006; note any discrepancies that would affect `form-surfaces.json` or `component-config.ts` field paths; also note the exact exported schema variable names that `langium-zod generate` will produce (e.g. `RosettaEnumerationSchema`, `DataSchema`) — these are needed for the `--export` flag in T024 and for `fields` keys in T019
+- [X] T006 Read `packages/core/src/grammar/rune-dsl.langium` and confirmed: RosettaEnumeration(name, parent[cross-ref], enumValues, annotations, definition?); Data(name, superType[cross-ref], attributes, conditions, annotations, definition?); Attribute(name, typeCall, card, override, annotations); RosettaFunction(name, inputs, output, conditions, annotations); Choice(name, attributes[ChoiceOption[]], annotations)
+- [X] T007 Cross-referenced ast.ts: all field names confirmed. Key discrepancies vs tasks.md: `parent` not `superEnum` for RosettaEnumeration; `attributes` not `options` for Choice; `inputs`/`output` not `parameters`/`outputType` for RosettaFunction. Expected generated schema names: `RosettaEnumerationSchema`, `DataSchema`, `AttributeSchema`, `RosettaFunctionSchema`, `ChoiceSchema`
 
 **Checkpoint**: Grammar field names confirmed and documented; expected schema variable names known — config authoring can now begin
 
@@ -53,16 +53,16 @@
 
 ### Pre-generation Specification (US1)
 
-- [ ] T008 [US1] Before running generation, record the expected conformance assertion shapes as comments at the top of `packages/visual-editor/form-surfaces.json` once created: for each projected type, list which schema fields are expected in `zod-schemas.conformance.ts` and which cross-ref factory should be emitted — this specification is compared against actual generation output in T012 to verify correctness
+- [X] T008 [US1] Before running generation, record the expected conformance assertion shapes as comments at the top of `packages/visual-editor/form-surfaces.json` once created: for each projected type, list which schema fields are expected in `zod-schemas.conformance.ts` and which cross-ref factory should be emitted — this specification is compared against actual generation output in T012 to verify correctness
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Create `packages/visual-editor/form-surfaces.json`: set `defaults.strip` to `["$container", "$document", "$cstNode", "$containerProperty", "$containerIndex"]`; add `types` entries for `RosettaEnumeration`, `Data`, `Attribute`, `RosettaFunction`, `ChoiceType` using confirmed field names from T006; include the expected-shape comments from T008
-- [ ] T010 [US1] Add `"generate:schemas"` script to `packages/visual-editor/package.json`: `langium-zod generate --out src/generated/zod-schemas.ts --projection form-surfaces.json --cross-ref-validation --conformance --ast-types src/generated/ast.ts`
-- [ ] T011 [US1] Run `pnpm --filter @rune-langium/visual-editor generate:schemas` and verify: (a) `packages/visual-editor/src/generated/zod-schemas.ts` is created, (b) `packages/visual-editor/src/generated/zod-schemas.conformance.ts` is created, (c) Langium internal fields (`$container`, `$cstNode`, `$document`, `$containerProperty`, `$containerIndex`) are absent from every generated schema
-- [ ] T012 [US1] Inspect `packages/visual-editor/src/generated/zod-schemas.ts` and verify against T008 expected shapes: `createRosettaEnumerationSchema(refs?)` function is exported, `RosettaEnumerationSchemaRefs` interface is exported, equivalent factory and refs interface exist for each grammar type that has cross-reference fields; note the exact exported schema variable names (e.g. `RosettaEnumerationSchema`) for use in T019 and T024
-- [ ] T013 [US1] Run `pnpm --filter @rune-langium/visual-editor type-check` and confirm `src/generated/zod-schemas.conformance.ts` compiles without TypeScript errors (SC-003 baseline)
-- [ ] T014 [US1] Verify conformance drift detection: temporarily add a non-existent field name to one `types` entry in `form-surfaces.json`, re-run `generate:schemas`, confirm `tsc --noEmit` reports a type error in the conformance file; revert the field name and confirm type-check passes again (SC-003 fail/pass cycle)
+- [X] T009 [US1] Create `packages/visual-editor/form-surfaces.json`: set `defaults.strip` to `["$container", "$document", "$cstNode", "$containerProperty", "$containerIndex"]`; add `types` entries for `RosettaEnumeration`, `Data`, `Attribute`, `RosettaFunction`, `ChoiceType` using confirmed field names from T006; include the expected-shape comments from T008
+- [X] T010 [US1] Add `"generate:schemas"` script to `packages/visual-editor/package.json`: `langium-zod generate --out src/generated/zod-schemas.ts --projection form-surfaces.json --cross-ref-validation --conformance --ast-types src/generated/ast.ts`
+- [X] T011 [US1] Run `pnpm --filter @rune-langium/visual-editor generate:schemas` and verify: (a) `packages/visual-editor/src/generated/zod-schemas.ts` is created, (b) `packages/visual-editor/src/generated/zod-schemas.conformance.ts` is created, (c) Langium internal fields (`$container`, `$cstNode`, `$document`, `$containerProperty`, `$containerIndex`) are absent from every generated schema
+- [X] T012 [US1] Inspect `packages/visual-editor/src/generated/zod-schemas.ts` and verify against T008 expected shapes: `createRosettaEnumerationSchema(refs?)` function is exported, `RosettaEnumerationSchemaRefs` interface is exported, equivalent factory and refs interface exist for each grammar type that has cross-reference fields; note the exact exported schema variable names (e.g. `RosettaEnumerationSchema`) for use in T019 and T024
+- [X] T013 [US1] Run `pnpm --filter @rune-langium/visual-editor type-check` and confirm `src/generated/zod-schemas.conformance.ts` compiles without TypeScript errors (SC-003 baseline)
+- [X] T014 [US1] Verify conformance drift detection: temporarily add a non-existent field name to one `types` entry in `form-surfaces.json`, re-run `generate:schemas`, confirm `tsc --noEmit` reports a type error in the conformance file; revert the field name and confirm type-check passes again (SC-003 fail/pass cycle)
 
 **Checkpoint**: `pnpm generate:schemas` runs cleanly; generated schemas contain only projected fields with cross-ref factories; `tsc --noEmit` passes on conformance artifact; drift detection verified; exact schema variable names recorded for T019 and T024
 
