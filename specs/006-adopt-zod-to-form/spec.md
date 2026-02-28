@@ -12,7 +12,7 @@
 - Q: How should external model updates (e.g. undo/redo) interact with in-progress dirty form state? → A: Pristine (unedited) fields refresh immediately; dirty (user-edited) fields are never overwritten by incoming external updates.
 - Q: Which existing form is the designated first migration target for FR-013? → A: `EnumForm` — explicitly named as the first migration target.
 - Q: How should the component reuse surface be exposed from the visual editor package? → A: Via a `package.json` `exports` map subpath (`"./components"`), importable as `@rune-langium/visual-editor/components`.
-- Q: How should projection rules be authored? → A: TypeScript config file (e.g. `form-projection.config.ts`) — type-checked, colocated with the grammar workspace.
+- Q: How should projection rules be authored? → A: JSON projection config (e.g. `form-surfaces.json`) — colocated with the grammar workspace and consumed by langium-zod.
 - Q: How should stale generated artifacts be detected when grammar, projection config, or mapping config changes? → A: Git diff CI check — CI regenerates artifacts and fails if committed files differ from freshly generated ones.
 
 ## User Scenarios & Testing *(mandatory)*
