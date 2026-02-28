@@ -13,6 +13,7 @@
 - Q: Which existing form is the designated first migration target for FR-013? → A: `EnumForm` — explicitly named as the first migration target.
 - Q: How should the component reuse surface be exposed from the visual editor package? → A: Via a `package.json` `exports` map subpath (`"./components"`), importable as `@rune-langium/visual-editor/components`.
 - Q: How should projection rules be authored? → A: TypeScript config file (e.g. `form-projection.config.ts`) — type-checked, colocated with the grammar workspace.
+- Q: How should stale generated artifacts be detected when grammar, projection config, or mapping config changes? → A: Git diff CI check — CI regenerates artifacts and fails if committed files differ from freshly generated ones.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -135,7 +136,7 @@ flowchart LR
 - Projection config refers to fields that no longer exist in the grammar.
 - Conformance checks fail after grammar updates, indicating schema/model drift.
 - Cross-reference validation receives stale reference sets and rejects valid selections.
-- Generated forms are stale because schema/config changed but scaffold was not re-run.
+- Generated forms are stale because schema/config changed but scaffold was not re-run; detected by CI git-diff check failing on regeneration.
 - External model changes (undo/redo or concurrent updates) occur while user has dirty form state.
 - A field path expected to use a custom widget is omitted from field mappings.
 - Runtime cannot resolve form runtime package at app build or execution time.
@@ -161,6 +162,7 @@ flowchart LR
 - **FR-015**: The migrated form MUST continue supporting list-style member editing within the shared form context.
 - **FR-016**: The migrated form MUST handle external data refresh events by refreshing only pristine (unedited) fields; fields the user has actively edited MUST NOT be overwritten by incoming external updates, regardless of the update source.
 - **FR-017**: Hand-authored non-migrated forms MUST continue to work unchanged during incremental rollout.
+- **FR-018**: CI MUST regenerate all generated artifacts (schemas, conformance outputs, form components) and fail the build if any committed file differs from the freshly-regenerated output (`git diff --exit-code`).
 
 ### Constitution Alignment
 
@@ -191,6 +193,7 @@ flowchart LR
 - **SC-005**: In migrated-form verification scenarios, 100% of tested name/parent edits are persisted through auto-save within the existing debounce window.
 - **SC-006**: In migrated-form verification scenarios, 100% of tested external update events (including undo/redo) reconcile by updating pristine fields and leaving dirty fields untouched; no dirty field value is overwritten by an incoming external update.
 - **SC-007**: No regressions are introduced in non-migrated forms during the migration release, as validated by existing form-focused test coverage and smoke checks.
+- **SC-008**: CI regeneration check (`git diff --exit-code` after full generation) passes with zero diff on a clean checkout where all inputs and outputs are in sync; fails with a non-zero exit when any generated file is intentionally drifted from its inputs.
 
 ## Assumptions
 
