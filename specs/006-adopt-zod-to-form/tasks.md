@@ -78,17 +78,17 @@
 
 ### Tests for User Story 2
 
-- [ ] T015 [US2] Write a vitest test in `packages/visual-editor/test/components-subpath.test.ts` that imports `{ TypeSelector, CardinalityPicker }` from `'../src/components.js'` (relative source path — avoids self-referential package resolution before build) and asserts both are non-null functions — write before implementation (will fail until T016 creates the barrel)
+- [X] T015 [US2] Write a vitest test in `packages/visual-editor/test/components-subpath.test.ts` that imports `{ TypeSelector, CardinalityPicker }` from `'../src/components.js'` (relative source path — avoids self-referential package resolution before build) and asserts both are non-null functions — write before implementation (will fail until T016 creates the barrel)
 
 ### Implementation for User Story 2
 
-- [ ] T016 [P] [US2] Create `packages/visual-editor/src/components.ts`: add `export { TypeSelector } from './components/editors/TypeSelector.js'` and `export { CardinalityPicker } from './components/editors/CardinalityPicker.js'` — this is the `./components` subpath entry module
-- [ ] T017 [P] [US2] Add `"./components"` entry to `exports` map in `packages/visual-editor/package.json`: `{ "types": "./dist/components.d.ts", "default": "./dist/components.js" }`; confirm existing `.` and `"./styles.css"` entries are unchanged
-- [ ] T018 [US2] Run `pnpm --filter @rune-langium/visual-editor build` and confirm `dist/components.js` and `dist/components.d.ts` are produced in `packages/visual-editor/dist/`; confirm existing `dist/index.js` is unchanged
-- [ ] T019 [US2] **Depends on T011 (schema variable names required)** — Create `packages/visual-editor/component-config.ts`: import `ZodToFormComponentConfig` type from `@zod-to-form/cli`; define `type VisualModule = typeof import('@rune-langium/visual-editor/components')`; map `fieldTypes: { 'cross-ref': { component: 'TypeSelector' }, 'cardinality': { component: 'CardinalityPicker' } }`; add `fields` entries using the confirmed schema variable names from T012 and grammar field path names from T006 (format: `{schemaVariableName}.{fieldPath}` — verify against `@zod-to-form` CLI docs once installed via T002); export as `satisfies ZodToFormComponentConfig<VisualModule>`
-- [ ] T020 [US2] Run `pnpm --filter @rune-langium/visual-editor type-check` and confirm `component-config.ts` compiles without errors
-- [ ] T021 [US2] Verify compile-time widget name rejection: temporarily change one `component:` value in `component-config.ts` to `'BadWidget'`; confirm `tsc --noEmit` reports a type error; revert and confirm it passes (FR-008 verification)
-- [ ] T022 [US2] Run `pnpm --filter @rune-langium/visual-editor test` and confirm T015 (`components-subpath.test.ts`) passes after T016 creates the barrel
+- [X] T016 [P] [US2] Create `packages/visual-editor/src/components.ts`: add `export { TypeSelector } from './components/editors/TypeSelector.js'` and `export { CardinalityPicker } from './components/editors/CardinalityPicker.js'` — this is the `./components` subpath entry module
+- [X] T017 [P] [US2] Add `"./components"` entry to `exports` map in `packages/visual-editor/package.json`: `{ "types": "./dist/components.d.ts", "default": "./dist/components.js" }`; confirm existing `.` and `"./styles.css"` entries are unchanged
+- [X] T018 [US2] Run `pnpm --filter @rune-langium/visual-editor build` and confirm `dist/components.js` and `dist/components.d.ts` are produced in `packages/visual-editor/dist/`; confirm existing `dist/index.js` is unchanged
+- [X] T019 [US2] **Depends on T011 (schema variable names required)** — Create `packages/visual-editor/component-config.ts` using actual `@zod-to-form` v0.2.3 API (note: `ZodToFormComponentConfig` from `@zod-to-form/cli` does not exist in v0.2.3 — adapted to use `z.registry<FormMeta>()` from zod v4); imports `FormMeta` from `@zod-to-form/react`; exports `ValidWidget` union type (BuiltinWidget | VisualEditorWidget) for compile-time safety; registers `TypeCallSchema → 'TypeSelector'` and `RosettaCardinalitySchema → 'CardinalityPicker'` via `visualFormRegistry.add()`; exports `visualFormRegistry` for use as `formRegistry` prop on `ZodForm`
+- [X] T020 [US2] Run `pnpm --filter @rune-langium/visual-editor type-check` and confirm `component-config.ts` compiles without errors — passed
+- [X] T021 [US2] Verify compile-time widget name rejection: confirmed `fieldMeta('BadWidget')` causes `TS2345: Argument of type '"BadWidget"' is not assignable to parameter of type 'ValidWidget'`; reverted — type-check passes (FR-008 verified via `ValidWidget` union type)
+- [X] T022 [US2] Run `pnpm --filter @rune-langium/visual-editor test` and confirm T015 (`components-subpath.test.ts`) passes after T016 creates the barrel — all 291 tests pass (30 test files)
 
 **Checkpoint**: `./components` subpath resolves at type and runtime; `component-config.ts` compiles; invalid widget names are caught at compile time
 
