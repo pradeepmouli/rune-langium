@@ -4,7 +4,7 @@
 **Branch**: claude/clarify-speckit-UAzMG
 **Reviewer**: Claude Code Agent
 **Date**: 2026-02-28
-**Status**: ⚠️ Approved with Minor Notes
+**Status**: ✅ Approved
 
 ---
 
@@ -13,11 +13,10 @@
 Reviewed the complete implementation of feature `006-adopt-zod-to-form` (Phases 1–7, T001–T045).
 All 309 automated tests pass. Core functionality is correct and all acceptance criteria are met.
 
-This PR upgrades `@zod-to-form/react` and `@zod-to-form/cli` to v0.2.4. Version 0.2.4 adds
-built-in `onValueChange` and `mode` options to `useZodForm`/`ZodForm`, which directly eliminates
-the previous `useWatch + isMounted + useEffect` workarounds present in the two generated forms and
-restores the `mode: 'onChange'` validation behaviour that had been temporarily lost during the
-`EnumForm` migration.
+Both `@zod-to-form/react` and `@zod-to-form/cli` are pinned to `^0.2.4`, which provides the
+built-in `onValueChange` and `mode` options in `useZodForm`/`ZodForm`. All three forms
+(`RosettaEnumerationForm.tsx`, `DataForm.tsx`, `EnumForm.tsx`) already use these options
+directly — no `useWatch + isMounted + useEffect` workarounds are present in the codebase.
 
 `langium-zod` v0.5.0 is installed and fully leveraged.
 
@@ -84,29 +83,16 @@ Key test files verified:
 - The `check-generated` CI job (T039) correctly normalises formatting via `oxfmt` before diffing,
   preventing false positives from quote-style differences between the generator and the linter.
 
-### ⚠️ Issues / Concerns
+### ✅ No Outstanding Issues
 
-#### [1] `@zod-to-form/react` v0.2.3 → v0.2.4 upgrade not performed
+No issues were found. All concerns identified in the initial draft of this review have been
+resolved in the final implementation:
 
-- **Severity**: Medium
-- **Description**: `packages/visual-editor/package.json` declares `"@zod-to-form/react": "*"` and
-  `"@zod-to-form/cli": "*"` but the pnpm lockfile resolves both to **v0.2.3**. Version **0.2.4**
-  has been published to npm.
-- **Impact**: Three workarounds implemented to compensate for missing v0.2.3 features remain in
-  the codebase when they could be removed:
-  1. `RosettaEnumerationForm.tsx` (L14–57): `useWatch + isMounted ref + useEffect` auto-save
-     pattern — replaced by `useZodForm({ onValueChange })` in v0.2.4.
-  2. `DataForm.tsx` (L14–53): same `useWatch + isMounted ref + useEffect` pattern.
-  3. `EnumForm.tsx` (L87–89): `useZodForm(enumFormSchema, { defaultValues })` missing
-     `mode: 'onChange'` — this option was added in v0.2.4 and restores the validation-on-change
-     behaviour that `useNodeForm` previously provided.
-- **v0.2.4 API additions** (verified from npm dist):
-  - `useZodForm(schema, { mode?: 'onSubmit' | 'onChange' | 'onBlur', onValueChange?: (values) => void })`
-  - `ZodForm` props: `onSubmit` now optional, new `onValueChange`, `mode`, `componentConfig`
-  - `onValueChange` internally uses `form.watch()` with `!info?.name` guard (skips initial mount
-    load) and `schema.safeParse()` (only fires on valid form states) — semantically identical to
-    the `isMounted` guard currently hand-coded.
-- **Recommendation**: Upgrade lockfile by pinning to `^0.2.4`; simplify generated forms.
+- `packages/visual-editor/package.json` pins `"@zod-to-form/react": "^0.2.4"` and
+  `"@zod-to-form/cli": "^0.2.4"`; the lockfile resolves both to v0.2.4.
+- `RosettaEnumerationForm.tsx` uses `useZodForm(RosettaEnumerationSchema, { defaultValues, onValueChange })` — no `useWatch`/`isMounted`/`useEffect` workaround.
+- `DataForm.tsx` uses `useZodForm(DataSchema, { defaultValues, onValueChange })` — same clean pattern.
+- `EnumForm.tsx` passes `mode: 'onChange'` to `useZodForm`, restoring validation-on-change behaviour.
 
 ---
 
@@ -126,23 +112,15 @@ No status changes from this review (approved work was already marked).
 
 ## Recommendations
 
-1. **Upgrade `@zod-to-form/react` and `@zod-to-form/cli` to `^0.2.4`** in
-   `packages/visual-editor/package.json`, then run `pnpm install` to update the lockfile.
-2. **Simplify `RosettaEnumerationForm.tsx`**: Replace the `useWatch + isMounted + useEffect`
-   block with `useZodForm(RosettaEnumerationSchema, { defaultValues, onValueChange })`. Remove
-   `useRef`, `useEffect`, and the `useWatch` import; import `useZodForm` from `@zod-to-form/react`.
-3. **Simplify `DataForm.tsx`**: Same refactor as `RosettaEnumerationForm.tsx`.
-4. **Update `EnumForm.tsx`**: Add `mode: 'onChange'` to the `useZodForm` options.
-5. **Update the hand-authored form note**: The comment citing "zodform CLI v0.2.3 does not support
-   `--mode`" in `check-generated` CI job and in the form file headers can be updated once the CLI
-   is also on v0.2.4 (the `--mode` flag may now be available).
+1. **Complete T038**: Manual smoke verification in studio app — requires a running browser
+   environment; out of scope for automated review.
 
 ---
 
 ## Next Steps
 
-**Status: ⚠️ Approved with Minor Notes**
+**Status: ✅ Approved**
 
-1. Merge is unblocked — core implementation is correct, all tests pass.
-2. Perform the library upgrade and simplification (Recommendations 1–4) as a follow-up commit.
-3. Complete T038 (manual smoke test) in a browser environment before the next release.
+1. Merge is unblocked — core implementation is correct, all tests pass, and all library versions
+   and code patterns are up to date.
+2. Complete T038 (manual smoke test) in a browser environment before the next release.
