@@ -63,7 +63,7 @@ export function ToolbarPanel({ onFitView, onRelayout, currentDirection }: Toolba
           value={currentDirection}
           onValueChange={(val) => handleDirectionChange(val as LayoutDirection)}
         >
-          <SelectTrigger className="h-8 w-35 text-xs">
+          <SelectTrigger className="h-8 w-[8.75rem] text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
