@@ -41,13 +41,13 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
-    "@zod-to-form/react": "^0.2.4",
     "@hookform/resolvers": "^5.2.2",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
     "@xyflow/react": "^12.10.1",
-    "lucide-react": "^0.575.0",
-    "react-hook-form": "^7.71.1",
+    "@zod-to-form/react": "^0.2.4",
+    "lucide-react": "^0.576.0",
+    "react-hook-form": "^7.71.2",
     "zod": "^4.3.6",
     "zundo": "^2.3.0",
     "zustand": "^5.0.11"
@@ -62,8 +62,8 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@zod-to-form/cli": "^0.2.4",
-    "langium-zod": "^0.5.0",
     "jsdom": "^28.1.0",
+    "langium-zod": "^0.5.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "typescript": "^5.9.3"
