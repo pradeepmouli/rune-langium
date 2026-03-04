@@ -131,7 +131,7 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 - **FR-007**: System MUST parse Rune DSL text into visual blocks when switching from text mode to builder mode.
 - **FR-008**: System MUST support toggling between builder mode and text mode for any expression, preserving the expression content across switches.
 - **FR-009**: System MUST display the generated Rune DSL text as a live preview alongside the visual blocks.
-- **FR-010**: System MUST render all function sections (inputs, output, shortcuts/aliases, conditions, operations, post-conditions) with labeled headers in the builder view.
+- **FR-010**: System MUST render all function sections (inputs, output, shortcuts/aliases, conditions, operations, post-conditions) with labeled headers in the builder view. Inputs, output, and section structure are read-only in the builder; structural editing of the function is handled by the existing function form.
 - **FR-011**: System MUST support all core expression types: binary operations (+, -, *, /, and, or, =, <>, >, <, >=, <=, contains, disjoint, default, join), unary/postfix operations (exists, is absent, count, flatten, distinct, first, last, sum, reverse, only-element, type conversions), feature calls (-> and ->>), conditionals (if/then/else), switch expressions, lambda operations (filter, extract, sort, min, max, reduce), constructor expressions, and list literals.
 - **FR-012**: System MUST support undo and redo of expression edits within the builder.
 - **FR-013**: System MUST visually indicate broken references (e.g., references to deleted inputs or unresolved types) with a warning indicator.
@@ -154,6 +154,12 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 - **SC-004**: Round-trip fidelity: any expression authored in builder mode, switched to text mode, and switched back to builder mode, produces an identical visual block tree.
 - **SC-005**: The builder supports all operator types used in the Rune function grammar (binary, unary, feature call, conditional, switch, lambda, constructor, list literal) — covering at least 95% of expressions found in real-world Rune function definitions.
 - **SC-006**: Users report the builder as "easy to use" or "very easy to use" in usability testing, with a task completion rate of 85% or higher for first-time users constructing a 3-operator expression.
+
+## Clarifications
+
+### Session 2026-03-04
+
+- Q: Does the builder edit only expression bodies, or also function structure (inputs, outputs, adding operations)? → A: Expression bodies only. Function structure editing (add/remove inputs, output, operations, conditions, shortcuts) remains the responsibility of the existing function form. The builder is scoped to editing the expression content within existing slots.
 
 ## Assumptions
 
