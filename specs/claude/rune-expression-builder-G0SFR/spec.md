@@ -139,6 +139,7 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 - **FR-015**: System MUST integrate with the existing function editing form in the visual editor, using the existing expression editor slot mechanism.
 - **FR-016**: System MUST allow users to remove any expression block, replacing it with an empty placeholder slot while preserving the surrounding tree structure.
 - **FR-017**: System MUST render unsupported expression sub-trees as inline text blocks within the visual tree, allowing surrounding supported nodes to remain as visual blocks. The inline text block MUST be visually distinct from visual blocks.
+- **FR-018**: System MUST support keyboard navigation: Tab/arrow keys to move between blocks and slots, Enter to open the operator palette, Escape to cancel the current action, and Delete to replace the selected block with a placeholder.
 
 ### Key Entities
 
@@ -164,6 +165,7 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 - Q: Does the builder edit only expression bodies, or also function structure (inputs, outputs, adding operations)? → A: Expression bodies only. Function structure editing (add/remove inputs, output, operations, conditions, shortcuts) remains the responsibility of the existing function form. The builder is scoped to editing the expression content within existing slots.
 - Q: How does a user remove an existing expression block? → A: Replace with placeholder. Removing a block replaces it with an empty placeholder slot, preserving the surrounding tree structure. This keeps the expression tree structurally valid at all times.
 - Q: When an expression contains a mix of supported and unsupported nodes, what is the fallback granularity? → A: Sub-tree fallback. Only the unsupported sub-expression renders as an inline text block; surrounding supported nodes remain as visual blocks.
+- Q: What level of keyboard support should the builder provide? → A: Keyboard-navigable. Tab/arrow keys move between blocks and slots; Enter opens the palette; Escape cancels; Delete replaces a block with a placeholder.
 
 ## Assumptions
 
