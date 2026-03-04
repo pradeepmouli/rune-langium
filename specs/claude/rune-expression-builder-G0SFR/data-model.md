@@ -187,6 +187,240 @@ interface UnsupportedNode extends ExpressionNodeBase {
 }
 ```
 
+## Zod Schemas
+
+Runtime validation schemas for `ExpressionNode`, following the `form-schemas.ts` pattern used by other editor forms. These schemas serve three purposes:
+1. **Runtime validation** — validate trees deserialized from storage or pasted text
+2. **Type inference** — `z.infer<typeof ExpressionNodeSchema>` produces the TypeScript types above
+3. **Conformance anchor** — compile-time checks ensure the schema stays in sync with the TypeScript interfaces
+
+The generated `zod-schemas.ts` already provides `RosettaExpressionSchema` (a `z.discriminatedUnion` over `$type` with 40+ AST variants). Our schemas are a **parallel, simplified projection** discriminated on `kind` instead of `$type`, with UI-only variants (`placeholder`, `unsupported`) that have no AST counterpart.
+
+```typescript
+import { z } from 'zod';
+
+// ---------------------------------------------------------------------------
+// Primitives
+// ---------------------------------------------------------------------------
+
+const NodeIdSchema = z.string().min(1);
+
+const ExpressionTypeHintSchema = z.enum([
+  'any', 'boolean', 'numeric', 'string', 'collection', 'comparable'
+]);
+
+const BinaryOperatorSchema = z.enum([
+  '+', '-', '*', '/',
+  'and', 'or',
+  '=', '<>',
+  '>', '<', '>=', '<=',
+  'contains', 'disjoint', 'default', 'join'
+]);
+
+const UnaryOperatorSchema = z.enum([
+  'exists', 'is absent', 'count', 'flatten', 'distinct',
+  'reverse', 'first', 'last', 'sum', 'only-element', 'one-of',
+  'to-string', 'to-number', 'to-int', 'to-time',
+  'to-date', 'to-date-time', 'to-zoned-date-time'
+]);
+
+const LambdaOperatorSchema = z.enum([
+  'filter', 'extract', 'reduce', 'sort', 'min', 'max', 'then'
+]);
+
+const CardinalityModSchema = z.enum(['any', 'all']);
+const ExistsModSchema = z.enum(['single', 'multiple']);
+const LiteralKindSchema = z.enum(['boolean', 'string', 'number', 'integer', 'empty']);
+
+// ---------------------------------------------------------------------------
+// Node base (shared fields)
+// ---------------------------------------------------------------------------
+
+const nodeBase = { id: NodeIdSchema };
+
+// ---------------------------------------------------------------------------
+// Leaf nodes (no recursive children)
+// ---------------------------------------------------------------------------
+
+const LiteralNodeSchema = z.object({
+  ...nodeBase,
+  kind: z.literal('literal'),
+  literalKind: LiteralKindSchema,
+  value: z.string()
+});
+
+const ReferenceNodeSchema = z.object({
+  ...nodeBase,
+  kind: z.literal('reference'),
+  name: z.string().min(1),
+  typeName: z.string().optional(),
+  cardinality: z.string().optional(),
+  broken: z.boolean().optional()
+});
+
+const ImplicitVarNodeSchema = z.object({
+  ...nodeBase,
+  kind: z.literal('implicitVar'),
+  name: z.literal('item')
+});
+
+const PlaceholderNodeSchema = z.object({
+  ...nodeBase,
+  kind: z.literal('placeholder'),
+  expectedType: ExpressionTypeHintSchema.optional()
+});
+
+const UnsupportedNodeSchema = z.object({
+  ...nodeBase,
+  kind: z.literal('unsupported'),
+  rawText: z.string()
+});
+
+// ---------------------------------------------------------------------------
+// Recursive nodes (use z.lazy for self-reference)
+// ---------------------------------------------------------------------------
+
+const BinaryNodeSchema: z.ZodType<BinaryNode> = z.object({
+  ...nodeBase,
+  kind: z.literal('binary'),
+  operator: BinaryOperatorSchema,
+  left: z.lazy(() => ExpressionNodeSchema),
+  right: z.lazy(() => ExpressionNodeSchema),
+  cardMod: CardinalityModSchema.optional()
+});
+
+const UnaryNodeSchema: z.ZodType<UnaryNode> = z.object({
+  ...nodeBase,
+  kind: z.literal('unary'),
+  operator: UnaryOperatorSchema,
+  argument: z.lazy(() => ExpressionNodeSchema),
+  modifier: ExistsModSchema.optional()
+});
+
+const FeatureCallNodeSchema: z.ZodType<FeatureCallNode> = z.object({
+  ...nodeBase,
+  kind: z.literal('featureCall'),
+  receiver: z.lazy(() => ExpressionNodeSchema),
+  feature: z.string().min(1)
+});
+
+const DeepFeatureCallNodeSchema: z.ZodType<DeepFeatureCallNode> = z.object({
+  ...nodeBase,
+  kind: z.literal('deepFeatureCall'),
+  receiver: z.lazy(() => ExpressionNodeSchema),
+  feature: z.string().min(1)
+});
+
+const ConditionalNodeSchema: z.ZodType<ConditionalNode> = z.object({
+  ...nodeBase,
+  kind: z.literal('conditional'),
+  condition: z.lazy(() => ExpressionNodeSchema),
+  consequent: z.lazy(() => ExpressionNodeSchema),
+  alternate: z.lazy(() => ExpressionNodeSchema).optional()
+});
+
+const SwitchCaseSchema = z.object({
+  guard: z.lazy(() => ExpressionNodeSchema),
+  expression: z.lazy(() => ExpressionNodeSchema)
+});
+
+const SwitchNodeSchema: z.ZodType<SwitchNode> = z.object({
+  ...nodeBase,
+  kind: z.literal('switch'),
+  argument: z.lazy(() => ExpressionNodeSchema),
+  cases: z.array(SwitchCaseSchema),
+  defaultCase: z.lazy(() => ExpressionNodeSchema).optional()
+});
+
+const LambdaNodeSchema: z.ZodType<LambdaNode> = z.object({
+  ...nodeBase,
+  kind: z.literal('lambda'),
+  operator: LambdaOperatorSchema,
+  argument: z.lazy(() => ExpressionNodeSchema),
+  parameters: z.array(z.string()),
+  body: z.lazy(() => ExpressionNodeSchema)
+});
+
+const ConstructorEntrySchema = z.object({
+  key: z.string().min(1),
+  value: z.lazy(() => ExpressionNodeSchema)
+});
+
+const ConstructorNodeSchema: z.ZodType<ConstructorNode> = z.object({
+  ...nodeBase,
+  kind: z.literal('constructor'),
+  typeName: z.string().min(1),
+  entries: z.array(ConstructorEntrySchema),
+  implicitEmpty: z.boolean()
+});
+
+const ListNodeSchema: z.ZodType<ListNode> = z.object({
+  ...nodeBase,
+  kind: z.literal('list'),
+  elements: z.array(z.lazy(() => ExpressionNodeSchema))
+});
+
+// ---------------------------------------------------------------------------
+// Discriminated union
+// ---------------------------------------------------------------------------
+
+/**
+ * The top-level ExpressionNode schema — a discriminated union on `kind`.
+ *
+ * Mirrors the generated RosettaExpressionSchema (discriminated on `$type`)
+ * but uses our simplified node model with UI-only variants (placeholder,
+ * unsupported).
+ */
+const ExpressionNodeSchema: z.ZodType<ExpressionNode> = z.discriminatedUnion('kind', [
+  BinaryNodeSchema,
+  UnaryNodeSchema,
+  FeatureCallNodeSchema,
+  DeepFeatureCallNodeSchema,
+  ConditionalNodeSchema,
+  SwitchNodeSchema,
+  LambdaNodeSchema,
+  ConstructorNodeSchema,
+  LiteralNodeSchema,
+  ListNodeSchema,
+  ReferenceNodeSchema,
+  ImplicitVarNodeSchema,
+  PlaceholderNodeSchema,
+  UnsupportedNodeSchema
+]);
+
+// ---------------------------------------------------------------------------
+// Exports & type inference
+// ---------------------------------------------------------------------------
+
+export {
+  ExpressionNodeSchema,
+  BinaryOperatorSchema,
+  UnaryOperatorSchema,
+  LambdaOperatorSchema,
+  ExpressionTypeHintSchema,
+  PlaceholderNodeSchema,
+  LiteralNodeSchema,
+  ReferenceNodeSchema
+};
+
+/** Inferred TypeScript type — should equal ExpressionNode. */
+export type ExpressionNodeInferred = z.infer<typeof ExpressionNodeSchema>;
+```
+
+### Conformance: ExpressionNode ↔ Generated AST Schemas
+
+The generated `RosettaExpressionSchema` in `generated/zod-schemas.ts` uses `z.discriminatedUnion('$type', [...])` with 40+ AST-level variants. Our `ExpressionNodeSchema` uses `z.discriminatedUnion('kind', [...])` with 14 UI-level variants. The adapter layer (`ast-to-expression-tree.ts`) is the conformance boundary — it maps every `$type` variant to a `kind` variant. Compile-time conformance is enforced by the adapter's exhaustive switch, not by schema-level checks (since the two schemas have different discriminator fields and shapes).
+
+### Schema Design Rationale
+
+| Decision | Rationale |
+|----------|-----------|
+| `z.discriminatedUnion('kind')` not `$type` | Our nodes don't carry `$type`; `kind` is our discriminator |
+| Explicit `z.ZodType<T>` annotations on recursive schemas | Required by Zod for `z.lazy()` circular references |
+| Separate primitive schemas (`BinaryOperatorSchema`, etc.) | Reused by operator palette filtering and validation |
+| `z.string()` for literal values (not type-specific) | All literal editing happens as text; parse-time validation handles type correctness |
+| No `.strict()` on node objects | Allows forward-compatible extension without breaking deserialization |
+
 ## Supporting Entities
 
 ### FunctionScope
