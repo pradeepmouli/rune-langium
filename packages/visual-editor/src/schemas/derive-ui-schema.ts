@@ -10,7 +10,8 @@
 
 import { z } from 'zod';
 
-type LooseObjectSchema = z.ZodObject<z.ZodRawShape, 'passthrough'>;
+/** Accept any ZodObject regardless of config (covers both $loose and 'passthrough'). */
+export type LooseObjectSchema = z.ZodObject<z.ZodRawShape, any>;
 
 export interface DeriveOptions<TOverrides extends z.ZodRawShape = z.ZodRawShape> {
   /**
@@ -60,11 +61,11 @@ export interface DeriveOptions<TOverrides extends z.ZodRawShape = z.ZodRawShape>
 export function deriveUiSchema<T extends LooseObjectSchema>(
   source: T,
   options: DeriveOptions = {}
-): z.ZodObject<z.ZodRawShape, 'passthrough'> {
+): z.ZodObject<z.ZodRawShape, any> {
   const { pick, overrides, extend, omitType } = options;
 
   // Step 1: Pick (if specified, select only these fields from source)
-  let schema: z.ZodObject<z.ZodRawShape, 'passthrough'> = pick
+  let schema: z.ZodObject<z.ZodRawShape, any> = pick
     ? (source.pick(Object.fromEntries(pick.map((k) => [k, true])) as Record<string, true>) as any)
     : source;
 

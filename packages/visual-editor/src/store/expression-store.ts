@@ -137,6 +137,22 @@ function deepCloneWithNewIds(tree: ExpressionNode): ExpressionNode {
   return cloned;
 }
 
+/** Check if a value is an ExpressionNode (has $type). */
+function isExprNode(v: unknown): v is ExpressionNode {
+  return v != null && typeof v === 'object' && '$type' in (v as object);
+}
+
+/** Get a field from a record via bracket access. */
+function field(obj: Record<string, unknown>, key: string): unknown {
+  return obj[key];
+}
+
+/** Expression child field names for single-value children. */
+const CHILD_FIELDS = ['left', 'right', 'argument', 'if', 'ifthen', 'elsethen', 'receiver'] as const;
+
+/** Expression child field names for array children. */
+const ARRAY_CHILD_FIELDS = ['elements', 'rawArgs'] as const;
+
 /**
  * Get direct child expression nodes.
  */
@@ -144,62 +160,43 @@ function getChildren(node: ExpressionNode): ExpressionNode[] {
   const children: ExpressionNode[] = [];
   const n = node as Record<string, unknown>;
 
-  // Binary: left, right
-  if (n.left && typeof n.left === 'object' && '$type' in (n.left as object))
-    children.push(n.left as ExpressionNode);
-  if (n.right && typeof n.right === 'object' && '$type' in (n.right as object))
-    children.push(n.right as ExpressionNode);
-
-  // Unary: argument
-  if (n.argument && typeof n.argument === 'object' && '$type' in (n.argument as object))
-    children.push(n.argument as ExpressionNode);
-
-  // Conditional: if, ifthen, elsethen
-  if (n.if && typeof n.if === 'object' && '$type' in (n.if as object))
-    children.push(n.if as ExpressionNode);
-  if (n.ifthen && typeof n.ifthen === 'object' && '$type' in (n.ifthen as object))
-    children.push(n.ifthen as ExpressionNode);
-  if (n.elsethen && typeof n.elsethen === 'object' && '$type' in (n.elsethen as object))
-    children.push(n.elsethen as ExpressionNode);
-
-  // Navigation: receiver
-  if (n.receiver && typeof n.receiver === 'object' && '$type' in (n.receiver as object))
-    children.push(n.receiver as ExpressionNode);
+  for (const key of CHILD_FIELDS) {
+    const v = field(n, key);
+    if (isExprNode(v)) children.push(v);
+  }
 
   // Lambda: function.body
-  const fn = n.function as Record<string, unknown> | undefined;
-  if (fn?.body && typeof fn.body === 'object' && '$type' in (fn.body as object))
-    children.push(fn.body as ExpressionNode);
+  const func = field(n, 'function') as Record<string, unknown> | undefined;
+  if (func) {
+    const body = field(func, 'body');
+    if (isExprNode(body)) children.push(body);
+  }
 
   // Switch: cases[].expression
-  if (Array.isArray(n.cases)) {
-    for (const c of n.cases as Record<string, unknown>[]) {
-      if (c.expression && typeof c.expression === 'object' && '$type' in (c.expression as object))
-        children.push(c.expression as ExpressionNode);
+  const cases = field(n, 'cases');
+  if (Array.isArray(cases)) {
+    for (const c of cases as Record<string, unknown>[]) {
+      const expr = field(c, 'expression');
+      if (isExprNode(expr)) children.push(expr);
     }
   }
 
   // Constructor: values[].value
-  if (Array.isArray(n.values)) {
-    for (const v of n.values as Record<string, unknown>[]) {
-      if (v.value && typeof v.value === 'object' && '$type' in (v.value as object))
-        children.push(v.value as ExpressionNode);
+  const values = field(n, 'values');
+  if (Array.isArray(values)) {
+    for (const v of values as Record<string, unknown>[]) {
+      const val = field(v, 'value');
+      if (isExprNode(val)) children.push(val);
     }
   }
 
-  // List: elements[]
-  if (Array.isArray(n.elements)) {
-    for (const e of n.elements) {
-      if (e && typeof e === 'object' && '$type' in (e as object))
-        children.push(e as ExpressionNode);
-    }
-  }
-
-  // rawArgs[]
-  if (Array.isArray(n.rawArgs)) {
-    for (const a of n.rawArgs) {
-      if (a && typeof a === 'object' && '$type' in (a as object))
-        children.push(a as ExpressionNode);
+  // Array children (elements, rawArgs)
+  for (const key of ARRAY_CHILD_FIELDS) {
+    const arr = field(n, key);
+    if (Array.isArray(arr)) {
+      for (const e of arr) {
+        if (isExprNode(e)) children.push(e);
+      }
     }
   }
 
@@ -215,81 +212,49 @@ function mapChildren(
 ): ExpressionNode {
   const n = { ...node } as Record<string, unknown>;
 
-  // Binary
-  if (n.left && typeof n.left === 'object' && '$type' in (n.left as object))
-    n.left = fn(n.left as ExpressionNode);
-  if (n.right && typeof n.right === 'object' && '$type' in (n.right as object))
-    n.right = fn(n.right as ExpressionNode);
+  // Single-value children
+  for (const key of CHILD_FIELDS) {
+    const v = field(n, key);
+    if (isExprNode(v)) n[key] = fn(v);
+  }
 
-  // Unary
-  if (n.argument && typeof n.argument === 'object' && '$type' in (n.argument as object))
-    n.argument = fn(n.argument as ExpressionNode);
-
-  // Conditional
-  if (n.if && typeof n.if === 'object' && '$type' in (n.if as object))
-    n.if = fn(n.if as ExpressionNode);
-  if (n.ifthen && typeof n.ifthen === 'object' && '$type' in (n.ifthen as object))
-    n.ifthen = fn(n.ifthen as ExpressionNode);
-  if (n.elsethen && typeof n.elsethen === 'object' && '$type' in (n.elsethen as object))
-    n.elsethen = fn(n.elsethen as ExpressionNode);
-
-  // Navigation
-  if (n.receiver && typeof n.receiver === 'object' && '$type' in (n.receiver as object))
-    n.receiver = fn(n.receiver as ExpressionNode);
-
-  // Lambda
-  if (n.function && typeof n.function === 'object') {
-    const func = { ...(n.function as Record<string, unknown>) };
-    if (func.body && typeof func.body === 'object' && '$type' in (func.body as object)) {
-      func.body = fn(func.body as ExpressionNode);
-    }
-    n.function = func;
+  // Lambda function.body
+  const func = field(n, 'function');
+  if (func && typeof func === 'object') {
+    const funcCopy = { ...(func as Record<string, unknown>) };
+    const body = field(funcCopy, 'body');
+    if (isExprNode(body)) funcCopy['body'] = fn(body);
+    n['function'] = funcCopy;
   }
 
   // Switch cases
-  if (Array.isArray(n.cases)) {
-    n.cases = (n.cases as Record<string, unknown>[]).map((c) => {
+  const cases = field(n, 'cases');
+  if (Array.isArray(cases)) {
+    n['cases'] = (cases as Record<string, unknown>[]).map((c) => {
       const newCase = { ...c };
-      if (
-        newCase.expression &&
-        typeof newCase.expression === 'object' &&
-        '$type' in (newCase.expression as object)
-      ) {
-        newCase.expression = fn(newCase.expression as ExpressionNode);
-      }
+      const expr = field(newCase, 'expression');
+      if (isExprNode(expr)) newCase['expression'] = fn(expr);
       return newCase;
     });
   }
 
   // Constructor values
-  if (Array.isArray(n.values)) {
-    n.values = (n.values as Record<string, unknown>[]).map((v) => {
+  const values = field(n, 'values');
+  if (Array.isArray(values)) {
+    n['values'] = (values as Record<string, unknown>[]).map((v) => {
       const newVal = { ...v };
-      if (newVal.value && typeof newVal.value === 'object' && '$type' in (newVal.value as object)) {
-        newVal.value = fn(newVal.value as ExpressionNode);
-      }
+      const val = field(newVal, 'value');
+      if (isExprNode(val)) newVal['value'] = fn(val);
       return newVal;
     });
   }
 
-  // List elements
-  if (Array.isArray(n.elements)) {
-    n.elements = (n.elements as unknown[]).map((e) => {
-      if (e && typeof e === 'object' && '$type' in (e as object)) {
-        return fn(e as ExpressionNode);
-      }
-      return e;
-    });
-  }
-
-  // rawArgs
-  if (Array.isArray(n.rawArgs)) {
-    n.rawArgs = (n.rawArgs as unknown[]).map((a) => {
-      if (a && typeof a === 'object' && '$type' in (a as object)) {
-        return fn(a as ExpressionNode);
-      }
-      return a;
-    });
+  // Array children (elements, rawArgs)
+  for (const key of ARRAY_CHILD_FIELDS) {
+    const arr = field(n, key);
+    if (Array.isArray(arr)) {
+      n[key] = (arr as unknown[]).map((e) => (isExprNode(e) ? fn(e) : e));
+    }
   }
 
   return n as unknown as ExpressionNode;

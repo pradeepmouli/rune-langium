@@ -18,10 +18,15 @@ function uid(): string {
   return crypto.randomUUID();
 }
 
+/** Bracket-access helper for Record<string, unknown> to satisfy noPropertyAccessFromIndexSignature. */
+function g(obj: Record<string, unknown>, key: string): unknown {
+  return obj[key];
+}
+
 /** Resolve a Langium Reference<T> to its $refText string, or undefined. */
 function resolveRef(ref: unknown): string | undefined {
   if (ref && typeof ref === 'object' && '$refText' in ref) {
-    return String((ref as { $refText: string }).$refText);
+    return String((ref as Record<string, unknown>)['$refText']);
   }
   if (typeof ref === 'string') return ref;
   return undefined;
@@ -104,22 +109,24 @@ function convertInlineFunction(ast: Record<string, unknown> | undefined, sourceT
   if (!ast) return undefined;
   return {
     $type: 'InlineFunction' as const,
-    body: convertChildRequired(ast.body, sourceText),
-    parameters: ast.parameters as Array<{ $type: 'ClosureParameter'; name: string }> | undefined
+    body: convertChildRequired(g(ast, 'body'), sourceText),
+    parameters: g(ast, 'parameters') as
+      | Array<{ $type: 'ClosureParameter'; name: string }>
+      | undefined
   };
 }
 
 /** Convert a switch case. */
 function convertSwitchCase(ast: Record<string, unknown>, sourceText: string) {
-  const guard = ast.guard as Record<string, unknown> | undefined;
+  const guard = g(ast, 'guard') as Record<string, unknown> | undefined;
   return {
     $type: 'SwitchCaseOrDefault' as const,
-    expression: convertChildRequired(ast.expression, sourceText),
+    expression: convertChildRequired(g(ast, 'expression'), sourceText),
     guard: guard
       ? {
           $type: 'SwitchCaseGuard' as const,
-          literalGuard: guard.literalGuard,
-          referenceGuard: resolveRef(guard.referenceGuard)
+          literalGuard: g(guard, 'literalGuard'),
+          referenceGuard: resolveRef(g(guard, 'referenceGuard'))
         }
       : undefined
   };
@@ -129,14 +136,14 @@ function convertSwitchCase(ast: Record<string, unknown>, sourceText: string) {
 function convertKVP(ast: Record<string, unknown>, sourceText: string) {
   return {
     $type: 'ConstructorKeyValuePair' as const,
-    key: resolveRef(ast.key) ?? '',
-    value: convertChildRequired(ast.value, sourceText)
+    key: resolveRef(g(ast, 'key')) ?? '',
+    value: convertChildRequired(g(ast, 'value'), sourceText)
   };
 }
 
 /** Main conversion function. */
 function convertNode(ast: Record<string, unknown>, sourceText: string): ExpressionNode {
-  const $type = ast.$type as string;
+  const $type = g(ast, '$type') as string;
 
   if (!KNOWN_TYPES.has($type)) {
     return { $type: 'Unsupported', id: uid(), rawText: sourceText } as unknown as ExpressionNode;
@@ -151,9 +158,9 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       return {
         $type,
         id,
-        operator: ast.operator,
-        left: convertChildRequired(ast.left, sourceText),
-        right: convertChildRequired(ast.right, sourceText)
+        operator: g(ast, 'operator'),
+        left: convertChildRequired(g(ast, 'left'), sourceText),
+        right: convertChildRequired(g(ast, 'right'), sourceText)
       } as unknown as ExpressionNode;
 
     case 'ComparisonOperation':
@@ -164,19 +171,19 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       return {
         $type,
         id,
-        operator: ast.operator,
-        cardMod: ast.cardMod,
-        left: convertChild(ast.left, sourceText),
-        right: convertChildRequired(ast.right, sourceText)
+        operator: g(ast, 'operator'),
+        cardMod: g(ast, 'cardMod'),
+        left: convertChild(g(ast, 'left'), sourceText),
+        right: convertChildRequired(g(ast, 'right'), sourceText)
       } as unknown as ExpressionNode;
 
     case 'JoinOperation':
       return {
         $type,
         id,
-        operator: ast.operator,
-        left: convertChild(ast.left, sourceText),
-        right: convertChild(ast.right, sourceText)
+        operator: g(ast, 'operator'),
+        left: convertChild(g(ast, 'left'), sourceText),
+        right: convertChild(g(ast, 'right'), sourceText)
       } as unknown as ExpressionNode;
 
     // Unary postfix
@@ -202,17 +209,17 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       return {
         $type,
         id,
-        operator: ast.operator,
-        argument: convertChild(ast.argument, sourceText)
+        operator: g(ast, 'operator'),
+        argument: convertChild(g(ast, 'argument'), sourceText)
       } as unknown as ExpressionNode;
 
     case 'ToEnumOperation':
       return {
         $type,
         id,
-        operator: ast.operator,
-        argument: convertChild(ast.argument, sourceText),
-        enumeration: resolveRef(ast.enumeration) ?? ''
+        operator: g(ast, 'operator'),
+        argument: convertChild(g(ast, 'argument'), sourceText),
+        enumeration: resolveRef(g(ast, 'enumeration')) ?? ''
       } as unknown as ExpressionNode;
 
     // Navigation
@@ -220,16 +227,16 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       return {
         $type,
         id,
-        receiver: convertChildRequired(ast.receiver, sourceText),
-        feature: resolveRef(ast.feature)
+        receiver: convertChildRequired(g(ast, 'receiver'), sourceText),
+        feature: resolveRef(g(ast, 'feature'))
       } as unknown as ExpressionNode;
 
     case 'RosettaDeepFeatureCall':
       return {
         $type,
         id,
-        receiver: convertChildRequired(ast.receiver, sourceText),
-        feature: resolveRef(ast.feature)
+        receiver: convertChildRequired(g(ast, 'receiver'), sourceText),
+        feature: resolveRef(g(ast, 'feature'))
       } as unknown as ExpressionNode;
 
     // Lambda operations
@@ -242,10 +249,10 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       return {
         $type,
         id,
-        operator: ast.operator,
-        argument: convertChild(ast.argument, sourceText),
+        operator: g(ast, 'operator'),
+        argument: convertChild(g(ast, 'argument'), sourceText),
         function: convertInlineFunction(
-          ast.function as Record<string, unknown> | undefined,
+          g(ast, 'function') as Record<string, unknown> | undefined,
           sourceText
         )
       } as unknown as ExpressionNode;
@@ -254,10 +261,10 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       return {
         $type,
         id,
-        operator: ast.operator,
-        argument: convertChildRequired(ast.argument, sourceText),
+        operator: g(ast, 'operator'),
+        argument: convertChildRequired(g(ast, 'argument'), sourceText),
         function: convertInlineFunction(
-          ast.function as Record<string, unknown> | undefined,
+          g(ast, 'function') as Record<string, unknown> | undefined,
           sourceText
         )
       } as unknown as ExpressionNode;
@@ -267,42 +274,44 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       return {
         $type,
         id,
-        if: convertChild(ast.if, sourceText),
-        ifthen: convertChild(ast.ifthen, sourceText),
-        full: ast.full,
-        elsethen: convertChild(ast.elsethen, sourceText)
+        if: convertChild(g(ast, 'if'), sourceText),
+        ifthen: convertChild(g(ast, 'ifthen'), sourceText),
+        full: g(ast, 'full'),
+        elsethen: convertChild(g(ast, 'elsethen'), sourceText)
       } as unknown as ExpressionNode;
 
     case 'SwitchOperation':
       return {
         $type,
         id,
-        operator: ast.operator,
-        argument: convertChild(ast.argument, sourceText),
-        cases: ((ast.cases as Record<string, unknown>[]) ?? []).map((c) =>
+        operator: g(ast, 'operator'),
+        argument: convertChild(g(ast, 'argument'), sourceText),
+        cases: ((g(ast, 'cases') as Record<string, unknown>[]) ?? []).map((c) =>
           convertSwitchCase(c, sourceText)
         )
       } as unknown as ExpressionNode;
 
     // Constructor
     case 'RosettaConstructorExpression': {
-      const typeRef = ast.typeRef as Record<string, unknown>;
+      const typeRef = g(ast, 'typeRef') as Record<string, unknown>;
       return {
         $type,
         id,
         typeRef: typeRef
           ? {
-              $type: typeRef.$type,
-              symbol: resolveRef(typeRef.symbol),
-              name: typeRef.name,
-              explicitArguments: typeRef.explicitArguments,
-              rawArgs: typeRef.rawArgs
-                ? (typeRef.rawArgs as unknown[]).map((a) => convertChildRequired(a, sourceText))
+              $type: g(typeRef, '$type'),
+              symbol: resolveRef(g(typeRef, 'symbol')),
+              name: g(typeRef, 'name'),
+              explicitArguments: g(typeRef, 'explicitArguments'),
+              rawArgs: g(typeRef, 'rawArgs')
+                ? (g(typeRef, 'rawArgs') as unknown[]).map((a) =>
+                    convertChildRequired(a, sourceText)
+                  )
                 : undefined
             }
           : undefined,
-        implicitEmpty: ast.implicitEmpty,
-        values: ((ast.values as Record<string, unknown>[]) ?? []).map((v) =>
+        implicitEmpty: g(ast, 'implicitEmpty'),
+        values: ((g(ast, 'values') as Record<string, unknown>[]) ?? []).map((v) =>
           convertKVP(v, sourceText)
         )
       } as unknown as ExpressionNode;
@@ -313,29 +322,29 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
     case 'RosettaIntLiteral':
     case 'RosettaNumberLiteral':
     case 'RosettaStringLiteral':
-      return { $type, id, value: ast.value } as unknown as ExpressionNode;
+      return { $type, id, value: g(ast, 'value') } as unknown as ExpressionNode;
 
     // References
     case 'RosettaSymbolReference':
       return {
         $type,
         id,
-        symbol: resolveRef(ast.symbol) ?? '',
-        explicitArguments: ast.explicitArguments,
-        rawArgs: ast.rawArgs
-          ? (ast.rawArgs as unknown[]).map((a) => convertChildRequired(a, sourceText))
+        symbol: resolveRef(g(ast, 'symbol')) ?? '',
+        explicitArguments: g(ast, 'explicitArguments'),
+        rawArgs: g(ast, 'rawArgs')
+          ? (g(ast, 'rawArgs') as unknown[]).map((a) => convertChildRequired(a, sourceText))
           : undefined
       } as unknown as ExpressionNode;
 
     case 'RosettaImplicitVariable':
-      return { $type, id, name: ast.name } as unknown as ExpressionNode;
+      return { $type, id, name: g(ast, 'name') } as unknown as ExpressionNode;
 
     // Collection
     case 'ListLiteral':
       return {
         $type,
         id,
-        elements: ((ast.elements as unknown[]) ?? []).map((e) =>
+        elements: ((g(ast, 'elements') as unknown[]) ?? []).map((e) =>
           convertChildRequired(e, sourceText)
         )
       } as unknown as ExpressionNode;
@@ -345,35 +354,35 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       return {
         $type,
         id,
-        operator: ast.operator,
-        argument: convertChild(ast.argument, sourceText),
-        attributes: ((ast.attributes as unknown[]) ?? []).map((a) => resolveRef(a) ?? '')
+        operator: g(ast, 'operator'),
+        argument: convertChild(g(ast, 'argument'), sourceText),
+        attributes: ((g(ast, 'attributes') as unknown[]) ?? []).map((a) => resolveRef(a) ?? '')
       } as unknown as ExpressionNode;
 
     case 'AsKeyOperation':
       return {
         $type,
         id,
-        operator: ast.operator,
-        argument: convertChildRequired(ast.argument, sourceText)
+        operator: g(ast, 'operator'),
+        argument: convertChildRequired(g(ast, 'argument'), sourceText)
       } as unknown as ExpressionNode;
 
     case 'WithMetaOperation':
       return {
         $type,
         id,
-        operator: ast.operator,
-        argument: convertChildRequired(ast.argument, sourceText)
+        operator: g(ast, 'operator'),
+        argument: convertChildRequired(g(ast, 'argument'), sourceText)
       } as unknown as ExpressionNode;
 
     case 'RosettaSuperCall':
       return {
         $type,
         id,
-        name: ast.name,
-        explicitArguments: ast.explicitArguments,
-        rawArgs: ast.rawArgs
-          ? (ast.rawArgs as unknown[]).map((a) => convertChildRequired(a, sourceText))
+        name: g(ast, 'name'),
+        explicitArguments: g(ast, 'explicitArguments'),
+        rawArgs: g(ast, 'rawArgs')
+          ? (g(ast, 'rawArgs') as unknown[]).map((a) => convertChildRequired(a, sourceText))
           : undefined
       } as unknown as ExpressionNode;
 
