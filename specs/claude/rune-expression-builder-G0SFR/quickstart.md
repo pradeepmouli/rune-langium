@@ -31,7 +31,8 @@ The expression builder lives entirely within `packages/visual-editor`. It:
 | `src/components/editors/expression-builder/blocks/*.tsx` | Block components per $type |
 | `src/components/editors/expression-builder/OperatorPalette.tsx` | cmdk command palette |
 | `src/store/expression-store.ts` | Zustand store + zundo undo/redo |
-| `src/schemas/expression-node-schema.ts` | ExpressionNode Zod schema (transforms generated schemas) |
+| `src/schemas/derive-ui-schema.ts` | Generic schema transformation utility (pick/override/extend) |
+| `src/schemas/expression-node-schema.ts` | ExpressionNode schemas via `deriveUiSchema()` |
 | `src/adapters/ast-to-expression-node.ts` | RosettaExpression → ExpressionNode (assign ids, resolve refs) |
 | `src/adapters/expression-node-to-dsl.ts` | ExpressionNode → DSL text |
 | `src/hooks/useExpressionBuilder.ts` | Orchestration hook |

@@ -38,13 +38,13 @@ type NodeId = string; // nanoid-generated
 | **Reference** | `RosettaSymbolReference`, `RosettaImplicitVariable` | `id`, `symbol` → `string` |
 | **UI-only** | `Placeholder`, `Unsupported` | `id`, `expectedType?` / `rawText` |
 
-## Zod Schemas (Derived from Generated AST Schemas)
+## Zod Schemas (Derived via Generic Transformation)
 
-The expression builder schema is **derived by transformation** from the generated `RosettaExpressionSchema` in `generated/zod-schemas.ts`, not coded separately. This ensures the builder's validation stays in sync with the grammar as it evolves.
+All UI schemas — both expression builder and existing form schemas — are derived from the generated `zod-schemas.ts` via a single generic `deriveUiSchema()` utility. No hand-crafted Zod schemas exist; the generated schemas are the sole source of truth.
 
-### Source Schema
+### Source Schemas
 
-The generated file provides individual `z.looseObject` schemas for each AST variant, composed into `RosettaExpressionSchema` as a `z.discriminatedUnion('$type', [...])` with 40+ members:
+The generated file provides `z.looseObject` schemas for every AST type:
 
 ```typescript
 // generated/zod-schemas.ts (source of truth — DO NOT HAND-EDIT)
@@ -54,333 +54,316 @@ export const ArithmeticOperationSchema = z.looseObject({
   operator: z.union([z.literal('+'), z.literal('-'), z.literal('*'), z.literal('/')]),
   right: z.lazy(() => RosettaExpressionSchema)
 });
-// ... 40+ more variants
-export const RosettaExpressionSchema = z.discriminatedUnion('$type', [ ... ]);
+export const DataSchema = z.looseObject({
+  $type: z.literal('Data'),
+  name: ValidIDSchema,
+  superType: ReferenceSchema.optional(),
+  attributes: z.array(AttributeSchema).optional()
+});
+// ... 60+ more type schemas
 ```
 
-### Transformation Strategy
-
-Rather than maintaining a parallel schema, we apply **four transformations** to derive the builder schema from the generated one:
+### Generic Transformation Utility
 
 ```typescript
-// expression-node-schema.ts — builder schema derived from generated schemas
+// schemas/derive-ui-schema.ts — single reusable transformation function
 import { z } from 'zod';
-import {
-  ArithmeticOperationSchema,
-  LogicalOperationSchema,
-  ComparisonOperationSchema,
-  EqualityOperationSchema,
-  RosettaContainsExpressionSchema,
-  RosettaDisjointExpressionSchema,
-  DefaultOperationSchema,
-  JoinOperationSchema,
-  // ... all 40+ generated variant schemas
-  RosettaExpressionSchema,
-  CardinalityModifierSchema,
-  ExistsModifierSchema,
-  InlineFunctionSchema,
-  ClosureParameterSchema,
-  ConstructorKeyValuePairSchema,
-  SwitchCaseOrDefaultSchema,
-  RosettaBooleanLiteralSchema,
-  RosettaIntLiteralSchema,
-  RosettaNumberLiteralSchema,
-  RosettaStringLiteralSchema,
-  ListLiteralSchema,
-  RosettaImplicitVariableSchema,
-  RosettaSymbolReferenceSchema,
-  RosettaFeatureCallSchema,
-  RosettaDeepFeatureCallSchema,
-  RosettaConditionalExpressionSchema,
-  SwitchOperationSchema,
-  RosettaConstructorExpressionSchema,
-  FilterOperationSchema,
-  MapOperationSchema,
-  ReduceOperationSchema,
-  SortOperationSchema,
-  MinOperationSchema,
-  MaxOperationSchema,
-  ThenOperationSchema,
-} from '../generated/zod-schemas.js';
 
-// ---------------------------------------------------------------------------
-// T1: UI augmentation fields (added to every variant)
-// ---------------------------------------------------------------------------
+type LooseObjectSchema = ReturnType<typeof z.looseObject>;
 
-/** Fields injected into every node for UI tracking. */
-const uiFields = {
-  id: z.string().min(1),  // nanoid — React key + selection tracking
-};
+interface DeriveOptions<TOverrides extends z.ZodRawShape = z.ZodRawShape> {
+  /**
+   * Fields to pick from the source schema. If omitted, all fields are kept.
+   * Use when creating a form projection (e.g., Data form only needs name).
+   */
+  pick?: string[];
 
-// ---------------------------------------------------------------------------
-// T2: Reference relaxation (Reference<T> → resolved string)
-// ---------------------------------------------------------------------------
+  /**
+   * Field overrides — replaces matched fields in the source schema.
+   * Handles all three transformation types:
+   *   - Reference relaxation:  `{ superType: z.string() }`
+   *   - Field relaxation:      `{ left: exprChild }`
+   *   - Validation additions:  `{ name: z.string().min(1, 'Required') }`
+   */
+  overrides?: TOverrides;
+
+  /**
+   * Additional fields not present in the source schema.
+   * Used for UI-only fields (e.g., `id`, `parentName`, `expressionText`).
+   */
+  extend?: z.ZodRawShape;
+
+  /**
+   * Strip the $type discriminator from the output.
+   * Used for form schemas that don't need $type in their shape.
+   * Default: false (keep $type).
+   */
+  omitType?: boolean;
+}
 
 /**
- * The generated schemas use `ReferenceSchema = { $refText, ref? }` for
- * cross-references. In the builder UI, these are resolved to plain strings
- * at the adapter boundary. This helper replaces Reference fields.
- */
-const resolvedRef = z.string().min(1);
-
-// ---------------------------------------------------------------------------
-// T3: Field relaxation (required → optional for partial trees)
-// ---------------------------------------------------------------------------
-
-/**
- * During incremental construction, child expression slots may be empty
- * (represented as placeholders). We relax required expression-child fields
- * to accept either a valid expression subtree OR a placeholder/undefined.
+ * Derive a UI schema from a generated z.looseObject schema.
  *
- * The `relaxExpression` wrapper makes an expression field accept
- * ExpressionNodeSchema (which includes placeholder) instead of only
- * complete RosettaExpressionSchema.
+ * This single function replaces all hand-crafted schemas by applying
+ * pick/override/extend transformations to generated schemas. Since
+ * generated schemas use z.looseObject, .extend() works naturally and
+ * extra AST fields (CST, parent) pass through without error.
+ *
+ * @example Expression node — add id, relax children:
+ *   deriveUiSchema(ArithmeticOperationSchema, {
+ *     extend: { id: z.string().min(1) },
+ *     overrides: { left: exprChild, right: exprChild },
+ *   })
+ *
+ * @example Form schema — pick fields, add validation:
+ *   deriveUiSchema(DataSchema, {
+ *     pick: ['name'],
+ *     overrides: { name: z.string().min(1, 'Type name is required') },
+ *     extend: { parentName: z.string(), members: z.array(memberSchema) },
+ *     omitType: true,
+ *   })
  */
+function deriveUiSchema<T extends LooseObjectSchema>(
+  source: T,
+  options: DeriveOptions = {}
+): z.ZodObject<any> {
+  const { pick, overrides, extend, omitType } = options;
+
+  // Step 1: Pick (if specified, select only these fields from source)
+  let schema = pick ? source.pick(
+    Object.fromEntries(pick.map(k => [k, true]))
+  ) : source;
+
+  // Step 2: Omit $type if requested (form schemas don't need it)
+  if (omitType) {
+    schema = schema.omit({ $type: true });
+  }
+
+  // Step 3: Apply overrides (relaxation, validation, reference resolution)
+  if (overrides) {
+    schema = schema.extend(overrides);
+  }
+
+  // Step 4: Extend with UI-only fields
+  if (extend) {
+    schema = schema.extend(extend);
+  }
+
+  return schema;
+}
+```
+
+### Expression Node Schemas (via `deriveUiSchema`)
+
+```typescript
+// schemas/expression-node-schema.ts
+import { deriveUiSchema } from './derive-ui-schema.js';
+
+// Shared UI fields for all expression nodes
+const uiFields = { id: z.string().min(1) };
+
+// Shared child expression schemas (self-referencing)
 const exprChild = z.lazy(() => ExpressionNodeSchema);
 const optExprChild = z.lazy(() => ExpressionNodeSchema).optional();
+const resolvedRef = z.string().min(1);
 
-// ---------------------------------------------------------------------------
-// T4: UI-only variants (no AST counterpart)
-// ---------------------------------------------------------------------------
+// --- Binary operations ---
+const ArithmeticNodeSchema = deriveUiSchema(ArithmeticOperationSchema, {
+  extend: uiFields,
+  overrides: { left: exprChild, right: exprChild },
+});
 
-const ExpressionTypeHintSchema = z.enum([
-  'any', 'boolean', 'numeric', 'string', 'collection', 'comparable'
-]);
+const ComparisonNodeSchema = deriveUiSchema(ComparisonOperationSchema, {
+  extend: uiFields,
+  overrides: { left: optExprChild, right: exprChild },
+});
 
-/** Placeholder — empty slot in the tree awaiting user input. */
+// ... LogicalOperation, EqualityOperation, Contains, Disjoint, Default, Join
+// all follow the same pattern with deriveUiSchema()
+
+// --- Unary operations (20+ variants, identical shape) ---
+function deriveUnary(schema: LooseObjectSchema) {
+  return deriveUiSchema(schema, {
+    extend: uiFields,
+    overrides: { argument: optExprChild },
+  });
+}
+// Applied to: Distinct, Flatten, Reverse, First, Last, Sum, OneOf,
+// RosettaCount, RosettaOnlyElement, RosettaAbsent, all To* conversions
+
+// --- Lambda operations (7 variants, identical shape) ---
+function deriveLambda(schema: LooseObjectSchema) {
+  return deriveUiSchema(schema, {
+    extend: uiFields,
+    overrides: {
+      argument: optExprChild,
+      function: InlineFunctionSchema.extend({
+        body: exprChild,
+        parameters: z.array(ClosureParameterSchema).optional(),
+      }).optional(),
+    },
+  });
+}
+// Applied to: Filter, Map, Reduce, Sort, Min, Max, Then
+
+// --- Navigation ---
+const FeatureCallNodeSchema = deriveUiSchema(RosettaFeatureCallSchema, {
+  extend: uiFields,
+  overrides: { receiver: exprChild, feature: resolvedRef.optional() },
+});
+
+// --- Control flow ---
+const ConditionalNodeSchema = deriveUiSchema(RosettaConditionalExpressionSchema, {
+  extend: uiFields,
+  overrides: { if: optExprChild, ifthen: optExprChild, elsethen: optExprChild },
+});
+
+// --- Literals (only need id) ---
+const BooleanLiteralNodeSchema = deriveUiSchema(RosettaBooleanLiteralSchema, {
+  extend: uiFields,
+});
+
+// --- Symbol reference (resolve cross-ref) ---
+const SymbolRefNodeSchema = deriveUiSchema(RosettaSymbolReferenceSchema, {
+  extend: uiFields,
+  overrides: { symbol: resolvedRef },
+});
+
+// --- UI-only variants (no generated source) ---
 const PlaceholderNodeSchema = z.object({
   ...uiFields,
   $type: z.literal('Placeholder'),
-  expectedType: ExpressionTypeHintSchema.optional(),
+  expectedType: z.enum([
+    'any', 'boolean', 'numeric', 'string', 'collection', 'comparable'
+  ]).optional(),
 });
 
-/** Unsupported — sub-tree that couldn't be converted from AST. */
 const UnsupportedNodeSchema = z.object({
   ...uiFields,
   $type: z.literal('Unsupported'),
   rawText: z.string(),
 });
 
-// ---------------------------------------------------------------------------
-// Transformed variants (derived from generated schemas)
-// ---------------------------------------------------------------------------
-//
-// Each variant extends its generated counterpart with:
-//   - `id` field (T1)
-//   - Reference fields relaxed to strings (T2)
-//   - Required child expressions relaxed to accept placeholders (T3)
-//
-// The generated schemas use `z.looseObject` so `.extend()` works naturally.
-// We use `.extend()` to overlay UI fields and relaxed types on top of the
-// generated shape, keeping all other fields (operator, etc.) inherited.
-
-/** Binary operations: arithmetic, logical, equality, comparison, keyword */
-const ArithmeticNodeSchema = ArithmeticOperationSchema.extend({
-  ...uiFields,
-  left: exprChild,   // relax: required → accepts placeholder
-  right: exprChild,  // relax: required → accepts placeholder
-});
-
-const LogicalNodeSchema = LogicalOperationSchema.extend({
-  ...uiFields,
-  left: exprChild,
-  right: exprChild,
-});
-
-const ComparisonNodeSchema = ComparisonOperationSchema.extend({
-  ...uiFields,
-  left: optExprChild,  // already optional in grammar
-  right: exprChild,
-  cardMod: CardinalityModifierSchema.optional(),
-});
-
-const EqualityNodeSchema = EqualityOperationSchema.extend({
-  ...uiFields,
-  left: optExprChild,
-  right: exprChild,
-  cardMod: CardinalityModifierSchema.optional(),
-});
-
-const ContainsNodeSchema = RosettaContainsExpressionSchema.extend({
-  ...uiFields,
-  left: optExprChild,
-  right: exprChild,
-});
-
-const DisjointNodeSchema = RosettaDisjointExpressionSchema.extend({
-  ...uiFields,
-  left: optExprChild,
-  right: exprChild,
-});
-
-const DefaultNodeSchema = DefaultOperationSchema.extend({
-  ...uiFields,
-  left: optExprChild,
-  right: exprChild,
-});
-
-const JoinNodeSchema = JoinOperationSchema.extend({
-  ...uiFields,
-  left: optExprChild,
-  right: optExprChild,
-});
-
-/** Navigation */
-const FeatureCallNodeSchema = RosettaFeatureCallSchema.extend({
-  ...uiFields,
-  receiver: exprChild,
-  feature: resolvedRef.optional(),  // T2: Reference → string
-});
-
-const DeepFeatureCallNodeSchema = RosettaDeepFeatureCallSchema.extend({
-  ...uiFields,
-  receiver: exprChild,
-  feature: resolvedRef.optional(),  // T2: Reference → string
-});
-
-/** Unary postfix operations */
-// Each unary op schema just needs `id` + argument relaxation.
-// We generate these with a helper since they share the same shape.
-function extendUnary(schema: typeof DistinctOperationSchema) {
-  return schema.extend({ ...uiFields, argument: optExprChild });
-}
-
-// ... applied to: DistinctOperation, FlattenOperation, ReverseOperation,
-// FirstOperation, LastOperation, SumOperation, OneOfOperation,
-// RosettaCountOperation, RosettaOnlyElement, RosettaExistsExpression,
-// RosettaAbsentExpression, ToStringOperation, ToNumberOperation, etc.
-
-/** Exists with modifier */
-const ExistsNodeSchema = RosettaExistsExpressionSchema.extend({
-  ...uiFields,
-  argument: optExprChild,
-  modifier: ExistsModifierSchema.optional(),
-});
-
-/** Control flow */
-const ConditionalNodeSchema = RosettaConditionalExpressionSchema.extend({
-  ...uiFields,
-  if: optExprChild,      // condition
-  ifthen: optExprChild,  // consequent
-  elsethen: optExprChild, // alternate (already optional)
-});
-
-const SwitchNodeSchema = SwitchOperationSchema.extend({
-  ...uiFields,
-  argument: optExprChild,
-  cases: z.array(SwitchCaseOrDefaultSchema.extend({
-    expression: exprChild,
-  })),
-});
-
-/** Lambda operations (filter, extract, reduce, sort, min, max, then) */
-function extendLambda(schema: typeof FilterOperationSchema) {
-  return schema.extend({
-    ...uiFields,
-    argument: optExprChild,
-    function: InlineFunctionSchema.extend({
-      body: exprChild,
-      parameters: z.array(ClosureParameterSchema).optional(),
-    }).optional(),
-  });
-}
-
-/** Constructor */
-const ConstructorNodeSchema = RosettaConstructorExpressionSchema.extend({
-  ...uiFields,
-  typeRef: z.union([
-    z.object({ $type: z.literal('RosettaSymbolReference'), symbol: resolvedRef }),
-    z.object({ $type: z.literal('RosettaSuperCall'), name: z.literal('super') }),
-  ]),
-  values: z.array(ConstructorKeyValuePairSchema.extend({
-    key: resolvedRef,   // T2: Reference → string
-    value: exprChild,   // T3: relax child
-  })).optional(),
-});
-
-/** Literals — extend each generated literal variant with `id` */
-const BooleanLiteralNodeSchema = RosettaBooleanLiteralSchema.extend(uiFields);
-const IntLiteralNodeSchema = RosettaIntLiteralSchema.extend(uiFields);
-const NumberLiteralNodeSchema = RosettaNumberLiteralSchema.extend(uiFields);
-const StringLiteralNodeSchema = RosettaStringLiteralSchema.extend(uiFields);
-
-/** List & implicit var */
-const ListNodeSchema = ListLiteralSchema.extend({
-  ...uiFields,
-  elements: z.array(exprChild),
-});
-
-const ImplicitVarNodeSchema = RosettaImplicitVariableSchema.extend(uiFields);
-
-/** Symbol reference — relax cross-reference to resolved string */
-const SymbolRefNodeSchema = RosettaSymbolReferenceSchema.extend({
-  ...uiFields,
-  symbol: resolvedRef,  // T2: Reference → string
-});
-
-// ---------------------------------------------------------------------------
-// Composed union (generated variants + UI-only variants)
-// ---------------------------------------------------------------------------
-
-/**
- * The builder's expression schema: the generated RosettaExpressionSchema
- * union, with each member extended (T1–T3), plus UI-only variants (T4).
- *
- * Discriminated on `$type` — same discriminator as the generated schema,
- * so the adapter layer doesn't need to remap discriminators.
- */
-export const ExpressionNodeSchema: z.ZodType<ExpressionNode> = z.discriminatedUnion('$type', [
-  // — Transformed generated variants —
-  ArithmeticNodeSchema,
-  LogicalNodeSchema,
-  ComparisonNodeSchema,
-  EqualityNodeSchema,
-  ContainsNodeSchema,
-  DisjointNodeSchema,
-  DefaultNodeSchema,
-  JoinNodeSchema,
-  FeatureCallNodeSchema,
-  DeepFeatureCallNodeSchema,
-  // ... all unary variants via extendUnary()
-  ExistsNodeSchema,
-  ConditionalNodeSchema,
-  SwitchNodeSchema,
-  // ... all lambda variants via extendLambda()
-  ConstructorNodeSchema,
-  BooleanLiteralNodeSchema,
-  IntLiteralNodeSchema,
-  NumberLiteralNodeSchema,
-  StringLiteralNodeSchema,
-  ListNodeSchema,
-  ImplicitVarNodeSchema,
-  SymbolRefNodeSchema,
-  // — UI-only variants (T4) —
-  PlaceholderNodeSchema,
-  UnsupportedNodeSchema,
+// --- Composed union ---
+export const ExpressionNodeSchema = z.discriminatedUnion('$type', [
+  ArithmeticNodeSchema, /* ... all transformed variants ... */
+  PlaceholderNodeSchema, UnsupportedNodeSchema,  // UI-only
 ]);
 
-/** Inferred TypeScript type — the builder's expression node type. */
 export type ExpressionNode = z.infer<typeof ExpressionNodeSchema>;
 ```
 
-### Transformation Summary
+### Form Schemas (via same `deriveUiSchema`) — replaces `form-schemas.ts`
 
-| Transform | What | Why |
-|-----------|------|-----|
-| **T1: UI augmentation** | Add `id: string` to every variant via `.extend(uiFields)` | React keys, selection tracking, store lookups |
-| **T2: Reference relaxation** | Replace `ReferenceSchema` (`{ $refText, ref? }`) with `z.string()` | Cross-references are resolved to plain names at the adapter boundary |
-| **T3: Field relaxation** | Required expression children accept `PlaceholderNodeSchema` | Partial trees during incremental construction |
-| **T4: UI-only variants** | Add `Placeholder` and `Unsupported` to the discriminated union | Empty slots and graceful fallback for unrecognized sub-trees |
+```typescript
+// schemas/form-schemas.ts — AFTER migration (R-011)
+import { deriveUiSchema } from './derive-ui-schema.js';
+import {
+  DataSchema, ChoiceSchema, RosettaEnumerationSchema,
+  RosettaFunctionSchema, AttributeSchema, RosettaEnumValueSchema,
+} from '../generated/zod-schemas.js';
+
+const metadataFields = {
+  definition: z.string().optional(),
+  comments: z.string().optional(),
+  synonyms: z.array(z.string()).optional(),
+};
+
+// --- Member (shared attribute shape for useFieldArray) ---
+export const memberSchema = deriveUiSchema(AttributeSchema, {
+  pick: ['name'],
+  overrides: { name: z.string() },
+  extend: {
+    typeName: z.string(),
+    cardinality: z.string(),
+    isOverride: z.boolean(),
+    displayName: z.string().optional(),
+  },
+  omitType: true,
+});
+
+// --- Attribute row ---
+export const attributeSchema = deriveUiSchema(AttributeSchema, {
+  pick: ['name'],
+  overrides: { name: z.string().min(1, 'Attribute name is required') },
+  extend: { typeName: z.string(), cardinality: z.string() },
+  omitType: true,
+});
+
+// --- Data form ---
+export const dataTypeFormSchema = deriveUiSchema(DataSchema, {
+  pick: ['name'],
+  overrides: { name: z.string().min(1, 'Type name is required') },
+  extend: {
+    parentName: z.string(),              // superType ref → string
+    members: z.array(memberSchema),
+    ...metadataFields,
+  },
+  omitType: true,
+});
+
+// --- Enum form ---
+export const enumFormSchema = deriveUiSchema(RosettaEnumerationSchema, {
+  pick: ['name'],
+  overrides: { name: z.string().min(1, 'Enum name is required') },
+  extend: {
+    parentName: z.string(),
+    members: z.array(memberSchema).default([]),
+    ...metadataFields,
+  },
+  omitType: true,
+});
+
+// --- Choice form ---
+export const choiceFormSchema = deriveUiSchema(ChoiceSchema, {
+  pick: ['name'],
+  overrides: { name: z.string().min(1, 'Choice name is required') },
+  extend: {
+    members: z.array(memberSchema).default([]),
+    ...metadataFields,
+  },
+  omitType: true,
+});
+
+// --- Function form ---
+export const functionFormSchema = deriveUiSchema(RosettaFunctionSchema, {
+  pick: ['name'],
+  overrides: { name: z.string().min(1, 'Function name is required') },
+  extend: {
+    outputType: z.string(),
+    expressionText: z.string(),
+    members: z.array(memberSchema).optional(),
+    ...metadataFields,
+  },
+  omitType: true,
+});
+
+// Types inferred from schemas (no hand-coded interfaces)
+export type DataTypeFormValues = z.infer<typeof dataTypeFormSchema>;
+export type EnumFormValues = z.infer<typeof enumFormSchema>;
+// ... etc.
+```
+
+### How `deriveUiSchema` Unifies All Transformations
+
+| Use Case | `pick` | `overrides` | `extend` | `omitType` |
+|----------|--------|-------------|----------|------------|
+| Expression binary op | — | `{ left: exprChild }` | `{ id }` | no |
+| Expression literal | — | — | `{ id }` | no |
+| Expression reference | — | `{ symbol: z.string() }` | `{ id }` | no |
+| Form data type | `['name']` | `{ name: z.string().min(1) }` | `{ parentName, members, ... }` | yes |
+| Form member row | `['name']` | `{ name: z.string() }` | `{ typeName, cardinality, ... }` | yes |
 
 ### Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Keep `$type` as discriminator (not `kind`) | Same discriminator as generated schemas; no remapping needed in adapter |
-| Use `.extend()` on `z.looseObject` | Generated schemas use `z.looseObject` which supports `.extend()` naturally; extra AST fields (CST, parent) pass through without error |
-| `extendUnary()`/`extendLambda()` helpers | 20+ unary/lambda variants share the same extension pattern; DRY |
-| Literal variants stay separate (not collapsed) | Preserves 1:1 mapping with generated `RosettaBooleanLiteral`, `RosettaIntLiteral`, etc.; type-specific rendering in blocks |
-| `z.string()` for resolved references | Adapter resolves `ref.$refText` at conversion time; builder only needs the display name |
+| Single generic `deriveUiSchema()` | One function for all schema derivations; eliminates `extendUnary()`, `extendLambda()`, and all hand-coded `z.object()` calls |
+| `pick` before `overrides` before `extend` | Pick narrows, overrides replace, extend adds — a consistent pipeline regardless of use case |
+| `omitType: true` for forms | Form schemas don't participate in discriminated unions; `$type` would leak into react-hook-form values |
+| Keep `$type` for expression nodes | Same discriminator as generated schemas; BlockRenderer switches on `node.$type` |
+| `deriveUnary()` / `deriveLambda()` wrappers | Thin wrappers over `deriveUiSchema` for 20+ identical-shape variants; keeps call sites one-line |
+| UI-only variants (`Placeholder`, `Unsupported`) built with `z.object()` | No generated source to derive from; these are small leaf schemas |
 
 ## Supporting Entities
 

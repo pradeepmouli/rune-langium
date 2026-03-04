@@ -85,8 +85,9 @@ packages/visual-editor/
 │   │   ├── expression-store.ts            # NEW — expression tree state + undo/redo
 │   │   └── history.ts                     # Existing
 │   ├── schemas/
-│   │   ├── form-schemas.ts               # Existing — refactor to derive from generated schemas
-│   │   ├── expression-node-schema.ts     # NEW — ExpressionNode schema (transforms generated)
+│   │   ├── derive-ui-schema.ts           # NEW — generic schema transformation utility
+│   │   ├── form-schemas.ts               # Existing — refactor to use deriveUiSchema()
+│   │   ├── expression-node-schema.ts     # NEW — ExpressionNode schemas via deriveUiSchema()
 │   │   └── index.ts                      # Existing — add expression schema exports
 │   ├── adapters/
 │   │   ├── ast-to-expression-node.ts     # NEW — RosettaExpression AST → ExpressionNode
@@ -113,13 +114,13 @@ packages/visual-editor/
 
 **Structure Decision**: All new code lives within the existing `packages/visual-editor` package. The expression builder is a sub-module of the editors directory, following the established pattern. No new packages are created.
 
-## Follow-On: Migrate Hand-Crafted Form Schemas (R-011)
+## Follow-On: Migrate Form Schemas to `deriveUiSchema()` (R-011)
 
-After the expression builder is complete, refactor `schemas/form-schemas.ts` to derive all schemas from the generated `zod-schemas.ts` using the same transformation pattern (`.pick()` / `.extend()`), eliminating hand-coded schemas and manual conformance checks. See [research.md R-011](./research.md#r-011-migrate-hand-crafted-form-schemas-to-generated-schema-transformations) for full scope and migration pattern.
+After the expression builder lands (which ships `derive-ui-schema.ts`), refactor `schemas/form-schemas.ts` to use the same `deriveUiSchema()` utility for all 7 form schemas. See [research.md R-011](./research.md#r-011-migrate-hand-crafted-form-schemas-to-generic-deriveuischema) for full scope and migration pattern.
 
-**Scope**: `dataTypeFormSchema`, `enumFormSchema`, `choiceFormSchema`, `functionFormSchema`, `memberSchema`, `attributeSchema`, `enumValueSchema` — all derived from their generated counterparts. `metadataSchema` kept as-is (form-specific). Removes ~130 lines of hand-coded schema + conformance checks.
+**Scope**: `dataTypeFormSchema`, `enumFormSchema`, `choiceFormSchema`, `functionFormSchema`, `memberSchema`, `attributeSchema`, `enumValueSchema` — all rewritten as `deriveUiSchema(GeneratedSchema, { pick, overrides, extend, omitType: true })`. Delete all `_*Check` conformance types. `metadataSchema` kept as-is (form-specific). Removes ~130 lines.
 
-**Timing**: Separate PR after expression builder lands.
+**Timing**: Separate PR after expression builder lands. The `deriveUiSchema()` utility ships with the expression builder.
 
 ## Complexity Tracking
 
