@@ -1,68 +1,152 @@
-/**
- * DataForm — auto-save form for Data type nodes.
- *
- * Hand-authored form with auto-save wiring (onValueChange fires on every
- * valid field change after mount). Uses TypeSelector for the cross-ref superType
- * field and standard <input> for unmapped text fields.
- *
- * Note: This file was authored to match what `zodform generate` would produce
- * extended with auto-save wiring and visual-editor widget mappings from
- * component-config.ts. Auto-save is implemented via useZodForm onValueChange
- * (available in @zod-to-form/react ^0.2.4).
- */
-
-import { Controller } from 'react-hook-form';
-import { useZodForm } from '@zod-to-form/react';
+// @ts-nocheck — Generated scaffold; component props require controlled-component adapters
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
+  CardinalitySelector,
+  Field,
+  FieldContent,
+  FieldLabel,
+  Input,
+  Select,
+  TypeSelector
+} from '@/components/zod-form-components';
 import { DataSchema } from '../../../generated/zod-schemas.js';
-import { TypeSelector } from '../../editors/TypeSelector.js';
-import type { TypeOption } from '../../../types.js';
 
-type FormData = (typeof DataSchema)['_zod']['output'];
+type StripIndexSignature<T> = T extends readonly (infer U)[]
+  ? StripIndexSignature<U>[]
+  : T extends object
+    ? {
+        [K in keyof T as string extends K
+          ? never
+          : number extends K
+            ? never
+            : symbol extends K
+              ? never
+              : K]: StripIndexSignature<T[K]>;
+      }
+    : T;
 
-export interface DataFormProps {
-  /** Called on every valid field change after mount — drives auto-save to the graph store. */
-  onValueChange: (data: FormData) => void;
-  /** Initial values for the form fields. */
-  defaultValues?: Partial<FormData>;
-  /** Available type options for the superType cross-ref TypeSelector. */
-  typeOptions?: TypeOption[];
-}
+type FormData = StripIndexSignature<z.output<typeof DataSchema>>;
 
-/**
- * Auto-save form for editing Data type fields.
- * Fires `onValueChange` on every valid change after mount (no submit button).
- */
-export function DataForm({ onValueChange, defaultValues, typeOptions = [] }: DataFormProps) {
-  const { form } = useZodForm(DataSchema, {
-    defaultValues: defaultValues ?? { $type: 'Data', name: '' },
-    onValueChange
+export function DataForm(props: { onSubmit: (data: FormData) => void }) {
+  const { register, handleSubmit, control } = useForm<FormData>({
+    resolver: zodResolver(DataSchema)
   });
-  const { register, control } = form;
+  const {
+    fields: attributesFields,
+    append: appendAttributes,
+    remove: removeAttributes
+  } = useFieldArray<FormData, 'attributes'>({ control, name: 'attributes' });
 
   return (
-    <form>
-      {/* name — unmapped field: standard <input> */}
+    <form onSubmit={handleSubmit(props.onSubmit)}>
+      <Field>
+        <FieldLabel htmlFor="$type">$Type</FieldLabel>
+        <FieldContent>
+          <Select id="$type" {...register('$type')} />
+        </FieldContent>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="name">Name</FieldLabel>
+        <FieldContent>
+          <Input id="name" {...register('name')} />
+        </FieldContent>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="superType">Super Type</FieldLabel>
+        <FieldContent>
+          <TypeSelector id="superType" {...register('superType')} />
+        </FieldContent>
+      </Field>
       <div>
-        <label htmlFor="name">Name</label>
-        <input id="name" type="text" {...register('name')} />
+        <label>Attributes</label>
+        {attributesFields.map((item, index) => (
+          <div key={item.id}>
+            <div>
+              <label>0</label>
+              <fieldset>
+                <legend>0</legend>
+                <Field>
+                  <FieldLabel htmlFor="attributes.${index}.$type">$Type</FieldLabel>
+                  <FieldContent>
+                    <Select
+                      id="attributes.${index}.$type"
+                      {...register(`attributes.${index}.$type`)}
+                    />
+                  </FieldContent>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="attributes.${index}.name">Name</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      id="attributes.${index}.name"
+                      {...register(`attributes.${index}.name`)}
+                    />
+                  </FieldContent>
+                </Field>
+                <div>
+                  <label>Type Call</label>
+                  <fieldset>
+                    <legend>Type Call</legend>
+                    <Field>
+                      <FieldLabel htmlFor="attributes.${index}.typeCall.$type">$Type</FieldLabel>
+                      <FieldContent>
+                        <Select
+                          id="attributes.${index}.typeCall.$type"
+                          {...register(`attributes.${index}.typeCall.$type`)}
+                        />
+                      </FieldContent>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="attributes.${index}.typeCall.type">Type</FieldLabel>
+                      <FieldContent>
+                        <TypeSelector
+                          id="attributes.${index}.typeCall.type"
+                          {...register(`attributes.${index}.typeCall.type`)}
+                        />
+                      </FieldContent>
+                    </Field>
+                    <div>
+                      <label>Arguments</label>
+                      <p>
+                        Nested array editing is not auto-generated for dynamic paths. Use a custom
+                        renderer for attributes.${index}.typeCall.arguments.
+                      </p>
+                    </div>
+                  </fieldset>
+                </div>
+                <Field>
+                  <FieldLabel htmlFor="attributes.${index}.card">Card</FieldLabel>
+                  <FieldContent>
+                    <CardinalitySelector
+                      id="attributes.${index}.card"
+                      {...register(`attributes.${index}.card`)}
+                    />
+                  </FieldContent>
+                </Field>
+              </fieldset>
+            </div>
+            <button type="button" onClick={() => removeAttributes(index)}>
+              Remove
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() =>
+            appendAttributes({
+              $type: 'Attribute',
+              name: '',
+              typeCall: { $type: 'TypeCall', type: { $refText: '', ref: '' }, arguments: [] },
+              card: { $type: 'RosettaCardinality', inf: 0, sup: 0, unbounded: false }
+            })
+          }
+        >
+          Add
+        </button>
       </div>
-
-      {/* superType — cross-ref field: TypeSelector widget */}
-      <div>
-        <label>Super Type</label>
-        <Controller
-          control={control}
-          name="superType"
-          render={({ field }) => (
-            <TypeSelector
-              value={field.value?.$refText ?? null}
-              options={typeOptions}
-              onSelect={(val: string | null) => field.onChange(val ? { $refText: val } : undefined)}
-              allowClear
-            />
-          )}
-        />
-      </div>
+      <button type="submit">Submit</button>
     </form>
   );
 }

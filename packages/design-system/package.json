@@ -24,7 +24,8 @@
     "./ui/spinner": "./src/ui/spinner.tsx",
     "./ui/tabs": "./src/ui/tabs.tsx",
     "./ui/textarea": "./src/ui/textarea.tsx",
-    "./ui/tooltip": "./src/ui/tooltip.tsx"
+    "./ui/tooltip": "./src/ui/tooltip.tsx",
+	"./ui/components": "./src/ui/index.tsx"
   },
   "files": [
     "src"
