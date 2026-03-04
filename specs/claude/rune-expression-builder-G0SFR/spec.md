@@ -137,6 +137,7 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 - **FR-013**: System MUST visually indicate broken references (e.g., references to deleted inputs or unresolved types) with a warning indicator.
 - **FR-014**: System MUST allow users to collapse deeply nested sub-expression blocks to manage visual complexity.
 - **FR-015**: System MUST integrate with the existing function editing form in the visual editor, using the existing expression editor slot mechanism.
+- **FR-016**: System MUST allow users to remove any expression block, replacing it with an empty placeholder slot while preserving the surrounding tree structure.
 
 ### Key Entities
 
@@ -160,6 +161,7 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 ### Session 2026-03-04
 
 - Q: Does the builder edit only expression bodies, or also function structure (inputs, outputs, adding operations)? → A: Expression bodies only. Function structure editing (add/remove inputs, output, operations, conditions, shortcuts) remains the responsibility of the existing function form. The builder is scoped to editing the expression content within existing slots.
+- Q: How does a user remove an existing expression block? → A: Replace with placeholder. Removing a block replaces it with an empty placeholder slot, preserving the surrounding tree structure. This keeps the expression tree structurally valid at all times.
 
 ## Assumptions
 
