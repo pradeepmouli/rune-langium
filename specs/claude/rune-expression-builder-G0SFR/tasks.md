@@ -141,12 +141,12 @@
 
 ### Tests for User Story 4 (TDD — write first, verify they fail)
 
-- [ ] T048 [P] [US4] Write context filtering tests in `packages/visual-editor/test/expression-builder/context-filtering.test.tsx` — test: numeric context shows arithmetic + numeric refs, boolean context shows comparison + logic, collection context shows collection operators (filter, extract, sum, count), single-value context hides collection-only operators, filter closure body shows boolean-producing operators
+- [X] T048 [P] [US4] Write context filtering tests in `packages/visual-editor/test/expression-builder/context-filtering.test.tsx` — test: numeric context shows arithmetic + numeric refs, boolean context shows comparison + logic, collection context shows collection operators (filter, extract, sum, count), single-value context hides collection-only operators, filter closure body shows boolean-producing operators
 
 ### Implementation for User Story 4
 
-- [ ] T049 [US4] Implement type context resolution in `packages/visual-editor/src/hooks/useExpressionAutocomplete.ts` — enhance existing hook to determine expectedType from parent node context (binary left/right → infer from operator, conditional if → boolean, lambda body → depends on operator), resolve type from FunctionScope entries
-- [ ] T050 [US4] Add type-aware filtering to OperatorPalette — update `OperatorPalette.tsx` to receive expectedType from store/placeholder, filter OperatorDefinition[] by `applicableWhen` field matching current context, visually de-emphasize (but don't hide) operators that don't match context type
+- [X] T049 [US4] Implement type context resolution in `packages/visual-editor/src/hooks/useContextFilter.ts` — new hook to determine expectedType from parent node context (binary left/right → infer from operator, conditional if → boolean, lambda body → depends on operator), resolve type from tree structure
+- [X] T050 [US4] Add type-aware filtering to OperatorPalette — update `OperatorPalette.tsx` to receive filteredCategories with recommended annotations, visually de-emphasize (but don't hide) operators that don't match context type
 
 **Checkpoint**: User Story 4 complete — palette filters operators by type context, invalid choices de-emphasized
 

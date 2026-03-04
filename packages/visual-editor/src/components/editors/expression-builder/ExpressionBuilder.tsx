@@ -17,6 +17,7 @@ import { OperatorPalette } from './OperatorPalette.js';
 import { ReferencePicker } from './ReferencePicker.js';
 import { astToExpressionNode } from '../../../adapters/ast-to-expression-node.js';
 import { expressionNodeToDslPreview } from '../../../adapters/expression-node-to-dsl.js';
+import { useContextFilter } from '../../../hooks/useContextFilter.js';
 
 export interface ExpressionBuilderProps extends ExpressionEditorSlotProps {
   scope: FunctionScope;
@@ -110,6 +111,9 @@ export function ExpressionBuilder({
     setReferencePickerOpen(false);
   }, []);
 
+  // Context-aware operator filtering
+  const { categories: filteredCategories } = useContextFilter(tree, paletteAnchorId);
+
   return (
     <div
       ref={containerRef}
@@ -156,6 +160,7 @@ export function ExpressionBuilder({
               open={paletteOpen}
               onSelect={handlePaletteSelect}
               onClose={handlePaletteClose}
+              filteredCategories={filteredCategories}
             />
             <ReferencePicker
               open={referencePickerOpen}

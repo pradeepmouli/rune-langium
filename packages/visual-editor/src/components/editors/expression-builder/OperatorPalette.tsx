@@ -1,8 +1,9 @@
 /**
- * OperatorPalette — categorized operator picker using cmdk.
+ * OperatorPalette — categorized operator picker with context-aware filtering.
  *
  * Opens as a popover anchored to a clicked placeholder. Provides
- * fuzzy search and categorized groups.
+ * fuzzy search and categorized groups. Operators that don't match
+ * the current type context are de-emphasized but still selectable.
  *
  * @module
  */
@@ -11,15 +12,26 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { OPERATOR_CATALOG } from './operator-catalog.js';
 import type { OperatorDefinition } from './operator-catalog.js';
 import type { ExpressionNode } from '../../../schemas/expression-node-schema.js';
+import type {
+  FilteredOperatorCategory,
+  AnnotatedOperator
+} from '../../../hooks/useContextFilter.js';
 
 export interface OperatorPaletteProps {
   open: boolean;
   anchorEl?: HTMLElement | null;
   onSelect: (node: ExpressionNode) => void;
   onClose: () => void;
+  /** Context-filtered categories. If not provided, all operators are shown as recommended. */
+  filteredCategories?: FilteredOperatorCategory[];
 }
 
-export function OperatorPalette({ open, onSelect, onClose }: OperatorPaletteProps) {
+export function OperatorPalette({
+  open,
+  onSelect,
+  onClose,
+  filteredCategories
+}: OperatorPaletteProps) {
   const [search, setSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -55,6 +67,14 @@ export function OperatorPalette({ open, onSelect, onClose }: OperatorPaletteProp
 
   const lowerSearch = search.toLowerCase();
 
+  // Use filtered categories if provided, otherwise default catalog (all recommended)
+  const categories: FilteredOperatorCategory[] =
+    filteredCategories ??
+    OPERATOR_CATALOG.map((cat) => ({
+      ...cat,
+      operators: cat.operators.map((op) => ({ ...op, recommended: true }))
+    }));
+
   return (
     <div
       className="absolute z-50 w-64 rounded-md border border-border bg-popover p-1 shadow-lg"
@@ -70,7 +90,7 @@ export function OperatorPalette({ open, onSelect, onClose }: OperatorPaletteProp
         data-testid="palette-search"
       />
       <div className="max-h-60 overflow-y-auto">
-        {OPERATOR_CATALOG.map((category) => {
+        {categories.map((category) => {
           const filtered = category.operators.filter(
             (op) =>
               !search ||
@@ -78,18 +98,29 @@ export function OperatorPalette({ open, onSelect, onClose }: OperatorPaletteProp
               op.description.toLowerCase().includes(lowerSearch)
           );
           if (filtered.length === 0) return null;
+
+          // Sort: recommended first, then non-recommended
+          const sorted = [...filtered].sort((a, b) => {
+            if (a.recommended === b.recommended) return 0;
+            return a.recommended ? -1 : 1;
+          });
+
           return (
             <div key={category.id} className="mb-1">
               <div className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {category.label}
               </div>
-              {filtered.map((op) => (
+              {sorted.map((op: AnnotatedOperator) => (
                 <button
                   key={`${op.$type}-${op.operator ?? op.label}`}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent focus:bg-accent focus:outline-none"
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-accent focus:bg-accent focus:outline-none ${
+                    op.recommended ? 'text-foreground' : 'text-muted-foreground/50 opacity-50'
+                  }`}
                   onClick={() => handleSelect(op)}
                   role="option"
                   data-testid={`palette-option-${op.label}`}
+                  data-recommended={op.recommended}
+                  aria-label={`${op.label}${op.recommended ? '' : ' (not recommended for this context)'}`}
                 >
                   <span className="font-mono font-medium">{op.label}</span>
                   <span className="text-[10px] text-muted-foreground">{op.description}</span>
