@@ -7,7 +7,7 @@
  * @module
  */
 
-import { memo, useCallback, type DragEvent } from 'react';
+import { memo, useCallback, useState, type DragEvent } from 'react';
 import { EXPRESSION_DRAG_TYPE } from '../../../hooks/useDragDrop.js';
 import type { ExpressionNode } from '../../../schemas/expression-node-schema.js';
 import { BinaryBlock } from './blocks/BinaryBlock.js';
@@ -79,6 +79,22 @@ const LAMBDA_TYPES = new Set([
   'MinOperation',
   'MaxOperation',
   'ThenOperation'
+]);
+
+/** Depth threshold for collapsible sub-expressions. */
+const COLLAPSE_THRESHOLD = 3;
+
+/** Leaf node types that shouldn't be collapsible. */
+const LEAF_TYPES = new Set([
+  'Placeholder',
+  'Unsupported',
+  'RosettaBooleanLiteral',
+  'RosettaIntLiteral',
+  'RosettaNumberLiteral',
+  'RosettaStringLiteral',
+  'RosettaSymbolReference',
+  'RosettaImplicitVariable',
+  'RosettaSuperCall'
 ]);
 
 /** Access typed fields from ExpressionNode (which may have index signatures). */
@@ -168,6 +184,8 @@ function BlockRendererInner({
   }
 
   const isDraggable = $type !== 'Placeholder' && $type !== 'Unsupported';
+  const isCollapsible = depth >= COLLAPSE_THRESHOLD && !LEAF_TYPES.has($type);
+  const [collapsed, setCollapsed] = useState(false);
 
   const handleDragStart = useCallback(
     (e: DragEvent) => {
@@ -178,6 +196,11 @@ function BlockRendererInner({
     [id]
   );
 
+  const handleToggleCollapse = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCollapsed((prev) => !prev);
+  }, []);
+
   return (
     <div
       className={`expr-block inline-flex items-baseline gap-1 rounded px-1 py-0.5 transition-shadow ${
@@ -186,14 +209,43 @@ function BlockRendererInner({
       data-node-id={id}
       data-node-type={$type}
       data-depth={depth}
+      data-collapsed={collapsed || undefined}
       onClick={handleClick}
       draggable={isDraggable}
       onDragStart={isDraggable ? handleDragStart : undefined}
       role="treeitem"
       tabIndex={0}
       aria-selected={isSelected}
+      aria-expanded={isCollapsible ? !collapsed : undefined}
     >
-      {content}
+      {isCollapsible && collapsed ? (
+        <button
+          className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
+          onClick={handleToggleCollapse}
+          data-testid="expand-block"
+          aria-label="Expand sub-expression"
+        >
+          <span>{'▸'}</span>
+          <span className="font-mono">
+            {$type.replace(/^Rosetta/, '').replace(/Operation$/, '')}
+          </span>
+          <span>{'…'}</span>
+        </button>
+      ) : (
+        <>
+          {isCollapsible && (
+            <button
+              className="inline-flex items-center rounded text-[10px] text-muted-foreground opacity-50 hover:opacity-100"
+              onClick={handleToggleCollapse}
+              data-testid="collapse-block"
+              aria-label="Collapse sub-expression"
+            >
+              {'▾'}
+            </button>
+          )}
+          {content}
+        </>
+      )}
     </div>
   );
 }
