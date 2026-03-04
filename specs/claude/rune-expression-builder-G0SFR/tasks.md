@@ -71,17 +71,18 @@
 - [ ] T020 [P] [US1] Implement `UnaryBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/UnaryBlock.tsx` — render postfix operator label after argument child slot, handle all 20+ unary variants (exists, count, sum, flatten, distinct, first, last, reverse, type conversions)
 - [ ] T021 [P] [US1] Implement `FeatureCallBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/FeatureCallBlock.tsx` — render receiver block with `->` or `->>` arrow and feature name, navigation category color
 - [ ] T022 [P] [US1] Implement `ConditionalBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/ConditionalBlock.tsx` — render if/then/else sections with labeled headers, control flow category color
-- [ ] T023 [P] [US1] Implement `SwitchBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/SwitchBlock.tsx` — render argument block, scrollable case list with pattern→result pairs, default case, control flow category color
+- [ ] T023 [P] [US1] Implement `SwitchBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/SwitchBlock.tsx` — render argument block, scrollable case list with pattern→result pairs, default case, "add case" action button, control flow category color
 - [ ] T024 [P] [US1] Implement `LambdaBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/LambdaBlock.tsx` — render operator label (filter/extract/sort/min/max/reduce/then), optional argument block, closure parameter names, body block, collection category color
 - [ ] T025 [P] [US1] Implement `ConstructorBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/ConstructorBlock.tsx` — render type name, key-value pair list with value blocks as child slots
 - [ ] T026 [P] [US1] Implement `LiteralBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/LiteralBlock.tsx` — render literal value (boolean, int, number, string) with inline display, literal category color
-- [ ] T027 [P] [US1] Implement `ReferenceBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/ReferenceBlock.tsx` — render symbol name with type badge, visual indicator for input/alias/output origin, broken reference warning if not in scope
+- [ ] T027 [P] [US1] Implement `ReferenceBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/ReferenceBlock.tsx` — render symbol name with type badge, visual indicator for input/alias/output origin, check symbol against FunctionScope and display warning Badge (design system) for broken/unresolved references (FR-013)
 - [ ] T028 [P] [US1] Implement `ListBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/ListBlock.tsx` — render list brackets with element blocks as child slots, collection category color
-- [ ] T029 [P] [US1] Implement `PlaceholderBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/PlaceholderBlock.tsx` — render dashed border placeholder with expected type hint, click handler to open palette
+- [ ] T029 [P] [US1] Implement `PlaceholderBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/PlaceholderBlock.tsx` — render dashed border placeholder with expected type hint, accept `onActivate` prop callback (wired to palette in US2 T041)
 - [ ] T030 [P] [US1] Implement `UnsupportedBlock.tsx` in `packages/visual-editor/src/components/editors/expression-builder/blocks/UnsupportedBlock.tsx` — render rawText in monospace with distinct warning styling, tooltip explaining unsupported status
-- [ ] T031 [US1] Create barrel export in `packages/visual-editor/src/components/editors/expression-builder/index.ts` — export ExpressionBuilder, BlockRenderer, and all public types
+- [ ] T031 [US1] Implement function section layout in `ExpressionBuilder.tsx` — render labeled headers for function sections (inputs, output, shortcuts/aliases, conditions, operations, post-conditions) per FR-010, inputs/output/section structure read-only, expression slots render BlockRenderer for each expression body
+- [ ] T032 [US1] Create barrel export in `packages/visual-editor/src/components/editors/expression-builder/index.ts` — export ExpressionBuilder, BlockRenderer, and all public types
 
-**Checkpoint**: User Story 1 complete — expressions render as nested visual blocks, all block types display correctly, tests pass
+**Checkpoint**: User Story 1 complete — expressions render as nested visual blocks with labeled section headers, all block types display correctly, tests pass
 
 ---
 
@@ -93,20 +94,21 @@
 
 ### Tests for User Story 2 (TDD — write first, verify they fail)
 
-- [ ] T032 [P] [US2] Write OperatorPalette interaction tests in `packages/visual-editor/test/expression-builder/operator-palette.test.tsx` — test: palette opens on placeholder click, categories display (arithmetic/comparison/logic/navigation/collection/control), fuzzy search filters operators, selecting operator creates correct node type, keyboard navigation within palette, Escape closes palette
-- [ ] T033 [P] [US2] Write ReferencePicker tests in `packages/visual-editor/test/expression-builder/reference-picker.test.tsx` — test: picker shows in-scope variables (inputs, aliases, output) with type and cardinality, selecting reference creates RosettaSymbolReference node, empty scope shows helpful message
-- [ ] T034 [P] [US2] Write integration tests for build flow in `packages/visual-editor/test/expression-builder/build-flow.test.tsx` — test: click placeholder → select operator → fills slot with new block + child placeholders, complete expression (no placeholders) serializes to valid DSL, partial expression shows placeholders clearly
+- [ ] T033 [P] [US2] Write OperatorPalette interaction tests in `packages/visual-editor/test/expression-builder/operator-palette.test.tsx` — test: palette opens on placeholder click, categories display (arithmetic/comparison/logic/navigation/collection/control), fuzzy search filters operators, selecting operator creates correct node type, keyboard navigation within palette, Escape closes palette
+- [ ] T034 [P] [US2] Write ReferencePicker tests in `packages/visual-editor/test/expression-builder/reference-picker.test.tsx` — test: picker shows in-scope variables (inputs, aliases, output) with type and cardinality, selecting reference creates RosettaSymbolReference node, empty scope shows helpful message
+- [ ] T035 [P] [US2] Write integration tests for build flow in `packages/visual-editor/test/expression-builder/build-flow.test.tsx` — test: click placeholder → select operator → fills slot with new block + child placeholders, complete expression (no placeholders) serializes to valid DSL, partial expression shows placeholders clearly
 
 ### Implementation for User Story 2
 
-- [ ] T035 [US2] Define operator catalog (categories + definitions) in `packages/visual-editor/src/components/editors/expression-builder/operator-catalog.ts` — OperatorCategory[] with all operators organized per FR-003: arithmetic (+,-,*,/), comparison (=,<>,>,<,>=,<=,contains,disjoint), logic (and,or), navigation (->,->>,exists,is absent), collection (filter,extract,sort,min,max,reduce,sum,count,distinct,first,last,flatten,reverse,only-element), control (if/then/else,switch,default,join)
-- [ ] T036 [US2] Implement `OperatorPalette.tsx` in `packages/visual-editor/src/components/editors/expression-builder/OperatorPalette.tsx` — cmdk Command component inside Radix Popover, anchored to clicked placeholder, categorized groups with icons (lucide-react), fuzzy search input, keyboard navigation, on select: create ExpressionNode of correct $type with Placeholder children, call store.replaceNode()
-- [ ] T037 [US2] Implement `ReferencePicker.tsx` in `packages/visual-editor/src/components/editors/expression-builder/ReferencePicker.tsx` — dropdown showing FunctionScope entries (inputs, aliases, output) with name, typeName, cardinality badge, on select: create RosettaSymbolReference node, call store.replaceNode()
-- [ ] T038 [US2] Implement inline literal editing in `LiteralBlock.tsx` — add contenteditable or controlled input for literal value editing (FR-004), call store.updateLiteral() on change, validate input based on literal type (boolean toggle, numeric input, string input)
-- [ ] T039 [US2] Implement `useExpressionBuilder.ts` orchestration hook in `packages/visual-editor/src/hooks/useExpressionBuilder.ts` — wire store to onChange/onBlur slot props: on tree mutation → serializeTree() → onChange(dslText), on mode switch → onBlur(), initialize store from value prop via parseExpression(), sync scope prop to store
-- [ ] T040 [US2] Wire PlaceholderBlock click to open OperatorPalette — update `PlaceholderBlock.tsx` to call store.openPalette(nodeId) on click, update `BlockRenderer.tsx` to render OperatorPalette when store.paletteOpen && store.paletteAnchorId matches
+- [ ] T036 [US2] Define operator catalog (categories + definitions) in `packages/visual-editor/src/components/editors/expression-builder/operator-catalog.ts` — OperatorCategory[] with all operators organized per FR-003: arithmetic (+,-,*,/), comparison (=,<>,>,<,>=,<=,contains,disjoint), logic (and,or), navigation (->,->>,exists,is absent), collection (filter,extract,sort,min,max,reduce,sum,count,distinct,first,last,flatten,reverse,only-element), control (if/then/else,switch,default,join)
+- [ ] T037 [US2] Implement `OperatorPalette.tsx` in `packages/visual-editor/src/components/editors/expression-builder/OperatorPalette.tsx` — cmdk Command component inside Radix Popover, anchored to clicked placeholder, categorized groups with icons (lucide-react), fuzzy search input, keyboard navigation, on select: create ExpressionNode of correct $type with Placeholder children, call store.replaceNode()
+- [ ] T038 [US2] Implement `ReferencePicker.tsx` in `packages/visual-editor/src/components/editors/expression-builder/ReferencePicker.tsx` — dropdown showing FunctionScope entries (inputs, aliases, output) with name, typeName, cardinality badge, on select: create RosettaSymbolReference node, call store.replaceNode()
+- [ ] T039 [US2] Implement inline literal editing in `LiteralBlock.tsx` — add contenteditable or controlled input for literal value editing (FR-004), call store.updateLiteral() on change, validate input based on literal type (boolean toggle, numeric input, string input, date picker/formatted date input)
+- [ ] T040 [US2] Implement `useExpressionBuilder.ts` orchestration hook in `packages/visual-editor/src/hooks/useExpressionBuilder.ts` — wire store to onChange/onBlur slot props: on tree mutation → serializeTree() → onChange(dslText), on mode switch → onBlur(), initialize store from value prop via parseExpression(), sync scope prop to store
+- [ ] T041 [US2] Wire PlaceholderBlock click to open OperatorPalette — wire `onActivate` prop in `PlaceholderBlock.tsx` to call store.openPalette(nodeId), update `BlockRenderer.tsx` to render OperatorPalette when store.paletteOpen && store.paletteAnchorId matches
+- [ ] T042 [US2] Wire undo/redo keyboard shortcuts (FR-012) — add Ctrl+Z (undo) and Ctrl+Shift+Z (redo) handlers in `packages/visual-editor/src/hooks/useKeyboardNavigation.ts`, call zundo temporal store `undo()` / `redo()` methods (store already includes zundo from T014; this wires the keyboard bindings so undo/redo is available from MVP onward)
 
-**Checkpoint**: User Story 2 complete — users can build expressions via click interactions, palette shows categorized operators, DSL serializes correctly
+**Checkpoint**: User Story 2 complete — users can build expressions via click interactions, palette shows categorized operators, DSL serializes correctly, undo/redo available
 
 ---
 
@@ -118,14 +120,14 @@
 
 ### Tests for User Story 3 (TDD — write first, verify they fail)
 
-- [ ] T041 [P] [US3] Write ExpressionBuilder root component tests in `packages/visual-editor/test/expression-builder/expression-builder.test.tsx` — test: renders Tabs with Builder/Text tabs, builder mode shows BlockRenderer, text mode shows textarea, switching modes preserves content, parse error blocks switch to builder with inline error
-- [ ] T042 [P] [US3] Write DslPreview tests in `packages/visual-editor/test/expression-builder/dsl-preview.test.tsx` — test: preview shows live DSL text, updates on tree mutations, placeholder positions shown as `___` markers
+- [ ] T043 [P] [US3] Write ExpressionBuilder root component tests in `packages/visual-editor/test/expression-builder/expression-builder.test.tsx` — test: renders Tabs with Builder/Text tabs, builder mode shows BlockRenderer, text mode shows textarea, switching modes preserves content, parse error blocks switch to builder with inline error
+- [ ] T044 [P] [US3] Write DslPreview tests in `packages/visual-editor/test/expression-builder/dsl-preview.test.tsx` — test: preview shows live DSL text, updates on tree mutations, placeholder positions shown as `___` markers
 
 ### Implementation for User Story 3
 
-- [ ] T043 [US3] Implement `ExpressionBuilder.tsx` root component in `packages/visual-editor/src/components/editors/expression-builder/ExpressionBuilder.tsx` — Tabs component (design system) with "Builder" and "Text" tabs, builder mode renders BlockRenderer + DslPreview, text mode renders textarea with value/onChange, mode toggle calls store.setMode() which triggers parse (text→builder) or serialize (builder→text), parse errors display inline and block switch to builder, conforms to ExpressionBuilderProps (extends ExpressionEditorSlotProps + scope + defaultMode)
-- [ ] T044 [US3] Implement `DslPreview.tsx` in `packages/visual-editor/src/components/editors/expression-builder/DslPreview.tsx` — read-only panel showing live DSL text from expressionNodeToDslPreview(tree), updates reactively via store subscription, monospace font, syntax-highlighted if feasible, collapsible via design system Collapsible component
-- [ ] T045 [US3] Wire ExpressionBuilder into FunctionForm via `renderExpressionEditor` slot — update `packages/visual-editor/src/components/editors/FunctionForm.tsx` to pass ExpressionBuilder as the renderExpressionEditor implementation, provide scope prop from function data, integrate with existing form validation
+- [ ] T045 [US3] Implement `ExpressionBuilder.tsx` root component in `packages/visual-editor/src/components/editors/expression-builder/ExpressionBuilder.tsx` — Tabs component (design system) with "Builder" and "Text" tabs, builder mode renders BlockRenderer + DslPreview, text mode renders textarea with value/onChange, mode toggle calls store.setMode() which triggers parse (text→builder) or serialize (builder→text), parse errors display inline and block switch to builder, conforms to ExpressionBuilderProps (extends ExpressionEditorSlotProps + scope + defaultMode)
+- [ ] T046 [US3] Implement `DslPreview.tsx` in `packages/visual-editor/src/components/editors/expression-builder/DslPreview.tsx` — read-only panel showing live DSL text from expressionNodeToDslPreview(tree), updates reactively via store subscription, monospace font, syntax-highlighted if feasible, collapsible via design system Collapsible component
+- [ ] T047 [US3] Wire ExpressionBuilder into FunctionForm via `renderExpressionEditor` slot — update `packages/visual-editor/src/components/editors/FunctionForm.tsx` to pass ExpressionBuilder as the renderExpressionEditor implementation, provide scope prop from function data, integrate with existing form validation
 
 **Checkpoint**: User Story 3 complete — mode toggle works, text↔builder sync preserves content, parse errors handled gracefully
 
@@ -139,12 +141,12 @@
 
 ### Tests for User Story 4 (TDD — write first, verify they fail)
 
-- [ ] T046 [P] [US4] Write context filtering tests in `packages/visual-editor/test/expression-builder/context-filtering.test.tsx` — test: numeric context shows arithmetic + numeric refs, boolean context shows comparison + logic, collection context shows collection operators (filter, extract, sum, count), single-value context hides collection-only operators, filter closure body shows boolean-producing operators
+- [ ] T048 [P] [US4] Write context filtering tests in `packages/visual-editor/test/expression-builder/context-filtering.test.tsx` — test: numeric context shows arithmetic + numeric refs, boolean context shows comparison + logic, collection context shows collection operators (filter, extract, sum, count), single-value context hides collection-only operators, filter closure body shows boolean-producing operators
 
 ### Implementation for User Story 4
 
-- [ ] T047 [US4] Implement type context resolution in `packages/visual-editor/src/hooks/useExpressionAutocomplete.ts` — enhance existing hook to determine expectedType from parent node context (binary left/right → infer from operator, conditional if → boolean, lambda body → depends on operator), resolve type from FunctionScope entries
-- [ ] T048 [US4] Add type-aware filtering to OperatorPalette — update `OperatorPalette.tsx` to receive expectedType from store/placeholder, filter OperatorDefinition[] by `applicableWhen` field matching current context, visually de-emphasize (but don't hide) operators that don't match context type
+- [ ] T049 [US4] Implement type context resolution in `packages/visual-editor/src/hooks/useExpressionAutocomplete.ts` — enhance existing hook to determine expectedType from parent node context (binary left/right → infer from operator, conditional if → boolean, lambda body → depends on operator), resolve type from FunctionScope entries
+- [ ] T050 [US4] Add type-aware filtering to OperatorPalette — update `OperatorPalette.tsx` to receive expectedType from store/placeholder, filter OperatorDefinition[] by `applicableWhen` field matching current context, visually de-emphasize (but don't hide) operators that don't match context type
 
 **Checkpoint**: User Story 4 complete — palette filters operators by type context, invalid choices de-emphasized
 
@@ -158,13 +160,13 @@
 
 ### Tests for User Story 5 (TDD — write first, verify they fail)
 
-- [ ] T049 [P] [US5] Write drag-and-drop tests in `packages/visual-editor/test/expression-builder/drag-drop.test.tsx` — test: drag block to placeholder fills slot, source becomes placeholder, drag to invalid target shows rejection indicator, tree remains structurally valid after reparenting
+- [ ] T051 [P] [US5] Write drag-and-drop tests in `packages/visual-editor/test/expression-builder/drag-drop.test.tsx` — test: drag block to placeholder fills slot, source becomes placeholder, drag to invalid target shows rejection indicator, tree remains structurally valid after reparenting
 
 ### Implementation for User Story 5
 
-- [ ] T050 [US5] Install @dnd-kit/core and configure DnD context in `packages/visual-editor/src/components/editors/expression-builder/ExpressionBuilder.tsx` — add DndContext wrapper, custom tree collision strategy
-- [ ] T051 [US5] Add drag source behavior to block components — update `BlockRenderer.tsx` and block components to support `useDraggable` from @dnd-kit, visual drag preview
-- [ ] T052 [US5] Add drop target behavior to PlaceholderBlock and block slots — update `PlaceholderBlock.tsx` with `useDroppable`, implement `onDragEnd` handler in store: remove node from source path, insert at target path, validate type compatibility
+- [ ] T052 [US5] Install @dnd-kit/core and configure DnD context in `packages/visual-editor/src/components/editors/expression-builder/ExpressionBuilder.tsx` — add DndContext wrapper, custom tree collision strategy
+- [ ] T053 [US5] Add drag source behavior to block components — update `BlockRenderer.tsx` and block components to support `useDraggable` from @dnd-kit, visual drag preview
+- [ ] T054 [US5] Add drop target behavior to PlaceholderBlock and block slots — update `PlaceholderBlock.tsx` with `useDroppable`, implement `onDragEnd` handler in store: remove node from source path, insert at target path, validate type compatibility
 
 **Checkpoint**: User Story 5 complete — blocks can be dragged to restructure expressions
 
@@ -172,21 +174,20 @@
 
 ## Phase 8: User Story 6 — Copy, Paste, and Undo Expression Sub-Trees (Priority: P3)
 
-**Goal**: Users can copy/paste sub-expressions and undo/redo edits
+**Goal**: Users can copy/paste sub-expressions (undo/redo keyboard shortcuts already wired in US2 T042)
 
-**Independent Test**: Copy a sub-expression, paste into another placeholder, verify both render. Undo/redo an edit.
+**Independent Test**: Copy a sub-expression, paste into another placeholder, verify both render.
 
 ### Tests for User Story 6 (TDD — write first, verify they fail)
 
-- [ ] T053 [P] [US6] Write copy/paste and undo/redo tests in `packages/visual-editor/test/expression-builder/clipboard-undo.test.tsx` — test: copy stores deep clone of sub-tree, paste inserts copy with new ids at placeholder, undo reverts last mutation (replaceNode, removeNode, updateLiteral), redo re-applies undone mutation, multiple undo levels work
+- [ ] T055 [P] [US6] Write copy/paste tests in `packages/visual-editor/test/expression-builder/clipboard.test.tsx` — test: copy stores deep clone of sub-tree, paste inserts copy with new ids at placeholder, multiple undo levels work with clipboard operations
 
 ### Implementation for User Story 6
 
-- [ ] T054 [US6] Implement clipboard actions in expression store — add `copyNode(nodeId)`, `pasteNode(targetId)` actions to `packages/visual-editor/src/store/expression-store.ts`: copyNode deep-clones sub-tree to store clipboard, pasteNode assigns new nanoid ids to cloned tree and replaces target placeholder
-- [ ] T055 [US6] Wire undo/redo keyboard shortcuts — add Ctrl+Z (undo) and Ctrl+Shift+Z (redo) handlers in `packages/visual-editor/src/hooks/useKeyboardNavigation.ts`, call zundo temporal store `undo()` / `redo()` methods
-- [ ] T056 [US6] Wire copy/paste keyboard shortcuts — add Ctrl+C (copy selected node) and Ctrl+V (paste at selected placeholder) handlers in `useKeyboardNavigation.ts`, visual feedback on copy (brief highlight) and paste (animate insertion)
+- [ ] T056 [US6] Implement clipboard actions in expression store — add `copyNode(nodeId)`, `pasteNode(targetId)` actions to `packages/visual-editor/src/store/expression-store.ts`: copyNode deep-clones sub-tree to store clipboard, pasteNode assigns new nanoid ids to cloned tree and replaces target placeholder
+- [ ] T057 [US6] Wire copy/paste keyboard shortcuts — add Ctrl+C (copy selected node) and Ctrl+V (paste at selected placeholder) handlers in `packages/visual-editor/src/hooks/useKeyboardNavigation.ts`, visual feedback on copy (brief highlight) and paste (animate insertion)
 
-**Checkpoint**: User Story 6 complete — clipboard and undo/redo work via keyboard shortcuts
+**Checkpoint**: User Story 6 complete — clipboard works via keyboard shortcuts
 
 ---
 
@@ -194,13 +195,13 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T057 Implement keyboard navigation in `packages/visual-editor/src/hooks/useKeyboardNavigation.ts` — aria-activedescendant pattern per R-007: Arrow keys move through linearized depth-first block ordering, Enter opens palette on placeholders, Escape cancels current action, Delete replaces selected block with placeholder (FR-018)
-- [ ] T058 Add collapsible sub-expressions — update block components to support Collapsible (design system) wrapper for deeply nested sub-trees (FR-014), toggle via click or keyboard
-- [ ] T059 Add broken reference indicators — update `ReferenceBlock.tsx` to check symbol name against FunctionScope, display warning Badge (design system) for unresolved references (FR-013)
+- [ ] T058 Implement keyboard navigation in `packages/visual-editor/src/hooks/useKeyboardNavigation.ts` — aria-activedescendant pattern per R-007: Arrow keys move through linearized depth-first block ordering, Enter opens palette on placeholders, Escape cancels current action, Delete replaces selected block with placeholder (FR-018)
+- [ ] T059 Add collapsible sub-expressions — update block components to support Collapsible (design system) wrapper for deeply nested sub-trees (FR-014), toggle via click or keyboard
 - [ ] T060 Verify all components use design system tokens and components per FR-019 — audit all block components for CSS token usage (`var(--color-expr-*)`), verify Popover/ScrollArea/Tabs/Badge/Tooltip/Collapsible/Button from design system, CVA variants for block styling
 - [ ] T061 Run full test suite and verify all tests pass — `cd packages/visual-editor && pnpm test`
 - [ ] T062 Run type-check and lint — `cd packages/visual-editor && pnpm type-check && pnpm lint`
 - [ ] T063 Run quickstart.md validation — verify data flow, round-trip, and testing strategy described in quickstart.md match implementation
+- [ ] T064 Performance benchmark — test 50-node expression render and interaction timing against <16ms frame budget per plan.md performance goal, document results
 
 ---
 
@@ -215,7 +216,7 @@
 - **US3 (Phase 5)**: Depends on Phase 2 (adapters for parse/serialize) — can proceed in parallel with US1/US2 for the root component, but full integration needs US1
 - **US4 (Phase 6)**: Depends on Phase 4 (palette exists to be filtered)
 - **US5 (Phase 7)**: Depends on Phase 3 (blocks exist to be dragged)
-- **US6 (Phase 8)**: Depends on Phase 2 (store exists for clipboard/undo)
+- **US6 (Phase 8)**: Depends on Phase 4 (undo/redo wired in US2; clipboard extends store from Phase 2)
 - **Polish (Phase 9)**: Depends on all desired user stories being complete
 
 ### User Story Dependencies
@@ -225,7 +226,7 @@
 - **US3 (P2)**: Can start after Foundational for root component; full integration needs US1
 - **US4 (P2)**: Depends on US2 (palette must exist to add filtering)
 - **US5 (P3)**: Depends on US1 (blocks must exist to be dragged)
-- **US6 (P3)**: Can start after Foundational for store clipboard; keyboard wiring needs US1
+- **US6 (P3)**: Depends on US2 (undo/redo keyboard shortcuts must exist; clipboard extends store)
 
 ### Within Each User Story
 
@@ -240,8 +241,8 @@
 - T007 + T008 + T009 + T010 can all run in parallel (test files for different adapters/store)
 - T016 + T017 can run in parallel (different test files for US1)
 - T019–T030 can all run in parallel (individual block component files)
-- T032 + T033 + T034 can run in parallel (different test files for US2)
-- T041 + T042 can run in parallel (different test files for US3)
+- T033 + T034 + T035 can run in parallel (different test files for US2)
+- T043 + T044 can run in parallel (different test files for US3)
 - Different user stories can be worked on in parallel by different team members (after Foundational phase)
 
 ---
@@ -278,19 +279,19 @@ Task: T030 "Implement UnsupportedBlock.tsx"
 2. Complete Phase 2: Foundational (adapters, store, design tokens)
 3. Complete Phase 3: User Story 1 (view expressions as blocks)
 4. **STOP and VALIDATE**: Test US1 independently — load Rune functions, verify block rendering
-5. Complete Phase 4: User Story 2 (build expressions by clicking)
-6. **STOP and VALIDATE**: Test US2 independently — construct expressions from scratch via clicks
-7. Deploy/demo if ready — MVP delivers read + write capability
+5. Complete Phase 4: User Story 2 (build expressions by clicking + undo/redo)
+6. **STOP and VALIDATE**: Test US2 independently — construct expressions from scratch via clicks, verify undo/redo
+7. Deploy/demo if ready — MVP delivers read + write + undo/redo capability
 
 ### Incremental Delivery
 
 1. Complete Setup + Foundational → Foundation ready
 2. Add US1 → Test independently → Read-only expression viewing
-3. Add US2 → Test independently → Interactive expression building (MVP!)
+3. Add US2 → Test independently → Interactive expression building + undo/redo (MVP!)
 4. Add US3 → Test independently → Text↔Builder mode toggle
 5. Add US4 → Test independently → Context-aware filtering
 6. Add US5 → Test independently → Drag-and-drop restructuring
-7. Add US6 → Test independently → Copy/paste/undo
+7. Add US6 → Test independently → Copy/paste
 8. Each story adds value without breaking previous stories
 
 ---

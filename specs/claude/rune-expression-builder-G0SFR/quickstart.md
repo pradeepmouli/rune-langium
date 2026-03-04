@@ -35,6 +35,7 @@ The expression builder lives entirely within `packages/visual-editor`. It:
 | `src/schemas/expression-node-schema.ts` | ExpressionNode schemas via `deriveUiSchema()` |
 | `src/adapters/ast-to-expression-node.ts` | RosettaExpression → ExpressionNode (assign ids, resolve refs) |
 | `src/adapters/expression-node-to-dsl.ts` | ExpressionNode → DSL text |
+| `src/adapters/parse-expression.ts` | DSL text → ExpressionNode (wraps core parser) |
 | `src/hooks/useExpressionBuilder.ts` | Orchestration hook |
 | `src/hooks/useKeyboardNavigation.ts` | Keyboard navigation |
 
@@ -63,7 +64,7 @@ User clicks placeholder
   → User selects operator
   → expression-store.replaceNode(placeholderId, newNode)
   → BlockRenderer re-renders affected subtree
-  → expressionTreeToDsl(tree) → DSL text
+  → expressionNodeToDsl(tree) → DSL text
   → onChange(dslText) → FunctionForm validates
 ```
 

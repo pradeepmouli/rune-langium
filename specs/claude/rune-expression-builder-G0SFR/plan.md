@@ -1,6 +1,6 @@
 # Implementation Plan: Rune Expression Builder
 
-**Branch**: `007-expression-builder` | **Date**: 2026-03-04 | **Spec**: [spec.md](./spec.md)
+**Branch**: `claude/rune-expression-builder-G0SFR` | **Date**: 2026-03-04 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/claude/rune-expression-builder-G0SFR/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
@@ -91,14 +91,15 @@ packages/visual-editor/
 │   │   └── index.ts                      # Existing — add expression schema exports
 │   ├── adapters/
 │   │   ├── ast-to-expression-node.ts     # NEW — RosettaExpression AST → ExpressionNode
-│   │   └── expression-node-to-dsl.ts     # NEW — ExpressionNode → Rune DSL text
+│   │   ├── expression-node-to-dsl.ts     # NEW — ExpressionNode → Rune DSL text
+│   │   └── parse-expression.ts           # NEW — DSL text → ExpressionNode (wraps core parser)
 │   ├── hooks/
 │   │   ├── useExpressionAutocomplete.ts   # Existing — enhance for context-aware filtering
 │   │   ├── useExpressionBuilder.ts        # NEW — builder orchestration hook
 │   │   └── useKeyboardNavigation.ts       # NEW — keyboard nav for blocks/slots
 │   ├── types.ts                           # Existing — ExpressionNode type inferred from schema
 │   └── validation/
-│       └── edit-validator.ts              # Existing — enhance for round-trip validation
+│       └── edit-validator.ts              # Existing — no changes needed (round-trip validation handled by adapters + tests)
 ├── test/
 │   ├── expression-builder/
 │   │   ├── expression-node-schema.test.ts # Schema transformation tests

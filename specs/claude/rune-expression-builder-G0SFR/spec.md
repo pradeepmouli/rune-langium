@@ -1,6 +1,6 @@
 # Feature Specification: Rune Expression Builder
 
-**Feature Branch**: `007-expression-builder`
+**Feature Branch**: `claude/rune-expression-builder-G0SFR`
 **Created**: 2026-03-04
 **Status**: Draft
 **Input**: User description: "Visual block-based expression builder for constructing Rune function expressions (operations, conditions, shortcuts, post-conditions) as an alternative to raw text editing"

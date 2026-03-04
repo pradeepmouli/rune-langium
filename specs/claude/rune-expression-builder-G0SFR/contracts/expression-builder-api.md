@@ -72,7 +72,7 @@ function astToExpressionNode(
 ): ExpressionNode;
 ```
 
-### expression-tree-to-dsl
+### expression-node-to-dsl
 
 ```typescript
 /**
@@ -80,13 +80,13 @@ function astToExpressionNode(
  * Throws if tree contains placeholder nodes.
  * UnsupportedNode serializes using its rawText.
  */
-function expressionTreeToDsl(tree: ExpressionNode): string;
+function expressionNodeToDsl(tree: ExpressionNode): string;
 
 /**
  * Serialize with placeholders replaced by a marker (for preview).
  * Returns text with `___` at placeholder positions.
  */
-function expressionTreeToDslPreview(tree: ExpressionNode): string;
+function expressionNodeToDslPreview(tree: ExpressionNode): string;
 ```
 
 ### parse-expression (wrapper)
