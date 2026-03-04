@@ -38,6 +38,17 @@ export const colors = {
     warning: '#fbbf24',
     error: '#f87171',
     info: '#38bdf8'
+  },
+  expr: {
+    arithmetic: { DEFAULT: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
+    comparison: { DEFAULT: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)' },
+    logic: { DEFAULT: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)' },
+    navigation: { DEFAULT: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)' },
+    collection: { DEFAULT: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' },
+    control: { DEFAULT: '#ec4899', bg: 'rgba(236, 72, 153, 0.15)' },
+    literal: { DEFAULT: '#94a3b8', bg: 'rgba(148, 163, 184, 0.15)' },
+    reference: { DEFAULT: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' },
+    placeholder: { DEFAULT: '#64748b', bg: 'rgba(100, 116, 139, 0.10)' }
   }
 } as const;
 
