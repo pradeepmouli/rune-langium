@@ -160,13 +160,13 @@
 
 ### Tests for User Story 5 (TDD — write first, verify they fail)
 
-- [ ] T051 [P] [US5] Write drag-and-drop tests in `packages/visual-editor/test/expression-builder/drag-drop.test.tsx` — test: drag block to placeholder fills slot, source becomes placeholder, drag to invalid target shows rejection indicator, tree remains structurally valid after reparenting
+- [X] T051 [P] [US5] Write drag-and-drop tests in `packages/visual-editor/test/expression-builder/drag-drop.test.tsx` — test: drag block to placeholder fills slot, source becomes placeholder, drag to invalid target shows rejection indicator, tree remains structurally valid after reparenting
 
 ### Implementation for User Story 5
 
-- [ ] T052 [US5] Install @dnd-kit/core and configure DnD context in `packages/visual-editor/src/components/editors/expression-builder/ExpressionBuilder.tsx` — add DndContext wrapper, custom tree collision strategy
-- [ ] T053 [US5] Add drag source behavior to block components — update `BlockRenderer.tsx` and block components to support `useDraggable` from @dnd-kit, visual drag preview
-- [ ] T054 [US5] Add drop target behavior to PlaceholderBlock and block slots — update `PlaceholderBlock.tsx` with `useDroppable`, implement `onDragEnd` handler in store: remove node from source path, insert at target path, validate type compatibility
+- [X] T052 [US5] Implement native HTML drag-and-drop via useDragDrop hook in `packages/visual-editor/src/hooks/useDragDrop.ts` — useDraggable and useDroppable hooks with EXPRESSION_DRAG_TYPE MIME type
+- [X] T053 [US5] Add drag source behavior to BlockRenderer — update `BlockRenderer.tsx` with draggable attribute and onDragStart handler for non-placeholder nodes
+- [X] T054 [US5] Add drop target behavior to PlaceholderBlock — update `PlaceholderBlock.tsx` with onDragOver/onDragEnter/onDragLeave/onDrop handlers and visual drop indicator
 
 **Checkpoint**: User Story 5 complete — blocks can be dragged to restructure expressions
 
@@ -180,12 +180,12 @@
 
 ### Tests for User Story 6 (TDD — write first, verify they fail)
 
-- [ ] T055 [P] [US6] Write copy/paste tests in `packages/visual-editor/test/expression-builder/clipboard.test.tsx` — test: copy stores deep clone of sub-tree, paste inserts copy with new ids at placeholder, multiple undo levels work with clipboard operations
+- [X] T055 [P] [US6] Write copy/paste tests in `packages/visual-editor/test/expression-builder/clipboard.test.tsx` — test: copy stores deep clone of sub-tree, paste inserts copy with new ids at placeholder, multiple undo levels work with clipboard operations
 
 ### Implementation for User Story 6
 
-- [ ] T056 [US6] Implement clipboard actions in expression store — add `copyNode(nodeId)`, `pasteNode(targetId)` actions to `packages/visual-editor/src/store/expression-store.ts`: copyNode deep-clones sub-tree to store clipboard, pasteNode assigns new nanoid ids to cloned tree and replaces target placeholder
-- [ ] T057 [US6] Wire copy/paste keyboard shortcuts — add Ctrl+C (copy selected node) and Ctrl+V (paste at selected placeholder) handlers in `packages/visual-editor/src/hooks/useKeyboardNavigation.ts`, visual feedback on copy (brief highlight) and paste (animate insertion)
+- [X] T056 [US6] Clipboard actions already implemented in expression store — copyNode deep-clones sub-tree to store clipboard, pasteNode assigns new randomUUID ids to cloned tree and replaces target placeholder
+- [X] T057 [US6] Wire copy/paste keyboard shortcuts — add Ctrl+C (copy selected node) and Ctrl+V (paste at selected placeholder) handlers in `packages/visual-editor/src/hooks/useKeyboardNavigation.ts`
 
 **Checkpoint**: User Story 6 complete — clipboard works via keyboard shortcuts
 

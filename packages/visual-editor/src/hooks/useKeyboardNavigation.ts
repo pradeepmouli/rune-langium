@@ -44,6 +44,20 @@ export function useKeyboardNavigation({ store, containerRef }: UseKeyboardNaviga
         return;
       }
 
+      // Copy: Ctrl+C (or Cmd+C on Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && state.selectedNodeId) {
+        e.preventDefault();
+        state.copyNode(state.selectedNodeId);
+        return;
+      }
+
+      // Paste: Ctrl+V (or Cmd+V on Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && state.selectedNodeId) {
+        e.preventDefault();
+        state.pasteNode(state.selectedNodeId);
+        return;
+      }
+
       // Delete/Backspace: remove selected node
       if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedNodeId) {
         e.preventDefault();

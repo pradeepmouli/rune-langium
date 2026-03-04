@@ -22,6 +22,8 @@ import { useContextFilter } from '../../../hooks/useContextFilter.js';
 export interface ExpressionBuilderProps extends ExpressionEditorSlotProps {
   scope: FunctionScope;
   defaultMode?: 'builder' | 'text';
+  /** Callback when a node is dragged to a placeholder target. */
+  onDragNode?: (draggedNodeId: string, targetNodeId: string) => void;
 }
 
 export function ExpressionBuilder({
@@ -31,7 +33,8 @@ export function ExpressionBuilder({
   scope,
   placeholder,
   error,
-  defaultMode = 'builder'
+  defaultMode = 'builder',
+  onDragNode
 }: ExpressionBuilderProps) {
   const [mode, setMode] = useState<'builder' | 'text'>(defaultMode);
   const [textValue, setTextValue] = useState(value ?? '');
@@ -155,6 +158,7 @@ export function ExpressionBuilder({
               selectedNodeId={selectedNodeId}
               onSelect={setSelectedNodeId}
               onActivatePlaceholder={handleActivatePlaceholder}
+              onDragNode={onDragNode}
             />
             <OperatorPalette
               open={paletteOpen}

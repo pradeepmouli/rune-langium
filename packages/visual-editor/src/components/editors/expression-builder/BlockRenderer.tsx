@@ -7,7 +7,8 @@
  * @module
  */
 
-import { memo, useCallback } from 'react';
+import { memo, useCallback, type DragEvent } from 'react';
+import { EXPRESSION_DRAG_TYPE } from '../../../hooks/useDragDrop.js';
 import type { ExpressionNode } from '../../../schemas/expression-node-schema.js';
 import { BinaryBlock } from './blocks/BinaryBlock.js';
 import { UnaryBlock } from './blocks/UnaryBlock.js';
@@ -27,6 +28,7 @@ export interface BlockRendererProps {
   selectedNodeId?: string | null;
   onSelect?: (nodeId: string) => void;
   onActivatePlaceholder?: (nodeId: string) => void;
+  onDragNode?: (draggedNodeId: string, targetNodeId: string) => void;
   depth?: number;
 }
 
@@ -92,6 +94,7 @@ function BlockRendererInner({
   selectedNodeId,
   onSelect,
   onActivatePlaceholder,
+  onDragNode,
   depth = 0
 }: BlockRendererProps) {
   const id = nodeId(node);
@@ -115,11 +118,12 @@ function BlockRendererInner({
           selectedNodeId={selectedNodeId}
           onSelect={onSelect}
           onActivatePlaceholder={onActivatePlaceholder}
+          onDragNode={onDragNode}
           depth={depth + 1}
         />
       );
     },
-    [selectedNodeId, onSelect, onActivatePlaceholder, depth]
+    [selectedNodeId, onSelect, onActivatePlaceholder, onDragNode, depth]
   );
 
   let content: React.ReactNode;
@@ -154,12 +158,25 @@ function BlockRendererInner({
   } else if ($type === 'ChoiceOperation') {
     content = <UnaryBlock node={node} renderChild={renderChild} />;
   } else if ($type === 'Placeholder') {
-    content = <PlaceholderBlock node={node} onActivate={onActivatePlaceholder} />;
+    content = (
+      <PlaceholderBlock node={node} onActivate={onActivatePlaceholder} onDragNode={onDragNode} />
+    );
   } else if ($type === 'Unsupported') {
     content = <UnsupportedBlock node={node} />;
   } else {
     content = <UnsupportedBlock node={node} />;
   }
+
+  const isDraggable = $type !== 'Placeholder' && $type !== 'Unsupported';
+
+  const handleDragStart = useCallback(
+    (e: DragEvent) => {
+      e.stopPropagation();
+      e.dataTransfer.setData(EXPRESSION_DRAG_TYPE, id);
+      e.dataTransfer.effectAllowed = 'move';
+    },
+    [id]
+  );
 
   return (
     <div
@@ -170,6 +187,8 @@ function BlockRendererInner({
       data-node-type={$type}
       data-depth={depth}
       onClick={handleClick}
+      draggable={isDraggable}
+      onDragStart={isDraggable ? handleDragStart : undefined}
       role="treeitem"
       tabIndex={0}
       aria-selected={isSelected}
