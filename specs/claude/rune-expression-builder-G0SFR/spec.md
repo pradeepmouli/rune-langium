@@ -140,6 +140,7 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 - **FR-016**: System MUST allow users to remove any expression block, replacing it with an empty placeholder slot while preserving the surrounding tree structure.
 - **FR-017**: System MUST render unsupported expression sub-trees as a visually distinct "unsupported" block within the visual tree, allowing surrounding supported nodes to remain as visual blocks.
 - **FR-018**: System MUST support keyboard navigation: Tab/arrow keys to move between blocks and slots, Enter to open the operator palette, Escape to cancel the current action, and Delete to replace the selected block with a placeholder.
+- **FR-019**: System MUST use components, tokens, and patterns from the project's shared design system (`packages/design-system`) to ensure visual consistency with the rest of the application.
 
 ### Key Entities
 
