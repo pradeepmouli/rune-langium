@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rune Expression Builder — Interactive Prototype</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface-2: #232733;
+    --surface-3: #2c3040;
+    --border: #363b4a;
+    --border-active: #5b8def;
+    --text: #e1e4ed;
+    --text-muted: #8b90a0;
+    --text-dim: #5c6070;
+    --accent: #5b8def;
+    --accent-hover: #7ba4f7;
+    --accent-bg: rgba(91, 141, 239, 0.1);
+    --green: #4ade80;
+    --green-bg: rgba(74, 222, 128, 0.1);
+    --orange: #fb923c;
+    --orange-bg: rgba(251, 146, 60, 0.1);
+    --purple: #a78bfa;
+    --purple-bg: rgba(167, 139, 250, 0.1);
+    --red: #f87171;
+    --red-bg: rgba(248, 113, 113, 0.1);
+    --cyan: #22d3ee;
+    --cyan-bg: rgba(34, 211, 238, 0.1);
+    --yellow: #facc15;
+    --yellow-bg: rgba(250, 204, 21, 0.08);
+    --radius: 8px;
+    --radius-sm: 5px;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .header .func-sig {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+  .header .func-sig .kw { color: var(--purple); }
+  .header .func-sig .name { color: var(--accent); }
+  .header .func-sig .type { color: var(--green); }
+  .mode-toggle {
+    margin-left: auto;
+    display: flex;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .mode-toggle button {
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 5px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .mode-toggle button.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  /* ── Main layout ── */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Palette (left sidebar) ── */
+  .palette {
+    width: 220px;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .palette-section {
+    padding: 12px 14px 8px;
+  }
+  .palette-section-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .palette-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    cursor: grab;
+    font-size: 12px;
+    color: var(--text-muted);
+    transition: all 0.12s;
+    margin-bottom: 2px;
+  }
+  .palette-item:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
+  .palette-item .op-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    width: 32px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .palette-item .op-badge.math { color: var(--orange); }
+  .palette-item .op-badge.logic { color: var(--purple); }
+  .palette-item .op-badge.cmp { color: var(--cyan); }
+  .palette-item .op-badge.coll { color: var(--green); }
+  .palette-item .op-badge.nav { color: var(--accent); }
+  .palette-item .op-badge.ctrl { color: var(--yellow); }
+
+  /* ── Canvas ── */
+  .canvas {
+    flex: 1;
+    padding: 32px;
+    overflow: auto;
+  }
+
+  /* ── Function section ── */
+  .func-section {
+    margin-bottom: 24px;
+  }
+  .func-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .func-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+  }
+  .func-section-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Inputs / Output badges ── */
+  .io-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .io-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .io-badge .io-name {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--text);
+  }
+  .io-badge .io-type {
+    font-family: var(--mono);
+    color: var(--green);
+    font-size: 11px;
+  }
+  .io-badge .io-card {
+    color: var(--text-dim);
+    font-size: 10px;
+  }
+  .io-badge.output {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  /* ── Expression blocks ── */
+  .expr-block {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .expr-block:hover {
+    border-color: #4a4f60;
+  }
+  .expr-block.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .expr-block-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .expr-block-body {
+    padding: 12px;
+  }
+
+  /* Operation label */
+  .op-label {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .op-label.kw { color: var(--purple); }
+  .op-label.math { color: var(--orange); }
+  .op-label.logic { color: var(--purple); }
+  .op-label.cmp { color: var(--cyan); }
+  .op-label.coll { color: var(--green); }
+  .op-label.nav { color: var(--accent); }
+  .op-label.ctrl { color: var(--yellow); }
+
+  .target-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* ── Binary layout ── */
+  .binary-layout {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .binary-slot {
+    flex: 1;
+    min-width: 0;
+  }
+  .binary-op-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--orange);
+    background: var(--orange-bg);
+    border-radius: var(--radius-sm);
+    border: 1px dashed rgba(251, 146, 60, 0.3);
+  }
+  .binary-op-badge.logic {
+    color: var(--purple);
+    background: var(--purple-bg);
+    border-color: rgba(167, 139, 250, 0.3);
+  }
+  .binary-op-badge.cmp {
+    color: var(--cyan);
+    background: var(--cyan-bg);
+    border-color: rgba(34, 211, 238, 0.3);
+  }
+
+  /* ── Leaf nodes ── */
+  .ref-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    cursor: pointer;
+    transition: all 0.12s;
+    width: 100%;
+    min-height: 34px;
+  }
+  .ref-chip:hover {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+  .ref-chip .ref-icon {
+    font-size: 10px;
+    opacity: 0.6;
+  }
+  .ref-chip .ref-name { color: var(--text); font-weight: 500; }
+  .ref-chip .ref-via { color: var(--text-dim); font-size: 11px; }
+
+  .literal-chip {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    width: 100%;
+    min-height: 34px;
+  }
+  .literal-chip.number { color: var(--orange); }
+  .literal-chip.string { color: var(--green); }
+  .literal-chip.bool   { color: var(--purple); }
+
+  /* ── Placeholder ── */
+  .placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-height: 34px;
+    width: 100%;
+  }
+  .placeholder:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-bg);
+  }
+  .placeholder .plus {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  /* ── Unary (postfix) ── */
+  .unary-layout {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .unary-slot { flex: 1; }
+  .unary-op {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+  }
+  .unary-op.coll {
+    color: var(--green);
+    background: var(--green-bg);
+  }
+
+  /* ── Feature call ── */
+  .feature-call-layout {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .feature-arrow {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .feature-attr {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    padding: 6px 10px;
+    background: var(--accent-bg);
+    border: 1px solid rgba(91, 141, 239, 0.3);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .feature-attr:hover {
+    border-color: var(--accent);
+  }
+
+  /* ── Conditional ── */
+  .cond-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cond-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cond-kw {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--yellow);
+    width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .cond-slot { flex: 1; }
+
+  /* ── Lambda ── */
+  .lambda-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .lambda-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .lambda-param {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--purple);
+    background: var(--purple-bg);
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+  .lambda-body {
+    border-left: 2px solid var(--purple);
+    padding-left: 12px;
+    margin-left: 4px;
+  }
+
+  /* ── Switch ── */
+  .switch-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .switch-case {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .switch-guard {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--yellow-bg);
+    color: var(--yellow);
+    border: 1px solid rgba(250, 204, 21, 0.2);
+    min-width: 60px;
+    text-align: center;
+  }
+  .switch-guard.default {
+    color: var(--text-dim);
+    background: var(--surface-3);
+    border-color: var(--border);
+  }
+  .switch-then {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .switch-result { flex: 1; }
+
+  /* ── Context panel (right) ── */
+  .context-panel {
+    width: 260px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+    flex-shrink: 0;
+    padding: 16px;
+  }
+  .context-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  .context-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 4px;
+    cursor: default;
+  }
+  .context-item:hover {
+    background: var(--surface-2);
+  }
+  .context-item .ci-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .context-item .ci-type {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--green);
+  }
+  .context-item .ci-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .context-section { margin-bottom: 20px; }
+
+  /* ── DSL preview ── */
+  .dsl-preview {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-top: 12px;
+  }
+  .dsl-preview code {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre;
+    color: var(--text-muted);
+  }
+  .dsl-preview code .kw { color: var(--purple); }
+  .dsl-preview code .fn { color: var(--accent); }
+  .dsl-preview code .tp { color: var(--green); }
+  .dsl-preview code .op { color: var(--orange); }
+  .dsl-preview code .num { color: var(--orange); }
+  .dsl-preview code .cm { color: var(--text-dim); font-style: italic; }
+
+  /* ── Scenario tabs ── */
+  .scenario-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .scenario-tab {
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .scenario-tab:hover { color: var(--text); }
+  .scenario-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ── Nested indent ── */
+  .nested {
+    margin-left: 0;
+  }
+
+  /* ── Tooltip ── */
+  .tooltip {
+    position: relative;
+  }
+  .tooltip::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-3);
+    color: var(--text);
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .tooltip:hover::after { opacity: 1; }
+
+  /* ── Animations ── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .expr-block { animation: fadeIn 0.2s ease; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>Expression Builder</h1>
+  <div class="func-sig">
+    <span class="kw">func</span> <span class="name">WeightedAverage</span>
+  </div>
+  <div class="mode-toggle">
+    <button class="active" id="btn-builder">Builder</button>
+    <button id="btn-text">Text</button>
+  </div>
+</div>
+
+<!-- Scenario tabs -->
+<div class="scenario-tabs">
+  <button class="scenario-tab active" onclick="showScenario('arithmetic')">Arithmetic + Feature Call</button>
+  <button class="scenario-tab" onclick="showScenario('conditional')">Conditional Logic</button>
+  <button class="scenario-tab" onclick="showScenario('lambda')">Filter + Aggregate</button>
+  <button class="scenario-tab" onclick="showScenario('switch')">Switch Expression</button>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Palette -->
+  <div class="palette">
+    <div class="palette-section">
+      <div class="palette-section-title">Arithmetic</div>
+      <div class="palette-item"><span class="op-badge math">+</span> Add</div>
+      <div class="palette-item"><span class="op-badge math">−</span> Subtract</div>
+      <div class="palette-item"><span class="op-badge math">×</span> Multiply</div>
+      <div class="palette-item"><span class="op-badge math">÷</span> Divide</div>
+    </div>
+    <div class="palette-section">
+      <div class="palette-section-title">Comparison</div>
+      <div class="palette-item"><span class="op-badge cmp">=</span> Equals</div>
+      <div class="palette-item"><span class="op-badge cmp">&lt;&gt;</span> Not equals</div>
+      <div class="palette-item"><span class="op-badge cmp">&gt;</span> Greater than</div>
+      <div class="palette-item"><span class="op-badge cmp">&lt;</span> Less than</div>
+    </div>
+    <div class="palette-section">
+      <div class="palette-section-title">Logic</div>
+      <div class="palette-item"><span class="op-badge logic">and</span> And</div>
+      <div class="palette-item"><span class="op-badge logic">or</span> Or</div>
+    </div>
+    <div class="palette-section">
+      <div class="palette-section-title">Navigation</div>
+      <div class="palette-item"><span class="op-badge nav">-&gt;</span> Feature call</div>
+      <div class="palette-item"><span class="op-badge nav">-&gt;&gt;</span> Deep call</div>
+    </div>
+    <div class="palette-section">
+      <div class="palette-section-title">Collection</div>
+      <div class="palette-item"><span class="op-badge coll">sum</span> Sum</div>
+      <div class="palette-item"><span class="op-badge coll">cnt</span> Count</div>
+      <div class="palette-item"><span class="op-badge coll">flt</span> Filter</div>
+      <div class="palette-item"><span class="op-badge coll">ext</span> Extract</div>
+      <div class="palette-item"><span class="op-badge coll">dst</span> Distinct</div>
+    </div>
+    <div class="palette-section">
+      <div class="palette-section-title">Control</div>
+      <div class="palette-item"><span class="op-badge ctrl">if</span> Conditional</div>
+      <div class="palette-item"><span class="op-badge ctrl">sw</span> Switch</div>
+      <div class="palette-item"><span class="op-badge ctrl">?</span> Exists</div>
+      <div class="palette-item"><span class="op-badge ctrl">∅</span> Is absent</div>
+    </div>
+  </div>
+
+  <!-- Canvas -->
+  <div class="canvas" id="canvas">
+
+    <!-- ═══════════ SCENARIO 1: Arithmetic + Feature Call ═══════════ -->
+    <div id="scenario-arithmetic">
+
+      <!-- Inputs -->
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Inputs</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="io-row">
+          <div class="io-badge">
+            <span class="io-name">weights</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(0..*)</span>
+          </div>
+          <div class="io-badge">
+            <span class="io-name">values</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(0..*)</span>
+          </div>
+          <div class="io-badge">
+            <span class="io-name">trade</span>
+            <span class="io-type">Trade</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Output -->
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Output</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="io-row">
+          <div class="io-badge output">
+            <span class="io-name">result</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alias -->
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Shortcut</span>
+          <div class="func-section-line"></div>
+        </div>
+        <!-- alias totalWeight: weights sum -->
+        <div class="expr-block" style="max-width:520px">
+          <div class="expr-block-header">
+            <span class="op-label kw">alias</span>
+            <span class="target-label">totalWeight</span>
+          </div>
+          <div class="expr-block-body">
+            <div class="unary-layout">
+              <div class="unary-slot">
+                <div class="ref-chip">
+                  <span class="ref-icon">&#x25B8;</span>
+                  <span class="ref-name">weights</span>
+                  <span class="ref-via">input</span>
+                </div>
+              </div>
+              <div class="unary-op coll">sum</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Operation: set result -->
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Operations</span>
+          <div class="func-section-line"></div>
+        </div>
+
+        <!-- set result:  (weights * values) sum / totalWeight -->
+        <div class="expr-block selected" style="max-width: 680px">
+          <div class="expr-block-header">
+            <span class="op-label kw">set</span>
+            <span class="target-label">result</span>
+            <span style="margin-left:auto; font-size:11px; color:var(--text-dim)">operation</span>
+          </div>
+          <div class="expr-block-body">
+            <!-- divide -->
+            <div class="binary-layout">
+              <div class="binary-slot">
+                <!-- (weights * values) sum  -->
+                <div class="expr-block">
+                  <div class="expr-block-header">
+                    <span class="op-label coll">sum</span>
+                    <span style="font-size:11px; color:var(--text-dim)">aggregate</span>
+                  </div>
+                  <div class="expr-block-body">
+                    <div class="binary-layout">
+                      <div class="binary-slot">
+                        <div class="ref-chip">
+                          <span class="ref-icon">&#x25B8;</span>
+                          <span class="ref-name">weights</span>
+                          <span class="ref-via">input</span>
+                        </div>
+                      </div>
+                      <div class="binary-op-badge">*</div>
+                      <div class="binary-slot">
+                        <div class="ref-chip">
+                          <span class="ref-icon">&#x25B8;</span>
+                          <span class="ref-name">values</span>
+                          <span class="ref-via">input</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="binary-op-badge">/</div>
+              <div class="binary-slot">
+                <div class="ref-chip">
+                  <span class="ref-icon">&#x25C6;</span>
+                  <span class="ref-name">totalWeight</span>
+                  <span class="ref-via">alias</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Post-condition -->
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Post-condition</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="expr-block" style="max-width:420px">
+          <div class="expr-block-header">
+            <span class="op-label kw">post-condition</span>
+            <span class="target-label">NonNegative</span>
+          </div>
+          <div class="expr-block-body">
+            <div class="binary-layout">
+              <div class="binary-slot">
+                <div class="ref-chip">
+                  <span class="ref-icon">&#x25B8;</span>
+                  <span class="ref-name">result</span>
+                  <span class="ref-via">output</span>
+                </div>
+              </div>
+              <div class="binary-op-badge cmp">&gt;=</div>
+              <div class="binary-slot">
+                <div class="literal-chip number">0</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DSL preview -->
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Generated Rune DSL</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="dsl-preview"><code><span class="kw">func</span> <span class="fn">WeightedAverage</span>:
+  <span class="kw">inputs</span>:
+    weights <span class="tp">number</span> (0..*)
+    values  <span class="tp">number</span> (0..*)
+    trade   <span class="tp">Trade</span>  (1..1)
+  <span class="kw">output</span>:
+    result <span class="tp">number</span> (1..1)
+
+  <span class="kw">alias</span> totalWeight:
+    weights <span class="op">sum</span>
+
+  <span class="kw">set</span> result:
+    (weights <span class="op">*</span> values) <span class="op">sum</span> <span class="op">/</span> totalWeight
+
+  <span class="kw">post-condition</span> NonNegative:
+    result <span class="op">&gt;=</span> <span class="num">0</span></code></div>
+      </div>
+    </div>
+
+    <!-- ═══════════ SCENARIO 2: Conditional Logic ═══════════ -->
+    <div id="scenario-conditional" style="display:none">
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Inputs</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="io-row">
+          <div class="io-badge">
+            <span class="io-name">quantity</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+          <div class="io-badge">
+            <span class="io-name">unitPrice</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+          <div class="io-badge">
+            <span class="io-name">discount</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(0..1)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Output</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="io-row">
+          <div class="io-badge output">
+            <span class="io-name">total</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Operations</span>
+          <div class="func-section-line"></div>
+        </div>
+
+        <!-- set total: if discount exists then qty*price*(1-discount) else qty*price -->
+        <div class="expr-block selected" style="max-width: 720px">
+          <div class="expr-block-header">
+            <span class="op-label kw">set</span>
+            <span class="target-label">total</span>
+          </div>
+          <div class="expr-block-body">
+            <div class="cond-layout">
+              <!-- if -->
+              <div class="cond-row">
+                <span class="cond-kw">if</span>
+                <div class="cond-slot">
+                  <div class="unary-layout">
+                    <div class="unary-slot">
+                      <div class="ref-chip">
+                        <span class="ref-icon">&#x25B8;</span>
+                        <span class="ref-name">discount</span>
+                        <span class="ref-via">input</span>
+                      </div>
+                    </div>
+                    <div class="unary-op" style="color:var(--yellow);background:var(--yellow-bg)">exists</div>
+                  </div>
+                </div>
+              </div>
+              <!-- then -->
+              <div class="cond-row">
+                <span class="cond-kw">then</span>
+                <div class="cond-slot">
+                  <div class="binary-layout">
+                    <div class="binary-slot">
+                      <!-- qty * price -->
+                      <div class="binary-layout">
+                        <div class="binary-slot">
+                          <div class="ref-chip"><span class="ref-icon">&#x25B8;</span><span class="ref-name">quantity</span></div>
+                        </div>
+                        <div class="binary-op-badge">*</div>
+                        <div class="binary-slot">
+                          <div class="ref-chip"><span class="ref-icon">&#x25B8;</span><span class="ref-name">unitPrice</span></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="binary-op-badge">*</div>
+                    <div class="binary-slot">
+                      <!-- (1 - discount) -->
+                      <div class="expr-block">
+                        <div class="expr-block-body" style="padding:8px">
+                          <div class="binary-layout">
+                            <div class="binary-slot"><div class="literal-chip number">1</div></div>
+                            <div class="binary-op-badge">−</div>
+                            <div class="binary-slot">
+                              <div class="ref-chip"><span class="ref-icon">&#x25B8;</span><span class="ref-name">discount</span></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- else -->
+              <div class="cond-row">
+                <span class="cond-kw">else</span>
+                <div class="cond-slot">
+                  <div class="binary-layout">
+                    <div class="binary-slot">
+                      <div class="ref-chip"><span class="ref-icon">&#x25B8;</span><span class="ref-name">quantity</span></div>
+                    </div>
+                    <div class="binary-op-badge">*</div>
+                    <div class="binary-slot">
+                      <div class="ref-chip"><span class="ref-icon">&#x25B8;</span><span class="ref-name">unitPrice</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Generated Rune DSL</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="dsl-preview"><code><span class="kw">func</span> <span class="fn">CalculateTotal</span>:
+  <span class="kw">inputs</span>:
+    quantity  <span class="tp">number</span> (1..1)
+    unitPrice <span class="tp">number</span> (1..1)
+    discount  <span class="tp">number</span> (0..1)
+  <span class="kw">output</span>:
+    total <span class="tp">number</span> (1..1)
+
+  <span class="kw">set</span> total:
+    <span class="kw">if</span> discount <span class="op">exists</span>
+    <span class="kw">then</span> quantity <span class="op">*</span> unitPrice <span class="op">*</span> (<span class="num">1</span> <span class="op">-</span> discount)
+    <span class="kw">else</span> quantity <span class="op">*</span> unitPrice</code></div>
+      </div>
+    </div>
+
+    <!-- ═══════════ SCENARIO 3: Filter + Aggregate ═══════════ -->
+    <div id="scenario-lambda" style="display:none">
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Inputs</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="io-row">
+          <div class="io-badge">
+            <span class="io-name">trades</span>
+            <span class="io-type">Trade</span>
+            <span class="io-card">(0..*)</span>
+          </div>
+          <div class="io-badge">
+            <span class="io-name">minNotional</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Output</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="io-row">
+          <div class="io-badge output">
+            <span class="io-name">totalNotional</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Operations</span>
+          <div class="func-section-line"></div>
+        </div>
+
+        <!-- set totalNotional: trades filter [item -> notional > minNotional] extract [item -> notional] sum -->
+        <div class="expr-block selected" style="max-width:760px">
+          <div class="expr-block-header">
+            <span class="op-label kw">set</span>
+            <span class="target-label">totalNotional</span>
+          </div>
+          <div class="expr-block-body">
+            <!-- Pipeline: trades → filter → extract → sum -->
+            <div class="unary-layout" style="flex-direction: column; align-items: stretch; gap: 10px;">
+
+              <!-- Step 1: trades -->
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:60px;text-align:right;font-size:11px;color:var(--text-dim)">source</div>
+                <div class="ref-chip" style="width:auto;flex:1;max-width:200px">
+                  <span class="ref-icon">&#x25B8;</span>
+                  <span class="ref-name">trades</span>
+                  <span class="ref-via">input</span>
+                </div>
+              </div>
+
+              <!-- Step 2: filter -->
+              <div style="display:flex;align-items:flex-start;gap:8px;">
+                <div style="width:60px;text-align:right;padding-top:8px;">
+                  <span class="op-label coll" style="font-size:11px;">filter</span>
+                </div>
+                <div class="expr-block" style="flex:1">
+                  <div class="expr-block-body">
+                    <div class="lambda-layout">
+                      <div class="lambda-header">
+                        <span class="lambda-param">item</span>
+                        <span style="font-size:11px;color:var(--text-dim)">implicit closure parameter</span>
+                      </div>
+                      <div class="lambda-body">
+                        <!-- item -> notional > minNotional -->
+                        <div class="binary-layout">
+                          <div class="binary-slot">
+                            <div class="feature-call-layout">
+                              <div class="ref-chip" style="width:auto">
+                                <span class="ref-name">item</span>
+                              </div>
+                              <span class="feature-arrow">-&gt;</span>
+                              <div class="feature-attr">notional</div>
+                            </div>
+                          </div>
+                          <div class="binary-op-badge cmp">&gt;</div>
+                          <div class="binary-slot">
+                            <div class="ref-chip">
+                              <span class="ref-icon">&#x25B8;</span>
+                              <span class="ref-name">minNotional</span>
+                              <span class="ref-via">input</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Step 3: extract -->
+              <div style="display:flex;align-items:flex-start;gap:8px;">
+                <div style="width:60px;text-align:right;padding-top:8px;">
+                  <span class="op-label coll" style="font-size:11px;">extract</span>
+                </div>
+                <div class="expr-block" style="flex:1">
+                  <div class="expr-block-body">
+                    <div class="lambda-layout">
+                      <div class="lambda-header">
+                        <span class="lambda-param">item</span>
+                      </div>
+                      <div class="lambda-body">
+                        <div class="feature-call-layout">
+                          <div class="ref-chip" style="width:auto">
+                            <span class="ref-name">item</span>
+                          </div>
+                          <span class="feature-arrow">-&gt;</span>
+                          <div class="feature-attr">notional</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Step 4: sum -->
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:60px;text-align:right;">
+                  <span class="op-label coll" style="font-size:11px;">sum</span>
+                </div>
+                <div style="font-size:11px;color:var(--text-dim)">aggregate numeric results</div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Generated Rune DSL</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="dsl-preview"><code><span class="kw">func</span> <span class="fn">LargeTradeNotional</span>:
+  <span class="kw">inputs</span>:
+    trades      <span class="tp">Trade</span>  (0..*)
+    minNotional <span class="tp">number</span> (1..1)
+  <span class="kw">output</span>:
+    totalNotional <span class="tp">number</span> (1..1)
+
+  <span class="kw">set</span> totalNotional:
+    trades
+      <span class="op">filter</span> [ item <span class="op">-&gt;</span> notional <span class="op">&gt;</span> minNotional ]
+      <span class="op">extract</span> [ item <span class="op">-&gt;</span> notional ]
+      <span class="op">sum</span></code></div>
+      </div>
+    </div>
+
+    <!-- ═══════════ SCENARIO 4: Switch Expression ═══════════ -->
+    <div id="scenario-switch" style="display:none">
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Inputs</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="io-row">
+          <div class="io-badge">
+            <span class="io-name">currency</span>
+            <span class="io-type">CurrencyEnum</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+          <div class="io-badge">
+            <span class="io-name">amount</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Output</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="io-row">
+          <div class="io-badge output">
+            <span class="io-name">amountUSD</span>
+            <span class="io-type">number</span>
+            <span class="io-card">(1..1)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Operations</span>
+          <div class="func-section-line"></div>
+        </div>
+
+        <div class="expr-block selected" style="max-width:620px">
+          <div class="expr-block-header">
+            <span class="op-label kw">set</span>
+            <span class="target-label">amountUSD</span>
+          </div>
+          <div class="expr-block-body">
+            <div class="binary-layout">
+              <div class="binary-slot" style="flex:none;width:auto">
+                <div class="ref-chip" style="width:auto">
+                  <span class="ref-icon">&#x25B8;</span>
+                  <span class="ref-name">amount</span>
+                </div>
+              </div>
+              <div class="binary-op-badge">*</div>
+              <div class="binary-slot">
+                <!-- switch expression -->
+                <div class="expr-block">
+                  <div class="expr-block-header">
+                    <span class="op-label ctrl">switch</span>
+                    <div class="ref-chip" style="width:auto;min-height:unset;padding:3px 8px;font-size:11px;">
+                      <span class="ref-name">currency</span>
+                    </div>
+                  </div>
+                  <div class="expr-block-body">
+                    <div class="switch-layout">
+                      <div class="switch-case">
+                        <div class="switch-guard">USD</div>
+                        <span class="switch-then">then</span>
+                        <div class="switch-result"><div class="literal-chip number">1.0</div></div>
+                      </div>
+                      <div class="switch-case">
+                        <div class="switch-guard">EUR</div>
+                        <span class="switch-then">then</span>
+                        <div class="switch-result"><div class="literal-chip number">1.08</div></div>
+                      </div>
+                      <div class="switch-case">
+                        <div class="switch-guard">GBP</div>
+                        <span class="switch-then">then</span>
+                        <div class="switch-result"><div class="literal-chip number">1.27</div></div>
+                      </div>
+                      <div class="switch-case">
+                        <div class="switch-guard">JPY</div>
+                        <span class="switch-then">then</span>
+                        <div class="switch-result"><div class="literal-chip number">0.0067</div></div>
+                      </div>
+                      <div class="switch-case">
+                        <div class="switch-guard default">default</div>
+                        <span class="switch-then">then</span>
+                        <div class="switch-result"><div class="literal-chip number">1.0</div></div>
+                      </div>
+                      <div class="switch-case">
+                        <div class="placeholder" style="max-width:140px">
+                          <span class="plus">+</span> add case
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add new operation placeholder -->
+      <div class="func-section">
+        <div class="placeholder" style="max-width:620px">
+          <span class="plus">+</span> add operation, condition, or post-condition
+        </div>
+      </div>
+
+      <div class="func-section">
+        <div class="func-section-header">
+          <span class="func-section-label">Generated Rune DSL</span>
+          <div class="func-section-line"></div>
+        </div>
+        <div class="dsl-preview"><code><span class="kw">func</span> <span class="fn">ConvertToUSD</span>:
+  <span class="kw">inputs</span>:
+    currency <span class="tp">CurrencyEnum</span> (1..1)
+    amount   <span class="tp">number</span>       (1..1)
+  <span class="kw">output</span>:
+    amountUSD <span class="tp">number</span> (1..1)
+
+  <span class="kw">set</span> amountUSD:
+    amount <span class="op">*</span> currency
+      <span class="op">switch</span>
+        USD <span class="kw">then</span> <span class="num">1.0</span>,
+        EUR <span class="kw">then</span> <span class="num">1.08</span>,
+        GBP <span class="kw">then</span> <span class="num">1.27</span>,
+        JPY <span class="kw">then</span> <span class="num">0.0067</span>,
+        <span class="kw">default</span> <span class="num">1.0</span></code></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Context panel -->
+  <div class="context-panel">
+    <div class="context-section">
+      <div class="context-title">Scope — In-scope references</div>
+      <div id="context-items">
+        <!-- Filled by JS based on active scenario -->
+      </div>
+    </div>
+
+    <div class="context-section">
+      <div class="context-title">Selected block</div>
+      <div id="selected-block-info" style="font-size:12px;color:var(--text-muted);padding:8px 10px;">
+        Click a block to inspect
+      </div>
+    </div>
+
+    <div class="context-section">
+      <div class="context-title">Type Info</div>
+      <div id="type-info" style="font-size:12px;color:var(--text-muted);padding:8px 10px;">
+        Inferred return type shown here
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const scopeData = {
+    arithmetic: [
+      { name: 'weights', type: 'number (0..*)', desc: 'Input — weight factors' },
+      { name: 'values', type: 'number (0..*)', desc: 'Input — values to weight' },
+      { name: 'trade', type: 'Trade (1..1)', desc: 'Input — trade reference' },
+      { name: 'result', type: 'number (1..1)', desc: 'Output' },
+      { name: 'totalWeight', type: 'number (1..1)', desc: 'Alias — weights sum' },
+    ],
+    conditional: [
+      { name: 'quantity', type: 'number (1..1)', desc: 'Input' },
+      { name: 'unitPrice', type: 'number (1..1)', desc: 'Input' },
+      { name: 'discount', type: 'number (0..1)', desc: 'Input — optional' },
+      { name: 'total', type: 'number (1..1)', desc: 'Output' },
+    ],
+    lambda: [
+      { name: 'trades', type: 'Trade (0..*)', desc: 'Input — trade list' },
+      { name: 'minNotional', type: 'number (1..1)', desc: 'Input — threshold' },
+      { name: 'totalNotional', type: 'number (1..1)', desc: 'Output' },
+    ],
+    switch: [
+      { name: 'currency', type: 'CurrencyEnum (1..1)', desc: 'Input — currency code' },
+      { name: 'amount', type: 'number (1..1)', desc: 'Input — amount' },
+      { name: 'amountUSD', type: 'number (1..1)', desc: 'Output' },
+    ],
+  };
+
+  function showScenario(id) {
+    document.querySelectorAll('[id^="scenario-"]').forEach(el => el.style.display = 'none');
+    document.getElementById('scenario-' + id).style.display = 'block';
+    document.querySelectorAll('.scenario-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+
+    const items = scopeData[id] || [];
+    const container = document.getElementById('context-items');
+    container.innerHTML = items.map(i => `
+      <div class="context-item">
+        <span class="ci-name">${i.name}</span>
+        <span class="ci-type">${i.type}</span>
+        <span class="ci-desc">${i.desc}</span>
+      </div>
+    `).join('');
+  }
+
+  // Init
+  showScenario('arithmetic');
+  document.querySelector('.scenario-tab.active').dispatchEvent = null; // already set
+
+  // Block selection
+  document.querySelectorAll('.expr-block').forEach(block => {
+    block.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.expr-block.selected').forEach(b => b.classList.remove('selected'));
+      block.classList.add('selected');
+
+      const header = block.querySelector('.expr-block-header');
+      if (header) {
+        const labels = Array.from(header.querySelectorAll('.op-label, .target-label'))
+          .map(l => l.textContent).join(' ');
+        document.getElementById('selected-block-info').innerHTML = `
+          <div style="font-weight:600;margin-bottom:4px;">${labels}</div>
+          <div style="color:var(--text-dim)">Click sub-blocks to drill down</div>
+        `;
+      }
+    });
+  });
+
+  // Placeholder hover effect
+  document.querySelectorAll('.placeholder').forEach(ph => {
+    ph.addEventListener('click', () => {
+      ph.style.borderColor = 'var(--accent)';
+      ph.style.color = 'var(--accent)';
+      setTimeout(() => {
+        ph.style.borderColor = '';
+        ph.style.color = '';
+      }, 600);
+    });
+  });
+</script>
+
+</body>
+</html>
