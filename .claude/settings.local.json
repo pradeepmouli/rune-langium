@@ -1,5 +1,5 @@
 {
   "permissions": {
-    "allow": ["Bash(ln:*)", "Bash(xargs:*)", "Bash(grep:*)"]
+    "allow": ["Bash(ln:*)", "Bash(xargs:*)", "Bash(grep:*)", "Bash(pnpm type-check:*)"]
   }
 }

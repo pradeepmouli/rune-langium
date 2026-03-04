@@ -58,15 +58,21 @@
     "node": ">=20.0.0",
     "pnpm": ">=10.0.0"
   },
-  "packageManager": "pnpm@10.6.2",
+  "packageManager": "pnpm@10.30.3",
   "dependencies": {
     "@lspeasy/client": "^3.0.0",
     "@lspeasy/core": "^2.1.0",
-    "camelcase": "^9.0.0"
+    "@zod-to-form/cli": "link:../zodforms/packages/cli",
+    "camelcase": "^9.0.0",
+    "cli": "link:../zodforms/packages/cli"
   },
   "pnpm": {
     "overrides": {
-      "x-to-zod": "^0.8.0"
+      "x-to-zod": "^0.8.0",
+      "@zod-to-form/core": "link:../zodforms/packages/core",
+      "@zod-to-form/react": "link:../zodforms/packages/react",
+      "@zod-to-form/cli": "link:../zodforms/packages/cli",
+      "cli": "link:../zodforms/packages/cli"
     }
   },
   "simple-git-hooks": {

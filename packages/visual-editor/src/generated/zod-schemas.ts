@@ -593,11 +593,11 @@ export const RosettaEnumValueSchema = z.looseObject({
   enumSynonyms: z.array(RosettaEnumSynonymSchema).optional()
 });
 
-export const RosettaEnumerationSchema = z.looseObject({
+export const RosettaEnumerationSchema = z.object({
   $type: z.literal('RosettaEnumeration'),
   name: ValidIDSchema,
   parent: ReferenceSchema.optional(),
-  enumValues: z.array(RosettaEnumValueSchema).optional()
+  enumValues: z.array(RosettaEnumValueSchema)
 });
 
 export const RosettaEnumValueReferenceSchema = z.looseObject({
