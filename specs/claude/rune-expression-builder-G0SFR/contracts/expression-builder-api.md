@@ -52,14 +52,21 @@ interface ExpressionBuilderProps extends ExpressionEditorSlotProps {
 
 ## Adapter Contracts
 
-### ast-to-expression-tree
+### ast-to-expression-node
 
 ```typescript
 /**
- * Convert a RosettaExpression AST node to an ExpressionNode tree.
- * Unsupported sub-trees become UnsupportedNode with rawText.
+ * Convert a RosettaExpression AST node to an ExpressionNode.
+ *
+ * Since ExpressionNode is derived from the same generated schemas (extended
+ * with `id` + relaxed fields), this adapter primarily:
+ *   1. Assigns `id` (nanoid) to each node
+ *   2. Resolves Reference<T> cross-refs to plain strings ($refText)
+ *   3. Wraps unrecognized sub-trees as { $type: 'Unsupported', rawText }
+ *
+ * The $type discriminator passes through unchanged.
  */
-function astToExpressionTree(
+function astToExpressionNode(
   ast: RosettaExpression,
   sourceText: string
 ): ExpressionNode;

@@ -4,422 +4,383 @@
 
 ## Core Entities
 
-### ExpressionNode (Discriminated Union)
+### ExpressionNode (Schema-Derived Discriminated Union)
 
-The central data structure for the expression builder UI. A lightweight, immutable representation of expression trees optimized for React rendering and zustand state management. Each variant maps to a grammar-level expression kind from `RosettaExpression` but without Langium internals (cross-references, CST nodes, parent pointers).
+The `ExpressionNode` type is **not hand-coded** — it is inferred via `z.infer<typeof ExpressionNodeSchema>` from Zod schemas that are themselves derived by transformation from the generated `RosettaExpressionSchema`. This ensures the builder's type system stays in sync with the grammar automatically.
+
+The discriminator is `$type` (same as the generated AST schemas), augmented with two UI-only `$type` values: `'Placeholder'` and `'Unsupported'`. Every variant also gains an `id: string` field for React key/selection tracking.
 
 ```typescript
+// Types are INFERRED from schemas — see "Zod Schemas" section below.
+// Do not hand-code interfaces; they drift from the source of truth.
+
+import { ExpressionNodeSchema } from './expression-node-schema.js';
+
+/** The builder's expression node type — inferred from transformed schemas. */
+export type ExpressionNode = z.infer<typeof ExpressionNodeSchema>;
+
 /** Unique identifier for each node in the expression tree. */
 type NodeId = string; // nanoid-generated
-
-/** Base fields shared by all expression nodes. */
-interface ExpressionNodeBase {
-  id: NodeId;
-  kind: ExpressionKind;
-}
-
-/** All possible expression kinds. */
-type ExpressionKind =
-  | 'binary'         // +, -, *, /, and, or, =, <>, >, <, >=, <=, contains, disjoint, default, join
-  | 'unary'          // exists, is absent, count, flatten, distinct, reverse, first, last, sum, only-element, one-of, type conversions
-  | 'featureCall'    // -> (shallow navigation)
-  | 'deepFeatureCall'// ->> (deep navigation)
-  | 'conditional'    // if/then/else
-  | 'switch'         // switch with cases
-  | 'lambda'         // filter, extract, reduce, sort, min, max, then (with inline function)
-  | 'constructor'    // Type { key: value, ... }
-  | 'literal'        // boolean, string, number, integer, empty
-  | 'list'           // [elem1, elem2, ...]
-  | 'reference'      // symbol reference (variable, input, alias)
-  | 'implicitVar'    // implicit `item` variable
-  | 'placeholder'    // empty slot awaiting user input
-  | 'unsupported';   // fallback for unparseable sub-trees
-
-type ExpressionNode =
-  | BinaryNode
-  | UnaryNode
-  | FeatureCallNode
-  | DeepFeatureCallNode
-  | ConditionalNode
-  | SwitchNode
-  | LambdaNode
-  | ConstructorNode
-  | LiteralNode
-  | ListNode
-  | ReferenceNode
-  | ImplicitVarNode
-  | PlaceholderNode
-  | UnsupportedNode;
 ```
 
-### Node Variants
+### Variant Categories (for reference — shapes are defined by schemas)
+
+| Category | `$type` values | Key fields (beyond generated) |
+|----------|---------------|-------------------------------|
+| **Binary** | `ArithmeticOperation`, `LogicalOperation`, `ComparisonOperation`, `EqualityOperation`, `RosettaContainsExpression`, `RosettaDisjointExpression`, `DefaultOperation`, `JoinOperation` | `id`, `left`/`right` relaxed to accept `Placeholder` |
+| **Unary postfix** | `DistinctOperation`, `FlattenOperation`, `ReverseOperation`, `FirstOperation`, `LastOperation`, `SumOperation`, `OneOfOperation`, `RosettaCountOperation`, `RosettaOnlyElement`, `RosettaExistsExpression`, `RosettaAbsentExpression`, `ToString/Number/Int/Time/Date/DateTime/ZonedDateTime Operation` | `id`, `argument` relaxed |
+| **Navigation** | `RosettaFeatureCall`, `RosettaDeepFeatureCall` | `id`, `feature`: `Reference` → `string` |
+| **Lambda** | `FilterOperation`, `MapOperation`, `ReduceOperation`, `SortOperation`, `MinOperation`, `MaxOperation`, `ThenOperation` | `id`, `argument` relaxed, `function.body` relaxed |
+| **Control flow** | `RosettaConditionalExpression`, `SwitchOperation` | `id`, condition/cases relaxed |
+| **Constructor** | `RosettaConstructorExpression` | `id`, `typeRef.symbol` → `string`, `values[].key` → `string` |
+| **Literals** | `RosettaBooleanLiteral`, `RosettaIntLiteral`, `RosettaNumberLiteral`, `RosettaStringLiteral` | `id` only |
+| **Collection** | `ListLiteral` | `id`, `elements` relaxed |
+| **Reference** | `RosettaSymbolReference`, `RosettaImplicitVariable` | `id`, `symbol` → `string` |
+| **UI-only** | `Placeholder`, `Unsupported` | `id`, `expectedType?` / `rawText` |
+
+## Zod Schemas (Derived from Generated AST Schemas)
+
+The expression builder schema is **derived by transformation** from the generated `RosettaExpressionSchema` in `generated/zod-schemas.ts`, not coded separately. This ensures the builder's validation stays in sync with the grammar as it evolves.
+
+### Source Schema
+
+The generated file provides individual `z.looseObject` schemas for each AST variant, composed into `RosettaExpressionSchema` as a `z.discriminatedUnion('$type', [...])` with 40+ members:
 
 ```typescript
-/** Binary operation: left <op> right */
-interface BinaryNode extends ExpressionNodeBase {
-  kind: 'binary';
-  operator: BinaryOperator;
-  left: ExpressionNode;
-  right: ExpressionNode;
-  cardMod?: 'any' | 'all'; // for equality/comparison operations
-}
-
-type BinaryOperator =
-  | '+' | '-' | '*' | '/'                          // arithmetic
-  | 'and' | 'or'                                    // logical
-  | '=' | '<>'                                      // equality
-  | '>' | '<' | '>=' | '<='                         // comparison
-  | 'contains' | 'disjoint' | 'default' | 'join';  // keyword binary
-
-/** Unary postfix operation: argument <op> */
-interface UnaryNode extends ExpressionNodeBase {
-  kind: 'unary';
-  operator: UnaryOperator;
-  argument: ExpressionNode;
-  modifier?: 'single' | 'multiple'; // for exists
-}
-
-type UnaryOperator =
-  | 'exists' | 'is absent' | 'count' | 'flatten' | 'distinct'
-  | 'reverse' | 'first' | 'last' | 'sum' | 'only-element' | 'one-of'
-  | 'to-string' | 'to-number' | 'to-int' | 'to-time'
-  | 'to-date' | 'to-date-time' | 'to-zoned-date-time';
-
-/** Feature call: receiver -> feature */
-interface FeatureCallNode extends ExpressionNodeBase {
-  kind: 'featureCall';
-  receiver: ExpressionNode;
-  feature: string; // resolved feature/attribute name
-}
-
-/** Deep feature call: receiver ->> feature */
-interface DeepFeatureCallNode extends ExpressionNodeBase {
-  kind: 'deepFeatureCall';
-  receiver: ExpressionNode;
-  feature: string;
-}
-
-/** Conditional: if <condition> then <consequent> [else <alternate>] */
-interface ConditionalNode extends ExpressionNodeBase {
-  kind: 'conditional';
-  condition: ExpressionNode;
-  consequent: ExpressionNode;
-  alternate?: ExpressionNode; // absent for if/then without else
-}
-
-/** Switch: argument switch case1 then expr1, case2 then expr2 [default expr] */
-interface SwitchNode extends ExpressionNodeBase {
-  kind: 'switch';
-  argument: ExpressionNode;
-  cases: SwitchCase[];
-  defaultCase?: ExpressionNode;
-}
-
-interface SwitchCase {
-  guard: ExpressionNode; // enum value or type reference
-  expression: ExpressionNode;
-}
-
-/** Lambda: argument <op> [params body] (filter, extract, reduce, sort, min, max, then) */
-interface LambdaNode extends ExpressionNodeBase {
-  kind: 'lambda';
-  operator: LambdaOperator;
-  argument: ExpressionNode;
-  parameters: string[];  // closure parameter names (may be empty for implicit `item`)
-  body: ExpressionNode;
-}
-
-type LambdaOperator = 'filter' | 'extract' | 'reduce' | 'sort' | 'min' | 'max' | 'then';
-
-/** Constructor: TypeName { key1: value1, key2: value2, ... } */
-interface ConstructorNode extends ExpressionNodeBase {
-  kind: 'constructor';
-  typeName: string;
-  entries: ConstructorEntry[];
-  implicitEmpty: boolean; // trailing `...` spread
-}
-
-interface ConstructorEntry {
-  key: string;
-  value: ExpressionNode;
-}
-
-/** Literal value: boolean, string, number, integer, or empty */
-interface LiteralNode extends ExpressionNodeBase {
-  kind: 'literal';
-  literalKind: 'boolean' | 'string' | 'number' | 'integer' | 'empty';
-  value: string; // string representation for all types (allows editing)
-}
-
-/** List literal: [elem1, elem2, ...] */
-interface ListNode extends ExpressionNodeBase {
-  kind: 'list';
-  elements: ExpressionNode[];
-}
-
-/** Symbol reference: a named variable, input, or alias in scope */
-interface ReferenceNode extends ExpressionNodeBase {
-  kind: 'reference';
-  name: string;       // the symbol name
-  typeName?: string;  // resolved type (for display)
-  cardinality?: string; // resolved cardinality (for display)
-  broken?: boolean;   // true if reference cannot be resolved
-}
-
-/** Implicit variable: `item` (auto-bound in filter/extract/reduce closures) */
-interface ImplicitVarNode extends ExpressionNodeBase {
-  kind: 'implicitVar';
-  name: 'item';
-}
-
-/** Placeholder: empty slot awaiting user input */
-interface PlaceholderNode extends ExpressionNodeBase {
-  kind: 'placeholder';
-  expectedType?: ExpressionTypeHint; // hint for palette filtering
-}
-
-type ExpressionTypeHint = 'any' | 'boolean' | 'numeric' | 'string' | 'collection' | 'comparable';
-
-/** Unsupported: sub-tree that couldn't be converted from AST */
-interface UnsupportedNode extends ExpressionNodeBase {
-  kind: 'unsupported';
-  rawText: string; // original DSL text for display and round-trip
-}
+// generated/zod-schemas.ts (source of truth — DO NOT HAND-EDIT)
+export const ArithmeticOperationSchema = z.looseObject({
+  $type: z.literal('ArithmeticOperation'),
+  left: z.lazy(() => RosettaExpressionSchema),
+  operator: z.union([z.literal('+'), z.literal('-'), z.literal('*'), z.literal('/')]),
+  right: z.lazy(() => RosettaExpressionSchema)
+});
+// ... 40+ more variants
+export const RosettaExpressionSchema = z.discriminatedUnion('$type', [ ... ]);
 ```
 
-## Zod Schemas
+### Transformation Strategy
 
-Runtime validation schemas for `ExpressionNode`, following the `form-schemas.ts` pattern used by other editor forms. These schemas serve three purposes:
-1. **Runtime validation** — validate trees deserialized from storage or pasted text
-2. **Type inference** — `z.infer<typeof ExpressionNodeSchema>` produces the TypeScript types above
-3. **Conformance anchor** — compile-time checks ensure the schema stays in sync with the TypeScript interfaces
-
-The generated `zod-schemas.ts` already provides `RosettaExpressionSchema` (a `z.discriminatedUnion` over `$type` with 40+ AST variants). Our schemas are a **parallel, simplified projection** discriminated on `kind` instead of `$type`, with UI-only variants (`placeholder`, `unsupported`) that have no AST counterpart.
+Rather than maintaining a parallel schema, we apply **four transformations** to derive the builder schema from the generated one:
 
 ```typescript
+// expression-node-schema.ts — builder schema derived from generated schemas
 import { z } from 'zod';
+import {
+  ArithmeticOperationSchema,
+  LogicalOperationSchema,
+  ComparisonOperationSchema,
+  EqualityOperationSchema,
+  RosettaContainsExpressionSchema,
+  RosettaDisjointExpressionSchema,
+  DefaultOperationSchema,
+  JoinOperationSchema,
+  // ... all 40+ generated variant schemas
+  RosettaExpressionSchema,
+  CardinalityModifierSchema,
+  ExistsModifierSchema,
+  InlineFunctionSchema,
+  ClosureParameterSchema,
+  ConstructorKeyValuePairSchema,
+  SwitchCaseOrDefaultSchema,
+  RosettaBooleanLiteralSchema,
+  RosettaIntLiteralSchema,
+  RosettaNumberLiteralSchema,
+  RosettaStringLiteralSchema,
+  ListLiteralSchema,
+  RosettaImplicitVariableSchema,
+  RosettaSymbolReferenceSchema,
+  RosettaFeatureCallSchema,
+  RosettaDeepFeatureCallSchema,
+  RosettaConditionalExpressionSchema,
+  SwitchOperationSchema,
+  RosettaConstructorExpressionSchema,
+  FilterOperationSchema,
+  MapOperationSchema,
+  ReduceOperationSchema,
+  SortOperationSchema,
+  MinOperationSchema,
+  MaxOperationSchema,
+  ThenOperationSchema,
+} from '../generated/zod-schemas.js';
 
 // ---------------------------------------------------------------------------
-// Primitives
+// T1: UI augmentation fields (added to every variant)
 // ---------------------------------------------------------------------------
 
-const NodeIdSchema = z.string().min(1);
+/** Fields injected into every node for UI tracking. */
+const uiFields = {
+  id: z.string().min(1),  // nanoid — React key + selection tracking
+};
+
+// ---------------------------------------------------------------------------
+// T2: Reference relaxation (Reference<T> → resolved string)
+// ---------------------------------------------------------------------------
+
+/**
+ * The generated schemas use `ReferenceSchema = { $refText, ref? }` for
+ * cross-references. In the builder UI, these are resolved to plain strings
+ * at the adapter boundary. This helper replaces Reference fields.
+ */
+const resolvedRef = z.string().min(1);
+
+// ---------------------------------------------------------------------------
+// T3: Field relaxation (required → optional for partial trees)
+// ---------------------------------------------------------------------------
+
+/**
+ * During incremental construction, child expression slots may be empty
+ * (represented as placeholders). We relax required expression-child fields
+ * to accept either a valid expression subtree OR a placeholder/undefined.
+ *
+ * The `relaxExpression` wrapper makes an expression field accept
+ * ExpressionNodeSchema (which includes placeholder) instead of only
+ * complete RosettaExpressionSchema.
+ */
+const exprChild = z.lazy(() => ExpressionNodeSchema);
+const optExprChild = z.lazy(() => ExpressionNodeSchema).optional();
+
+// ---------------------------------------------------------------------------
+// T4: UI-only variants (no AST counterpart)
+// ---------------------------------------------------------------------------
 
 const ExpressionTypeHintSchema = z.enum([
   'any', 'boolean', 'numeric', 'string', 'collection', 'comparable'
 ]);
 
-const BinaryOperatorSchema = z.enum([
-  '+', '-', '*', '/',
-  'and', 'or',
-  '=', '<>',
-  '>', '<', '>=', '<=',
-  'contains', 'disjoint', 'default', 'join'
-]);
-
-const UnaryOperatorSchema = z.enum([
-  'exists', 'is absent', 'count', 'flatten', 'distinct',
-  'reverse', 'first', 'last', 'sum', 'only-element', 'one-of',
-  'to-string', 'to-number', 'to-int', 'to-time',
-  'to-date', 'to-date-time', 'to-zoned-date-time'
-]);
-
-const LambdaOperatorSchema = z.enum([
-  'filter', 'extract', 'reduce', 'sort', 'min', 'max', 'then'
-]);
-
-const CardinalityModSchema = z.enum(['any', 'all']);
-const ExistsModSchema = z.enum(['single', 'multiple']);
-const LiteralKindSchema = z.enum(['boolean', 'string', 'number', 'integer', 'empty']);
-
-// ---------------------------------------------------------------------------
-// Node base (shared fields)
-// ---------------------------------------------------------------------------
-
-const nodeBase = { id: NodeIdSchema };
-
-// ---------------------------------------------------------------------------
-// Leaf nodes (no recursive children)
-// ---------------------------------------------------------------------------
-
-const LiteralNodeSchema = z.object({
-  ...nodeBase,
-  kind: z.literal('literal'),
-  literalKind: LiteralKindSchema,
-  value: z.string()
-});
-
-const ReferenceNodeSchema = z.object({
-  ...nodeBase,
-  kind: z.literal('reference'),
-  name: z.string().min(1),
-  typeName: z.string().optional(),
-  cardinality: z.string().optional(),
-  broken: z.boolean().optional()
-});
-
-const ImplicitVarNodeSchema = z.object({
-  ...nodeBase,
-  kind: z.literal('implicitVar'),
-  name: z.literal('item')
-});
-
+/** Placeholder — empty slot in the tree awaiting user input. */
 const PlaceholderNodeSchema = z.object({
-  ...nodeBase,
-  kind: z.literal('placeholder'),
-  expectedType: ExpressionTypeHintSchema.optional()
+  ...uiFields,
+  $type: z.literal('Placeholder'),
+  expectedType: ExpressionTypeHintSchema.optional(),
 });
 
+/** Unsupported — sub-tree that couldn't be converted from AST. */
 const UnsupportedNodeSchema = z.object({
-  ...nodeBase,
-  kind: z.literal('unsupported'),
-  rawText: z.string()
+  ...uiFields,
+  $type: z.literal('Unsupported'),
+  rawText: z.string(),
 });
 
 // ---------------------------------------------------------------------------
-// Recursive nodes (use z.lazy for self-reference)
+// Transformed variants (derived from generated schemas)
 // ---------------------------------------------------------------------------
+//
+// Each variant extends its generated counterpart with:
+//   - `id` field (T1)
+//   - Reference fields relaxed to strings (T2)
+//   - Required child expressions relaxed to accept placeholders (T3)
+//
+// The generated schemas use `z.looseObject` so `.extend()` works naturally.
+// We use `.extend()` to overlay UI fields and relaxed types on top of the
+// generated shape, keeping all other fields (operator, etc.) inherited.
 
-const BinaryNodeSchema: z.ZodType<BinaryNode> = z.object({
-  ...nodeBase,
-  kind: z.literal('binary'),
-  operator: BinaryOperatorSchema,
-  left: z.lazy(() => ExpressionNodeSchema),
-  right: z.lazy(() => ExpressionNodeSchema),
-  cardMod: CardinalityModSchema.optional()
+/** Binary operations: arithmetic, logical, equality, comparison, keyword */
+const ArithmeticNodeSchema = ArithmeticOperationSchema.extend({
+  ...uiFields,
+  left: exprChild,   // relax: required → accepts placeholder
+  right: exprChild,  // relax: required → accepts placeholder
 });
 
-const UnaryNodeSchema: z.ZodType<UnaryNode> = z.object({
-  ...nodeBase,
-  kind: z.literal('unary'),
-  operator: UnaryOperatorSchema,
-  argument: z.lazy(() => ExpressionNodeSchema),
-  modifier: ExistsModSchema.optional()
+const LogicalNodeSchema = LogicalOperationSchema.extend({
+  ...uiFields,
+  left: exprChild,
+  right: exprChild,
 });
 
-const FeatureCallNodeSchema: z.ZodType<FeatureCallNode> = z.object({
-  ...nodeBase,
-  kind: z.literal('featureCall'),
-  receiver: z.lazy(() => ExpressionNodeSchema),
-  feature: z.string().min(1)
+const ComparisonNodeSchema = ComparisonOperationSchema.extend({
+  ...uiFields,
+  left: optExprChild,  // already optional in grammar
+  right: exprChild,
+  cardMod: CardinalityModifierSchema.optional(),
 });
 
-const DeepFeatureCallNodeSchema: z.ZodType<DeepFeatureCallNode> = z.object({
-  ...nodeBase,
-  kind: z.literal('deepFeatureCall'),
-  receiver: z.lazy(() => ExpressionNodeSchema),
-  feature: z.string().min(1)
+const EqualityNodeSchema = EqualityOperationSchema.extend({
+  ...uiFields,
+  left: optExprChild,
+  right: exprChild,
+  cardMod: CardinalityModifierSchema.optional(),
 });
 
-const ConditionalNodeSchema: z.ZodType<ConditionalNode> = z.object({
-  ...nodeBase,
-  kind: z.literal('conditional'),
-  condition: z.lazy(() => ExpressionNodeSchema),
-  consequent: z.lazy(() => ExpressionNodeSchema),
-  alternate: z.lazy(() => ExpressionNodeSchema).optional()
+const ContainsNodeSchema = RosettaContainsExpressionSchema.extend({
+  ...uiFields,
+  left: optExprChild,
+  right: exprChild,
 });
 
-const SwitchCaseSchema = z.object({
-  guard: z.lazy(() => ExpressionNodeSchema),
-  expression: z.lazy(() => ExpressionNodeSchema)
+const DisjointNodeSchema = RosettaDisjointExpressionSchema.extend({
+  ...uiFields,
+  left: optExprChild,
+  right: exprChild,
 });
 
-const SwitchNodeSchema: z.ZodType<SwitchNode> = z.object({
-  ...nodeBase,
-  kind: z.literal('switch'),
-  argument: z.lazy(() => ExpressionNodeSchema),
-  cases: z.array(SwitchCaseSchema),
-  defaultCase: z.lazy(() => ExpressionNodeSchema).optional()
+const DefaultNodeSchema = DefaultOperationSchema.extend({
+  ...uiFields,
+  left: optExprChild,
+  right: exprChild,
 });
 
-const LambdaNodeSchema: z.ZodType<LambdaNode> = z.object({
-  ...nodeBase,
-  kind: z.literal('lambda'),
-  operator: LambdaOperatorSchema,
-  argument: z.lazy(() => ExpressionNodeSchema),
-  parameters: z.array(z.string()),
-  body: z.lazy(() => ExpressionNodeSchema)
+const JoinNodeSchema = JoinOperationSchema.extend({
+  ...uiFields,
+  left: optExprChild,
+  right: optExprChild,
 });
 
-const ConstructorEntrySchema = z.object({
-  key: z.string().min(1),
-  value: z.lazy(() => ExpressionNodeSchema)
+/** Navigation */
+const FeatureCallNodeSchema = RosettaFeatureCallSchema.extend({
+  ...uiFields,
+  receiver: exprChild,
+  feature: resolvedRef.optional(),  // T2: Reference → string
 });
 
-const ConstructorNodeSchema: z.ZodType<ConstructorNode> = z.object({
-  ...nodeBase,
-  kind: z.literal('constructor'),
-  typeName: z.string().min(1),
-  entries: z.array(ConstructorEntrySchema),
-  implicitEmpty: z.boolean()
+const DeepFeatureCallNodeSchema = RosettaDeepFeatureCallSchema.extend({
+  ...uiFields,
+  receiver: exprChild,
+  feature: resolvedRef.optional(),  // T2: Reference → string
 });
 
-const ListNodeSchema: z.ZodType<ListNode> = z.object({
-  ...nodeBase,
-  kind: z.literal('list'),
-  elements: z.array(z.lazy(() => ExpressionNodeSchema))
+/** Unary postfix operations */
+// Each unary op schema just needs `id` + argument relaxation.
+// We generate these with a helper since they share the same shape.
+function extendUnary(schema: typeof DistinctOperationSchema) {
+  return schema.extend({ ...uiFields, argument: optExprChild });
+}
+
+// ... applied to: DistinctOperation, FlattenOperation, ReverseOperation,
+// FirstOperation, LastOperation, SumOperation, OneOfOperation,
+// RosettaCountOperation, RosettaOnlyElement, RosettaExistsExpression,
+// RosettaAbsentExpression, ToStringOperation, ToNumberOperation, etc.
+
+/** Exists with modifier */
+const ExistsNodeSchema = RosettaExistsExpressionSchema.extend({
+  ...uiFields,
+  argument: optExprChild,
+  modifier: ExistsModifierSchema.optional(),
+});
+
+/** Control flow */
+const ConditionalNodeSchema = RosettaConditionalExpressionSchema.extend({
+  ...uiFields,
+  if: optExprChild,      // condition
+  ifthen: optExprChild,  // consequent
+  elsethen: optExprChild, // alternate (already optional)
+});
+
+const SwitchNodeSchema = SwitchOperationSchema.extend({
+  ...uiFields,
+  argument: optExprChild,
+  cases: z.array(SwitchCaseOrDefaultSchema.extend({
+    expression: exprChild,
+  })),
+});
+
+/** Lambda operations (filter, extract, reduce, sort, min, max, then) */
+function extendLambda(schema: typeof FilterOperationSchema) {
+  return schema.extend({
+    ...uiFields,
+    argument: optExprChild,
+    function: InlineFunctionSchema.extend({
+      body: exprChild,
+      parameters: z.array(ClosureParameterSchema).optional(),
+    }).optional(),
+  });
+}
+
+/** Constructor */
+const ConstructorNodeSchema = RosettaConstructorExpressionSchema.extend({
+  ...uiFields,
+  typeRef: z.union([
+    z.object({ $type: z.literal('RosettaSymbolReference'), symbol: resolvedRef }),
+    z.object({ $type: z.literal('RosettaSuperCall'), name: z.literal('super') }),
+  ]),
+  values: z.array(ConstructorKeyValuePairSchema.extend({
+    key: resolvedRef,   // T2: Reference → string
+    value: exprChild,   // T3: relax child
+  })).optional(),
+});
+
+/** Literals — extend each generated literal variant with `id` */
+const BooleanLiteralNodeSchema = RosettaBooleanLiteralSchema.extend(uiFields);
+const IntLiteralNodeSchema = RosettaIntLiteralSchema.extend(uiFields);
+const NumberLiteralNodeSchema = RosettaNumberLiteralSchema.extend(uiFields);
+const StringLiteralNodeSchema = RosettaStringLiteralSchema.extend(uiFields);
+
+/** List & implicit var */
+const ListNodeSchema = ListLiteralSchema.extend({
+  ...uiFields,
+  elements: z.array(exprChild),
+});
+
+const ImplicitVarNodeSchema = RosettaImplicitVariableSchema.extend(uiFields);
+
+/** Symbol reference — relax cross-reference to resolved string */
+const SymbolRefNodeSchema = RosettaSymbolReferenceSchema.extend({
+  ...uiFields,
+  symbol: resolvedRef,  // T2: Reference → string
 });
 
 // ---------------------------------------------------------------------------
-// Discriminated union
+// Composed union (generated variants + UI-only variants)
 // ---------------------------------------------------------------------------
 
 /**
- * The top-level ExpressionNode schema — a discriminated union on `kind`.
+ * The builder's expression schema: the generated RosettaExpressionSchema
+ * union, with each member extended (T1–T3), plus UI-only variants (T4).
  *
- * Mirrors the generated RosettaExpressionSchema (discriminated on `$type`)
- * but uses our simplified node model with UI-only variants (placeholder,
- * unsupported).
+ * Discriminated on `$type` — same discriminator as the generated schema,
+ * so the adapter layer doesn't need to remap discriminators.
  */
-const ExpressionNodeSchema: z.ZodType<ExpressionNode> = z.discriminatedUnion('kind', [
-  BinaryNodeSchema,
-  UnaryNodeSchema,
+export const ExpressionNodeSchema: z.ZodType<ExpressionNode> = z.discriminatedUnion('$type', [
+  // — Transformed generated variants —
+  ArithmeticNodeSchema,
+  LogicalNodeSchema,
+  ComparisonNodeSchema,
+  EqualityNodeSchema,
+  ContainsNodeSchema,
+  DisjointNodeSchema,
+  DefaultNodeSchema,
+  JoinNodeSchema,
   FeatureCallNodeSchema,
   DeepFeatureCallNodeSchema,
+  // ... all unary variants via extendUnary()
+  ExistsNodeSchema,
   ConditionalNodeSchema,
   SwitchNodeSchema,
-  LambdaNodeSchema,
+  // ... all lambda variants via extendLambda()
   ConstructorNodeSchema,
-  LiteralNodeSchema,
+  BooleanLiteralNodeSchema,
+  IntLiteralNodeSchema,
+  NumberLiteralNodeSchema,
+  StringLiteralNodeSchema,
   ListNodeSchema,
-  ReferenceNodeSchema,
   ImplicitVarNodeSchema,
+  SymbolRefNodeSchema,
+  // — UI-only variants (T4) —
   PlaceholderNodeSchema,
-  UnsupportedNodeSchema
+  UnsupportedNodeSchema,
 ]);
 
-// ---------------------------------------------------------------------------
-// Exports & type inference
-// ---------------------------------------------------------------------------
-
-export {
-  ExpressionNodeSchema,
-  BinaryOperatorSchema,
-  UnaryOperatorSchema,
-  LambdaOperatorSchema,
-  ExpressionTypeHintSchema,
-  PlaceholderNodeSchema,
-  LiteralNodeSchema,
-  ReferenceNodeSchema
-};
-
-/** Inferred TypeScript type — should equal ExpressionNode. */
-export type ExpressionNodeInferred = z.infer<typeof ExpressionNodeSchema>;
+/** Inferred TypeScript type — the builder's expression node type. */
+export type ExpressionNode = z.infer<typeof ExpressionNodeSchema>;
 ```
 
-### Conformance: ExpressionNode ↔ Generated AST Schemas
+### Transformation Summary
 
-The generated `RosettaExpressionSchema` in `generated/zod-schemas.ts` uses `z.discriminatedUnion('$type', [...])` with 40+ AST-level variants. Our `ExpressionNodeSchema` uses `z.discriminatedUnion('kind', [...])` with 14 UI-level variants. The adapter layer (`ast-to-expression-tree.ts`) is the conformance boundary — it maps every `$type` variant to a `kind` variant. Compile-time conformance is enforced by the adapter's exhaustive switch, not by schema-level checks (since the two schemas have different discriminator fields and shapes).
+| Transform | What | Why |
+|-----------|------|-----|
+| **T1: UI augmentation** | Add `id: string` to every variant via `.extend(uiFields)` | React keys, selection tracking, store lookups |
+| **T2: Reference relaxation** | Replace `ReferenceSchema` (`{ $refText, ref? }`) with `z.string()` | Cross-references are resolved to plain names at the adapter boundary |
+| **T3: Field relaxation** | Required expression children accept `PlaceholderNodeSchema` | Partial trees during incremental construction |
+| **T4: UI-only variants** | Add `Placeholder` and `Unsupported` to the discriminated union | Empty slots and graceful fallback for unrecognized sub-trees |
 
-### Schema Design Rationale
+### Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| `z.discriminatedUnion('kind')` not `$type` | Our nodes don't carry `$type`; `kind` is our discriminator |
-| Explicit `z.ZodType<T>` annotations on recursive schemas | Required by Zod for `z.lazy()` circular references |
-| Separate primitive schemas (`BinaryOperatorSchema`, etc.) | Reused by operator palette filtering and validation |
-| `z.string()` for literal values (not type-specific) | All literal editing happens as text; parse-time validation handles type correctness |
-| No `.strict()` on node objects | Allows forward-compatible extension without breaking deserialization |
+| Keep `$type` as discriminator (not `kind`) | Same discriminator as generated schemas; no remapping needed in adapter |
+| Use `.extend()` on `z.looseObject` | Generated schemas use `z.looseObject` which supports `.extend()` naturally; extra AST fields (CST, parent) pass through without error |
+| `extendUnary()`/`extendLambda()` helpers | 20+ unary/lambda variants share the same extension pattern; DRY |
+| Literal variants stay separate (not collapsed) | Preserves 1:1 mapping with generated `RosettaBooleanLiteral`, `RosettaIntLiteral`, etc.; type-specific rendering in blocks |
+| `z.string()` for resolved references | Adapter resolves `ref.$refText` at conversion time; builder only needs the display name |
 
 ## Supporting Entities
 
@@ -472,8 +433,8 @@ interface OperatorDefinition {
   label: string;
   /** The operator value to insert. */
   operator: string;
-  /** Which node kind this creates. */
-  nodeKind: ExpressionKind;
+  /** Which AST $type this creates (e.g., 'ArithmeticOperation'). */
+  nodeType: ExpressionNode['$type'];
   /** Description for tooltip. */
   description: string;
   /** Type constraint: when is this operator valid? */
@@ -534,7 +495,7 @@ FunctionForm
         │     ├── scope: FunctionScope
         │     └── mode: 'builder' | 'text'
         ├── BlockRenderer (recursive)
-        │     └── dispatches to: BinaryBlock, UnaryBlock, LiteralBlock, ...
+        │     └── dispatches on $type: ArithmeticBlock, LogicalBlock, LiteralBlock, ...
         ├── OperatorPalette (cmdk + popover)
         │     └── reads: OperatorCategory[]
         ├── ReferencePicker
@@ -548,11 +509,11 @@ FunctionForm
 | Rule | Entity | Description |
 |------|--------|-------------|
 | V-001 | ExpressionNode tree | Tree must have no placeholder nodes for serialization to succeed |
-| V-002 | ReferenceNode | Reference `name` must exist in `FunctionScope` (inputs, aliases, or output) |
-| V-003 | BinaryNode | Both `left` and `right` must be non-placeholder for complete expression |
-| V-004 | ConditionalNode | `condition` must resolve to boolean type hint |
-| V-005 | LambdaNode | `body` must be present; `parameters` count must match operator expectations (reduce=2, others=0-1) |
-| V-006 | ConstructorNode | `typeName` must exist in `scope.availableTypes` |
+| V-002 | `RosettaSymbolReference` | `symbol` name must exist in `FunctionScope` (inputs, aliases, or output) |
+| V-003 | Binary variants | Both `left` and `right` must be non-placeholder for complete expression |
+| V-004 | `RosettaConditionalExpression` | `if` field must resolve to boolean type hint |
+| V-005 | Lambda variants | `function.body` must be present; `parameters` count must match operator expectations (reduce=2, others=0-1) |
+| V-006 | `RosettaConstructorExpression` | `typeRef` must reference a type in `scope.availableTypes` |
 | V-007 | Round-trip | `parse(serialize(tree))` must produce equivalent tree (SC-004) |
 
 ## State Transitions

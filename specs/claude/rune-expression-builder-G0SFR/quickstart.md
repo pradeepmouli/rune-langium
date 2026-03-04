@@ -28,11 +28,12 @@ The expression builder lives entirely within `packages/visual-editor`. It:
 |------|---------|
 | `src/components/editors/expression-builder/ExpressionBuilder.tsx` | Root component, mode toggle |
 | `src/components/editors/expression-builder/BlockRenderer.tsx` | Recursive tree → blocks |
-| `src/components/editors/expression-builder/blocks/*.tsx` | Block components per expression kind |
+| `src/components/editors/expression-builder/blocks/*.tsx` | Block components per $type |
 | `src/components/editors/expression-builder/OperatorPalette.tsx` | cmdk command palette |
 | `src/store/expression-store.ts` | Zustand store + zundo undo/redo |
-| `src/adapters/ast-to-expression-tree.ts` | RosettaExpression → ExpressionNode |
-| `src/adapters/expression-tree-to-dsl.ts` | ExpressionNode → DSL text |
+| `src/schemas/expression-node-schema.ts` | ExpressionNode Zod schema (transforms generated schemas) |
+| `src/adapters/ast-to-expression-node.ts` | RosettaExpression → ExpressionNode (assign ids, resolve refs) |
+| `src/adapters/expression-node-to-dsl.ts` | ExpressionNode → DSL text |
 | `src/hooks/useExpressionBuilder.ts` | Orchestration hook |
 | `src/hooks/useKeyboardNavigation.ts` | Keyboard navigation |
 
@@ -70,11 +71,11 @@ User clicks placeholder
 ```
 Text → Builder:
   1. parseExpression(text)          // wraps in func body, calls core parse()
-  2. astToExpressionTree(ast)       // RosettaExpression → ExpressionNode
+  2. astToExpressionNode(ast)       // assign ids, resolve refs, wrap unknowns
   3. Store initializes with tree
 
 Builder → Text:
-  1. expressionTreeToDsl(tree)      // ExpressionNode → DSL string
+  1. expressionNodeToDsl(tree)      // ExpressionNode → DSL string
   2. onChange(dslText)              // parent validates via core parser
 ```
 

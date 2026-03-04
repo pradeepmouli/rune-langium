@@ -126,3 +126,52 @@ const result = await parse(input);
 **Alternatives considered**:
 - *Side-by-side view*: Rejected for P1 — adds complexity; the DSL preview panel (FR-009) already shows live text alongside blocks.
 - *Auto-sync on every keystroke in text mode*: Rejected — too expensive and would show constant parse errors during typing.
+
+## R-011: Migrate Hand-Crafted Form Schemas to Generated Schema Transformations
+
+**Decision**: After the expression builder lands, refactor `form-schemas.ts` to derive its schemas from the generated `zod-schemas.ts` via `.pick()` / `.extend()` / `.partial()` — eliminating all hand-coded Zod schemas and their manual conformance checks.
+
+**Rationale**: The current `form-schemas.ts` hand-codes Zod schemas for Data, Enum, Choice, and Function forms, then uses compile-time conformance checks (`_DataFormCheck`, etc.) to verify they stay in sync with `TypeNodeData`. This is fragile — a field rename in the generated AST requires manual updates in two places. The generated `zod-schemas.ts` already contains the canonical schemas for every AST type.
+
+**Scope**: All schemas in `schemas/form-schemas.ts`:
+- `dataTypeFormSchema` → derive from `DataSchema.pick({...}).extend({...})`
+- `enumFormSchema` → derive from `RosettaEnumerationSchema.pick({...}).extend({...})`
+- `choiceFormSchema` → derive from `ChoiceSchema.pick({...}).extend({...})`
+- `functionFormSchema` → derive from `RosettaFunctionSchema.pick({...}).extend({...})`
+- `memberSchema` → derive from `AttributeSchema.pick({...})`
+- `attributeSchema` → derive from `AttributeSchema.pick({...})`
+- `enumValueSchema` → derive from `RosettaEnumValueSchema.pick({...})`
+- `metadataSchema` — keep as-is (metadata fields are form-specific, not in AST schemas)
+
+**Migration pattern** (same as expression builder):
+```typescript
+// Before (hand-crafted):
+export const dataTypeFormSchema = z.object({
+  name: z.string().min(1, 'Type name is required'),
+  parentName: z.string(),
+  members: z.array(memberSchema),
+  ...metadataFields
+});
+
+// After (derived from generated):
+export const dataTypeFormSchema = DataSchema.pick({
+  name: true,
+}).extend({
+  name: z.string().min(1, 'Type name is required'), // override with validation
+  parentName: z.string(), // UI-only field (superType ref → string)
+  members: z.array(memberSchema),
+  ...metadataFields
+});
+```
+
+**Benefits**:
+1. Removes ~100 lines of hand-coded schema + ~30 lines of conformance checks
+2. Field additions to generated schemas automatically propagate
+3. Single source of truth: `generate-zod.ts` output
+4. Consistent pattern with new expression builder schemas
+
+**Timing**: Post expression-builder (separate PR). Non-blocking — current conformance checks catch drift at compile time.
+
+**Alternatives considered**:
+- *Leave as-is*: Viable since conformance checks work, but inconsistent with the transformation approach established by the expression builder.
+- *Delete form schemas entirely, use generated schemas directly*: Rejected — forms need UI-specific fields (`parentName` as string, `members` array shape) and validation messages (`.min(1, ...)`) that generated schemas don't carry.
