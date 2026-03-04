@@ -112,7 +112,7 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 ### Edge Cases
 
 - What happens when a function has no expressions yet (empty operations)? The builder should show a single placeholder slot inviting the user to start building.
-- How does the builder handle expressions that use syntax not yet supported by the builder? It should fall back to displaying the raw text with an indicator that builder mode is unavailable for that expression.
+- How does the builder handle expressions that use syntax not yet supported by the builder? Unsupported sub-expressions render as inline text blocks within the visual tree; surrounding supported nodes remain as visual blocks. The text block is visually distinct and editable in text mode.
 - What happens when an expression references a type or function that doesn't exist (broken reference)? The reference block should show a warning indicator with the unresolved name displayed.
 - How does the builder handle very deeply nested expressions (e.g., 10+ levels)? The UI should remain scrollable and usable; blocks should be collapsible at user discretion to manage visual complexity.
 - What happens if the user deletes an input parameter that is referenced in an expression? The reference blocks should display a "broken reference" warning, and the generated DSL should include the original name so the user can identify what to fix.
@@ -138,6 +138,7 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 - **FR-014**: System MUST allow users to collapse deeply nested sub-expression blocks to manage visual complexity.
 - **FR-015**: System MUST integrate with the existing function editing form in the visual editor, using the existing expression editor slot mechanism.
 - **FR-016**: System MUST allow users to remove any expression block, replacing it with an empty placeholder slot while preserving the surrounding tree structure.
+- **FR-017**: System MUST render unsupported expression sub-trees as inline text blocks within the visual tree, allowing surrounding supported nodes to remain as visual blocks. The inline text block MUST be visually distinct from visual blocks.
 
 ### Key Entities
 
@@ -162,6 +163,7 @@ A user copies a sub-expression to reuse it elsewhere in the same function or und
 
 - Q: Does the builder edit only expression bodies, or also function structure (inputs, outputs, adding operations)? → A: Expression bodies only. Function structure editing (add/remove inputs, output, operations, conditions, shortcuts) remains the responsibility of the existing function form. The builder is scoped to editing the expression content within existing slots.
 - Q: How does a user remove an existing expression block? → A: Replace with placeholder. Removing a block replaces it with an empty placeholder slot, preserving the surrounding tree structure. This keeps the expression tree structurally valid at all times.
+- Q: When an expression contains a mix of supported and unsupported nodes, what is the fallback granularity? → A: Sub-tree fallback. Only the unsupported sub-expression renders as an inline text block; surrounding supported nodes remain as visual blocks.
 
 ## Assumptions
 
