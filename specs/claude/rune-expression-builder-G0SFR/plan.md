@@ -84,20 +84,25 @@ packages/visual-editor/
 │   │   ├── editor-store.ts                # Existing — extend for expression state
 │   │   ├── expression-store.ts            # NEW — expression tree state + undo/redo
 │   │   └── history.ts                     # Existing
+│   ├── schemas/
+│   │   ├── form-schemas.ts               # Existing — refactor to derive from generated schemas
+│   │   ├── expression-node-schema.ts     # NEW — ExpressionNode schema (transforms generated)
+│   │   └── index.ts                      # Existing — add expression schema exports
 │   ├── adapters/
-│   │   ├── ast-to-expression-tree.ts      # NEW — RosettaExpression AST → ExpressionNode
-│   │   └── expression-tree-to-dsl.ts      # NEW — ExpressionNode → Rune DSL text
+│   │   ├── ast-to-expression-node.ts     # NEW — RosettaExpression AST → ExpressionNode
+│   │   └── expression-node-to-dsl.ts     # NEW — ExpressionNode → Rune DSL text
 │   ├── hooks/
 │   │   ├── useExpressionAutocomplete.ts   # Existing — enhance for context-aware filtering
 │   │   ├── useExpressionBuilder.ts        # NEW — builder orchestration hook
 │   │   └── useKeyboardNavigation.ts       # NEW — keyboard nav for blocks/slots
-│   ├── types.ts                           # Existing — extend with ExpressionNode types
+│   ├── types.ts                           # Existing — ExpressionNode type inferred from schema
 │   └── validation/
 │       └── edit-validator.ts              # Existing — enhance for round-trip validation
 ├── test/
 │   ├── expression-builder/
-│   │   ├── ast-to-expression-tree.test.ts # Adapter unit tests
-│   │   ├── expression-tree-to-dsl.test.ts # Serializer unit tests
+│   │   ├── expression-node-schema.test.ts # Schema transformation tests
+│   │   ├── ast-to-expression-node.test.ts # Adapter unit tests
+│   │   ├── expression-node-to-dsl.test.ts # Serializer unit tests
 │   │   ├── block-renderer.test.tsx        # Component render tests
 │   │   ├── operator-palette.test.tsx      # Palette interaction tests
 │   │   ├── expression-store.test.ts       # Store unit tests
@@ -107,6 +112,14 @@ packages/visual-editor/
 ```
 
 **Structure Decision**: All new code lives within the existing `packages/visual-editor` package. The expression builder is a sub-module of the editors directory, following the established pattern. No new packages are created.
+
+## Follow-On: Migrate Hand-Crafted Form Schemas (R-011)
+
+After the expression builder is complete, refactor `schemas/form-schemas.ts` to derive all schemas from the generated `zod-schemas.ts` using the same transformation pattern (`.pick()` / `.extend()`), eliminating hand-coded schemas and manual conformance checks. See [research.md R-011](./research.md#r-011-migrate-hand-crafted-form-schemas-to-generated-schema-transformations) for full scope and migration pattern.
+
+**Scope**: `dataTypeFormSchema`, `enumFormSchema`, `choiceFormSchema`, `functionFormSchema`, `memberSchema`, `attributeSchema`, `enumValueSchema` — all derived from their generated counterparts. `metadataSchema` kept as-is (form-specific). Removes ~130 lines of hand-coded schema + conformance checks.
+
+**Timing**: Separate PR after expression builder lands.
 
 ## Complexity Tracking
 
