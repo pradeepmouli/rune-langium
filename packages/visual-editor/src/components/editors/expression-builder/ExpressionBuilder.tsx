@@ -18,6 +18,7 @@ import { ReferencePicker } from './ReferencePicker.js';
 import { astToExpressionNode } from '../../../adapters/ast-to-expression-node.js';
 import { expressionNodeToDslPreview } from '../../../adapters/expression-node-to-dsl.js';
 import { useContextFilter } from '../../../hooks/useContextFilter.js';
+import { replaceInTree } from '../../../store/expression-store.js';
 
 export interface ExpressionBuilderProps extends ExpressionEditorSlotProps {
   scope: FunctionScope;
@@ -49,16 +50,23 @@ export function ExpressionBuilder({
     if (!value) {
       return { $type: 'Placeholder', id: 'root-placeholder' } as unknown as ExpressionNode;
     }
+    // value is DSL text — pass it through the AST adapter which expects
+    // a parsed AST object. When the host provides a pre-parsed AST (object),
+    // convert it; otherwise treat raw DSL text as unsupported until a proper
+    // Rune parser integration is wired up.
     try {
       const parsed = JSON.parse(value);
-      return astToExpressionNode(parsed, value);
+      if (parsed && typeof parsed === 'object' && '$type' in parsed) {
+        return astToExpressionNode(parsed, value);
+      }
     } catch {
-      return {
-        $type: 'Unsupported',
-        id: 'parse-error',
-        rawText: value
-      } as unknown as ExpressionNode;
+      // Not JSON — treat as raw DSL text
     }
+    return {
+      $type: 'Unsupported',
+      id: 'parse-error',
+      rawText: value
+    } as unknown as ExpressionNode;
   }, [value]);
 
   const handleModeSwitch = useCallback(
@@ -98,12 +106,28 @@ export function ExpressionBuilder({
     setPaletteOpen(true);
   }, []);
 
-  const handlePaletteSelect = useCallback((_node: ExpressionNode) => {
-    // In a full implementation, this would replace the placeholder node
-    // in the tree. For now, close the palette.
+  const handleOpenReferencePicker = useCallback(() => {
     setPaletteOpen(false);
-    setPaletteAnchorId(null);
+    setReferencePickerOpen(true);
   }, []);
+
+  const handlePaletteSelect = useCallback(
+    (node: ExpressionNode) => {
+      if (paletteAnchorId) {
+        const newTree = replaceInTree(tree, paletteAnchorId, node);
+        try {
+          const dsl = JSON.stringify(newTree);
+          onChange?.(dsl);
+        } catch {
+          // serialization failed — still close the palette
+        }
+      }
+      setPaletteOpen(false);
+      setPaletteAnchorId(null);
+      setReferencePickerOpen(false);
+    },
+    [paletteAnchorId, tree, onChange]
+  );
 
   const handlePaletteClose = useCallback(() => {
     setPaletteOpen(false);
@@ -165,6 +189,7 @@ export function ExpressionBuilder({
               onSelect={handlePaletteSelect}
               onClose={handlePaletteClose}
               filteredCategories={filteredCategories}
+              onOpenReferencePicker={handleOpenReferencePicker}
             />
             <ReferencePicker
               open={referencePickerOpen}

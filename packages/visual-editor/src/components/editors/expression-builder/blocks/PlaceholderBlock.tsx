@@ -64,7 +64,8 @@ export function PlaceholderBlock({ node, onActivate, onDragNode }: PlaceholderBl
   );
 
   return (
-    <span
+    <button
+      type="button"
       className={`inline-flex cursor-pointer items-center rounded border border-dashed px-2 py-0.5 text-xs transition-colors ${
         isDropTarget
           ? 'border-solid border-ring bg-accent text-accent-foreground'
@@ -77,11 +78,9 @@ export function PlaceholderBlock({ node, onActivate, onDragNode }: PlaceholderBl
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      role="button"
-      tabIndex={0}
       aria-label={expectedType ? `Add ${expectedType} expression` : 'Add expression'}
     >
       {expectedType ? `+ ${expectedType}` : '+ expression'}
-    </span>
+    </button>
   );
 }

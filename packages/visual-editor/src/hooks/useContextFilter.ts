@@ -28,13 +28,7 @@ import {
  * - `comparable`: slot expects a value that can participate in comparisons
  * - `any`: no specific type constraint
  */
-export type TypeContext =
-  | 'numeric'
-  | 'boolean'
-  | 'collection'
-  | 'string'
-  | 'comparable'
-  | 'any';
+export type TypeContext = 'numeric' | 'boolean' | 'collection' | 'string' | 'comparable' | 'any';
 
 // ---------------------------------------------------------------------------
 // Operator → produced type mapping
@@ -70,6 +64,27 @@ const COLLECTION_PRODUCERS = new Set([
   'FlattenOperation',
   'ReverseOperation',
   'ListLiteral'
+]);
+
+/** $type values whose result is a string. */
+const STRING_PRODUCERS = new Set(['RosettaStringLiteral', 'ToStringOperation']);
+
+/** $type values whose result is comparable (numeric or string). */
+const COMPARABLE_PRODUCERS = new Set([
+  // Numeric types are comparable
+  'ArithmeticOperation',
+  'RosettaCountOperation',
+  'SumOperation',
+  'RosettaNumberLiteral',
+  'RosettaIntLiteral',
+  // String types are comparable
+  'RosettaStringLiteral',
+  'ToStringOperation',
+  // Date/time types are comparable
+  'ToDateOperation',
+  'ToDateTimeOperation',
+  'ToZonedDateTimeOperation',
+  'ToTimeOperation'
 ]);
 
 /** $type values that are polymorphic — could produce any type depending on usage. */
@@ -143,9 +158,9 @@ export function resolveTypeContext(
     return 'any';
   }
 
-  // Comparison: both sides should be numeric (or comparable)
+  // Comparison: both sides should be comparable (numeric, string, or date)
   if ($type === 'ComparisonOperation') {
-    return 'numeric';
+    return 'comparable';
   }
 
   return 'any';
@@ -184,6 +199,14 @@ export function operatorMatchesContext(op: OperatorDefinition, context: TypeCont
 
   if (context === 'collection') {
     return COLLECTION_PRODUCERS.has($type);
+  }
+
+  if (context === 'string') {
+    return STRING_PRODUCERS.has($type);
+  }
+
+  if (context === 'comparable') {
+    return COMPARABLE_PRODUCERS.has($type);
   }
 
   return true;

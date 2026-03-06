@@ -19,18 +19,20 @@ import type {
 
 export interface OperatorPaletteProps {
   open: boolean;
-  anchorEl?: HTMLElement | null;
   onSelect: (node: ExpressionNode) => void;
   onClose: () => void;
   /** Context-filtered categories. If not provided, all operators are shown as recommended. */
   filteredCategories?: FilteredOperatorCategory[];
+  /** Callback to open the reference picker from the palette. */
+  onOpenReferencePicker?: () => void;
 }
 
 export function OperatorPalette({
   open,
   onSelect,
   onClose,
-  filteredCategories
+  filteredCategories,
+  onOpenReferencePicker
 }: OperatorPaletteProps) {
   const [search, setSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -130,6 +132,16 @@ export function OperatorPalette({
           );
         })}
       </div>
+      {onOpenReferencePicker && (
+        <button
+          className="mt-1 flex w-full items-center gap-2 rounded border-t border-border px-2 py-1.5 text-left text-xs text-foreground hover:bg-accent focus:bg-accent focus:outline-none"
+          onClick={onOpenReferencePicker}
+          data-testid="palette-open-reference"
+        >
+          <span className="font-mono font-medium">Variable</span>
+          <span className="text-[10px] text-muted-foreground">Pick from scope</span>
+        </button>
+      )}
     </div>
   );
 }

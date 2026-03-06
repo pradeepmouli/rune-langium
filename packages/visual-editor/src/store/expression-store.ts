@@ -90,7 +90,7 @@ export interface ExpressionBuilderState {
  * Deep-clone an ExpressionNode tree, replacing any node matching
  * the target ID with the replacement node.
  */
-function replaceInTree(
+export function replaceInTree(
   tree: ExpressionNode,
   targetId: string,
   replacement: ExpressionNode
@@ -204,60 +204,113 @@ function getChildren(node: ExpressionNode): ExpressionNode[] {
 }
 
 /**
- * Map all child expression nodes, returning a new node.
+ * Map all child expression nodes, returning a new node only if at least
+ * one child changed (preserves object identity otherwise).
  */
 function mapChildren(
   node: ExpressionNode,
   fn: (child: ExpressionNode) => ExpressionNode
 ): ExpressionNode {
-  const n = { ...node } as Record<string, unknown>;
+  let changed = false;
+  const orig = node as Record<string, unknown>;
+  const n = {} as Record<string, unknown>;
+
+  // Copy all fields first
+  for (const key in orig) {
+    n[key] = orig[key];
+  }
 
   // Single-value children
   for (const key of CHILD_FIELDS) {
-    const v = field(n, key);
-    if (isExprNode(v)) n[key] = fn(v);
+    const v = field(orig, key);
+    if (isExprNode(v)) {
+      const mapped = fn(v);
+      if (mapped !== v) {
+        n[key] = mapped;
+        changed = true;
+      }
+    }
   }
 
   // Lambda function.body
-  const func = field(n, 'function');
+  const func = field(orig, 'function');
   if (func && typeof func === 'object') {
-    const funcCopy = { ...(func as Record<string, unknown>) };
-    const body = field(funcCopy, 'body');
-    if (isExprNode(body)) funcCopy['body'] = fn(body);
-    n['function'] = funcCopy;
+    const funcRec = func as Record<string, unknown>;
+    const body = field(funcRec, 'body');
+    if (isExprNode(body)) {
+      const mappedBody = fn(body);
+      if (mappedBody !== body) {
+        n['function'] = { ...funcRec, body: mappedBody };
+        changed = true;
+      }
+    }
   }
 
   // Switch cases
-  const cases = field(n, 'cases');
+  const cases = field(orig, 'cases');
   if (Array.isArray(cases)) {
-    n['cases'] = (cases as Record<string, unknown>[]).map((c) => {
-      const newCase = { ...c };
-      const expr = field(newCase, 'expression');
-      if (isExprNode(expr)) newCase['expression'] = fn(expr);
-      return newCase;
+    let casesChanged = false;
+    const newCases = (cases as Record<string, unknown>[]).map((c) => {
+      const expr = field(c, 'expression');
+      if (isExprNode(expr)) {
+        const mapped = fn(expr);
+        if (mapped !== expr) {
+          casesChanged = true;
+          return { ...c, expression: mapped };
+        }
+      }
+      return c;
     });
+    if (casesChanged) {
+      n['cases'] = newCases;
+      changed = true;
+    }
   }
 
   // Constructor values
-  const values = field(n, 'values');
+  const values = field(orig, 'values');
   if (Array.isArray(values)) {
-    n['values'] = (values as Record<string, unknown>[]).map((v) => {
-      const newVal = { ...v };
-      const val = field(newVal, 'value');
-      if (isExprNode(val)) newVal['value'] = fn(val);
-      return newVal;
+    let valuesChanged = false;
+    const newValues = (values as Record<string, unknown>[]).map((v) => {
+      const val = field(v, 'value');
+      if (isExprNode(val)) {
+        const mapped = fn(val);
+        if (mapped !== val) {
+          valuesChanged = true;
+          return { ...v, value: mapped };
+        }
+      }
+      return v;
     });
+    if (valuesChanged) {
+      n['values'] = newValues;
+      changed = true;
+    }
   }
 
   // Array children (elements, rawArgs)
   for (const key of ARRAY_CHILD_FIELDS) {
-    const arr = field(n, key);
+    const arr = field(orig, key);
     if (Array.isArray(arr)) {
-      n[key] = (arr as unknown[]).map((e) => (isExprNode(e) ? fn(e) : e));
+      let arrChanged = false;
+      const newArr = (arr as unknown[]).map((e) => {
+        if (isExprNode(e)) {
+          const mapped = fn(e);
+          if (mapped !== e) {
+            arrChanged = true;
+            return mapped;
+          }
+        }
+        return e;
+      });
+      if (arrChanged) {
+        n[key] = newArr;
+        changed = true;
+      }
     }
   }
 
-  return n as unknown as ExpressionNode;
+  return changed ? (n as unknown as ExpressionNode) : node;
 }
 
 // ---------------------------------------------------------------------------

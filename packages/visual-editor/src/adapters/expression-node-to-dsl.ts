@@ -11,12 +11,55 @@ import type { ExpressionNode } from '../schemas/expression-node-schema.js';
 
 const PLACEHOLDER_MARKER = '___';
 
+// ---------------------------------------------------------------------------
+// Operator precedence table (lower number = lower precedence = binds less tightly)
+// ---------------------------------------------------------------------------
+
+const PRECEDENCE: Record<string, number> = {
+  // Logical
+  or: 1,
+  and: 2,
+  // Equality / comparison
+  '=': 3,
+  '<>': 3,
+  contains: 3,
+  disjoint: 3,
+  default: 3,
+  '<': 4,
+  '<=': 4,
+  '>': 4,
+  '>=': 4,
+  // Additive
+  '+': 5,
+  '-': 5,
+  // Multiplicative
+  '*': 6,
+  '/': 6
+};
+
+function getPrecedence(node: ExpressionNode): number | undefined {
+  const $type = (node as any).$type as string;
+  if (
+    $type === 'ArithmeticOperation' ||
+    $type === 'LogicalOperation' ||
+    $type === 'ComparisonOperation' ||
+    $type === 'EqualityOperation' ||
+    $type === 'RosettaContainsExpression' ||
+    $type === 'RosettaDisjointExpression' ||
+    $type === 'DefaultOperation'
+  ) {
+    const op = (node as any).operator as string;
+    return PRECEDENCE[op];
+  }
+  return undefined;
+}
+
 /**
  * Serialize an ExpressionNode tree to Rune DSL text.
  * Throws if tree contains placeholder nodes.
  */
 export function expressionNodeToDsl(tree: ExpressionNode): string {
-  return serialize(tree, false);
+  return serialize(tree, false, undefined);
 }
 
 /**
@@ -24,14 +67,29 @@ export function expressionNodeToDsl(tree: ExpressionNode): string {
  * Returns text with `___` at placeholder positions.
  */
 export function expressionNodeToDslPreview(tree: ExpressionNode): string {
-  return serialize(tree, true);
+  return serialize(tree, true, undefined);
 }
 
-function serialize(node: ExpressionNode, allowPlaceholders: boolean): string {
-  const s = (n: ExpressionNode | undefined) => {
+function serialize(
+  node: ExpressionNode,
+  allowPlaceholders: boolean,
+  parentPrecedence: number | undefined
+): string {
+  const s = (n: ExpressionNode | undefined, parentPrec?: number) => {
     if (n == null) return '';
-    return serialize(n, allowPlaceholders);
+    return serialize(n, allowPlaceholders, parentPrec);
   };
+
+  /** Wrap result in parens if this node's precedence is lower than parent's. */
+  const wrapIfNeeded = (result: string): string => {
+    const myPrec = getPrecedence(node);
+    if (myPrec !== undefined && parentPrecedence !== undefined && myPrec < parentPrecedence) {
+      return `(${result})`;
+    }
+    return result;
+  };
+
+  const myPrec = getPrecedence(node);
 
   switch (node.$type) {
     // UI-only
@@ -61,7 +119,7 @@ function serialize(node: ExpressionNode, allowPlaceholders: boolean): string {
       const sym = (node as any).symbol as string;
       const rawArgs = (node as any).rawArgs as ExpressionNode[] | undefined;
       if (rawArgs && rawArgs.length > 0) {
-        return `${sym}(${rawArgs.map(s).join(', ')})`;
+        return `${sym}(${rawArgs.map((a) => s(a)).join(', ')})`;
       }
       return sym;
     }
@@ -72,9 +130,9 @@ function serialize(node: ExpressionNode, allowPlaceholders: boolean): string {
     // Binary
     case 'ArithmeticOperation':
     case 'LogicalOperation': {
-      const left = s((node as any).left);
-      const right = s((node as any).right);
-      return `${left} ${(node as any).operator} ${right}`;
+      const left = s((node as any).left, myPrec);
+      const right = s((node as any).right, myPrec);
+      return wrapIfNeeded(`${left} ${(node as any).operator} ${right}`);
     }
 
     case 'ComparisonOperation':
@@ -82,12 +140,13 @@ function serialize(node: ExpressionNode, allowPlaceholders: boolean): string {
     case 'RosettaContainsExpression':
     case 'RosettaDisjointExpression':
     case 'DefaultOperation': {
-      const left = (node as any).left ? s((node as any).left) : '';
-      const right = s((node as any).right);
+      const left = (node as any).left ? s((node as any).left, myPrec) : '';
+      const right = s((node as any).right, myPrec);
       const cardMod = (node as any).cardMod ? `${(node as any).cardMod} ` : '';
-      return left
+      const result = left
         ? `${left} ${cardMod}${(node as any).operator} ${right}`
         : `${cardMod}${(node as any).operator} ${right}`;
+      return wrapIfNeeded(result);
     }
 
     case 'JoinOperation': {
@@ -182,19 +241,22 @@ function serialize(node: ExpressionNode, allowPlaceholders: boolean): string {
       }>;
       const casesStr = cases
         .map((c) => {
-          const expr = serialize(c.expression, allowPlaceholders);
+          const expr = serialize(c.expression, allowPlaceholders, undefined);
           if (c.guard?.referenceGuard) {
             return `${c.guard.referenceGuard} then ${expr}`;
           }
-          const literalGuard = c.guard?.literalGuard;
-          if (literalGuard !== undefined) {
-            // If the guard looks like an ExpressionNode (has a $type), serialize it as such.
-            if (literalGuard && typeof literalGuard === 'object' && '$type' in (literalGuard as any)) {
-              return `${serialize(literalGuard as ExpressionNode, allowPlaceholders)} then ${expr}`;
+          if (c.guard?.literalGuard !== undefined) {
+            const literalGuard = c.guard.literalGuard;
+            // If the guard is an ExpressionNode (has $type), serialize recursively
+            if (
+              literalGuard &&
+              typeof literalGuard === 'object' &&
+              '$type' in (literalGuard as object)
+            ) {
+              return `${serialize(literalGuard as ExpressionNode, allowPlaceholders, undefined)} then ${expr}`;
             }
-            // Otherwise, treat it as a literal/primitive.
-            const guardText = String(literalGuard);
-            return `${guardText} then ${expr}`;
+            // Otherwise treat as a literal/primitive value
+            return `${String(literalGuard)} then ${expr}`;
           }
           return `default ${expr}`;
         })
@@ -212,7 +274,7 @@ function serialize(node: ExpressionNode, allowPlaceholders: boolean): string {
       }>;
       if (values.length === 0) return `${typeName} {}`;
       const pairs = values
-        .map((v) => `${v.key}: ${serialize(v.value, allowPlaceholders)}`)
+        .map((v) => `${v.key}: ${serialize(v.value, allowPlaceholders, undefined)}`)
         .join(', ');
       return `${typeName} { ${pairs} }`;
     }
@@ -220,7 +282,7 @@ function serialize(node: ExpressionNode, allowPlaceholders: boolean): string {
     // Collection
     case 'ListLiteral': {
       const elements = ((node as any).elements ?? []) as ExpressionNode[];
-      return `[${elements.map((e) => serialize(e, allowPlaceholders)).join(', ')}]`;
+      return `[${elements.map((e) => serialize(e, allowPlaceholders, undefined)).join(', ')}]`;
     }
 
     // Other
@@ -254,7 +316,7 @@ function serializeInlineFunction(
   allowPlaceholders: boolean
 ): string {
   const params = fn.parameters?.map((p) => p.name) ?? [];
-  const body = serialize(fn.body, allowPlaceholders);
+  const body = serialize(fn.body, allowPlaceholders, undefined);
   if (params.length > 0) {
     return `[${params.join(', ')} ${body}]`;
   }

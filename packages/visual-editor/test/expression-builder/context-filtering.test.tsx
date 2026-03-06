@@ -106,12 +106,12 @@ describe('resolveTypeContext', () => {
     }
   });
 
-  it('returns "numeric" for ComparisonOperation children', () => {
+  it('returns "comparable" for ComparisonOperation children', () => {
     const parent = node('ComparisonOperation', 'p1', {
       operator: '>',
       right: placeholder('right-ph')
     });
-    expect(resolveTypeContext(parent, 'right')).toBe('numeric');
+    expect(resolveTypeContext(parent, 'right')).toBe('comparable');
   });
 
   it('returns "any" for unrecognized parent types', () => {
