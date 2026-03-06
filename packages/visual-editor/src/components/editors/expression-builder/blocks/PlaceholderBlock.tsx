@@ -6,7 +6,7 @@
  * @module
  */
 
-import { useCallback, useState, type DragEvent } from 'react';
+import { useCallback, useRef, useState, type DragEvent } from 'react';
 import type { ExpressionNode } from '../../../../schemas/expression-node-schema.js';
 import { EXPRESSION_DRAG_TYPE } from '../../../../hooks/useDragDrop.js';
 
@@ -21,6 +21,7 @@ export function PlaceholderBlock({ node, onActivate, onDragNode }: PlaceholderBl
   const nodeId = n['id'] as string;
   const expectedType = n['expectedType'] as string | undefined;
   const [isDropTarget, setIsDropTarget] = useState(false);
+  const enterCountRef = useRef(0);
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -41,18 +42,24 @@ export function PlaceholderBlock({ node, onActivate, onDragNode }: PlaceholderBl
   const handleDragEnter = useCallback((e: DragEvent) => {
     if (e.dataTransfer.types.includes(EXPRESSION_DRAG_TYPE)) {
       e.stopPropagation();
+      enterCountRef.current++;
       setIsDropTarget(true);
     }
   }, []);
 
   const handleDragLeave = useCallback((_e: DragEvent) => {
-    setIsDropTarget(false);
+    enterCountRef.current--;
+    if (enterCountRef.current <= 0) {
+      enterCountRef.current = 0;
+      setIsDropTarget(false);
+    }
   }, []);
 
   const handleDrop = useCallback(
     (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      enterCountRef.current = 0;
       setIsDropTarget(false);
 
       const draggedNodeId = e.dataTransfer.getData(EXPRESSION_DRAG_TYPE);

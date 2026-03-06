@@ -4,10 +4,13 @@
  * Provides Builder/Text mode toggle via tabs, renders function sections
  * (inputs, output) with labeled headers, and shows live DSL preview.
  *
+ * Uses the useExpressionBuilder hook (zustand store + zundo undo/redo)
+ * for state management, and wires keyboard navigation.
+ *
  * @module
  */
 
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { ExpressionEditorSlotProps } from '../../../types.js';
 import type { ExpressionNode } from '../../../schemas/expression-node-schema.js';
 import type { FunctionScope } from '../../../store/expression-store.js';
@@ -15,10 +18,11 @@ import { BlockRenderer } from './BlockRenderer.js';
 import { DslPreview } from './DslPreview.js';
 import { OperatorPalette } from './OperatorPalette.js';
 import { ReferencePicker } from './ReferencePicker.js';
-import { astToExpressionNode } from '../../../adapters/ast-to-expression-node.js';
 import { expressionNodeToDslPreview } from '../../../adapters/expression-node-to-dsl.js';
 import { useContextFilter } from '../../../hooks/useContextFilter.js';
-import { replaceInTree } from '../../../store/expression-store.js';
+import { useExpressionBuilder } from '../../../hooks/useExpressionBuilder.js';
+import { useKeyboardNavigation } from '../../../hooks/useKeyboardNavigation.js';
+import { parseExpression } from '../../../adapters/parse-expression.js';
 
 export interface ExpressionBuilderProps extends ExpressionEditorSlotProps {
   scope: FunctionScope;
@@ -37,37 +41,42 @@ export function ExpressionBuilder({
   defaultMode = 'builder',
   onDragNode
 }: ExpressionBuilderProps) {
-  const [mode, setMode] = useState<'builder' | 'text'>(defaultMode);
+  // Parse incoming value into an initial tree
+  const initialTree = parseExpression(value ?? '');
+
+  const {
+    tree,
+    mode,
+    selectedNodeId,
+    paletteOpen,
+    paletteAnchorId,
+    replaceNode,
+    selectNode,
+    setMode,
+    openPalette,
+    closePalette,
+    handleBlur,
+    store
+  } = useExpressionBuilder({
+    value: value ?? '',
+    onChange: onChange ?? (() => {}),
+    onBlur,
+    scope,
+    initialTree
+  });
+
   const [textValue, setTextValue] = useState(value ?? '');
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [paletteAnchorId, setPaletteAnchorId] = useState<string | null>(null);
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const tree = useMemo<ExpressionNode>(() => {
-    if (!value) {
-      return { $type: 'Placeholder', id: 'root-placeholder' } as unknown as ExpressionNode;
-    }
-    // value is DSL text — pass it through the AST adapter which expects
-    // a parsed AST object. When the host provides a pre-parsed AST (object),
-    // convert it; otherwise treat raw DSL text as unsupported until a proper
-    // Rune parser integration is wired up.
-    try {
-      const parsed = JSON.parse(value);
-      if (parsed && typeof parsed === 'object' && '$type' in parsed) {
-        return astToExpressionNode(parsed, value);
-      }
-    } catch {
-      // Not JSON — treat as raw DSL text
-    }
-    return {
-      $type: 'Unsupported',
-      id: 'parse-error',
-      rawText: value
-    } as unknown as ExpressionNode;
-  }, [value]);
+  // Wire keyboard navigation (undo/redo, arrow keys, copy/paste, etc.)
+  useKeyboardNavigation({ store, containerRef });
+
+  // Override mode from store default if defaultMode prop differs
+  if (defaultMode !== 'builder' && mode === 'builder') {
+    setMode(defaultMode);
+  }
 
   const handleModeSwitch = useCallback(
     (newMode: 'builder' | 'text') => {
@@ -88,7 +97,7 @@ export function ExpressionBuilder({
       }
       setMode(newMode);
     },
-    [mode, tree, value, textValue, onChange]
+    [mode, tree, value, textValue, onChange, setMode]
   );
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -98,41 +107,35 @@ export function ExpressionBuilder({
 
   const handleTextBlur = useCallback(() => {
     onChange?.(textValue);
-    onBlur?.();
-  }, [textValue, onChange, onBlur]);
+    handleBlur();
+  }, [textValue, onChange, handleBlur]);
 
-  const handleActivatePlaceholder = useCallback((nodeId: string) => {
-    setPaletteAnchorId(nodeId);
-    setPaletteOpen(true);
-  }, []);
+  const handleActivatePlaceholder = useCallback(
+    (nodeId: string) => {
+      openPalette(nodeId);
+    },
+    [openPalette]
+  );
 
   const handleOpenReferencePicker = useCallback(() => {
-    setPaletteOpen(false);
+    closePalette();
     setReferencePickerOpen(true);
-  }, []);
+  }, [closePalette]);
 
   const handlePaletteSelect = useCallback(
     (node: ExpressionNode) => {
       if (paletteAnchorId) {
-        const newTree = replaceInTree(tree, paletteAnchorId, node);
-        try {
-          const dsl = JSON.stringify(newTree);
-          onChange?.(dsl);
-        } catch {
-          // serialization failed — still close the palette
-        }
+        replaceNode(paletteAnchorId, node);
       }
-      setPaletteOpen(false);
-      setPaletteAnchorId(null);
+      closePalette();
       setReferencePickerOpen(false);
     },
-    [paletteAnchorId, tree, onChange]
+    [paletteAnchorId, replaceNode, closePalette]
   );
 
   const handlePaletteClose = useCallback(() => {
-    setPaletteOpen(false);
-    setPaletteAnchorId(null);
-  }, []);
+    closePalette();
+  }, [closePalette]);
 
   const handleReferenceClose = useCallback(() => {
     setReferencePickerOpen(false);
@@ -146,6 +149,7 @@ export function ExpressionBuilder({
       ref={containerRef}
       className="flex flex-col gap-2 rounded-md border border-border bg-card p-3"
       data-testid="expression-builder"
+      tabIndex={-1}
     >
       {/* Mode toggle tabs */}
       <div className="flex gap-1 border-b border-border pb-1">
@@ -180,7 +184,7 @@ export function ExpressionBuilder({
             <BlockRenderer
               node={tree}
               selectedNodeId={selectedNodeId}
-              onSelect={setSelectedNodeId}
+              onSelect={selectNode}
               onActivatePlaceholder={handleActivatePlaceholder}
               onDragNode={onDragNode}
             />

@@ -26,8 +26,8 @@ import {
 export interface TypeSelectorProps {
   /** Currently selected type value (node ID or built-in type name). */
   value: string | null;
-  /** Available types to choose from. */
-  options: TypeOption[];
+  /** Available types to choose from. May be undefined before types are loaded. */
+  options?: TypeOption[];
   /** Placeholder text. */
   placeholder?: string;
   /** Called when a type is selected. */
