@@ -357,7 +357,7 @@ const PlaceholderNodeSchema = z.looseObject({
   $type: z.literal('Placeholder'),
   id: z.string().min(1),
   expectedType: z
-    .enum(['any', 'boolean', 'numeric', 'string', 'collection', 'comparable'])
+    .enum(['any', 'boolean', 'numeric', 'collection'])
     .optional()
 });
 
