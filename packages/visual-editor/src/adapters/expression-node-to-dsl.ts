@@ -186,8 +186,15 @@ function serialize(node: ExpressionNode, allowPlaceholders: boolean): string {
           if (c.guard?.referenceGuard) {
             return `${c.guard.referenceGuard} then ${expr}`;
           }
-          if (c.guard?.literalGuard) {
-            return `${serialize(c.guard.literalGuard as ExpressionNode, allowPlaceholders)} then ${expr}`;
+          const literalGuard = c.guard?.literalGuard;
+          if (literalGuard !== undefined) {
+            // If the guard looks like an ExpressionNode (has a $type), serialize it as such.
+            if (literalGuard && typeof literalGuard === 'object' && '$type' in (literalGuard as any)) {
+              return `${serialize(literalGuard as ExpressionNode, allowPlaceholders)} then ${expr}`;
+            }
+            // Otherwise, treat it as a literal/primitive.
+            const guardText = String(literalGuard);
+            return `${guardText} then ${expr}`;
           }
           return `default ${expr}`;
         })
