@@ -24,9 +24,17 @@ import {
  * - `numeric`: slot expects a numeric result
  * - `boolean`: slot expects a boolean result
  * - `collection`: slot expects a list/collection
+ * - `string`: slot expects a string result
+ * - `comparable`: slot expects a value that can participate in comparisons
  * - `any`: no specific type constraint
  */
-export type TypeContext = 'numeric' | 'boolean' | 'collection' | 'any';
+export type TypeContext =
+  | 'numeric'
+  | 'boolean'
+  | 'collection'
+  | 'string'
+  | 'comparable'
+  | 'any';
 
 // ---------------------------------------------------------------------------
 // Operator → produced type mapping
