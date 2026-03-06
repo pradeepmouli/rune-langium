@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { parse, parseWorkspace } from '../../src/index.js';
 import type { Data, RosettaFunction, RosettaEnumeration, RosettaModel } from '../../src/index.js';
+import { createRuneDslServices } from '../../src/index.js';
+import { URI } from 'langium';
+import type { Diagnostic, LangiumDocument } from 'langium';
 
 /**
  * Helper: parse and assert no errors.
@@ -13,6 +16,34 @@ async function parseOk(input: string) {
   ];
   expect(allErrors, allErrors.join('\n')).toHaveLength(0);
   return result;
+}
+
+/**
+ * Helper: parse and validate a workspace of multiple documents.
+ * Returns diagnostics per document so we can check linking errors.
+ */
+async function parseAndValidateWorkspace(entries: Array<{ uri: string; content: string }>): Promise<
+  Array<{
+    value: RosettaModel;
+    diagnostics: Diagnostic[];
+    errors: Diagnostic[];
+  }>
+> {
+  const { RuneDsl } = createRuneDslServices();
+  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+  const builder = RuneDsl.shared.workspace.DocumentBuilder;
+
+  const documents = entries.map((entry) => factory.fromString(entry.content, URI.parse(entry.uri)));
+  await builder.build(documents, { validation: true });
+
+  return documents.map((doc) => {
+    const diagnostics = doc.diagnostics ?? [];
+    return {
+      value: doc.parseResult.value as RosettaModel,
+      diagnostics,
+      errors: diagnostics.filter((d) => d.severity === 1)
+    };
+  });
 }
 
 describe('Scoping', () => {
@@ -216,6 +247,134 @@ describe('Scoping', () => {
           value int (1..1)
       `);
       expect(result.hasErrors).toBe(false);
+    });
+  });
+
+  describe('Enum value feature call scope (CompareOp -> GreaterThan)', () => {
+    it('should resolve enum value via -> in same file', async () => {
+      const result = await parseOk(`
+        namespace test.scope
+        version "1.0.0"
+
+        enum CompareOp:
+          GreaterThan
+          LessThan
+          Equals
+
+        func CompareNumbers:
+          inputs:
+            n1 number (1..1)
+            op CompareOp (1..1)
+            n2 number (1..1)
+          output:
+            result boolean (1..1)
+          set result:
+            if op = CompareOp -> GreaterThan
+            then n1 > n2 = True
+            else if op = CompareOp -> LessThan
+            then n1 < n2 = True
+            else False
+      `);
+      expect(result.hasErrors).toBe(false);
+    });
+
+    it('should resolve enum value via -> across files', async () => {
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///basictypes.rosetta',
+          content: `
+            namespace com.rosetta.model
+            version "1.0.0"
+
+            basicType boolean
+            basicType number
+          `
+        },
+        {
+          uri: 'inmemory:///enum.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            enum CompareOp:
+              GreaterThan
+              GreaterThanOrEquals
+              Equals
+              LessThanOrEquals
+              LessThan
+          `
+        },
+        {
+          uri: 'inmemory:///func.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func CompareNumbers:
+              inputs:
+                n1 number (1..1)
+                op CompareOp (1..1)
+                n2 number (1..1)
+              output:
+                result boolean (1..1)
+              set result:
+                if op = CompareOp -> GreaterThan
+                then n1 > n2 = True
+                else if op = CompareOp -> GreaterThanOrEquals
+                then n1 >= n2 = True
+                else if op = CompareOp -> Equals
+                then n1 = n2 = True
+                else if op = CompareOp -> LessThanOrEquals
+                then n1 <= n2 = True
+                else if op = CompareOp -> LessThan
+                then n1 < n2 = True
+                else False
+          `
+        }
+      ]);
+
+      // Both documents should produce no linking/validation errors
+      for (const result of results) {
+        const errorMessages = result.errors.map((d) => d.message);
+        expect(errorMessages, errorMessages.join('\n')).toHaveLength(0);
+      }
+    });
+
+    it('should report error for non-existent enum value via ->', async () => {
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///enum2.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            enum Direction:
+              North
+              South
+          `
+        },
+        {
+          uri: 'inmemory:///func2.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func CheckDirection:
+              inputs:
+                dir Direction (1..1)
+              output:
+                result boolean (1..1)
+              set result:
+                dir = Direction -> East
+          `
+        }
+      ]);
+
+      // The func document should have a linking error for 'East'
+      const funcErrors = results[1]!.errors;
+      expect(funcErrors.length).toBeGreaterThan(0);
+      const eastError = funcErrors.find((d) => d.message.includes('East'));
+      expect(eastError).toBeDefined();
     });
   });
 });

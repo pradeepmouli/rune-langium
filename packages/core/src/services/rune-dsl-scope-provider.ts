@@ -218,9 +218,22 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   // ── Case implementations ────────────────────────────────────────────
 
   /**
-   * Case 1: Feature call scope — attributes of the receiver's resolved type.
+   * Case 1: Feature call scope — attributes of the receiver's resolved type,
+   * or enum values when the receiver is an enumeration.
    */
   private getFeatureCallScope(node: RosettaFeatureCall): Scope {
+    // When the receiver is a symbol reference to an enumeration,
+    // return the enum's values as scope entries instead of attempting
+    // to resolve a Data type (which would return undefined and fall back
+    // to the wrong scope).
+    if (isRosettaSymbolReference(node.receiver)) {
+      const sym = node.receiver.symbol?.ref;
+      if (sym && isRosettaEnumeration(sym)) {
+        const descriptions = sym.enumValues.map((v) => this.createDescription(v, v.name));
+        return new MapScope(descriptions);
+      }
+    }
+
     const receiverType = this.resolveExpressionType(node.receiver);
     return this.buildTypedScope(receiverType, node);
   }
