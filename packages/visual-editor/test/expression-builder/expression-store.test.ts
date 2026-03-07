@@ -42,8 +42,13 @@ describe('expression-store', () => {
       expect(state.tree.$type).toBe('ArithmeticOperation');
     });
 
-    it('initializes in builder mode', () => {
+    it('initializes in builder mode by default', () => {
       expect(store.getState().mode).toBe('builder');
+    });
+
+    it('initializes in text mode when initialMode is text', () => {
+      const textStore = createExpressionStore(makeTree(), emptyScope, 'text');
+      expect(textStore.getState().mode).toBe('text');
     });
 
     it('starts with no selected node', () => {
