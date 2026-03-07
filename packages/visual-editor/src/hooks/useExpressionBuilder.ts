@@ -22,6 +22,7 @@ export interface UseExpressionBuilderOptions {
   onBlur?: () => void;
   scope: FunctionScope;
   initialTree?: ExpressionNode;
+  defaultMode?: 'builder' | 'text';
 }
 
 export function useExpressionBuilder({
@@ -29,7 +30,8 @@ export function useExpressionBuilder({
   onChange,
   onBlur,
   scope,
-  initialTree
+  initialTree,
+  defaultMode = 'builder'
 }: UseExpressionBuilderOptions) {
   const defaultTree = useMemo<ExpressionNode>(
     () =>
@@ -38,7 +40,10 @@ export function useExpressionBuilder({
     [initialTree]
   );
 
-  const storeRef = useRef(createExpressionStore(defaultTree, scope));
+  const storeRef = useRef<ReturnType<typeof createExpressionStore> | null>(null);
+  if (storeRef.current === null) {
+    storeRef.current = createExpressionStore(defaultTree, scope, defaultMode);
+  }
   const store = storeRef.current;
 
   // Selector hooks

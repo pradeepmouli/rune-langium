@@ -62,7 +62,8 @@ export function ExpressionBuilder({
     onChange: onChange ?? (() => {}),
     onBlur,
     scope,
-    initialTree
+    initialTree,
+    defaultMode
   });
 
   const [textValue, setTextValue] = useState(value ?? '');
@@ -72,11 +73,6 @@ export function ExpressionBuilder({
 
   // Wire keyboard navigation (undo/redo, arrow keys, copy/paste, etc.)
   useKeyboardNavigation({ store, containerRef });
-
-  // Override mode from store default if defaultMode prop differs
-  if (defaultMode !== 'builder' && mode === 'builder') {
-    setMode(defaultMode);
-  }
 
   const handleModeSwitch = useCallback(
     (newMode: 'builder' | 'text') => {
