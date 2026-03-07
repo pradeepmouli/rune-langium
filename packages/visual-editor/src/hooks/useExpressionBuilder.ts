@@ -40,7 +40,10 @@ export function useExpressionBuilder({
     [initialTree]
   );
 
-  const storeRef = useRef(createExpressionStore(defaultTree, scope, defaultMode));
+  const storeRef = useRef<ReturnType<typeof createExpressionStore> | null>(null);
+  if (storeRef.current === null) {
+    storeRef.current = createExpressionStore(defaultTree, scope, defaultMode);
+  }
   const store = storeRef.current;
 
   // Selector hooks
