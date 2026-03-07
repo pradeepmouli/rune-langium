@@ -1123,7 +1123,9 @@ export const RosettaSymbolSchema = z.discriminatedUnion('$type', [
   ClosureParameterSchema,
   RosettaEnumerationSchema,
   RosettaEnumValueSchema,
-  RosettaParameterSchema
+  RosettaParameterSchema,
+  DataSchema,
+  ChoiceSchema
 ]);
 
 export const RosettaTypeSchema = z.discriminatedUnion('$type', [

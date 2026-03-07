@@ -4398,7 +4398,9 @@ export function isRosettaSuperCall(item: unknown): item is RosettaSuperCall {
 
 export type RosettaSymbol =
   | Attribute
+  | Choice
   | ClosureParameter
+  | Data
   | RosettaEnumValue
   | RosettaEnumeration
   | RosettaExternalFunction
@@ -6119,7 +6121,12 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           defaultValue: []
         }
       },
-      superTypes: [RosettaRootElement.$type, RosettaType.$type, SwitchCaseTarget.$type]
+      superTypes: [
+        RosettaRootElement.$type,
+        RosettaSymbol.$type,
+        RosettaType.$type,
+        SwitchCaseTarget.$type
+      ]
     },
     ChoiceOperation: {
       name: ChoiceOperation.$type,
@@ -6274,7 +6281,12 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           defaultValue: []
         }
       },
-      superTypes: [RosettaRootElement.$type, RosettaType.$type, SwitchCaseTarget.$type]
+      superTypes: [
+        RosettaRootElement.$type,
+        RosettaSymbol.$type,
+        RosettaType.$type,
+        SwitchCaseTarget.$type
+      ]
     },
     DefaultOperation: {
       name: DefaultOperation.$type,

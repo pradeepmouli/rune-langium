@@ -31,7 +31,7 @@ basicType time <"The time of the day - hour-minute-second.">
 basicType pattern <"A regular expression.">
 
 typeAlias int(digits int, min int, max int): <"A signed decimal integer.">
-\tint: number(digits: digits, fractionalDigits: 0, min: min, max: max)
+\tnumber(digits: digits, fractionalDigits: 0, min: min, max: max)
 
 library function DateRanges() date
 library function Min(x number, y number) number

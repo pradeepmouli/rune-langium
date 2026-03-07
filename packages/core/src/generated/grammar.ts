@@ -10898,6 +10898,18 @@ export const RuneDslGrammar = (): Grammar =>
             "typeRef": {
               "$ref": "#/rules@44"
             }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@18"
+            }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@19"
+            }
           }
         ]
       }

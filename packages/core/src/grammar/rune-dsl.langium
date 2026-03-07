@@ -21,7 +21,8 @@ type RosettaType = Data | Choice | RosettaBasicType | RosettaRecordType
 type RosettaSymbol = Attribute | ShortcutDeclaration
     | RosettaFunction | RosettaExternalFunction | RosettaRule
     | TypeParameter | RosettaMetaType | ClosureParameter
-    | RosettaEnumeration | RosettaEnumValue | RosettaParameter;
+    | RosettaEnumeration | RosettaEnumValue | RosettaParameter
+    | Data | Choice;
 
 type RosettaCallableWithArgs = RosettaFunction
     | RosettaExternalFunction | RosettaRule;
