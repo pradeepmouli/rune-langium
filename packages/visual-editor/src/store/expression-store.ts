@@ -323,13 +323,14 @@ function mapChildren(
  */
 export function createExpressionStore(
   initialTree: ExpressionNode,
-  scope: FunctionScope
+  scope: FunctionScope,
+  initialMode: 'builder' | 'text' = 'builder'
 ): StoreApi<ExpressionBuilderState> {
   return createStore<ExpressionBuilderState>()(
     temporal(
       (set, get) => ({
         tree: initialTree,
-        mode: 'builder',
+        mode: initialMode,
         selectedNodeId: null,
         paletteOpen: false,
         paletteAnchorId: null,
