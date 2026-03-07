@@ -28,7 +28,7 @@ type RosettaCallableWithArgs = RosettaFunction
     | RosettaExternalFunction | RosettaRule;
 
 type RosettaFeature = Attribute | RosettaRecordFeature
-    | RosettaEnumValue | RosettaMetaType;
+    | RosettaEnumValue | RosettaMetaType | ChoiceOption;
 
 type RosettaTypedFeature = Attribute | RosettaRecordFeature;
 

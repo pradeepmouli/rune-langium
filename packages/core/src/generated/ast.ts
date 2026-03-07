@@ -3269,7 +3269,12 @@ export function isRosettaExternalSynonym(item: unknown): item is RosettaExternal
   return reflection.isInstance(item, RosettaExternalSynonym.$type);
 }
 
-export type RosettaFeature = Attribute | RosettaEnumValue | RosettaMetaType | RosettaRecordFeature;
+export type RosettaFeature =
+  | Attribute
+  | ChoiceOption
+  | RosettaEnumValue
+  | RosettaMetaType
+  | RosettaRecordFeature;
 
 export const RosettaFeature = {
   $type: 'RosettaFeature'
@@ -6178,7 +6183,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           name: ChoiceOption.typeCall
         }
       },
-      superTypes: []
+      superTypes: [RosettaFeature.$type]
     },
     ClosureParameter: {
       name: ClosureParameter.$type,

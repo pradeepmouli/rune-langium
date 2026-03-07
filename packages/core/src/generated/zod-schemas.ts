@@ -1068,7 +1068,8 @@ export const RosettaFeatureSchema = z.discriminatedUnion('$type', [
   AttributeSchema,
   RosettaRecordFeatureSchema,
   RosettaEnumValueSchema,
-  RosettaMetaTypeSchema
+  RosettaMetaTypeSchema,
+  ChoiceOptionSchema
 ]);
 
 export const RosettaLiteralSchema = z.discriminatedUnion('$type', [
