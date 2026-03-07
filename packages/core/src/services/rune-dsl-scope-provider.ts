@@ -5,6 +5,8 @@ import {
   isData,
   isRosettaFunction,
   isRosettaEnumeration,
+  isRosettaBasicType,
+  isRosettaTypeAlias,
   isAttribute,
   isOperation,
   isShortcutDeclaration,
@@ -16,11 +18,15 @@ import {
   isSwitchCaseOrDefault,
   isSwitchOperation,
   isRosettaEnumValueReference,
+  isTypeCallArgument,
+  isTypeCall,
   isWithMetaEntry,
   isRosettaExternalRegularAttribute,
   isRosettaExternalClass,
   isAnnotationRef,
-  isRosettaSymbolReference
+  isRosettaSymbolReference,
+  isRosettaRecordType,
+  isRosettaRecordFeature
 } from '../generated/ast.js';
 import type {
   Data,
@@ -31,7 +37,10 @@ import type {
   RosettaDeepFeatureCall,
   Segment,
   TypeCall,
-  Operation
+  TypeCallArgument,
+  Operation,
+  RosettaRecordType,
+  RosettaRecordFeature
 } from '../generated/ast.js';
 
 /**
@@ -103,8 +112,13 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.getExternalAttributeScope(container);
     }
 
-    // Case 11: ChoiceOperation attributes — already references by name
-    // Cases 12+: Default to standard scope resolution
+    // Case 11: TypeCallArgument.parameter — resolve to TypeParameters of the referenced type
+    if (isTypeCallArgument(container) && property === 'parameter') {
+      return this.getTypeCallArgumentScope(container);
+    }
+
+    // Case 12: ChoiceOperation attributes — already references by name
+    // Cases 13+: Default to standard scope resolution
     return super.getScope(context);
   }
 
@@ -112,9 +126,9 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
   /**
    * Resolve the type produced by an expression.
-   * Returns a Data node if the expression's type can be determined, or undefined.
+   * Returns a Data or RosettaRecordType node if the expression's type can be determined, or undefined.
    */
-  private resolveExpressionType(expr: RosettaExpression): Data | undefined {
+  private resolveExpressionType(expr: RosettaExpression): Data | RosettaRecordType | undefined {
     // Symbol reference → look up the symbol to determine its type
     if (isRosettaSymbolReference(expr)) {
       const sym = expr.symbol?.ref;
@@ -170,14 +184,46 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   }
 
   /**
-   * Resolve a TypeCall to a Data node, if the type reference points to one.
+   * Resolve a TypeCall to a Data or RosettaRecordType node.
+   * Returns undefined if the type reference does not point to a structured type.
    */
-  private resolveTypeCallToData(typeCall: TypeCall | undefined): Data | undefined {
+  private resolveTypeCallToData(
+    typeCall: TypeCall | undefined
+  ): Data | RosettaRecordType | undefined {
     const ref = typeCall?.type?.ref;
     if (ref && isData(ref)) {
       return ref;
     }
+    if (ref && isRosettaRecordType(ref)) {
+      return ref;
+    }
     return undefined;
+  }
+
+  /**
+   * Resolve scope for TypeCallArgument.parameter — returns TypeParameters of the referenced type.
+   *
+   * In `number(digits: digits, fractionalDigits: 0, ...)`, `fractionalDigits` is a
+   * TypeParameter of `basicType number(...)`. The container is a TypeCall whose `type`
+   * reference resolves to the basicType/typeAlias that owns the parameters.
+   */
+  private getTypeCallArgumentScope(node: TypeCallArgument): Scope {
+    const container = node.$container;
+
+    // TypeCallArgument inside a TypeCall (e.g., typeAlias body or attribute type)
+    if (isTypeCall(container)) {
+      const ref = container.type?.ref;
+      if (ref && isRosettaBasicType(ref)) {
+        const descriptions = ref.parameters.map((p) => this.createDescription(p, p.name));
+        return new MapScope(descriptions);
+      }
+      if (ref && isRosettaTypeAlias(ref)) {
+        const descriptions = ref.parameters.map((p) => this.createDescription(p, p.name));
+        return new MapScope(descriptions);
+      }
+    }
+
+    return EMPTY_SCOPE;
   }
 
   /**
@@ -200,12 +246,23 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   }
 
   /**
-   * Build a scope from a Data type's attributes (including inherited).
+   * Build a scope from a Data or RosettaRecordType's features (including inherited for Data).
    * Falls back to the global attribute scope if the type cannot be resolved.
    */
-  private buildTypedScope(data: Data | undefined, fallbackNode: AstNode): Scope {
+  private buildTypedScope(
+    data: Data | RosettaRecordType | undefined,
+    fallbackNode: AstNode
+  ): Scope {
     if (!data) {
       return this.getAllAttributesScope(fallbackNode);
+    }
+    if (isRosettaRecordType(data)) {
+      const features = data.features;
+      if (features.length === 0) {
+        return this.getAllAttributesScope(fallbackNode);
+      }
+      const descriptions = features.map((f) => this.createDescription(f, f.name));
+      return new MapScope(descriptions);
     }
     const attrs = this.collectDataAttributes(data);
     if (attrs.length === 0) {
@@ -248,28 +305,37 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
     // For deep feature calls, collect attributes transitively:
     // gather all attributes of the type and all types reachable from those attributes.
-    const allAttrs = this.collectTransitiveAttributes(receiverType);
-    if (allAttrs.length === 0) {
+    const allFeatures = this.collectTransitiveAttributes(receiverType);
+    if (allFeatures.length === 0) {
       return this.getAllAttributesScope(node);
     }
-    const descriptions = allAttrs.map((a) => this.createDescription(a, a.name));
+    const descriptions = allFeatures.map((f) => this.createDescription(f, f.name));
     return new MapScope(descriptions);
   }
 
   /**
-   * Collect attributes transitively: the type's own attrs plus attributes
+   * Collect features transitively: the type's own features plus features
    * of all types reachable through attribute type references.
    */
-  private collectTransitiveAttributes(data: Data, visited?: Set<Data>): Attribute[] {
+  private collectTransitiveAttributes(
+    data: Data | RosettaRecordType,
+    visited?: Set<Data | RosettaRecordType>
+  ): (Attribute | RosettaRecordFeature)[] {
     if (!visited) visited = new Set();
     if (visited.has(data)) return [];
     visited.add(data);
 
-    const attrs = this.collectDataAttributes(data);
+    if (isRosettaRecordType(data)) {
+      return [...data.features];
+    }
+
+    const attrs: (Attribute | RosettaRecordFeature)[] = this.collectDataAttributes(data);
     for (const attr of [...attrs]) {
-      const attrType = this.resolveTypeCallToData(attr.typeCall);
-      if (attrType) {
-        attrs.push(...this.collectTransitiveAttributes(attrType, visited));
+      if (isAttribute(attr)) {
+        const attrType = this.resolveTypeCallToData(attr.typeCall);
+        if (attrType) {
+          attrs.push(...this.collectTransitiveAttributes(attrType, visited));
+        }
       }
     }
     return attrs;
@@ -293,7 +359,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
 
     // Get the root type
-    let currentType: Data | undefined;
+    let currentType: Data | RosettaRecordType | undefined;
     if (isAttribute(root)) {
       currentType = this.resolveTypeCallToData(root.typeCall);
     } else if (isShortcutDeclaration(root)) {
@@ -308,7 +374,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     const segments = this.getSegmentChain(operation, node);
     for (const seg of segments) {
       const feature = seg.feature?.ref;
-      if (feature && isAttribute(feature)) {
+      if (feature && (isAttribute(feature) || isRosettaRecordFeature(feature))) {
         currentType = this.resolveTypeCallToData(feature.typeCall);
         if (!currentType) break;
       } else {

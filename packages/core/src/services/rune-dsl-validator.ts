@@ -12,7 +12,8 @@ import {
   isRosettaContainsExpression,
   isRosettaDisjointExpression,
   isRosettaConstructorExpression,
-  isSwitchOperation
+  isSwitchOperation,
+  isRosettaFunction
 } from '../generated/ast.js';
 import type {
   Data,
@@ -224,12 +225,15 @@ export class RuneDslValidator {
 
   /**
    * S-13: No duplicate top-level element names in the same model.
+   * Dispatch function overloads share the same name intentionally — skip them.
    */
   checkModelNoDuplicateElements(node: RosettaModel, accept: ValidationAcceptor): void {
     const seen = new Set<string>();
     for (const element of node.elements) {
       const name = (element as { name?: string }).name;
       if (!name) continue;
+      // Dispatch function overloads have a dispatchAttribute; they legitimately share names
+      if (isRosettaFunction(element) && element.dispatchAttribute) continue;
       if (seen.has(name)) {
         accept('error', `Duplicate element '${name}'.`, {
           node: element,
