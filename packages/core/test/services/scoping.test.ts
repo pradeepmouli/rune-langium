@@ -570,6 +570,51 @@ describe('Scoping', () => {
       expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
     });
 
+    it('should resolve constructor keys cross-namespace with import', async () => {
+      // Mimics CDM: Transfer in one namespace, function in another, cross-namespace constructor
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///event-type.rosetta',
+          content: `
+            namespace com.event.common
+            version "1.0.0"
+
+            type AssetBase:
+              quantity number (0..1)
+
+            type Transfer extends AssetBase:
+              payerReceiver string (0..1)
+              transferExpr string (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///ingest-func.rosetta',
+          content: `
+            namespace com.ingest.payment
+            version "1.0.0"
+            import com.event.common.*
+
+            func TestFunc:
+              inputs:
+                val string (1..1)
+              output:
+                result Transfer (1..1)
+              set result:
+                Transfer {
+                  payerReceiver: val,
+                  transferExpr: val,
+                  quantity: empty
+                }
+          `
+        }
+      ]);
+
+      const featureErrors = results.flatMap((r) =>
+        r.errors.filter((d) => d.message.includes('RosettaFeature'))
+      );
+      expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
+    });
+
     it('should resolve direct constructor keys across files', async () => {
       const results = await parseAndValidateWorkspace([
         {
