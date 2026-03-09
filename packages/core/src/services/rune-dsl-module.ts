@@ -13,6 +13,7 @@ import {
 } from 'langium';
 import { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from '../generated/module.js';
 import { RuneDslScopeProvider } from './rune-dsl-scope-provider.js';
+import { RuneDslScopeComputation } from './rune-dsl-scope-computation.js';
 import { RuneDslValidator } from './rune-dsl-validator.js';
 import { createRuneDslParser } from './rune-dsl-parser.js';
 
@@ -31,6 +32,7 @@ export const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServic
     LangiumParser: (services) => createRuneDslParser(services)
   },
   references: {
+    ScopeComputation: (services) => new RuneDslScopeComputation(services),
     ScopeProvider: (services) => new RuneDslScopeProvider(services)
   }
 };

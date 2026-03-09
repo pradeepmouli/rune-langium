@@ -21,7 +21,23 @@
       "Bash(ls /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/*.rosetta)",
       "mcp__plugin_playwright_playwright__browser_click",
       "mcp__plugin_playwright_playwright__browser_file_upload",
-      "mcp__plugin_playwright_playwright__browser_wait_for"
+      "mcp__plugin_playwright_playwright__browser_wait_for",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "Bash(node --experimental-vm-modules /tmp/cdm-final-diag.mjs)",
+      "Bash(cp /tmp/cdm-final-diag.mjs /Users/pmouli/GitHub.nosync/rune-langium/packages/core/cdm-final-diag.mjs)",
+      "Bash(node --experimental-vm-modules cdm-final-diag.mjs)",
+      "Bash(pnpm build)",
+      "Bash(pnpm --filter @rune-langium/core test)",
+      "Bash(pnpm --filter @rune-langium/core exec node -e \":*)",
+      "Bash(grep -n \"func.*\\(:.*:\\)\" /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/*.rosetta)",
+      "Bash(grep -rn \"func.*\\([a-zA-Z].*:.*\\)\" /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/*.rosetta)",
+      "Bash(grep -rn \"\\(economicTerms:\" /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/*.rosetta)",
+      "Bash(grep -rn \"func.*\\\\\\(.*economicTerms.*:.*->\" /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/*.rosetta)",
+      "Bash(pnpm --filter @rune-langium/core build)",
+      "Bash(npx vitest run packages/core/test/conformance/cdm-deep-diag.test.ts)",
+      "Bash(npx vitest:*)"
     ]
   }
 }

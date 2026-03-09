@@ -15,8 +15,6 @@ import {
   isSegment,
   isConstructorKeyValuePair,
   isRosettaConstructorExpression,
-  isSwitchCaseOrDefault,
-  isSwitchOperation,
   isRosettaEnumValueReference,
   isTypeCallArgument,
   isTypeCall,
@@ -28,13 +26,16 @@ import {
   isRosettaRecordType,
   isRosettaRecordFeature,
   isChoice,
-  isChoiceOption
+  isChoiceOption,
+  isAnnotation
 } from '../generated/ast.js';
 import type {
   Data,
   Attribute,
+  ShortcutDeclaration,
   RosettaExpression,
   RosettaModel,
+  Import,
   RosettaFeatureCall,
   RosettaDeepFeatureCall,
   Segment,
@@ -44,8 +45,62 @@ import type {
   RosettaRecordType,
   RosettaRecordFeature,
   Choice,
-  ChoiceOption
+  ChoiceOption,
+  RosettaEnumeration,
+  RosettaEnumValue
 } from '../generated/ast.js';
+
+/**
+ * A Scope wrapper that expands import aliases when looking up qualified names.
+ *
+ * If a lookup for `fpml.Leg` fails in the base scope, and the alias map contains
+ * `{ fpml: ["fpml.consolidated.shared"] }`, it tries `fpml.consolidated.shared.Leg`
+ * in the base scope and returns that result.
+ */
+class AliasResolvingScope implements Scope {
+  constructor(
+    private readonly base: Scope,
+    private readonly aliasMap: Map<string, string[]>
+  ) {}
+
+  getElement(name: string): AstNodeDescription | undefined {
+    const direct = this.base.getElement(name);
+    if (direct) return direct;
+    return this.resolveViaAlias(name, (expanded) => this.base.getElement(expanded));
+  }
+
+  getElements(name: string): import('langium').Stream<AstNodeDescription> {
+    const direct = this.base.getElements(name);
+    // Check if the alias expansion yields anything
+    const expanded = this.resolveViaAlias(name, (exp) => this.base.getElement(exp));
+    if (expanded) {
+      // stream() is available from langium
+      return direct;
+    }
+    return direct;
+  }
+
+  getAllElements(): import('langium').Stream<AstNodeDescription> {
+    return this.base.getAllElements();
+  }
+
+  private resolveViaAlias(
+    name: string,
+    lookup: (expanded: string) => AstNodeDescription | undefined
+  ): AstNodeDescription | undefined {
+    const dot = name.indexOf('.');
+    if (dot === -1) return undefined;
+    const prefix = name.slice(0, dot);
+    const rest = name.slice(dot + 1);
+    const namespaces = this.aliasMap.get(prefix);
+    if (!namespaces) return undefined;
+    for (const ns of namespaces) {
+      const result = lookup(`${ns}.${rest}`);
+      if (result) return result;
+    }
+    return undefined;
+  }
+}
 
 /**
  * Custom scope provider for the Rune DSL.
@@ -86,6 +141,12 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.getOperationAssignScope(container);
     }
 
+    // Case 4b: RosettaFunction.dispatchAttribute — resolve to inputs of the base function
+    // (dispatch overloads reference an input from the base function with the same name)
+    if (isRosettaFunction(container) && property === 'dispatchAttribute') {
+      return this.getDispatchAttributeScope(container);
+    }
+
     // Case 5: ConstructorKeyValuePair.key — resolve to features of the constructed type
     if (isConstructorKeyValuePair(container) && property === 'key') {
       return this.getConstructorKeyScope(container);
@@ -96,9 +157,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.getWithMetaKeyScope(container);
     }
 
-    // Case 7: SwitchCaseGuard.referenceGuard — resolve to enum values or data subtypes
+    // Case 7: SwitchCaseGuard.referenceGuard — resolve to enum values or data subtypes.
+    // SwitchCaseTarget = Data | Choice | RosettaEnumValue, which can span namespaces
+    // (e.g. fpml.CapFloor) so we use the global scope with alias resolution.
     if (container.$type === 'SwitchCaseGuard' && property === 'referenceGuard') {
-      return this.getSwitchCaseGuardScope(container);
+      return super.getScope(context);
     }
 
     // Case 8: EnumValueReference.value — resolve to enum values of the specified enum
@@ -106,9 +169,14 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.getEnumValueScope(container);
     }
 
-    // Case 9: AnnotationRef.annotation — already handled by default scope (global)
+    // Case 9a: AnnotationRef.annotation — resolved via global scope
     if (isAnnotationRef(container) && property === 'annotation') {
       return super.getScope(context);
+    }
+
+    // Case 9b: AnnotationRef.attribute — resolved to attributes of the specified annotation
+    if (isAnnotationRef(container) && property === 'attribute') {
+      return this.getAnnotationAttributeScope(container);
     }
 
     // Case 10: ExternalRegularAttribute.attributeRef — resolve to features of the external class's data type
@@ -121,7 +189,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.getTypeCallArgumentScope(container);
     }
 
-    // Case 12: ChoiceOperation attributes — already references by name
+    // Case 12: RosettaSymbolReference.symbol — add inherited attributes from supertype chain
+    if (isRosettaSymbolReference(container) && property === 'symbol') {
+      return this.getSymbolReferenceScope(container, context);
+    }
+
     // Cases 13+: Default to standard scope resolution
     return super.getScope(context);
   }
@@ -448,7 +520,40 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   }
 
   /**
+   * Case 4b: Dispatch attribute scope.
+   * Dispatch function overloads reference an input of the base (non-dispatch) function.
+   * e.g. `func YearFraction(dayCountFractionEnum: DayCountFractionEnum -> _1_1):`
+   * looks up `dayCountFractionEnum` from the base `func YearFraction:` inputs.
+   */
+  private getDispatchAttributeScope(node: AstNode): Scope {
+    if (!isRosettaFunction(node)) return EMPTY_SCOPE;
+    const model = AstUtils.getContainerOfType(
+      node,
+      (n): n is RosettaModel => n.$type === 'RosettaModel'
+    );
+    if (!model) return EMPTY_SCOPE;
+
+    // Collect inputs from all functions with the same name (base + other overloads)
+    const descriptions: AstNodeDescription[] = [];
+    const seen = new Set<string>();
+    for (const element of model.elements) {
+      if (isRosettaFunction(element) && element.name === node.name) {
+        for (const input of element.inputs) {
+          if (!seen.has(input.name)) {
+            descriptions.push(this.createDescription(input, input.name));
+            seen.add(input.name);
+          }
+        }
+      }
+    }
+    return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
+  }
+
+  /**
    *  Case 4: Operation assign root — function inputs, output, and shortcuts in scope.
+   *
+   *  For dispatch overloads (which have a dispatchAttribute but no explicit output),
+   *  we also search sibling functions with the same name to find their inputs/outputs.
    */
   private getOperationAssignScope(node: AstNode): Scope {
     const func = AstUtils.getContainerOfType(node, isRosettaFunction);
@@ -456,16 +561,62 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return EMPTY_SCOPE;
     }
     const descriptions: AstNodeDescription[] = [];
-    for (const input of func.inputs) {
-      descriptions.push(this.createDescription(input, input.name));
+    const seen = new Set<string>();
+
+    const addAttr = (a: Attribute | ShortcutDeclaration) => {
+      if (!seen.has(a.name)) {
+        descriptions.push(this.createDescription(a, a.name));
+        seen.add(a.name);
+      }
+    };
+
+    // Always add this function's own inputs/output/shortcuts first
+    for (const input of func.inputs) addAttr(input);
+    if (func.output) addAttr(func.output);
+    for (const shortcut of func.shortcuts) addAttr(shortcut);
+
+    // For dispatch overloads, also pull in inputs/outputs from sibling functions
+    if (func.dispatchAttribute && func.$container) {
+      const model = func.$container as RosettaModel;
+      for (const element of model.elements) {
+        if (isRosettaFunction(element) && element.name === func.name && element !== func) {
+          for (const input of element.inputs) addAttr(input);
+          if (element.output) addAttr(element.output);
+          for (const shortcut of element.shortcuts) addAttr(shortcut);
+        }
+      }
     }
-    if (func.output) {
-      descriptions.push(this.createDescription(func.output, func.output.name));
+
+    return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
+  }
+
+  /**
+   * Case 12: Symbol reference scope — standard scope PLUS inherited attributes.
+   *
+   * When a symbol reference like `product` appears inside a condition of
+   * `type Trade extends TradableProduct`, Langium's default local scope only
+   * contains Trade's direct attributes.  We augment it with the full inherited
+   * attribute chain so that references to supertype attributes resolve correctly.
+   */
+  private getSymbolReferenceScope(node: AstNode, context: ReferenceInfo): Scope {
+    const baseScope = super.getScope(context);
+
+    // Find the innermost Data type that owns this reference
+    const dataOwner = AstUtils.getContainerOfType(node, isData);
+    if (!dataOwner || !dataOwner.superType?.ref) {
+      // No inheritance → the base scope is sufficient
+      return baseScope;
     }
-    for (const shortcut of func.shortcuts) {
-      descriptions.push(this.createDescription(shortcut, shortcut.name));
-    }
-    return new MapScope(descriptions);
+
+    // Collect inherited attributes (supertype chain, excluding direct attributes
+    // which are already in the local scope via DefaultScopeComputation)
+    const superRef = dataOwner.superType.ref;
+    if (!isData(superRef)) return baseScope;
+    const inheritedAttrs = this.collectDataAttributes(superRef);
+    if (inheritedAttrs.length === 0) return baseScope;
+
+    const descriptions = inheritedAttrs.map((a) => this.createDescription(a, a.name));
+    return new MapScope(descriptions, baseScope);
   }
 
   /**
@@ -488,24 +639,8 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   }
 
   /**
-   * Case 7: Switch case guard scope — enum values or type names.
-   */
-  private getSwitchCaseGuardScope(node: AstNode): Scope {
-    // Find the parent SwitchOperation to determine argument type
-    const switchCase = AstUtils.getContainerOfType(node, isSwitchCaseOrDefault);
-    if (!switchCase) {
-      return EMPTY_SCOPE;
-    }
-    const switchOp = AstUtils.getContainerOfType(switchCase, isSwitchOperation);
-    if (!switchOp) {
-      return EMPTY_SCOPE;
-    }
-    // For now, provide all enum values and data types in scope
-    return this.getAllEnumValuesAndTypesScope(node);
-  }
-
-  /**
-   * Case 8: EnumValueReference value — values of the specified enumeration.
+   * Case 8: EnumValueReference value — values of the specified enumeration,
+   * including values inherited from parent enumerations via `extends`.
    */
   private getEnumValueScope(node: AstNode): Scope {
     if (!isRosettaEnumValueReference(node)) {
@@ -515,8 +650,42 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (!enumRef || !isRosettaEnumeration(enumRef)) {
       return EMPTY_SCOPE;
     }
-    const descriptions = enumRef.enumValues.map((v) => this.createDescription(v, v.name));
-    return new MapScope(descriptions);
+    const descriptions = this.collectEnumValues(enumRef).map((v) =>
+      this.createDescription(v, v.name)
+    );
+    return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
+  }
+
+  /**
+   * Collect all enum values from an enumeration including inherited ones
+   * via its `extends` parent chain.
+   */
+  private collectEnumValues(
+    enumeration: RosettaEnumeration,
+    visited?: Set<string>
+  ): RosettaEnumValue[] {
+    if (!visited) visited = new Set();
+    if (visited.has(enumeration.name)) return [];
+    visited.add(enumeration.name);
+
+    const values = [...enumeration.enumValues];
+    const parent = enumeration.parent?.ref;
+    if (parent && isRosettaEnumeration(parent)) {
+      values.push(...this.collectEnumValues(parent, visited));
+    }
+    return values;
+  }
+
+  /**
+   * Case 9b: Annotation attribute scope — attributes of the specified annotation.
+   * e.g. in `[metadata scheme]`, `scheme` is an attribute of the `metadata` annotation.
+   */
+  private getAnnotationAttributeScope(node: AstNode): Scope {
+    if (!isAnnotationRef(node)) return EMPTY_SCOPE;
+    const annotation = node.annotation?.ref;
+    if (!annotation || !isAnnotation(annotation)) return EMPTY_SCOPE;
+    const descriptions = annotation.attributes.map((a) => this.createDescription(a, a.name));
+    return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
   }
 
   /**
@@ -562,29 +731,52 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     return new MapScope(descriptions);
   }
 
+  // ── Namespace alias resolution ───────────────────────────────────────
+
   /**
-   * Collect all enum values and type names for switch case resolution.
+   * Override global scope lookup to support `import ... as <alias>` resolution.
+   *
+   * When a file contains `import fpml.consolidated.shared.* as fpml`, references
+   * written as `fpml.Leg` should resolve to `fpml.consolidated.shared.Leg` in the
+   * global index.  We do this by building a thin alias-expansion layer on top of
+   * the regular global scope: for every qualified reference name we try to replace
+   * a known alias prefix with the full namespace prefix and retry the lookup.
    */
-  private getAllEnumValuesAndTypesScope(node: AstNode): Scope {
+  protected override getGlobalScope(referenceType: string, context: ReferenceInfo): Scope {
+    const base = super.getGlobalScope(referenceType, context);
+
     const model = AstUtils.getContainerOfType(
-      node,
+      context.container,
       (n): n is RosettaModel => n.$type === 'RosettaModel'
     );
-    if (!model) {
-      return EMPTY_SCOPE;
-    }
-    const descriptions: AstNodeDescription[] = [];
-    for (const element of model.elements) {
-      if (isRosettaEnumeration(element)) {
-        for (const value of element.enumValues) {
-          descriptions.push(this.createDescription(value, value.name));
-        }
+    if (!model) return base;
+
+    // Build alias → namespace list from the document's imports.
+    const aliasMap = this.buildImportAliasMap(model.imports);
+    if (aliasMap.size === 0) return base;
+
+    return new AliasResolvingScope(base, aliasMap);
+  }
+
+  /**
+   * Build a map from alias name → list of namespace prefixes that the alias expands to.
+   * e.g. `import fpml.consolidated.shared.* as fpml` → `{ fpml: ["fpml.consolidated.shared"] }`
+   */
+  private buildImportAliasMap(imports: Import[]): Map<string, string[]> {
+    const map = new Map<string, string[]>();
+    for (const imp of imports) {
+      const alias = imp.namespaceAlias;
+      if (!alias) continue;
+      let ns = imp.importedNamespace as string;
+      if (ns.endsWith('.*')) ns = ns.slice(0, -2);
+      const existing = map.get(alias);
+      if (existing) {
+        existing.push(ns);
+      } else {
+        map.set(alias, [ns]);
       }
-      if (isData(element)) {
-        descriptions.push(this.createDescription(element, element.name));
-      }
     }
-    return new MapScope(descriptions);
+    return map;
   }
 
   private createDescription(node: AstNode, name: string): AstNodeDescription {
