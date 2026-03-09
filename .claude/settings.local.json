@@ -1,5 +1,27 @@
 {
   "permissions": {
-    "allow": ["Bash(ln:*)", "Bash(xargs:*)", "Bash(grep:*)", "Bash(pnpm type-check:*)"]
+    "allow": [
+      "Bash(ln:*)",
+      "Bash(xargs:*)",
+      "Bash(grep:*)",
+      "Bash(pnpm type-check:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(git merge origin/claude/rune-expression-builder-G0SFR --no-edit)",
+      "Bash(git add packages/core/src/services/rune-dsl-scope-provider.ts packages/core/src/services/rune-dsl-validator.ts)",
+      "Bash(git fetch origin claude/rune-expression-builder-G0SFR)",
+      "Bash(pnpm generate)",
+      "Bash(node -e \"const l = require\\(''langium/package.json''\\); console.log\\(l.version\\)\")",
+      "Bash(npx langium generate)",
+      "Bash(./node_modules/.bin/langium generate)",
+      "Bash(pnpm test)",
+      "Bash(git add packages/core/src/generated/grammar.ts packages/core/src/generated/module.ts)",
+      "Bash(git commit:*)",
+      "Bash(lsof -iTCP -sTCP:LISTEN -P)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "Bash(ls /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/*.rosetta)",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "mcp__plugin_playwright_playwright__browser_file_upload",
+      "mcp__plugin_playwright_playwright__browser_wait_for"
+    ]
   }
 }

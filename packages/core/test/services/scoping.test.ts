@@ -286,8 +286,15 @@ describe('Scoping', () => {
             namespace com.rosetta.model
             version "1.0.0"
 
-            basicType boolean
-            basicType number
+            basicType boolean <"A boolean value.">
+            basicType number(
+              digits int <"Max digits.">,
+              fractionalDigits int <"Max fractional digits.">,
+              min number <"Min bound.">,
+              max number <"Max bound.">
+            ) <"A signed decimal number.">
+            typeAlias int(digits int, min int, max int): <"A signed decimal integer.">
+              number(digits: digits, fractionalDigits: 0, min: min, max: max)
           `
         },
         {
