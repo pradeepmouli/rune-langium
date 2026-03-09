@@ -37,7 +37,8 @@
       "Bash(grep -rn \"func.*\\\\\\(.*economicTerms.*:.*->\" /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/*.rosetta)",
       "Bash(pnpm --filter @rune-langium/core build)",
       "Bash(npx vitest run packages/core/test/conformance/cdm-deep-diag.test.ts)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(rg \\\\[qualification\\\\]:*)"
     ]
   }
 }

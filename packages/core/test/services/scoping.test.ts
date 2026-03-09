@@ -384,4 +384,91 @@ describe('Scoping', () => {
       expect(eastError).toBeDefined();
     });
   });
+
+  describe('Implicit lambda then-extract scope (T083)', () => {
+    it('should resolve inherited attribute via then extract chain', async () => {
+      const result = await parseOk(`
+        namespace test.scope
+        version "1.0.0"
+
+        type MeasureBase:
+          value number (0..1)
+
+        type Price extends MeasureBase:
+          priceType string (1..1)
+
+        type PriceQuantity:
+          price Price (0..*)
+
+        func TestFunc:
+          inputs:
+            pqs PriceQuantity (0..*)
+          output:
+            result number (0..*)
+          set result:
+            pqs
+              extract [price]
+              then flatten
+              then filter [priceType = "InterestRate"]
+              then extract [value]
+      `);
+      expect(result.hasErrors).toBe(false);
+    });
+
+    it('should resolve attribute via filter then extract chain', async () => {
+      const result = await parseOk(`
+        namespace test.scope
+        version "1.0.0"
+
+        type MeasureBase:
+          value number (0..1)
+
+        type Price extends MeasureBase:
+          priceType string (1..1)
+
+        func TestFunc:
+          inputs:
+            prices Price (0..*)
+          output:
+            result number (0..*)
+          set result:
+            prices
+              filter [priceType = "InterestRate"]
+              then extract [value]
+      `);
+      expect(result.hasErrors).toBe(false);
+    });
+
+    it('should resolve inherited value via filter then extract (CDM-like pattern)', async () => {
+      // Exact CDM pattern: price PriceSchedule input, filter by priceType, then extract value
+      // PriceSchedule extends MeasureSchedule extends MeasureBase (which has value)
+      const result = await parseOk(`
+        namespace test.scope
+        version "1.0.0"
+
+        type MeasureBase:
+          value number (0..1)
+
+        type MeasureSchedule extends MeasureBase:
+          datedValue number (0..*)
+
+        type PriceSchedule extends MeasureSchedule:
+          priceType string (1..1)
+
+        func TestFunc:
+          inputs:
+            price PriceSchedule (0..*)
+          output:
+            result number (0..*)
+          alias cashPrice:
+            price
+              filter priceType = "AssetPrice"
+              then extract value
+              then only-element
+          set result:
+            cashPrice
+      `);
+      expect(result.hasErrors).toBe(false);
+    });
+  });
 });

@@ -60,11 +60,11 @@ describe('CDM deep diagnostic', () => {
     console.log(`\nTotal linking errors: ${total}`);
 
     // Extra: show first 5 files/lines for RosettaSymbol 'product' to diagnose
-    console.log('\n--- RosettaSymbol product errors (first 5) ---');
+    console.log('\n--- RosettaSymbol value errors (first 5) ---');
     let count = 0;
     for (const doc of docs) {
       for (const d of (doc.diagnostics ?? []).filter((x) => x.severity === 1)) {
-        if (d.message.includes('RosettaSymbol') && d.message.includes("'product'") && count < 5) {
+        if (d.message.includes('RosettaSymbol') && d.message.includes("'value'") && count < 5) {
           console.log(doc.uri.path, 'line', d.range.start.line + 1);
           count++;
         }

@@ -27,7 +27,19 @@ import {
   isRosettaRecordFeature,
   isChoice,
   isChoiceOption,
-  isAnnotation
+  isAnnotation,
+  isInlineFunction,
+  isMapOperation,
+  isFilterOperation,
+  isThenOperation,
+  isFlattenOperation,
+  isRosettaOnlyElement,
+  isDistinctOperation,
+  isReverseOperation,
+  isFirstOperation,
+  isLastOperation,
+  isSortOperation,
+  isSwitchCaseOrDefault
 } from '../generated/ast.js';
 import type {
   Data,
@@ -264,25 +276,95 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.resolveExpressionType(expr.typeRef);
     }
 
+    // Passthrough operations: the output type equals the input (argument) type.
+    // only-element, distinct, reverse, first, last, sort — all preserve the element type.
+    if (
+      isRosettaOnlyElement(expr) ||
+      isDistinctOperation(expr) ||
+      isReverseOperation(expr) ||
+      isFirstOperation(expr) ||
+      isLastOperation(expr) ||
+      isSortOperation(expr)
+    ) {
+      return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
+    }
+
+    // Collection operations — resolve element type by propagating through the chain.
+    // Headless forms (argument=null) arise inside ImplicitInlineFunction bodies after `then`.
+    if (isFilterOperation(expr)) {
+      // filter preserves element type — use the argument if present
+      return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
+    }
+    if (isFlattenOperation(expr)) {
+      return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
+    }
+    // MapOperation element type = what the mapping function produces
+    if (isMapOperation(expr) && expr.function?.body) {
+      return this.resolveExpressionType(expr.function.body);
+    }
+    // ThenOperation: output type depends on what the body does to each element.
+    if (isThenOperation(expr)) {
+      const body = expr.function?.body;
+      if (!body) return undefined;
+      // Headless filter/flatten/distinct/reverse/sort preserve the argument's element type
+      if (
+        (isFilterOperation(body) ||
+          isFlattenOperation(body) ||
+          isDistinctOperation(body) ||
+          isReverseOperation(body) ||
+          isSortOperation(body)) &&
+        !body.argument
+      ) {
+        return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
+      }
+      // Headless only-element: same element type as argument (de-lists the collection)
+      if (isRosettaOnlyElement(body) && !body.argument) {
+        return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
+      }
+      // Headless MapOperation needs item context — let the walk-up in getSymbolReferenceScope handle it
+      if (isMapOperation(body) && !body.argument) {
+        return undefined;
+      }
+      return this.resolveExpressionType(body);
+    }
+
     return undefined;
   }
 
   /**
    * Resolve a TypeCall to a structured type node (Data, RosettaRecordType, or Choice).
    * Returns undefined if the type reference does not point to a navigable structured type.
+   *
+   * Falls back to a global-index lookup when `.ref` is not yet linked (e.g. when the
+   * containing document is processed before the file that defines the referenced type).
    */
   private resolveTypeCallToData(
     typeCall: TypeCall | undefined
   ): Data | RosettaRecordType | Choice | undefined {
-    const ref = typeCall?.type?.ref;
-    if (ref && isData(ref)) {
-      return ref;
+    if (!typeCall) return undefined;
+    const ref = typeCall.type?.ref;
+    if (ref) {
+      if (isData(ref)) return ref;
+      if (isRosettaRecordType(ref)) return ref;
+      if (isChoice(ref)) return ref;
+      return undefined;
     }
-    if (ref && isRosettaRecordType(ref)) {
-      return ref;
-    }
-    if (ref && isChoice(ref)) {
-      return ref;
+    // Fallback: .ref not linked yet — look up by $refText in the global index
+    const refText = typeCall.type?.$refText;
+    if (!refText) return undefined;
+    return this.resolveDataByName(refText);
+  }
+
+  /**
+   * Look up a Data type by (possibly qualified) name in the global index.
+   * Used as a fallback when cross-references are not yet linked.
+   */
+  private resolveDataByName(name: string): Data | undefined {
+    for (const desc of this.indexManager.allElements('Data')) {
+      if (desc.name === name || desc.name.endsWith('.' + name)) {
+        const node = desc.node;
+        if (node && isData(node)) return node;
+      }
     }
     return undefined;
   }
@@ -315,6 +397,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
   /**
    * Collect all attributes from a Data type including inherited attributes.
+   * Falls back to the global index when `superType.ref` is not yet linked.
    */
   private collectDataAttributes(data: Data, visited?: Set<Data>): Attribute[] {
     if (!visited) visited = new Set();
@@ -323,8 +406,8 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
     const attrs = [...data.attributes];
 
-    // Walk the inheritance chain
-    const superRef = data.superType?.ref;
+    // Walk the inheritance chain; fall back to index lookup when .ref is not linked yet
+    const superRef = data.superType?.ref ?? this.resolveDataByName(data.superType?.$refText ?? '');
     if (superRef && isData(superRef)) {
       attrs.push(...this.collectDataAttributes(superRef, visited));
     }
@@ -591,32 +674,98 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   }
 
   /**
-   * Case 12: Symbol reference scope — standard scope PLUS inherited attributes.
+   * Case 12: Symbol reference scope — standard scope PLUS:
    *
-   * When a symbol reference like `product` appears inside a condition of
-   * `type Trade extends TradableProduct`, Langium's default local scope only
-   * contains Trade's direct attributes.  We augment it with the full inherited
-   * attribute chain so that references to supertype attributes resolve correctly.
+   * (a) Inherited attributes from a containing Data type's supertype chain,
+   *     so that `type Trade extends TradableProduct` conditions can reference
+   *     `product` (defined on TradableProduct).
+   *
+   * (b) Implicit lambda item attributes — when the symbol reference is the body
+   *     of a parameter-less InlineFunction (e.g. `list extract value`), the
+   *     reference should resolve to an attribute of each list element.
    */
   private getSymbolReferenceScope(node: AstNode, context: ReferenceInfo): Scope {
     const baseScope = super.getScope(context);
+    const extra: AstNodeDescription[] = [];
 
-    // Find the innermost Data type that owns this reference
+    // (a) Inherited attributes from the enclosing Data type's supertype chain
     const dataOwner = AstUtils.getContainerOfType(node, isData);
-    if (!dataOwner || !dataOwner.superType?.ref) {
-      // No inheritance → the base scope is sufficient
-      return baseScope;
+    if (dataOwner?.superType?.ref) {
+      const superRef = dataOwner.superType.ref;
+      if (isData(superRef)) {
+        const inheritedAttrs = this.collectDataAttributes(superRef);
+        for (const a of inheritedAttrs) {
+          extra.push(this.createDescription(a, a.name));
+        }
+      }
     }
 
-    // Collect inherited attributes (supertype chain, excluding direct attributes
-    // which are already in the local scope via DefaultScopeComputation)
-    const superRef = dataOwner.superType.ref;
-    if (!isData(superRef)) return baseScope;
-    const inheritedAttrs = this.collectDataAttributes(superRef);
-    if (inheritedAttrs.length === 0) return baseScope;
+    // (b) Implicit lambda: if this reference is inside a parameter-less InlineFunction,
+    //     expose attributes of the element type of the enclosing map/filter/then operation.
+    //
+    //     The custom parser wraps bare expressions: `extract price` → `extract [price]`.
+    //     So `then extract [value]` creates:
+    //       ThenOperation { argument: collection, function: ImplicitInlineFunction {
+    //         body: MapOperation { argument: null, function: InlineFunction { body: value_sym } }
+    //       }}
+    //     The inner InlineFunction's container is a headless MapOperation (argument=null),
+    //     so we must walk UP through headless operations to find the enclosing argument.
+    let searchFrom: AstNode = node;
+    while (true) {
+      const inlineFunc = AstUtils.getContainerOfType(searchFrom, isInlineFunction);
+      if (!inlineFunc || inlineFunc.parameters.length > 0) break;
 
-    const descriptions = inheritedAttrs.map((a) => this.createDescription(a, a.name));
-    return new MapScope(descriptions, baseScope);
+      const op = inlineFunc.$container;
+      if (!op) break;
+
+      const argument = isMapOperation(op)
+        ? op.argument
+        : isFilterOperation(op)
+          ? op.argument
+          : isThenOperation(op)
+            ? op.argument
+            : undefined;
+
+      if (argument) {
+        const itemType = this.resolveCollectionElementType(argument);
+        if (itemType) {
+          const attrs = this.collectDataAttributes(itemType);
+          for (const a of attrs) {
+            extra.push(this.createDescription(a, a.name));
+          }
+        }
+        break;
+      }
+
+      // Headless operation (argument=null): walk up through the operation itself
+      // to reach the outer InlineFunction/ThenOperation that carries the argument.
+      searchFrom = op;
+    }
+
+    // (c) Switch case type narrowing: inside `fpmlProduct switch SomeType then <body>`,
+    //     the scope should expose attributes of the narrowed type (`SomeType`).
+    const switchCase = AstUtils.getContainerOfType(node, isSwitchCaseOrDefault);
+    if (switchCase?.guard?.referenceGuard) {
+      const guardType = switchCase.guard.referenceGuard.ref;
+      if (guardType && isData(guardType)) {
+        const attrs = this.collectDataAttributes(guardType);
+        for (const a of attrs) {
+          extra.push(this.createDescription(a, a.name));
+        }
+      }
+    }
+
+    return extra.length > 0 ? new MapScope(extra, baseScope) : baseScope;
+  }
+
+  /**
+   * Resolve the element type of a collection expression.
+   * e.g. `list -> field` where field is a list of Data → returns the Data element type.
+   */
+  private resolveCollectionElementType(expr: RosettaExpression): Data | undefined {
+    const t = this.resolveExpressionType(expr);
+    if (t && isData(t)) return t;
+    return undefined;
   }
 
   /**
