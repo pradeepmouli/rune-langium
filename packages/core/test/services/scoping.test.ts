@@ -471,4 +471,143 @@ describe('Scoping', () => {
       expect(result.hasErrors).toBe(false);
     });
   });
+
+  describe('Cross-file constructor key scope', () => {
+    it('should resolve inherited constructor keys across files', async () => {
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///base.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            type Base:
+              x int (0..1)
+              y int (0..1)
+
+            type Child extends Base:
+              z int (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///func.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func TestFunc:
+              inputs:
+                inp int (1..1)
+              output:
+                result Child (1..1)
+              set result:
+                Child {
+                  x: inp,
+                  y: inp,
+                  z: inp
+                }
+          `
+        }
+      ]);
+
+      // Only check RosettaFeature errors (not type reference errors for int/string)
+      const featureErrors = results.flatMap((r) =>
+        r.errors.filter((d) => d.message.includes('RosettaFeature'))
+      );
+      expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
+    });
+
+    it('should resolve constructor keys when type extends across multiple files', async () => {
+      // Mimics CDM: Transfer extends AssetFlowBase (in different file), constructor in 3rd file
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///base-types.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            type AssetBase:
+              quantity number (0..1)
+              asset string (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///transfer.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            type Transfer extends AssetBase:
+              payerReceiver string (0..1)
+              transferExpression string (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///func.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func TestFunc:
+              inputs:
+                val string (1..1)
+              output:
+                result Transfer (1..1)
+              set result:
+                Transfer {
+                  payerReceiver: val,
+                  transferExpression: val,
+                  quantity: empty,
+                  asset: val
+                }
+          `
+        }
+      ]);
+
+      const featureErrors = results.flatMap((r) =>
+        r.errors.filter((d) => d.message.includes('RosettaFeature'))
+      );
+      expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
+    });
+
+    it('should resolve direct constructor keys across files', async () => {
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///types.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            type Ingredient:
+              amount number (0..1)
+
+            type Container:
+              fieldA Ingredient (0..1)
+              fieldB Ingredient (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///func.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func TestFunc:
+              inputs:
+                ing Ingredient (1..1)
+              output:
+                result Container (1..1)
+              set result:
+                Container {
+                  fieldA: ing,
+                  fieldB: ing
+                }
+          `
+        }
+      ]);
+
+      const funcErrors = results[1]!.errors.filter((d) => d.message.includes('RosettaFeature'));
+      expect(funcErrors, funcErrors.map((d) => d.message).join('\n')).toHaveLength(0);
+    });
+  });
 });

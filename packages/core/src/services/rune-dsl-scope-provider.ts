@@ -39,7 +39,10 @@ import {
   isFirstOperation,
   isLastOperation,
   isSortOperation,
-  isSwitchCaseOrDefault
+  isSwitchCaseOrDefault,
+  isClosureParameter,
+  isRosettaConditionalExpression,
+  isRosettaImplicitVariable
 } from '../generated/ast.js';
 import type {
   Data,
@@ -222,7 +225,12 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     // Symbol reference → look up the symbol to determine its type
     if (isRosettaSymbolReference(expr)) {
       const sym = expr.symbol?.ref;
-      if (!sym) return undefined;
+      if (!sym) {
+        // Fallback: look up by $refText in global index (e.g. when .ref is not yet linked)
+        const refText = expr.symbol?.$refText;
+        if (refText) return this.resolveDataByName(refText);
+        return undefined;
+      }
 
       // Attribute → its typeCall determines the type
       if (isAttribute(sym)) {
@@ -239,9 +247,32 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         return sym.output ? this.resolveTypeCallToData(sym.output.typeCall) : undefined;
       }
 
-      // Data type referenced directly
+      // Data or Choice type referenced directly
       if (isData(sym)) {
         return sym;
+      }
+      if (isChoice(sym)) {
+        return sym;
+      }
+
+      // ClosureParameter: its type is the element type of the collection it iterates over.
+      // e.g. `list extract q1 [q1 -> value]` — q1's type = element type of `list`.
+      if (isClosureParameter(sym)) {
+        const inlineFunc = sym.$container;
+        if (isInlineFunction(inlineFunc)) {
+          const op = inlineFunc.$container;
+          const argument = isMapOperation(op)
+            ? op.argument
+            : isFilterOperation(op)
+              ? op.argument
+              : isThenOperation(op)
+                ? op.argument
+                : undefined;
+          if (argument) {
+            return this.resolveCollectionElementType(argument);
+          }
+        }
+        return undefined;
       }
 
       return undefined;
@@ -274,6 +305,30 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     // Constructor expression → resolve the typeRef
     if (isRosettaConstructorExpression(expr)) {
       return this.resolveExpressionType(expr.typeRef);
+    }
+
+    // RosettaImplicitVariable (`item`) → element type of the enclosing collection operation.
+    // e.g. `after extract [item -> trade]` — `item` has the element type of `after` (TradeState).
+    if (isRosettaImplicitVariable(expr)) {
+      let searchFrom: AstNode = expr;
+      while (true) {
+        const inlineFunc = AstUtils.getContainerOfType(searchFrom, isInlineFunction);
+        if (!inlineFunc) break;
+        const op = inlineFunc.$container;
+        if (!op) break;
+        const argument = isMapOperation(op)
+          ? op.argument
+          : isFilterOperation(op)
+            ? op.argument
+            : isThenOperation(op)
+              ? op.argument
+              : undefined;
+        if (argument) {
+          return this.resolveCollectionElementType(argument);
+        }
+        searchFrom = op;
+      }
+      return undefined;
     }
 
     // Passthrough operations: the output type equals the input (argument) type.
@@ -326,6 +381,15 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         return undefined;
       }
       return this.resolveExpressionType(body);
+    }
+
+    // Conditional expression: `if cond then A else B` — try then-branch first, then else-branch.
+    // Used for shortcuts like `alias tradeLot: if ... then ... else trade -> tradeLot only-element`.
+    if (isRosettaConditionalExpression(expr)) {
+      return (
+        (expr.ifthen ? this.resolveExpressionType(expr.ifthen) : undefined) ??
+        (expr.elsethen ? this.resolveExpressionType(expr.elsethen) : undefined)
+      );
     }
 
     return undefined;
@@ -528,7 +592,15 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
 
     if (isChoice(data)) {
-      return [...data.attributes];
+      // Include the ChoiceOption nodes themselves AND all attributes of each option's type
+      const result: (Attribute | RosettaRecordFeature | ChoiceOption)[] = [...data.attributes];
+      for (const option of data.attributes) {
+        const optionType = this.resolveTypeCallToData(option.typeCall);
+        if (optionType) {
+          result.push(...this.collectTransitiveAttributes(optionType, visited));
+        }
+      }
+      return result;
     }
 
     const attrs: (Attribute | RosettaRecordFeature | ChoiceOption)[] =
@@ -781,10 +853,45 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   }
 
   /**
-   * Case 6: WithMetaEntry key scope
+   * Case 6: WithMetaEntry key scope — expose attributes of all annotation types,
+   * so `with-meta { key: ... }` can resolve `key` to the `metadata` annotation's `key` attribute.
    */
-  private getWithMetaKeyScope(_node: AstNode): Scope {
-    return EMPTY_SCOPE;
+  private getWithMetaKeyScope(node: AstNode): Scope {
+    const descriptions: AstNodeDescription[] = [];
+    const seen = new Set<string>();
+
+    // First, collect annotation attributes from the local model
+    const model = AstUtils.getContainerOfType(
+      node,
+      (n): n is RosettaModel => n.$type === 'RosettaModel'
+    );
+    if (model) {
+      for (const element of model.elements) {
+        if (isAnnotation(element)) {
+          for (const attr of element.attributes) {
+            if (!seen.has(attr.name)) {
+              descriptions.push(this.createDescription(attr, attr.name));
+              seen.add(attr.name);
+            }
+          }
+        }
+      }
+    }
+
+    // Also collect from global index (annotations defined in other files, e.g. annotations.rosetta)
+    for (const desc of this.indexManager.allElements('Annotation')) {
+      const annotationNode = desc.node;
+      if (annotationNode && isAnnotation(annotationNode)) {
+        for (const attr of annotationNode.attributes) {
+          if (!seen.has(attr.name)) {
+            descriptions.push(this.createDescription(attr, attr.name));
+            seen.add(attr.name);
+          }
+        }
+      }
+    }
+
+    return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
   }
 
   /**

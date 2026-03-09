@@ -38,7 +38,12 @@
       "Bash(pnpm --filter @rune-langium/core build)",
       "Bash(npx vitest run packages/core/test/conformance/cdm-deep-diag.test.ts)",
       "Bash(npx vitest:*)",
-      "Bash(rg \\\\[qualification\\\\]:*)"
+      "Bash(rg \\\\[qualification\\\\]:*)",
+      "Bash(npm:*)",
+      "Bash(npx skills:*)",
+      "Read(//Users/pmouli/.claude/skills/**)",
+      "Read(//dev/**)",
+      "Bash(sed -n '65,115p' /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/ingest-fpml-confirmation-common-func.rosetta)"
     ]
   }
 }
