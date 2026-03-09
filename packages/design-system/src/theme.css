@@ -91,6 +91,26 @@
   --color-success: #4ade80;
   --color-warning: #fbbf24;
   --color-info: #38bdf8;
+
+  /* Expression builder — operator category colors */
+  --color-expr-arithmetic: #3b82f6;
+  --color-expr-arithmetic-bg: rgba(59, 130, 246, 0.15);
+  --color-expr-comparison: #22c55e;
+  --color-expr-comparison-bg: rgba(34, 197, 94, 0.15);
+  --color-expr-logic: #a855f7;
+  --color-expr-logic-bg: rgba(168, 85, 247, 0.15);
+  --color-expr-navigation: #06b6d4;
+  --color-expr-navigation-bg: rgba(6, 182, 212, 0.15);
+  --color-expr-collection: #f59e0b;
+  --color-expr-collection-bg: rgba(245, 158, 11, 0.15);
+  --color-expr-control: #ec4899;
+  --color-expr-control-bg: rgba(236, 72, 153, 0.15);
+  --color-expr-literal: #94a3b8;
+  --color-expr-literal-bg: rgba(148, 163, 184, 0.15);
+  --color-expr-reference: #8b5cf6;
+  --color-expr-reference-bg: rgba(139, 92, 246, 0.15);
+  --color-expr-placeholder: #64748b;
+  --color-expr-placeholder-bg: rgba(100, 116, 139, 0.10);
 }
 
 /* ── Color palette ────────────────────────────────────────────── */

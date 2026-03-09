@@ -6,10 +6,9 @@ settings:
 
 overrides:
   x-to-zod: ^0.8.0
-  '@zod-to-form/core': link:../zodforms/packages/core
-  '@zod-to-form/react': link:../zodforms/packages/react
-  '@zod-to-form/cli': link:../zodforms/packages/cli
-  cli: link:../zodforms/packages/cli
+  '@zod-to-form/core': ^0.2.4
+  '@zod-to-form/react': ^0.2.4
+  '@zod-to-form/cli': ^0.2.4
 
 importers:
 
@@ -22,14 +21,11 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0(ws@8.19.0)
       '@zod-to-form/cli':
-        specifier: link:../zodforms/packages/cli
-        version: link:../zodforms/packages/cli
+        specifier: ^0.2.4
+        version: 0.2.4(zod@4.3.6)
       camelcase:
         specifier: ^9.0.0
         version: 9.0.0
-      cli:
-        specifier: link:../zodforms/packages/cli
-        version: link:../zodforms/packages/cli
     devDependencies:
       '@changesets/changelog-github':
         specifier: ^0.5.2
@@ -337,11 +333,11 @@ importers:
         specifier: ^12.10.1
         version: 12.10.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@zod-to-form/core':
-        specifier: link:../../../zodforms/packages/core
-        version: link:../../../zodforms/packages/core
+        specifier: ^0.2.4
+        version: 0.2.4(zod@4.3.6)
       '@zod-to-form/react':
-        specifier: link:../../../zodforms/packages/react
-        version: link:../../../zodforms/packages/react
+        specifier: ^0.2.4
+        version: 0.2.4(@hookform/resolvers@5.2.2(react-hook-form@7.71.2(react@19.2.4)))(react-hook-form@7.71.2(react@19.2.4))(react@19.2.4)(zod@4.3.6)
       lucide-react:
         specifier: ^0.576.0
         version: 0.576.0(react@19.2.4)
@@ -371,8 +367,8 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       '@zod-to-form/cli':
-        specifier: link:../../../zodforms/packages/cli
-        version: link:../../../zodforms/packages/cli
+        specifier: ^0.2.4
+        version: 0.2.4(zod@4.3.6)
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0(@noble/hashes@1.8.0)
@@ -2470,6 +2466,23 @@ packages:
   '@xyflow/system@0.0.75':
     resolution: {integrity: sha512-iXs+AGFLi8w/VlAoc/iSxk+CxfT6o64Uw/k0CKASOPqjqz6E0rb5jFZgJtXGZCpfQI6OQpu5EnumP5fGxQheaQ==}
 
+  '@zod-to-form/cli@0.2.4':
+    resolution: {integrity: sha512-c2O2XKkZhMct/YHnuGOcj1QqWH4yVuvi6NES8eBe2vmYPiInPo577Uw08ITTEAv3owif1HBfbPY1U8Z7e6V2+A==}
+    hasBin: true
+
+  '@zod-to-form/core@0.2.4':
+    resolution: {integrity: sha512-9vWNdeGHe6dryC4rl3i5GshEAUFRy6XjHZ/bHXu2qeIhx5fc3uch/OHA/V1mJasYpw3ta3Tysi3LEg55DNkMXg==}
+    peerDependencies:
+      zod: ^4.0.0
+
+  '@zod-to-form/react@0.2.4':
+    resolution: {integrity: sha512-SJx9B345DQgBohLbqd4a2mfQz2hQLk1HBE/f0BadQylMy69xM3fXh4loq0Z66jcVcR1QazCZJKXuE48A92S4FQ==}
+    peerDependencies:
+      '@hookform/resolvers': ^5.0.0
+      react: ^18.0.0 || ^19.0.0
+      react-hook-form: ^7.0.0
+      zod: ^4.0.0
+
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
@@ -2631,6 +2644,10 @@ packages:
 
   chevrotain@11.1.2:
     resolution: {integrity: sha512-opLQzEVriiH1uUQ4Kctsd49bRoFDXGGSC4GUqj7pGyxM3RehRhvTlZJc1FL/Flew2p5uwxa1tUDWKzI4wNM8pg==}
+
+  chokidar@5.0.0:
+    resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
+    engines: {node: '>= 20.19.0'}
 
   ci-info@3.9.0:
     resolution: {integrity: sha512-NIxF55hv4nSqQswkAeiOi1r83xy8JldOFDTWiug55KBu9Jnblncd2U6ViHmYgHf01TPZS77NJBhBMKdWj9HQMQ==}
@@ -3970,6 +3987,10 @@ packages:
   read-yaml-file@1.1.0:
     resolution: {integrity: sha512-VIMnQi/Z4HT2Fxuwg5KrY174U1VdUIASQVWXXyqtNRtxSr9IYkn1rsI6Tb6HsrHCmB7gVpNwX6JxPTHcH6IoTA==}
     engines: {node: '>=6'}
+
+  readdirp@5.0.0:
+    resolution: {integrity: sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ==}
+    engines: {node: '>= 20.19.0'}
 
   recast@0.23.11:
     resolution: {integrity: sha512-YTUo+Flmw4ZXiWfQKGcwwc11KnoRAYgzAE2E7mXKCjSviTKShtxBsN6YUUBB2gtaBzKzeKunxhUwNHQuRryhWA==}
@@ -6709,6 +6730,28 @@ snapshots:
       d3-selection: 3.0.0
       d3-zoom: 3.0.0
 
+  '@zod-to-form/cli@0.2.4(zod@4.3.6)':
+    dependencies:
+      '@zod-to-form/core': 0.2.4(zod@4.3.6)
+      chokidar: 5.0.0
+      commander: 14.0.3
+      jiti: 2.6.1
+      type-fest: 5.4.4
+    transitivePeerDependencies:
+      - zod
+
+  '@zod-to-form/core@0.2.4(zod@4.3.6)':
+    dependencies:
+      zod: 4.3.6
+
+  '@zod-to-form/react@0.2.4(@hookform/resolvers@5.2.2(react-hook-form@7.71.2(react@19.2.4)))(react-hook-form@7.71.2(react@19.2.4))(react@19.2.4)(zod@4.3.6)':
+    dependencies:
+      '@hookform/resolvers': 5.2.2(react-hook-form@7.71.2(react@19.2.4))
+      '@zod-to-form/core': 0.2.4(zod@4.3.6)
+      react: 19.2.4
+      react-hook-form: 7.71.2(react@19.2.4)
+      zod: 4.3.6
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
@@ -6860,6 +6903,10 @@ snapshots:
       '@chevrotain/types': 11.1.2
       '@chevrotain/utils': 11.1.2
       lodash-es: 4.17.23
+
+  chokidar@5.0.0:
+    dependencies:
+      readdirp: 5.0.0
 
   ci-info@3.9.0: {}
 
@@ -8184,6 +8231,8 @@ snapshots:
       js-yaml: 3.14.2
       pify: 4.0.1
       strip-bom: 3.0.0
+
+  readdirp@5.0.0: {}
 
   recast@0.23.11:
     dependencies:

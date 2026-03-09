@@ -26,3 +26,12 @@ export {
   type AttributeValues,
   type EnumValueValues
 } from './form-schemas.js';
+
+export { deriveUiSchema, type DeriveOptions } from './derive-ui-schema.js';
+export {
+  ExpressionNodeSchema,
+  PlaceholderNodeSchema,
+  UnsupportedNodeSchema,
+  type ExpressionNode,
+  type ExpressionNodeType
+} from './expression-node-schema.js';

@@ -62,17 +62,15 @@
   "dependencies": {
     "@lspeasy/client": "^3.0.0",
     "@lspeasy/core": "^2.1.0",
-    "@zod-to-form/cli": "link:../zodforms/packages/cli",
-    "camelcase": "^9.0.0",
-    "cli": "link:../zodforms/packages/cli"
+    "@zod-to-form/cli": "^0.2.4",
+    "camelcase": "^9.0.0"
   },
   "pnpm": {
     "overrides": {
       "x-to-zod": "^0.8.0",
-      "@zod-to-form/core": "link:../zodforms/packages/core",
-      "@zod-to-form/react": "link:../zodforms/packages/react",
-      "@zod-to-form/cli": "link:../zodforms/packages/cli",
-      "cli": "link:../zodforms/packages/cli"
+      "@zod-to-form/core": "^0.2.4",
+      "@zod-to-form/react": "^0.2.4",
+      "@zod-to-form/cli": "^0.2.4"
     }
   },
   "simple-git-hooks": {

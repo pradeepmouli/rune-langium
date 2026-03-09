@@ -26,8 +26,8 @@ import {
 export interface TypeSelectorProps {
   /** Currently selected type value (node ID or built-in type name). */
   value: string | null;
-  /** Available types to choose from. */
-  options: TypeOption[];
+  /** Available types to choose from. May be undefined before types are loaded. */
+  options?: TypeOption[];
   /** Placeholder text. */
   placeholder?: string;
   /** Called when a type is selected. */
@@ -158,6 +158,7 @@ export function TypeSelector({
 
   // Filter options by kind if specified
   const filteredOptions = useMemo(() => {
+    if (!options) return [];
     if (!filterKinds || filterKinds.length === 0) return options;
     return options.filter((opt) => filterKinds.includes(opt.kind));
   }, [options, filterKinds]);
@@ -198,7 +199,7 @@ export function TypeSelector({
   }, [searchedOptions]);
 
   // Find current selection
-  const selected = useMemo(() => options.find((o) => o.value === value) ?? null, [options, value]);
+  const selected = useMemo(() => options?.find((o) => o.value === value) ?? null, [options, value]);
 
   const handleSelect = (val: string | null) => {
     onSelect(val);
