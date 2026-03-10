@@ -206,6 +206,7 @@ export const AttributeSchema = z.looseObject({
   override: z.boolean().optional(),
   name: ValidIDSchema,
   typeCall: TypeCallSchema,
+  typeCallArgs: z.array(TypeCallArgumentSchema).optional(),
   card: RosettaCardinalitySchema,
   definition: z.string().optional(),
   references: z.array(RosettaDocReferenceSchema).optional(),

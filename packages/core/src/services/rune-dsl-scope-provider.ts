@@ -75,7 +75,8 @@ import type {
   RosettaEnumeration,
   RosettaEnumValue,
   AnnotationPathExpression,
-  AnnotationRef
+  AnnotationRef,
+  RosettaType
 } from '../generated/ast.js';
 
 /**
@@ -560,19 +561,28 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   private getTypeCallArgumentScope(node: TypeCallArgument): Scope {
     const container = node.$container;
 
-    // TypeCallArgument inside a TypeCall (e.g., typeAlias body or attribute type)
+    // TypeCallArgument inside a TypeCall (e.g., typeAlias body or constructor)
     if (isTypeCall(container)) {
-      const ref = container.type?.ref;
-      if (ref && isRosettaBasicType(ref)) {
-        const descriptions = ref.parameters.map((p) => this.createDescription(p, p.name));
-        return new MapScope(descriptions);
-      }
-      if (ref && isRosettaTypeAlias(ref)) {
-        const descriptions = ref.parameters.map((p) => this.createDescription(p, p.name));
-        return new MapScope(descriptions);
-      }
+      return this.getTypeParametersFromRef(container.type?.ref);
     }
 
+    // TypeCallArgument inside an Attribute (inlined type args, e.g., `int(min: 0)`)
+    if (isAttribute(container)) {
+      return this.getTypeParametersFromRef(container.typeCall?.type?.ref);
+    }
+
+    return EMPTY_SCOPE;
+  }
+
+  private getTypeParametersFromRef(ref: RosettaType | undefined): Scope {
+    if (ref && isRosettaBasicType(ref)) {
+      const descriptions = ref.parameters.map((p) => this.createDescription(p, p.name));
+      return new MapScope(descriptions);
+    }
+    if (ref && isRosettaTypeAlias(ref)) {
+      const descriptions = ref.parameters.map((p) => this.createDescription(p, p.name));
+      return new MapScope(descriptions);
+    }
     return EMPTY_SCOPE;
   }
 

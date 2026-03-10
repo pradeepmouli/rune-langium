@@ -495,6 +495,7 @@ export interface Attribute extends langium.AstNode {
   ruleReferences: Array<RuleReferenceAnnotation>;
   synonyms: Array<RosettaSynonym>;
   typeCall: TypeCall;
+  typeCallArgs: Array<TypeCallArgument>;
 }
 
 export const Attribute = {
@@ -508,7 +509,8 @@ export const Attribute = {
   references: 'references',
   ruleReferences: 'ruleReferences',
   synonyms: 'synonyms',
-  typeCall: 'typeCall'
+  typeCall: 'typeCall',
+  typeCallArgs: 'typeCallArgs'
 } as const;
 
 export function isAttribute(item: unknown): item is Attribute {
@@ -5656,7 +5658,7 @@ export function isTypeCall(item: unknown): item is TypeCall {
 }
 
 export interface TypeCallArgument extends langium.AstNode {
-  readonly $container: RosettaConstructorExpression | TypeCall;
+  readonly $container: Attribute | RosettaConstructorExpression | TypeCall;
   readonly $type: 'TypeCallArgument';
   parameter: langium.Reference<TypeParameter>;
   value: RosettaExpression;
@@ -6117,6 +6119,10 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
         },
         typeCall: {
           name: Attribute.typeCall
+        },
+        typeCallArgs: {
+          name: Attribute.typeCallArgs,
+          defaultValue: []
         }
       },
       superTypes: [

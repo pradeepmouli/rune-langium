@@ -131,7 +131,9 @@ ChoiceOption:
 
 Attribute:
     override?='override'?
-    RosettaNamed typeCall=TypeCallSimple card=RosettaCardinality RosettaDefinable?
+    RosettaNamed typeCall=TypeCallSimple
+    ('(' typeCallArgs+=TypeCallArgument (',' typeCallArgs+=TypeCallArgument)* ')')?
+    card=RosettaCardinality RosettaDefinable?
     (References | Annotations | Synonyms | labels+=LabelAnnotation | RuleReference)*
 ;
 
@@ -213,8 +215,7 @@ TypeCall:
     ('(' arguments+=TypeCallArgument (',' arguments+=TypeCallArgument)* ')')?
 ;
 
-// Simple type reference without optional arguments, used in Attribute
-// to avoid ambiguity with RosettaCardinality (both start with '(').
+// Simple type reference without optional arguments.
 TypeCallSimple infers TypeCall:
     ^type=[RosettaType:QualifiedName]
 ;

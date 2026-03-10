@@ -81,10 +81,23 @@ describe('CDM deep diagnostic', () => {
     // Show top diagnostic messages
     const topMsgs = Object.entries(diagMessages)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 15);
+      .slice(0, 30);
     console.log(`\nTop diagnostic messages:`);
     for (const [msg, count] of topMsgs) {
       console.log(`  ${String(count).padStart(5)}  ${msg}`);
+    }
+
+    // Show all unique diagnostics with file+line for investigation
+    console.log(`\n--- All diagnostics by file ---`);
+    for (const doc of docs) {
+      const diags = doc.diagnostics ?? [];
+      if (diags.length > 0) {
+        console.log(`\n${doc.uri.path} (${diags.length}):`);
+        for (const d of diags) {
+          const sev = d.severity === 1 ? 'ERR' : d.severity === 2 ? 'WRN' : 'INF';
+          console.log(`  [${sev}] L${d.range.start.line + 1}: ${d.message.substring(0, 150)}`);
+        }
+      }
     }
   }, 120000);
 });
