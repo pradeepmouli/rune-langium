@@ -59,29 +59,32 @@ describe('CDM deep diagnostic', () => {
     }
     console.log(`\nTotal linking errors: ${total}`);
 
-    // Extra: show first 5 files/lines for specific names to diagnose
-    for (const targetName of [
-      'Lowest',
-      'InterestRateIndex',
-      'ForeignExchangeRateIndex',
-      'Observable'
-    ]) {
-      console.log(`\n--- '${targetName}' errors (first 5) ---`);
-      let count = 0;
-      for (const doc of docs) {
-        for (const d of (doc.diagnostics ?? []).filter((x) => x.severity === 1)) {
-          if (d.message.includes(`'${targetName}'`) && count < 5) {
-            console.log(
-              doc.uri.path,
-              'line',
-              d.range.start.line + 1,
-              '-',
-              d.message.substring(0, 100)
-            );
-            count++;
-          }
-        }
+    // Count all diagnostics by severity
+    let allDiags = 0;
+    const bySeverity: Record<number, number> = {};
+    const diagMessages: Record<string, number> = {};
+    for (const doc of docs) {
+      for (const d of doc.diagnostics ?? []) {
+        allDiags++;
+        bySeverity[d.severity ?? 0] = (bySeverity[d.severity ?? 0] ?? 0) + 1;
+        const msgKey = d.message.substring(0, 80);
+        diagMessages[msgKey] = (diagMessages[msgKey] ?? 0) + 1;
       }
+    }
+    console.log(`Total diagnostics (all severities): ${allDiags}`);
+    for (const [sev, count] of Object.entries(bySeverity)) {
+      const label =
+        sev === '1' ? 'error' : sev === '2' ? 'warning' : sev === '3' ? 'info' : `sev${sev}`;
+      console.log(`  ${label}: ${count}`);
+    }
+
+    // Show top diagnostic messages
+    const topMsgs = Object.entries(diagMessages)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15);
+    console.log(`\nTop diagnostic messages:`);
+    for (const [msg, count] of topMsgs) {
+      console.log(`  ${String(count).padStart(5)}  ${msg}`);
     }
   }, 120000);
 });

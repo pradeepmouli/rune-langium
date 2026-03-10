@@ -13,7 +13,9 @@ import {
   isRosettaDisjointExpression,
   isRosettaConstructorExpression,
   isSwitchOperation,
-  isRosettaFunction
+  isRosettaFunction,
+  isAnnotation,
+  isChoiceOption
 } from '../generated/ast.js';
 import type {
   Data,
@@ -180,9 +182,10 @@ export class RuneDslValidator {
 
   /**
    * S-07: Functions should have an output.
+   * Dispatch functions (with dispatchAttribute) are exempt — they inherit output from the parent.
    */
   checkFunctionOutputRequired(node: RosettaFunction, accept: ValidationAcceptor): void {
-    if (!node.output) {
+    if (!node.output && !node.dispatchAttribute) {
       accept('warning', `Function '${node.name}' has no output.`, {
         node,
         property: 'name'
@@ -447,8 +450,11 @@ export class RuneDslValidator {
 
   /**
    * N-02: Attribute names should start with lowercase.
+   * Exempt: attributes inside Annotation blocks and ChoiceOptions (matching Xtext behavior).
    */
   checkAttributeNaming(node: Attribute, accept: ValidationAcceptor): void {
+    if (isChoiceOption(node)) return;
+    if (isAnnotation(node.$container)) return;
     if (node.name && /^[A-Z]/.test(node.name)) {
       accept('warning', `Attribute '${node.name}' should start with a lowercase letter.`, {
         node,
