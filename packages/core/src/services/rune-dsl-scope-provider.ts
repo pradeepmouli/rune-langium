@@ -400,13 +400,15 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (isThenOperation(expr)) {
       const body = expr.function?.body;
       if (!body) return undefined;
-      // Headless filter/flatten/distinct/reverse/sort preserve the argument's element type
+      // Headless filter/flatten/distinct/reverse/sort/first/last preserve the argument's element type
       if (
         (isFilterOperation(body) ||
           isFlattenOperation(body) ||
           isDistinctOperation(body) ||
           isReverseOperation(body) ||
-          isSortOperation(body)) &&
+          isSortOperation(body) ||
+          isFirstOperation(body) ||
+          isLastOperation(body)) &&
         !body.argument
       ) {
         return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
@@ -1068,12 +1070,19 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
     let constructedType = this.resolveExpressionType(constructor.typeRef);
 
-    // Fallback: if resolveExpressionType returned undefined (e.g. because a same-named enum
-    // value shadows the Data type in the global scope), look up the type by name directly.
-    if (!constructedType && isRosettaSymbolReference(constructor.typeRef)) {
+    // When the typeRef is a symbol reference, always check if a Choice type shares
+    // the same name and prefer it over any Data type.  CDM uses `choice Index` as a
+    // constructor type while FpML has a same-named `type Index` (Data); without this
+    // preference the wrong type is used and its choice options aren't in scope.
+    if (isRosettaSymbolReference(constructor.typeRef)) {
       const refText = constructor.typeRef.symbol?.$refText;
       if (refText) {
-        constructedType = this.resolveDataOrChoiceByName(refText);
+        const choiceType = this.resolveChoiceByName(refText);
+        if (choiceType) {
+          constructedType = choiceType;
+        } else if (!constructedType) {
+          constructedType = this.resolveDataByName(refText);
+        }
       }
     }
 
