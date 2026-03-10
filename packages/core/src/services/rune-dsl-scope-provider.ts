@@ -39,6 +39,9 @@ import {
   isFirstOperation,
   isLastOperation,
   isSortOperation,
+  isMaxOperation,
+  isMinOperation,
+  isReduceOperation,
   isSwitchCaseOrDefault,
   isClosureParameter,
   isRosettaConditionalExpression,
@@ -361,7 +364,15 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
             ? op.argument
             : isThenOperation(op)
               ? op.argument
-              : undefined;
+              : isSortOperation(op)
+                ? op.argument
+                : isMaxOperation(op)
+                  ? op.argument
+                  : isMinOperation(op)
+                    ? op.argument
+                    : isReduceOperation(op)
+                      ? op.argument
+                      : undefined;
         if (argument) {
           return this.resolveCollectionElementType(argument);
         }
@@ -1016,7 +1027,15 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
           ? op.argument
           : isThenOperation(op)
             ? op.argument
-            : undefined;
+            : isSortOperation(op)
+              ? op.argument
+              : isMaxOperation(op)
+                ? op.argument
+                : isMinOperation(op)
+                  ? op.argument
+                  : isReduceOperation(op)
+                    ? op.argument
+                    : undefined;
 
       if (argument) {
         const itemType = this.resolveCollectionElementType(argument);
@@ -1189,14 +1208,36 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (!externalClass) {
       return EMPTY_SCOPE;
     }
+    const descriptions: AstNodeDescription[] = [];
+
+    // Handle Data type references (the common case).
     const dataRef = externalClass.data?.ref;
-    if (!dataRef || !isData(dataRef)) {
-      return EMPTY_SCOPE;
+    if (dataRef && isData(dataRef)) {
+      descriptions.push(
+        ...this.collectDataAttributes(dataRef).map((a) => this.createDescription(a, a.name))
+      );
     }
-    const descriptions = this.collectDataAttributes(dataRef).map((a) =>
-      this.createDescription(a, a.name)
-    );
-    return new MapScope(descriptions);
+
+    // Also handle Choice types — the grammar declares data=[Data] but CDM synonym blocks
+    // can reference choice types (e.g. `Payout:`, `Product:`, `CreditSupportAgreementElections:`).
+    // Look up the referenced name as a Choice and include its ChoiceOption nodes.
+    const refText = externalClass.data?.$refText;
+    if (refText) {
+      const choice = this.resolveChoiceByName(refText);
+      if (choice) {
+        for (const option of choice.attributes) {
+          const optionRefText = option.typeCall?.type?.$refText ?? '';
+          const simpleName = optionRefText.includes('.')
+            ? optionRefText.split('.').pop()!
+            : optionRefText;
+          if (simpleName) {
+            descriptions.push(this.createDescription(option, simpleName));
+          }
+        }
+      }
+    }
+
+    return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
   }
 
   // ── Fallback scopes ─────────────────────────────────────────────────
