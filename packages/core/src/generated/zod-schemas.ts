@@ -206,6 +206,7 @@ export const AttributeSchema = z.looseObject({
   override: z.boolean().optional(),
   name: ValidIDSchema,
   typeCall: TypeCallSchema,
+  typeCallArgs: z.array(TypeCallArgumentSchema).optional(),
   card: RosettaCardinalitySchema,
   definition: z.string().optional(),
   references: z.array(RosettaDocReferenceSchema).optional(),
@@ -1008,6 +1009,13 @@ export const AssignPathRootSchema = z.discriminatedUnion('$type', [
   ShortcutDeclarationSchema
 ]);
 
+export const AttributeOrChoiceOptionSchema = z.discriminatedUnion('$type', [
+  AttributeSchema,
+  ChoiceOptionSchema
+]);
+
+export const DataOrChoiceSchema = z.discriminatedUnion('$type', [DataSchema, ChoiceSchema]);
+
 export const RosettaCallableWithArgsSchema = z.discriminatedUnion('$type', [
   RosettaFunctionSchema,
   RosettaExternalFunctionSchema,
@@ -1068,7 +1076,8 @@ export const RosettaFeatureSchema = z.discriminatedUnion('$type', [
   AttributeSchema,
   RosettaRecordFeatureSchema,
   RosettaEnumValueSchema,
-  RosettaMetaTypeSchema
+  RosettaMetaTypeSchema,
+  ChoiceOptionSchema
 ]);
 
 export const RosettaLiteralSchema = z.discriminatedUnion('$type', [
@@ -1123,7 +1132,9 @@ export const RosettaSymbolSchema = z.discriminatedUnion('$type', [
   ClosureParameterSchema,
   RosettaEnumerationSchema,
   RosettaEnumValueSchema,
-  RosettaParameterSchema
+  RosettaParameterSchema,
+  DataSchema,
+  ChoiceSchema
 ]);
 
 export const RosettaTypeSchema = z.discriminatedUnion('$type', [
@@ -1143,7 +1154,8 @@ export const RosettaTypedFeatureSchema = z.discriminatedUnion('$type', [
 export const SwitchCaseTargetSchema = z.discriminatedUnion('$type', [
   DataSchema,
   ChoiceSchema,
-  RosettaEnumValueSchema
+  RosettaEnumValueSchema,
+  RosettaEnumerationSchema
 ]);
 
 export const AstNodeSchema = z.discriminatedUnion('$type', [

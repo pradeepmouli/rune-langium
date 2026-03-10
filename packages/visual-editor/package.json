@@ -36,8 +36,7 @@
     "scaffold:dataTypeForm": "z2f generate --schema src/generated/zod-schemas.ts --export DataSchema --out src/components/forms/generated --ui 'shadcn' --config z2f.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit",
-    "prepublishOnly": "npm run clean && npm run build"
+    "type-check": "tsgo --noEmit"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",

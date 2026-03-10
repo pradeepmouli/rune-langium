@@ -21,19 +21,24 @@ type RosettaType = Data | Choice | RosettaBasicType | RosettaRecordType
 type RosettaSymbol = Attribute | ShortcutDeclaration
     | RosettaFunction | RosettaExternalFunction | RosettaRule
     | TypeParameter | RosettaMetaType | ClosureParameter
-    | RosettaEnumeration | RosettaEnumValue | RosettaParameter;
+    | RosettaEnumeration | RosettaEnumValue | RosettaParameter
+    | Data | Choice;
 
 type RosettaCallableWithArgs = RosettaFunction
     | RosettaExternalFunction | RosettaRule;
 
 type RosettaFeature = Attribute | RosettaRecordFeature
-    | RosettaEnumValue | RosettaMetaType;
+    | RosettaEnumValue | RosettaMetaType | ChoiceOption;
 
 type RosettaTypedFeature = Attribute | RosettaRecordFeature;
 
 type AssignPathRoot = Attribute | ShortcutDeclaration;
 
-type SwitchCaseTarget = Data | Choice | RosettaEnumValue;
+type SwitchCaseTarget = Data | Choice | RosettaEnumValue | RosettaEnumeration;
+
+type DataOrChoice = Data | Choice;
+
+type AttributeOrChoiceOption = Attribute | ChoiceOption;
 
 // ═══════════════════════════════════════════════════════════════════
 // ENTRY RULE
@@ -106,7 +111,7 @@ AnnotationQualifier:
 ;
 
 Data:
-    'type' RosettaNamed ('extends' superType=[Data:QualifiedName])? ':'
+    'type' RosettaNamed ('extends' superType=[DataOrChoice:QualifiedName])? ':'
     RosettaDefinable?
     (References | Annotations | ClassSynonyms)*
     attributes+=Attribute*
@@ -126,7 +131,9 @@ ChoiceOption:
 
 Attribute:
     override?='override'?
-    RosettaNamed typeCall=TypeCallSimple card=RosettaCardinality RosettaDefinable?
+    RosettaNamed typeCall=TypeCallSimple
+    ('(' typeCallArgs+=TypeCallArgument (',' typeCallArgs+=TypeCallArgument)* ')')?
+    card=RosettaCardinality RosettaDefinable?
     (References | Annotations | Synonyms | labels+=LabelAnnotation | RuleReference)*
 ;
 
@@ -208,8 +215,7 @@ TypeCall:
     ('(' arguments+=TypeCallArgument (',' arguments+=TypeCallArgument)* ')')?
 ;
 
-// Simple type reference without optional arguments, used in Attribute
-// to avoid ambiguity with RosettaCardinality (both start with '(').
+// Simple type reference without optional arguments.
 TypeCallSimple infers TypeCall:
     ^type=[RosettaType:QualifiedName]
 ;
@@ -668,11 +674,11 @@ RosettaMapRosettaPath:
 ;
 
 RosettaDataReference:
-    data=[Data:QualifiedName]
+    data=[DataOrChoice:QualifiedName]
 ;
 
 RosettaAttributeReference:
-    RosettaDataReference ({infer RosettaAttributeReference.receiver=current} '->' attribute=[Attribute:ValidID])+
+    RosettaDataReference ({infer RosettaAttributeReference.receiver=current} '->' attribute=[AttributeOrChoiceOption:ValidID])+
 ;
 
 RosettaMapTestExpressionRule infers RosettaMapTestExpression:
@@ -758,7 +764,7 @@ RosettaExternalRuleSource:
 ;
 
 RosettaExternalClass:
-    data=[Data:QualifiedName] ':'
+    data=[DataOrChoice:QualifiedName] ':'
     (externalClassSynonyms+=RosettaExternalClassSynonym)*
     (regularAttributes+=RosettaExternalRegularAttribute)*
 ;
@@ -846,13 +852,13 @@ AnnotationPathExpression:
 
 NestedAnnotationPath infers AnnotationPathExpression:
     PrimaryAnnotationPath (
-        {infer AnnotationPath.receiver=current} operator='->' attribute=[Attribute:ValidID]
-        | {infer AnnotationDeepPath.receiver=current} operator='->>' attribute=[Attribute:ValidID]
+        {infer AnnotationPath.receiver=current} operator='->' attribute=[AttributeOrChoiceOption:ValidID]
+        | {infer AnnotationDeepPath.receiver=current} operator='->>' attribute=[AttributeOrChoiceOption:ValidID]
     )*
 ;
 
 PrimaryAnnotationPath infers AnnotationPathExpression:
-    {infer AnnotationPathAttributeReference} attribute=[Attribute:ValidID]
+    {infer AnnotationPathAttributeReference} attribute=[AttributeOrChoiceOption:ValidID]
     | RosettaImplicitVariableRule
 ;
 

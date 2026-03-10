@@ -3,9 +3,13 @@
  *
  * Creates a CM Transport backed by a SharedWorker (primary) or
  * dedicated Worker (fallback) running the Langium LSP server in-browser.
+ *
+ * Uses @lspeasy/core worker transports which handle Message objects
+ * natively, with an adapter layer for @codemirror/lsp-client's string protocol.
  */
 
 import type { Transport } from '@codemirror/lsp-client';
+import { SharedWorkerTransport, DedicatedWorkerTransport, type Message } from '@lspeasy/core';
 
 /**
  * Create a Worker-based transport for @codemirror/lsp-client.
@@ -23,16 +27,33 @@ export function createWorkerTransport(): Transport {
       name: 'rune-lsp-worker'
     });
 
-    worker.port.onmessage = (e: MessageEvent) => {
-      const data = typeof e.data === 'string' ? e.data : String(e.data);
-      for (const h of handlers) h(data);
-    };
+    // Generate a unique client ID for this connection
+    const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+    // Start the port before creating the transport
     worker.port.start();
+
+    const transport = new SharedWorkerTransport({
+      port: worker.port,
+      clientId
+    });
+
+    // Subscribe to messages from the LSP server and convert to strings
+    transport.onMessage((message: Message) => {
+      const data = JSON.stringify(message);
+      for (const h of handlers) h(data);
+    });
 
     return {
       send(message: string) {
-        worker.port.postMessage(message);
+        try {
+          const parsed = JSON.parse(message) as Message;
+          transport.send(parsed).catch((err) => {
+            console.error('[worker-transport] Send error:', err);
+          });
+        } catch (err) {
+          console.error('[worker-transport] JSON parse error:', err);
+        }
       },
       subscribe(handler: (value: string) => void) {
         handlers.push(handler);
@@ -50,14 +71,26 @@ export function createWorkerTransport(): Transport {
     name: 'rune-lsp-worker'
   });
 
-  worker.onmessage = (e: MessageEvent) => {
-    const data = typeof e.data === 'string' ? e.data : String(e.data);
+  const transport = new DedicatedWorkerTransport({
+    worker
+  });
+
+  // Subscribe to messages from the LSP server and convert to strings
+  transport.onMessage((message: Message) => {
+    const data = JSON.stringify(message);
     for (const h of handlers) h(data);
-  };
+  });
 
   return {
     send(message: string) {
-      worker.postMessage(message);
+      try {
+        const parsed = JSON.parse(message) as Message;
+        transport.send(parsed).catch((err) => {
+          console.error('[worker-transport] Send error:', err);
+        });
+      } catch (err) {
+        console.error('[worker-transport] JSON parse error:', err);
+      }
     },
     subscribe(handler: (value: string) => void) {
       handlers.push(handler);

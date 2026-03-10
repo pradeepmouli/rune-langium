@@ -1,0 +1,47 @@
+modules = ["nodejs-20", "bash", "web"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Studio Dev Server"
+
+[[workflows.workflow]]
+name = "Studio Dev Server"
+author = "agent"
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && pnpm dev"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 5001
+externalPort = 3000
+
+[[ports]]
+localPort = 5002
+externalPort = 3001
+
+[deployment]
+deploymentTarget = "static"
+build = ["bash", "-c", "npm install -g pnpm@10.28.0 && pnpm install && pnpm --filter @rune-langium/core build && pnpm --filter @rune-langium/visual-editor build && pnpm --filter @rune-langium/lsp-server build && pnpm --filter @rune-langium/studio build"]
+publicDir = "apps/studio/dist"
