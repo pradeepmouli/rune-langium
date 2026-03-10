@@ -26,8 +26,7 @@
     "start": "node dist/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit",
-    "prepublishOnly": "npm run clean && npm run build"
+    "type-check": "tsgo --noEmit"
   },
   "dependencies": {
     "@lspeasy/core": "^2.1.0",

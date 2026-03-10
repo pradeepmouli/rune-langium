@@ -43,7 +43,10 @@
       "Bash(npx skills:*)",
       "Read(//Users/pmouli/.claude/skills/**)",
       "Read(//dev/**)",
-      "Bash(sed -n '65,115p' /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/ingest-fpml-confirmation-common-func.rosetta)"
+      "Bash(sed -n '65,115p' /Users/pmouli/GitHub.nosync/rune-langium/.resources/cdm/ingest-fpml-confirmation-common-func.rosetta)",
+      "Bash(npx tsc:*)",
+      "Bash(ast-grep:*)",
+      "Bash(ast-grep run:*)"
     ]
   }
 }

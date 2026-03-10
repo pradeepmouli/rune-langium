@@ -42,7 +42,13 @@ import {
   isSwitchCaseOrDefault,
   isClosureParameter,
   isRosettaConditionalExpression,
-  isRosettaImplicitVariable
+  isRosettaImplicitVariable,
+  isRosettaAttributeReference,
+  isRosettaDataReference,
+  isAnnotationPath,
+  isAnnotationDeepPath,
+  isAnnotationPathAttributeReference,
+  isChoiceOperation
 } from '../generated/ast.js';
 import type {
   Data,
@@ -62,7 +68,9 @@ import type {
   Choice,
   ChoiceOption,
   RosettaEnumeration,
-  RosettaEnumValue
+  RosettaEnumValue,
+  AnnotationPathExpression,
+  AnnotationRef
 } from '../generated/ast.js';
 
 /**
@@ -182,6 +190,37 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     // Case 8: EnumValueReference.value — resolve to enum values of the specified enum
     if (isRosettaEnumValueReference(container) && property === 'value') {
       return this.getEnumValueScope(container);
+    }
+
+    // RosettaAttributeReference.attribute — scope is attributes of the receiver Data type
+    // Used in: [metadata address "pointsTo"=PriceQuantity->price]
+    if (
+      isRosettaAttributeReference(container) &&
+      !isRosettaDataReference(container) &&
+      property === 'attribute'
+    ) {
+      return this.getRosettaAttributeRefScope(container);
+    }
+
+    // AnnotationPath.attribute — scope is attributes of the receiver's resolved type
+    if (isAnnotationPath(container) && property === 'attribute') {
+      return this.getAnnotationPathScope(container.receiver);
+    }
+
+    // AnnotationDeepPath.attribute — deep features of the receiver's resolved type
+    if (isAnnotationDeepPath(container) && property === 'attribute') {
+      return this.getAnnotationDeepPathScope(container.receiver);
+    }
+
+    // AnnotationPathAttributeReference.attribute — attributes of enclosing Data type
+    if (isAnnotationPathAttributeReference(container) && property === 'attribute') {
+      return this.getAnnotationPathAttributeRefScope(container);
+    }
+
+    // ChoiceOperation.attributes — attributes of the argument type or enclosing Data type
+    // Used in: `optional choice field1, field2` conditions
+    if (isChoiceOperation(container) && property === 'attributes') {
+      return this.getChoiceOperationAttributeScope(container);
     }
 
     // Case 9a: AnnotationRef.annotation — resolved via global scope
@@ -414,9 +453,10 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return undefined;
     }
     // Fallback: .ref not linked yet — look up by $refText in the global index
+    // Must search both Data AND Choice types since attributes can be typed as either.
     const refText = typeCall.type?.$refText;
     if (!refText) return undefined;
-    return this.resolveDataByName(refText);
+    return this.resolveDataOrChoiceByName(refText);
   }
 
   /**
@@ -428,6 +468,23 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       if (desc.name === name || desc.name.endsWith('.' + name)) {
         const node = desc.node;
         if (node && isData(node)) return node;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Look up a Data or Choice type by name in the global index.
+   * Used as a fallback when a symbol reference resolves to an unexpected node type
+   * (e.g., a same-named enum value shadows a Data/Choice type in the global scope).
+   */
+  private resolveDataOrChoiceByName(name: string): Data | Choice | undefined {
+    const data = this.resolveDataByName(name);
+    if (data) return data;
+    for (const desc of this.indexManager.allElements('Choice')) {
+      if (desc.name === name || desc.name.endsWith('.' + name)) {
+        const node = desc.node;
+        if (node && isChoice(node)) return node;
       }
     }
     return undefined;
@@ -480,6 +537,126 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   }
 
   /**
+   * Collect inherited ChoiceOption nodes from a parent Choice type.
+   * CDM uses `type Foo extends SomeChoice:` where SomeChoice is a `choice` type.
+   * The grammar only declares superType=[Data], so the linker may fail to link to
+   * the choice type (or accidentally link to a same-named Data in another namespace).
+   * We always search for a Choice matching the superType's name and include its options.
+   */
+  private collectInheritedChoiceOptions(data: Data): ChoiceOption[] {
+    if (!data.superType?.$refText) return [];
+    const choiceSuper = this.resolveChoiceByName(data.superType.$refText);
+    return choiceSuper ? [...choiceSuper.attributes] : [];
+  }
+
+  /**
+   * Look up a Choice type by (possibly qualified) name in the global index.
+   */
+  private resolveChoiceByName(name: string): Choice | undefined {
+    for (const desc of this.indexManager.allElements('Choice')) {
+      if (desc.name === name || desc.name.endsWith('.' + name)) {
+        const node = desc.node;
+        if (node && isChoice(node)) return node;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Return the Attribute nodes from `annotation metadata` that correspond to
+   * `[metadata X]` annotations on the given attribute OR its resolved type.
+   *
+   * The Rune DSL puts metadata annotations in two places:
+   *  - On the ATTRIBUTE: `foo Party (0..1) [metadata reference]` → `reference` in scope
+   *  - On the TYPE: `type Foo: [metadata key]` → `key` in scope when navigating through `foo Foo (0..1)`
+   */
+  private getMetaAttributeRefs(attr: Attribute): Attribute[] {
+    const result: Attribute[] = [];
+    const seen = new Set<string>();
+
+    const collect = (annotations: ReadonlyArray<AnnotationRef>) => {
+      for (const annRef of annotations) {
+        const annName = annRef.annotation?.ref?.name ?? annRef.annotation?.$refText;
+        if (annName !== 'metadata') continue;
+        // The attribute ref may or may not be linked yet; use both paths
+        const metaAttr = annRef.attribute?.ref;
+        if (metaAttr && isAttribute(metaAttr) && !seen.has(metaAttr.name)) {
+          seen.add(metaAttr.name);
+          result.push(metaAttr);
+        } else if (!metaAttr) {
+          // Fallback: look up by $refText in the metadata annotation
+          const refText = annRef.attribute?.$refText;
+          if (refText && !seen.has(refText)) {
+            const found = this.findMetadataAnnotationAttribute(refText);
+            if (found) {
+              seen.add(refText);
+              result.push(found);
+            }
+          }
+        }
+      }
+    };
+
+    // 1) Annotations on the attribute itself (e.g. `[metadata reference]`)
+    collect(attr.annotations);
+
+    // 2) Annotations on the type that the attribute is typed as
+    //    (e.g. `type AdjustableOrRelativeDate: [metadata key]`)
+    const typeRef = attr.typeCall?.type?.ref;
+    if (typeRef && isData(typeRef)) {
+      collect(typeRef.annotations);
+    } else if (!typeRef && attr.typeCall?.type?.$refText) {
+      // Type not linked yet — resolve by name
+      const resolved = this.resolveDataByName(attr.typeCall.type.$refText);
+      if (resolved) collect(resolved.annotations);
+    }
+
+    return result;
+  }
+
+  /** Cache of metadata annotation attributes, keyed by attribute name. */
+  private _metadataAnnotationAttrs: Map<string, Attribute> | undefined;
+
+  /**
+   * Look up an Attribute by name in the `annotation metadata` declaration.
+   * Searches the global index for an Annotation named 'metadata' and finds
+   * its child Attribute with the given name.
+   */
+  private findMetadataAnnotationAttribute(name: string): Attribute | undefined {
+    if (!this._metadataAnnotationAttrs) {
+      this._metadataAnnotationAttrs = new Map();
+      for (const desc of this.indexManager.allElements('Annotation')) {
+        if (desc.name === 'metadata' || desc.name === 'com.rosetta.model.metadata') {
+          const node = desc.node;
+          if (node && isAnnotation(node)) {
+            for (const a of node.attributes) {
+              this._metadataAnnotationAttrs.set(a.name, a);
+            }
+          }
+          break;
+        }
+      }
+    }
+    return this._metadataAnnotationAttrs.get(name);
+  }
+
+  /**
+   * Extract the last Attribute that was directly navigated via an expression.
+   * Used to determine if meta-attributes (reference, key, scheme) are in scope.
+   */
+  private getLastAttributeOfExpression(expr: RosettaExpression): Attribute | undefined {
+    if (isRosettaSymbolReference(expr)) {
+      const sym = expr.symbol?.ref;
+      return isAttribute(sym) ? sym : undefined;
+    }
+    if (isRosettaFeatureCall(expr)) {
+      const feature = expr.feature?.ref;
+      return isAttribute(feature) ? feature : undefined;
+    }
+    return undefined;
+  }
+
+  /**
    * Build a scope from a Data, RosettaRecordType, or Choice's features.
    * Falls back to the global attribute scope if the type cannot be resolved.
    */
@@ -502,10 +679,18 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.getChoiceOptionScope(data);
     }
     const attrs = this.collectDataAttributes(data);
-    if (attrs.length === 0) {
+    const inheritedOptions = this.collectInheritedChoiceOptions(data);
+    if (attrs.length === 0 && inheritedOptions.length === 0) {
       return this.getAllAttributesScope(fallbackNode);
     }
-    const descriptions = attrs.map((a) => this.createDescription(a, a.name));
+    const descriptions: AstNodeDescription[] = [
+      ...attrs.map((a) => this.createDescription(a, a.name)),
+      ...inheritedOptions.map((o) => {
+        const refText = o.typeCall?.type?.$refText ?? '';
+        const simpleName = refText.includes('.') ? refText.split('.').pop()! : refText;
+        return this.createDescription(o, simpleName);
+      })
+    ];
     return new MapScope(descriptions);
   }
 
@@ -538,7 +723,8 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (isRosettaSymbolReference(node.receiver)) {
       const sym = node.receiver.symbol?.ref;
       if (sym && isRosettaEnumeration(sym)) {
-        const descriptions = sym.enumValues.map((v) => this.createDescription(v, v.name));
+        const allValues = this.collectEnumValues(sym);
+        const descriptions = allValues.map((v) => this.createDescription(v, v.name));
         return new MapScope(descriptions);
       }
       if (sym && isChoice(sym)) {
@@ -547,7 +733,21 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     }
 
     const receiverType = this.resolveExpressionType(node.receiver);
-    return this.buildTypedScope(receiverType, node);
+    const baseScope = this.buildTypedScope(receiverType, node);
+
+    // Include meta-attributes (reference, key, scheme…) if the receiver's last
+    // navigated attribute has [metadata X] annotations.
+    // e.g. `partyReference -> reference` where partyReference has [metadata reference]
+    const receiverAttr = this.getLastAttributeOfExpression(node.receiver);
+    if (receiverAttr) {
+      const metaAttrs = this.getMetaAttributeRefs(receiverAttr);
+      if (metaAttrs.length > 0) {
+        const metaDescs = metaAttrs.map((a) => this.createDescription(a, a.name));
+        return new MapScope(metaDescs, baseScope);
+      }
+    }
+
+    return baseScope;
   }
 
   /**
@@ -633,29 +833,47 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.getAllAttributesScope(node);
     }
 
-    // Get the root type
+    // Get the root type; track lastAttribute to expose meta-attributes
     let currentType: Data | RosettaRecordType | Choice | undefined;
+    let lastAttribute: Attribute | undefined;
     if (isAttribute(root)) {
       currentType = this.resolveTypeCallToData(root.typeCall);
+      lastAttribute = root;
     } else if (isShortcutDeclaration(root)) {
       currentType = root.expression ? this.resolveExpressionType(root.expression) : undefined;
-    }
-
-    if (!currentType) {
-      return this.getAllAttributesScope(node);
     }
 
     // Walk the segment chain: for each preceding segment, resolve its type
     const segments = this.getSegmentChain(operation, node);
     for (const seg of segments) {
+      if (!currentType) break;
       const feature = seg.feature?.ref;
-      if (feature && (isAttribute(feature) || isRosettaRecordFeature(feature))) {
+      if (
+        feature &&
+        (isAttribute(feature) || isRosettaRecordFeature(feature) || isChoiceOption(feature))
+      ) {
+        lastAttribute = isAttribute(feature) ? feature : undefined;
         currentType = this.resolveTypeCallToData(feature.typeCall);
-        if (!currentType) break;
       } else {
+        lastAttribute = undefined;
         currentType = undefined;
-        break;
       }
+    }
+
+    // Include meta-attributes (reference, key, scheme…) if the last navigated
+    // attribute has [metadata X] annotations — e.g. `-> dayDistribution -> scheme`
+    // This must be checked even when currentType is undefined (e.g., enum-typed attrs).
+    if (lastAttribute) {
+      const metaAttrs = this.getMetaAttributeRefs(lastAttribute);
+      if (metaAttrs.length > 0) {
+        const metaDescs = metaAttrs.map((a) => this.createDescription(a, a.name));
+        const baseScope = this.buildTypedScope(currentType, node);
+        return new MapScope(metaDescs, baseScope);
+      }
+    }
+
+    if (!currentType) {
+      return this.getAllAttributesScope(node);
     }
 
     return this.buildTypedScope(currentType, node);
@@ -848,7 +1066,17 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (!constructor?.typeRef) {
       return EMPTY_SCOPE;
     }
-    const constructedType = this.resolveExpressionType(constructor.typeRef);
+    let constructedType = this.resolveExpressionType(constructor.typeRef);
+
+    // Fallback: if resolveExpressionType returned undefined (e.g. because a same-named enum
+    // value shadows the Data type in the global scope), look up the type by name directly.
+    if (!constructedType && isRosettaSymbolReference(constructor.typeRef)) {
+      const refText = constructor.typeRef.symbol?.$refText;
+      if (refText) {
+        constructedType = this.resolveDataOrChoiceByName(refText);
+      }
+    }
+
     return this.buildTypedScope(constructedType, node);
   }
 
@@ -1033,6 +1261,160 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       }
     }
     return map;
+  }
+
+  /**
+   * RosettaAttributeReference.attribute — attributes of the receiver Data type.
+   * e.g. `PriceQuantity->price`: scope = attributes of PriceQuantity.
+   * The receiver can be RosettaDataReference OR a prior RosettaAttributeReference.
+   */
+  private getRosettaAttributeRefScope(node: AstNode): Scope {
+    if (!isRosettaAttributeReference(node)) return EMPTY_SCOPE;
+    const receiver = node.receiver;
+    if (!receiver) return EMPTY_SCOPE;
+    const receiverType = this.resolveRosettaAttributeRefType(receiver);
+    return this.buildTypedScope(receiverType, node);
+  }
+
+  /**
+   * Resolve the type produced by a RosettaAttributeReference expression.
+   * Returns a Data, Choice, or RosettaRecordType node.
+   */
+  private resolveRosettaAttributeRefType(
+    node: AstNode
+  ): Data | RosettaRecordType | Choice | undefined {
+    if (isRosettaDataReference(node)) {
+      const ref = node.data?.ref;
+      if (ref && isData(ref)) return ref;
+      const refText = node.data?.$refText;
+      if (refText) return this.resolveDataOrChoiceByName(refText);
+      return undefined;
+    }
+    if (isRosettaAttributeReference(node)) {
+      const attrRef = node.attribute?.ref;
+      if (attrRef && isAttribute(attrRef)) {
+        return this.resolveTypeCallToData(attrRef.typeCall);
+      }
+      // Fallback: resolve receiver first, then find attr by name
+      const receiverType = this.resolveRosettaAttributeRefType(node.receiver);
+      if (receiverType && isData(receiverType)) {
+        const attrText = node.attribute?.$refText;
+        if (attrText) {
+          const attrs = this.collectDataAttributes(receiverType);
+          const found = attrs.find((a) => a.name === attrText);
+          if (found) return this.resolveTypeCallToData(found.typeCall);
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * AnnotationPath.attribute — scope from the receiver's resolved type.
+   */
+  private getAnnotationPathScope(receiver: AnnotationPathExpression): Scope {
+    const type = this.resolveAnnotationPathType(receiver);
+    if (!type) return EMPTY_SCOPE;
+    return this.buildTypedScope(type, receiver);
+  }
+
+  /**
+   * AnnotationDeepPath.attribute — deep features from the receiver's resolved type.
+   */
+  private getAnnotationDeepPathScope(receiver: AnnotationPathExpression): Scope {
+    const type = this.resolveAnnotationPathType(receiver);
+    if (!type) return EMPTY_SCOPE;
+    const allFeatures = this.collectTransitiveAttributes(type);
+    if (allFeatures.length === 0) return EMPTY_SCOPE;
+    const descriptions = allFeatures.map((f) => {
+      if (isChoiceOption(f)) {
+        const refText = f.typeCall?.type?.$refText ?? '';
+        const simpleName = refText.includes('.') ? refText.split('.').pop()! : refText;
+        return this.createDescription(f, simpleName);
+      }
+      return this.createDescription(f, f.name);
+    });
+    return new MapScope(descriptions);
+  }
+
+  /**
+   * Resolve the type produced by an AnnotationPathExpression.
+   */
+  private resolveAnnotationPathType(
+    expr: AnnotationPathExpression
+  ): Data | RosettaRecordType | Choice | undefined {
+    if (isAnnotationPathAttributeReference(expr)) {
+      // The starting attribute — its type
+      const attr = expr.attribute?.ref;
+      if (attr && isAttribute(attr)) return this.resolveTypeCallToData(attr.typeCall);
+      const refText = expr.attribute?.$refText;
+      if (refText) {
+        // Try finding by name from the enclosing Data type
+        const data = AstUtils.getContainerOfType(expr, isData);
+        if (data) {
+          const attrs = this.collectDataAttributes(data);
+          const found = attrs.find((a) => a.name === refText);
+          if (found) return this.resolveTypeCallToData(found.typeCall);
+        }
+      }
+      return undefined;
+    }
+    if (isAnnotationPath(expr)) {
+      const attr = expr.attribute?.ref;
+      if (attr && isAttribute(attr)) return this.resolveTypeCallToData(attr.typeCall);
+      // Fallback: resolve from receiver type
+      const receiverType = this.resolveAnnotationPathType(expr.receiver);
+      if (receiverType && isData(receiverType)) {
+        const attrText = expr.attribute?.$refText;
+        if (attrText) {
+          const attrs = this.collectDataAttributes(receiverType);
+          const found = attrs.find((a) => a.name === attrText);
+          if (found) return this.resolveTypeCallToData(found.typeCall);
+        }
+      }
+      return undefined;
+    }
+    if (isAnnotationDeepPath(expr)) {
+      const attr = expr.attribute?.ref;
+      if (attr && isAttribute(attr)) return this.resolveTypeCallToData(attr.typeCall);
+      return undefined;
+    }
+    return undefined;
+  }
+
+  /**
+   * AnnotationPathAttributeReference.attribute — attributes of the enclosing Data type.
+   * e.g. `[regulatoryReference for quantity -> unit]` on an attribute of Taxonomy:
+   * `quantity` is scoped to Taxonomy's attributes.
+   */
+  private getAnnotationPathAttributeRefScope(node: AstNode): Scope {
+    // Walk up to find the enclosing Data type
+    const data = AstUtils.getContainerOfType(node, isData);
+    if (!data) return EMPTY_SCOPE;
+    const attrs = this.collectDataAttributes(data);
+    if (attrs.length === 0) return EMPTY_SCOPE;
+    const descriptions = attrs.map((a) => this.createDescription(a, a.name));
+    return new MapScope(descriptions);
+  }
+
+  /**
+   * ChoiceOperation.attributes — attributes of the argument type or enclosing Data type.
+   * e.g. `optional choice field1, field2` in a condition.
+   */
+  private getChoiceOperationAttributeScope(node: AstNode): Scope {
+    if (!isChoiceOperation(node)) return EMPTY_SCOPE;
+    // If argument is provided, use its type
+    if (node.argument) {
+      const argType = this.resolveExpressionType(node.argument);
+      if (argType) return this.buildTypedScope(argType, node);
+    }
+    // Fall back to enclosing Data type
+    const data = AstUtils.getContainerOfType(node, isData);
+    if (!data) return EMPTY_SCOPE;
+    const attrs = this.collectDataAttributes(data);
+    if (attrs.length === 0) return EMPTY_SCOPE;
+    const descriptions = attrs.map((a) => this.createDescription(a, a.name));
+    return new MapScope(descriptions);
   }
 
   private createDescription(node: AstNode, name: string): AstNodeDescription {

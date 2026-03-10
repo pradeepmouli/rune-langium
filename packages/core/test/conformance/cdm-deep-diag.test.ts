@@ -59,15 +59,15 @@ describe('CDM deep diagnostic', () => {
     }
     console.log(`\nTotal linking errors: ${total}`);
 
-    // Extra: show first 5 files/lines for RosettaSymbol errors to diagnose
+    // Extra: show first 5 files/lines for specific names to diagnose
     for (const targetName of [
-      'payerReceiver',
-      'transferExpression',
-      'settlementDate',
+      'Lowest',
+      'InterestRateIndex',
+      'quantity',
       'value',
-      'priceType'
+      'priceQuantity'
     ]) {
-      console.log(`\n--- RosettaSymbol '${targetName}' errors (first 5) ---`);
+      console.log(`\n--- '${targetName}' errors (first 5) ---`);
       let count = 0;
       for (const doc of docs) {
         for (const d of (doc.diagnostics ?? []).filter((x) => x.severity === 1)) {
@@ -77,7 +77,7 @@ describe('CDM deep diagnostic', () => {
               'line',
               d.range.start.line + 1,
               '-',
-              d.message.substring(0, 80)
+              d.message.substring(0, 100)
             );
             count++;
           }

@@ -30,8 +30,7 @@
     "lint": "oxlint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit",
-    "prepublishOnly": "npm run clean && npm run build"
+    "type-check": "tsgo --noEmit"
   },
   "dependencies": {
     "langium": "^4.2.1",
