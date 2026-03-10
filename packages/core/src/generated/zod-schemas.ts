@@ -1008,6 +1008,13 @@ export const AssignPathRootSchema = z.discriminatedUnion('$type', [
   ShortcutDeclarationSchema
 ]);
 
+export const AttributeOrChoiceOptionSchema = z.discriminatedUnion('$type', [
+  AttributeSchema,
+  ChoiceOptionSchema
+]);
+
+export const DataOrChoiceSchema = z.discriminatedUnion('$type', [DataSchema, ChoiceSchema]);
+
 export const RosettaCallableWithArgsSchema = z.discriminatedUnion('$type', [
   RosettaFunctionSchema,
   RosettaExternalFunctionSchema,
@@ -1146,7 +1153,8 @@ export const RosettaTypedFeatureSchema = z.discriminatedUnion('$type', [
 export const SwitchCaseTargetSchema = z.discriminatedUnion('$type', [
   DataSchema,
   ChoiceSchema,
-  RosettaEnumValueSchema
+  RosettaEnumValueSchema,
+  RosettaEnumerationSchema
 ]);
 
 export const AstNodeSchema = z.discriminatedUnion('$type', [

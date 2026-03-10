@@ -5,6 +5,7 @@ import {
   isData,
   isRosettaFunction,
   isRosettaEnumeration,
+  isRosettaEnumValue,
   isRosettaBasicType,
   isRosettaTypeAlias,
   isAttribute,
@@ -270,8 +271,13 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       const sym = expr.symbol?.ref;
       if (!sym) {
         // Fallback: look up by $refText in global index (e.g. when .ref is not yet linked)
+        // Prefer Choice over Data when both exist (e.g. CDM `choice Index` vs FpML `type Index`)
         const refText = expr.symbol?.$refText;
-        if (refText) return this.resolveDataByName(refText);
+        if (refText) {
+          const choiceType = this.resolveChoiceByName(refText);
+          if (choiceType) return choiceType;
+          return this.resolveDataByName(refText);
+        }
         return undefined;
       }
 
@@ -290,8 +296,15 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         return sym.output ? this.resolveTypeCallToData(sym.output.typeCall) : undefined;
       }
 
-      // Data or Choice type referenced directly
+      // Data or Choice type referenced directly.
+      // When a Data is resolved but a same-named Choice exists, prefer the Choice
+      // (e.g. CDM `choice Index` vs FpML `type Index`).
       if (isData(sym)) {
+        const refText = expr.symbol?.$refText;
+        if (refText) {
+          const choiceType = this.resolveChoiceByName(refText);
+          if (choiceType) return choiceType;
+        }
         return sym;
       }
       if (isChoice(sym)) {
@@ -392,6 +405,16 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
         if (guardType && isChoice(guardType)) {
           return guardType;
         }
+        // Guard resolved to an enum value that shadows a Data/Choice type name
+        // (e.g. enum value `Index` shadows `choice Index`). Look up by name.
+        if (guardType && isRosettaEnumValue(guardType)) {
+          return this.resolveDataOrChoiceByName(guardType.name);
+        }
+        // Guard not linked yet — try by $refText
+        if (!guardType) {
+          const refText = switchCase.guard.referenceGuard.$refText;
+          if (refText) return this.resolveDataOrChoiceByName(refText);
+        }
       }
       return undefined;
     }
@@ -450,6 +473,20 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return this.resolveExpressionType(body);
     }
 
+    // Switch operation: resolve the type of the first non-default case expression.
+    // e.g. `fpmlTrade -> product switch EquitySwapTransactionSupplement then item, ReturnSwap then item`
+    // Both cases return `item` which narrows to the guard type; use the first case's guard as the result type.
+    if (isSwitchOperation(expr)) {
+      for (const c of expr.cases) {
+        if (c.guard?.referenceGuard) {
+          const guardType = c.guard.referenceGuard.ref;
+          if (guardType && isData(guardType)) return guardType;
+          if (guardType && isChoice(guardType)) return guardType;
+        }
+      }
+      return undefined;
+    }
+
     // Conditional expression: `if cond then A else B` — try then-branch first, then else-branch.
     // Used for shortcuts like `alias tradeLot: if ... then ... else trade -> tradeLot only-element`.
     if (isRosettaConditionalExpression(expr)) {
@@ -503,19 +540,14 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
   /**
    * Look up a Data or Choice type by name in the global index.
-   * Used as a fallback when a symbol reference resolves to an unexpected node type
-   * (e.g., a same-named enum value shadows a Data/Choice type in the global scope).
+   * Prefers Choice over Data when both exist with the same simple name,
+   * because CDM defines authoritative choice types that may be shadowed
+   * by same-named FpML data types or enum values.
    */
   private resolveDataOrChoiceByName(name: string): Data | Choice | undefined {
-    const data = this.resolveDataByName(name);
-    if (data) return data;
-    for (const desc of this.indexManager.allElements('Choice')) {
-      if (desc.name === name || desc.name.endsWith('.' + name)) {
-        const node = desc.node;
-        if (node && isChoice(node)) return node;
-      }
-    }
-    return undefined;
+    const choice = this.resolveChoiceByName(name);
+    if (choice) return choice;
+    return this.resolveDataByName(name);
   }
 
   /**
@@ -757,6 +789,18 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       }
       if (sym && isChoice(sym)) {
         return this.getChoiceOptionScope(sym);
+      }
+      // When a non-Choice/non-Enum type is resolved (Data or RosettaEnumValue)
+      // but a Choice type with the same name exists, prefer the Choice.
+      // e.g. `Index` may resolve to enum value `Index` but CDM `choice Index` is intended.
+      if (sym && !isChoice(sym) && !isRosettaEnumeration(sym)) {
+        const refText = node.receiver.symbol?.$refText;
+        if (refText) {
+          const choiceType = this.resolveChoiceByName(refText);
+          if (choiceType) {
+            return this.getChoiceOptionScope(choiceType);
+          }
+        }
       }
     }
 
@@ -1072,9 +1116,13 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     //     the scope should expose attributes of the narrowed type (`SomeType`).
     const switchCase = AstUtils.getContainerOfType(node, isSwitchCaseOrDefault);
     if (switchCase?.guard?.referenceGuard) {
-      const guardType = switchCase.guard.referenceGuard.ref;
-      if (guardType && isData(guardType)) {
-        const attrs = this.collectDataAttributes(guardType);
+      let guardResolved = switchCase.guard.referenceGuard.ref;
+      // When guard resolves to an enum value that shadows a type name, look up the actual type
+      if (guardResolved && isRosettaEnumValue(guardResolved)) {
+        guardResolved = this.resolveDataOrChoiceByName(guardResolved.name) ?? guardResolved;
+      }
+      if (guardResolved && isData(guardResolved)) {
+        const attrs = this.collectDataAttributes(guardResolved);
         for (const a of attrs) {
           extra.push(this.createDescription(a, a.name));
         }
@@ -1351,6 +1399,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (isRosettaDataReference(node)) {
       const ref = node.data?.ref;
       if (ref && isData(ref)) return ref;
+      if (ref && isChoice(ref)) return ref;
       const refText = node.data?.$refText;
       if (refText) return this.resolveDataOrChoiceByName(refText);
       return undefined;
@@ -1360,14 +1409,27 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       if (attrRef && isAttribute(attrRef)) {
         return this.resolveTypeCallToData(attrRef.typeCall);
       }
-      // Fallback: resolve receiver first, then find attr by name
+      if (attrRef && isChoiceOption(attrRef)) {
+        return this.resolveTypeCallToData(attrRef.typeCall);
+      }
+      // Fallback: resolve receiver first, then find attr/option by name
       const receiverType = this.resolveRosettaAttributeRefType(node.receiver);
-      if (receiverType && isData(receiverType)) {
-        const attrText = node.attribute?.$refText;
-        if (attrText) {
+      const attrText = node.attribute?.$refText;
+      if (receiverType && attrText) {
+        if (isData(receiverType)) {
           const attrs = this.collectDataAttributes(receiverType);
           const found = attrs.find((a) => a.name === attrText);
           if (found) return this.resolveTypeCallToData(found.typeCall);
+        }
+        if (isChoice(receiverType)) {
+          // Find the choice option whose type name matches
+          for (const opt of receiverType.attributes) {
+            const refText = opt.typeCall?.type?.$refText ?? '';
+            const simpleName = refText.includes('.') ? refText.split('.').pop()! : refText;
+            if (simpleName === attrText) {
+              return this.resolveTypeCallToData(opt.typeCall);
+            }
+          }
         }
       }
     }

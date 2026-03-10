@@ -63,13 +63,8 @@ describe('CDM deep diagnostic', () => {
     for (const targetName of [
       'Lowest',
       'InterestRateIndex',
-      'quantity',
-      'value',
-      'priceQuantity',
-      'returnSwapLeg',
       'ForeignExchangeRateIndex',
-      'CurrencyCodeEnum',
-      'assetClass'
+      'Observable'
     ]) {
       console.log(`\n--- '${targetName}' errors (first 5) ---`);
       let count = 0;

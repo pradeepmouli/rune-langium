@@ -34,7 +34,11 @@ type RosettaTypedFeature = Attribute | RosettaRecordFeature;
 
 type AssignPathRoot = Attribute | ShortcutDeclaration;
 
-type SwitchCaseTarget = Data | Choice | RosettaEnumValue;
+type SwitchCaseTarget = Data | Choice | RosettaEnumValue | RosettaEnumeration;
+
+type DataOrChoice = Data | Choice;
+
+type AttributeOrChoiceOption = Attribute | ChoiceOption;
 
 // ═══════════════════════════════════════════════════════════════════
 // ENTRY RULE
@@ -107,7 +111,7 @@ AnnotationQualifier:
 ;
 
 Data:
-    'type' RosettaNamed ('extends' superType=[Data:QualifiedName])? ':'
+    'type' RosettaNamed ('extends' superType=[DataOrChoice:QualifiedName])? ':'
     RosettaDefinable?
     (References | Annotations | ClassSynonyms)*
     attributes+=Attribute*
@@ -669,11 +673,11 @@ RosettaMapRosettaPath:
 ;
 
 RosettaDataReference:
-    data=[Data:QualifiedName]
+    data=[DataOrChoice:QualifiedName]
 ;
 
 RosettaAttributeReference:
-    RosettaDataReference ({infer RosettaAttributeReference.receiver=current} '->' attribute=[Attribute:ValidID])+
+    RosettaDataReference ({infer RosettaAttributeReference.receiver=current} '->' attribute=[AttributeOrChoiceOption:ValidID])+
 ;
 
 RosettaMapTestExpressionRule infers RosettaMapTestExpression:
@@ -759,7 +763,7 @@ RosettaExternalRuleSource:
 ;
 
 RosettaExternalClass:
-    data=[Data:QualifiedName] ':'
+    data=[DataOrChoice:QualifiedName] ':'
     (externalClassSynonyms+=RosettaExternalClassSynonym)*
     (regularAttributes+=RosettaExternalRegularAttribute)*
 ;
@@ -847,13 +851,13 @@ AnnotationPathExpression:
 
 NestedAnnotationPath infers AnnotationPathExpression:
     PrimaryAnnotationPath (
-        {infer AnnotationPath.receiver=current} operator='->' attribute=[Attribute:ValidID]
-        | {infer AnnotationDeepPath.receiver=current} operator='->>' attribute=[Attribute:ValidID]
+        {infer AnnotationPath.receiver=current} operator='->' attribute=[AttributeOrChoiceOption:ValidID]
+        | {infer AnnotationDeepPath.receiver=current} operator='->>' attribute=[AttributeOrChoiceOption:ValidID]
     )*
 ;
 
 PrimaryAnnotationPath infers AnnotationPathExpression:
-    {infer AnnotationPathAttributeReference} attribute=[Attribute:ValidID]
+    {infer AnnotationPathAttributeReference} attribute=[AttributeOrChoiceOption:ValidID]
     | RosettaImplicitVariableRule
 ;
 

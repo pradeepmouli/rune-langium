@@ -206,7 +206,7 @@ export interface AnnotationDeepPath extends langium.AstNode {
     | RosettaDocReference
     | RuleReferenceAnnotation;
   readonly $type: 'AnnotationDeepPath';
-  attribute: langium.Reference<Attribute>;
+  attribute: langium.Reference<AttributeOrChoiceOption>;
   operator: '->>';
   receiver: AnnotationPathExpression;
 }
@@ -230,7 +230,7 @@ export interface AnnotationPath extends langium.AstNode {
     | RosettaDocReference
     | RuleReferenceAnnotation;
   readonly $type: 'AnnotationPath';
-  attribute: langium.Reference<Attribute>;
+  attribute: langium.Reference<AttributeOrChoiceOption>;
   operator: '->';
   receiver: AnnotationPathExpression;
 }
@@ -254,7 +254,7 @@ export interface AnnotationPathAttributeReference extends langium.AstNode {
     | RosettaDocReference
     | RuleReferenceAnnotation;
   readonly $type: 'AnnotationPathAttributeReference';
-  attribute: langium.Reference<Attribute>;
+  attribute: langium.Reference<AttributeOrChoiceOption>;
 }
 
 export const AnnotationPathAttributeReference = {
@@ -513,6 +513,16 @@ export const Attribute = {
 
 export function isAttribute(item: unknown): item is Attribute {
   return reflection.isInstance(item, Attribute.$type);
+}
+
+export type AttributeOrChoiceOption = Attribute | ChoiceOption;
+
+export const AttributeOrChoiceOption = {
+  $type: 'AttributeOrChoiceOption'
+} as const;
+
+export function isAttributeOrChoiceOption(item: unknown): item is AttributeOrChoiceOption {
+  return reflection.isInstance(item, AttributeOrChoiceOption.$type);
 }
 
 export type BigDecimal = string;
@@ -793,7 +803,7 @@ export interface Data extends langium.AstNode {
   definition?: string;
   name: ValidID;
   references: Array<RosettaDocReference>;
-  superType?: langium.Reference<Data>;
+  superType?: langium.Reference<DataOrChoice>;
   synonyms: Array<RosettaClassSynonym>;
 }
 
@@ -811,6 +821,16 @@ export const Data = {
 
 export function isData(item: unknown): item is Data {
   return reflection.isInstance(item, Data.$type);
+}
+
+export type DataOrChoice = Choice | Data;
+
+export const DataOrChoice = {
+  $type: 'DataOrChoice'
+} as const;
+
+export function isDataOrChoice(item: unknown): item is DataOrChoice {
+  return reflection.isInstance(item, DataOrChoice.$type);
 }
 
 export interface DefaultOperation extends langium.AstNode {
@@ -2198,7 +2218,7 @@ export function isRosettaAbsentExpression(item: unknown): item is RosettaAbsentE
 export interface RosettaAttributeReference extends langium.AstNode {
   readonly $container: AnnotationQualifier | RosettaAttributeReference | RosettaMapRosettaPath;
   readonly $type: 'RosettaAttributeReference' | 'RosettaDataReference';
-  attribute: langium.Reference<Attribute>;
+  attribute: langium.Reference<AttributeOrChoiceOption>;
   receiver: RosettaDataReference;
 }
 
@@ -2695,7 +2715,7 @@ export function isRosettaCountOperation(item: unknown): item is RosettaCountOper
 export interface RosettaDataReference extends RosettaAttributeReference {
   readonly $container: RosettaAttributeReference;
   readonly $type: 'RosettaDataReference';
-  data: langium.Reference<Data>;
+  data: langium.Reference<DataOrChoice>;
 }
 
 export const RosettaDataReference = {
@@ -3120,7 +3140,7 @@ export function isRosettaExpression(item: unknown): item is RosettaExpression {
 export interface RosettaExternalClass extends langium.AstNode {
   readonly $container: RosettaExternalRuleSource | RosettaSynonymSource;
   readonly $type: 'RosettaExternalClass';
-  data: langium.Reference<Data>;
+  data: langium.Reference<DataOrChoice>;
   externalClassSynonyms: Array<RosettaExternalClassSynonym>;
   regularAttributes: Array<RosettaExternalRegularAttribute>;
 }
@@ -4882,7 +4902,7 @@ export function isSwitchCaseOrDefault(item: unknown): item is SwitchCaseOrDefaul
   return reflection.isInstance(item, SwitchCaseOrDefault.$type);
 }
 
-export type SwitchCaseTarget = Choice | Data | RosettaEnumValue;
+export type SwitchCaseTarget = Choice | Data | RosettaEnumValue | RosettaEnumeration;
 
 export const SwitchCaseTarget = {
   $type: 'SwitchCaseTarget'
@@ -5793,6 +5813,7 @@ export type RuneDslAstType = {
   AsKeyOperation: AsKeyOperation;
   AssignPathRoot: AssignPathRoot;
   Attribute: Attribute;
+  AttributeOrChoiceOption: AttributeOrChoiceOption;
   Choice: Choice;
   ChoiceOperation: ChoiceOperation;
   ChoiceOption: ChoiceOption;
@@ -5801,6 +5822,7 @@ export type RuneDslAstType = {
   Condition: Condition;
   ConstructorKeyValuePair: ConstructorKeyValuePair;
   Data: Data;
+  DataOrChoice: DataOrChoice;
   DefaultOperation: DefaultOperation;
   DistinctOperation: DistinctOperation;
   DocumentRationale: DocumentRationale;
@@ -5950,7 +5972,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
       properties: {
         attribute: {
           name: AnnotationDeepPath.attribute,
-          referenceType: Attribute.$type
+          referenceType: AttributeOrChoiceOption.$type
         },
         operator: {
           name: AnnotationDeepPath.operator
@@ -5966,7 +5988,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
       properties: {
         attribute: {
           name: AnnotationPath.attribute,
-          referenceType: Attribute.$type
+          referenceType: AttributeOrChoiceOption.$type
         },
         operator: {
           name: AnnotationPath.operator
@@ -5982,7 +6004,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
       properties: {
         attribute: {
           name: AnnotationPathAttributeReference.attribute,
-          referenceType: Attribute.$type
+          referenceType: AttributeOrChoiceOption.$type
         }
       },
       superTypes: [AnnotationPathExpression.$type]
@@ -6099,10 +6121,16 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
       },
       superTypes: [
         AssignPathRoot.$type,
+        AttributeOrChoiceOption.$type,
         RosettaFeature.$type,
         RosettaSymbol.$type,
         RosettaTypedFeature.$type
       ]
+    },
+    AttributeOrChoiceOption: {
+      name: AttributeOrChoiceOption.$type,
+      properties: {},
+      superTypes: []
     },
     Choice: {
       name: Choice.$type,
@@ -6127,6 +6155,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
         }
       },
       superTypes: [
+        DataOrChoice.$type,
         RosettaRootElement.$type,
         RosettaSymbol.$type,
         RosettaType.$type,
@@ -6183,7 +6212,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           name: ChoiceOption.typeCall
         }
       },
-      superTypes: [RosettaFeature.$type]
+      superTypes: [AttributeOrChoiceOption.$type, RosettaFeature.$type]
     },
     ClosureParameter: {
       name: ClosureParameter.$type,
@@ -6279,7 +6308,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
         },
         superType: {
           name: Data.superType,
-          referenceType: Data.$type
+          referenceType: DataOrChoice.$type
         },
         synonyms: {
           name: Data.synonyms,
@@ -6287,11 +6316,17 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
         }
       },
       superTypes: [
+        DataOrChoice.$type,
         RosettaRootElement.$type,
         RosettaSymbol.$type,
         RosettaType.$type,
         SwitchCaseTarget.$type
       ]
+    },
+    DataOrChoice: {
+      name: DataOrChoice.$type,
+      properties: {},
+      superTypes: []
     },
     DefaultOperation: {
       name: DefaultOperation.$type,
@@ -6628,7 +6663,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
       properties: {
         attribute: {
           name: RosettaAttributeReference.attribute,
-          referenceType: Attribute.$type
+          referenceType: AttributeOrChoiceOption.$type
         },
         receiver: {
           name: RosettaAttributeReference.receiver
@@ -6809,11 +6844,11 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
       properties: {
         attribute: {
           name: RosettaDataReference.attribute,
-          referenceType: Attribute.$type
+          referenceType: AttributeOrChoiceOption.$type
         },
         data: {
           name: RosettaDataReference.data,
-          referenceType: Data.$type
+          referenceType: DataOrChoice.$type
         },
         receiver: {
           name: RosettaDataReference.receiver
@@ -6976,7 +7011,12 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           defaultValue: []
         }
       },
-      superTypes: [RosettaRootElement.$type, RosettaSymbol.$type, RosettaType.$type]
+      superTypes: [
+        RosettaRootElement.$type,
+        RosettaSymbol.$type,
+        RosettaType.$type,
+        SwitchCaseTarget.$type
+      ]
     },
     RosettaExistsExpression: {
       name: RosettaExistsExpression.$type,
@@ -7003,7 +7043,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
       properties: {
         data: {
           name: RosettaExternalClass.data,
-          referenceType: Data.$type
+          referenceType: DataOrChoice.$type
         },
         externalClassSynonyms: {
           name: RosettaExternalClass.externalClassSynonyms,
