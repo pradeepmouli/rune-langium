@@ -65,7 +65,11 @@ describe('CDM deep diagnostic', () => {
       'InterestRateIndex',
       'quantity',
       'value',
-      'priceQuantity'
+      'priceQuantity',
+      'returnSwapLeg',
+      'ForeignExchangeRateIndex',
+      'CurrencyCodeEnum',
+      'assetClass'
     ]) {
       console.log(`\n--- '${targetName}' errors (first 5) ---`);
       let count = 0;

@@ -51,7 +51,8 @@ import {
   isAnnotationPath,
   isAnnotationDeepPath,
   isAnnotationPathAttributeReference,
-  isChoiceOperation
+  isChoiceOperation,
+  isSwitchOperation
 } from '../generated/ast.js';
 import type {
   Data,
@@ -377,6 +378,20 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
           return this.resolveCollectionElementType(argument);
         }
         searchFrom = op;
+      }
+
+      // Switch case type narrowing: inside `expr switch SomeType then <body>`,
+      // `item` should resolve to the narrowed type of the switch case guard.
+      // e.g. `inputCriteria switch IssuerAgencyRating then CheckAgencyRating(item -> issuerAgencyRating, query)`
+      const switchCase = AstUtils.getContainerOfType(expr, isSwitchCaseOrDefault);
+      if (switchCase?.guard?.referenceGuard) {
+        const guardType = switchCase.guard.referenceGuard.ref;
+        if (guardType && isData(guardType)) {
+          return guardType;
+        }
+        if (guardType && isChoice(guardType)) {
+          return guardType;
+        }
       }
       return undefined;
     }
