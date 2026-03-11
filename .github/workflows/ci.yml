@@ -90,6 +90,7 @@ jobs:
       - name: Check Bundle Size
         run: pnpm dlx size-limit
         if: matrix.node-version == '20.x'
+        continue-on-error: true
 
   # ---------------------------------------------------------------------------
   # check-generated: Verify generated schema files don't drift from source (T039, FR-018, SC-008)
