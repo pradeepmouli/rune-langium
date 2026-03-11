@@ -10,6 +10,39 @@ vi.mock('../../src/services/transport-provider.js', () => ({
   createTransportProvider: vi.fn()
 }));
 
+// Mock @codemirror/lsp-client to capture didOpen/didClose/notification calls
+const {
+  mockDidOpen,
+  mockDidClose,
+  mockNotification,
+  mockLspDisconnect,
+  mockLspConnect,
+  mockPlugin
+} = vi.hoisted(() => ({
+  mockDidOpen: vi.fn(),
+  mockDidClose: vi.fn(),
+  mockNotification: vi.fn(),
+  mockLspDisconnect: vi.fn(),
+  mockLspConnect: vi.fn(),
+  mockPlugin: vi.fn().mockReturnValue([])
+}));
+
+vi.mock('@codemirror/lsp-client', () => {
+  class MockLSPClient {
+    didOpen = mockDidOpen;
+    didClose = mockDidClose;
+    notification = mockNotification;
+    disconnect = mockLspDisconnect;
+    connect = mockLspConnect;
+    plugin = mockPlugin;
+    constructor(_opts: unknown) {}
+  }
+  return {
+    LSPClient: MockLSPClient,
+    languageServerExtensions: vi.fn().mockReturnValue([])
+  };
+});
+
 import { createTransportProvider } from '../../src/services/transport-provider.js';
 
 const mockCreateProvider = vi.mocked(createTransportProvider);
@@ -149,5 +182,160 @@ describe('createLspClientService', () => {
 
     expect(service.isInitialized()).toBe(true);
     expect(mockCreateProvider).not.toHaveBeenCalled();
+  });
+});
+
+describe('syncWorkspaceFiles', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function createConnectedService() {
+    const transport = makeFakeTransport();
+    const provider = makeFakeProvider(transport);
+    mockCreateProvider.mockReturnValue(provider as never);
+    const service = createLspClientService();
+    await service.connect();
+    // Clear mocks from connect phase
+    mockDidOpen.mockClear();
+    mockDidClose.mockClear();
+    mockNotification.mockClear();
+    return service;
+  }
+
+  it('sends didOpen for new files', async () => {
+    const service = await createConnectedService();
+
+    service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace foo' }]);
+
+    expect(mockDidOpen).toHaveBeenCalledOnce();
+    expect(mockDidOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uri: 'file:///workspace/foo.rosetta',
+        languageId: 'rosetta',
+        version: 0
+      })
+    );
+  });
+
+  it('sends didChange for modified files', async () => {
+    const service = await createConnectedService();
+
+    // First sync — opens the file
+    service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace foo' }]);
+    mockDidOpen.mockClear();
+    mockNotification.mockClear();
+
+    // Second sync — same path, different content
+    service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace bar' }]);
+
+    expect(mockDidOpen).not.toHaveBeenCalled();
+    expect(mockNotification).toHaveBeenCalledWith('textDocument/didChange', {
+      textDocument: { uri: 'file:///workspace/foo.rosetta', version: 1 },
+      contentChanges: [{ text: 'namespace bar' }]
+    });
+  });
+
+  it('sends didClose for removed files', async () => {
+    const service = await createConnectedService();
+
+    // Open a file
+    service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace foo' }]);
+    mockDidOpen.mockClear();
+
+    // Sync with empty list — file is removed
+    service.syncWorkspaceFiles([]);
+
+    expect(mockDidClose).toHaveBeenCalledWith('file:///workspace/foo.rosetta');
+  });
+
+  it('increments version numbers on subsequent changes', async () => {
+    const service = await createConnectedService();
+
+    service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'v1' }]);
+    service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'v2' }]);
+    service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'v3' }]);
+
+    // v1→v2 is version 1, v2→v3 is version 2
+    const changeCalls = mockNotification.mock.calls.filter(
+      (c) => c[0] === 'textDocument/didChange'
+    );
+    // Filter to only the target URI changes (exclude refresh notifications)
+    const targetChanges = changeCalls.filter(
+      (c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta'
+    );
+    expect(targetChanges[0][1].textDocument.version).toBe(1);
+    expect(targetChanges[1][1].textDocument.version).toBe(2);
+  });
+
+  it('handles batch of multiple new files', async () => {
+    const service = await createConnectedService();
+
+    service.syncWorkspaceFiles([
+      { path: 'a.rosetta', content: 'namespace a' },
+      { path: 'b.rosetta', content: 'namespace b' },
+      { path: 'c.rosetta', content: 'namespace c' }
+    ]);
+
+    expect(mockDidOpen).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not send notifications when not connected', () => {
+    const provider = makeFakeProvider();
+    mockCreateProvider.mockReturnValue(provider as never);
+    const service = createLspClientService();
+
+    // Not connected — should still track files internally without errors
+    service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace foo' }]);
+
+    expect(mockDidOpen).not.toHaveBeenCalled();
+    expect(mockNotification).not.toHaveBeenCalled();
+  });
+
+  it('refreshes unchanged files when new files are added', async () => {
+    const service = await createConnectedService();
+
+    // First sync — one file
+    service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'namespace a' }]);
+    mockDidOpen.mockClear();
+    mockNotification.mockClear();
+
+    // Second sync — add a new file alongside existing
+    service.syncWorkspaceFiles([
+      { path: 'a.rosetta', content: 'namespace a' },
+      { path: 'b.rosetta', content: 'namespace b' }
+    ]);
+
+    // b.rosetta should be opened
+    expect(mockDidOpen).toHaveBeenCalledOnce();
+
+    // a.rosetta should get a refresh notification (unchanged content, bumped version)
+    const changeCalls = mockNotification.mock.calls.filter(
+      (c) => c[0] === 'textDocument/didChange'
+    );
+    const refreshForA = changeCalls.find(
+      (c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta'
+    );
+    expect(refreshForA).toBeTruthy();
+  });
+
+  it('does not change anything when files are identical', async () => {
+    const service = await createConnectedService();
+
+    service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'namespace a' }]);
+    mockDidOpen.mockClear();
+    mockNotification.mockClear();
+
+    // Same files, same content, no additions
+    service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'namespace a' }]);
+
+    // No new opens, no changes, no closes (no new files added so no refresh either)
+    expect(mockDidOpen).not.toHaveBeenCalled();
+    expect(mockNotification).not.toHaveBeenCalled();
+    expect(mockDidClose).not.toHaveBeenCalled();
   });
 });
