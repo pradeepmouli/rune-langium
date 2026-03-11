@@ -42,14 +42,14 @@
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.6.0",
-    "@changesets/cli": "^2.29.8",
-    "@types/node": "^25.3.3",
-    "@typescript/native-preview": "7.0.0-dev.20260302.1",
+    "@changesets/cli": "^2.30.0",
+    "@types/node": "^25.4.0",
+    "@typescript/native-preview": "7.0.0-dev.20260310.1",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
-    "lint-staged": "^16.3.1",
-    "oxfmt": "^0.36.0",
-    "oxlint": "^1.51.0",
+    "lint-staged": "^16.3.3",
+    "oxfmt": "^0.37.0",
+    "oxlint": "^1.52.0",
     "simple-git-hooks": "^2.13.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
@@ -60,9 +60,9 @@
   },
   "packageManager": "pnpm@10.30.3",
   "dependencies": {
-    "@lspeasy/client": "^3.0.0",
-    "@lspeasy/core": "^2.1.0",
-    "@zod-to-form/cli": "^0.2.4",
+    "@lspeasy/client": "^3.0.1",
+    "@lspeasy/core": "^2.1.1",
+    "@zod-to-form/cli": "^0.2.7",
     "camelcase": "^9.0.0"
   },
   "pnpm": {

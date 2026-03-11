@@ -22,7 +22,7 @@
     "@codemirror/lsp-client": "^6.2.2",
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.39.17",
-    "@lspeasy/core": "^2.1.0",
+    "@lspeasy/core": "^2.1.1",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
     "@rune-langium/lsp-server": "workspace:*",

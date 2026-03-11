@@ -77,24 +77,7 @@ export const DocumentRationaleSchema = z.looseObject({
 
 export const RosettaDocReferenceSchema = z.looseObject({
   $type: z.literal('RosettaDocReference'),
-  name: z.union([
-    z.literal('regulatoryReference'),
-    z.literal('docReference'),
-    z.literal('regulatoryReference'),
-    z.literal('docReference'),
-    z.literal('regulatoryReference'),
-    z.literal('docReference'),
-    z.literal('regulatoryReference'),
-    z.literal('docReference'),
-    z.literal('regulatoryReference'),
-    z.literal('docReference'),
-    z.literal('regulatoryReference'),
-    z.literal('docReference'),
-    z.literal('regulatoryReference'),
-    z.literal('docReference'),
-    z.literal('regulatoryReference'),
-    z.literal('docReference')
-  ]),
+  name: z.union([z.literal('regulatoryReference'), z.literal('docReference')]),
   path: z.lazy(() => AnnotationPathExpressionSchema).optional(),
   docReference: RegulatoryDocumentReferenceSchema,
   rationales: z.array(DocumentRationaleSchema).optional(),
@@ -182,7 +165,7 @@ export const RosettaSynonymSchema = z.looseObject({
 
 export const LabelAnnotationSchema = z.looseObject({
   $type: z.literal('LabelAnnotation'),
-  name: z.union([z.literal('label'), z.literal('label'), z.literal('label')]),
+  name: z.literal('label'),
   label: z.string(),
   path: z.lazy(() => AnnotationPathExpressionSchema).optional(),
   deprecatedAs: z.boolean().optional()
@@ -190,12 +173,7 @@ export const LabelAnnotationSchema = z.looseObject({
 
 export const RuleReferenceAnnotationSchema = z.looseObject({
   $type: z.literal('RuleReferenceAnnotation'),
-  name: z.union([
-    z.literal('ruleReference'),
-    z.literal('ruleReference'),
-    z.literal('ruleReference'),
-    z.literal('ruleReference')
-  ]),
+  name: z.literal('ruleReference'),
   path: z.lazy(() => AnnotationPathExpressionSchema).optional(),
   reportingRule: ReferenceSchema.optional(),
   empty: z.boolean().optional()
@@ -287,12 +265,7 @@ export const ChoiceOperationSchema = z.looseObject({
   $type: z.literal('ChoiceOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
   necessity: NecessitySchema,
-  operator: z.union([
-    z.literal('choice'),
-    z.literal('choice'),
-    z.literal('choice'),
-    z.literal('choice')
-  ]),
+  operator: z.literal('choice'),
   attributes: z.array(ReferenceSchema)
 });
 
@@ -305,20 +278,7 @@ export const ComparisonOperationSchema = z.looseObject({
   $type: z.literal('ComparisonOperation'),
   left: z.lazy(() => RosettaExpressionSchema).optional(),
   cardMod: CardinalityModifierSchema.optional(),
-  operator: z.union([
-    z.literal('>='),
-    z.literal('<='),
-    z.literal('>'),
-    z.literal('<'),
-    z.literal('>='),
-    z.literal('<='),
-    z.literal('>'),
-    z.literal('<'),
-    z.literal('>='),
-    z.literal('<='),
-    z.literal('>'),
-    z.literal('<')
-  ]),
+  operator: z.union([z.literal('>='), z.literal('<='), z.literal('>'), z.literal('<')]),
   right: z.lazy(() => RosettaExpressionSchema)
 });
 
@@ -353,28 +313,21 @@ export const DataSchema = z.looseObject({
 export const DefaultOperationSchema = z.looseObject({
   $type: z.literal('DefaultOperation'),
   left: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('default'), z.literal('default')]),
+  operator: z.literal('default'),
   right: z.lazy(() => RosettaExpressionSchema)
 });
 
 export const DistinctOperationSchema = z.looseObject({
   $type: z.literal('DistinctOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('distinct'), z.literal('distinct')])
+  operator: z.literal('distinct')
 });
 
 export const EqualityOperationSchema = z.looseObject({
   $type: z.literal('EqualityOperation'),
   left: z.lazy(() => RosettaExpressionSchema).optional(),
   cardMod: CardinalityModifierSchema.optional(),
-  operator: z.union([
-    z.literal('='),
-    z.literal('<>'),
-    z.literal('='),
-    z.literal('<>'),
-    z.literal('='),
-    z.literal('<>')
-  ]),
+  operator: z.union([z.literal('='), z.literal('<>')]),
   right: z.lazy(() => RosettaExpressionSchema)
 });
 
@@ -387,20 +340,20 @@ export const InlineFunctionSchema = z.looseObject({
 export const FilterOperationSchema = z.looseObject({
   $type: z.literal('FilterOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('filter'), z.literal('filter')]),
+  operator: z.literal('filter'),
   function: InlineFunctionSchema.optional()
 });
 
 export const FirstOperationSchema = z.looseObject({
   $type: z.literal('FirstOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('first'), z.literal('first')])
+  operator: z.literal('first')
 });
 
 export const FlattenOperationSchema = z.looseObject({
   $type: z.literal('FlattenOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('flatten'), z.literal('flatten')])
+  operator: z.literal('flatten')
 });
 
 export const ImportSchema = z.looseObject({
@@ -412,14 +365,14 @@ export const ImportSchema = z.looseObject({
 export const JoinOperationSchema = z.looseObject({
   $type: z.literal('JoinOperation'),
   left: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('join'), z.literal('join')]),
+  operator: z.literal('join'),
   right: z.lazy(() => RosettaExpressionSchema).optional()
 });
 
 export const LastOperationSchema = z.looseObject({
   $type: z.literal('LastOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('last'), z.literal('last')])
+  operator: z.literal('last')
 });
 
 export const ListLiteralSchema = z.looseObject({
@@ -437,28 +390,28 @@ export const LogicalOperationSchema = z.looseObject({
 export const MapOperationSchema = z.looseObject({
   $type: z.literal('MapOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('extract'), z.literal('extract')]),
+  operator: z.literal('extract'),
   function: InlineFunctionSchema.optional()
 });
 
 export const MaxOperationSchema = z.looseObject({
   $type: z.literal('MaxOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('max'), z.literal('max')]),
+  operator: z.literal('max'),
   function: InlineFunctionSchema.optional()
 });
 
 export const MinOperationSchema = z.looseObject({
   $type: z.literal('MinOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('min'), z.literal('min')]),
+  operator: z.literal('min'),
   function: InlineFunctionSchema.optional()
 });
 
 export const OneOfOperationSchema = z.looseObject({
   $type: z.literal('OneOfOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('one-of'), z.literal('one-of')])
+  operator: z.literal('one-of')
 });
 
 export const SegmentSchema = z.looseObject({
@@ -481,20 +434,20 @@ export const OperationSchema = z.looseObject({
 export const ReduceOperationSchema = z.looseObject({
   $type: z.literal('ReduceOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('reduce'), z.literal('reduce')]),
+  operator: z.literal('reduce'),
   function: InlineFunctionSchema.optional()
 });
 
 export const ReverseOperationSchema = z.looseObject({
   $type: z.literal('ReverseOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('reverse'), z.literal('reverse')])
+  operator: z.literal('reverse')
 });
 
 export const RosettaAbsentExpressionSchema = z.looseObject({
   $type: z.literal('RosettaAbsentExpression'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('absent'), z.literal('absent')])
+  operator: z.literal('absent')
 });
 
 export const TypeParameterSchema = z.looseObject({
@@ -533,7 +486,7 @@ export const RosettaConditionalExpressionSchema = z.looseObject({
 
 export const RosettaSuperCallSchema = z.looseObject({
   $type: z.literal('RosettaSuperCall'),
-  name: z.union([z.literal('super'), z.literal('super'), z.literal('super'), z.literal('super')]),
+  name: z.literal('super'),
   explicitArguments: z.boolean().optional(),
   rawArgs: z.array(z.lazy(() => RosettaExpressionSchema)).optional()
 });
@@ -556,7 +509,7 @@ export const RosettaConstructorExpressionSchema = z.looseObject({
 export const RosettaContainsExpressionSchema = z.looseObject({
   $type: z.literal('RosettaContainsExpression'),
   left: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('contains'), z.literal('contains')]),
+  operator: z.literal('contains'),
   right: z.lazy(() => RosettaExpressionSchema)
 });
 
@@ -572,7 +525,7 @@ export const RosettaCorpusSchema = z.looseObject({
 export const RosettaCountOperationSchema = z.looseObject({
   $type: z.literal('RosettaCountOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('count'), z.literal('count')])
+  operator: z.literal('count')
 });
 
 export const RosettaDeepFeatureCallSchema = z.looseObject({
@@ -584,7 +537,7 @@ export const RosettaDeepFeatureCallSchema = z.looseObject({
 export const RosettaDisjointExpressionSchema = z.looseObject({
   $type: z.literal('RosettaDisjointExpression'),
   left: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('disjoint'), z.literal('disjoint')]),
+  operator: z.literal('disjoint'),
   right: z.lazy(() => RosettaExpressionSchema)
 });
 
@@ -629,7 +582,7 @@ export const RosettaExistsExpressionSchema = z.looseObject({
   $type: z.literal('RosettaExistsExpression'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
   modifier: ExistsModifierSchema.optional(),
-  operator: z.union([z.literal('exists'), z.literal('exists')])
+  operator: z.literal('exists')
 });
 
 export const RosettaExternalClassSynonymSchema = z.looseObject({
@@ -726,7 +679,7 @@ export const RosettaFunctionSchema = z.looseObject({
 
 export const RosettaImplicitVariableSchema = z.looseObject({
   $type: z.literal('RosettaImplicitVariable'),
-  name: z.union([z.literal('item'), z.literal('item')])
+  name: z.literal('item')
 });
 
 export const RosettaIntLiteralSchema = z.looseObject({
@@ -810,7 +763,7 @@ export const RosettaNumberLiteralSchema = z.looseObject({
 export const RosettaOnlyElementSchema = z.looseObject({
   $type: z.literal('RosettaOnlyElement'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('only-element'), z.literal('only-element')])
+  operator: z.literal('only-element')
 });
 
 export const RosettaOnlyExistsExpressionSchema = z.looseObject({
@@ -889,14 +842,14 @@ export const RosettaTypeAliasSchema = z.looseObject({
 export const SortOperationSchema = z.looseObject({
   $type: z.literal('SortOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('sort'), z.literal('sort')]),
+  operator: z.literal('sort'),
   function: InlineFunctionSchema.optional()
 });
 
 export const SumOperationSchema = z.looseObject({
   $type: z.literal('SumOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('sum'), z.literal('sum')])
+  operator: z.literal('sum')
 });
 
 export const SwitchCaseGuardSchema = z.looseObject({
@@ -914,12 +867,7 @@ export const SwitchCaseOrDefaultSchema = z.looseObject({
 export const SwitchOperationSchema = z.looseObject({
   $type: z.literal('SwitchOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([
-    z.literal('switch'),
-    z.literal('switch'),
-    z.literal('switch'),
-    z.literal('switch')
-  ]),
+  operator: z.literal('switch'),
   cases: z.array(SwitchCaseOrDefaultSchema)
 });
 
@@ -933,50 +881,50 @@ export const ThenOperationSchema = z.looseObject({
 export const ToDateOperationSchema = z.looseObject({
   $type: z.literal('ToDateOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('to-date'), z.literal('to-date')])
+  operator: z.literal('to-date')
 });
 
 export const ToDateTimeOperationSchema = z.looseObject({
   $type: z.literal('ToDateTimeOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('to-date-time'), z.literal('to-date-time')])
+  operator: z.literal('to-date-time')
 });
 
 export const ToEnumOperationSchema = z.looseObject({
   $type: z.literal('ToEnumOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('to-enum'), z.literal('to-enum')]),
+  operator: z.literal('to-enum'),
   enumeration: ReferenceSchema
 });
 
 export const ToIntOperationSchema = z.looseObject({
   $type: z.literal('ToIntOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('to-int'), z.literal('to-int')])
+  operator: z.literal('to-int')
 });
 
 export const ToNumberOperationSchema = z.looseObject({
   $type: z.literal('ToNumberOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('to-number'), z.literal('to-number')])
+  operator: z.literal('to-number')
 });
 
 export const ToStringOperationSchema = z.looseObject({
   $type: z.literal('ToStringOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('to-string'), z.literal('to-string')])
+  operator: z.literal('to-string')
 });
 
 export const ToTimeOperationSchema = z.looseObject({
   $type: z.literal('ToTimeOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('to-time'), z.literal('to-time')])
+  operator: z.literal('to-time')
 });
 
 export const ToZonedDateTimeOperationSchema = z.looseObject({
   $type: z.literal('ToZonedDateTimeOperation'),
   argument: z.lazy(() => RosettaExpressionSchema).optional(),
-  operator: z.union([z.literal('to-zoned-date-time'), z.literal('to-zoned-date-time')])
+  operator: z.literal('to-zoned-date-time')
 });
 
 export const WithMetaEntrySchema = z.looseObject({
@@ -988,12 +936,7 @@ export const WithMetaEntrySchema = z.looseObject({
 export const WithMetaOperationSchema = z.looseObject({
   $type: z.literal('WithMetaOperation'),
   argument: z.lazy(() => RosettaExpressionSchema),
-  operator: z.union([
-    z.literal('with-meta'),
-    z.literal('with-meta'),
-    z.literal('with-meta'),
-    z.literal('with-meta')
-  ]),
+  operator: z.literal('with-meta'),
   entries: z.array(WithMetaEntrySchema).optional()
 });
 
