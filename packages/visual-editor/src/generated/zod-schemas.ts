@@ -593,11 +593,11 @@ export const RosettaEnumValueSchema = z.looseObject({
   enumSynonyms: z.array(RosettaEnumSynonymSchema).optional()
 });
 
-export const RosettaEnumerationSchema = z.object({
+export const RosettaEnumerationSchema = z.looseObject({
   $type: z.literal('RosettaEnumeration'),
   name: ValidIDSchema,
   parent: ReferenceSchema.optional(),
-  enumValues: z.array(RosettaEnumValueSchema)
+  enumValues: z.array(RosettaEnumValueSchema).optional()
 });
 
 export const RosettaEnumValueReferenceSchema = z.looseObject({
@@ -980,6 +980,13 @@ export const AssignPathRootSchema = z.discriminatedUnion('$type', [
   ShortcutDeclarationSchema
 ]);
 
+export const AttributeOrChoiceOptionSchema = z.discriminatedUnion('$type', [
+  AttributeSchema,
+  ChoiceOptionSchema
+]);
+
+export const DataOrChoiceSchema = z.discriminatedUnion('$type', [DataSchema, ChoiceSchema]);
+
 export const RosettaCallableWithArgsSchema = z.discriminatedUnion('$type', [
   RosettaFunctionSchema,
   RosettaExternalFunctionSchema,
@@ -1040,7 +1047,8 @@ export const RosettaFeatureSchema = z.discriminatedUnion('$type', [
   AttributeSchema,
   RosettaRecordFeatureSchema,
   RosettaEnumValueSchema,
-  RosettaMetaTypeSchema
+  RosettaMetaTypeSchema,
+  ChoiceOptionSchema
 ]);
 
 export const RosettaLiteralSchema = z.discriminatedUnion('$type', [
@@ -1095,7 +1103,9 @@ export const RosettaSymbolSchema = z.discriminatedUnion('$type', [
   ClosureParameterSchema,
   RosettaEnumerationSchema,
   RosettaEnumValueSchema,
-  RosettaParameterSchema
+  RosettaParameterSchema,
+  DataSchema,
+  ChoiceSchema
 ]);
 
 export const RosettaTypeSchema = z.discriminatedUnion('$type', [
@@ -1115,7 +1125,8 @@ export const RosettaTypedFeatureSchema = z.discriminatedUnion('$type', [
 export const SwitchCaseTargetSchema = z.discriminatedUnion('$type', [
   DataSchema,
   ChoiceSchema,
-  RosettaEnumValueSchema
+  RosettaEnumValueSchema,
+  RosettaEnumerationSchema
 ]);
 
 export const AstNodeSchema = z.discriminatedUnion('$type', [
@@ -1269,56 +1280,56 @@ export function createTypeCallSchema(refs: TypeCallSchemaRefs = {}) {
 }
 
 export interface AnnotationDeepPathSchemaRefs {
-  Attribute?: string[];
+  AttributeOrChoiceOption?: string[];
 }
 
 export function createAnnotationDeepPathSchema(refs: AnnotationDeepPathSchemaRefs = {}) {
   return AnnotationDeepPathSchema.extend({
-    attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.Attribute ?? []) })
+    attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
 }
 
 export interface AnnotationPathSchemaRefs {
-  Attribute?: string[];
+  AttributeOrChoiceOption?: string[];
 }
 
 export function createAnnotationPathSchema(refs: AnnotationPathSchemaRefs = {}) {
   return AnnotationPathSchema.extend({
-    attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.Attribute ?? []) })
+    attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
 }
 
 export interface AnnotationPathAttributeReferenceSchemaRefs {
-  Attribute?: string[];
+  AttributeOrChoiceOption?: string[];
 }
 
 export function createAnnotationPathAttributeReferenceSchema(
   refs: AnnotationPathAttributeReferenceSchemaRefs = {}
 ) {
   return AnnotationPathAttributeReferenceSchema.extend({
-    attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.Attribute ?? []) })
+    attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
 }
 
 export interface RosettaDataReferenceSchemaRefs {
-  Data?: string[];
+  DataOrChoice?: string[];
 }
 
 export function createRosettaDataReferenceSchema(refs: RosettaDataReferenceSchemaRefs = {}) {
   return RosettaDataReferenceSchema.extend({
-    data: ReferenceSchema.extend({ $refText: zRef(() => refs.Data ?? []) })
+    data: ReferenceSchema.extend({ $refText: zRef(() => refs.DataOrChoice ?? []) })
   });
 }
 
 export interface RosettaAttributeReferenceSchemaRefs {
-  Attribute?: string[];
+  AttributeOrChoiceOption?: string[];
 }
 
 export function createRosettaAttributeReferenceSchema(
   refs: RosettaAttributeReferenceSchemaRefs = {}
 ) {
   return RosettaAttributeReferenceSchema.extend({
-    attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.Attribute ?? []) })
+    attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
 }
 
@@ -1403,12 +1414,12 @@ export function createConstructorKeyValuePairSchema(refs: ConstructorKeyValuePai
 }
 
 export interface DataSchemaRefs {
-  Data?: string[];
+  DataOrChoice?: string[];
 }
 
 export function createDataSchema(refs: DataSchemaRefs = {}) {
   return DataSchema.extend({
-    superType: ReferenceSchema.extend({ $refText: zRef(() => refs.Data ?? []) }).optional()
+    superType: ReferenceSchema.extend({ $refText: zRef(() => refs.DataOrChoice ?? []) }).optional()
   });
 }
 
@@ -1525,12 +1536,12 @@ export function createRosettaExternalRegularAttributeSchema(
 }
 
 export interface RosettaExternalClassSchemaRefs {
-  Data?: string[];
+  DataOrChoice?: string[];
 }
 
 export function createRosettaExternalClassSchema(refs: RosettaExternalClassSchemaRefs = {}) {
   return RosettaExternalClassSchema.extend({
-    data: ReferenceSchema.extend({ $refText: zRef(() => refs.Data ?? []) })
+    data: ReferenceSchema.extend({ $refText: zRef(() => refs.DataOrChoice ?? []) })
   });
 }
 
