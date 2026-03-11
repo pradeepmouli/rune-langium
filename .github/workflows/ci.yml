@@ -43,7 +43,7 @@ jobs:
 
       - name: Cache CDM / Rune DSL / Rune FpML fixtures
         id: fixture-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .resources
           key: ${{ steps.fixture-versions.outputs.cache-key }}
