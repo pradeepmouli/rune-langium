@@ -7,6 +7,7 @@
 import { memo } from 'react';
 import { BaseEdge, getStraightPath, EdgeLabelRenderer } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
+import { colors } from '@rune-langium/design-system/tokens';
 
 export const InheritanceEdge = memo(function InheritanceEdge({
   id,
@@ -29,7 +30,7 @@ export const InheritanceEdge = memo(function InheritanceEdge({
       id={id}
       path={edgePath}
       style={{
-        stroke: '#4299e1',
+        stroke: colors.data.DEFAULT,
         strokeWidth: 2,
         ...style
       }}

@@ -3,9 +3,41 @@
  *
  * Renders a collapsible tree grouped by namespace. Expanding/collapsing
  * a namespace correlates with showing/hiding its types on the graph canvas.
+ *
+ * Uses shadcn/ui primitives and lucide-react icons.
  */
 
 import { useState, useMemo, useCallback } from 'react';
+import type { JSX } from 'react';
+import {
+  ChevronRight,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  CircleDot,
+  Circle,
+  PlusSquare,
+  MinusSquare,
+  Package,
+  GitBranch,
+  Tag,
+  FunctionSquare,
+  Link,
+  Layers,
+  ArrowRightLeft,
+  Atom,
+  StickyNote
+} from 'lucide-react';
+import { Input } from '@rune-langium/design-system/ui/input';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { Badge } from '@rune-langium/design-system/ui/badge';
+import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@rune-langium/design-system/ui/tooltip';
 import type { TypeGraphNode, NamespaceTreeNode, TypeKind } from '../../types.js';
 import { buildNamespaceTree, filterNamespaceTree } from '../../utils/namespace-tree.js';
 
@@ -30,6 +62,8 @@ export interface NamespaceExplorerPanelProps {
   onCollapseAll: () => void;
   /** Called when a node is clicked to select it in the graph. */
   onSelectNode?: (nodeId: string) => void;
+  /** Currently selected node ID (for highlighting). */
+  selectedNodeId?: string | null;
   /** Optional className for outer container. */
   className?: string;
   /** Total edge count for cross-namespace reference detection. */
@@ -37,21 +71,29 @@ export interface NamespaceExplorerPanelProps {
 }
 
 // ---------------------------------------------------------------------------
-// Kind icons
+// Kind icon components
 // ---------------------------------------------------------------------------
 
-const KIND_ICONS: Record<TypeKind, string> = {
-  data: '\u{1F4E6}', // 📦
-  choice: '\u{1F500}', // 🔀
-  enum: '\u{1F3F7}', // 🏷️
-  func: '\u{1D453}' // 𝑓
+const KIND_ICON_MAP: Record<TypeKind, React.ElementType> = {
+  data: Package,
+  choice: GitBranch,
+  enum: Tag,
+  func: FunctionSquare,
+  record: Layers,
+  typeAlias: ArrowRightLeft,
+  basicType: Atom,
+  annotation: StickyNote
 };
 
 const KIND_LABELS: Record<TypeKind, string> = {
   data: 'Data',
   choice: 'Choice',
   enum: 'Enum',
-  func: 'Function'
+  func: 'Function',
+  record: 'Record',
+  typeAlias: 'Type Alias',
+  basicType: 'Basic Type',
+  annotation: 'Annotation'
 };
 
 // ---------------------------------------------------------------------------
@@ -62,6 +104,7 @@ export function NamespaceExplorerPanel({
   nodes,
   expandedNamespaces,
   hiddenNodeIds,
+  selectedNodeId,
   onToggleNamespace,
   onToggleNode,
   onExpandAll,
@@ -69,9 +112,11 @@ export function NamespaceExplorerPanel({
   onSelectNode,
   className,
   hiddenRefCounts
-}: NamespaceExplorerPanelProps): React.JSX.Element {
+}: NamespaceExplorerPanelProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
-  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(new Set());
+  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(
+    () => new Set(nodes.map((n) => n.data.namespace))
+  );
 
   // Build and filter the namespace tree
   const fullTree = useMemo(() => buildNamespaceTree(nodes), [nodes]);
@@ -108,68 +153,81 @@ export function NamespaceExplorerPanel({
   ).length;
 
   return (
-    <div className={`ns-explorer ${className ?? ''}`} data-testid="namespace-explorer">
-      {/* Header */}
-      <div className="ns-explorer__header">
-        <span className="ns-explorer__title">Explorer</span>
-        <span className="ns-explorer__count">
-          {visibleCount}/{totalTypes}
-        </span>
-      </div>
-
-      {/* Toolbar */}
-      <div className="ns-explorer__toolbar">
-        <input
-          type="text"
-          className="ns-explorer__search"
-          placeholder="Filter namespaces..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          data-testid="namespace-search"
-        />
-        <div className="ns-explorer__actions">
-          <button
-            className="ns-explorer__action-btn"
-            onClick={onExpandAll}
-            title="Show all namespaces on graph"
-            data-testid="expand-all"
-          >
-            &#x229E;
-          </button>
-          <button
-            className="ns-explorer__action-btn"
-            onClick={onCollapseAll}
-            title="Hide all namespaces from graph"
-            data-testid="collapse-all"
-          >
-            &#x229F;
-          </button>
+    <TooltipProvider>
+      <div
+        className={`flex flex-col h-full bg-card ${className ?? ''}`}
+        data-testid="namespace-explorer"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-3 py-2 border-b">
+          <span className="text-sm font-semibold">Explorer</span>
+          <Badge variant="secondary">
+            {visibleCount}/{totalTypes}
+          </Badge>
         </div>
-      </div>
 
-      {/* Tree */}
-      <div className="ns-explorer__tree" data-testid="namespace-tree">
-        {filteredTree.length === 0 && (
-          <div className="ns-explorer__empty">
-            {searchQuery ? 'No matching namespaces' : 'No types loaded'}
-          </div>
-        )}
-        {filteredTree.map((entry) => (
-          <NamespaceRow
-            key={entry.namespace}
-            entry={entry}
-            isGraphVisible={expandedNamespaces.has(entry.namespace)}
-            isTreeExpanded={isTreeExpanded(entry.namespace)}
-            hiddenNodeIds={hiddenNodeIds}
-            hiddenRefCounts={hiddenRefCounts}
-            onToggleGraphVisibility={() => onToggleNamespace(entry.namespace)}
-            onToggleTreeExpand={() => toggleTreeExpand(entry.namespace)}
-            onToggleNode={onToggleNode}
-            onSelectNode={onSelectNode}
+        {/* Toolbar */}
+        <div className="flex items-center gap-1.5 px-3 py-2 border-b">
+          <Input
+            type="text"
+            placeholder="Filter namespaces..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-7 text-xs"
+            data-testid="namespace-search"
           />
-        ))}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-xs" onClick={onExpandAll} data-testid="expand-all">
+                <PlusSquare className="size-4" />
+                <span className="sr-only">Show all</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Show all namespaces on graph</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={onCollapseAll}
+                data-testid="collapse-all"
+              >
+                <MinusSquare className="size-4" />
+                <span className="sr-only">Hide all</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Hide all namespaces from graph</TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* Tree */}
+        <ScrollArea className="flex-1">
+          <div className="py-1" data-testid="namespace-tree">
+            {filteredTree.length === 0 && (
+              <p className="px-3 py-4 text-xs text-center text-muted-foreground">
+                {searchQuery ? 'No matching namespaces' : 'No types loaded'}
+              </p>
+            )}
+            {filteredTree.map((entry) => (
+              <NamespaceRow
+                key={entry.namespace}
+                entry={entry}
+                isGraphVisible={expandedNamespaces.has(entry.namespace)}
+                isTreeExpanded={isTreeExpanded(entry.namespace)}
+                hiddenNodeIds={hiddenNodeIds}
+                hiddenRefCounts={hiddenRefCounts}
+                onToggleGraphVisibility={() => onToggleNamespace(entry.namespace)}
+                onToggleTreeExpand={() => toggleTreeExpand(entry.namespace)}
+                onToggleNode={onToggleNode}
+                onSelectNode={onSelectNode}
+                selectedNodeId={selectedNodeId}
+              />
+            ))}
+          </div>
+        </ScrollArea>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
 
@@ -183,6 +241,7 @@ interface NamespaceRowProps {
   isTreeExpanded: boolean;
   hiddenNodeIds: Set<string>;
   hiddenRefCounts?: Map<string, number>;
+  selectedNodeId?: string | null;
   onToggleGraphVisibility: () => void;
   onToggleTreeExpand: () => void;
   onToggleNode: (nodeId: string) => void;
@@ -195,69 +254,122 @@ function NamespaceRow({
   isTreeExpanded,
   hiddenNodeIds,
   hiddenRefCounts,
+  selectedNodeId,
   onToggleGraphVisibility,
   onToggleTreeExpand,
   onToggleNode,
   onSelectNode
-}: NamespaceRowProps): React.JSX.Element {
+}: NamespaceRowProps): JSX.Element {
   return (
-    <div className="ns-row" data-testid={`ns-row-${entry.namespace}`}>
-      <div className={`ns-row__header ${isGraphVisible ? 'ns-row__header--visible' : ''}`}>
-        <button
-          className="ns-row__chevron"
+    <div data-testid={`ns-row-${entry.namespace}`}>
+      <div
+        className={`flex items-center gap-1 px-2 py-1 text-sm hover:bg-accent/50 cursor-default ${
+          isGraphVisible ? 'text-foreground' : 'text-muted-foreground'
+        }`}
+      >
+        <Button
+          variant="ghost"
+          size="icon-xs"
           onClick={onToggleTreeExpand}
           aria-label={isTreeExpanded ? 'Collapse tree' : 'Expand tree'}
+          className="shrink-0"
         >
-          {isTreeExpanded ? '\u25BC' : '\u25B6'}
-        </button>
-        <button
-          className="ns-row__visibility"
-          onClick={onToggleGraphVisibility}
-          title={isGraphVisible ? 'Hide from graph' : 'Show on graph'}
-          aria-label={isGraphVisible ? 'Hide namespace from graph' : 'Show namespace on graph'}
+          {isTreeExpanded ? (
+            <ChevronDown className="size-3.5" />
+          ) : (
+            <ChevronRight className="size-3.5" />
+          )}
+        </Button>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={onToggleGraphVisibility}
+              aria-label={isGraphVisible ? 'Hide namespace from graph' : 'Show namespace on graph'}
+              className="shrink-0"
+            >
+              {isGraphVisible ? (
+                <Eye className="size-3.5" />
+              ) : (
+                <EyeOff className="size-3.5 text-muted-foreground" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{isGraphVisible ? 'Hide from graph' : 'Show on graph'}</TooltipContent>
+        </Tooltip>
+
+        <span
+          className="flex-1 truncate text-xs font-medium cursor-pointer"
+          onClick={onToggleTreeExpand}
         >
-          {isGraphVisible ? '\u{1F441}' : '\u{1F441}\u{FE0F}\u{200D}\u{1F5E8}\u{FE0F}'}
-        </button>
-        <span className="ns-row__name" onClick={onToggleTreeExpand}>
           {entry.namespace}
         </span>
-        <span className="ns-row__badge">{entry.totalCount}</span>
+
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+          {entry.totalCount}
+        </Badge>
       </div>
 
       {isTreeExpanded && (
-        <div className="ns-row__children">
+        <div className="ml-4">
           {entry.types.map((type) => {
             const isHidden = hiddenNodeIds.has(type.nodeId);
             const isVisible = isGraphVisible && !isHidden;
             const refCount = hiddenRefCounts?.get(type.nodeId) ?? 0;
+            const KindIcon = KIND_ICON_MAP[type.kind];
+
+            const isSelected = type.nodeId === selectedNodeId;
+
             return (
               <div
                 key={type.nodeId}
-                className={`ns-type ${isVisible ? 'ns-type--visible' : 'ns-type--hidden'}`}
+                className={`flex items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
+                  isSelected
+                    ? 'bg-accent text-accent-foreground'
+                    : isVisible
+                      ? 'text-foreground'
+                      : 'text-muted-foreground opacity-60'
+                }`}
                 data-testid={`ns-type-${type.nodeId}`}
               >
-                <button
-                  className="ns-type__visibility"
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={() => onToggleNode(type.nodeId)}
-                  title={isHidden ? 'Show type' : 'Hide type'}
                   disabled={!isGraphVisible}
+                  aria-label={isHidden ? 'Show type' : 'Hide type'}
+                  className="shrink-0 size-5"
                 >
-                  {isVisible ? '\u25C9' : '\u25CB'}
-                </button>
-                <span className="ns-type__icon">{KIND_ICONS[type.kind]}</span>
+                  {isVisible ? <CircleDot className="size-3" /> : <Circle className="size-3" />}
+                </Button>
+
+                <KindIcon className="size-3.5 shrink-0 text-muted-foreground" />
+
                 <span
-                  className="ns-type__name"
+                  className="flex-1 truncate cursor-pointer hover:underline"
                   onClick={() => onSelectNode?.(type.nodeId)}
                   title={`${type.name} [${KIND_LABELS[type.kind]}]`}
                 >
                   {type.name}
                 </span>
+
                 {refCount > 0 && (
-                  <span className="ns-type__ext-refs" title={`${refCount} hidden reference(s)`}>
-                    &#x1F517;{refCount}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+                        <Link className="size-3" />
+                        <span className="text-[10px]">{refCount}</span>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{refCount} hidden reference(s)</TooltipContent>
+                  </Tooltip>
                 )}
-                <span className="ns-type__kind">{KIND_LABELS[type.kind]}</span>
+
+                <span className="text-[10px] text-muted-foreground shrink-0">
+                  {KIND_LABELS[type.kind]}
+                </span>
               </div>
             );
           })}

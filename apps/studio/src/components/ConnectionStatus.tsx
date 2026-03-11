@@ -6,8 +6,8 @@
  */
 
 import type { TransportState } from '../services/transport-provider.js';
-import { cn } from '@/lib/utils.js';
-import { Button } from './ui/button.js';
+import { cn } from '@rune-langium/design-system/utils';
+import { Button } from '@rune-langium/design-system/ui/button';
 
 export interface ConnectionStatusProps {
   /** Transport state to display. */
@@ -32,8 +32,8 @@ const MODE_LABELS: Record<string, string> = {
 const DOT_COLORS: Record<string, string> = {
   connected: 'bg-success',
   connecting: 'bg-warning animate-[pulse-dot_1.5s_ease-in-out_infinite]',
-  disconnected: 'bg-text-muted',
-  error: 'bg-error'
+  disconnected: 'bg-muted-foreground',
+  error: 'bg-destructive'
 };
 
 export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) {
@@ -44,7 +44,10 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
     onReconnect !== undefined && state.status !== 'connected' && state.status !== 'connecting';
 
   return (
-    <output className="inline-flex items-center gap-1.5 text-sm text-text-secondary" role="status">
+    <output
+      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
+      role="status"
+    >
       <span
         className={cn(
           'w-2 h-2 rounded-full shrink-0',
@@ -56,7 +59,7 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
         {modeLabel && state.status === 'connected' ? ` (${modeLabel})` : ''}
       </span>
       {state.status === 'error' && state.error && (
-        <span className="text-error text-xs">{state.error.message}</span>
+        <span className="text-destructive text-xs">{state.error.message}</span>
       )}
       {showReconnect && (
         <Button

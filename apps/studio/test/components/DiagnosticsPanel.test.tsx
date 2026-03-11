@@ -103,8 +103,10 @@ describe('DiagnosticsPanel', () => {
       <DiagnosticsPanel fileDiagnostics={diags} onNavigate={onNavigate} />
     );
 
-    const errorIcons = container.querySelectorAll('.text-error');
-    const warningIcons = container.querySelectorAll('.text-warning');
+    // Error icon (●) and warning icon (▲) in shrink-0 spans
+    const iconSpans = container.querySelectorAll('span.shrink-0.text-xs');
+    const errorIcons = Array.from(iconSpans).filter((el) => el.textContent === '\u25cf');
+    const warningIcons = Array.from(iconSpans).filter((el) => el.textContent === '\u25b2');
     expect(errorIcons.length).toBe(1);
     expect(warningIcons.length).toBe(1);
   });

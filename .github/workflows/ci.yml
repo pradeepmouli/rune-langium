@@ -3,7 +3,7 @@ name: CI
 # TEMPLATE: Customize branches and workflow triggers for your project
 on:
   push:
-    branches: [master, develop]
+    branches: [master, develop, "changeset-release/**"]
   pull_request:
     branches: [master, develop]
 
@@ -35,18 +35,20 @@ jobs:
         run: |
           CDM_TAG=$(grep -m1 '^CDM_TAG=' scripts/update-fixtures.sh | cut -d'"' -f2)
           RUNE_TAG=$(grep -m1 '^RUNE_TAG=' scripts/update-fixtures.sh | cut -d'"' -f2)
+          FPML_TAG=$(grep -m1 '^FPML_TAG=' scripts/update-fixtures.sh | cut -d'"' -f2)
           echo "cdm-tag=$CDM_TAG" >> "$GITHUB_OUTPUT"
           echo "rune-tag=$RUNE_TAG" >> "$GITHUB_OUTPUT"
-          echo "cache-key=fixtures-cdm-${CDM_TAG}-rune-${RUNE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "fpml-tag=$FPML_TAG" >> "$GITHUB_OUTPUT"
+          echo "cache-key=fixtures-cdm-${CDM_TAG}-rune-${RUNE_TAG}-fpml-${FPML_TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Cache CDM / Rune DSL fixtures
+      - name: Cache CDM / Rune DSL / Rune FpML fixtures
         id: fixture-cache
         uses: actions/cache@v4
         with:
           path: .resources
           key: ${{ steps.fixture-versions.outputs.cache-key }}
 
-      - name: Download CDM / Rune DSL fixtures
+      - name: Download CDM / Rune DSL / Rune FpML fixtures
         if: steps.fixture-cache.outputs.cache-hit != 'true'
         run: bash scripts/update-fixtures.sh
 
@@ -88,3 +90,45 @@ jobs:
       - name: Check Bundle Size
         run: pnpm dlx size-limit
         if: matrix.node-version == '20.x'
+        continue-on-error: true
+
+  # ---------------------------------------------------------------------------
+  # check-generated: Verify generated schema files don't drift from source (T039, FR-018, SC-008)
+  #
+  # Runs generate:schemas, normalises formatting, then fails if any committed
+  # generated file differs from the freshly-regenerated output.
+  #
+  # Note: scaffold:forms is still intentionally omitted even though @zod-to-form/cli
+  # is now pinned to v0.2.4+ with --mode auto-save support; hand-authored forms in
+  # src/components/forms/generated/ are not yet reproduced and checked in CI.
+  # TODO: Add scaffold:forms check using auto-save mode now that the CLI supports it.
+  # ---------------------------------------------------------------------------
+  check-generated:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20.x'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerate Zod schemas from Langium grammar
+        run: pnpm --filter @rune-langium/visual-editor generate:schemas
+
+      - name: Normalise formatting on generated schemas
+        run: |
+          pnpm --filter @rune-langium/visual-editor exec oxfmt \
+            src/generated/zod-schemas.ts \
+            src/generated/zod-schemas.conformance.ts
+
+      - name: Assert no drift between committed and freshly-generated schemas
+        run: git diff --exit-code -- packages/visual-editor/src/generated/

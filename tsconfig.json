@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "jsx": "react",
     "target": "ES2022",
     "module": "nodenext",
     "moduleResolution": "nodenext",
@@ -25,5 +26,13 @@
     "composite": true,
     "incremental": true
   },
-  "exclude": ["node_modules", "dist", "build", "coverage"]
+  "exclude": ["node_modules", "dist", "build", "coverage"],
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/design-system/tsconfig.json" },
+    { "path": "packages/lsp-server" },
+    { "path": "packages/visual-editor" },
+    { "path": "apps/studio" }
+  ]
 }

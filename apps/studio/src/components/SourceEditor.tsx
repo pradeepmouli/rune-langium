@@ -9,7 +9,15 @@
  * and cross-file navigation.
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  useImperativeHandle,
+  forwardRef
+} from 'react';
 import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, type Extension } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
@@ -17,7 +25,7 @@ import { defaultKeymap } from '@codemirror/commands';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
-import { cn } from '@/lib/utils.js';
+import { cn } from '@rune-langium/design-system/utils';
 
 // Re-export pathToUri for backward compatibility
 export { pathToUri } from '../utils/uri.js';
@@ -31,6 +39,8 @@ export interface SourceEditorFile {
   path: string;
   content: string;
   dirty: boolean;
+  /** When true, the file is a system/built-in file and cannot be edited. */
+  readOnly?: boolean;
 }
 
 export interface SourceEditorProps {
@@ -40,10 +50,18 @@ export interface SourceEditorProps {
   activeFile?: string;
   /** Called when user switches tabs. */
   onFileSelect?: (path: string) => void;
+  /** Called when a tab close button is clicked. */
+  onFileClose?: (path: string) => void;
   /** Called when editor content changes. */
   onContentChange?: (path: string, content: string) => void;
   /** LSP client service (injected). */
   lspClient?: LspClientService;
+}
+
+/** Imperative handle exposed by SourceEditor for programmatic navigation. */
+export interface SourceEditorRef {
+  /** Scroll to a line in the specified (or current) file and highlight it. */
+  revealLine(line: number, filePath?: string): void;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -60,20 +78,65 @@ function getTabId(path: string): string {
   return `tab-${encoded}`;
 }
 
+/** Scroll to a 1-based line number and highlight it briefly. */
+function scrollToLine(view: EditorView | null, line: number): void {
+  if (!view) return;
+  const clampedLine = Math.max(1, Math.min(line, view.state.doc.lines));
+  const lineInfo = view.state.doc.line(clampedLine);
+  view.dispatch({
+    selection: { anchor: lineInfo.from },
+    effects: EditorView.scrollIntoView(lineInfo.from, { y: 'center' })
+  });
+  view.focus();
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────────────────────────────────
 
-export function SourceEditor({
-  files,
-  activeFile,
-  onFileSelect,
-  onContentChange,
-  lspClient
-}: SourceEditorProps) {
+export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(function SourceEditor(
+  { files, activeFile, onFileSelect, onFileClose, onContentChange, lspClient },
+  ref
+) {
   const [selectedPath, setSelectedPath] = useState<string>(activeFile ?? files[0]?.path ?? '');
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+
+  // Sync selectedPath when activeFile prop changes externally
+  useEffect(() => {
+    if (activeFile && activeFile !== selectedPath) {
+      const exists = files.some((f) => f.path === activeFile);
+      if (exists) {
+        setSelectedPath(activeFile);
+      }
+    }
+  }, [activeFile, files]);
+
+  // Expose imperative handle for programmatic navigation
+  useImperativeHandle(
+    ref,
+    () => ({
+      revealLine(line: number, filePath?: string) {
+        // If a different file is specified, switch to it first
+        if (filePath && filePath !== selectedPath) {
+          const target = files.find((f) => f.path === filePath || f.name === filePath);
+          if (target) {
+            setSelectedPath(target.path);
+            onFileSelect?.(target.path);
+            // Schedule the scroll after the editor is recreated for the new file
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                scrollToLine(editorViewRef.current, line);
+              });
+            });
+            return;
+          }
+        }
+        scrollToLine(editorViewRef.current, line);
+      }
+    }),
+    [files, selectedPath, onFileSelect]
+  );
 
   // Track content per file for document model
   const contentMapRef = useRef<Map<string, string>>(new Map());
@@ -130,19 +193,22 @@ export function SourceEditor({
 
   // Build extensions — uses refs for callbacks to keep extensions stable
   const buildExtensions = useCallback(
-    (filePath: string): Extension[] => {
-      const exts: Extension[] = [
-        basicSetup,
-        keymap.of(defaultKeymap),
-        runeDslLanguage(),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
-            const content = update.state.doc.toString();
-            contentMapRef.current.set(filePath, content);
-            onContentChangeRef.current?.(filePath, content);
-          }
-        })
-      ];
+    (filePath: string, isReadOnly: boolean): Extension[] => {
+      const exts: Extension[] = [basicSetup, keymap.of(defaultKeymap), runeDslLanguage()];
+
+      if (isReadOnly) {
+        exts.push(EditorState.readOnly.of(true));
+      } else {
+        exts.push(
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              const content = update.state.doc.toString();
+              contentMapRef.current.set(filePath, content);
+              onContentChangeRef.current?.(filePath, content);
+            }
+          })
+        );
+      }
 
       // Wire LSP plugin if client is available
       if (lspClient?.isInitialized()) {
@@ -170,7 +236,7 @@ export function SourceEditor({
 
     const state = EditorState.create({
       doc: content,
-      extensions: buildExtensions(currentFile.path)
+      extensions: buildExtensions(currentFile.path, currentFile.readOnly ?? false)
     });
 
     const view = new EditorView({
@@ -193,7 +259,7 @@ export function SourceEditor({
   if (files.length === 0) {
     return (
       <section
-        className="flex flex-col items-center justify-center h-full bg-surface-base text-text-muted"
+        className="flex flex-col items-center justify-center h-full bg-background text-muted-foreground"
         data-testid="source-editor"
       >
         <p>No files loaded</p>
@@ -202,33 +268,77 @@ export function SourceEditor({
   }
 
   return (
-    <section className="flex flex-col h-full bg-surface-base" data-testid="source-editor">
+    <section className="flex flex-col h-full bg-background" data-testid="source-editor">
       {/* Tab bar */}
       <nav
-        className="flex overflow-x-auto bg-surface-raised border-b border-border-default gap-px min-h-[32px]"
+        className="flex overflow-x-auto bg-card border-b border-border gap-px min-h-[32px]"
         role="tablist"
         aria-label="Open files"
       >
         {files.map((file) => (
-          <button
+          <div
             key={file.path}
-            id={getTabId(file.path)}
-            role="tab"
-            aria-selected={file.path === selectedPath}
-            aria-controls="editor-tabpanel"
-            tabIndex={file.path === selectedPath ? 0 : -1}
             className={cn(
-              'px-3.5 py-1.5 text-sm bg-transparent border-none border-b-2 border-b-transparent cursor-pointer whitespace-nowrap transition-colors',
-              'hover:text-text-primary',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
-              file.path === selectedPath ? 'text-accent border-b-accent' : 'text-text-secondary'
+              'group flex items-center gap-0.5 border-b-2 border-b-transparent transition-colors',
+              file.path === selectedPath ? 'border-b-primary' : ''
             )}
-            onClick={() => handleFileSelect(file.path)}
-            title={file.path}
           >
-            {file.name}
-            {file.dirty && <span className="text-warning text-xs"> ●</span>}
-          </button>
+            <button
+              id={getTabId(file.path)}
+              role="tab"
+              aria-selected={file.path === selectedPath}
+              aria-controls="editor-tabpanel"
+              tabIndex={file.path === selectedPath ? 0 : -1}
+              className={cn(
+                'pl-3 pr-1 py-1.5 text-sm bg-transparent border-none cursor-pointer whitespace-nowrap transition-colors',
+                'hover:text-foreground',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                file.path === selectedPath ? 'text-primary' : 'text-muted-foreground'
+              )}
+              onClick={() => handleFileSelect(file.path)}
+              title={file.path}
+            >
+              {file.name}
+              {file.readOnly && (
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  aria-label="read-only"
+                  className="inline-block ml-1 opacity-60"
+                >
+                  <path d="M11 7V5a3 3 0 0 0-6 0v2H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1zm-5 0V5a2 2 0 1 1 4 0v2H6zm2 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
+                </svg>
+              )}
+              {file.dirty && <span className="text-warning text-xs"> ●</span>}
+            </button>
+            {onFileClose && !file.readOnly && (
+              <button
+                type="button"
+                aria-label={`Close ${file.name}`}
+                className={cn(
+                  'shrink-0 p-0.5 rounded-sm text-muted-foreground transition-colors',
+                  'hover:text-foreground hover:bg-muted',
+                  'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                  file.path === selectedPath && 'opacity-60'
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFileClose(file.path);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path
+                    d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
         ))}
       </nav>
 
@@ -243,4 +353,4 @@ export function SourceEditor({
       />
     </section>
   );
-}
+});

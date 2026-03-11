@@ -14,10 +14,17 @@ import type {
   Choice,
   RosettaEnumeration,
   RosettaFunction,
+  RosettaRecordType,
+  RosettaTypeAlias,
+  RosettaBasicType,
+  Annotation,
   Attribute,
   ChoiceOption,
-  RosettaEnumValue
+  RosettaEnumValue,
+  RosettaRecordFeature
 } from '@rune-langium/core';
+
+export type ExtractKind<T> = T extends { $type: infer K } ? K : never;
 
 // ---------------------------------------------------------------------------
 // AST ↔ Graph kind mappings
@@ -29,6 +36,10 @@ export interface AstNodeKindMap {
   choice: Choice;
   enum: RosettaEnumeration;
   func: RosettaFunction;
+  record: RosettaRecordType;
+  typeAlias: RosettaTypeAlias;
+  basicType: RosettaBasicType;
+  annotation: Annotation;
 }
 
 /** Maps each `TypeKind` to its member AST node type. */
@@ -37,6 +48,10 @@ export interface AstMemberKindMap {
   choice: ChoiceOption;
   enum: RosettaEnumValue;
   func: Attribute;
+  record: RosettaRecordFeature;
+  typeAlias: never;
+  basicType: never;
+  annotation: Attribute;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,7 +66,12 @@ export type AstMemberType = AstMemberKindMap[TypeKind];
 /** Union of all AST node types carried by graph nodes. */
 export type AstNodeType = AstNodeKindMap[TypeKind];
 
-export type EdgeKind = 'extends' | 'attribute-ref' | 'choice-option' | 'enum-extends';
+export type EdgeKind =
+  | 'extends'
+  | 'attribute-ref'
+  | 'choice-option'
+  | 'enum-extends'
+  | 'type-alias-ref';
 
 /**
  * Display-oriented representation of a single member (attribute / option / value).
@@ -92,7 +112,7 @@ export interface MemberDisplay<M = AstMemberType> {
  * const generic: TypeNodeData = node.data;
  * ```
  */
-export interface TypeNodeData<K extends TypeKind = TypeKind> {
+export type TypeNodeData<K extends TypeKind = TypeKind> = {
   kind: K;
   name: string;
   namespace: string;
@@ -100,7 +120,10 @@ export interface TypeNodeData<K extends TypeKind = TypeKind> {
   members: Array<MemberDisplay<AstMemberKindMap[K]>>;
   parentName?: string;
   hasExternalRefs: boolean;
+
   errors: ValidationError[];
+  /** Annotations applied to this element (e.g. [metadata], [deprecated]). */
+  annotations?: AnnotationDisplay[];
   /** Editable synonym values for this element. */
   synonyms?: string[];
   /** Whether this element is read-only (from external/locked source). */
@@ -108,14 +131,14 @@ export interface TypeNodeData<K extends TypeKind = TypeKind> {
   /** Comments/annotations text for this element. */
   comments?: string;
   /** Output type name (functions only). */
-  outputType?: string;
+  outputType?: K extends 'func' ? string : undefined;
   /** Expression text (functions only). */
-  expressionText?: string;
+  expressionText?: K extends 'func' ? string : undefined;
   /** Source AST node — preserves full Langium type information. */
   source?: AstNodeKindMap[K];
   /** Required for ReactFlow compatibility: Node<T> requires T extends Record<string, unknown> */
   [key: string]: unknown;
-}
+};
 
 /**
  * Data payload for graph edges.
@@ -131,6 +154,14 @@ export interface EdgeData {
   [key: string]: unknown;
 }
 
+/** Display representation of an annotation applied to a type. */
+export interface AnnotationDisplay {
+  /** Annotation name (e.g. 'metadata', 'deprecated'). */
+  name: string;
+  /** Optional attribute qualification (e.g. 'key' for [metadata key]). */
+  attribute?: string;
+}
+
 export interface ValidationError {
   nodeId: string;
   severity: 'error' | 'warning' | 'info';
@@ -138,6 +169,26 @@ export interface ValidationError {
   ruleId?: string;
   line?: number;
   column?: number;
+}
+
+/**
+ * Props provided to the expression editor render-prop slot.
+ *
+ * `packages/visual-editor` is editor-agnostic — the host app provides
+ * the actual editor implementation (e.g. CodeMirror, Monaco) via a
+ * `renderExpressionEditor` prop on `FunctionForm`.
+ */
+export interface ExpressionEditorSlotProps {
+  /** Current expression text. */
+  value: string;
+  /** Called on every keystroke / change. */
+  onChange: (value: string) => void;
+  /** Called when the editor loses focus — triggers validation & commit. */
+  onBlur: () => void;
+  /** Validation error message (null when valid). */
+  error?: string | null;
+  /** Placeholder text shown when the editor is empty. */
+  placeholder?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,22 +214,30 @@ export interface TypeOption {
   /** Display label (type name). */
   label: string;
   /** Type kind for badge coloring. */
-  kind: TypeKind | 'builtin';
+  kind: TypeKind | 'builtin' | 'record' | 'typeAlias' | 'basicType' | 'annotation';
   /** Namespace for grouping in the dropdown. */
   namespace?: string;
 }
 
-/** Callback interface exposing all editor form store actions. */
-export interface EditorFormActions {
-  // --- Type operations (all kinds) ---
+// ---------------------------------------------------------------------------
+// Kind-specific form action interfaces
+// ---------------------------------------------------------------------------
+
+/** Actions shared by all type kinds. */
+export interface CommonFormActions {
   renameType(nodeId: string, newName: string): void;
   deleteType(nodeId: string): void;
   updateDefinition(nodeId: string, definition: string): void;
   updateComments(nodeId: string, comments: string): void;
   addSynonym(nodeId: string, synonym: string): void;
   removeSynonym(nodeId: string, index: number): void;
+  addAnnotation(nodeId: string, annotationName: string): void;
+  removeAnnotation(nodeId: string, index: number): void;
+  validate(): ValidationError[];
+}
 
-  // --- Data type operations ---
+/** Data type–specific editor actions. */
+export interface DataFormActions extends CommonFormActions {
   addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string): void;
   removeAttribute(nodeId: string, attrName: string): void;
   updateAttribute(
@@ -190,27 +249,74 @@ export interface EditorFormActions {
   ): void;
   reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
   setInheritance(childId: string, parentId: string | null): void;
+}
 
-  // --- Enum operations ---
+/** Enum-specific editor actions. */
+export interface EnumFormActions extends CommonFormActions {
   addEnumValue(nodeId: string, valueName: string, displayName?: string): void;
   removeEnumValue(nodeId: string, valueName: string): void;
   updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string): void;
   reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number): void;
   setEnumParent(nodeId: string, parentId: string | null): void;
+}
 
-  // --- Choice operations ---
+/** Choice-specific editor actions. */
+export interface ChoiceFormActions extends CommonFormActions {
   addChoiceOption(nodeId: string, typeName: string): void;
   removeChoiceOption(nodeId: string, typeName: string): void;
+}
 
-  // --- Function operations ---
+/** Function-specific editor actions. */
+export interface FuncFormActions extends CommonFormActions {
   addInputParam(nodeId: string, paramName: string, typeName: string): void;
   removeInputParam(nodeId: string, paramName: string): void;
   updateOutputType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
-
-  // --- Validation ---
-  validate(): ValidationError[];
 }
+
+/** Maps each `TypeKind` to its form actions interface. */
+export interface FormActionsKindMap {
+  data: DataFormActions;
+  enum: EnumFormActions;
+  choice: ChoiceFormActions;
+  func: FuncFormActions;
+  record: CommonFormActions;
+  typeAlias: CommonFormActions;
+  basicType: CommonFormActions;
+  annotation: CommonFormActions;
+}
+
+/** Intersection of all kind-specific actions (every method available). */
+export type AllEditorFormActions = DataFormActions &
+  EnumFormActions &
+  ChoiceFormActions &
+  FuncFormActions;
+
+/**
+ * Kind-aware editor form actions.
+ *
+ * When parameterized with a specific kind (e.g. `EditorFormActions<'data'>`),
+ * only that kind's actions + common actions are available.
+ *
+ * When unparameterized (`EditorFormActions`), resolves to the full intersection
+ * of all kind-specific actions for backward compatibility.
+ *
+ * @example
+ * ```ts
+ * // Narrow — DataTypeForm only sees data + common actions
+ * const dataActions: EditorFormActions<'data'>;
+ * dataActions.addAttribute(...); // ✅
+ * dataActions.addEnumValue(...); // ❌ compile error
+ *
+ * // Full — EditorFormPanel passes the complete set
+ * const allActions: EditorFormActions;
+ * allActions.addAttribute(...); // ✅
+ * allActions.addEnumValue(...); // ✅
+ * ```
+ */
+export type EditorFormActions<K extends TypeKind = TypeKind> = [TypeKind] extends [K]
+  ? AllEditorFormActions
+  : FormActionsKindMap[K];
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -268,6 +374,8 @@ export interface RuneTypeGraphCallbacks {
   onTypeDeleted?: (nodeId: string) => void;
   onModelChanged?: (serialized: Map<string, string>) => void;
   onValidationChange?: (errors: ValidationError[]) => void;
+  /** Called when a node's data changes due to an edit action. */
+  onNodeDataChanged?: (nodeId: string, data: TypeNodeData) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -354,6 +462,10 @@ export interface RuneTypeGraphRef {
   updateOutputType(nodeId: string, typeName: string): void;
   /** Update a function's expression text. */
   updateExpression(nodeId: string, expressionText: string): void;
+  /** Add an annotation to a node. */
+  addAnnotation(nodeId: string, annotationName: string): void;
+  /** Remove an annotation from a node by index. */
+  removeAnnotation(nodeId: string, index: number): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -367,12 +479,15 @@ export interface NamespaceTreeNode {
   dataCount: number;
   choiceCount: number;
   enumCount: number;
+  funcCount: number;
 }
 
 export interface NamespaceTypeEntry {
   nodeId: string;
   name: string;
   kind: TypeKind;
+  /** Whether this entry is from a system/base-type file (read-only). */
+  isSystem?: boolean;
 }
 
 export interface VisibilityState {

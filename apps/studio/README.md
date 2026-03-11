@@ -102,7 +102,17 @@ The studio will connect to `ws://localhost:3001` automatically. If no server is 
 
 ## Testing
 
-Tests use the CDM corpus from `.resources/cdm/` (142 Rune DSL files) for realistic integration testing.
+Tests use vendored Rune DSL fixtures under `.resources/` for realistic integration testing:
+
+- `.resources/cdm/` — CDM model corpus
+- `.resources/rune-dsl/` — built-in base model files
+- `.resources/rune-fpml/` — FpML imported model dependencies
+
+Refresh snapshots with:
+
+```bash
+bash scripts/update-fixtures.sh
+```
 
 ```bash
 # Run all studio tests

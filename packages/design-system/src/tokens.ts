@@ -6,29 +6,6 @@
  */
 
 export const colors = {
-  surface: {
-    base: '#0f172a',
-    raised: '#1e293b',
-    overlay: '#334155',
-    sunken: '#020617'
-  },
-  border: {
-    default: '#334155',
-    muted: '#1e293b',
-    emphasis: '#475569'
-  },
-  text: {
-    primary: '#e2e8f0',
-    heading: '#f1f5f9',
-    secondary: '#94a3b8',
-    muted: '#64748b'
-  },
-  accent: {
-    DEFAULT: '#3b82f6',
-    hover: '#2563eb',
-    muted: 'rgba(59, 130, 246, 0.15)',
-    text: '#93c5fd'
-  },
   data: {
     DEFAULT: '#3b82f6',
     bg: 'rgba(59, 130, 246, 0.15)',
@@ -47,13 +24,31 @@ export const colors = {
     text: '#86efac',
     badge: 'rgba(34, 197, 94, 0.25)'
   },
+  func: {
+    DEFAULT: '#a855f7',
+    bg: 'rgba(168, 85, 247, 0.15)',
+    text: '#d8b4fe',
+    badge: 'rgba(168, 85, 247, 0.25)'
+  },
+  edge: {
+    ref: '#94a3b8'
+  },
   status: {
     success: '#4ade80',
     warning: '#fbbf24',
     error: '#f87171',
-    errorBg: 'rgba(239, 68, 68, 0.1)',
-    errorText: '#fca5a5',
     info: '#38bdf8'
+  },
+  expr: {
+    arithmetic: { DEFAULT: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
+    comparison: { DEFAULT: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)' },
+    logic: { DEFAULT: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)' },
+    navigation: { DEFAULT: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)' },
+    collection: { DEFAULT: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' },
+    control: { DEFAULT: '#ec4899', bg: 'rgba(236, 72, 153, 0.15)' },
+    literal: { DEFAULT: '#94a3b8', bg: 'rgba(148, 163, 184, 0.15)' },
+    reference: { DEFAULT: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' },
+    placeholder: { DEFAULT: '#64748b', bg: 'rgba(100, 116, 139, 0.10)' }
   }
 } as const;
 

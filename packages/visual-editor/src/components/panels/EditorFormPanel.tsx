@@ -17,13 +17,23 @@
 
 import { useEffect, useCallback, useRef, Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
+import { X } from 'lucide-react';
+import { Badge } from '@rune-langium/design-system/ui/badge';
+import { Button } from '@rune-langium/design-system/ui/button';
 import { DataTypeForm } from '../editors/DataTypeForm.js';
 import { EnumForm } from '../editors/EnumForm.js';
 import { ChoiceForm } from '../editors/ChoiceForm.js';
 import { FunctionForm } from '../editors/FunctionForm.js';
 import { DetailPanel } from './DetailPanel.js';
-import { getKindBadgeClasses, getKindLabel } from '../editors/TypeSelector.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
+import { getKindLabel } from '../editors/TypeSelector.js';
+import { useInheritedMembers } from '../../hooks/useInheritedMembers.js';
+import type {
+  TypeNodeData,
+  TypeOption,
+  EditorFormActions,
+  TypeGraphNode,
+  ExpressionEditorSlotProps
+} from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Error Boundary
@@ -86,6 +96,13 @@ export interface EditorFormPanelProps {
   availableTypes: TypeOption[];
   /** All editor form actions. */
   actions: EditorFormActions;
+  /** All graph nodes (for inherited member resolution). */
+  allNodes?: TypeGraphNode[];
+  /**
+   * Optional render-prop for a rich expression editor in FunctionForm.
+   * When omitted, FunctionForm renders a plain `<Textarea>` fallback.
+   */
+  renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
   /** Called when the panel requests to close (e.g., Escape key). */
   onClose?: () => void;
 }
@@ -100,9 +117,13 @@ function EditorFormPanel({
   isReadOnly = false,
   availableTypes,
   actions,
+  allNodes = [],
+  renderExpressionEditor,
   onClose
 }: EditorFormPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
+
+  const inheritedGroups = useInheritedMembers(nodeData, allNodes);
 
   // ---- Escape key closes panel --------------------------------------------
 
@@ -163,26 +184,31 @@ function EditorFormPanel({
       case 'data':
         return (
           <DataTypeForm
+            key={nodeId!}
             nodeId={nodeId!}
             data={nodeData as TypeNodeData<'data'>}
             availableTypes={availableTypes}
             actions={actions}
+            inheritedGroups={inheritedGroups}
           />
         );
 
       case 'enum':
         return (
           <EnumForm
+            key={nodeId!}
             nodeId={nodeId!}
             data={nodeData as TypeNodeData<'enum'>}
             availableTypes={availableTypes}
             actions={actions}
+            inheritedGroups={inheritedGroups}
           />
         );
 
       case 'choice':
         return (
           <ChoiceForm
+            key={nodeId!}
             nodeId={nodeId!}
             data={nodeData as TypeNodeData<'choice'>}
             availableTypes={availableTypes}
@@ -193,12 +219,23 @@ function EditorFormPanel({
       case 'func':
         return (
           <FunctionForm
+            key={nodeId!}
             nodeId={nodeId!}
             data={nodeData as TypeNodeData<'func'>}
             availableTypes={availableTypes}
             actions={actions}
+            inheritedGroups={inheritedGroups}
+            renderExpressionEditor={renderExpressionEditor}
           />
         );
+
+      // record, typeAlias, basicType, and annotation are currently view-only;
+      // full editor forms for these kinds are tracked for a future iteration.
+      case 'record':
+      case 'typeAlias':
+      case 'basicType':
+      case 'annotation':
+        return <DetailPanel nodeData={nodeData} />;
 
       default:
         return <DetailPanel nodeData={nodeData} />;
@@ -218,23 +255,20 @@ function EditorFormPanel({
       <div
         data-slot="panel-header"
         className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3
-          border-b bg-surface-overlay"
+          border-b bg-muted"
       >
         <span className="text-sm font-semibold truncate">{nodeData.name}</span>
-        <span
-          className={`text-xs font-medium px-1.5 py-0.5 rounded shrink-0 ${getKindBadgeClasses(nodeData.kind)}`}
-        >
-          {getKindLabel(nodeData.kind)}
-        </span>
+        <Badge variant={nodeData.kind}>{getKindLabel(nodeData.kind)}</Badge>
         {onClose && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={onClose}
             className="ml-auto text-muted-foreground hover:text-foreground"
             aria-label="Close editor panel"
           >
-            ✕
-          </button>
+            <X className="size-4" />
+          </Button>
         )}
       </div>
 

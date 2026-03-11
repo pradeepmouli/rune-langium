@@ -20,7 +20,7 @@ import type { TypeNodeData, TypeOption, EditorFormActions } from '../../src/type
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeActions(): EditorFormActions {
+function makeActions(): EditorFormActions<'func'> {
   return {
     renameType: vi.fn(),
     deleteType: vi.fn(),
@@ -28,18 +28,6 @@ function makeActions(): EditorFormActions {
     updateComments: vi.fn(),
     addSynonym: vi.fn(),
     removeSynonym: vi.fn(),
-    addAttribute: vi.fn(),
-    removeAttribute: vi.fn(),
-    updateAttribute: vi.fn(),
-    reorderAttribute: vi.fn(),
-    setInheritance: vi.fn(),
-    addEnumValue: vi.fn(),
-    removeEnumValue: vi.fn(),
-    updateEnumValue: vi.fn(),
-    reorderEnumValue: vi.fn(),
-    setEnumParent: vi.fn(),
-    addChoiceOption: vi.fn(),
-    removeChoiceOption: vi.fn(),
     addInputParam: vi.fn(),
     removeInputParam: vi.fn(),
     updateOutputType: vi.fn(),

@@ -4,7 +4,8 @@
 
 /** Convert a file path to a proper file:// URI for LSP document identification. */
 export function pathToUri(path: string): string {
-  if (path.startsWith('file://')) return path;
+  // Preserve any path that already carries a URI scheme (file://, system://, etc.)
+  if (path.includes('://')) return path;
 
   // For browser environment, treat relative paths as workspace paths
   let absPath: string;

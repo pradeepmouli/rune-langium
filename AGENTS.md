@@ -22,8 +22,6 @@ This repository is designed for multi-agent collaboration (Copilot, Claude, Gemi
 5) Type-check (if added): pnpm run type-check
 
 ## Coding Standards
-- 2-space indentation; spaces (no tabs).
-- Semicolons required; single quotes; no trailing commas.
 - Keep public API docs concise; avoid documenting internals.
 - Use vitest for tests; add coverage for public APIs.
 

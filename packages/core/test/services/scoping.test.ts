@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { parse, parseWorkspace } from '../../src/index.js';
 import type { Data, RosettaFunction, RosettaEnumeration, RosettaModel } from '../../src/index.js';
+import { createRuneDslServices } from '../../src/index.js';
+import { URI } from 'langium';
+import type { Diagnostic, LangiumDocument } from 'langium';
 
 /**
  * Helper: parse and assert no errors.
@@ -13,6 +16,34 @@ async function parseOk(input: string) {
   ];
   expect(allErrors, allErrors.join('\n')).toHaveLength(0);
   return result;
+}
+
+/**
+ * Helper: parse and validate a workspace of multiple documents.
+ * Returns diagnostics per document so we can check linking errors.
+ */
+async function parseAndValidateWorkspace(entries: Array<{ uri: string; content: string }>): Promise<
+  Array<{
+    value: RosettaModel;
+    diagnostics: Diagnostic[];
+    errors: Diagnostic[];
+  }>
+> {
+  const { RuneDsl } = createRuneDslServices();
+  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+  const builder = RuneDsl.shared.workspace.DocumentBuilder;
+
+  const documents = entries.map((entry) => factory.fromString(entry.content, URI.parse(entry.uri)));
+  await builder.build(documents, { validation: true });
+
+  return documents.map((doc) => {
+    const diagnostics = doc.diagnostics ?? [];
+    return {
+      value: doc.parseResult.value as RosettaModel,
+      diagnostics,
+      errors: diagnostics.filter((d) => d.severity === 1)
+    };
+  });
 }
 
 describe('Scoping', () => {
@@ -216,6 +247,412 @@ describe('Scoping', () => {
           value int (1..1)
       `);
       expect(result.hasErrors).toBe(false);
+    });
+  });
+
+  describe('Enum value feature call scope (CompareOp -> GreaterThan)', () => {
+    it('should resolve enum value via -> in same file', async () => {
+      const result = await parseOk(`
+        namespace test.scope
+        version "1.0.0"
+
+        enum CompareOp:
+          GreaterThan
+          LessThan
+          Equals
+
+        func CompareNumbers:
+          inputs:
+            n1 number (1..1)
+            op CompareOp (1..1)
+            n2 number (1..1)
+          output:
+            result boolean (1..1)
+          set result:
+            if op = CompareOp -> GreaterThan
+            then n1 > n2 = True
+            else if op = CompareOp -> LessThan
+            then n1 < n2 = True
+            else False
+      `);
+      expect(result.hasErrors).toBe(false);
+    });
+
+    it('should resolve enum value via -> across files', async () => {
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///basictypes.rosetta',
+          content: `
+            namespace com.rosetta.model
+            version "1.0.0"
+
+            basicType boolean <"A boolean value.">
+            basicType number(
+              digits int <"Max digits.">,
+              fractionalDigits int <"Max fractional digits.">,
+              min number <"Min bound.">,
+              max number <"Max bound.">
+            ) <"A signed decimal number.">
+            typeAlias int(digits int, min int, max int): <"A signed decimal integer.">
+              number(digits: digits, fractionalDigits: 0, min: min, max: max)
+          `
+        },
+        {
+          uri: 'inmemory:///enum.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            enum CompareOp:
+              GreaterThan
+              GreaterThanOrEquals
+              Equals
+              LessThanOrEquals
+              LessThan
+          `
+        },
+        {
+          uri: 'inmemory:///func.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func CompareNumbers:
+              inputs:
+                n1 number (1..1)
+                op CompareOp (1..1)
+                n2 number (1..1)
+              output:
+                result boolean (1..1)
+              set result:
+                if op = CompareOp -> GreaterThan
+                then n1 > n2 = True
+                else if op = CompareOp -> GreaterThanOrEquals
+                then n1 >= n2 = True
+                else if op = CompareOp -> Equals
+                then n1 = n2 = True
+                else if op = CompareOp -> LessThanOrEquals
+                then n1 <= n2 = True
+                else if op = CompareOp -> LessThan
+                then n1 < n2 = True
+                else False
+          `
+        }
+      ]);
+
+      // Both documents should produce no linking/validation errors
+      for (const result of results) {
+        const errorMessages = result.errors.map((d) => d.message);
+        expect(errorMessages, errorMessages.join('\n')).toHaveLength(0);
+      }
+    });
+
+    it('should report error for non-existent enum value via ->', async () => {
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///enum2.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            enum Direction:
+              North
+              South
+          `
+        },
+        {
+          uri: 'inmemory:///func2.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func CheckDirection:
+              inputs:
+                dir Direction (1..1)
+              output:
+                result boolean (1..1)
+              set result:
+                dir = Direction -> East
+          `
+        }
+      ]);
+
+      // The func document should have a linking error for 'East'
+      const funcErrors = results[1]!.errors;
+      expect(funcErrors.length).toBeGreaterThan(0);
+      const eastError = funcErrors.find((d) => d.message.includes('East'));
+      expect(eastError).toBeDefined();
+    });
+  });
+
+  describe('Implicit lambda then-extract scope (T083)', () => {
+    it('should resolve inherited attribute via then extract chain', async () => {
+      const result = await parseOk(`
+        namespace test.scope
+        version "1.0.0"
+
+        type MeasureBase:
+          value number (0..1)
+
+        type Price extends MeasureBase:
+          priceType string (1..1)
+
+        type PriceQuantity:
+          price Price (0..*)
+
+        func TestFunc:
+          inputs:
+            pqs PriceQuantity (0..*)
+          output:
+            result number (0..*)
+          set result:
+            pqs
+              extract [price]
+              then flatten
+              then filter [priceType = "InterestRate"]
+              then extract [value]
+      `);
+      expect(result.hasErrors).toBe(false);
+    });
+
+    it('should resolve attribute via filter then extract chain', async () => {
+      const result = await parseOk(`
+        namespace test.scope
+        version "1.0.0"
+
+        type MeasureBase:
+          value number (0..1)
+
+        type Price extends MeasureBase:
+          priceType string (1..1)
+
+        func TestFunc:
+          inputs:
+            prices Price (0..*)
+          output:
+            result number (0..*)
+          set result:
+            prices
+              filter [priceType = "InterestRate"]
+              then extract [value]
+      `);
+      expect(result.hasErrors).toBe(false);
+    });
+
+    it('should resolve inherited value via filter then extract (CDM-like pattern)', async () => {
+      // Exact CDM pattern: price PriceSchedule input, filter by priceType, then extract value
+      // PriceSchedule extends MeasureSchedule extends MeasureBase (which has value)
+      const result = await parseOk(`
+        namespace test.scope
+        version "1.0.0"
+
+        type MeasureBase:
+          value number (0..1)
+
+        type MeasureSchedule extends MeasureBase:
+          datedValue number (0..*)
+
+        type PriceSchedule extends MeasureSchedule:
+          priceType string (1..1)
+
+        func TestFunc:
+          inputs:
+            price PriceSchedule (0..*)
+          output:
+            result number (0..*)
+          alias cashPrice:
+            price
+              filter priceType = "AssetPrice"
+              then extract value
+              then only-element
+          set result:
+            cashPrice
+      `);
+      expect(result.hasErrors).toBe(false);
+    });
+  });
+
+  describe('Cross-file constructor key scope', () => {
+    it('should resolve inherited constructor keys across files', async () => {
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///base.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            type Base:
+              x int (0..1)
+              y int (0..1)
+
+            type Child extends Base:
+              z int (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///func.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func TestFunc:
+              inputs:
+                inp int (1..1)
+              output:
+                result Child (1..1)
+              set result:
+                Child {
+                  x: inp,
+                  y: inp,
+                  z: inp
+                }
+          `
+        }
+      ]);
+
+      // Only check RosettaFeature errors (not type reference errors for int/string)
+      const featureErrors = results.flatMap((r) =>
+        r.errors.filter((d) => d.message.includes('RosettaFeature'))
+      );
+      expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
+    });
+
+    it('should resolve constructor keys when type extends across multiple files', async () => {
+      // Mimics CDM: Transfer extends AssetFlowBase (in different file), constructor in 3rd file
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///base-types.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            type AssetBase:
+              quantity number (0..1)
+              asset string (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///transfer.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            type Transfer extends AssetBase:
+              payerReceiver string (0..1)
+              transferExpression string (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///func.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func TestFunc:
+              inputs:
+                val string (1..1)
+              output:
+                result Transfer (1..1)
+              set result:
+                Transfer {
+                  payerReceiver: val,
+                  transferExpression: val,
+                  quantity: empty,
+                  asset: val
+                }
+          `
+        }
+      ]);
+
+      const featureErrors = results.flatMap((r) =>
+        r.errors.filter((d) => d.message.includes('RosettaFeature'))
+      );
+      expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
+    });
+
+    it('should resolve constructor keys cross-namespace with import', async () => {
+      // Mimics CDM: Transfer in one namespace, function in another, cross-namespace constructor
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///event-type.rosetta',
+          content: `
+            namespace com.event.common
+            version "1.0.0"
+
+            type AssetBase:
+              quantity number (0..1)
+
+            type Transfer extends AssetBase:
+              payerReceiver string (0..1)
+              transferExpr string (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///ingest-func.rosetta',
+          content: `
+            namespace com.ingest.payment
+            version "1.0.0"
+            import com.event.common.*
+
+            func TestFunc:
+              inputs:
+                val string (1..1)
+              output:
+                result Transfer (1..1)
+              set result:
+                Transfer {
+                  payerReceiver: val,
+                  transferExpr: val,
+                  quantity: empty
+                }
+          `
+        }
+      ]);
+
+      const featureErrors = results.flatMap((r) =>
+        r.errors.filter((d) => d.message.includes('RosettaFeature'))
+      );
+      expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
+    });
+
+    it('should resolve direct constructor keys across files', async () => {
+      const results = await parseAndValidateWorkspace([
+        {
+          uri: 'inmemory:///types.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            type Ingredient:
+              amount number (0..1)
+
+            type Container:
+              fieldA Ingredient (0..1)
+              fieldB Ingredient (0..1)
+          `
+        },
+        {
+          uri: 'inmemory:///func.rosetta',
+          content: `
+            namespace test.scope
+            version "1.0.0"
+
+            func TestFunc:
+              inputs:
+                ing Ingredient (1..1)
+              output:
+                result Container (1..1)
+              set result:
+                Container {
+                  fieldA: ing,
+                  fieldB: ing
+                }
+          `
+        }
+      ]);
+
+      const funcErrors = results[1]!.errors.filter((d) => d.message.includes('RosettaFeature'));
+      expect(funcErrors, funcErrors.map((d) => d.message).join('\n')).toHaveLength(0);
     });
   });
 });

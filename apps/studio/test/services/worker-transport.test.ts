@@ -105,10 +105,10 @@ describe('createWorkerTransport', () => {
     const handler = vi.fn();
 
     transport.subscribe(handler);
-    
+
     // Wait a tick for subscription to be set up
-    await new Promise(resolve => setTimeout(resolve, 0));
-    
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     // Simulate receiving a valid JSON-RPC response message
     worker.port.simulateMessage({
       jsonrpc: '2.0',
@@ -127,7 +127,7 @@ describe('createWorkerTransport', () => {
 
     transport.subscribe(handler);
     transport.unsubscribe(handler);
-    
+
     worker.port.simulateMessage({
       jsonrpc: '2.0',
       id: 1,

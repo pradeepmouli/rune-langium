@@ -21,7 +21,8 @@
   ],
   "scripts": {
     "build": "tsgo -b",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "type-check": "tsgo --noEmit"
   },
   "dependencies": {
     "@rune-langium/core": "workspace:*",
@@ -29,6 +30,7 @@
     "langium": "^4.2.1"
   },
   "devDependencies": {
+    "@types/node": "^25.4.0",
     "typescript": "^5.9.3"
   }
 }

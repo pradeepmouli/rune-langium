@@ -790,7 +790,7 @@ export const RuneDslGrammar = (): Grammar =>
                 "terminal": {
                   "$type": "CrossReference",
                   "type": {
-                    "$ref": "#/rules@18"
+                    "$ref": "#/types@7"
                   },
                   "terminal": {
                     "$type": "RuleCall",
@@ -1052,6 +1052,54 @@ export const RuneDslGrammar = (): Grammar =>
               },
               "arguments": []
             }
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Keyword",
+                "value": "("
+              },
+              {
+                "$type": "Assignment",
+                "feature": "typeCallArgs",
+                "operator": "+=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@35"
+                  },
+                  "arguments": []
+                }
+              },
+              {
+                "$type": "Group",
+                "elements": [
+                  {
+                    "$type": "Keyword",
+                    "value": ","
+                  },
+                  {
+                    "$type": "Assignment",
+                    "feature": "typeCallArgs",
+                    "operator": "+=",
+                    "terminal": {
+                      "$type": "RuleCall",
+                      "rule": {
+                        "$ref": "#/rules@35"
+                      },
+                      "arguments": []
+                    }
+                  }
+                ],
+                "cardinality": "*"
+              },
+              {
+                "$type": "Keyword",
+                "value": ")"
+              }
+            ],
+            "cardinality": "?"
           },
           {
             "$type": "Assignment",
@@ -8268,7 +8316,7 @@ export const RuneDslGrammar = (): Grammar =>
         "terminal": {
           "$type": "CrossReference",
           "type": {
-            "$ref": "#/rules@18"
+            "$ref": "#/types@7"
           },
           "terminal": {
             "$type": "RuleCall",
@@ -8321,7 +8369,7 @@ export const RuneDslGrammar = (): Grammar =>
                 "terminal": {
                   "$type": "CrossReference",
                   "type": {
-                    "$ref": "#/rules@21"
+                    "$ref": "#/types@8"
                   },
                   "terminal": {
                     "$type": "RuleCall",
@@ -9262,7 +9310,7 @@ export const RuneDslGrammar = (): Grammar =>
             "terminal": {
               "$type": "CrossReference",
               "type": {
-                "$ref": "#/rules@18"
+                "$ref": "#/types@7"
               },
               "terminal": {
                 "$type": "RuleCall",
@@ -10284,7 +10332,7 @@ export const RuneDslGrammar = (): Grammar =>
                     "terminal": {
                       "$type": "CrossReference",
                       "type": {
-                        "$ref": "#/rules@21"
+                        "$ref": "#/types@8"
                       },
                       "terminal": {
                         "$type": "RuleCall",
@@ -10327,7 +10375,7 @@ export const RuneDslGrammar = (): Grammar =>
                     "terminal": {
                       "$type": "CrossReference",
                       "type": {
-                        "$ref": "#/rules@21"
+                        "$ref": "#/types@8"
                       },
                       "terminal": {
                         "$type": "RuleCall",
@@ -10378,7 +10426,7 @@ export const RuneDslGrammar = (): Grammar =>
                 "terminal": {
                   "$type": "CrossReference",
                   "type": {
-                    "$ref": "#/rules@21"
+                    "$ref": "#/types@8"
                   },
                   "terminal": {
                     "$type": "RuleCall",
@@ -10898,6 +10946,18 @@ export const RuneDslGrammar = (): Grammar =>
             "typeRef": {
               "$ref": "#/rules@44"
             }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@18"
+            }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@19"
+            }
           }
         ]
       }
@@ -10957,6 +11017,12 @@ export const RuneDslGrammar = (): Grammar =>
             "$type": "SimpleType",
             "typeRef": {
               "$ref": "#/rules@47"
+            }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@20"
             }
           }
         ]
@@ -11026,6 +11092,54 @@ export const RuneDslGrammar = (): Grammar =>
             "$type": "SimpleType",
             "typeRef": {
               "$ref": "#/rules@48"
+            }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@22/inferredType"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "Type",
+      "name": "DataOrChoice",
+      "type": {
+        "$type": "UnionType",
+        "types": [
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@18"
+            }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@19"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "Type",
+      "name": "AttributeOrChoiceOption",
+      "type": {
+        "$type": "UnionType",
+        "types": [
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@21"
+            }
+          },
+          {
+            "$type": "SimpleType",
+            "typeRef": {
+              "$ref": "#/rules@20"
             }
           }
         ]

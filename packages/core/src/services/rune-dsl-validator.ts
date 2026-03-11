@@ -12,7 +12,10 @@ import {
   isRosettaContainsExpression,
   isRosettaDisjointExpression,
   isRosettaConstructorExpression,
-  isSwitchOperation
+  isSwitchOperation,
+  isRosettaFunction,
+  isAnnotation,
+  isChoiceOption
 } from '../generated/ast.js';
 import type {
   Data,
@@ -179,9 +182,10 @@ export class RuneDslValidator {
 
   /**
    * S-07: Functions should have an output.
+   * Dispatch functions (with dispatchAttribute) are exempt — they inherit output from the parent.
    */
   checkFunctionOutputRequired(node: RosettaFunction, accept: ValidationAcceptor): void {
-    if (!node.output) {
+    if (!node.output && !node.dispatchAttribute) {
       accept('warning', `Function '${node.name}' has no output.`, {
         node,
         property: 'name'
@@ -224,12 +228,15 @@ export class RuneDslValidator {
 
   /**
    * S-13: No duplicate top-level element names in the same model.
+   * Dispatch function overloads share the same name intentionally — skip them.
    */
   checkModelNoDuplicateElements(node: RosettaModel, accept: ValidationAcceptor): void {
     const seen = new Set<string>();
     for (const element of node.elements) {
       const name = (element as { name?: string }).name;
       if (!name) continue;
+      // Dispatch function overloads have a dispatchAttribute; they legitimately share names
+      if (isRosettaFunction(element) && element.dispatchAttribute) continue;
       if (seen.has(name)) {
         accept('error', `Duplicate element '${name}'.`, {
           node: element,
@@ -263,13 +270,9 @@ export class RuneDslValidator {
   /**
    * S-16: Data type should have at least one attribute or extend another type.
    */
-  checkDataMustHaveAttributesOrSuperType(node: Data, accept: ValidationAcceptor): void {
-    if (node.attributes.length === 0 && !node.superType) {
-      accept('warning', `Data type '${node.name}' has no attributes and no supertype.`, {
-        node,
-        property: 'name'
-      });
-    }
+  checkDataMustHaveAttributesOrSuperType(_node: Data, _accept: ValidationAcceptor): void {
+    // Xtext does not flag empty data types — marker types like `Empty`, `Reference`,
+    // `MasterAgreementBase` etc. are valid in CDM/FpML.
   }
 
   /**
@@ -443,8 +446,11 @@ export class RuneDslValidator {
 
   /**
    * N-02: Attribute names should start with lowercase.
+   * Exempt: attributes inside Annotation blocks and ChoiceOptions (matching Xtext behavior).
    */
   checkAttributeNaming(node: Attribute, accept: ValidationAcceptor): void {
+    if (isChoiceOption(node)) return;
+    if (isAnnotation(node.$container)) return;
     if (node.name && /^[A-Z]/.test(node.name)) {
       accept('warning', `Attribute '${node.name}' should start with a lowercase letter.`, {
         node,
@@ -504,15 +510,9 @@ export class RuneDslValidator {
   /**
    * N-07: Enum value names should start with an uppercase letter (convention: PascalCase or UPPER_CASE).
    */
-  checkEnumValueNaming(node: RosettaEnumeration, accept: ValidationAcceptor): void {
-    for (const value of node.enumValues) {
-      if (value.name && /^[a-z]/.test(value.name)) {
-        accept('warning', `Enum value '${value.name}' should start with an uppercase letter.`, {
-          node: value,
-          property: 'name'
-        });
-      }
-    }
+  checkEnumValueNaming(_node: RosettaEnumeration, _accept: ValidationAcceptor): void {
+    // Xtext does not enforce enum value casing — CDM/FpML use lowercase values
+    // like `iTraxxEurope`, `clearingDateTime`, etc.
   }
 
   /**
@@ -525,13 +525,9 @@ export class RuneDslValidator {
   /**
    * N-09: Shortcut names should start with lowercase.
    */
-  checkShortcutNaming(node: ShortcutDeclaration, accept: ValidationAcceptor): void {
-    if (node.name && /^[A-Z]/.test(node.name)) {
-      accept('warning', `Shortcut '${node.name}' should start with a lowercase letter.`, {
-        node,
-        property: 'name'
-      });
-    }
+  checkShortcutNaming(_node: ShortcutDeclaration, _accept: ValidationAcceptor): void {
+    // Xtext does not enforce shortcut casing — CDM uses uppercase shortcuts
+    // like `EuropeanExercise`, `AmericanExercise`.
   }
 
   /**
@@ -616,8 +612,10 @@ export class RuneDslValidator {
     }
 
     // E-04: Equality operations must have both left and right operands
+    // Headless equality with cardMod (e.g., `then all = True`) is valid — the left
+    // operand is the implicit `item` filled in by derived state.
     if (isEqualityOperation(node)) {
-      if (!node.left) {
+      if (!node.left && !node.cardMod) {
         accept('error', `Equality '${node.operator}' missing left operand.`, {
           node,
           property: 'left' as any

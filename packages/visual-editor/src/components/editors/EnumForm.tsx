@@ -1,6 +1,11 @@
 /**
  * EnumForm — structured editor form for an Enumeration node.
  *
+ * Uses react-hook-form `FormProvider` so nested components (EnumValueRow,
+ * MetadataSection) can access form state via `useFormContext`.
+ * `useFieldArray` manages the members list with stable keys for
+ * add/remove/reorder without stale-closure bugs.
+ *
  * Sections:
  * 1. Header: editable name + "Enum" green badge
  * 2. Parent enum: TypeSelector (filtered to kind='enum', clearable)
@@ -10,12 +15,50 @@
  * @module
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef } from 'react';
+import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLegend,
+  FieldSet
+} from '@rune-langium/design-system/ui/field';
+import { Input } from '@rune-langium/design-system/ui/input';
+import { Badge } from '@rune-langium/design-system/ui/badge';
 import { EnumValueRow } from './EnumValueRow.js';
-import { TypeSelector, getKindBadgeClasses } from './TypeSelector.js';
+import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
+import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import type { TypeNodeData, TypeOption, EditorFormActions, MemberDisplay } from '../../types.js';
+import { useZodForm } from '@zod-to-form/react';
+import { ExternalDataSync } from '../forms/ExternalDataSync.js';
+import { enumFormSchema, type EnumFormValues } from '../../schemas/form-schemas.js';
+import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
+import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Convert TypeNodeData to form-managed values. */
+function toFormValues(data: TypeNodeData<'enum'>): EnumFormValues {
+  return {
+    name: data.name,
+    parentName: data.parentName ?? '',
+    members: data.members.map((m) => ({
+      name: m.name,
+      typeName: m.typeName ?? '',
+      cardinality: m.cardinality ?? '',
+      isOverride: m.isOverride,
+      displayName: m.displayName
+    })),
+    definition: data.definition ?? '',
+    comments: data.comments ?? '',
+    synonyms: data.synonyms ?? []
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -28,83 +71,135 @@ export interface EnumFormProps {
   data: TypeNodeData<'enum'>;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
-  /** All editor form action callbacks. */
-  actions: EditorFormActions;
+  /** Enum-specific editor form action callbacks. */
+  actions: EditorFormActions<'enum'>;
+  /** Inherited member groups from ancestors. */
+  inheritedGroups?: InheritedGroup[];
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
-  // ---- Name editing --------------------------------------------------------
+function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] }: EnumFormProps) {
+  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
-  const [localName, setLocalName] = useState(data.name);
-  const nameInputRef = useRef<HTMLInputElement>(null);
+  const { form } = useZodForm(enumFormSchema, {
+    defaultValues: toFormValues(data),
+    mode: 'onChange'
+  });
 
-  // Sync localName when node selection changes
-  useEffect(() => {
-    setLocalName(data.name);
-  }, [data.name]);
+  const { fields, append, remove, move } = useFieldArray({
+    control: form.control,
+    name: 'members'
+  });
+
+  // Track the committed (graph-confirmed) data for diffing
+  const committedRef = useRef(data);
+  committedRef.current = data;
+
+  // ---- Name auto-save (debounced) ------------------------------------------
 
   const commitName = useCallback(
     (newName: string) => {
-      if (newName && newName.trim() && newName !== data.name) {
+      if (newName && newName.trim() && newName !== committedRef.current.name) {
         actions.renameType(nodeId, newName.trim());
       }
     },
-    [nodeId, data.name, actions]
+    [nodeId, actions]
   );
 
   const debouncedName = useAutoSave(commitName, 500);
 
-  function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value;
-    setLocalName(val);
-    debouncedName(val);
-  }
-
   // ---- Parent enum ---------------------------------------------------------
 
-  function handleParentSelect(value: string | null) {
-    actions.setEnumParent(nodeId, value);
-  }
+  const handleParentSelect = useCallback(
+    (value: string | null) => {
+      const label = value ? (availableTypes.find((o) => o.value === value)?.label ?? '') : '';
+      form.setValue('parentName', label, { shouldDirty: true });
+      actions.setEnumParent(nodeId, value);
+    },
+    [nodeId, actions, availableTypes, form]
+  );
 
-  // ---- Enum value callbacks ------------------------------------------------
+  // ---- Enum value actions --------------------------------------------------
 
-  function handleUpdateValue(nId: string, oldName: string, newName: string, displayName?: string) {
-    actions.updateEnumValue(nId, oldName, newName, displayName);
-  }
-
-  function handleRemoveValue(nId: string, valueName: string) {
-    actions.removeEnumValue(nId, valueName);
-  }
-
-  function handleReorderValue(nId: string, fromIndex: number, toIndex: number) {
-    actions.reorderEnumValue(nId, fromIndex, toIndex);
-  }
-
-  function handleAddValue() {
+  const handleAddValue = useCallback(() => {
+    append({ name: '', typeName: '', cardinality: '', isOverride: false, displayName: '' });
     actions.addEnumValue(nodeId, '', undefined);
-  }
+  }, [nodeId, actions, append]);
+
+  const handleRemoveValue = useCallback(
+    (i: number) => {
+      const committed = committedRef.current.members[i];
+      if (committed) {
+        remove(i);
+        actions.removeEnumValue(nodeId, committed.name);
+      }
+    },
+    [nodeId, actions, remove]
+  );
+
+  const handleReorderValue = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      move(fromIndex, toIndex);
+      actions.reorderEnumValue(nodeId, fromIndex, toIndex);
+    },
+    [nodeId, actions, move]
+  );
+
+  const handleUpdateValue = useCallback(
+    (_nodeId: string, oldName: string, newName: string, displayName?: string) => {
+      actions.updateEnumValue(nodeId, oldName, newName, displayName);
+    },
+    [nodeId, actions]
+  );
 
   // ---- Metadata callbacks --------------------------------------------------
 
-  function handleDefinitionChange(definition: string) {
-    actions.updateDefinition(nodeId, definition);
-  }
+  const commitDefinition = useCallback(
+    (def: string) => {
+      actions.updateDefinition(nodeId, def);
+    },
+    [nodeId, actions]
+  );
 
-  function handleCommentsChange(comments: string) {
-    actions.updateComments(nodeId, comments);
-  }
+  const commitComments = useCallback(
+    (comments: string) => {
+      actions.updateComments(nodeId, comments);
+    },
+    [nodeId, actions]
+  );
 
-  function handleAddSynonym(synonym: string) {
-    actions.addSynonym(nodeId, synonym);
-  }
+  const handleAddSynonym = useCallback(
+    (synonym: string) => {
+      actions.addSynonym(nodeId, synonym);
+    },
+    [nodeId, actions]
+  );
 
-  function handleRemoveSynonym(index: number) {
-    actions.removeSynonym(nodeId, index);
-  }
+  const handleRemoveSynonym = useCallback(
+    (index: number) => {
+      actions.removeSynonym(nodeId, index);
+    },
+    [nodeId, actions]
+  );
+
+  // ---- Annotation callbacks ------------------------------------------------
+
+  const handleAddAnnotation = useCallback(
+    (annotationName: string) => {
+      actions.addAnnotation(nodeId, annotationName);
+    },
+    [nodeId, actions]
+  );
+
+  const handleRemoveAnnotation = useCallback(
+    (index: number) => {
+      actions.removeAnnotation(nodeId, index);
+    },
+    [nodeId, actions]
+  );
 
   // ---- Resolve parent enum option ------------------------------------------
 
@@ -119,89 +214,112 @@ function EnumForm({ nodeId, data, availableTypes, actions }: EnumFormProps) {
   // ---- Render --------------------------------------------------------------
 
   return (
-    <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
-      {/* Header: Name + Badge */}
-      <div data-slot="form-header" className="flex items-center gap-2">
-        <input
-          ref={nameInputRef}
-          data-slot="type-name-input"
-          type="text"
-          value={localName}
-          onChange={handleNameChange}
-          className="flex-1 text-lg font-semibold bg-transparent border-b border-transparent
-            focus:border-border-emphasis focus:outline-none px-1 py-0.5"
-          placeholder="Enum name"
-          aria-label="Enum type name"
-        />
-        <span
-          data-slot="kind-badge"
-          className={`text-xs font-medium px-2 py-0.5 rounded ${getKindBadgeClasses('enum')}`}
-        >
-          Enum
-        </span>
-      </div>
+    <FormProvider {...form}>
+      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
+      <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
+        {/* Header: Name + Badge */}
+        <div data-slot="form-header" className="flex items-center gap-2">
+          <Controller
+            control={form.control}
+            name="name"
+            render={({ field, fieldState }) => (
+              <Field className="flex-1">
+                <Input
+                  {...field}
+                  id={field.name}
+                  data-slot="type-name-input"
+                  aria-invalid={fieldState.invalid}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    debouncedName(e.target.value);
+                  }}
+                  className="text-lg font-semibold bg-transparent border-b border-transparent
+                    focus-visible:border-input focus-visible:ring-0 shadow-none
+                    px-1 py-0.5 h-auto rounded-none"
+                  placeholder="Enum name"
+                  aria-label="Enum type name"
+                />
+                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+              </Field>
+            )}
+          />
+          <Badge variant="enum">Enum</Badge>
+        </div>
 
-      {/* Parent Enum */}
-      <section data-slot="parent-section" className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Extends</label>
-        <TypeSelector
-          value={parentValue ?? ''}
-          options={parentOptions}
-          onSelect={handleParentSelect}
-          placeholder="Select parent enum..."
-          allowClear
-        />
-      </section>
+        {/* Parent Enum */}
+        <FieldSet className="gap-1.5">
+          <FieldLegend variant="label" className="mb-0 text-muted-foreground">
+            Extends
+          </FieldLegend>
+          <TypeSelector
+            value={parentValue ?? ''}
+            options={parentOptions}
+            onSelect={handleParentSelect}
+            placeholder="Select parent enum..."
+            allowClear
+          />
+        </FieldSet>
 
-      {/* Enum Values */}
-      <section data-slot="values-section" className="flex flex-col gap-1">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-muted-foreground">
-            Values ({data.members.length})
-          </label>
-          <button
-            data-slot="add-value-btn"
-            type="button"
-            onClick={handleAddValue}
-            className="text-xs text-primary hover:underline"
+        {/* Enum Values */}
+        <FieldSet className="gap-1">
+          <FieldLegend
+            variant="label"
+            className="mb-0 text-muted-foreground flex items-center justify-between"
           >
-            + Add Value
-          </button>
-        </div>
+            <span>Values ({fields.length})</span>
+            <button
+              data-slot="add-value-btn"
+              type="button"
+              onClick={handleAddValue}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary
+                border border-border rounded px-2 py-0.5
+                hover:bg-card hover:border-input transition-colors"
+            >
+              + Add Value
+            </button>
+          </FieldLegend>
 
-        <div data-slot="value-list" className="flex flex-col gap-0.5" role="list">
-          {data.members.map((member: MemberDisplay, i: number) => (
-            <EnumValueRow
-              key={`${nodeId}-val-${member.name}-${i}`}
-              name={member.name}
-              displayName={member.displayName}
-              nodeId={nodeId}
-              index={i}
-              onUpdate={handleUpdateValue}
-              onRemove={handleRemoveValue}
-              onReorder={handleReorderValue}
-            />
-          ))}
+          <FieldGroup className="gap-0.5">
+            {fields.map((field, i) => (
+              <EnumValueRow
+                key={field.id}
+                index={i}
+                name={committedRef.current.members[i]?.name ?? ''}
+                displayName={committedRef.current.members[i]?.displayName ?? ''}
+                nodeId={nodeId}
+                onUpdate={handleUpdateValue}
+                onRemove={() => handleRemoveValue(i)}
+                onReorder={handleReorderValue}
+              />
+            ))}
 
-          {data.members.length === 0 && (
-            <p className="text-xs text-muted-foreground italic py-2 text-center">
-              No values defined. Click "+ Add Value" to create one.
-            </p>
-          )}
-        </div>
-      </section>
+            {fields.length === 0 && (
+              <p className="text-xs text-muted-foreground italic py-2 text-center">
+                No values defined. Click &quot;+ Add Value&quot; to create one.
+              </p>
+            )}
+          </FieldGroup>
+        </FieldSet>
 
-      {/* Metadata */}
-      <MetadataSection
-        definition={data.definition ?? ''}
-        comments={data.comments ?? ''}
-        synonyms={data.synonyms ?? []}
-        onDefinitionChange={handleDefinitionChange}
-        onCommentsChange={handleCommentsChange}
-        onAddSynonym={handleAddSynonym}
-        onRemoveSynonym={handleRemoveSynonym}
-      />
-    </div>
+        {/* Inherited Members */}
+        <InheritedMembersSection groups={inheritedGroups} />
+
+        {/* Annotations */}
+        <AnnotationSection
+          annotations={data.annotations ?? []}
+          onAdd={handleAddAnnotation}
+          onRemove={handleRemoveAnnotation}
+        />
+
+        {/* Metadata */}
+        <MetadataSection
+          onDefinitionCommit={commitDefinition}
+          onCommentsCommit={commitComments}
+          onSynonymAdd={handleAddSynonym}
+          onSynonymRemove={handleRemoveSynonym}
+        />
+      </div>
+    </FormProvider>
   );
 }
 

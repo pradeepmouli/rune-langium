@@ -37,7 +37,8 @@ export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] 
       totalCount: types.length,
       dataCount: types.filter((t) => t.kind === 'data').length,
       choiceCount: types.filter((t) => t.kind === 'choice').length,
-      enumCount: types.filter((t) => t.kind === 'enum').length
+      enumCount: types.filter((t) => t.kind === 'enum').length,
+      funcCount: types.filter((t) => t.kind === 'func').length
     });
   }
 
@@ -83,7 +84,8 @@ export function filterNamespaceTree(tree: NamespaceTreeNode[], query: string): N
         totalCount: matchingTypes.length,
         dataCount: matchingTypes.filter((t) => t.kind === 'data').length,
         choiceCount: matchingTypes.filter((t) => t.kind === 'choice').length,
-        enumCount: matchingTypes.filter((t) => t.kind === 'enum').length
+        enumCount: matchingTypes.filter((t) => t.kind === 'enum').length,
+        funcCount: matchingTypes.filter((t) => t.kind === 'func').length
       });
     }
   }

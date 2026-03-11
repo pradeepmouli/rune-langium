@@ -22,6 +22,7 @@
     "clean": "pnpm -r run clean && rm -rf node_modules/.cache",
     "clean:all": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
     "dev": "pnpm -r --parallel run dev",
+    "dev:lsp": "pnpm --filter @rune-langium/lsp-server dev",
     "dev:studio": "pnpm --filter @rune-langium/studio dev",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
@@ -32,17 +33,23 @@
     "test": "pnpm -r run test",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "type-check": "pnpm -r run type-check"
+    "type-check": "pnpm -r run type-check",
+    "ui:add": "pnpm --filter @rune-langium/design-system exec shadcn add",
+    "prepare": "simple-git-hooks",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "pnpm run build && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.8",
-    "@types/node": "^25.2.3",
-    "@typescript/native-preview": "7.0.0-dev.20260212.1",
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.30.0",
+    "@types/node": "^25.4.0",
+    "@typescript/native-preview": "7.0.0-dev.20260310.1",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
-    "lint-staged": "^16.2.7",
-    "oxfmt": "^0.33.0",
-    "oxlint": "^1.48.0",
+    "lint-staged": "^16.3.3",
+    "oxfmt": "^0.37.0",
+    "oxlint": "^1.52.0",
     "simple-git-hooks": "^2.13.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
@@ -51,13 +58,23 @@
     "node": ">=20.0.0",
     "pnpm": ">=10.0.0"
   },
-  "packageManager": "pnpm@10.28.0",
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
-  },
+  "packageManager": "pnpm@10.30.3",
   "dependencies": {
-    "@lspeasy/client": "^1.1.0",
-    "@lspeasy/core": "^1.1.0",
+    "@lspeasy/client": "^3.0.1",
+    "@lspeasy/core": "^2.1.1",
+    "@zod-to-form/cli": "^0.2.7",
     "camelcase": "^9.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "x-to-zod": "^0.8.0",
+      "@zod-to-form/core": "^0.2.4",
+      "@zod-to-form/react": "^0.2.4",
+      "@zod-to-form/cli": "^0.2.4"
+    }
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged",
+    "pre-push": "pnpm run type-check"
   }
 }

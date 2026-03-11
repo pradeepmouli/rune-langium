@@ -3,12 +3,21 @@
  *
  * Uses composition-based architecture: accepts `renderTrigger` and
  * `renderPopover` render-props so the host app can inject shadcn
- * Popover + Command primitives. Falls back to a basic `<select>`
+ * Popover + Command primitives. Falls back to a shadcn Select
  * when render-props are not provided.
  */
 
 import { useState, useMemo } from 'react';
 import type { TypeOption, TypeKind } from '../../types.js';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue
+} from '@rune-langium/design-system/ui/select';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -17,8 +26,8 @@ import type { TypeOption, TypeKind } from '../../types.js';
 export interface TypeSelectorProps {
   /** Currently selected type value (node ID or built-in type name). */
   value: string | null;
-  /** Available types to choose from. */
-  options: TypeOption[];
+  /** Available types to choose from. May be undefined before types are loaded. */
+  options?: TypeOption[];
   /** Placeholder text. */
   placeholder?: string;
   /** Called when a type is selected. */
@@ -77,7 +86,24 @@ const KIND_BADGE_COLORS: Record<TypeKind | 'builtin', string> = {
   choice: 'bg-amber-500/20 text-amber-400',
   enum: 'bg-green-500/20 text-green-400',
   func: 'bg-purple-500/20 text-purple-400',
+  record: 'bg-teal-500/20 text-teal-400',
+  typeAlias: 'bg-slate-500/20 text-slate-400',
+  basicType: 'bg-gray-500/20 text-gray-400',
+  annotation: 'bg-rose-500/20 text-rose-400',
   builtin: 'bg-gray-500/20 text-gray-400'
+};
+
+/** Solid dot colors for inline type indicators. */
+const KIND_DOT_COLORS: Record<TypeKind | 'builtin', string> = {
+  data: 'bg-blue-400',
+  choice: 'bg-amber-400',
+  enum: 'bg-green-400',
+  func: 'bg-purple-400',
+  record: 'bg-teal-400',
+  typeAlias: 'bg-slate-400',
+  basicType: 'bg-gray-400',
+  annotation: 'bg-rose-400',
+  builtin: 'bg-gray-400'
 };
 
 /**
@@ -96,6 +122,10 @@ export function getKindLabel(kind: TypeKind | 'builtin'): string {
     choice: 'Choice',
     enum: 'Enum',
     func: 'Function',
+    record: 'Record',
+    typeAlias: 'Type Alias',
+    basicType: 'Basic Type',
+    annotation: 'Annotation',
     builtin: 'Built-in'
   };
   return labels[kind] ?? 'Unknown';
@@ -110,7 +140,7 @@ export function getKindLabel(kind: TypeKind | 'builtin'): string {
  *
  * When `renderTrigger` and `renderPopover` are provided, uses composition
  * to inject host app UI primitives (e.g., shadcn Popover + Command).
- * Otherwise falls back to a basic native `<select>`.
+ * Otherwise falls back to a shadcn Select.
  */
 export function TypeSelector({
   value,
@@ -128,6 +158,7 @@ export function TypeSelector({
 
   // Filter options by kind if specified
   const filteredOptions = useMemo(() => {
+    if (!options) return [];
     if (!filterKinds || filterKinds.length === 0) return options;
     return options.filter((opt) => filterKinds.includes(opt.kind));
   }, [options, filterKinds]);
@@ -168,7 +199,7 @@ export function TypeSelector({
   }, [searchedOptions]);
 
   // Find current selection
-  const selected = useMemo(() => options.find((o) => o.value === value) ?? null, [options, value]);
+  const selected = useMemo(() => options?.find((o) => o.value === value) ?? null, [options, value]);
 
   const handleSelect = (val: string | null) => {
     onSelect(val);
@@ -207,24 +238,36 @@ export function TypeSelector({
     );
   }
 
-  // Fallback mode: native <select>
+  // Fallback mode: shadcn Select
+  const NONE_SENTINEL = '__none__';
   return (
-    <select
-      value={value ?? ''}
-      onChange={(e) => handleSelect(e.target.value || null)}
+    <Select
+      value={value ?? NONE_SENTINEL}
+      onValueChange={(val) => handleSelect(val === NONE_SENTINEL ? null : val)}
       disabled={disabled}
-      data-slot="type-selector"
     >
-      <option value="">{allowClear ? '— None —' : placeholder}</option>
-      {groups.map((group) => (
-        <optgroup key={group.label} label={group.label}>
-          {group.options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              [{getKindLabel(opt.kind)}] {opt.label}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+      <SelectTrigger data-slot="type-selector" className="h-7 text-xs px-2">
+        <SelectValue placeholder={allowClear ? '— None —' : placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {allowClear && <SelectItem value={NONE_SENTINEL}>— None —</SelectItem>}
+        {groups.map((group) => (
+          <SelectGroup key={group.label}>
+            <SelectLabel>{group.label}</SelectLabel>
+            {group.options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={`inline-block size-2 rounded-full shrink-0 ${KIND_DOT_COLORS[opt.kind] ?? KIND_DOT_COLORS.builtin}`}
+                    aria-hidden="true"
+                  />
+                  {opt.label}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

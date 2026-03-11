@@ -21,7 +21,7 @@ import { createRuneLspServer } from '@rune-langium/lsp-server';
 
 /**
  * Create a simple Transport for a MessagePort that unwraps envelopes.
- * 
+ *
  * The client side uses SharedWorkerTransport which sends envelopes with
  * {clientId, message}. This adapter unwraps those envelopes and passes
  * plain Message objects to the LSP server.
@@ -106,15 +106,15 @@ function createPortTransport(port: MessagePort): Transport {
 
     async close(): Promise<void> {
       if (!connected) return;
-      
+
       connected = false;
       port.removeEventListener('message', handleMessage);
       port.removeEventListener('messageerror', handleError);
-      
+
       for (const handler of closeHandlers) {
         handler();
       }
-      
+
       messageHandlers.clear();
       errorHandlers.clear();
       closeHandlers.clear();
@@ -140,7 +140,7 @@ function servePort(port: MessagePort): void {
   const transport = createPortTransport(port);
 
   const { listen } = createRuneLspServer();
-  listen(transport).catch((err) => {
+  listen(transport).catch((err: unknown) => {
     console.error('[lsp-worker] LSP listen error:', err);
   });
 
@@ -171,7 +171,7 @@ if ('onconnect' in self) {
       workerScope.postMessage(...args),
     addEventListener: workerScope.addEventListener.bind(workerScope),
     removeEventListener: workerScope.removeEventListener.bind(workerScope),
-    dispatchEvent: workerScope.dispatchEvent.bind(workerScope),
+    dispatchEvent: workerScope.dispatchEvent.bind(workerScope)
   } as unknown as Worker;
 
   const transport = new DedicatedWorkerTransport({
@@ -179,7 +179,7 @@ if ('onconnect' in self) {
   });
 
   const { listen } = createRuneLspServer();
-  listen(transport).catch((err) => {
+  listen(transport).catch((err: unknown) => {
     console.error('[lsp-worker] LSP listen error:', err);
   });
 }

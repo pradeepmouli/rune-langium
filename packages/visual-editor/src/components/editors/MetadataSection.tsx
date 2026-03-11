@@ -1,12 +1,18 @@
 /**
  * MetadataSection — collapsible metadata editor for all form types.
  *
- * Provides editable fields for description, comments, and synonyms.
- * Description and comments auto-save with 500ms debounce.
- * Synonym add/remove are immediate (no debounce needed).
+ * Reads/writes definition, comments, and synonyms via `useFormContext`
+ * (provided by the parent FormProvider). No prop-drilling needed.
+ *
+ * Definition and comments commit to graph actions via debounced callbacks.
+ * Synonyms are managed as a form-state array with add/remove callbacks.
+ *
+ * @module
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+import { useFormContext, Controller, useFieldArray } from 'react-hook-form';
+import { Field, FieldLabel, FieldGroup } from '@rune-langium/design-system/ui/field';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 
 // ---------------------------------------------------------------------------
@@ -14,22 +20,16 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 // ---------------------------------------------------------------------------
 
 export interface MetadataSectionProps {
-  /** Current definition/description text. */
-  definition?: string;
-  /** Current synonyms list. */
-  synonyms?: string[];
-  /** Current comments/annotations text. */
-  comments?: string;
   /** Whether the metadata section is read-only. */
   readOnly?: boolean;
-  /** Called when definition changes (debounced commit). */
-  onDefinitionChange: (definition: string) => void;
-  /** Called when a synonym is added. */
-  onAddSynonym: (synonym: string) => void;
-  /** Called when a synonym is removed by index. */
-  onRemoveSynonym: (index: number) => void;
-  /** Called when comments change (debounced commit). */
-  onCommentsChange: (comments: string) => void;
+  /** Called when definition changes (debounced commit to graph). */
+  onDefinitionCommit: (definition: string) => void;
+  /** Called when comments change (debounced commit to graph). */
+  onCommentsCommit: (comments: string) => void;
+  /** Called when a synonym is added (immediate commit to graph). */
+  onSynonymAdd: (synonym: string) => void;
+  /** Called when a synonym is removed by index (immediate commit to graph). */
+  onSynonymRemove: (index: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,63 +39,49 @@ export interface MetadataSectionProps {
 /**
  * Collapsible metadata section with description, comments, and synonym fields.
  *
- * Default expanded. Includes auto-resize textareas for description and
- * comments, and a tag-list with inline add input for synonyms.
+ * Reads field values from the parent `FormProvider` context. Auto-resize
+ * textareas for description and comments, tag-list with inline add for synonyms.
  */
 export function MetadataSection({
-  definition = '',
-  synonyms = [],
-  comments = '',
   readOnly = false,
-  onDefinitionChange,
-  onAddSynonym,
-  onRemoveSynonym,
-  onCommentsChange
+  onDefinitionCommit,
+  onCommentsCommit,
+  onSynonymAdd,
+  onSynonymRemove
 }: MetadataSectionProps): React.ReactNode {
+  const { control, getValues } = useFormContext();
   const [expanded, setExpanded] = useState(true);
-  const [localDefinition, setLocalDefinition] = useState(definition);
-  const [localComments, setLocalComments] = useState(comments);
   const [synonymInput, setSynonymInput] = useState('');
 
-  // Sync local state when props change (e.g., node selection change, undo/redo)
-  useEffect(() => {
-    setLocalDefinition(definition);
-  }, [definition]);
+  // Synonyms field-array from the parent form
+  const { append: appendSynonym, remove: removeSynonymField } = useFieldArray({
+    control,
+    name: 'synonyms' as any
+  });
 
-  useEffect(() => {
-    setLocalComments(comments);
-  }, [comments]);
-
-  // Debounced auto-save for description
-  const debouncedDefinitionSave = useAutoSave(onDefinitionChange, 500);
+  // Debounced auto-save for definition
+  const debouncedDefinition = useAutoSave(onDefinitionCommit, 500);
 
   // Debounced auto-save for comments
-  const debouncedCommentsSave = useAutoSave(onCommentsChange, 500);
-
-  const handleDefinitionChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const val = e.target.value;
-      setLocalDefinition(val);
-      debouncedDefinitionSave(val);
-    },
-    [debouncedDefinitionSave]
-  );
-
-  const handleCommentsChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const val = e.target.value;
-      setLocalComments(val);
-      debouncedCommentsSave(val);
-    },
-    [debouncedCommentsSave]
-  );
+  const debouncedComments = useAutoSave(onCommentsCommit, 500);
 
   const handleAddSynonym = useCallback(() => {
     const trimmed = synonymInput.trim();
     if (!trimmed) return;
-    onAddSynonym(trimmed);
+    // Update form state
+    appendSynonym(trimmed as any);
+    // Commit to graph
+    onSynonymAdd(trimmed);
     setSynonymInput('');
-  }, [synonymInput, onAddSynonym]);
+  }, [synonymInput, appendSynonym, onSynonymAdd]);
+
+  const handleRemoveSynonym = useCallback(
+    (index: number) => {
+      removeSynonymField(index);
+      onSynonymRemove(index);
+    },
+    [removeSynonymField, onSynonymRemove]
+  );
 
   const handleSynonymKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -107,79 +93,100 @@ export function MetadataSection({
     [handleAddSynonym]
   );
 
+  // Read synonym values from form state
+  const synonymValues: string[] = getValues('synonyms') ?? [];
+
   return (
-    <div data-slot="metadata-section" className="border-t border-border-default mt-3 pt-3">
+    <div data-slot="metadata-section" className="border-t border-border mt-3 pt-3">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between text-sm font-medium text-text-primary"
+        className="flex w-full items-center justify-between text-sm font-medium text-foreground"
         aria-expanded={expanded}
       >
         <span>Metadata</span>
-        <span className="text-xs text-text-secondary">{expanded ? '▾' : '▸'}</span>
+        <span className="text-xs text-muted-foreground">{expanded ? '\u25be' : '\u25b8'}</span>
       </button>
 
       {expanded && (
-        <div className="mt-2 space-y-3">
+        <FieldGroup className="mt-2 gap-3">
           {/* Description */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">
-              Description
-            </label>
-            <textarea
-              value={localDefinition}
-              onChange={handleDefinitionChange}
-              disabled={readOnly}
-              placeholder="Add a description..."
-              rows={2}
-              data-slot="metadata-description"
-              className="w-full rounded border border-border-emphasis bg-surface-base
-                px-2 py-1.5 text-sm text-text-primary
-                placeholder:text-text-tertiary
-                focus:ring-1 focus:ring-ring focus:outline-none
-                disabled:opacity-50 disabled:cursor-not-allowed
-                resize-y"
-              style={{ fieldSizing: 'content' } as React.CSSProperties}
-            />
-          </div>
+          <Controller
+            control={control}
+            name="definition"
+            render={({ field }) => (
+              <Field>
+                <FieldLabel className="text-xs text-muted-foreground">Description</FieldLabel>
+                <textarea
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    debouncedDefinition(e.target.value);
+                  }}
+                  onBlur={field.onBlur}
+                  disabled={readOnly}
+                  placeholder="Add a description..."
+                  rows={2}
+                  data-slot="metadata-description"
+                  className="w-full rounded border border-input bg-background
+                    px-2 py-1.5 text-sm text-foreground
+                    placeholder:text-muted-foreground
+                    focus:ring-1 focus:ring-ring focus:outline-none
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    resize-y"
+                  style={{ fieldSizing: 'content' } as React.CSSProperties}
+                />
+              </Field>
+            )}
+          />
 
           {/* Comments */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">Comments</label>
-            <textarea
-              value={localComments}
-              onChange={handleCommentsChange}
-              disabled={readOnly}
-              placeholder="Add comments..."
-              rows={2}
-              data-slot="metadata-comments"
-              className="w-full rounded border border-border-emphasis bg-surface-base
-                px-2 py-1.5 text-sm text-text-primary
-                placeholder:text-text-tertiary
-                focus:ring-1 focus:ring-ring focus:outline-none
-                disabled:opacity-50 disabled:cursor-not-allowed
-                resize-y"
-              style={{ fieldSizing: 'content' } as React.CSSProperties}
-            />
-          </div>
+          <Controller
+            control={control}
+            name="comments"
+            render={({ field }) => (
+              <Field>
+                <FieldLabel className="text-xs text-muted-foreground">Comments</FieldLabel>
+                <textarea
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    debouncedComments(e.target.value);
+                  }}
+                  onBlur={field.onBlur}
+                  disabled={readOnly}
+                  placeholder="Add comments..."
+                  rows={2}
+                  data-slot="metadata-comments"
+                  className="w-full rounded border border-input bg-background
+                    px-2 py-1.5 text-sm text-foreground
+                    placeholder:text-muted-foreground
+                    focus:ring-1 focus:ring-ring focus:outline-none
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    resize-y"
+                  style={{ fieldSizing: 'content' } as React.CSSProperties}
+                />
+              </Field>
+            )}
+          />
 
           {/* Synonyms */}
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">Synonyms</label>
+          <Field>
+            <FieldLabel className="text-xs text-muted-foreground">Synonyms</FieldLabel>
             <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {synonyms.map((synonym, index) => (
+              {synonymValues.map((synonym: string, index: number) => (
                 <span
-                  key={`${synonym}-${index}`}
-                  className="inline-flex items-center gap-1 rounded bg-surface-raised
-                    px-2 py-0.5 text-xs text-text-primary"
+                  key={`synonym-${index}`}
+                  className="inline-flex items-center gap-1 rounded bg-card
+                    px-2 py-0.5 text-xs text-foreground"
                 >
                   {synonym}
                   {!readOnly && (
                     <button
                       type="button"
-                      onClick={() => onRemoveSynonym(index)}
+                      onClick={() => handleRemoveSynonym(index)}
                       aria-label={`Remove synonym "${synonym}"`}
-                      className="text-text-tertiary hover:text-status-error transition-colors"
+                      className="text-muted-foreground hover:text-destructive transition-colors"
                     >
                       ×
                     </button>
@@ -196,25 +203,25 @@ export function MetadataSection({
                   onKeyDown={handleSynonymKeyDown}
                   placeholder="Add synonym..."
                   data-slot="metadata-synonym-input"
-                  className="flex-1 rounded border border-border-emphasis bg-surface-base
-                    px-2 py-1 text-xs text-text-primary
-                    placeholder:text-text-tertiary
+                  className="flex-1 rounded border border-input bg-background
+                    px-2 py-1 text-xs text-foreground
+                    placeholder:text-muted-foreground
                     focus:ring-1 focus:ring-ring focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleAddSynonym}
                   disabled={!synonymInput.trim()}
-                  className="rounded bg-surface-raised px-2 py-1 text-xs text-text-primary
-                    hover:bg-surface-overlay transition-colors
+                  className="rounded bg-card px-2 py-1 text-xs text-foreground
+                    hover:bg-muted transition-colors
                     disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Add
                 </button>
               </div>
             )}
-          </div>
-        </div>
+          </Field>
+        </FieldGroup>
       )}
     </div>
   );

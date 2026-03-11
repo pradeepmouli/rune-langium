@@ -1,4 +1,10 @@
-/* @rune-langium/visual-editor — Base styles */
+/* @rune-langium/visual-editor — Base styles
+ *
+ * All colors reference design-system tokens via var() with light-theme
+ * fallbacks. When embedded in the studio (which loads theme.css), the
+ * dark-palette tokens take effect automatically. Standalone usage
+ * falls back to the original light palette.
+ */
 
 .rune-type-graph {
   width: 100%;
@@ -6,60 +12,62 @@
   position: relative;
 }
 
-/* Node base styles */
+/* ── Node base ────────────────────────────────────────────────── */
+
 .rune-node {
-  border-radius: 6px;
-  border: 2px solid #e2e8f0;
-  background: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
+  border-radius: var(--radius-lg, 6px);
+  border: 2px solid var(--color-node-border, #e2e8f0);
+  background: var(--color-node-bg, #ffffff);
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: var(--text-base, 13px);
   min-width: 200px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.1));
+  color: var(--color-node-text, #1a202c);
 }
 
 .rune-node-header {
-  padding: 8px 12px;
+  padding: var(--space-4, 8px) var(--space-6, 12px);
   font-weight: 600;
-  font-size: 14px;
-  border-bottom: 1px solid #e2e8f0;
+  font-size: var(--text-md, 14px);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3, 6px);
 }
 
 .rune-node-kind-badge {
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 3px;
+  font-size: var(--text-xs, 10px);
+  padding: var(--space-1, 1px) var(--space-3, 6px);
+  border-radius: var(--radius-sm, 3px);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .rune-node-body {
-  padding: 8px 12px;
+  padding: var(--space-4, 8px) var(--space-6, 12px);
 }
 
 .rune-node-member {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 3px 0;
-  gap: 8px;
+  padding: var(--space-1, 3px) 0;
+  gap: var(--space-4, 8px);
 }
 
 .rune-node-member-name {
-  color: #1a202c;
+  color: var(--color-node-text, #1a202c);
 }
 
 .rune-node-member-type {
-  color: #718096;
+  color: var(--color-node-member-type, #718096);
   font-style: italic;
 }
 
 .rune-node-member-cardinality {
-  color: #a0aec0;
-  font-size: 11px;
+  color: var(--color-node-member-card, #a0aec0);
+  font-size: var(--text-xs, 11px);
 }
 
 .rune-node-member-override {
@@ -67,211 +75,255 @@
   font-style: italic;
 }
 
-/* Data node */
+/* ── Data node (blue) ─────────────────────────────────────────── */
+
 .rune-node-data {
-  border-color: #4299e1;
+  border-color: var(--color-data, #4299e1);
 }
 
 .rune-node-data .rune-node-header {
-  background: #ebf8ff;
-  color: #2b6cb0;
+  background: var(--color-data-bg, #ebf8ff);
+  color: var(--color-data-text, #2b6cb0);
 }
 
 .rune-node-data .rune-node-kind-badge {
-  background: #bee3f8;
-  color: #2a69ac;
+  background: var(--color-data-badge, #bee3f8);
+  color: var(--color-data-text, #2a69ac);
 }
 
-/* Choice node */
+/* ── Choice node (amber) ──────────────────────────────────────── */
+
 .rune-node-choice {
-  border-color: #ed8936;
+  border-color: var(--color-choice, #ed8936);
 }
 
 .rune-node-choice .rune-node-header {
-  background: #fffaf0;
-  color: #c05621;
+  background: var(--color-choice-bg, #fffaf0);
+  color: var(--color-choice-text, #c05621);
 }
 
 .rune-node-choice .rune-node-kind-badge {
-  background: #feebc8;
-  color: #c05621;
+  background: var(--color-choice-badge, #feebc8);
+  color: var(--color-choice-text, #c05621);
 }
 
-/* Enum node */
+/* ── Enum node (green) ────────────────────────────────────────── */
+
 .rune-node-enum {
-  border-color: #48bb78;
+  border-color: var(--color-enum, #48bb78);
 }
 
 .rune-node-enum .rune-node-header {
-  background: #f0fff4;
-  color: #276749;
+  background: var(--color-enum-bg, #f0fff4);
+  color: var(--color-enum-text, #276749);
 }
 
 .rune-node-enum .rune-node-kind-badge {
-  background: #c6f6d5;
-  color: #276749;
+  background: var(--color-enum-badge, #c6f6d5);
+  color: var(--color-enum-text, #276749);
 }
 
-/* Node error indicator */
+/* ── Function node (purple) ───────────────────────────────────── */
+
+.rune-node-func {
+  border-color: var(--color-func, #a855f7);
+}
+
+.rune-node-func .rune-node-header {
+  background: var(--color-func-bg, rgba(168, 85, 247, 0.15));
+  color: var(--color-func-text, #d8b4fe);
+}
+
+.rune-node-func .rune-node-kind-badge {
+  background: var(--color-func-badge, rgba(168, 85, 247, 0.25));
+  color: var(--color-func-text, #d8b4fe);
+}
+
+/* ── Node error indicator ─────────────────────────────────────── */
+
 .rune-node-errors {
-  border-left: 3px solid #e53e3e;
-  padding: 4px 8px;
-  margin: 4px 8px 8px;
-  background: #fff5f5;
-  font-size: 12px;
-  color: #c53030;
+  border-left: 3px solid var(--color-error, #e53e3e);
+  padding: var(--space-2, 4px) var(--space-4, 8px);
+  margin: var(--space-2, 4px) var(--space-4, 8px) var(--space-4, 8px);
+  background: var(--color-error-bg, #fff5f5);
+  font-size: var(--text-sm, 12px);
+  color: var(--color-error-text, #c53030);
 }
 
-/* Edge styles */
+/* ── Edge styles ──────────────────────────────────────────────── */
+
 .rune-edge-extends {
-  stroke: #4299e1;
+  stroke: var(--color-data, #4299e1);
   stroke-width: 2;
 }
 
 .rune-edge-attribute-ref {
-  stroke: #718096;
+  stroke: var(--color-edge-ref, #718096);
   stroke-width: 1.5;
   stroke-dasharray: 5 3;
 }
 
 .rune-edge-choice-option {
-  stroke: #ed8936;
+  stroke: var(--color-choice, #ed8936);
   stroke-width: 1.5;
 }
 
 .rune-edge-enum-extends {
-  stroke: #48bb78;
+  stroke: var(--color-enum, #48bb78);
   stroke-width: 2;
 }
 
-/* Panel styles */
+/* Edge label (positioned by EdgeLabelRenderer) */
+.rune-edge-label {
+  font-size: var(--text-xs, 11px);
+  background: var(--color-edge-label-bg, #ffffff);
+  padding: var(--space-1, 1px) var(--space-2, 4px);
+  border-radius: var(--radius-sm, 3px);
+  border: 1px solid var(--color-edge-label-border, #e2e8f0);
+  color: var(--color-node-text, #1a202c);
+  pointer-events: all;
+}
+
+.rune-edge-label__cardinality {
+  color: var(--color-edge-label-text, #a0aec0);
+  margin-left: var(--space-2, 4px);
+}
+
+/* ── Panel styles ─────────────────────────────────────────────── */
+
 .rune-panel {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  padding: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 6px);
+  box-shadow: var(--shadow-lg, 0 2px 8px rgba(0, 0, 0, 0.08));
+  padding: var(--space-6, 12px);
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: var(--text-base, 13px);
+  color: var(--foreground);
 }
 
 .rune-panel-header {
   font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 8px;
-  color: #2d3748;
+  font-size: var(--text-md, 14px);
+  margin-bottom: var(--space-4, 8px);
+  color: var(--foreground);
 }
 
-/* Search panel */
+/* ── Search panel ─────────────────────────────────────────────── */
+
 .rune-search-input {
   width: 100%;
-  padding: 6px 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  font-size: 13px;
+  padding: var(--space-3, 6px) var(--space-5, 10px);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md, 4px);
+  font-size: var(--text-base, 13px);
   outline: none;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 .rune-search-input:focus {
-  border-color: #4299e1;
-  box-shadow: 0 0 0 1px #4299e1;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 
-/* Search panel layout */
 .rune-search-panel__results {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #718096;
+  margin-top: var(--space-2, 4px);
+  font-size: var(--text-sm, 12px);
+  color: var(--muted-foreground);
 }
 
 .rune-search-panel__filter-section {
-  margin-top: 8px;
+  margin-top: var(--space-4, 8px);
 }
 
 .rune-search-panel__filter-buttons {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2, 4px);
 }
 
 .rune-search-panel__orphan-toggle {
-  margin-top: 8px;
+  margin-top: var(--space-4, 8px);
 }
 
 .rune-search-panel__orphan-label {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: var(--space-2, 4px);
+  font-size: var(--text-sm, 12px);
   cursor: pointer;
+  color: var(--foreground);
 }
 
-.rune-toolbar-button-active {
-  background: #4299e1;
-  border-color: #4299e1;
-  color: #ffffff;
-}
+/* ── Toolbar ──────────────────────────────────────────────────── */
 
-/* Toolbar */
 .rune-toolbar {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2, 4px);
 }
 
 .rune-toolbar-button {
-  padding: 6px 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  background: #ffffff;
+  padding: var(--space-3, 6px) var(--space-5, 10px);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md, 4px);
+  background: var(--muted);
   cursor: pointer;
-  font-size: 12px;
-  color: #4a5568;
+  font-size: var(--text-sm, 12px);
+  color: var(--foreground);
 }
 
 .rune-toolbar-button:hover {
-  background: #f7fafc;
-  border-color: #cbd5e0;
+  background: var(--input);
+  color: var(--foreground);
+}
+
+.rune-toolbar-button-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
 }
 
 .rune-toolbar-select {
-  font-size: 12px;
-  padding: 4px 6px;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #4a5568;
+  font-size: var(--text-sm, 12px);
+  padding: var(--space-2, 4px) var(--space-3, 6px);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md, 4px);
+  background: var(--muted);
+  color: var(--foreground);
   cursor: pointer;
 }
 
 .rune-toolbar-select:hover {
-  background: #f7fafc;
-  border-color: #cbd5e0;
+  background: var(--input);
+  color: var(--foreground);
 }
 
-/* Detail panel */
+/* ── Detail panel ─────────────────────────────────────────────── */
+
 .rune-detail-section {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-6, 12px);
 }
 
 .rune-detail-label {
-  font-size: 11px;
+  font-size: var(--text-xs, 11px);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #a0aec0;
-  margin-bottom: 4px;
+  color: var(--muted-foreground);
+  margin-bottom: var(--space-2, 4px);
 }
 
 .rune-detail-value {
-  color: #2d3748;
+  color: var(--foreground);
 }
 
-/* Selection highlight */
+/* ── Selection / search highlight ─────────────────────────────── */
+
 .rune-node-selected {
-  box-shadow: 0 0 0 2px #4299e1;
+  box-shadow: 0 0 0 2px var(--primary);
 }
 
-/* Search highlight */
 .rune-node-search-match {
-  box-shadow: 0 0 0 2px #ecc94b;
+  box-shadow: 0 0 0 2px var(--color-warning, #ecc94b);
 }
 
 .rune-node-dimmed {
