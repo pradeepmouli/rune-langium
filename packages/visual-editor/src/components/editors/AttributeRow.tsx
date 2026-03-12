@@ -146,93 +146,87 @@ function AttributeRow({
     <div
       data-slot="attribute-row"
       data-index={index}
-      className={`flex flex-col gap-1 py-1.5 px-1.5 rounded border border-transparent
+      className={`flex items-center gap-1.5 py-1 px-1.5 rounded border border-transparent
         hover:border-border hover:bg-background/50 ${isOverride ? 'opacity-60' : ''}`}
       draggable={!disabled}
       onDragStart={handleDragStart}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      {/* Row 1: drag handle + name + override badge + remove */}
-      <div className="flex items-center gap-1.5">
-        {/* Drag handle */}
-        <span
-          data-slot="drag-handle"
-          className="cursor-grab text-muted-foreground select-none text-xs"
-          aria-hidden="true"
-        >
-          ⠿
-        </span>
+      {/* Drag handle */}
+      <span
+        data-slot="drag-handle"
+        className="cursor-grab text-muted-foreground select-none text-xs shrink-0"
+        aria-hidden="true"
+      >
+        ⠿
+      </span>
 
-        {/* Name input via Controller */}
-        <Controller
-          control={control}
-          name={`${prefix}.name`}
-          render={({ field }) => (
-            <input
-              data-slot="attribute-name"
-              type="text"
-              value={field.value}
-              onChange={(e) => {
-                field.onChange(e);
-                debouncedName(e.target.value);
-              }}
-              onBlur={field.onBlur}
-              disabled={disabled}
-              className="flex-1 min-w-0 px-1.5 py-0.5 text-sm border border-transparent rounded
-                focus:border-input focus:outline-none bg-transparent"
-              placeholder="name"
-              aria-label={`Attribute name: ${field.value}`}
-            />
-          )}
-        />
-
-        {/* Override badge */}
-        {isOverride && (
-          <span
-            data-slot="override-badge"
-            className="text-xs text-muted-foreground italic whitespace-nowrap"
-          >
-            override
-          </span>
+      {/* Name input */}
+      <Controller
+        control={control}
+        name={`${prefix}.name`}
+        render={({ field }) => (
+          <input
+            data-slot="attribute-name"
+            type="text"
+            value={field.value}
+            onChange={(e) => {
+              field.onChange(e);
+              debouncedName(e.target.value);
+            }}
+            onBlur={field.onBlur}
+            disabled={disabled}
+            className="w-24 min-w-0 px-1.5 py-0.5 text-sm border border-transparent rounded
+              focus:border-input focus:outline-none bg-transparent"
+            placeholder="name"
+            aria-label={`Attribute name: ${field.value}`}
+          />
         )}
+      />
 
-        {/* Remove button */}
-        <button
-          data-slot="attribute-remove"
-          type="button"
-          onClick={() => onRemove(index)}
-          disabled={disabled || isOverride}
-          className="shrink-0 p-0.5 text-muted-foreground hover:text-destructive
-            disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label={`Remove attribute ${committedName || 'unnamed'}`}
+      {/* Type selector */}
+      <div data-slot="attribute-type" className="w-32 shrink-0">
+        <TypeSelector
+          value={typeValue}
+          options={availableTypes}
+          onSelect={handleTypeSelect}
+          disabled={disabled}
+          placeholder="type"
+        />
+      </div>
+
+      {/* Cardinality */}
+      <div data-slot="attribute-cardinality" className="shrink-0">
+        <CardinalityPicker
+          value={cardinality ?? '(1..1)'}
+          onChange={handleCardinalityChange}
+          disabled={disabled}
+        />
+      </div>
+
+      {/* Override badge */}
+      {isOverride && (
+        <span
+          data-slot="override-badge"
+          className="text-xs text-muted-foreground italic whitespace-nowrap"
         >
-          ✕
-        </button>
-      </div>
+          override
+        </span>
+      )}
 
-      {/* Row 2: type selector + cardinality */}
-      <div className="flex items-center gap-1.5 pl-5">
-        {/* Type selector */}
-        <div data-slot="attribute-type" className="w-36 shrink-0">
-          <TypeSelector
-            value={typeValue}
-            options={availableTypes}
-            onSelect={handleTypeSelect}
-            disabled={disabled}
-            placeholder="type"
-          />
-        </div>
-
-        {/* Cardinality */}
-        <div data-slot="attribute-cardinality" className="shrink-0">
-          <CardinalityPicker
-            value={cardinality ?? '(1..1)'}
-            onChange={handleCardinalityChange}
-            disabled={disabled}
-          />
-        </div>
-      </div>
+      {/* Remove button */}
+      <button
+        data-slot="attribute-remove"
+        type="button"
+        onClick={() => onRemove(index)}
+        disabled={disabled || isOverride}
+        className="ml-auto shrink-0 p-0.5 text-muted-foreground hover:text-destructive
+          disabled:opacity-30 disabled:cursor-not-allowed"
+        aria-label={`Remove attribute ${committedName || 'unnamed'}`}
+      >
+        ✕
+      </button>
     </div>
   );
 }
