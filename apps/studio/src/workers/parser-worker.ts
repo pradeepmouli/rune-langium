@@ -41,6 +41,36 @@ export interface ParseWorkspaceResponse {
 export type WorkerResponse = ParseResponse | ParseWorkspaceResponse;
 
 // ---------------------------------------------------------------------------
+// CST text preservation — $cstNode is lost during postMessage serialization
+// (structured clone can't handle circular refs). Save the text as $cstText.
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function preserveCstText(model: any): void {
+  for (const elem of model?.elements ?? []) {
+    // Function body parts: shortcuts, conditions, operations, postConditions
+    if (elem.$type === 'Function') {
+      for (const arr of [elem.shortcuts, elem.conditions, elem.operations, elem.postConditions]) {
+        for (const part of arr ?? []) {
+          if (part?.$cstNode?.text) {
+            part.$cstText = part.$cstNode.text;
+          }
+        }
+      }
+    }
+    // Data/Choice conditions
+    if (elem.conditions) {
+      for (const cond of elem.conditions) {
+        if (cond?.$cstNode?.text) {
+          cond.$cstText = cond.$cstNode.text;
+        }
+      }
+    }
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ---------------------------------------------------------------------------
 // Worker message handler
 // ---------------------------------------------------------------------------
 
@@ -53,6 +83,7 @@ async function handleParse(req: ParseRequest): Promise<ParseResponse> {
         errors.push(err.message);
       }
     }
+    if (result.value) preserveCstText(result.value);
     return { type: 'parseResult', id: req.id, model: result.value, errors };
   } catch (e) {
     return {
@@ -71,7 +102,10 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
   for (const file of req.files) {
     try {
       const result = await parse(file.content, file.name);
-      if (result.value) models.push(result.value);
+      if (result.value) {
+        preserveCstText(result.value);
+        models.push(result.value);
+      }
       if (result.parserErrors?.length) {
         errors[file.name] = result.parserErrors.map((e) => e.message);
       }
