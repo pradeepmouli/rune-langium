@@ -57,8 +57,16 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
   let client: LSPClient | null = null;
   let initialized = false;
   const workspaceSnapshot = new Map<string, { version: number; content: string }>();
+  let _pendingRefreshId: ReturnType<typeof setTimeout> | null = null;
 
   const diagnosticHandlers: ((uri: string, diagnostics: LspDiagnostic[]) => void)[] = [];
+
+  function cancelPendingRefresh(): void {
+    if (_pendingRefreshId !== null) {
+      clearTimeout(_pendingRefreshId);
+      _pendingRefreshId = null;
+    }
+  }
 
   function buildClient(): LSPClient {
     return new LSPClient({
@@ -101,6 +109,7 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
     },
 
     async disconnect(): Promise<void> {
+      cancelPendingRefresh();
       if (client) {
         client.disconnect();
         client = null;
@@ -176,16 +185,25 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
       // validated before all dependencies were present. Force a no-op content
       // refresh across unchanged files so diagnostics are recomputed with the
       // complete workspace loaded.
+      //
+      // Debounced via setTimeout(0) to yield the UI thread and coalesce
+      // multiple rapid syncWorkspaceFiles calls into a single batch refresh.
       if (client && initialized && addedCount > 0) {
-        for (const [uri, entry] of workspaceSnapshot) {
-          if (changedUris.has(uri)) continue;
-          const version = entry.version + 1;
-          workspaceSnapshot.set(uri, { version, content: entry.content });
-          client.notification('textDocument/didChange', {
-            textDocument: { uri, version },
-            contentChanges: [{ text: entry.content }]
-          });
-        }
+        const urisToSkip = new Set(changedUris);
+        cancelPendingRefresh();
+        _pendingRefreshId = setTimeout(() => {
+          _pendingRefreshId = null;
+          if (!client || !initialized) return;
+          for (const [uri, entry] of workspaceSnapshot) {
+            if (urisToSkip.has(uri)) continue;
+            const version = entry.version + 1;
+            workspaceSnapshot.set(uri, { version, content: entry.content });
+            client.notification('textDocument/didChange', {
+              textDocument: { uri, version },
+              contentChanges: [{ text: entry.content }]
+            });
+          }
+        }, 0);
       }
     },
 
@@ -213,6 +231,7 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
     },
 
     dispose(): void {
+      cancelPendingRefresh();
       if (client) {
         client.disconnect();
         client = null;

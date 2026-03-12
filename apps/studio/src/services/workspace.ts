@@ -19,6 +19,12 @@ export interface WorkspaceFile {
   readOnly?: boolean;
 }
 
+export interface WorkspaceLoadProgress {
+  phase: 'reading' | 'syncing' | 'complete';
+  loaded: number;
+  total: number;
+}
+
 export interface WorkspaceState {
   files: WorkspaceFile[];
   models: unknown[];
@@ -158,21 +164,45 @@ export async function parseWorkspaceFiles(
 
 /**
  * Read files from a FileList (from file input or drag-and-drop).
+ * Reads in chunks of 10 to keep the UI responsive for large folders.
+ * Calls onProgress between chunks when provided.
  */
-export async function readFileList(fileList: FileList): Promise<WorkspaceFile[]> {
+export async function readFileList(
+  fileList: FileList,
+  onProgress?: (progress: WorkspaceLoadProgress) => void
+): Promise<WorkspaceFile[]> {
   const results: WorkspaceFile[] = [];
 
+  // Collect rosetta file indices first
+  const indices: number[] = [];
   for (let i = 0; i < fileList.length; i++) {
     const file = fileList[i];
-    if (!file || !file.name.endsWith('.rosetta')) continue;
+    if (file && file.name.endsWith('.rosetta')) {
+      indices.push(i);
+    }
+  }
 
-    const content = await file.text();
-    results.push({
-      name: file.name,
-      path: file.webkitRelativePath || file.name,
-      content,
-      dirty: false
-    });
+  const total = indices.length;
+  const CHUNK_SIZE = 10;
+
+  for (let chunk = 0; chunk < indices.length; chunk += CHUNK_SIZE) {
+    const end = Math.min(chunk + CHUNK_SIZE, indices.length);
+    for (let j = chunk; j < end; j++) {
+      const file = fileList[indices[j]!]!;
+      const content = await file.text();
+      results.push({
+        name: file.name,
+        path: file.webkitRelativePath || file.name,
+        content,
+        dirty: false
+      });
+    }
+    onProgress?.({ phase: 'reading', loaded: results.length, total });
+
+    // Yield to the UI thread between chunks
+    if (end < indices.length) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   }
 
   return results;

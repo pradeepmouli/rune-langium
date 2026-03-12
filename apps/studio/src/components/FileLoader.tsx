@@ -1,9 +1,11 @@
 /**
  * FileLoader — Drag-and-drop + file picker for loading .rosetta files (T084, T099).
+ *
+ * Shows a progress bar during chunked file reading for large folders.
  */
 
 import { useCallback, useRef, useState } from 'react';
-import type { WorkspaceFile } from '../services/workspace.js';
+import type { WorkspaceFile, WorkspaceLoadProgress } from '../services/workspace.js';
 import { readFileList } from '../services/workspace.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { cn } from '@rune-langium/design-system/utils';
@@ -14,15 +16,21 @@ export interface FileLoaderProps {
 
 export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [loadProgress, setLoadProgress] = useState<WorkspaceLoadProgress | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = useCallback(
     async (fileList: FileList) => {
-      const files = await readFileList(fileList);
+      setLoadProgress({ phase: 'reading', loaded: 0, total: 0 });
+      const files = await readFileList(fileList, (progress) => {
+        setLoadProgress(progress);
+      });
+      setLoadProgress({ phase: 'syncing', loaded: files.length, total: files.length });
       if (files.length > 0) {
         onFilesLoaded(files);
       }
+      setLoadProgress(null);
     },
     [onFilesLoaded]
   );
@@ -73,14 +81,40 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
         <p className="text-md text-muted-foreground mb-6">
           Drag and drop .rosetta files here, or use the buttons below
         </p>
-        <div className="flex gap-3 justify-center">
-          <Button size="lg" onClick={() => fileInputRef.current?.click()}>
-            Select Files
-          </Button>
-          <Button variant="secondary" size="lg" onClick={() => dirInputRef.current?.click()}>
-            Select Folder
-          </Button>
-        </div>
+
+        {loadProgress ? (
+          <div className="w-full" data-testid="load-progress">
+            <div className="w-full bg-muted rounded-full h-2 mb-2">
+              <div
+                className="bg-primary h-2 rounded-full transition-all"
+                style={{
+                  width: `${loadProgress.total > 0 ? (loadProgress.loaded / loadProgress.total) * 100 : 0}%`
+                }}
+                role="progressbar"
+                aria-valuenow={loadProgress.loaded}
+                aria-valuemin={0}
+                aria-valuemax={loadProgress.total}
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {loadProgress.phase === 'reading'
+                ? `Loading ${loadProgress.loaded}/${loadProgress.total} files...`
+                : 'Syncing with language server...'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-3 justify-center">
+              <Button size="lg" onClick={() => fileInputRef.current?.click()}>
+                Select Files
+              </Button>
+              <Button variant="secondary" size="lg" onClick={() => dirInputRef.current?.click()}>
+                Select Folder
+              </Button>
+            </div>
+          </>
+        )}
+
         {/* Visually hidden — NOT display:none, Chrome blocks .click() on those */}
         <input
           ref={fileInputRef}

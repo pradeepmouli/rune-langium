@@ -15,7 +15,7 @@
  * @module
  */
 
-import { useEffect, useCallback, useRef, Component } from 'react';
+import { useEffect, useCallback, useRef, Component, memo } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
@@ -111,7 +111,7 @@ export interface EditorFormPanelProps {
 // Component
 // ---------------------------------------------------------------------------
 
-function EditorFormPanel({
+const EditorFormPanel = memo(function EditorFormPanel({
   nodeData,
   nodeId,
   isReadOnly = false,
@@ -278,6 +278,6 @@ function EditorFormPanel({
       </div>
     </aside>
   );
-}
+});
 
 export { EditorFormPanel };

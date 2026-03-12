@@ -8,7 +8,7 @@
 **Input**: User drops/selects a folder containing 142 CDM .rosetta files
 **Expected Output**: All files loaded into workspace, parsed, and available in editor
 **Actual Output** (before): All 142 files loaded, AST parsed, diagnostics computed
-**Actual Output** (after): [Re-run after refactoring - must match]
+**Actual Output** (after): All 142 files loaded, chunked in batches of 10 with progress callback. 11 workspace tests pass.
 
 **Verification**: `WorkspaceFile[]` array has same length and same file paths/content
 
@@ -16,7 +16,7 @@
 **Input**: Parsed CDM corpus with 10,000+ types across 100+ namespaces
 **Expected Output**: Tree shows all namespaces sorted alphabetically, each containing types sorted alphabetically, with correct counts per kind (data, choice, enum, func)
 **Actual Output** (before): Tree renders all namespaces, expandable, with counts
-**Actual Output** (after): [Re-run after refactoring - must match]
+**Actual Output** (after): Virtualized via @tanstack/react-virtual — same tree structure, only visible rows render. 14 NamespaceExplorerPanel + 21 namespace-tree tests pass.
 
 **Verification**: `buildNamespaceTree()` returns identical tree structure before and after
 
@@ -24,7 +24,7 @@
 **Input**: Search query "Trade" in explorer with CDM corpus loaded
 **Expected Output**: Only namespaces containing types matching "Trade" (regex) are shown
 **Actual Output** (before): `filterNamespaceTree(tree, "Trade")` returns filtered subset
-**Actual Output** (after): [Re-run after refactoring - must match]
+**Actual Output** (after): `flattenNamespaceTree()` applies search filter before flattening — same results. Tests verify exact match.
 
 **Verification**: Same filtered tree structure and type counts
 
@@ -32,7 +32,7 @@
 **Input**: 142 CDM .rosetta files + 2 built-in type files + 42 FpML files
 **Expected Output**: 0 linking errors, 0 parse errors, 0 warnings
 **Actual Output** (before): CDM conformance test passes — `Total linking errors: 0`, `Total diagnostics: 0`
-**Actual Output** (after): [Re-run after refactoring - must match]
+**Actual Output** (after): CDM conformance passes — `Total linking errors: 0`, `Total diagnostics: 0`. Debounced refresh produces same final state.
 
 **Verification**: `npx vitest run cdm-deep-diag` produces identical diagnostic counts
 
@@ -40,7 +40,7 @@
 **Input**: User clicks a type (e.g., "Trade") in namespace explorer
 **Expected Output**: Graph view navigates to and highlights the corresponding node
 **Actual Output** (before): `onSelectNode(nodeId)` callback fires with correct node ID
-**Actual Output** (after): [Re-run after refactoring - must match]
+**Actual Output** (after): Same callback preserved with identical data-testid attributes and click handlers. Tests verify.
 
 **Verification**: Same node ID passed to callback for same type click
 
@@ -48,7 +48,7 @@
 **Input**: Edit a data type in source editor (e.g., add an attribute)
 **Expected Output**: Graph updates to reflect the new attribute; editing graph reflects back to source
 **Actual Output** (before): Bidirectional sync works via LSP + workspace service
-**Actual Output** (after): [Re-run after refactoring - must match]
+**Actual Output** (after): Same sync mechanism, refresh now debounced but produces identical final state. 19 lsp-client tests pass.
 
 **Verification**: Content changes propagate in both directions identically
 

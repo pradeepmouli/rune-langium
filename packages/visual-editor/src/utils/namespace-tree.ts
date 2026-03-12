@@ -3,7 +3,21 @@
  * for the NamespaceExplorerPanel.
  */
 
-import type { TypeGraphNode, NamespaceTreeNode, NamespaceTypeEntry } from '../types.js';
+import type { TypeGraphNode, TypeKind, NamespaceTreeNode, NamespaceTypeEntry } from '../types.js';
+
+/**
+ * Flattened row for virtualized rendering of the namespace tree.
+ */
+export type FlatTreeRow =
+  | { kind: 'namespace'; namespace: string; typeCount: number; expanded: boolean }
+  | {
+      kind: 'type';
+      nodeId: string;
+      name: string;
+      typeKind: TypeKind;
+      namespace: string;
+      hidden: boolean;
+    };
 
 /**
  * Build a sorted list of namespace tree entries from graph nodes.
@@ -91,4 +105,45 @@ export function filterNamespaceTree(tree: NamespaceTreeNode[], query: string): N
   }
 
   return results;
+}
+
+/**
+ * Flatten the namespace tree into a single array of rows for virtualized rendering.
+ *
+ * Each namespace becomes a header row; its child types become individual rows
+ * (only when the namespace is expanded). Hidden nodes and search filtering are applied.
+ */
+export function flattenNamespaceTree(
+  tree: NamespaceTreeNode[],
+  expandedNamespaces: Set<string>,
+  hiddenNodeIds: Set<string>,
+  searchQuery?: string
+): FlatTreeRow[] {
+  const filtered = searchQuery ? filterNamespaceTree(tree, searchQuery) : tree;
+  const rows: FlatTreeRow[] = [];
+
+  for (const entry of filtered) {
+    const expanded = expandedNamespaces.has(entry.namespace);
+    rows.push({
+      kind: 'namespace',
+      namespace: entry.namespace,
+      typeCount: entry.totalCount,
+      expanded
+    });
+
+    if (expanded) {
+      for (const type of entry.types) {
+        rows.push({
+          kind: 'type',
+          nodeId: type.nodeId,
+          name: type.name,
+          typeKind: type.kind,
+          namespace: entry.namespace,
+          hidden: hiddenNodeIds.has(type.nodeId)
+        });
+      }
+    }
+  }
+
+  return rows;
 }

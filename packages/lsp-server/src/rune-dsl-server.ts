@@ -71,7 +71,13 @@ export function createRuneLspServer(): RuneLspServer {
       renameProvider: { prepareProvider: true },
       documentFormattingProvider: true,
       signatureHelpProvider: { triggerCharacters: ['(', ','] },
-      documentLinkProvider: {}
+      documentLinkProvider: {},
+      workspace: {
+        workspaceFolders: {
+          supported: true,
+          changeNotifications: true
+        }
+      }
     }
   });
 

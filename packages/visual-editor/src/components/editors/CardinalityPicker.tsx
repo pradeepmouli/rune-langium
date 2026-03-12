@@ -1,11 +1,18 @@
 /**
- * CardinalityPicker — 4 preset toggle buttons + custom input.
+ * CardinalityPicker — Dropdown select for cardinality with custom input option.
  *
  * Provides quick-select for common cardinalities (1..1, 0..1, 0..*, 1..*)
- * with a custom input field that validates via `validateCardinality()`.
+ * via a compact dropdown, plus a custom input that validates via `validateCardinality()`.
  */
 
 import { useState, useCallback } from 'react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@rune-langium/design-system/ui/select';
 import { validateCardinality } from '../../validation/edit-validator.js';
 
 // ---------------------------------------------------------------------------
@@ -32,50 +39,53 @@ const PRESETS = [
   { label: '1..*', value: '(1..*)' }
 ] as const;
 
+/** Sentinel value used to trigger the custom input flow. */
+const CUSTOM_VALUE = '__custom__';
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 /**
- * Cardinality picker with 4 preset toggle buttons and a custom input field.
+ * Cardinality picker as a compact dropdown with 4 presets and a custom option.
  *
- * Preset clicks commit immediately. Custom input validates with
- * `validateCardinality()` on blur.
+ * Preset selection commits immediately. Choosing "Custom…" shows an inline
+ * input that validates with `validateCardinality()` on blur or Enter.
  */
 export function CardinalityPicker({
   value,
   onChange,
   disabled = false
 }: CardinalityPickerProps): React.ReactNode {
+  const [showCustom, setShowCustom] = useState(false);
   const [customValue, setCustomValue] = useState('');
   const [customError, setCustomError] = useState<string | null>(null);
-  const [showCustom, setShowCustom] = useState(false);
 
-  // Normalize the value for comparison with presets
+  // Normalize the value for display (strip parens)
   const normalizedValue = value.replace(/[()]/g, '').trim();
-  const isPresetActive = (preset: (typeof PRESETS)[number]): boolean => {
-    const presetNorm = preset.value.replace(/[()]/g, '').trim();
-    return normalizedValue === presetNorm;
-  };
 
-  const handlePresetClick = useCallback(
-    (preset: (typeof PRESETS)[number]) => {
-      if (disabled) return;
-      setShowCustom(false);
-      setCustomError(null);
-      onChange(preset.value);
+  // Find matching preset for the Select's controlled value
+  const matchingPreset = PRESETS.find(
+    (p) => p.value.replace(/[()]/g, '').trim() === normalizedValue
+  );
+  const selectValue = matchingPreset?.value ?? CUSTOM_VALUE;
+
+  const handleSelectChange = useCallback(
+    (newValue: string) => {
+      if (newValue === CUSTOM_VALUE) {
+        setShowCustom(true);
+        setCustomValue(normalizedValue);
+        setCustomError(null);
+      } else {
+        setShowCustom(false);
+        setCustomError(null);
+        onChange(newValue);
+      }
     },
-    [disabled, onChange]
+    [normalizedValue, onChange]
   );
 
-  const handleCustomToggle = useCallback(() => {
-    setShowCustom((prev) => !prev);
-    setCustomError(null);
-    // Pre-fill custom input with current value (without parens)
-    setCustomValue(normalizedValue);
-  }, [normalizedValue]);
-
-  const handleCustomBlur = useCallback(() => {
+  const commitCustom = useCallback(() => {
     if (!customValue.trim()) {
       setCustomError(null);
       return;
@@ -95,70 +105,64 @@ export function CardinalityPicker({
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        handleCustomBlur();
+        commitCustom();
       }
       if (e.key === 'Escape') {
         setShowCustom(false);
         setCustomError(null);
       }
     },
-    [handleCustomBlur]
+    [commitCustom]
   );
 
-  return (
-    <div data-slot="cardinality-picker" className="flex items-center gap-0.5">
-      {PRESETS.map((preset) => (
-        <button
-          key={preset.label}
-          type="button"
-          onClick={() => handlePresetClick(preset)}
+  if (showCustom) {
+    return (
+      <div data-slot="cardinality-picker" className="flex items-center gap-1">
+        <input
+          type="text"
+          value={customValue}
+          onChange={(e) => {
+            setCustomValue(e.target.value);
+            setCustomError(null);
+          }}
+          onBlur={commitCustom}
+          onKeyDown={handleCustomKeyDown}
           disabled={disabled}
-          data-active={isPresetActive(preset) || undefined}
-          aria-pressed={isPresetActive(preset)}
-          className="rounded border border-border px-1.5 py-0.5 text-xs font-mono transition-colors
-            data-active:bg-primary data-active:text-primary-foreground data-active:border-primary
-            hover:bg-card hover:border-input disabled:opacity-50 disabled:cursor-not-allowed"
+          placeholder="inf..sup"
+          aria-label="Custom cardinality"
+          aria-invalid={!!customError}
+          autoFocus
+          className={`w-20 rounded border px-1.5 py-0.5 text-xs font-mono
+            bg-background outline-none
+            focus:ring-1 focus:ring-ring
+            ${customError ? 'border-destructive' : 'border-input'}`}
+        />
+        {customError && <span className="text-xs text-destructive">{customError}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div data-slot="cardinality-picker">
+      <Select value={selectValue} onValueChange={handleSelectChange} disabled={disabled}>
+        <SelectTrigger
+          size="sm"
+          className="h-6 min-w-[4.5rem] px-2 py-0 text-xs font-mono gap-1"
+          aria-label="Cardinality"
         >
-          {preset.label}
-        </button>
-      ))}
-
-      <button
-        type="button"
-        onClick={handleCustomToggle}
-        disabled={disabled}
-        data-active={showCustom || undefined}
-        aria-label="Custom cardinality"
-        className="rounded border border-border px-1 py-0.5 text-xs transition-colors
-          data-active:bg-card data-active:border-input hover:bg-card hover:border-input
-          disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        ···
-      </button>
-
-      {showCustom && (
-        <div className="flex items-center gap-1">
-          <input
-            type="text"
-            value={customValue}
-            onChange={(e) => {
-              setCustomValue(e.target.value);
-              setCustomError(null);
-            }}
-            onBlur={handleCustomBlur}
-            onKeyDown={handleCustomKeyDown}
-            disabled={disabled}
-            placeholder="inf..sup"
-            aria-label="Custom cardinality"
-            aria-invalid={!!customError}
-            className={`w-20 rounded border px-1.5 py-0.5 text-xs font-mono
-              bg-background outline-none
-              focus:ring-1 focus:ring-ring
-              ${customError ? 'border-destructive' : 'border-input'}`}
-          />
-          {customError && <span className="text-xs text-destructive">{customError}</span>}
-        </div>
-      )}
+          <SelectValue>{normalizedValue || '1..1'}</SelectValue>
+        </SelectTrigger>
+        <SelectContent position="popper" className="min-w-[6rem]">
+          {PRESETS.map((preset) => (
+            <SelectItem key={preset.value} value={preset.value} className="text-xs font-mono">
+              {preset.label}
+            </SelectItem>
+          ))}
+          <SelectItem value={CUSTOM_VALUE} className="text-xs">
+            Custom…
+          </SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }

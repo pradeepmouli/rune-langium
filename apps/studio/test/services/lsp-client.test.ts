@@ -188,9 +188,11 @@ describe('createLspClientService', () => {
 describe('syncWorkspaceFiles', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -227,11 +229,13 @@ describe('syncWorkspaceFiles', () => {
 
     // First sync — opens the file
     service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace foo' }]);
+    vi.runAllTimers();
     mockDidOpen.mockClear();
     mockNotification.mockClear();
 
     // Second sync — same path, different content
     service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace bar' }]);
+    vi.runAllTimers();
 
     expect(mockDidOpen).not.toHaveBeenCalled();
     expect(mockNotification).toHaveBeenCalledWith('textDocument/didChange', {
@@ -245,10 +249,12 @@ describe('syncWorkspaceFiles', () => {
 
     // Open a file
     service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace foo' }]);
+    vi.runAllTimers();
     mockDidOpen.mockClear();
 
     // Sync with empty list — file is removed
     service.syncWorkspaceFiles([]);
+    vi.runAllTimers();
 
     expect(mockDidClose).toHaveBeenCalledWith('file:///workspace/foo.rosetta');
   });
@@ -257,8 +263,11 @@ describe('syncWorkspaceFiles', () => {
     const service = await createConnectedService();
 
     service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'v1' }]);
+    vi.runAllTimers();
     service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'v2' }]);
+    vi.runAllTimers();
     service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'v3' }]);
+    vi.runAllTimers();
 
     // v1→v2 is version 1, v2→v3 is version 2
     const changeCalls = mockNotification.mock.calls.filter(
@@ -280,6 +289,7 @@ describe('syncWorkspaceFiles', () => {
       { path: 'b.rosetta', content: 'namespace b' },
       { path: 'c.rosetta', content: 'namespace c' }
     ]);
+    vi.runAllTimers();
 
     expect(mockDidOpen).toHaveBeenCalledTimes(3);
   });
@@ -310,6 +320,9 @@ describe('syncWorkspaceFiles', () => {
       { path: 'b.rosetta', content: 'namespace b' }
     ]);
 
+    // Flush debounced refresh
+    vi.runAllTimers();
+
     // b.rosetta should be opened
     expect(mockDidOpen).toHaveBeenCalledOnce();
 
@@ -323,15 +336,73 @@ describe('syncWorkspaceFiles', () => {
     expect(refreshForA).toBeTruthy();
   });
 
+  it('refreshes ALL unchanged files and skips changed files when new files added', async () => {
+    const service = await createConnectedService();
+
+    // First sync — three files
+    service.syncWorkspaceFiles([
+      { path: 'a.rosetta', content: 'namespace a' },
+      { path: 'b.rosetta', content: 'namespace b' },
+      { path: 'c.rosetta', content: 'namespace c' }
+    ]);
+    vi.runAllTimers();
+    mockDidOpen.mockClear();
+    mockNotification.mockClear();
+
+    // Second sync — add new file d, modify b, keep a and c unchanged
+    service.syncWorkspaceFiles([
+      { path: 'a.rosetta', content: 'namespace a' },
+      { path: 'b.rosetta', content: 'namespace b_modified' },
+      { path: 'c.rosetta', content: 'namespace c' },
+      { path: 'd.rosetta', content: 'namespace d' }
+    ]);
+
+    // Flush debounced refresh
+    vi.runAllTimers();
+
+    // d.rosetta should be opened
+    expect(mockDidOpen).toHaveBeenCalledOnce();
+
+    const changeCalls = mockNotification.mock.calls.filter(
+      (c) => c[0] === 'textDocument/didChange'
+    );
+
+    // b.rosetta should get exactly ONE change (content modification), not a second refresh
+    const changesForB = changeCalls.filter(
+      (c) => c[1].textDocument.uri === 'file:///workspace/b.rosetta'
+    );
+    expect(changesForB).toHaveLength(1);
+    expect(changesForB[0][1].contentChanges[0].text).toBe('namespace b_modified');
+
+    // a.rosetta and c.rosetta should BOTH get refresh notifications (unchanged files)
+    const refreshForA = changeCalls.filter(
+      (c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta'
+    );
+    const refreshForC = changeCalls.filter(
+      (c) => c[1].textDocument.uri === 'file:///workspace/c.rosetta'
+    );
+    expect(refreshForA).toHaveLength(1);
+    expect(refreshForC).toHaveLength(1);
+
+    // Refresh notifications send same content (no-op change)
+    expect(refreshForA[0][1].contentChanges[0].text).toBe('namespace a');
+    expect(refreshForC[0][1].contentChanges[0].text).toBe('namespace c');
+
+    // Total: 1 content change (b) + 2 refreshes (a, c) = 3 didChange notifications
+    expect(changeCalls).toHaveLength(3);
+  });
+
   it('does not change anything when files are identical', async () => {
     const service = await createConnectedService();
 
     service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'namespace a' }]);
+    vi.runAllTimers();
     mockDidOpen.mockClear();
     mockNotification.mockClear();
 
     // Same files, same content, no additions
     service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'namespace a' }]);
+    vi.runAllTimers();
 
     // No new opens, no changes, no closes (no new files added so no refresh either)
     expect(mockDidOpen).not.toHaveBeenCalled();

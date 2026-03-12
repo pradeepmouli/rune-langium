@@ -3,7 +3,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildNamespaceTree, filterNamespaceTree } from '../../src/utils/namespace-tree.js';
+import {
+  buildNamespaceTree,
+  filterNamespaceTree,
+  flattenNamespaceTree
+} from '../../src/utils/namespace-tree.js';
 import type { TypeGraphNode, TypeNodeData } from '../../src/types.js';
 
 function makeNode(ns: string, name: string, kind: TypeNodeData['kind'] = 'data'): TypeGraphNode {
@@ -150,5 +154,86 @@ describe('filterNamespaceTree', () => {
     const result2 = filterNamespaceTree(specialTree, '.');
     expect(result2).toHaveLength(1);
     expect(result2[0]!.types[0]!.name).toBe('Type.C');
+  });
+});
+
+describe('flattenNamespaceTree', () => {
+  const nodes = [
+    makeNode('ns.a', 'TypeA', 'data'),
+    makeNode('ns.a', 'TypeB', 'choice'),
+    makeNode('ns.b', 'TypeC', 'enum'),
+    makeNode('ns.c', 'TypeD', 'func')
+  ];
+  const tree = buildNamespaceTree(nodes);
+
+  it('returns only namespace headers when all collapsed', () => {
+    const rows = flattenNamespaceTree(tree, new Set(), new Set());
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.kind === 'namespace')).toBe(true);
+    expect(rows.map((r) => (r as { namespace: string }).namespace)).toEqual([
+      'ns.a',
+      'ns.b',
+      'ns.c'
+    ]);
+    expect(rows.every((r) => r.kind === 'namespace' && !r.expanded)).toBe(true);
+  });
+
+  it('includes type rows for expanded namespaces', () => {
+    const rows = flattenNamespaceTree(tree, new Set(['ns.a']), new Set());
+    // ns.a header + 2 types + ns.b header + ns.c header = 5
+    expect(rows).toHaveLength(5);
+    expect(rows[0]).toMatchObject({ kind: 'namespace', namespace: 'ns.a', expanded: true });
+    expect(rows[1]).toMatchObject({
+      kind: 'type',
+      name: 'TypeA',
+      typeKind: 'data',
+      namespace: 'ns.a'
+    });
+    expect(rows[2]).toMatchObject({
+      kind: 'type',
+      name: 'TypeB',
+      typeKind: 'choice',
+      namespace: 'ns.a'
+    });
+    expect(rows[3]).toMatchObject({ kind: 'namespace', namespace: 'ns.b', expanded: false });
+    expect(rows[4]).toMatchObject({ kind: 'namespace', namespace: 'ns.c', expanded: false });
+  });
+
+  it('includes all types when all namespaces expanded', () => {
+    const expanded = new Set(['ns.a', 'ns.b', 'ns.c']);
+    const rows = flattenNamespaceTree(tree, expanded, new Set());
+    // 3 headers + 4 types = 7
+    expect(rows).toHaveLength(7);
+    const typeRows = rows.filter((r) => r.kind === 'type');
+    expect(typeRows).toHaveLength(4);
+  });
+
+  it('marks hidden nodes correctly', () => {
+    const hidden = new Set(['ns.a::TypeA']);
+    const rows = flattenNamespaceTree(tree, new Set(['ns.a']), hidden);
+    const typeARow = rows.find((r) => r.kind === 'type' && r.name === 'TypeA');
+    const typeBRow = rows.find((r) => r.kind === 'type' && r.name === 'TypeB');
+    expect(typeARow).toMatchObject({ hidden: true });
+    expect(typeBRow).toMatchObject({ hidden: false });
+  });
+
+  it('applies search filter before flattening', () => {
+    const expanded = new Set(['ns.a', 'ns.b', 'ns.c']);
+    const rows = flattenNamespaceTree(tree, expanded, new Set(), 'TypeA');
+    // Only ns.a matches (has TypeA), expanded → header + 1 type
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ kind: 'namespace', namespace: 'ns.a' });
+    expect(rows[1]).toMatchObject({ kind: 'type', name: 'TypeA' });
+  });
+
+  it('returns empty array for empty tree', () => {
+    const rows = flattenNamespaceTree([], new Set(), new Set());
+    expect(rows).toHaveLength(0);
+  });
+
+  it('includes namespace typeCount from tree entry', () => {
+    const rows = flattenNamespaceTree(tree, new Set(), new Set());
+    const nsA = rows.find((r) => r.kind === 'namespace' && r.namespace === 'ns.a');
+    expect(nsA).toMatchObject({ typeCount: 2 });
   });
 });
