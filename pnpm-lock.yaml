@@ -9,6 +9,7 @@ overrides:
   '@zod-to-form/core': ^0.2.4
   '@zod-to-form/react': ^0.2.4
   '@zod-to-form/cli': ^0.2.4
+  codemirror: 6.0.2
 
 importers:
 

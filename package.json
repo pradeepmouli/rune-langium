@@ -70,7 +70,8 @@
       "x-to-zod": "^0.8.0",
       "@zod-to-form/core": "^0.2.4",
       "@zod-to-form/react": "^0.2.4",
-      "@zod-to-form/cli": "^0.2.4"
+      "@zod-to-form/cli": "^0.2.4",
+      "codemirror": "6.0.2"
     }
   },
   "simple-git-hooks": {
