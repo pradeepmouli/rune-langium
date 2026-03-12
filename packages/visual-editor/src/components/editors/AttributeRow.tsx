@@ -177,7 +177,7 @@ function AttributeRow({
             }}
             onBlur={field.onBlur}
             disabled={disabled}
-            className="w-24 min-w-0 px-1.5 py-0.5 text-sm border border-transparent rounded
+            className="flex-1 min-w-0 px-1.5 py-0.5 text-sm border border-transparent rounded
               focus:border-input focus:outline-none bg-transparent"
             placeholder="name"
             aria-label={`Attribute name: ${field.value}`}
