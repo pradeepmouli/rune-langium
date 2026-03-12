@@ -22,6 +22,7 @@ import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, type Extension } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
 import { defaultKeymap } from '@codemirror/commands';
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
@@ -194,7 +195,12 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
   // Build extensions — uses refs for callbacks to keep extensions stable
   const buildExtensions = useCallback(
     (filePath: string, isReadOnly: boolean): Extension[] => {
-      const exts: Extension[] = [basicSetup, keymap.of(defaultKeymap), runeDslLanguage()];
+      const exts: Extension[] = [
+        basicSetup,
+        keymap.of(defaultKeymap),
+        syntaxHighlighting(defaultHighlightStyle),
+        runeDslLanguage()
+      ];
 
       if (isReadOnly) {
         exts.push(EditorState.readOnly.of(true));

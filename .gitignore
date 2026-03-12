@@ -1,3 +1,4 @@
+.claude/settings.local.json
 node_modules/
 dist/
 build/
@@ -24,3 +25,4 @@ test/e2e/__snapshots__/
 test/e2e/__screenshots__/
 test-results/
 playwright-report/
+.playwright-mcp/

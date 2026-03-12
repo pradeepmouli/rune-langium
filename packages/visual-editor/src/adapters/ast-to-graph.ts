@@ -362,25 +362,72 @@ function buildFunctionNode(
   // A function body consists of alias (shortcut) declarations, conditions,
   // and operations (set/add), each of which carries a Langium CST node
   // whose `.text` property gives the original source text.
+  // Falls back to `$cstText` (preserved by the parser worker before serialization).
   const bodyParts: string[] = [];
 
+  // Helper: get CST text from a node.
+  // Langium CstNode getters (text, offset, end) are lost during structured clone
+  // (postMessage). Fall back to reconstructing text from root._text + computed offsets,
+  // or from $cstText preserved by the parser worker.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getCstText = (node: { $cstNode?: any }): string | undefined => {
+    const cst = node.$cstNode;
+    if (!cst) return (node as unknown as Record<string, string>)['$cstText'];
+    // Try native getter first (works when parsed on main thread without serialization)
+    if (typeof cst.text === 'string') return cst.text;
+    // Reconstruct from root._text when getters are lost (structured clone)
+    const root = cst.root;
+    const fullText = root?.['_text'] as string | undefined;
+    if (fullText && cst['content']) {
+      const offsets = computeCstOffsets(cst);
+      if (offsets) return fullText.substring(offsets.offset, offsets.end);
+    }
+    return (node as unknown as Record<string, string>)['$cstText'];
+  };
+
+  // Compute offset/end from a deserialized CompositeCstNode by walking its content array
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function computeCstOffsets(cst: any): { offset: number; end: number } | undefined {
+    const content = cst['content'] as any[] | undefined;
+    if (!content || content.length === 0) return undefined;
+    let minOffset = Infinity;
+    let maxEnd = 0;
+    for (const child of content) {
+      // LeafCstNode has _offset and _length as own properties
+      const off = child['_offset'] as number | undefined;
+      const len = child['_length'] as number | undefined;
+      if (typeof off === 'number' && typeof len === 'number') {
+        minOffset = Math.min(minOffset, off);
+        maxEnd = Math.max(maxEnd, off + len);
+      } else if (child['content']) {
+        // Recurse into composite nodes
+        const nested = computeCstOffsets(child);
+        if (nested) {
+          minOffset = Math.min(minOffset, nested.offset);
+          maxEnd = Math.max(maxEnd, nested.end);
+        }
+      }
+    }
+    return minOffset < Infinity ? { offset: minOffset, end: maxEnd } : undefined;
+  }
+
   for (const shortcut of func.shortcuts ?? []) {
-    const text = shortcut.$cstNode?.text;
+    const text = getCstText(shortcut);
     if (text) bodyParts.push(text.trim());
   }
 
   for (const condition of func.conditions ?? []) {
-    const text = condition.$cstNode?.text;
+    const text = getCstText(condition);
     if (text) bodyParts.push(text.trim());
   }
 
   for (const op of func.operations ?? []) {
-    const text = op.$cstNode?.text;
+    const text = getCstText(op);
     if (text) bodyParts.push(text.trim());
   }
 
   for (const postCond of func.postConditions ?? []) {
-    const text = postCond.$cstNode?.text;
+    const text = getCstText(postCond);
     if (text) bodyParts.push(text.trim());
   }
 

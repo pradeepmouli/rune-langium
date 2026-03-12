@@ -68,9 +68,8 @@ cd "$REPO_ROOT"
 
 # Auto-detect refactor directory if not provided
 if [ -z "$REFACTOR_DIR" ]; then
-    # Look for most recent refactor directory
-    REFACTOR_DIR=$(find "$REPO_ROOT/specs" -maxdepth 1 -type d -name "refactor-*" | sort -r | head -1)
-    if [ -z "$REFACTOR_DIR" ]; then
+    REFACTOR_DIR=$(find "$REPO_ROOT/specs/refactor" -maxdepth 1 -type d | sort -r | head -1)
+    if [ -z "$REFACTOR_DIR" ] || [ "$REFACTOR_DIR" = "$REPO_ROOT/specs/refactor" ]; then
         echo "Error: No refactor directory found. Use --dir to specify." >&2
         exit 1
     fi
@@ -80,6 +79,24 @@ OUTPUT_FILE="$REFACTOR_DIR/metrics-${MODE}.md"
 
 echo "Capturing ${MODE} metrics to: $OUTPUT_FILE"
 echo ""
+
+# --- Source directories for this monorepo ---
+SRC_DIRS=(
+    "packages/core/src"
+    "packages/visual-editor/src"
+    "packages/lsp-server/src"
+    "packages/cli/src"
+    "packages/design-system/src"
+    "apps/studio/src"
+)
+
+TEST_DIRS=(
+    "packages/core/test"
+    "packages/visual-editor/test"
+    "packages/lsp-server/test"
+    "packages/cli/test"
+    "apps/studio/test"
+)
 
 # Start output file
 cat > "$OUTPUT_FILE" << EOF
@@ -93,124 +110,144 @@ cat > "$OUTPUT_FILE" << EOF
 
 EOF
 
-# Code Complexity Metrics
+# ── Code Complexity ──────────────────────────────────────────────────────
+
 echo "## Code Complexity" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
-# Lines of Code
-echo "### Lines of Code" >> "$OUTPUT_FILE"
+echo "### Lines of Code (Source)" >> "$OUTPUT_FILE"
 if command -v cloc &> /dev/null; then
     echo "Running cloc analysis..." >&2
     echo '```' >> "$OUTPUT_FILE"
-    cloc app/ --quiet --csv --csv-delimiter='|' 2>/dev/null | head -20 >> "$OUTPUT_FILE" || echo "cloc failed" >> "$OUTPUT_FILE"
+    cloc "${SRC_DIRS[@]}" --quiet 2>/dev/null >> "$OUTPUT_FILE" || echo "cloc failed" >> "$OUTPUT_FILE"
     echo '```' >> "$OUTPUT_FILE"
 else
-    echo "Manual count needed (cloc not installed):" >> "$OUTPUT_FILE"
-    find app/ -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" 2>/dev/null | wc -l >> "$OUTPUT_FILE" || echo "0" >> "$OUTPUT_FILE"
-fi
-echo "" >> "$OUTPUT_FILE"
-
-# Function/File sizes
-echo "### File Sizes" >> "$OUTPUT_FILE"
-echo '```' >> "$OUTPUT_FILE"
-find app/ -type f \( -name "*.ts" -o -name "*.tsx" \) -exec wc -l {} \; 2>/dev/null | sort -rn | head -10 >> "$OUTPUT_FILE" || echo "No files found" >> "$OUTPUT_FILE"
-echo '```' >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-# Test Coverage
-echo "## Test Coverage" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-if [ -f "coverage/coverage-summary.json" ]; then
-    echo "Reading coverage from coverage/coverage-summary.json..." >&2
-    echo '```json' >> "$OUTPUT_FILE"
-    cat coverage/coverage-summary.json >> "$OUTPUT_FILE"
     echo '```' >> "$OUTPUT_FILE"
-else
-    echo "Coverage data not found. Run tests with coverage:" >> "$OUTPUT_FILE"
-    echo '```bash' >> "$OUTPUT_FILE"
-    echo "npm run test:coverage  # or equivalent command" >> "$OUTPUT_FILE"
+    for dir in "${SRC_DIRS[@]}"; do
+        if [ -d "$dir" ]; then
+            COUNT=$(find "$dir" -type f \( -name "*.ts" -o -name "*.tsx" \) ! -path "*/generated/*" | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+            echo "$dir: $COUNT lines" >> "$OUTPUT_FILE"
+        fi
+    done
     echo '```' >> "$OUTPUT_FILE"
 fi
 echo "" >> "$OUTPUT_FILE"
 
-# Performance Metrics
+echo "### Affected Files (Largest)" >> "$OUTPUT_FILE"
+echo '```' >> "$OUTPUT_FILE"
+AFFECTED_FILES=(
+    "packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx"
+    "packages/visual-editor/src/utils/namespace-tree.ts"
+    "apps/studio/src/services/lsp-client.ts"
+    "apps/studio/src/services/workspace.ts"
+    "apps/studio/src/components/FileLoader.tsx"
+    "packages/lsp-server/src/rune-dsl-server.ts"
+    "packages/lsp-server/src/connection-adapter.ts"
+)
+for f in "${AFFECTED_FILES[@]}"; do
+    if [ -f "$f" ]; then
+        wc -l "$f" >> "$OUTPUT_FILE"
+    fi
+done
+echo '```' >> "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
+
+# ── Test Suite ───────────────────────────────────────────────────────────
+
+echo "## Test Suite" >> "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
+
+echo "### Test Counts Per Package" >> "$OUTPUT_FILE"
+echo '```' >> "$OUTPUT_FILE"
+
+# Run tests per package and capture counts
+run_tests_for() {
+    local pkg_name="$1"
+    local pkg_dir="$2"
+    if [ -d "$pkg_dir" ]; then
+        echo "Running $pkg_name tests..." >&2
+        local result
+        result=$(cd "$pkg_dir" && npx vitest run --reporter=verbose 2>&1 | grep -E "Test Files|Tests " || true)
+        echo "$pkg_name:" >> "$OUTPUT_FILE"
+        echo "$result" | sed 's/\x1b\[[0-9;]*m//g' | sed 's/^/  /' >> "$OUTPUT_FILE"
+    fi
+}
+
+run_tests_for "core" "packages/core"
+run_tests_for "visual-editor" "packages/visual-editor"
+run_tests_for "studio" "apps/studio"
+run_tests_for "lsp-server" "packages/lsp-server"
+
+echo '```' >> "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
+
+# Count test files
+echo "### Test File Counts" >> "$OUTPUT_FILE"
+TOTAL_TEST_FILES=0
+for dir in "${TEST_DIRS[@]}"; do
+    if [ -d "$dir" ]; then
+        COUNT=$(find "$dir" -type f \( -name "*.test.ts" -o -name "*.test.tsx" \) | wc -l | tr -d ' ')
+        echo "- **$dir**: $COUNT test files" >> "$OUTPUT_FILE"
+        TOTAL_TEST_FILES=$((TOTAL_TEST_FILES + COUNT))
+    fi
+done
+echo "- **Total**: $TOTAL_TEST_FILES test files" >> "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
+
+# ── Performance ──────────────────────────────────────────────────────────
+
 echo "## Performance" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
 echo "### Build Time" >> "$OUTPUT_FILE"
-if [ "$MODE" = "before" ]; then
-    echo "Measuring build time (may take a minute)..." >&2
-    BUILD_START=$(date +%s)
-    npm run build > /dev/null 2>&1 || true
-    BUILD_END=$(date +%s)
-    BUILD_TIME=$((BUILD_END - BUILD_START))
-    echo "- **Build Time**: ${BUILD_TIME} seconds" >> "$OUTPUT_FILE"
+echo "Measuring build time..." >&2
+BUILD_START=$(date +%s)
+pnpm -r run build > /dev/null 2>&1 || true
+BUILD_END=$(date +%s)
+BUILD_TIME=$((BUILD_END - BUILD_START))
+echo "- **Full Build (pnpm -r run build)**: ${BUILD_TIME}s" >> "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
+
+echo "### Bundle Size (studio)" >> "$OUTPUT_FILE"
+STUDIO_DIST="apps/studio/dist"
+if [ -d "$STUDIO_DIST" ]; then
+    BUNDLE_SIZE=$(du -sh "$STUDIO_DIST" | cut -f1)
+    echo "- **Studio dist**: $BUNDLE_SIZE" >> "$OUTPUT_FILE"
 else
-    echo "- **Build Time**: Run \`npm run build\` and time it" >> "$OUTPUT_FILE"
+    echo "- **Studio dist**: not built (run \`pnpm --filter studio build\` first)" >> "$OUTPUT_FILE"
 fi
 echo "" >> "$OUTPUT_FILE"
 
-echo "### Bundle Size" >> "$OUTPUT_FILE"
-if [ -d "build/client" ] || [ -d "dist/client" ]; then
-    BUILD_DIR=$(find . -type d -name "client" | grep -E "(build|dist)" | head -1)
-    if [ -n "$BUILD_DIR" ]; then
-        BUNDLE_SIZE=$(du -sh "$BUILD_DIR" | cut -f1)
-        echo "- **Bundle Size**: $BUNDLE_SIZE" >> "$OUTPUT_FILE"
-    else
-        echo "- **Bundle Size**: Build directory not found" >> "$OUTPUT_FILE"
-    fi
-else
-    echo "- **Bundle Size**: Build directory not found (run build first)" >> "$OUTPUT_FILE"
-fi
-echo "" >> "$OUTPUT_FILE"
+# ── Dependencies ─────────────────────────────────────────────────────────
 
-# Dependencies
 echo "## Dependencies" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
-if [ -f "package.json" ]; then
-    DIRECT_DEPS=$(jq '.dependencies | length' package.json 2>/dev/null || echo "unknown")
-    DEV_DEPS=$(jq '.devDependencies | length' package.json 2>/dev/null || echo "unknown")
-    echo "- **Direct Dependencies**: $DIRECT_DEPS" >> "$OUTPUT_FILE"
-    echo "- **Dev Dependencies**: $DEV_DEPS" >> "$OUTPUT_FILE"
-
-    if command -v npm &> /dev/null; then
-        TOTAL_DEPS=$(npm list --depth=0 2>/dev/null | grep -c "^[├└]" || echo "unknown")
-        echo "- **Total Installed**: $TOTAL_DEPS" >> "$OUTPUT_FILE"
+for pkg in packages/core packages/visual-editor packages/lsp-server apps/studio; do
+    if [ -f "$pkg/package.json" ]; then
+        PKG_NAME=$(jq -r '.name // "unknown"' "$pkg/package.json" 2>/dev/null)
+        DIRECT=$(jq '.dependencies // {} | length' "$pkg/package.json" 2>/dev/null || echo "?")
+        DEV=$(jq '.devDependencies // {} | length' "$pkg/package.json" 2>/dev/null || echo "?")
+        echo "- **$PKG_NAME**: $DIRECT deps, $DEV devDeps" >> "$OUTPUT_FILE"
     fi
-else
-    echo "- **Dependencies**: package.json not found" >> "$OUTPUT_FILE"
-fi
+done
 echo "" >> "$OUTPUT_FILE"
 
-# Test Suite Stats
-echo "## Test Suite" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
+# ── Git Statistics ───────────────────────────────────────────────────────
 
-TEST_FILES=$(find tests/ -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.spec.ts" 2>/dev/null | wc -l)
-echo "- **Test Files**: $TEST_FILES" >> "$OUTPUT_FILE"
-
-if [ "$MODE" = "before" ]; then
-    echo "- **Test Pass Rate**: Run \`npm test\` to verify 100%" >> "$OUTPUT_FILE"
-else
-    echo "- **Test Pass Rate**: Should be 100% (verify with \`npm test\`)" >> "$OUTPUT_FILE"
-fi
-echo "" >> "$OUTPUT_FILE"
-
-# Git Stats
 echo "## Git Statistics" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
 if git rev-parse --git-dir > /dev/null 2>&1; then
-    FILES_CHANGED=$(git diff --name-only ${MODE} | wc -l 2>/dev/null || echo "0")
-    echo "- **Files Modified**: $FILES_CHANGED (since start of refactoring)" >> "$OUTPUT_FILE"
-else
-    echo "- **Git**: Not a git repository" >> "$OUTPUT_FILE"
+    MAIN_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@.*/@@' || echo "master")
+    COMMITS_AHEAD=$(git rev-list --count "${MAIN_BRANCH}..HEAD" 2>/dev/null || echo "0")
+    echo "- **Commits ahead of $MAIN_BRANCH**: $COMMITS_AHEAD" >> "$OUTPUT_FILE"
+    echo "- **Current commit**: $(git rev-parse --short HEAD)" >> "$OUTPUT_FILE"
 fi
 echo "" >> "$OUTPUT_FILE"
 
-# Summary
+# ── Summary ──────────────────────────────────────────────────────────────
+
 echo "## Summary" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 echo "Metrics captured ${MODE} refactoring at $(date)." >> "$OUTPUT_FILE"

@@ -68,7 +68,8 @@ const NOTIFICATION_MAP: Record<string, string> = {
   onDidSaveTextDocument: 'textDocument/didSave',
   onWillSaveTextDocument: 'textDocument/willSave',
   onDidChangeConfiguration: 'workspace/didChangeConfiguration',
-  onDidChangeWatchedFiles: 'workspace/didChangeWatchedFiles'
+  onDidChangeWatchedFiles: 'workspace/didChangeWatchedFiles',
+  onDidChangeWorkspaceFolders: 'workspace/didChangeWorkspaceFolders'
 };
 
 /** Typed send shortcuts (server → client). */
@@ -167,7 +168,8 @@ function createWorkspaceProxy(server: LSPServer<ServerCapabilities>): any {
     onWillDeleteFiles: (handler: any) =>
       server.onRequest('workspace/willDeleteFiles' as any, async (p: any, t: any) => handler(p, t)),
 
-    onDidChangeWorkspaceFolders: NOOP
+    onDidChangeWorkspaceFolders: (handler: any) =>
+      server.onNotification('workspace/didChangeWorkspaceFolders' as any, (p: any) => handler(p))
   };
 }
 

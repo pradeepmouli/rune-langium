@@ -7,6 +7,29 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { DiagnosticsPanel } from '../../src/components/DiagnosticsPanel.js';
 import type { LspDiagnostic } from '../../src/store/diagnostics-store.js';
 
+// Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({
+    count,
+    estimateSize
+  }: {
+    count: number;
+    estimateSize: (i: number) => number;
+  }) => {
+    let offset = 0;
+    const items = Array.from({ length: count }, (_, i) => {
+      const size = estimateSize(i);
+      const item = { index: i, key: String(i), start: offset, size, end: offset + size };
+      offset += size;
+      return item;
+    });
+    return {
+      getVirtualItems: () => items,
+      getTotalSize: () => offset
+    };
+  }
+}));
+
 function makeDiag(
   message: string,
   severity: 1 | 2 | 3 | 4 = 1,

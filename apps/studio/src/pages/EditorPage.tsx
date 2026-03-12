@@ -21,7 +21,8 @@ import type {
   TypeGraphNode,
   TypeNodeData,
   TypeOption,
-  EditorFormActions
+  EditorFormActions,
+  ExpressionEditorSlotProps
 } from '@rune-langium/visual-editor';
 import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
@@ -165,6 +166,16 @@ export function EditorPage({
       setShowEditor(true);
     }
   }, []);
+
+  const collapseEditor = useCallback(() => {
+    editorPanelRef.current?.collapse();
+    setShowEditor(false);
+  }, []);
+
+  const renderExpressionEditor = useCallback(
+    (props: ExpressionEditorSlotProps) => <ExpressionEditor {...props} />,
+    []
+  );
 
   // --- Stable ref for files (prevents stale closure in handleSourceChange) ---
   const filesRef = useRef(files);
@@ -630,11 +641,8 @@ export function EditorPage({
               availableTypes={availableTypes}
               actions={editorActions}
               allNodes={allGraphNodes}
-              renderExpressionEditor={(props) => <ExpressionEditor {...props} />}
-              onClose={() => {
-                editorPanelRef.current?.collapse();
-                setShowEditor(false);
-              }}
+              renderExpressionEditor={renderExpressionEditor}
+              onClose={collapseEditor}
             />
           </ResizablePanel>
         </ResizablePanelGroup>
