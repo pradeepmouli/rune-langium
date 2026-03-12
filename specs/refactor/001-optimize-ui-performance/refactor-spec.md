@@ -37,8 +37,8 @@ User description: "optimize UI performance when loading large folders, use works
 
 **High-Level Approach**:
 Three independent improvements, each deliverable incrementally:
-1. **Virtualize the namespace explorer** — Replace ScrollArea with `@tanstack/react-virtual` for the type tree, rendering only visible rows
-2. **Switch LSP client to workspace-based loading** — Use LSP workspace folders instead of individual `didOpen`/`didClose` per file, allowing Langium to discover and manage documents
+1. **Virtualize large lists** — Replace ScrollArea with `@tanstack/react-virtual` for the namespace explorer tree and DiagnosticsPanel, rendering only visible rows
+2. **Batch LSP document loading** — Replace N individual `didOpen`/`didClose` calls with a single batched workspace notification; client still drives file content delivery (browser has no FS for Langium to discover from)
 3. **Optimize file loading pipeline** — Add progress indication, chunked reading, and deferred parsing for large folders
 
 **Files Affected**:
@@ -50,6 +50,7 @@ Three independent improvements, each deliverable incrementally:
   - `apps/studio/src/components/FileLoader.tsx` — progress indication
   - `packages/lsp-server/src/rune-dsl-server.ts` — workspace folder capability
   - `packages/lsp-server/src/connection-adapter.ts` — workspace notifications
+  - `apps/studio/src/components/DiagnosticsPanel.tsx` — virtualize diagnostics list
 - **Created**:
   - `packages/visual-editor/src/hooks/useVirtualTree.ts` — virtual scrolling hook
 - **Deleted**: None
@@ -64,10 +65,12 @@ Explorer: ScrollArea → render ALL namespace nodes to DOM (10K+ elements)
 
 **After**:
 ```
-FileLoader → readFileList(chunked, with progress) → workspace/didChangeConfiguration (single notification)
-LSPServer: workspace folder → Langium discovers + manages documents internally
+FileLoader → readFileList(chunked, with progress) → single batched workspace notification
+LSPServer: receives batch of file contents from client (client-driven, not Langium-discovered)
 Explorer: @tanstack/react-virtual → render VISIBLE rows only (~30-50 visible at a time)
 ```
+
+> **Clarification**: The browser has no file system, so Langium cannot discover files via workspace folders. Instead, the client batches file contents into a single workspace-level notification (vs N individual didOpen calls). Langium's document manager receives the batch but file discovery remains client-driven.
 
 ## Phase 0: Testing Gap Assessment
 *CRITICAL: Complete BEFORE capturing baseline metrics - see testing-gaps.md*
@@ -199,9 +202,10 @@ Explorer: @tanstack/react-virtual → render VISIBLE rows only (~30-50 visible a
 1. Add `@tanstack/react-virtual` dependency
 2. Flatten namespace tree for virtual scrolling
 3. Virtualize NamespaceExplorerPanel
-4. Add workspace folder capability to LSP server
-5. Switch lsp-client to workspace-based sync
-6. Add progress indication + chunked file loading
+4. Virtualize DiagnosticsPanel
+5. Add workspace folder capability to LSP server
+6. Switch lsp-client to batched workspace sync
+7. Add progress indication + chunked file loading
 
 ### Phase 3: Validation
 1. Full test suite (MUST pass 100%)
@@ -245,6 +249,12 @@ Explorer: @tanstack/react-virtual → render VISIBLE rows only (~30-50 visible a
 
 ### Dependencies
 - None — can proceed independently
+
+## Clarifications
+
+### Session 2026-03-11
+- Q: How should LSP workspace folder support work given browser has no file system? → A: Client-driven batch delivery — client sends file contents in a single workspace notification; Langium receives but does not discover files.
+- Q: Is DiagnosticsPanel virtualization in scope? → A: Yes — virtualize alongside NamespaceExplorerPanel using the same @tanstack/react-virtual pattern.
 
 ---
 *Refactor spec created using `/refactor` workflow - See .specify/extensions/workflows/refactor/*

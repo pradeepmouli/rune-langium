@@ -11,6 +11,8 @@ This ensures skills are discoverable from both `.agents/skills/` and `.github/sk
 ## Active Technologies
 - TypeScript 5.9+ (strict mode, ESM), React 19, @xyflow/react 12, zustand 5, zundo 2 (undo/redo), @rune-langium/core (parser, AST types), @rune-langium/design-system (theme, tokens, UI primitives), @radix-ui/*, class-variance-authority (CVA), cmdk, lucide-react, Tailwind CSS 4
 - Browser-only; File System Access API for standalone app, no backend
+- TypeScript 5.9+ (strict mode, ESM) + React 19, @xyflow/react 12, zustand 5, @tanstack/react-virtual (new), @radix-ui/*, Tailwind CSS 4 (refactor/001-optimize-ui-performance)
+- N/A (browser-only, File System Access API) (refactor/001-optimize-ui-performance)
 
 ## Recent Changes
 - 002-reactflow-visual-editor: Added TypeScript 5.9+ (strict mode, ESM)
