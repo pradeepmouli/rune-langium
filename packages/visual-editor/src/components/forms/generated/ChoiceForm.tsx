@@ -4,26 +4,25 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { StripIndexSignature } from '@zod-to-form/core';
 import {
-  CardinalitySelector,
   Field,
   FieldControl,
   FieldLabel,
   Input,
-  Select,
+  Textarea,
   TypeSelector
 } from '@/components/zod-form-components';
-import { DataSchema } from '../../../generated/zod-schemas.js';
+import { ChoiceSchema } from '../../../generated/zod-schemas.js';
 
-type FormData = StripIndexSignature<z.output<typeof DataSchema>>;
+type FormData = StripIndexSignature<z.output<typeof ChoiceSchema>>;
 
-export function DataForm(props: {
+export function ChoiceForm(props: {
   onValueChange?: (data: FormData) => void;
   onSubmit?: (data: FormData) => void;
   defaultValues?: Partial<FormData>;
   values?: FormData;
 }) {
   const form = useForm<FormData>({
-    resolver: zodResolver(DataSchema),
+    resolver: zodResolver(ChoiceSchema),
     mode: 'onChange',
     defaultValues: props.defaultValues,
     values: props.values
@@ -51,25 +50,6 @@ export function DataForm(props: {
             <Input id="name" {...register('name')} />
           </FieldControl>
         </Field>
-        <Field>
-          <FieldLabel htmlFor="superType">Super Type</FieldLabel>
-          <FieldControl>
-            <Controller
-              name={'superType'}
-              control={control}
-              render={({ field }) => (
-                <TypeSelector
-                  id="superType"
-                  value={field.value}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  ref={field.ref}
-                  name={field.name}
-                />
-              )}
-            />
-          </FieldControl>
-        </Field>
         <div>
           <label>Attributes</label>
           {attributesFields.map((item, index) => (
@@ -78,15 +58,6 @@ export function DataForm(props: {
                 <label>0</label>
                 <fieldset>
                   <legend>0</legend>
-                  <Field>
-                    <FieldLabel htmlFor="attributes.${index}.name">Name</FieldLabel>
-                    <FieldControl>
-                      <Input
-                        id="attributes.${index}.name"
-                        {...register(`attributes.${index}.name`)}
-                      />
-                    </FieldControl>
-                  </Field>
                   <div>
                     <label>Type Call</label>
                     <fieldset>
@@ -113,21 +84,12 @@ export function DataForm(props: {
                     </fieldset>
                   </div>
                   <Field>
-                    <FieldLabel htmlFor="attributes.${index}.card">Card</FieldLabel>
+                    <FieldLabel htmlFor="attributes.${index}.definition">Definition</FieldLabel>
                     <FieldControl>
-                      <Controller
-                        name={`attributes.${index}.card`}
-                        control={control}
-                        render={({ field }) => (
-                          <CardinalitySelector
-                            id={`attributes.${index}.card`}
-                            value={field.value}
-                            onChange={field.onChange}
-                            onBlur={field.onBlur}
-                            ref={field.ref}
-                            name={field.name}
-                          />
-                        )}
+                      <Textarea
+                        id="attributes.${index}.definition"
+                        {...register(`attributes.${index}.definition`)}
+                        rows={2}
                       />
                     </FieldControl>
                   </Field>
@@ -142,10 +104,14 @@ export function DataForm(props: {
             type="button"
             onClick={() =>
               appendAttributes({
-                $type: 'Attribute',
-                name: '',
+                $type: 'ChoiceOption',
                 typeCall: { $type: 'TypeCall', type: { $refText: '', ref: '' }, arguments: [] },
-                card: { $type: 'RosettaCardinality', inf: 0, sup: '', unbounded: '' }
+                definition: '',
+                references: [],
+                annotations: [],
+                synonyms: [],
+                labels: [],
+                ruleReferences: []
               })
             }
           >

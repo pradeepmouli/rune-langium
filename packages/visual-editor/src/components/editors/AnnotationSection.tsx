@@ -7,15 +7,18 @@
  * @module
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
-import type { AnnotationDisplay } from '../../types.js';
+import { annotationsToDisplay, type AnnotationDisplayInfo } from '../../adapters/model-helpers.js';
 
 export interface AnnotationSectionProps {
-  /** Current annotations on the type. */
-  annotations: AnnotationDisplay[];
+  /**
+   * Raw AST annotation refs from the graph node.
+   * Internally converted to display-friendly objects via annotationsToDisplay().
+   */
+  annotations: unknown[] | undefined;
   /** Available annotation names for adding. */
   availableAnnotations?: string[];
   /** Whether to allow editing (add/remove). */
@@ -41,13 +44,18 @@ const WELL_KNOWN_ANNOTATIONS = [
 ];
 
 export function AnnotationSection({
-  annotations,
+  annotations: rawAnnotations,
   availableAnnotations = WELL_KNOWN_ANNOTATIONS,
   readOnly = false,
   onAdd,
   onRemove
 }: AnnotationSectionProps) {
   const [showPicker, setShowPicker] = useState(false);
+
+  const annotations: AnnotationDisplayInfo[] = useMemo(
+    () => annotationsToDisplay(rawAnnotations as any),
+    [rawAnnotations]
+  );
 
   const existingNames = new Set(annotations.map((a) => a.name));
   const addable = availableAnnotations.filter((name) => !existingNames.has(name));

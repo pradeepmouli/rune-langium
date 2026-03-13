@@ -15,9 +15,9 @@
  * @module
  */
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { FormProvider, Controller } from 'react-hook-form';
+import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
 import {
   Field,
   FieldError,
@@ -32,17 +32,23 @@ import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { AnnotationSection } from './AnnotationSection.js';
+import { ConditionSection } from './ConditionSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
+import {
+  formatCardinality,
+  getTypeRefText,
+  classExprSynonymsToStrings
+} from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useNodeForm } from '../../hooks/useNodeForm.js';
+import { useZodForm } from '@zod-to-form/react';
+import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
 import { validateExpression } from '../../validation/edit-validator.js';
 import { functionFormSchema, type FunctionFormValues } from '../../schemas/form-schemas.js';
 import type {
-  TypeNodeData,
+  AnyGraphNode,
   TypeOption,
   EditorFormActions,
-  MemberDisplay,
   ExpressionEditorSlotProps
 } from '../../types.js';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
@@ -51,22 +57,23 @@ import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Convert TypeNodeData to form-managed values. */
-function toFormValues(data: TypeNodeData<'func'>): FunctionFormValues {
+/** Convert AnyGraphNode to form-managed values. */
+function toFormValues(data: AnyGraphNode): FunctionFormValues {
+  const d = data as any;
   return {
-    name: data.name,
-    outputType: data.outputType ?? '',
-    expressionText: data.expressionText ?? '',
-    members: data.members.map((m) => ({
-      name: m.name,
-      typeName: m.typeName ?? 'string',
-      cardinality: m.cardinality ?? '',
-      isOverride: m.isOverride,
-      displayName: m.displayName
+    name: d.name ?? '',
+    outputType: getTypeRefText(d.output?.typeCall) ?? d.outputType ?? '',
+    expressionText: d.expressionText ?? '',
+    members: (d.inputs ?? []).map((p: any) => ({
+      name: p.name ?? '',
+      typeName: getTypeRefText(p.typeCall) ?? 'string',
+      cardinality: formatCardinality(p.card) || '',
+      isOverride: false,
+      displayName: p.name ?? ''
     })),
-    definition: data.definition ?? '',
-    comments: data.comments ?? '',
-    synonyms: data.synonyms ?? []
+    definition: d.definition ?? '',
+    comments: d.comments ?? '',
+    synonyms: classExprSynonymsToStrings(d.synonyms)
   };
 }
 
@@ -77,8 +84,8 @@ function toFormValues(data: TypeNodeData<'func'>): FunctionFormValues {
 export interface FunctionFormProps {
   /** Node ID of the Function being edited. */
   nodeId: string;
-  /** Data payload for the selected function node. */
-  data: TypeNodeData<'func'>;
+  /** Data payload for the selected function node (AnyGraphNode with $type='RosettaFunction'). */
+  data: AnyGraphNode;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
   /** Function-specific editor form action callbacks. */
@@ -97,7 +104,7 @@ export interface FunctionFormProps {
 // ---------------------------------------------------------------------------
 
 interface InputParamRowProps {
-  member: MemberDisplay;
+  member: { name: string; typeName?: string };
   nodeId: string;
   availableTypes: TypeOption[];
   onRemove: (nodeId: string, paramName: string) => void;
@@ -107,7 +114,7 @@ interface InputParamRowProps {
 function InputParamRow({
   member,
   nodeId,
-  availableTypes,
+  availableTypes: _availableTypes,
   onRemove,
   disabled = false
 }: InputParamRowProps) {
@@ -154,17 +161,19 @@ function FunctionForm({
   inheritedGroups = [],
   renderExpressionEditor
 }: FunctionFormProps) {
-  // ---- Form setup (full model via useNodeForm) -----------------------------
+  const d = data as any;
 
-  const resetKey = useMemo(() => JSON.stringify(toFormValues(data)), [data]);
+  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
-  const { form, members } = useNodeForm<FunctionFormValues>({
-    schema: functionFormSchema,
-    defaultValues: () => toFormValues(data),
-    resetKey
+  const { form } = useZodForm(functionFormSchema, {
+    defaultValues: toFormValues(data),
+    mode: 'onChange'
   });
 
-  const { fields } = members;
+  const { fields: _fields } = useFieldArray({
+    control: form.control,
+    name: 'members'
+  });
 
   // Track the committed data for diffing
   const committedRef = useRef(data);
@@ -212,20 +221,23 @@ function FunctionForm({
     [nodeId, actions, availableTypes]
   );
 
-  const outputType = data.outputType;
+  const outputType = getTypeRefText(d.output?.typeCall) ?? d.outputType ?? '';
   const outputValue = outputType
     ? (availableTypes.find((o) => o.label === outputType)?.value ?? '')
     : '';
 
   // ---- Input param callbacks -----------------------------------------------
 
-  const inputParams = data.members.map((m) => ({
-    name: m.name,
-    typeName: m.typeName
+  const inputParams = (d.inputs ?? []).map((p: any) => ({
+    name: p.name ?? '',
+    typeName: getTypeRefText(p.typeCall)
   }));
 
   // Autocomplete hook (available for future autocompletion popup integration)
-  const { getCompletions } = useExpressionAutocomplete(availableTypes, inputParams);
+  const { getCompletions: _getCompletions } = useExpressionAutocomplete(
+    availableTypes,
+    inputParams
+  );
 
   // Inline add-input state
   const [addParamName, setAddParamName] = useState('');
@@ -295,10 +307,13 @@ function FunctionForm({
     [nodeId, actions]
   );
 
+  // ---- (conditions and annotations are handled internally by their sections)
+
   // ---- Render --------------------------------------------------------------
 
   return (
     <FormProvider {...form}>
+      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="function-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">
@@ -332,11 +347,11 @@ function FunctionForm({
         {/* Input Parameters */}
         <FieldSet className="gap-1">
           <FieldLegend variant="label" className="mb-0 text-muted-foreground">
-            Inputs ({data.members.length})
+            Inputs ({inputParams.length})
           </FieldLegend>
 
           <FieldGroup className="gap-0.5">
-            {data.members.map((member: MemberDisplay, i: number) => (
+            {inputParams.map((member: { name: string; typeName?: string }, i: number) => (
               <InputParamRow
                 key={`${nodeId}-param-${member.name}-${i}`}
                 member={member}
@@ -346,7 +361,7 @@ function FunctionForm({
               />
             ))}
 
-            {data.members.length === 0 && (
+            {inputParams.length === 0 && (
               <p className="text-xs text-muted-foreground italic py-2 text-center">
                 No input parameters defined.
               </p>
@@ -454,9 +469,19 @@ function FunctionForm({
           )}
         />
 
+        {/* Conditions (pre + post handled internally by ConditionSection) */}
+        <ConditionSection
+          label="Conditions"
+          conditions={d.conditions}
+          postConditions={d.postConditions}
+          readOnly={d.isReadOnly}
+          showPostConditionToggle={false}
+          renderExpressionEditor={renderExpressionEditor}
+        />
+
         {/* Annotations */}
         <AnnotationSection
-          annotations={data.annotations ?? []}
+          annotations={d.annotations}
           onAdd={handleAddAnnotation}
           onRemove={handleRemoveAnnotation}
         />

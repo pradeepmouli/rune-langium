@@ -35,28 +35,30 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm } from '@zod-to-form/react';
 import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { enumFormSchema, type EnumFormValues } from '../../schemas/form-schemas.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
+import { getRefText, enumSynonymsToStrings } from '../../adapters/model-helpers.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../types.js';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Convert TypeNodeData to form-managed values. */
-function toFormValues(data: TypeNodeData<'enum'>): EnumFormValues {
+/** Convert AnyGraphNode to form-managed values. */
+function toFormValues(data: AnyGraphNode): EnumFormValues {
+  const d = data as any;
   return {
-    name: data.name,
-    parentName: data.parentName ?? '',
-    members: data.members.map((m) => ({
-      name: m.name,
-      typeName: m.typeName ?? '',
-      cardinality: m.cardinality ?? '',
-      isOverride: m.isOverride,
-      displayName: m.displayName
+    name: d.name ?? '',
+    parentName: getRefText(d.parent) ?? '',
+    members: (d.enumValues ?? []).map((v: any) => ({
+      name: v.name ?? '',
+      typeName: '',
+      cardinality: '',
+      isOverride: false,
+      displayName: v.display ?? v.name ?? ''
     })),
-    definition: data.definition ?? '',
-    comments: data.comments ?? '',
-    synonyms: data.synonyms ?? []
+    definition: d.definition ?? '',
+    comments: d.comments ?? '',
+    synonyms: enumSynonymsToStrings(d.synonyms)
   };
 }
 
@@ -67,8 +69,8 @@ function toFormValues(data: TypeNodeData<'enum'>): EnumFormValues {
 export interface EnumFormProps {
   /** Node ID of the Enum being edited. */
   nodeId: string;
-  /** Data payload for the selected enum node. */
-  data: TypeNodeData<'enum'>;
+  /** Data payload for the selected enum node (AnyGraphNode with $type='RosettaEnumeration'). */
+  data: AnyGraphNode;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
   /** Enum-specific editor form action callbacks. */
@@ -82,6 +84,7 @@ export interface EnumFormProps {
 // ---------------------------------------------------------------------------
 
 function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] }: EnumFormProps) {
+  const d = data as any;
   // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
   const { form } = useZodForm(enumFormSchema, {
@@ -131,7 +134,8 @@ function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] 
 
   const handleRemoveValue = useCallback(
     (i: number) => {
-      const committed = committedRef.current.members[i];
+      const enumValues = (committedRef.current as any).enumValues ?? [];
+      const committed = enumValues[i];
       if (committed) {
         remove(i);
         actions.removeEnumValue(nodeId, committed.name);
@@ -201,14 +205,14 @@ function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] 
     [nodeId, actions]
   );
 
+  const parentName = getRefText(d.parent);
+
   // ---- Resolve parent enum option ------------------------------------------
 
-  const parentOptions = availableTypes.filter(
-    (opt) => opt.kind === 'enum' && opt.label !== data.name
-  );
+  const parentOptions = availableTypes.filter((opt) => opt.kind === 'enum' && opt.label !== d.name);
 
-  const parentValue = data.parentName
-    ? (availableTypes.find((opt) => opt.label === data.parentName)?.value ?? null)
+  const parentValue = parentName
+    ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null)
     : null;
 
   // ---- Render --------------------------------------------------------------
@@ -284,8 +288,8 @@ function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] 
               <EnumValueRow
                 key={field.id}
                 index={i}
-                name={committedRef.current.members[i]?.name ?? ''}
-                displayName={committedRef.current.members[i]?.displayName ?? ''}
+                name={((committedRef.current as any).enumValues ?? [])[i]?.name ?? ''}
+                displayName={((committedRef.current as any).enumValues ?? [])[i]?.display ?? ''}
                 nodeId={nodeId}
                 onUpdate={handleUpdateValue}
                 onRemove={() => handleRemoveValue(i)}
@@ -306,7 +310,7 @@ function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] 
 
         {/* Annotations */}
         <AnnotationSection
-          annotations={data.annotations ?? []}
+          annotations={d.annotations}
           onAdd={handleAddAnnotation}
           onRemove={handleRemoveAnnotation}
         />
