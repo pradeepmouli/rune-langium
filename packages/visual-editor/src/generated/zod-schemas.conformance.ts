@@ -923,9 +923,19 @@ type _Rev_RosettaSynonymValueBase =
     : never;
 
 type _Fwd_RosettaTypeAlias =
-  z.infer<typeof RosettaTypeAliasSchema> extends _Surface<AST.RosettaTypeAlias> ? true : never;
+  z.infer<typeof RosettaTypeAliasSchema> extends Pick<
+    _Surface<AST.RosettaTypeAlias>,
+    '$type' | 'name' | 'typeCall' | 'definition'
+  >
+    ? true
+    : never;
 type _Rev_RosettaTypeAlias =
-  _Surface<AST.RosettaTypeAlias> extends z.infer<typeof RosettaTypeAliasSchema> ? true : never;
+  Pick<
+    _Surface<AST.RosettaTypeAlias>,
+    '$type' | 'name' | 'typeCall' | 'definition'
+  > extends z.infer<typeof RosettaTypeAliasSchema>
+    ? true
+    : never;
 
 type _Fwd_RuleReferenceAnnotation =
   z.infer<typeof RuleReferenceAnnotationSchema> extends _Surface<AST.RuleReferenceAnnotation>

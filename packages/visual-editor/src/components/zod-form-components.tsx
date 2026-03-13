@@ -1,9 +1,17 @@
-import * as React from 'react';
+/**
+ * zod-form-components — Adapter barrel for z2f CLI-generated forms.
+ *
+ * Re-exports design-system primitives (Input, Textarea, Field, etc.) directly.
+ * Controlled components (Select, TypeSelector, CardinalitySelector) are thin
+ * wrappers that accept value/onChange — the codegen handles Controller wiring.
+ *
+ * @module
+ */
+
 import { Input as DesignInput } from '@rune-langium/design-system/ui/input';
 import { Textarea as DesignTextarea } from '@rune-langium/design-system/ui/textarea';
 export * from '@rune-langium/design-system/ui/components';
 
-import { z } from 'zod';
 import {
   Field,
   FieldContent,
@@ -16,16 +24,73 @@ import {
   FieldSet,
   FieldTitle
 } from '@rune-langium/design-system/ui/field';
-export { TypeSelector } from './editors/TypeSelector.js';
-import { CardinalityPicker } from './editors/CardinalityPicker.js';
-import { type FormMeta } from '@zod-to-form/core';
+
 import {
-  DataSchema,
-  RosettaEnumerationSchema,
-  RosettaEnumSynonymSchema
-} from '../generated/zod-schemas.js';
+  Select as RadixSelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@rune-langium/design-system/ui/select';
+
+import { TypeSelector as RawTypeSelector } from './editors/TypeSelector.js';
+import { CardinalityPicker } from './editors/CardinalityPicker.js';
+
+// ---------------------------------------------------------------------------
+// Native-compatible re-exports (register() works directly)
+// ---------------------------------------------------------------------------
 
 export const Input = DesignInput;
 export const Textarea = DesignTextarea;
 
-export const CardinalitySelector = CardinalityPicker;
+// Re-export field primitives (used by formPrimitives config)
+export {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSeparator,
+  FieldSet,
+  FieldTitle
+};
+
+// ---------------------------------------------------------------------------
+// Controlled components — accept value/onChange from Controller
+// ---------------------------------------------------------------------------
+
+type ControlledProps = {
+  id?: string;
+  value?: unknown;
+  onChange?: (value: unknown) => void;
+  [key: string]: unknown;
+};
+
+export function Select({ value, onChange, ...rest }: ControlledProps) {
+  return (
+    <RadixSelect value={(value as string) ?? ''} onValueChange={onChange as (v: string) => void}>
+      <SelectTrigger>
+        <SelectValue placeholder="Select..." />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={(value as string) ?? ''}>{(value as string) ?? '—'}</SelectItem>
+      </SelectContent>
+    </RadixSelect>
+  );
+}
+
+export function TypeSelector({ value, onChange, ...rest }: ControlledProps) {
+  return (
+    <RawTypeSelector
+      value={(value as string) ?? ''}
+      onSelect={(v) => onChange?.(v ?? '')}
+      placeholder="Select type..."
+    />
+  );
+}
+
+export function CardinalitySelector({ value, onChange, ...rest }: ControlledProps) {
+  return <CardinalityPicker value={value ?? ''} onChange={onChange as (v: unknown) => void} />;
+}

@@ -797,10 +797,8 @@ export const RosettaSynonymSourceSchema = z.looseObject({
 export const RosettaTypeAliasSchema = z.looseObject({
   $type: z.literal('RosettaTypeAlias'),
   name: ValidIDSchema,
-  parameters: z.array(TypeParameterSchema).optional(),
   definition: z.string().optional(),
-  typeCall: TypeCallSchema,
-  conditions: z.array(ConditionSchema).optional()
+  typeCall: TypeCallSchema
 });
 
 export const ShortcutDeclarationSchema = z.looseObject({

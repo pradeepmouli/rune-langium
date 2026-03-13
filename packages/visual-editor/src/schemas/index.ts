@@ -1,11 +1,9 @@
 /**
  * Form-surface Zod schemas for editor forms.
  *
- * These are small projections of TypeNodeData fields — just the
- * user-editable properties that each form manages. They serve as:
- *
- * 1. react-hook-form validation schemas (via zodResolver)
- * 2. Compile-time conformance checks against TypeNodeData / MemberDisplay
+ * These are small projections of the user-editable fields that
+ * each form manages. Forms accept AnyGraphNode and use toFormValues()
+ * to extract fields from the AST-shaped data.
  *
  * @module
  */

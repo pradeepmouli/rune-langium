@@ -44,6 +44,9 @@
     },
     "Choice": {
       "fields": ["name", "attributes"]
+    },
+    "RosettaTypeAlias": {
+      "fields": ["name", "typeCall", "definition"]
     }
   }
 }
