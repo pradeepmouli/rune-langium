@@ -44,7 +44,11 @@ function ProgressBar({ progress, sourceId }: { progress: LoadProgress; sourceId:
   );
 }
 
-function LoadedModelBadge({ model }: { model: { source: ModelSource; files: { path: string }[] } }) {
+function LoadedModelBadge({
+  model
+}: {
+  model: { source: ModelSource; files: { path: string }[] };
+}) {
   const unload = useModelStore((s) => s.unload);
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-sm">
@@ -80,7 +84,7 @@ export function ModelLoader() {
     (source: ModelSource) => {
       load(source);
     },
-    [load],
+    [load]
   );
 
   const handleLoadCustom = useCallback(() => {
@@ -116,7 +120,7 @@ export function ModelLoader() {
           <p key={id} className="text-sm text-muted-foreground">
             Connecting to {state.source.name}...
           </p>
-        ),
+        )
       )}
 
       {/* Errors */}

@@ -9,7 +9,7 @@ import type {
   ModelSource,
   LoadProgress,
   LoadedModel,
-  ModelLoadErrorCode,
+  ModelLoadErrorCode
 } from '../types/model-types.js';
 import { loadModel } from '../services/model-loader.js';
 import { clearCache } from '../services/model-cache.js';
@@ -73,7 +73,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     newLoading.set(source.id, {
       source,
       progress: null,
-      abortController,
+      abortController
     });
 
     set({ loading: newLoading, errors: newErrors });
@@ -89,7 +89,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
             updated.set(source.id, { ...entry, progress });
             set({ loading: updated });
           }
-        },
+        }
       });
 
       // Success — add to loaded models, remove from loading
@@ -107,7 +107,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
       const err = e as { code?: ModelLoadErrorCode; message?: string };
       currentErrors.set(source.id, {
         code: err.code ?? 'NETWORK',
-        message: err.message ?? 'Unknown error',
+        message: err.message ?? 'Unknown error'
       });
 
       set({ loading: currentLoading, errors: currentErrors });
@@ -141,7 +141,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     const newErrors = new Map(errors);
     newErrors.delete(sourceId);
     set({ errors: newErrors });
-  },
+  }
 }));
 
 // ────────────────────────────────────────────────────────────────────────────

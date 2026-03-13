@@ -13,7 +13,7 @@ import type {
   CachedFile,
   LoadProgress,
   LoadedModel,
-  ModelLoadErrorCode,
+  ModelLoadErrorCode
 } from '../types/model-types.js';
 import { ModelLoadError } from '../types/model-types.js';
 import { getCachedModel, getCachedModelIfFresh, setCachedModel } from './model-cache.js';
@@ -32,7 +32,7 @@ interface LoadOptions {
  */
 export async function loadModel(
   source: ModelSource,
-  options: LoadOptions = {},
+  options: LoadOptions = {}
 ): Promise<LoadedModel> {
   const { signal, useCache = true, onProgress } = options;
 
@@ -49,7 +49,7 @@ export async function loadModel(
         source,
         commitHash: cached.commitHash,
         files: cached.files,
-        loadedAt: Date.now(),
+        loadedAt: Date.now()
       };
     }
   }
@@ -62,10 +62,13 @@ export async function loadModel(
         source,
         commitHash: cachedAny.commitHash,
         files: cachedAny.files,
-        loadedAt: Date.now(),
+        loadedAt: Date.now()
       };
     }
-    throw new ModelLoadError('NETWORK', `Offline and no cached version of ${source.name} available. Connect to the internet for initial download.`);
+    throw new ModelLoadError(
+      'NETWORK',
+      `Offline and no cached version of ${source.name} available. Connect to the internet for initial download.`
+    );
   }
 
   // Create an in-memory filesystem for this clone
@@ -93,9 +96,9 @@ export async function loadModel(
         onProgress?.({
           phase: 'fetching',
           current: evt.loaded ?? 0,
-          total: evt.total ?? 1,
+          total: evt.total ?? 1
         });
-      },
+      }
     });
 
     if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
@@ -116,7 +119,11 @@ export async function loadModel(
 
     if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
 
-    onProgress?.({ phase: 'discovering', current: rosettaFiles.length, total: rosettaFiles.length });
+    onProgress?.({
+      phase: 'discovering',
+      current: rosettaFiles.length,
+      total: rosettaFiles.length
+    });
 
     // Phase 3: Read file contents
     const files: CachedFile[] = [];
@@ -127,7 +134,7 @@ export async function loadModel(
 
       const filePath = rosettaFiles[i]!;
       const content = new TextDecoder().decode(
-        await fs.promises.readFile(`${dir}/${filePath}`) as Uint8Array,
+        (await fs.promises.readFile(`${dir}/${filePath}`)) as Uint8Array
       );
       const namespace = extractNamespace(content);
 
@@ -145,7 +152,7 @@ export async function loadModel(
       commitHash,
       files,
       fetchedAt: Date.now(),
-      totalFiles: files.length,
+      totalFiles: files.length
     };
     await setCachedModel(cachedModel);
 
@@ -153,7 +160,7 @@ export async function loadModel(
       source,
       commitHash,
       files,
-      loadedAt: Date.now(),
+      loadedAt: Date.now()
     };
   } catch (e) {
     if (e instanceof ModelLoadError) throw e;
@@ -161,9 +168,17 @@ export async function loadModel(
     const msg = (e as Error).message ?? String(e);
 
     if (msg.includes('404') || msg.includes('not found')) {
-      throw new ModelLoadError('NOT_FOUND', `Repository or ref not found: ${source.repoUrl}@${source.ref}`);
+      throw new ModelLoadError(
+        'NOT_FOUND',
+        `Repository or ref not found: ${source.repoUrl}@${source.ref}`
+      );
     }
-    if (msg.includes('fetch') || msg.includes('network') || msg.includes('CORS') || msg.includes('Failed')) {
+    if (
+      msg.includes('fetch') ||
+      msg.includes('network') ||
+      msg.includes('CORS') ||
+      msg.includes('Failed')
+    ) {
       throw new ModelLoadError('NETWORK', `Network error loading ${source.name}: ${msg}`);
     }
 
@@ -178,7 +193,7 @@ export async function loadModel(
 async function discoverRosettaFiles(
   fs: LightningFS,
   baseDir: string,
-  patterns: string[],
+  patterns: string[]
 ): Promise<string[]> {
   const allFiles = await walkDirectory(fs, baseDir, '');
   const rosettaFiles = allFiles.filter((f) => f.endsWith('.rosetta'));
@@ -188,7 +203,7 @@ async function discoverRosettaFiles(
   }
 
   return rosettaFiles.filter((filePath) =>
-    patterns.some((pattern) => matchGlob(filePath, pattern)),
+    patterns.some((pattern) => matchGlob(filePath, pattern))
   );
 }
 
@@ -196,10 +211,10 @@ async function discoverRosettaFiles(
 async function walkDirectory(
   fs: LightningFS,
   baseDir: string,
-  relativePath: string,
+  relativePath: string
 ): Promise<string[]> {
   const fullPath = relativePath ? `${baseDir}/${relativePath}` : baseDir;
-  const entries = await fs.promises.readdir(fullPath) as string[];
+  const entries = (await fs.promises.readdir(fullPath)) as string[];
   const results: string[] = [];
 
   for (const entry of entries) {
@@ -211,7 +226,7 @@ async function walkDirectory(
     try {
       const stat = await fs.promises.stat(entryFull);
       if (stat.isDirectory()) {
-        results.push(...await walkDirectory(fs, baseDir, entryRelative));
+        results.push(...(await walkDirectory(fs, baseDir, entryRelative)));
       } else {
         results.push(entryRelative);
       }

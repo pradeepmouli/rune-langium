@@ -6,67 +6,67 @@
 /** A git repository containing Rune DSL model files. */
 export interface ModelSource {
   /** Unique identifier (e.g., "cdm", "fpml", or URL hash) */
-  id: string
+  id: string;
   /** Display name (e.g., "CDM", "FpML") */
-  name: string
+  name: string;
   /** Public git repository URL (HTTPS) */
-  repoUrl: string
+  repoUrl: string;
   /** Git tag, branch, or commit ref */
-  ref: string
+  ref: string;
   /** Glob patterns for .rosetta file discovery */
-  paths: string[]
+  paths: string[];
 }
 
 /** A locally cached model with version tracking. */
 export interface CachedModel {
   /** References ModelSource.id */
-  sourceId: string
+  sourceId: string;
   /** Git ref that was fetched */
-  ref: string
+  ref: string;
   /** Actual commit SHA at time of fetch */
-  commitHash: string
+  commitHash: string;
   /** Parsed .rosetta file contents */
-  files: CachedFile[]
+  files: CachedFile[];
   /** Timestamp of last fetch (epoch ms) */
-  fetchedAt: number
+  fetchedAt: number;
   /** Count of .rosetta files in the model */
-  totalFiles: number
+  totalFiles: number;
 }
 
 /** Individual cached .rosetta file within a model. */
 export interface CachedFile {
   /** Relative path within the repository */
-  path: string
+  path: string;
   /** Raw .rosetta file content */
-  content: string
+  content: string;
   /** Extracted namespace from file */
-  namespace: string
+  namespace: string;
 }
 
 /** Progress events yielded during model loading. */
 export interface LoadProgress {
-  phase: 'fetching' | 'discovering' | 'parsing'
-  current: number
-  total: number
+  phase: 'fetching' | 'discovering' | 'parsing';
+  current: number;
+  total: number;
 }
 
 /** A fully loaded model with parsed workspace files. */
 export interface LoadedModel {
-  source: ModelSource
-  commitHash: string
-  files: CachedFile[]
-  loadedAt: number
+  source: ModelSource;
+  commitHash: string;
+  files: CachedFile[];
+  loadedAt: number;
 }
 
 /** Error types for model loading failures. */
-export type ModelLoadErrorCode = 'NETWORK' | 'NOT_FOUND' | 'NO_FILES' | 'CANCELLED'
+export type ModelLoadErrorCode = 'NETWORK' | 'NOT_FOUND' | 'NO_FILES' | 'CANCELLED';
 
 export class ModelLoadError extends Error {
   constructor(
     public readonly code: ModelLoadErrorCode,
-    message: string,
+    message: string
   ) {
-    super(message)
-    this.name = 'ModelLoadError'
+    super(message);
+    this.name = 'ModelLoadError';
   }
 }

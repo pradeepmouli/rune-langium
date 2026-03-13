@@ -19,7 +19,7 @@ async function getDB(): Promise<ModelCacheDB> {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'sourceId' });
       }
-    },
+    }
   });
 }
 
@@ -42,7 +42,7 @@ export async function setCachedModel(model: CachedModel): Promise<void> {
  */
 export async function getCachedModelIfFresh(
   sourceId: string,
-  requestedRef: string,
+  requestedRef: string
 ): Promise<CachedModel | null> {
   const cached = await getCachedModel(sourceId);
   if (cached && cached.ref === requestedRef) {

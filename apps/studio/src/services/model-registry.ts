@@ -12,22 +12,22 @@ const CURATED_MODELS: readonly ModelSource[] = [
     name: 'CDM (Common Domain Model)',
     repoUrl: 'https://github.com/REGnosys/rosetta-cdm.git',
     ref: 'master',
-    paths: ['rosetta-source/src/main/rosetta/**/*.rosetta'],
+    paths: ['rosetta-source/src/main/rosetta/**/*.rosetta']
   },
   {
     id: 'fpml',
     name: 'Rune FpML',
     repoUrl: 'https://github.com/finos/rune-fpml.git',
     ref: 'main',
-    paths: ['src/main/rosetta/**/*.rosetta'],
+    paths: ['src/main/rosetta/**/*.rosetta']
   },
   {
     id: 'rune-dsl',
     name: 'Rune DSL (Built-in Types)',
     repoUrl: 'https://github.com/REGnosys/rosetta-dsl.git',
     ref: 'master',
-    paths: ['rosetta-lang/src/main/resources/**/*.rosetta'],
-  },
+    paths: ['rosetta-lang/src/main/resources/**/*.rosetta']
+  }
 ] as const;
 
 /** Returns the curated list of well-known model sources. */
@@ -47,7 +47,7 @@ export function getModelSource(id: string): ModelSource | undefined {
 export function createCustomModelSource(
   repoUrl: string,
   ref: string = 'main',
-  paths: string[] = ['**/*.rosetta'],
+  paths: string[] = ['**/*.rosetta']
 ): ModelSource {
   const id = `custom-${hashUrl(repoUrl)}`;
   const name = extractRepoName(repoUrl);
