@@ -96,5 +96,10 @@ export function TypeSelector({ value, onChange, ...rest }: ControlledProps) {
 }
 
 export function CardinalitySelector({ value, onChange, ...rest }: ControlledProps) {
-  return <CardinalityPicker value={value ?? ''} onChange={onChange as (v: unknown) => void} />;
+  return (
+    <CardinalityPicker
+      value={(value as string) ?? ''}
+      onChange={onChange as (v: unknown) => void}
+    />
+  );
 }

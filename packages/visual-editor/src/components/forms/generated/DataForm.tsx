@@ -145,7 +145,7 @@ export function DataForm(props: {
                 $type: 'Attribute',
                 name: '',
                 typeCall: { $type: 'TypeCall', type: { $refText: '', ref: '' }, arguments: [] },
-                card: { $type: 'RosettaCardinality', inf: 0, sup: '', unbounded: '' }
+                card: { $type: 'RosettaCardinality', inf: 0, sup: 0, unbounded: false }
               })
             }
           >
