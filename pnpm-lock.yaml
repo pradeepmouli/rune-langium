@@ -6,9 +6,9 @@ settings:
 
 overrides:
   x-to-zod: ^0.8.0
-  '@zod-to-form/core': ^0.2.4
-  '@zod-to-form/react': ^0.2.4
-  '@zod-to-form/cli': ^0.2.4
+  '@zod-to-form/core': ^0.4.0
+  '@zod-to-form/react': ^0.4.0
+  '@zod-to-form/cli': ^0.4.0
   codemirror: 6.0.2
 
 importers:
@@ -22,8 +22,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1(ws@8.19.0)
       '@zod-to-form/cli':
-        specifier: ^0.2.4
-        version: 0.2.7(zod@4.3.6)
+        specifier: ^0.4.0
+        version: 0.4.0(zod@4.3.6)
       camelcase:
         specifier: ^9.0.0
         version: 9.0.0
@@ -352,8 +352,8 @@ importers:
         specifier: ^12.10.1
         version: 12.10.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@zod-to-form/react':
-        specifier: ^0.2.4
-        version: 0.2.7(@hookform/resolvers@5.2.2(react-hook-form@7.71.2(react@19.2.4)))(react-hook-form@7.71.2(react@19.2.4))(react@19.2.4)(zod@4.3.6)
+        specifier: ^0.4.0
+        version: 0.4.0(@hookform/resolvers@5.2.2(react-hook-form@7.71.2(react@19.2.4)))(react-hook-form@7.71.2(react@19.2.4))(react@19.2.4)(zod@4.3.6)
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.4)
@@ -383,11 +383,11 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       '@zod-to-form/cli':
-        specifier: ^0.2.4
-        version: 0.2.7(zod@4.3.6)
+        specifier: ^0.4.0
+        version: 0.4.0(zod@4.3.6)
       '@zod-to-form/core':
-        specifier: ^0.2.4
-        version: 0.2.7(zod@4.3.6)
+        specifier: ^0.4.0
+        version: 0.4.0(zod@4.3.6)
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0(@noble/hashes@1.8.0)
@@ -2501,17 +2501,17 @@ packages:
   '@xyflow/system@0.0.75':
     resolution: {integrity: sha512-iXs+AGFLi8w/VlAoc/iSxk+CxfT6o64Uw/k0CKASOPqjqz6E0rb5jFZgJtXGZCpfQI6OQpu5EnumP5fGxQheaQ==}
 
-  '@zod-to-form/cli@0.2.7':
-    resolution: {integrity: sha512-hotE+jF1gGMrZWoOPmelzEOqkdlu96hLEiRkfxV25X6zlCsXiPaUkC8PzxPz9O1g1JFW4xAyss6GbYBpkXKNDg==}
+  '@zod-to-form/cli@0.4.0':
+    resolution: {integrity: sha512-pfFsD6lYJwuxENJejroc5zolgfbpRCZiaPuMwKOfF2HfTbcu7aiUrJvhotE7ilAl5kh8jlBGw1c7li3DXj4Icg==}
     hasBin: true
 
-  '@zod-to-form/core@0.2.7':
-    resolution: {integrity: sha512-ZI+SDDRrFj6POY9EQOQPl89EH11b4GpnwUQaDQ/VpKOvSMb17P4DtZ2BMWqG1QJye7QvA5+mUnS51nuTsXGzDg==}
+  '@zod-to-form/core@0.4.0':
+    resolution: {integrity: sha512-BZ0KRq08IS70ji/0Q3zf+vobN8XJedQs/mn6AYnuXxvDw6oc6GUze+RrigVOoP9To4gZmh5icCcAcs5pYROCgg==}
     peerDependencies:
       zod: ^4.0.0
 
-  '@zod-to-form/react@0.2.7':
-    resolution: {integrity: sha512-Hwm5I8a82XQOGzxPrm8n/2SPZH68gR0E/Smo1oEqQt61rEnHtEMfnBFQ72F0t0o0wErppBgxkmDzN0htTrmnlQ==}
+  '@zod-to-form/react@0.4.0':
+    resolution: {integrity: sha512-VYj5XRJ2wXyTYbv7HZ2aiaFaua9ykf6vu23rEnbDarjOYPkblkho5UN/gLVQujljNTEAMNe/wg4Jduf6AgaHkg==}
     peerDependencies:
       '@hookform/resolvers': ^5.0.0
       react: ^18.0.0 || ^19.0.0
@@ -6933,23 +6933,23 @@ snapshots:
       d3-selection: 3.0.0
       d3-zoom: 3.0.0
 
-  '@zod-to-form/cli@0.2.7(zod@4.3.6)':
+  '@zod-to-form/cli@0.4.0(zod@4.3.6)':
     dependencies:
-      '@zod-to-form/core': 0.2.7(zod@4.3.6)
+      '@zod-to-form/core': 0.4.0(zod@4.3.6)
       chokidar: 5.0.0
       commander: 14.0.3
       jiti: 2.6.1
     transitivePeerDependencies:
       - zod
 
-  '@zod-to-form/core@0.2.7(zod@4.3.6)':
+  '@zod-to-form/core@0.4.0(zod@4.3.6)':
     dependencies:
       zod: 4.3.6
 
-  '@zod-to-form/react@0.2.7(@hookform/resolvers@5.2.2(react-hook-form@7.71.2(react@19.2.4)))(react-hook-form@7.71.2(react@19.2.4))(react@19.2.4)(zod@4.3.6)':
+  '@zod-to-form/react@0.4.0(@hookform/resolvers@5.2.2(react-hook-form@7.71.2(react@19.2.4)))(react-hook-form@7.71.2(react@19.2.4))(react@19.2.4)(zod@4.3.6)':
     dependencies:
       '@hookform/resolvers': 5.2.2(react-hook-form@7.71.2(react@19.2.4))
-      '@zod-to-form/core': 0.2.7(zod@4.3.6)
+      '@zod-to-form/core': 0.4.0(zod@4.3.6)
       react: 19.2.4
       react-hook-form: 7.71.2(react@19.2.4)
       zod: 4.3.6
