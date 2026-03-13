@@ -7,31 +7,32 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import type { TypeNodeData } from '../../types.js';
+import type { AnyGraphNode } from '../../types.js';
 
 export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
-  const nodeData = data as unknown as TypeNodeData;
+  const d = data as unknown as AnyGraphNode;
+  const members = ((d as any).enumValues ?? []) as any[];
 
   return (
     <div className={`rune-node rune-node-enum${selected ? ' rune-node-selected' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="rune-node-header">
         <span className="rune-node-kind-badge">Enum</span>
-        <span>{nodeData.name}</span>
+        <span>{d.name}</span>
       </div>
       <div className="rune-node-body">
-        {nodeData.members.length > 0 && (
+        {members.length > 0 && (
           <div className="rune-node-members">
-            {nodeData.members.map((member) => (
+            {members.map((member: any) => (
               <div key={member.name} className="rune-node-member">
                 <span className="rune-node-member-name">{member.name}</span>
               </div>
             ))}
           </div>
         )}
-        {nodeData.errors.length > 0 && (
+        {(d as any).errors?.length > 0 && (
           <div className="rune-node-errors">
-            {nodeData.errors.map((err, i) => (
+            {((d as any).errors as any[]).map((err: any, i: number) => (
               <div key={i}>{err.message}</div>
             ))}
           </div>

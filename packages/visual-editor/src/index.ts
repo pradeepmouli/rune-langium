@@ -52,14 +52,14 @@ export type { FunctionFormProps } from './components/editors/FunctionForm.js';
 
 // Types
 export type {
+  AstNodeModel,
+  AstNodeShape,
+  GraphNode,
+  AnyGraphNode,
+  GraphMetadata,
+  RootAstElement,
   TypeKind,
   EdgeKind,
-  AstNodeKindMap,
-  AstMemberKindMap,
-  AstNodeType,
-  AstMemberType,
-  MemberDisplay,
-  TypeNodeData,
   EdgeData,
   ValidationError,
   ExpressionEditorSlotProps,
@@ -90,9 +90,21 @@ export type {
 export { BUILTIN_TYPES } from './types.js';
 
 // Adapter utilities
-export { astToGraph } from './adapters/ast-to-graph.js';
-export { graphToModels } from './adapters/graph-to-ast.js';
-export type { SyntheticModel, SyntheticElement } from './adapters/graph-to-ast.js';
+export { astToModel, astToGraph } from './adapters/ast-to-model.js';
+export { modelsToAst, graphToModels } from './adapters/model-to-ast.js';
+export type { ModelOutput, SyntheticModel, SyntheticElement } from './adapters/model-to-ast.js';
+export {
+  formatCardinality,
+  parseCardinality,
+  getTypeRefText,
+  getRefText,
+  annotationsToDisplay,
+  conditionsToDisplay,
+  classExprSynonymsToStrings,
+  enumSynonymsToStrings,
+  AST_TYPE_TO_NODE_TYPE,
+  NODE_TYPE_TO_AST_TYPE
+} from './adapters/model-helpers.js';
 
 // Layout
 export { computeLayout } from './layout/dagre-layout.js';
@@ -107,6 +119,11 @@ export type { EditorStore, EditorState, EditorActions } from './store/editor-sto
 // History / undo-redo
 export { useTemporalStore, useCanUndo, useCanRedo, useUndo, useRedo } from './store/history.js';
 export type { TrackedState } from './store/history.js';
+
+// Expression builder
+export { ExpressionBuilder } from './components/editors/expression-builder/ExpressionBuilder.js';
+export type { ExpressionBuilderProps } from './components/editors/expression-builder/ExpressionBuilder.js';
+export type { FunctionScope, FunctionScopeEntry } from './store/expression-store.js';
 
 // Hooks
 export { useAutoSave } from './hooks/useAutoSave.js';

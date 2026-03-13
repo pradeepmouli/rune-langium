@@ -7,21 +7,36 @@
 
 import { create } from 'zustand';
 import { temporal } from 'zundo';
+import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react';
+import type { NodeChange, EdgeChange } from '@xyflow/react';
 import type {
   TypeGraphNode,
   TypeGraphEdge,
   GraphFilters,
   TypeKind,
   ValidationError,
-  TypeNodeData,
   EdgeData,
-  MemberDisplay,
   LayoutOptions,
-  VisibilityState
+  VisibilityState,
+  AnyGraphNode,
+  GraphNode
 } from '../types.js';
-import { astToGraph } from '../adapters/ast-to-graph.js';
+import type {
+  Data,
+  Choice,
+  RosettaEnumeration,
+  RosettaFunction,
+  RosettaRecordType,
+  Annotation
+} from '@rune-langium/core';
+import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
+import {
+  getTypeRefText,
+  AST_TYPE_TO_NODE_TYPE,
+  NODE_TYPE_TO_AST_TYPE
+} from '../adapters/model-helpers.js';
 import type { TrackedState } from './history.js';
 
 // ---------------------------------------------------------------------------
@@ -119,6 +134,10 @@ export interface EditorActions {
   // --- Annotation operations ---
   addAnnotation(nodeId: string, annotationName: string): void;
   removeAnnotation(nodeId: string, index: number): void;
+
+  // --- ReactFlow integration ---
+  applyReactFlowNodeChanges(changes: NodeChange<TypeGraphNode>[]): void;
+  applyReactFlowEdgeChanges(changes: EdgeChange<TypeGraphEdge>[]): void;
 }
 
 export type EditorStore = EditorState & EditorActions;
@@ -133,12 +152,105 @@ function makeNodeId(namespace: string, name: string): string {
   return `${namespace}::${name}`;
 }
 
+function parseCardinalityString(card: string): { inf: number; sup?: number; unbounded: boolean } {
+  const match = card.match(/\(?(\d+)\.\.(\*|\d+)\)?/);
+  if (!match) return { inf: 1, sup: 1, unbounded: false };
+  const inf = parseInt(match[1]!, 10);
+  if (match[2] === '*') return { inf, unbounded: true };
+  const sup = parseInt(match[2]!, 10);
+  return { inf, sup, unbounded: false };
+}
+
 function formatCardinalityString(card: string): string {
   // Normalize to (inf..sup) format
   if (card.startsWith('(') && card.endsWith(')')) {
     return card;
   }
   return `(${card})`;
+}
+
+/**
+ * Update typeCall.type.$refText references in a node's member arrays.
+ * Returns the same object if nothing changed, or a new object with updates.
+ */
+function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string): AnyGraphNode {
+  let changed = false;
+
+  function updateMemberRefs<T extends { typeCall?: { type?: { $refText?: string } } }>(
+    members: T[]
+  ): T[] {
+    const updated = members.map((m) => {
+      if (m.typeCall?.type?.$refText === oldName) {
+        changed = true;
+        return {
+          ...m,
+          typeCall: {
+            ...m.typeCall,
+            type: { ...m.typeCall!.type, $refText: newName }
+          }
+        } as T;
+      }
+      return m;
+    });
+    return updated;
+  }
+
+  function updateRefText(
+    ref: { $refText?: string } | undefined
+  ): { $refText?: string } | undefined {
+    if (ref?.$refText === oldName) {
+      changed = true;
+      return { ...ref, $refText: newName };
+    }
+    return ref;
+  }
+
+  const result = { ...d } as Record<string, unknown>;
+
+  switch (d.$type) {
+    case 'Data': {
+      const data = d as GraphNode<Data>;
+      result.attributes = updateMemberRefs(data.attributes as any[]);
+      result.superType = updateRefText(data.superType as any);
+      break;
+    }
+    case 'Choice': {
+      const choice = d as GraphNode<Choice>;
+      result.attributes = updateMemberRefs(choice.attributes as any[]);
+      break;
+    }
+    case 'RosettaFunction': {
+      const func = d as GraphNode<RosettaFunction>;
+      result.inputs = updateMemberRefs(func.inputs as any[]);
+      if ((func.output as any)?.typeCall?.type?.$refText === oldName) {
+        changed = true;
+        const out = func.output as any;
+        result.output = {
+          ...out,
+          typeCall: { ...out.typeCall, type: { ...out.typeCall.type, $refText: newName } }
+        };
+      }
+      result.superFunction = updateRefText(func.superFunction as any);
+      break;
+    }
+    case 'RosettaRecordType': {
+      const record = d as GraphNode<RosettaRecordType>;
+      result.features = updateMemberRefs(record.features as any[]);
+      break;
+    }
+    case 'RosettaEnumeration': {
+      const enumData = d as GraphNode<RosettaEnumeration>;
+      result.parent = updateRefText(enumData.parent as any);
+      break;
+    }
+    case 'Annotation': {
+      const ann = d as GraphNode<Annotation>;
+      result.attributes = updateMemberRefs(ann.attributes as any[]);
+      break;
+    }
+  }
+
+  return changed ? (result as unknown as AnyGraphNode) : d;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,7 +295,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         loadModels(models, layoutOpts) {
           const opts = layoutOpts ?? get().layoutOptions;
           const filters = get().activeFilters;
-          const { nodes: rawNodes, edges } = astToGraph(models, { filters });
+          const { nodes: rawNodes, edges } = astToModel(models, { filters });
 
           // Determine initial visibility based on model size
           const allNamespaces = new Set(rawNodes.map((n) => n.data.namespace));
@@ -270,18 +382,54 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const nodeId = makeNodeId(namespace, name);
           nodeCounter++;
 
+          const $type = NODE_TYPE_TO_AST_TYPE[kind] ?? 'Data';
+
+          // Build a minimal AstNodeModel shell for the new type.
+          // Each kind gets its own empty member array field.
+          const baseData: Record<string, unknown> = {
+            $type,
+            name,
+            namespace,
+            position: { x: nodeCounter * 50, y: nodeCounter * 50 },
+            hasExternalRefs: false,
+            errors: [],
+            definition: undefined,
+            annotations: [],
+            synonyms: []
+          };
+
+          // Add kind-specific member arrays
+          switch ($type) {
+            case 'Data':
+              baseData.attributes = [];
+              baseData.conditions = [];
+              break;
+            case 'Choice':
+              baseData.attributes = [];
+              break;
+            case 'RosettaEnumeration':
+              baseData.enumValues = [];
+              break;
+            case 'RosettaFunction':
+              baseData.inputs = [];
+              baseData.conditions = [];
+              baseData.postConditions = [];
+              baseData.operations = [];
+              baseData.shortcuts = [];
+              break;
+            case 'RosettaRecordType':
+              baseData.features = [];
+              break;
+            case 'Annotation':
+              baseData.attributes = [];
+              break;
+          }
+
           const newNode: TypeGraphNode = {
             id: nodeId,
             type: kind,
             position: { x: nodeCounter * 50, y: nodeCounter * 50 },
-            data: {
-              kind,
-              name,
-              namespace,
-              members: [],
-              hasExternalRefs: false,
-              errors: []
-            } as TypeNodeData
+            data: baseData as unknown as AnyGraphNode
           };
 
           set((state) => ({
@@ -304,35 +452,25 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             const targetNode = state.nodes.find((n) => n.id === nodeId);
             if (!targetNode) return {};
 
-            const oldName = targetNode.data.name;
-            const namespace = targetNode.data.namespace;
+            const oldName = (targetNode.data as AnyGraphNode).name as string;
+            const namespace = (targetNode.data as AnyGraphNode).namespace as string;
             const newNodeId = makeNodeId(namespace, newName);
 
-            // 1. Rename the target node: update name and ID
+            // 1. Rename the target node and cascade type references in other nodes
             const updatedNodes = state.nodes.map((n) => {
               if (n.id === nodeId) {
                 return { ...n, id: newNodeId, data: { ...n.data, name: newName } };
               }
-              // 2. Update other nodes' member typeName and parentName references
-              let changed = false;
-              const updatedMembers = n.data.members.map((m) => {
-                if (m.typeName === oldName) {
-                  changed = true;
-                  return { ...m, typeName: newName };
-                }
-                return m;
-              });
-              const updatedParentName = n.data.parentName === oldName ? newName : n.data.parentName;
-              if (changed || updatedParentName !== n.data.parentName) {
-                return {
-                  ...n,
-                  data: { ...n.data, members: updatedMembers, parentName: updatedParentName }
-                };
+              // Cascade: update typeCall.$refText references in member arrays
+              const d = n.data as AnyGraphNode;
+              const updated = updateTypeRefsInNode(d, oldName, newName);
+              if (updated !== d) {
+                return { ...n, data: updated };
               }
               return n;
             });
 
-            // 3. Update all edges that reference the old node ID
+            // 2. Update all edges
             const updatedEdges = state.edges.map((e) => {
               const sourceChanged = e.source === nodeId;
               const targetChanged = e.target === nodeId;
@@ -354,7 +492,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               };
             });
 
-            // 4. Update selectedNodeId if it was the renamed node
+            // 3. Update selectedNodeId
             const updatedSelectedNodeId =
               state.selectedNodeId === nodeId ? newNodeId : state.selectedNodeId;
 
@@ -367,21 +505,36 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string) {
-          const newMember: MemberDisplay = {
+          const card = parseCardinalityString(cardinality);
+          const newAttr = {
+            $type: 'Attribute',
             name: attrName,
-            typeName,
-            cardinality: formatCardinalityString(cardinality),
-            isOverride: false
+            override: false,
+            typeCall: {
+              $type: 'TypeCall',
+              type: { $refText: typeName },
+              arguments: []
+            },
+            card: { $type: 'RosettaCardinality', ...card },
+            annotations: [],
+            synonyms: []
           };
 
           set((state) => {
-            const targetNodeId = state.nodes.find((n) => n.data.name === typeName)?.id;
+            const targetNodeId = state.nodes.find(
+              (n) => (n.data as AnyGraphNode).name === typeName
+            )?.id;
 
-            const updatedNodes = state.nodes.map((n) =>
-              n.id === nodeId
-                ? { ...n, data: { ...n.data, members: [...n.data.members, newMember] } }
-                : n
-            );
+            const updatedNodes = state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              // Data and Annotation use 'attributes'
+              if (d.$type === 'Data' || d.$type === 'Annotation') {
+                const attrs = [...((d as any).attributes ?? []), newAttr];
+                return { ...n, data: { ...d, attributes: attrs } };
+              }
+              return n;
+            });
 
             if (targetNodeId && targetNodeId !== nodeId) {
               const newEdge: TypeGraphEdge = {
@@ -404,17 +557,15 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         removeAttribute(nodeId: string, attrName: string) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      members: n.data.members.filter((m) => m.name !== attrName)
-                    }
-                  }
-                : n
-            ),
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'Data' || d.$type === 'Annotation') {
+                const attrs = ((d as any).attributes ?? []).filter((a: any) => a.name !== attrName);
+                return { ...n, data: { ...d, attributes: attrs } };
+              }
+              return n;
+            }),
             edges: state.edges.filter(
               (e) =>
                 !(
@@ -427,42 +578,42 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         updateCardinality(nodeId: string, attrName: string, cardinality: string) {
+          const card = parseCardinalityString(cardinality);
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      members: n.data.members.map((m) =>
-                        m.name === attrName
-                          ? {
-                              ...m,
-                              cardinality: formatCardinalityString(cardinality)
-                            }
-                          : m
-                      )
-                    }
-                  }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'Data' || d.$type === 'Annotation') {
+                const attrs = ((d as any).attributes ?? []).map((a: any) =>
+                  a.name === attrName ? { ...a, card: { $type: 'RosettaCardinality', ...card } } : a
+                );
+                return { ...n, data: { ...d, attributes: attrs } };
+              }
+              return n;
+            })
           }));
         },
 
         setInheritance(childId: string, parentId: string | null) {
           set((state) => {
-            // Remove existing inheritance edges from the child
             const filteredEdges = state.edges.filter(
               (e) => !(e.source === childId && e.data?.kind === 'extends')
             );
 
-            // Update parentName on the child node
             const parentNode = parentId ? state.nodes.find((n) => n.id === parentId) : null;
-            const parentName = parentNode?.data.name ?? undefined;
+            const parentName = (parentNode?.data as AnyGraphNode)?.name as string | undefined;
 
-            const updatedNodes = state.nodes.map((n) =>
-              n.id === childId ? { ...n, data: { ...n.data, parentName } } : n
-            );
+            const updatedNodes = state.nodes.map((n) => {
+              if (n.id !== childId) return n;
+              const d = n.data as AnyGraphNode;
+              const superRef = parentName
+                ? ({ ref: { name: parentName }, $refText: parentName } as any)
+                : undefined;
+              if (d.$type === 'Data') {
+                return { ...n, data: { ...d, superType: superRef } } as TypeGraphNode;
+              }
+              return n;
+            });
 
             if (parentId) {
               const newEdge: TypeGraphEdge = {
@@ -475,16 +626,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                   label: 'extends'
                 } as EdgeData
               };
-              return {
-                nodes: updatedNodes,
-                edges: [...filteredEdges, newEdge]
-              };
+              return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
             }
 
-            return {
-              nodes: updatedNodes,
-              edges: filteredEdges
-            };
+            return { nodes: updatedNodes, edges: filteredEdges };
           });
         },
 
@@ -505,27 +650,30 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           typeName: string,
           cardinality: string
         ) {
+          const card = parseCardinalityString(cardinality);
           set((state) => {
-            const updatedNodes = state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      members: n.data.members.map((m) =>
-                        m.name === oldName
-                          ? {
-                              ...m,
-                              name: newName,
-                              typeName,
-                              cardinality: formatCardinalityString(cardinality)
-                            }
-                          : m
-                      )
-                    }
-                  }
-                : n
-            );
+            const updatedNodes = state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'Data' || d.$type === 'Annotation') {
+                const attrs = ((d as any).attributes ?? []).map((a: any) =>
+                  a.name === oldName
+                    ? {
+                        ...a,
+                        name: newName,
+                        typeCall: {
+                          ...a.typeCall,
+                          $type: 'TypeCall',
+                          type: { $refText: typeName }
+                        },
+                        card: { $type: 'RosettaCardinality', ...card }
+                      }
+                    : a
+                );
+                return { ...n, data: { ...d, attributes: attrs } };
+              }
+              return n;
+            });
 
             // Remove old attribute-ref edge for the old attribute name
             const filteredEdges = state.edges.filter(
@@ -538,7 +686,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             );
 
             // Add new attribute-ref edge if target exists
-            const targetNodeId = state.nodes.find((n) => n.data.name === typeName)?.id;
+            const targetNodeId = state.nodes.find(
+              (n) => (n.data as AnyGraphNode).name === typeName
+            )?.id;
             if (targetNodeId && targetNodeId !== nodeId) {
               const newEdge: TypeGraphEdge = {
                 id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
@@ -562,12 +712,16 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           set((state) => ({
             nodes: state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
-              const members = [...n.data.members];
-              const [moved] = members.splice(fromIndex, 1);
-              if (moved) {
-                members.splice(toIndex, 0, moved);
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'Data' || d.$type === 'Annotation') {
+                const attrs = [...((d as any).attributes ?? [])];
+                const [moved] = attrs.splice(fromIndex, 1);
+                if (moved) {
+                  attrs.splice(toIndex, 0, moved);
+                }
+                return { ...n, data: { ...d, attributes: attrs } };
               }
-              return { ...n, data: { ...n.data, members } };
+              return n;
             })
           }));
         },
@@ -577,52 +731,54 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // -----------------------------------------------------------------------
 
         addEnumValue(nodeId: string, valueName: string, displayName?: string) {
-          const newMember: MemberDisplay = {
+          const newValue = {
+            $type: 'RosettaEnumValue',
             name: valueName,
-            displayName,
-            isOverride: false
+            display: displayName,
+            annotations: [],
+            enumSynonyms: []
           };
 
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? { ...n, data: { ...n.data, members: [...n.data.members, newMember] } }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaEnumeration') {
+                const vals = [...((d as any).enumValues ?? []), newValue];
+                return { ...n, data: { ...d, enumValues: vals } };
+              }
+              return n;
+            })
           }));
         },
 
         removeEnumValue(nodeId: string, valueName: string) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      members: n.data.members.filter((m) => m.name !== valueName)
-                    }
-                  }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaEnumeration') {
+                const vals = ((d as any).enumValues ?? []).filter((v: any) => v.name !== valueName);
+                return { ...n, data: { ...d, enumValues: vals } };
+              }
+              return n;
+            })
           }));
         },
 
         updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      members: n.data.members.map((m) =>
-                        m.name === oldName ? { ...m, name: newName, displayName } : m
-                      )
-                    }
-                  }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaEnumeration') {
+                const vals = ((d as any).enumValues ?? []).map((v: any) =>
+                  v.name === oldName ? { ...v, name: newName, display: displayName } : v
+                );
+                return { ...n, data: { ...d, enumValues: vals } };
+              }
+              return n;
+            })
           }));
         },
 
@@ -630,29 +786,40 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           set((state) => ({
             nodes: state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
-              const members = [...n.data.members];
-              const [moved] = members.splice(fromIndex, 1);
-              if (moved) {
-                members.splice(toIndex, 0, moved);
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaEnumeration') {
+                const vals = [...((d as any).enumValues ?? [])];
+                const [moved] = vals.splice(fromIndex, 1);
+                if (moved) {
+                  vals.splice(toIndex, 0, moved);
+                }
+                return { ...n, data: { ...d, enumValues: vals } };
               }
-              return { ...n, data: { ...n.data, members } };
+              return n;
             })
           }));
         },
 
         setEnumParent(nodeId: string, parentId: string | null) {
           set((state) => {
-            // Remove existing enum-extends edges from this node
             const filteredEdges = state.edges.filter(
               (e) => !(e.source === nodeId && e.data?.kind === 'enum-extends')
             );
 
             const parentNode = parentId ? state.nodes.find((n) => n.id === parentId) : null;
-            const parentName = parentNode?.data.name ?? undefined;
+            const parentName = (parentNode?.data as AnyGraphNode)?.name as string | undefined;
+            const parentRef = parentName
+              ? ({ ref: { name: parentName }, $refText: parentName } as any)
+              : undefined;
 
-            const updatedNodes = state.nodes.map((n) =>
-              n.id === nodeId ? { ...n, data: { ...n.data, parentName } } : n
-            );
+            const updatedNodes = state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaEnumeration') {
+                return { ...n, data: { ...d, parent: parentRef } } as TypeGraphNode;
+              }
+              return n;
+            });
 
             if (parentId) {
               const newEdge: TypeGraphEdge = {
@@ -677,20 +844,31 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // -----------------------------------------------------------------------
 
         addChoiceOption(nodeId: string, typeName: string) {
-          const newMember: MemberDisplay = {
-            name: typeName,
-            typeName,
-            isOverride: false
+          const newOption = {
+            $type: 'ChoiceOption',
+            typeCall: {
+              $type: 'TypeCall',
+              type: { $refText: typeName },
+              arguments: []
+            },
+            annotations: [],
+            synonyms: []
           };
 
           set((state) => {
-            const targetNodeId = state.nodes.find((n) => n.data.name === typeName)?.id;
+            const targetNodeId = state.nodes.find(
+              (n) => (n.data as AnyGraphNode).name === typeName
+            )?.id;
 
-            const updatedNodes = state.nodes.map((n) =>
-              n.id === nodeId
-                ? { ...n, data: { ...n.data, members: [...n.data.members, newMember] } }
-                : n
-            );
+            const updatedNodes = state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'Choice') {
+                const attrs = [...((d as any).attributes ?? []), newOption];
+                return { ...n, data: { ...d, attributes: attrs } };
+              }
+              return n;
+            });
 
             if (targetNodeId) {
               const newEdge: TypeGraphEdge = {
@@ -709,17 +887,17 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         removeChoiceOption(nodeId: string, typeName: string) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      members: n.data.members.filter((m) => m.typeName !== typeName)
-                    }
-                  }
-                : n
-            ),
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'Choice') {
+                const attrs = ((d as any).attributes ?? []).filter(
+                  (a: any) => a.typeCall?.type?.$refText !== typeName
+                );
+                return { ...n, data: { ...d, attributes: attrs } };
+              }
+              return n;
+            }),
             edges: state.edges.filter(
               (e) =>
                 !(
@@ -736,53 +914,103 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // -----------------------------------------------------------------------
 
         addInputParam(nodeId: string, paramName: string, typeName: string) {
+          const newInput = {
+            $type: 'Attribute',
+            name: paramName,
+            override: false,
+            typeCall: {
+              $type: 'TypeCall',
+              type: { $refText: typeName },
+              arguments: []
+            },
+            card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false },
+            annotations: [],
+            synonyms: []
+          };
+
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      members: [
-                        ...n.data.members,
-                        { name: paramName, typeName, cardinality: '(1..1)', isOverride: false }
-                      ]
-                    }
-                  }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaFunction') {
+                const inputs = [...((d as any).inputs ?? []), newInput];
+                return { ...n, data: { ...d, inputs } };
+              }
+              return n;
+            })
           }));
         },
 
         removeInputParam(nodeId: string, paramName: string) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      members: n.data.members.filter((m) => m.name !== paramName)
-                    }
-                  }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaFunction') {
+                const inputs = ((d as any).inputs ?? []).filter((i: any) => i.name !== paramName);
+                return { ...n, data: { ...d, inputs } };
+              }
+              return n;
+            })
           }));
         },
 
         updateOutputType(nodeId: string, typeName: string) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId ? { ...n, data: { ...n.data, outputType: typeName } } : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaFunction') {
+                const output = (d as any).output ?? {
+                  $type: 'Attribute',
+                  name: 'output',
+                  override: false,
+                  card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false }
+                };
+                return {
+                  ...n,
+                  data: {
+                    ...d,
+                    output: {
+                      ...output,
+                      typeCall: {
+                        $type: 'TypeCall',
+                        type: { $refText: typeName },
+                        arguments: []
+                      }
+                    }
+                  }
+                };
+              }
+              return n;
+            })
           }));
         },
 
         updateExpression(nodeId: string, expressionText: string) {
+          // Expression text is stored on conditions. This updates
+          // the first condition's expression $cstText for display purposes.
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId ? { ...n, data: { ...n.data, expressionText } } : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (
+                d.$type === 'RosettaFunction' ||
+                d.$type === 'Data' ||
+                d.$type === 'RosettaTypeAlias'
+              ) {
+                const conditions = [...((d as any).conditions ?? [])];
+                if (conditions.length > 0) {
+                  const cond = conditions[0];
+                  conditions[0] = {
+                    ...cond,
+                    expression: { ...cond.expression, $cstText: expressionText }
+                  };
+                }
+                return { ...n, data: { ...d, conditions } };
+              }
+              return n;
+            })
           }));
         },
 
@@ -808,33 +1036,35 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         addSynonym(nodeId: string, synonym: string) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      synonyms: [...(n.data.synonyms ?? []), synonym]
-                    }
-                  }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
+              if (d.$type === 'Data' || d.$type === 'Choice') {
+                const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
+                const synonyms = [...((d as any).synonyms ?? []), newSyn];
+                return { ...n, data: { ...d, synonyms } };
+              }
+              if (d.$type === 'RosettaEnumeration') {
+                const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
+                const synonyms = [...((d as any).synonyms ?? []), newSyn];
+                return { ...n, data: { ...d, synonyms } };
+              }
+              return n;
+            })
           }));
         },
 
         removeSynonym(nodeId: string, index: number) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      synonyms: (n.data.synonyms ?? []).filter((_, i) => i !== index)
-                    }
-                  }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              const synonyms = ((d as any).synonyms ?? []).filter(
+                (_: any, i: number) => i !== index
+              );
+              return { ...n, data: { ...d, synonyms } };
+            })
           }));
         },
 
@@ -843,34 +1073,54 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // -----------------------------------------------------------------------
 
         addAnnotation(nodeId: string, annotationName: string) {
+          const newAnnotationRef = {
+            $type: 'AnnotationRef',
+            annotation: { $refText: annotationName }
+          };
+
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      annotations: [...(n.data.annotations ?? []), { name: annotationName }]
-                    }
-                  }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              const annotations = [...((d as any).annotations ?? []), newAnnotationRef];
+              return { ...n, data: { ...d, annotations } };
+            })
           }));
         },
 
         removeAnnotation(nodeId: string, index: number) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      annotations: (n.data.annotations ?? []).filter((_, i) => i !== index)
-                    }
-                  }
-                : n
-            )
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              const annotations = ((d as any).annotations ?? []).filter(
+                (_: any, i: number) => i !== index
+              );
+              return { ...n, data: { ...d, annotations } };
+            })
+          }));
+        },
+
+        // -----------------------------------------------------------------------
+        // ReactFlow integration
+        // -----------------------------------------------------------------------
+
+        applyReactFlowNodeChanges(changes: NodeChange<TypeGraphNode>[]) {
+          // Filter out intermediate drag states to avoid polluting undo history.
+          // Only apply position changes when dragging is complete.
+          const meaningful = changes.filter((c) => {
+            if (c.type === 'position' && c.dragging) return false;
+            return true;
+          });
+          if (meaningful.length === 0) return;
+          set((state) => ({
+            nodes: applyNodeChanges(meaningful, state.nodes)
+          }));
+        },
+
+        applyReactFlowEdgeChanges(changes: EdgeChange<TypeGraphEdge>[]) {
+          set((state) => ({
+            edges: applyEdgeChanges(changes, state.edges)
           }));
         },
 

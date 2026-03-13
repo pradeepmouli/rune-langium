@@ -232,6 +232,43 @@ export function createWorkspaceFile(name: string, content: string): WorkspaceFil
 }
 
 // ---------------------------------------------------------------------------
+// Model file merging (T008) — integrate loaded reference models
+// ---------------------------------------------------------------------------
+
+import type { CachedFile, LoadedModel } from '../types/model-types.js';
+
+/**
+ * Merge loaded model files into the workspace as read-only entries.
+ * Model files are prefixed with the model source ID to avoid path collisions.
+ * Existing user files are preserved; model files are appended.
+ */
+export function mergeModelFiles(
+  currentFiles: WorkspaceFile[],
+  model: LoadedModel
+): WorkspaceFile[] {
+  // Remove any previous files from this model source
+  const userFiles = currentFiles.filter((f) => !f.path.startsWith(`[${model.source.id}]/`));
+
+  // Convert model files to read-only workspace files
+  const modelFiles: WorkspaceFile[] = model.files.map((f: CachedFile) => ({
+    name: f.path.split('/').pop() ?? f.path,
+    path: `[${model.source.id}]/${f.path}`,
+    content: f.content,
+    dirty: false,
+    readOnly: true
+  }));
+
+  return [...userFiles, ...modelFiles];
+}
+
+/**
+ * Remove all files from a specific model source.
+ */
+export function removeModelFiles(currentFiles: WorkspaceFile[], sourceId: string): WorkspaceFile[] {
+  return currentFiles.filter((f) => !f.path.startsWith(`[${sourceId}]/`));
+}
+
+// ---------------------------------------------------------------------------
 // External file change detection (T102)
 // ---------------------------------------------------------------------------
 

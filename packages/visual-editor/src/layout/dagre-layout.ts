@@ -22,7 +22,10 @@ const DEFAULT_LAYOUT_OPTIONS: Required<LayoutOptions> = {
  * Estimate node height based on number of members.
  */
 function estimateNodeHeight(node: TypeGraphNode): number {
-  const memberCount = node.data.members.length;
+  // Count members based on the AST type's field name
+  const d = node.data as Record<string, unknown>;
+  const members = (d.attributes ?? d.enumValues ?? d.inputs ?? d.features ?? []) as unknown[];
+  const memberCount = members.length;
   const headerHeight = 40;
   const memberHeight = 24;
   const padding = 16;

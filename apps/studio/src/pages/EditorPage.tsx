@@ -1,9 +1,8 @@
 /**
  * EditorPage — Main editor layout embedding RuneTypeGraph (T088, T027).
  *
- * Provides the graph canvas + side panels (source editor, detail panel)
- * in a responsive layout. Now uses SourceEditor (CodeMirror) instead
- * of read-only SourceView.
+ * Uses the zustand editor store as source of truth for graph state.
+ * Forms call store mutations directly — no roundtrip through the graph.
  */
 
 import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
@@ -12,23 +11,23 @@ import {
   RuneTypeGraph,
   NamespaceExplorerPanel,
   EditorFormPanel,
-  astToGraph,
-  BUILTIN_TYPES
+  ExpressionBuilder,
+  BUILTIN_TYPES,
+  AST_TYPE_TO_NODE_TYPE,
+  useEditorStore
 } from '@rune-langium/visual-editor';
 import type {
   RuneTypeGraphRef,
-  VisibilityState,
-  TypeGraphNode,
-  TypeNodeData,
+  AnyGraphNode,
   TypeOption,
   EditorFormActions,
-  ExpressionEditorSlotProps
+  ExpressionEditorSlotProps,
+  FunctionScope
 } from '@rune-langium/visual-editor';
 import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
-import { ExpressionEditor } from '../components/ExpressionEditor.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -69,88 +68,68 @@ export function EditorPage({
   const [showSource, setShowSource] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showEditor, setShowEditor] = useState(true);
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [selectedNodeData, setSelectedNodeData] = useState<TypeNodeData | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
   /** Tracks file paths explicitly opened in the source editor (by node navigation). */
   const [openedFilePaths, setOpenedFilePaths] = useState<Set<string>>(new Set<string>());
   /** Pending reveal to fire after source files update. */
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
 
-  // --- Namespace visibility state ---
-  const [explorerOpen, setExplorerOpen] = useState(true);
-  const [expandedNamespaces, setExpandedNamespaces] = useState<Set<string>>(new Set<string>());
-  const [hiddenNodeIds, setHiddenNodeIds] = useState<Set<string>>(new Set<string>());
-  const [visibilityInitialized, setVisibilityInitialized] = useState(false);
+  // --- Store subscriptions ---
+  const storeNodes = useEditorStore((s) => s.nodes);
+  const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
+  const visibility = useEditorStore((s) => s.visibility);
+  const explorerOpen = visibility.explorerOpen;
+  const expandedNamespaces = visibility.expandedNamespaces;
+  const hiddenNodeIds = visibility.hiddenNodeIds;
 
-  // All graph nodes (unpositionally) for the explorer tree
-  const allGraphNodes: TypeGraphNode[] = useMemo(() => {
-    if (models.length === 0) return [];
-    const { nodes } = astToGraph(models as unknown[]);
-    return nodes;
+  // Store actions (stable references)
+  const storeSelectNode = useEditorStore((s) => s.selectNode);
+  const storeToggleNamespace = useEditorStore((s) => s.toggleNamespace);
+  const storeToggleNodeVisibility = useEditorStore((s) => s.toggleNodeVisibility);
+  const storeExpandAllNamespaces = useEditorStore((s) => s.expandAllNamespaces);
+  const storeCollapseAllNamespaces = useEditorStore((s) => s.collapseAllNamespaces);
+  const storeToggleExplorer = useEditorStore((s) => s.toggleExplorer);
+
+  // --- Load models into store when prop changes ---
+  useEffect(() => {
+    if (models.length > 0) {
+      useEditorStore.getState().loadModels(models as unknown[]);
+    }
   }, [models]);
 
-  // Initialize visibility on first load / model change.
-  // All namespaces expanded (visible in explorer) but all nodes hidden
-  // so the graph starts empty. Users toggle individual nodes on.
+  // Derive selectedNodeData from store
+  const selectedNodeData: AnyGraphNode | null = useMemo(() => {
+    if (!selectedNodeId) return null;
+    const node = storeNodes.find((n) => n.id === selectedNodeId);
+    return (node?.data as unknown as AnyGraphNode) ?? null;
+  }, [selectedNodeId, storeNodes]);
+
+  // React to selection changes for panel expansion + source navigation
+  const prevSelectedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (allGraphNodes.length === 0) return;
+    if (selectedNodeId === prevSelectedRef.current) return;
+    prevSelectedRef.current = selectedNodeId;
 
-    if (!visibilityInitialized) {
-      const allNamespaces = new Set(allGraphNodes.map((n) => n.data.namespace));
-      const allNodeIds = new Set(allGraphNodes.map((n) => n.id));
-      setExpandedNamespaces(allNamespaces);
-      setHiddenNodeIds(allNodeIds);
-      setVisibilityInitialized(true);
+    if (!selectedNodeId || !selectedNodeData) return;
+
+    expandEditor();
+
+    // Resolve the node's source file and open it in the source tabs
+    const filePath = resolveNodeFile(selectedNodeData);
+    if (filePath) openFileInSource(filePath);
+
+    // Navigate source editor to the AST node's definition line
+    const cstNode = (
+      selectedNodeData.source as { $cstNode?: { range?: { start?: { line?: number } } } }
+    )?.$cstNode;
+    if (cstNode?.range?.start?.line !== undefined) {
+      const line = cstNode.range.start.line + 1;
+      if (filePath) {
+        pendingRevealRef.current = { line, filePath };
+      }
     }
-  }, [allGraphNodes]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const visibilityState: VisibilityState | undefined = useMemo(
-    () =>
-      visibilityInitialized
-        ? {
-            expandedNamespaces,
-            hiddenNodeIds,
-            explorerOpen
-          }
-        : undefined,
-    [visibilityInitialized, expandedNamespaces, hiddenNodeIds, explorerOpen]
-  );
-
-  const handleToggleNamespace = useCallback((namespace: string) => {
-    setExpandedNamespaces((prev) => {
-      const next = new Set(prev);
-      if (next.has(namespace)) {
-        next.delete(namespace);
-      } else {
-        next.add(namespace);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleToggleNode = useCallback((nodeId: string) => {
-    setHiddenNodeIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleExpandAll = useCallback(() => {
-    const allNs = new Set(allGraphNodes.map((n) => n.data.namespace));
-    setExpandedNamespaces(allNs);
-    setHiddenNodeIds(new Set<string>());
-  }, [allGraphNodes]);
-
-  const handleCollapseAll = useCallback(() => {
-    setExpandedNamespaces(new Set<string>());
-    setHiddenNodeIds(new Set<string>());
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNodeId, selectedNodeData]);
 
   // --- Collapsible panel expand helpers (needed by navigation handlers) ---
   const expandSource = useCallback(() => {
@@ -172,9 +151,30 @@ export function EditorPage({
     setShowEditor(false);
   }, []);
 
+  // Derive FunctionScope from the selected function's data for ExpressionBuilder
+  const functionScope: FunctionScope = useMemo(() => {
+    const d = selectedNodeData as any;
+    if (!d || d.$type !== 'RosettaFunction') {
+      return { inputs: [], output: null, aliases: [] };
+    }
+    return {
+      inputs: (d.inputs ?? []).map((p: any) => ({
+        name: p.name,
+        typeName: p.typeCall?.type?.$refText,
+        cardinality: p.card
+          ? `(${p.card.inf}..${p.card.unbounded ? '*' : (p.card.sup ?? p.card.inf)})`
+          : undefined
+      })),
+      output: d.output?.typeCall?.type?.$refText
+        ? { name: 'output', typeName: d.output.typeCall.type.$refText }
+        : null,
+      aliases: []
+    };
+  }, [selectedNodeData]);
+
   const renderExpressionEditor = useCallback(
-    (props: ExpressionEditorSlotProps) => <ExpressionEditor {...props} />,
-    []
+    (props: ExpressionEditorSlotProps) => <ExpressionBuilder {...props} scope={functionScope} />,
+    [functionScope]
   );
 
   // --- Stable ref for files (prevents stale closure in handleSourceChange) ---
@@ -215,7 +215,6 @@ export function EditorPage({
   }, [models, files]);
 
   // Build nodeId → file path mapping for precise node→file resolution.
-  // Unlike namespaceToFile, this does not collide when files share a namespace.
   const nodeIdToFilePath = useMemo(() => {
     const map = new Map<string, string>();
     for (let i = 0; i < models.length && i < files.length; i++) {
@@ -232,8 +231,6 @@ export function EditorPage({
       for (const element of model.elements ?? []) {
         const name = element.name ?? 'unknown';
         const nodeId = `${ns}::${name}`;
-        // astToGraph keeps the first node encountered for duplicate nodeId values.
-        // Keep first-write semantics here so source-file resolution matches the graph.
         if (!map.has(nodeId)) {
           map.set(nodeId, files[i]!.path);
         }
@@ -244,8 +241,9 @@ export function EditorPage({
 
   /** Resolve which workspace file contains a given node (by unique nodeId). */
   const resolveNodeFile = useCallback(
-    (nodeData: TypeNodeData): string | undefined => {
-      const nodeId = `${nodeData.namespace}::${nodeData.name}`;
+    (nodeData: AnyGraphNode): string | undefined => {
+      const d = nodeData as any;
+      const nodeId = `${d.namespace}::${d.name}`;
       return nodeIdToFilePath.get(nodeId);
     },
     [nodeIdToFilePath]
@@ -265,40 +263,15 @@ export function EditorPage({
   const handleExplorerSelectNode = useCallback(
     (nodeId: string) => {
       graphRef.current?.focusNode(nodeId);
-
-      const node = allGraphNodes.find((n) => n.id === nodeId);
-      if (!node) return;
-
-      // Synchronise selection state with graph + editor form
-      setSelectedNode(nodeId);
-      setSelectedNodeData(node.data);
-      expandEditor();
-
-      // Resolve the node's source file and open it in the source tabs
-      // (but do NOT auto-expand the source panel — user must click Source or double-click)
-      if (node.data.source) {
-        const filePath = resolveNodeFile(node.data);
-        if (filePath) openFileInSource(filePath);
-
-        const cstNode = (
-          node.data.source as { $cstNode?: { range?: { start?: { line?: number } } } }
-        )?.$cstNode;
-        if (cstNode?.range?.start?.line !== undefined) {
-          const line = cstNode.range.start.line + 1;
-          if (filePath) {
-            pendingRevealRef.current = { line, filePath };
-          }
-        }
-      }
+      storeSelectNode(nodeId);
     },
-    [allGraphNodes, expandEditor, resolveNodeFile, openFileInSource]
+    [storeSelectNode]
   );
 
   const handleModelChanged = useCallback(
     (serialized: Map<string, string>) => {
       const currentFiles = filesRef.current;
       const updatedFiles = currentFiles.map((f) => {
-        // Find serialized text that maps to this file
         for (const [ns, text] of serialized) {
           if (namespaceToFile.get(ns) === f.path) {
             return { ...f, content: text, dirty: true };
@@ -328,7 +301,6 @@ export function EditorPage({
     const exists = sourceEditorFiles.some((f) => f.path === pending.filePath);
     if (exists) {
       pendingRevealRef.current = null;
-      // Defer to next frame so SourceEditor has processed the new files prop
       requestAnimationFrame(() => {
         sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
       });
@@ -343,7 +315,6 @@ export function EditorPage({
         next.delete(filePath);
         return next;
       });
-      // If the closed file was active, switch to the nearest remaining tab
       if (activeEditorFile === filePath) {
         const remaining = files.filter((f) => openedFilePaths.has(f.path) && f.path !== filePath);
         setActiveEditorFile(remaining[0]?.path);
@@ -377,53 +348,11 @@ export function EditorPage({
     }
   }, []);
 
-  const handleNodeSelect = useCallback(
-    (nodeId: string, nodeData?: TypeNodeData) => {
-      setSelectedNode(nodeId ?? null);
-      if (nodeId && nodeData) {
-        setSelectedNodeData(nodeData);
-        expandEditor();
-
-        // Resolve the node's source file and open it in the source tabs
-        // (but do NOT auto-expand the source panel)
-        const filePath = resolveNodeFile(nodeData);
-        if (filePath) openFileInSource(filePath);
-
-        // Navigate source editor to the AST node's definition line
-        const cstNode = (
-          nodeData.source as { $cstNode?: { range?: { start?: { line?: number } } } }
-        )?.$cstNode;
-        if (cstNode?.range?.start?.line !== undefined) {
-          const line = cstNode.range.start.line + 1;
-          if (filePath) {
-            pendingRevealRef.current = { line, filePath };
-          }
-        }
-      } else {
-        setSelectedNodeData(null);
-      }
-    },
-    [expandEditor, resolveNodeFile, openFileInSource]
-  );
-
   const handleNodeDoubleClick = useCallback(
-    (nodeId: string) => {
-      graphRef.current?.focusNode(nodeId);
-      // T038: Open source panel on double-click for editor navigation
+    (_nodeId: string) => {
       expandSource();
     },
     [expandSource]
-  );
-
-  // Keep the editor form in sync when node data changes (e.g. attribute
-  // type or cardinality edited via the form itself).
-  const handleNodeDataChanged = useCallback(
-    (nodeId: string, data: TypeNodeData) => {
-      if (nodeId === selectedNode) {
-        setSelectedNodeData(data);
-      }
-    },
-    [selectedNode]
   );
 
   const getSerializedFiles = useCallback((): Map<string, string> => {
@@ -443,50 +372,48 @@ export function EditorPage({
       label: t,
       kind: 'builtin' as const
     }));
-    const graphOptions: TypeOption[] = allGraphNodes.map((n) => ({
+    const graphOptions: TypeOption[] = storeNodes.map((n) => ({
       value: n.id,
       label: n.data.name,
-      kind: n.data.kind,
+      kind: (AST_TYPE_TO_NODE_TYPE[(n.data as any).$type] ?? 'data') as TypeOption['kind'],
       namespace: n.data.namespace
     }));
     return [...builtinOptions, ...graphOptions];
-  }, [allGraphNodes]);
+  }, [storeNodes]);
 
-  // --- Editor form actions wired through graphRef ---
-  const editorActions: EditorFormActions = useMemo(
-    () => ({
-      renameType: (nodeId, newName) => graphRef.current?.renameType(nodeId, newName),
-      deleteType: (nodeId) => graphRef.current?.deleteType(nodeId),
-      updateDefinition: (nodeId, def) => graphRef.current?.updateDefinition(nodeId, def),
-      updateComments: (nodeId, comments) => graphRef.current?.updateComments(nodeId, comments),
-      addSynonym: (nodeId, synonym) => graphRef.current?.addSynonym(nodeId, synonym),
-      removeSynonym: (nodeId, index) => graphRef.current?.removeSynonym(nodeId, index),
-      addAttribute: (nodeId, name, type, card) =>
-        graphRef.current?.addAttribute(nodeId, name, type, card),
-      removeAttribute: (nodeId, name) => graphRef.current?.removeAttribute(nodeId, name),
+  // --- Editor form actions wired to store ---
+  const editorActions: EditorFormActions = useMemo(() => {
+    const s = useEditorStore.getState;
+    return {
+      renameType: (nodeId, newName) => s().renameType(nodeId, newName),
+      deleteType: (nodeId) => s().deleteType(nodeId),
+      updateDefinition: (nodeId, def) => s().updateDefinition(nodeId, def),
+      updateComments: (nodeId, comments) => s().updateComments(nodeId, comments),
+      addSynonym: (nodeId, synonym) => s().addSynonym(nodeId, synonym),
+      removeSynonym: (nodeId, index) => s().removeSynonym(nodeId, index),
+      addAttribute: (nodeId, name, type, card) => s().addAttribute(nodeId, name, type, card),
+      removeAttribute: (nodeId, name) => s().removeAttribute(nodeId, name),
       updateAttribute: (nodeId, oldN, newN, type, card) =>
-        graphRef.current?.updateAttribute(nodeId, oldN, newN, type, card),
-      reorderAttribute: (nodeId, from, to) => graphRef.current?.reorderAttribute(nodeId, from, to),
-      setInheritance: (childId, parentId) => graphRef.current?.setInheritance(childId, parentId),
-      addEnumValue: (nodeId, name, display) =>
-        graphRef.current?.addEnumValue(nodeId, name, display),
-      removeEnumValue: (nodeId, name) => graphRef.current?.removeEnumValue(nodeId, name),
+        s().updateAttribute(nodeId, oldN, newN, type, card),
+      reorderAttribute: (nodeId, from, to) => s().reorderAttribute(nodeId, from, to),
+      setInheritance: (childId, parentId) => s().setInheritance(childId, parentId),
+      addEnumValue: (nodeId, name, display) => s().addEnumValue(nodeId, name, display),
+      removeEnumValue: (nodeId, name) => s().removeEnumValue(nodeId, name),
       updateEnumValue: (nodeId, oldN, newN, display) =>
-        graphRef.current?.updateEnumValue(nodeId, oldN, newN, display),
-      reorderEnumValue: (nodeId, from, to) => graphRef.current?.reorderEnumValue(nodeId, from, to),
-      setEnumParent: (nodeId, parentId) => graphRef.current?.setEnumParent(nodeId, parentId),
-      addChoiceOption: (nodeId, type) => graphRef.current?.addChoiceOption(nodeId, type),
-      removeChoiceOption: (nodeId, type) => graphRef.current?.removeChoiceOption(nodeId, type),
-      addInputParam: (nodeId, name, type) => graphRef.current?.addInputParam(nodeId, name, type),
-      removeInputParam: (nodeId, name) => graphRef.current?.removeInputParam(nodeId, name),
-      updateOutputType: (nodeId, type) => graphRef.current?.updateOutputType(nodeId, type),
-      updateExpression: (nodeId, expr) => graphRef.current?.updateExpression(nodeId, expr),
-      addAnnotation: (nodeId, name) => graphRef.current?.addAnnotation(nodeId, name),
-      removeAnnotation: (nodeId, index) => graphRef.current?.removeAnnotation(nodeId, index),
-      validate: () => graphRef.current?.validate() ?? []
-    }),
-    []
-  );
+        s().updateEnumValue(nodeId, oldN, newN, display),
+      reorderEnumValue: (nodeId, from, to) => s().reorderEnumValue(nodeId, from, to),
+      setEnumParent: (nodeId, parentId) => s().setEnumParent(nodeId, parentId),
+      addChoiceOption: (nodeId, type) => s().addChoiceOption(nodeId, type),
+      removeChoiceOption: (nodeId, type) => s().removeChoiceOption(nodeId, type),
+      addInputParam: (nodeId, name, type) => s().addInputParam(nodeId, name, type),
+      removeInputParam: (nodeId, name) => s().removeInputParam(nodeId, name),
+      updateOutputType: (nodeId, type) => s().updateOutputType(nodeId, type),
+      updateExpression: (nodeId, expr) => s().updateExpression(nodeId, expr),
+      addAnnotation: (nodeId, name) => s().addAnnotation(nodeId, name),
+      removeAnnotation: (nodeId, index) => s().removeAnnotation(nodeId, index),
+      validate: () => s().validate()
+    };
+  }, []);
 
   const handleFitView = useCallback(() => {
     graphRef.current?.fitView();
@@ -507,7 +434,7 @@ export function EditorPage({
           <Button
             variant={explorerOpen ? 'default' : 'secondary'}
             size="sm"
-            onClick={() => setExplorerOpen((v) => !v)}
+            onClick={storeToggleExplorer}
             title="Toggle namespace explorer"
           >
             Explorer
@@ -563,14 +490,14 @@ export function EditorPage({
           >
             <ScrollArea className="flex-1">
               <NamespaceExplorerPanel
-                nodes={allGraphNodes}
+                nodes={storeNodes}
                 expandedNamespaces={expandedNamespaces}
                 hiddenNodeIds={hiddenNodeIds}
-                selectedNodeId={selectedNode}
-                onToggleNamespace={handleToggleNamespace}
-                onToggleNode={handleToggleNode}
-                onExpandAll={handleExpandAll}
-                onCollapseAll={handleCollapseAll}
+                selectedNodeId={selectedNodeId}
+                onToggleNamespace={storeToggleNamespace}
+                onToggleNode={storeToggleNodeVisibility}
+                onExpandAll={storeExpandAllNamespaces}
+                onCollapseAll={storeCollapseAllNamespaces}
                 onSelectNode={handleExplorerSelectNode}
               />
             </ScrollArea>
@@ -582,7 +509,6 @@ export function EditorPage({
           <ResizablePanel id="graph" defaultSize={70}>
             <RuneTypeGraph
               ref={graphRef}
-              models={models as unknown[]}
               config={{
                 layout: { direction: 'TB' },
                 showControls: true,
@@ -590,12 +516,9 @@ export function EditorPage({
                 readOnly: false
               }}
               callbacks={{
-                onNodeSelect: handleNodeSelect,
                 onNodeDoubleClick: handleNodeDoubleClick,
-                onModelChanged: handleModelChanged,
-                onNodeDataChanged: handleNodeDataChanged
+                onModelChanged: handleModelChanged
               }}
-              visibilityState={visibilityState}
             />
           </ResizablePanel>
 
@@ -637,10 +560,10 @@ export function EditorPage({
           >
             <EditorFormPanel
               nodeData={selectedNodeData}
-              nodeId={selectedNode}
+              nodeId={selectedNodeId}
               availableTypes={availableTypes}
               actions={editorActions}
-              allNodes={allGraphNodes}
+              allNodes={storeNodes}
               renderExpressionEditor={renderExpressionEditor}
               onClose={collapseEditor}
             />
@@ -653,7 +576,6 @@ export function EditorPage({
         <DiagnosticsPanel
           fileDiagnostics={fileDiagnostics}
           onNavigate={(uri, _line, _char) => {
-            // Normalise URI to a path for comparison (strip file:// prefix)
             const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
             const fileName = normPath.split('/').pop() ?? normPath;
             const file = files.find(
@@ -673,7 +595,7 @@ export function EditorPage({
       <footer className="flex items-center gap-4 px-3 py-1 text-sm text-muted-foreground bg-card">
         <span>{models.length} model(s) loaded</span>
         <span>{files.filter((f) => f.dirty).length} modified</span>
-        {selectedNode && <span>Selected: {selectedNode}</span>}
+        {selectedNodeId && <span>Selected: {selectedNodeId}</span>}
         {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
       </footer>
     </div>
