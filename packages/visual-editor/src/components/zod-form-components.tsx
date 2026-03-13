@@ -25,6 +25,9 @@ import {
   FieldTitle
 } from '@rune-langium/design-system/ui/field';
 
+// z2f 0.4.0 codegen emits FieldControl — alias to FieldContent
+const FieldControl = FieldContent;
+
 import {
   Select as RadixSelect,
   SelectContent,
@@ -47,6 +50,7 @@ export const Textarea = DesignTextarea;
 export {
   Field,
   FieldContent,
+  FieldControl,
   FieldDescription,
   FieldError,
   FieldGroup,
