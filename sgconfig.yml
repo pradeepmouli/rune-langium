@@ -1,0 +1,6 @@
+ruleDirs:
+- /Users/pmouli/GitHub.nosync/rune-langium/rules
+testConfigs:
+- testDir: /Users/pmouli/GitHub.nosync/rune-langium/rule-tests
+utilDirs:
+- /Users/pmouli/GitHub.nosync/rune-langium/utils
