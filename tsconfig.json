@@ -9,8 +9,6 @@
     "allowJs": false,
     "sourceMap": true,
     "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noPropertyAccessFromIndexSignature": true,
     "verbatimModuleSyntax": true,
     "noEmit": false,
     "paths": {
