@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DataTypeForm } from '../../src/components/editors/DataTypeForm.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 
 function makeActions(
   overrides: Partial<EditorFormActions<'data'>> = {}
@@ -39,20 +39,36 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'test::Event', label: 'Event', kind: 'data', namespace: 'test' }
 ];
 
-function makeDataNode(): TypeNodeData<'data'> {
+function makeDataNode(): AnyGraphNode {
   return {
-    kind: 'data',
+    $type: 'Data',
     name: 'Trade',
     namespace: 'test.model',
     definition: 'A financial trade',
-    members: [
-      { name: 'tradeDate', typeName: 'date', cardinality: '(1..1)', isOverride: false },
-      { name: 'currency', typeName: 'string', cardinality: '(1..1)', isOverride: false }
+    attributes: [
+      {
+        $type: 'Attribute',
+        name: 'tradeDate',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'date' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      },
+      {
+        $type: 'Attribute',
+        name: 'currency',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'string' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      }
     ],
-    parentName: 'Event',
+    superType: { $refText: 'Event' },
+    conditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
     hasExternalRefs: false,
     errors: []
-  };
+  } as AnyGraphNode;
 }
 
 describe('DataTypeForm', () => {
@@ -189,7 +205,7 @@ describe('DataTypeForm', () => {
   it('shows empty state when no attributes', () => {
     const actions = makeActions();
     const data = makeDataNode();
-    data.members = [];
+    (data as any).attributes = [];
 
     render(
       <DataTypeForm

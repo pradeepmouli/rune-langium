@@ -97,6 +97,44 @@ type Leaf extends Middle:
 `;
 
 /**
+ * Model with function types including expressions and conditions.
+ */
+export const FUNCTION_MODEL_SOURCE = `
+namespace test.funcs
+version "1.0.0"
+
+type Money:
+  amount number (1..1)
+  currency string (1..1)
+
+func Add:
+  inputs:
+    a number (1..1)
+    b number (1..1)
+  output:
+    result number (1..1)
+  set result:
+    a + b
+
+func FilterPositive:
+  inputs:
+    values number (0..*)
+  output:
+    result number (0..*)
+  set result:
+    values filter [ item > 0 ]
+
+func Conditional:
+  inputs:
+    flag boolean (1..1)
+    x number (1..1)
+  output:
+    result number (1..1)
+  set result:
+    if flag then x else 0
+`;
+
+/**
  * Empty model (no types).
  */
 export const EMPTY_MODEL_SOURCE = `

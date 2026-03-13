@@ -7,14 +7,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
-import { astToGraph } from '../../src/adapters/ast-to-graph.js';
-import { graphToModels } from '../../src/adapters/graph-to-ast.js';
-import type {
-  SyntheticElement,
-  SyntheticData,
-  SyntheticChoice,
-  SyntheticEnum
-} from '../../src/adapters/graph-to-ast.js';
+import { astToModel } from '../../src/adapters/ast-to-model.js';
+import { modelsToAst } from '../../src/adapters/model-to-ast.js';
+import type { ModelOutput } from '../../src/adapters/model-to-ast.js';
 import {
   SIMPLE_INHERITANCE_SOURCE,
   COMBINED_MODEL_SOURCE,
@@ -25,21 +20,32 @@ import {
 // Inline serializer (same approach as RuneTypeGraph for roundtrip)
 // ---------------------------------------------------------------------------
 
-function serializeSyntheticElement(el: SyntheticElement): string {
-  if (el.$type === 'Data') return serializeData(el as SyntheticData);
-  if (el.$type === 'Choice') return serializeChoice(el as SyntheticChoice);
-  if (el.$type === 'RosettaEnumeration') return serializeEnum(el as SyntheticEnum);
+// Use Record-based element type since ModelOutput.elements is unknown[]
+type AnyElement = Record<string, unknown>;
+
+function serializeElement(el: unknown): string {
+  const e = el as AnyElement;
+  if (e.$type === 'Data') return serializeData(e);
+  if (e.$type === 'Choice') return serializeChoice(e);
+  if (e.$type === 'RosettaEnumeration') return serializeEnum(e);
   return '';
 }
 
-function serializeData(data: SyntheticData): string {
+function serializeData(data: AnyElement): string {
   const lines: string[] = [];
-  let header = `type ${data.name}`;
-  const parent = data.superType?.ref?.name ?? data.superType?.$refText;
+  let header = `type ${data.name as string}`;
+  const superType = data.superType as { ref?: { name?: string }; $refText?: string } | undefined;
+  const parent = superType?.ref?.name ?? superType?.$refText;
   if (parent) header += ` extends ${parent}`;
   header += ':';
   lines.push(header);
-  for (const attr of data.attributes) {
+  const attributes = (data.attributes ?? []) as Array<{
+    name: string;
+    typeCall?: { type?: { $refText?: string } };
+    card: { inf: number; sup?: number; unbounded: boolean };
+    override?: boolean;
+  }>;
+  for (const attr of attributes) {
     const typeName = attr.typeCall?.type?.$refText ?? 'string';
     const card = attr.card;
     const cardStr = card.unbounded ? `(${card.inf}..*)` : `(${card.inf}..${card.sup ?? card.inf})`;
@@ -49,30 +55,34 @@ function serializeData(data: SyntheticData): string {
   return lines.join('\n');
 }
 
-function serializeChoice(choice: SyntheticChoice): string {
+function serializeChoice(choice: AnyElement): string {
   const lines: string[] = [];
-  lines.push(`choice ${choice.name}:`);
-  for (const opt of choice.attributes ?? []) {
+  lines.push(`choice ${choice.name as string}:`);
+  const attributes = (choice.attributes ?? []) as Array<{
+    typeCall?: { type?: { $refText?: string } };
+  }>;
+  for (const opt of attributes) {
     const name = opt.typeCall?.type?.$refText ?? '???';
     lines.push(`  ${name}`);
   }
   return lines.join('\n');
 }
 
-function serializeEnum(enumType: SyntheticEnum): string {
+function serializeEnum(enumType: AnyElement): string {
   const lines: string[] = [];
-  lines.push(`enum ${enumType.name}:`);
-  for (const val of enumType.enumValues ?? []) {
+  lines.push(`enum ${enumType.name as string}:`);
+  const enumValues = (enumType.enumValues ?? []) as Array<{ name: string }>;
+  for (const val of enumValues) {
     lines.push(`  ${val.name}`);
   }
   return lines.join('\n');
 }
 
-function serializeModels(models: ReturnType<typeof graphToModels>): string {
+function serializeModels(models: ModelOutput[]): string {
   const parts: string[] = [];
   for (const model of models) {
     const header = `namespace ${model.name}`;
-    const elements = model.elements.map(serializeSyntheticElement).filter(Boolean);
+    const elements = model.elements.map(serializeElement).filter(Boolean);
     parts.push([header, '', ...elements].join('\n'));
   }
   return parts.join('\n\n');
@@ -88,10 +98,10 @@ describe('Round-trip Conformance (T003)', () => {
     const original = await parse(source);
 
     // Step 2: Convert to graph
-    const { nodes, edges } = astToGraph([original.value]);
+    const { nodes, edges } = astToModel([original.value]);
 
     // Step 3: Convert graph back to models
-    const syntheticModels = graphToModels(nodes, edges);
+    const syntheticModels = modelsToAst(nodes, edges);
 
     // Step 4: Serialize to .rosetta text
     const serialized = serializeModels(syntheticModels);

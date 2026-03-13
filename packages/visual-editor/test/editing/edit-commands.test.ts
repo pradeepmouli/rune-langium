@@ -38,7 +38,7 @@ describe('Edit Commands', () => {
 
       const newNode = updated.nodes.find((n) => n.data.name === 'NewType');
       expect(newNode).toBeDefined();
-      expect(newNode!.data.kind).toBe('data');
+      expect((newNode!.data as any).$type).toBe('Data');
       expect(newNode!.data.namespace).toBe('test.edit');
     });
 
@@ -48,7 +48,7 @@ describe('Edit Commands', () => {
 
       const newNode = store.getState().nodes.find((n) => n.data.name === 'MyChoice');
       expect(newNode).toBeDefined();
-      expect(newNode!.data.kind).toBe('choice');
+      expect((newNode!.data as any).$type).toBe('Choice');
     });
 
     it('should add a new enum type node', () => {
@@ -57,7 +57,7 @@ describe('Edit Commands', () => {
 
       const newNode = store.getState().nodes.find((n) => n.data.name === 'MyEnum');
       expect(newNode).toBeDefined();
-      expect(newNode!.data.kind).toBe('enum');
+      expect((newNode!.data as any).$type).toBe('RosettaEnumeration');
     });
 
     it('should return the new node id', () => {
@@ -134,37 +134,41 @@ describe('Edit Commands', () => {
   describe('addAttribute', () => {
     it('should add an attribute to a data node', () => {
       const state = store.getState();
-      const dataNode = state.nodes.find((n) => n.data.kind === 'data');
+      const dataNode = state.nodes.find((n) => (n.data as any).$type === 'Data');
       expect(dataNode).toBeDefined();
 
-      const initialMembers = dataNode!.data.members.length;
+      const initialAttrs = ((dataNode!.data as any).attributes ?? []).length;
 
       state.addAttribute(dataNode!.id, 'newAttr', 'string', '1..1');
 
       const updated = store.getState();
       const updatedNode = updated.nodes.find((n) => n.id === dataNode!.id);
-      expect(updatedNode!.data.members.length).toBe(initialMembers + 1);
+      expect(((updatedNode!.data as any).attributes ?? []).length).toBe(initialAttrs + 1);
 
-      const newMember = updatedNode!.data.members.find((m) => m.name === 'newAttr');
+      const newMember = ((updatedNode!.data as any).attributes ?? []).find(
+        (m: any) => m.name === 'newAttr'
+      );
       expect(newMember).toBeDefined();
-      expect(newMember!.typeName).toBe('string');
-      expect(newMember!.cardinality).toBe('(1..1)');
+      expect(newMember!.typeCall?.type?.$refText).toBe('string');
+      expect(newMember!.card).toMatchObject({ inf: 1, sup: 1, unbounded: false });
     });
   });
 
   describe('removeAttribute', () => {
     it('should remove an attribute from a node', () => {
       const state = store.getState();
-      const dataNode = state.nodes.find((n) => n.data.kind === 'data');
+      const dataNode = state.nodes.find((n) => (n.data as any).$type === 'Data');
       expect(dataNode).toBeDefined();
-      expect(dataNode!.data.members.length).toBeGreaterThan(0);
+      expect(((dataNode!.data as any).attributes ?? []).length).toBeGreaterThan(0);
 
-      const attrName = dataNode!.data.members[0].name;
+      const attrName = ((dataNode!.data as any).attributes ?? [])[0].name;
       state.removeAttribute(dataNode!.id, attrName);
 
       const updated = store.getState();
       const updatedNode = updated.nodes.find((n) => n.id === dataNode!.id);
-      expect(updatedNode!.data.members.find((m) => m.name === attrName)).toBeUndefined();
+      expect(
+        ((updatedNode!.data as any).attributes ?? []).find((m: any) => m.name === attrName)
+      ).toBeUndefined();
     });
   });
 
@@ -211,15 +215,17 @@ describe('Edit Commands', () => {
   describe('updateCardinality', () => {
     it('should update the cardinality of an attribute', () => {
       const state = store.getState();
-      const dataNode = state.nodes.find((n) => n.data.kind === 'data');
-      const attrName = dataNode!.data.members[0].name;
+      const dataNode = state.nodes.find((n) => (n.data as any).$type === 'Data');
+      const attrName = ((dataNode!.data as any).attributes ?? [])[0].name;
 
       state.updateCardinality(dataNode!.id, attrName, '0..*');
 
       const updated = store.getState();
       const updatedNode = updated.nodes.find((n) => n.id === dataNode!.id);
-      const member = updatedNode!.data.members.find((m) => m.name === attrName);
-      expect(member!.cardinality).toBe('(0..*)');
+      const member = ((updatedNode!.data as any).attributes ?? []).find(
+        (m: any) => m.name === attrName
+      );
+      expect(member!.card).toMatchObject({ inf: 0, unbounded: true });
     });
   });
 });

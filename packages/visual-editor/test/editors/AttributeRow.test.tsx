@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { AttributeRow } from '../../src/components/editors/AttributeRow.js';
-import type { MemberDisplay, TypeOption } from '../../src/types.js';
+import type { TypeOption } from '../../src/types.js';
 import type { MemberValues } from '../../src/schemas/form-schemas.js';
 
 const AVAILABLE_TYPES: TypeOption[] = [
@@ -22,7 +22,16 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::date', label: 'date', kind: 'builtin' }
 ];
 
-function baseMember(overrides: Partial<MemberDisplay> = {}): MemberDisplay {
+/** A simple member data shape for test fixtures. */
+interface TestMember {
+  name: string;
+  typeName: string;
+  cardinality: string;
+  isOverride: boolean;
+  displayName?: string;
+}
+
+function baseMember(overrides: Partial<TestMember> = {}): TestMember {
   return {
     name: 'tradeDate',
     typeName: 'date',
@@ -32,8 +41,8 @@ function baseMember(overrides: Partial<MemberDisplay> = {}): MemberDisplay {
   };
 }
 
-/** Convert MemberDisplay to MemberValues for the form. */
-function toMemberValues(m: MemberDisplay): MemberValues {
+/** Convert TestMember to MemberValues for the form. */
+function toMemberValues(m: TestMember): MemberValues {
   return {
     name: m.name,
     typeName: m.typeName ?? 'string',

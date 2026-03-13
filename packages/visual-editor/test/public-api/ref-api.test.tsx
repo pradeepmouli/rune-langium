@@ -3,22 +3,36 @@
  *
  * Verifies that the imperative ref API works correctly:
  * fitView, focusNode, search, setFilters, getFilters, relayout.
+ *
+ * Models are loaded into the zustand editor store (source of truth),
+ * not passed as props. The graph subscribes to the store.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, act } from '@testing-library/react';
 import { createRef } from 'react';
 import { parse } from '@rune-langium/core';
 import { RuneTypeGraph } from '../../src/components/RuneTypeGraph.js';
+import { useEditorStore } from '../../src/store/editor-store.js';
 import type { RuneTypeGraphRef } from '../../src/types.js';
 import { COMBINED_MODEL_SOURCE } from '../helpers/fixture-loader.js';
+
+/** Load models into the store before rendering the graph. */
+function loadModelsIntoStore(models: unknown) {
+  act(() => {
+    useEditorStore.getState().loadModels(models);
+    // Expand all namespaces so nodes are visible
+    useEditorStore.getState().expandAllNamespaces();
+  });
+}
 
 describe('RuneTypeGraph ref API', () => {
   it('exposes fitView via ref', async () => {
     const ref = createRef<RuneTypeGraphRef>();
     const result = await parse(COMBINED_MODEL_SOURCE);
+    loadModelsIntoStore(result.value);
 
-    render(<RuneTypeGraph ref={ref} models={result.value} />);
+    render(<RuneTypeGraph ref={ref} />);
 
     expect(ref.current).toBeDefined();
     expect(typeof ref.current!.fitView).toBe('function');
@@ -31,8 +45,9 @@ describe('RuneTypeGraph ref API', () => {
   it('exposes search via ref', async () => {
     const ref = createRef<RuneTypeGraphRef>();
     const result = await parse(COMBINED_MODEL_SOURCE);
+    loadModelsIntoStore(result.value);
 
-    render(<RuneTypeGraph ref={ref} models={result.value} />);
+    render(<RuneTypeGraph ref={ref} />);
 
     let results: string[] = [];
     act(() => {
@@ -44,8 +59,9 @@ describe('RuneTypeGraph ref API', () => {
   it('exposes search returning empty array for no match', async () => {
     const ref = createRef<RuneTypeGraphRef>();
     const result = await parse(COMBINED_MODEL_SOURCE);
+    loadModelsIntoStore(result.value);
 
-    render(<RuneTypeGraph ref={ref} models={result.value} />);
+    render(<RuneTypeGraph ref={ref} />);
 
     let results: string[] = [];
     act(() => {
@@ -57,8 +73,9 @@ describe('RuneTypeGraph ref API', () => {
   it('exposes setFilters and getFilters', async () => {
     const ref = createRef<RuneTypeGraphRef>();
     const result = await parse(COMBINED_MODEL_SOURCE);
+    loadModelsIntoStore(result.value);
 
-    render(<RuneTypeGraph ref={ref} models={result.value} />);
+    render(<RuneTypeGraph ref={ref} />);
 
     act(() => {
       ref.current!.setFilters({ kinds: ['data'], hideOrphans: true });
@@ -72,8 +89,9 @@ describe('RuneTypeGraph ref API', () => {
   it('exposes relayout', async () => {
     const ref = createRef<RuneTypeGraphRef>();
     const result = await parse(COMBINED_MODEL_SOURCE);
+    loadModelsIntoStore(result.value);
 
-    render(<RuneTypeGraph ref={ref} models={result.value} />);
+    render(<RuneTypeGraph ref={ref} />);
 
     expect(typeof ref.current!.relayout).toBe('function');
     // Should not throw
@@ -85,8 +103,9 @@ describe('RuneTypeGraph ref API', () => {
   it('exposes focusNode', async () => {
     const ref = createRef<RuneTypeGraphRef>();
     const result = await parse(COMBINED_MODEL_SOURCE);
+    loadModelsIntoStore(result.value);
 
-    render(<RuneTypeGraph ref={ref} models={result.value} />);
+    render(<RuneTypeGraph ref={ref} />);
 
     expect(typeof ref.current!.focusNode).toBe('function');
     // Should not throw even with unknown node ID
@@ -95,25 +114,29 @@ describe('RuneTypeGraph ref API', () => {
     });
   });
 
-  it('fires onNodeSelect callback', async () => {
-    const ref = createRef<RuneTypeGraphRef>();
-    const onNodeSelect = vi.fn();
+  it('selection goes through the store', async () => {
     const result = await parse(COMBINED_MODEL_SOURCE);
+    loadModelsIntoStore(result.value);
 
-    render(<RuneTypeGraph ref={ref} models={result.value} callbacks={{ onNodeSelect }} />);
+    render(<RuneTypeGraph />);
 
-    // The callback is wired; actual invocation depends on user interaction
-    expect(typeof onNodeSelect).toBe('function');
+    // Selection is managed by store, not by callbacks
+    const store = useEditorStore.getState();
+    expect(store.selectedNodeId).toBeNull();
+    act(() => {
+      store.selectNode('test.combined::Trade');
+    });
+    expect(useEditorStore.getState().selectedNodeId).toBe('test.combined::Trade');
   });
 
-  it('exposes undo/redo (P2 stubs)', async () => {
+  it('exposes exportRosetta and validate on ref', async () => {
     const ref = createRef<RuneTypeGraphRef>();
     const result = await parse(COMBINED_MODEL_SOURCE);
+    loadModelsIntoStore(result.value);
 
-    render(<RuneTypeGraph ref={ref} models={result.value} />);
+    render(<RuneTypeGraph ref={ref} />);
 
-    expect(typeof ref.current!.undo).toBe('function');
-    expect(typeof ref.current!.redo).toBe('function');
     expect(typeof ref.current!.exportRosetta).toBe('function');
+    expect(typeof ref.current!.validate).toBe('function');
   });
 });

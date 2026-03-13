@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { EnumForm } from '../src/components/editors/EnumForm.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -38,31 +38,22 @@ function makeActions(): EditorFormActions<'enum'> {
 
 const AVAILABLE_TYPES: TypeOption[] = [];
 
-function makeEnumData(overrides: Partial<TypeNodeData<'enum'>> = {}): TypeNodeData<'enum'> {
+function makeEnumData(overrides: Record<string, unknown> = {}): AnyGraphNode {
   return {
-    kind: 'enum',
+    $type: 'RosettaEnumeration',
     name: 'CurrencyEnum',
     namespace: 'test',
-    members: [
-      {
-        name: 'USD',
-        typeName: undefined,
-        cardinality: undefined,
-        isOverride: false,
-        displayName: 'US Dollar'
-      },
-      {
-        name: 'EUR',
-        typeName: undefined,
-        cardinality: undefined,
-        isOverride: false,
-        displayName: 'Euro'
-      }
+    enumValues: [
+      { $type: 'RosettaEnumValue', name: 'USD', display: 'US Dollar' },
+      { $type: 'RosettaEnumValue', name: 'EUR', display: 'Euro' }
     ],
+    synonyms: [],
+    annotations: [],
+    position: { x: 0, y: 0 },
     hasExternalRefs: false,
     errors: [],
     ...overrides
-  };
+  } as AnyGraphNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +121,7 @@ describe('EnumForm — list-style member editing (T031, FR-015)', () => {
     render(
       <EnumForm
         nodeId="node-1"
-        data={makeEnumData({ members: [] })}
+        data={makeEnumData({ enumValues: [] })}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
       />

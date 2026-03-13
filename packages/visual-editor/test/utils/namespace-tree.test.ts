@@ -8,21 +8,27 @@ import {
   filterNamespaceTree,
   flattenNamespaceTree
 } from '../../src/utils/namespace-tree.js';
-import type { TypeGraphNode, TypeNodeData } from '../../src/types.js';
+import type { TypeGraphNode } from '../../src/types.js';
 
-function makeNode(ns: string, name: string, kind: TypeNodeData['kind'] = 'data'): TypeGraphNode {
+const KIND_TO_AST_TYPE: Record<string, string> = {
+  data: 'Data',
+  choice: 'Choice',
+  enum: 'RosettaEnumeration',
+  func: 'RosettaFunction'
+};
+
+function makeNode(ns: string, name: string, kind: string = 'data'): TypeGraphNode {
   return {
     id: `${ns}::${name}`,
     type: kind,
     position: { x: 0, y: 0 },
     data: {
-      kind,
+      $type: KIND_TO_AST_TYPE[kind] ?? 'Data',
       name,
       namespace: ns,
-      members: [],
       hasExternalRefs: false,
       errors: []
-    }
+    } as any
   };
 }
 

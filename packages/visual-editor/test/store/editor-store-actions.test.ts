@@ -40,10 +40,12 @@ describe('EditorStore — new actions', () => {
         .updateAttribute(tradeNode!.id, 'tradeDate', 'executionDate', 'dateTime', '0..1');
 
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      const member = updated!.data.members.find((m) => m.name === 'executionDate');
+      const member = ((updated!.data as any).attributes ?? []).find(
+        (m: any) => m.name === 'executionDate'
+      );
       expect(member).toBeDefined();
-      expect(member!.typeName).toBe('dateTime');
-      expect(member!.cardinality).toBe('(0..1)');
+      expect(member!.typeCall?.type?.$refText).toBe('dateTime');
+      expect(member!.card).toMatchObject({ inf: 0, sup: 1, unbounded: false });
     });
 
     it('does not affect other attributes', () => {
@@ -55,9 +57,11 @@ describe('EditorStore — new actions', () => {
         .updateAttribute(tradeNode!.id, 'tradeDate', 'executionDate', 'dateTime', '0..1');
 
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      const currency = updated!.data.members.find((m) => m.name === 'currency');
+      const currency = ((updated!.data as any).attributes ?? []).find(
+        (m: any) => m.name === 'currency'
+      );
       expect(currency).toBeDefined();
-      expect(currency!.typeName).toBe('CurrencyEnum');
+      expect(currency!.typeCall?.type?.$refText).toBe('CurrencyEnum');
     });
   });
 
@@ -69,17 +73,19 @@ describe('EditorStore — new actions', () => {
     it('moves an attribute from one position to another', () => {
       const nodes = store.getState().nodes;
       const tradeNode = nodes.find((n) => n.data.name === 'Trade');
-      expect(tradeNode!.data.members.length).toBeGreaterThanOrEqual(2);
+      const attrs = (tradeNode!.data as any).attributes ?? [];
+      expect(attrs.length).toBeGreaterThanOrEqual(2);
 
-      const originalFirst = tradeNode!.data.members[0]!.name;
-      const originalSecond = tradeNode!.data.members[1]!.name;
+      const originalFirst = attrs[0]!.name;
+      const originalSecond = attrs[1]!.name;
 
       // Move first to second position
       store.getState().reorderAttribute(tradeNode!.id, 0, 1);
 
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      expect(updated!.data.members[0]!.name).toBe(originalSecond);
-      expect(updated!.data.members[1]!.name).toBe(originalFirst);
+      const updatedAttrs = (updated!.data as any).attributes ?? [];
+      expect(updatedAttrs[0]!.name).toBe(originalSecond);
+      expect(updatedAttrs[1]!.name).toBe(originalFirst);
     });
   });
 
@@ -127,7 +133,9 @@ describe('EditorStore — new actions', () => {
       store.getState().addSynonym(tradeNode!.id, 'FpML_Trade');
 
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      expect(updated!.data.synonyms).toEqual(['FpML_Trade']);
+      const syns = (updated!.data as any).synonyms;
+      expect(syns).toHaveLength(1);
+      expect(syns[0].value.name).toBe('FpML_Trade');
     });
 
     it('appends to existing synonyms', () => {
@@ -138,7 +146,10 @@ describe('EditorStore — new actions', () => {
       store.getState().addSynonym(tradeNode!.id, 'FIX_Trade');
 
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      expect(updated!.data.synonyms).toEqual(['FpML_Trade', 'FIX_Trade']);
+      const syns = (updated!.data as any).synonyms;
+      expect(syns).toHaveLength(2);
+      expect(syns[0].value.name).toBe('FpML_Trade');
+      expect(syns[1].value.name).toBe('FIX_Trade');
     });
   });
 
@@ -152,7 +163,9 @@ describe('EditorStore — new actions', () => {
       store.getState().removeSynonym(tradeNode!.id, 0);
 
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      expect(updated!.data.synonyms).toEqual(['FIX_Trade']);
+      const syns = (updated!.data as any).synonyms;
+      expect(syns).toHaveLength(1);
+      expect(syns[0].value.name).toBe('FIX_Trade');
     });
   });
 });
@@ -173,60 +186,64 @@ describe('EditorStore — enum operations', () => {
   describe('addEnumValue', () => {
     it('adds a new enum value to an enum node', () => {
       const nodes = store.getState().nodes;
-      const enumNode = nodes.find((n) => n.data.kind === 'enum');
+      const enumNode = nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration');
       expect(enumNode).toBeDefined();
 
       store.getState().addEnumValue(enumNode!.id, 'JPY', 'Japanese Yen');
 
       const updated = store.getState().nodes.find((n) => n.id === enumNode!.id);
-      const newValue = updated!.data.members.find((m) => m.name === 'JPY');
+      const newValue = ((updated!.data as any).enumValues ?? []).find((m: any) => m.name === 'JPY');
       expect(newValue).toBeDefined();
-      expect(newValue!.displayName).toBe('Japanese Yen');
+      expect(newValue!.display).toBe('Japanese Yen');
     });
   });
 
   describe('removeEnumValue', () => {
     it('removes an enum value by name', () => {
       const nodes = store.getState().nodes;
-      const enumNode = nodes.find((n) => n.data.kind === 'enum');
-      const initialCount = enumNode!.data.members.length;
+      const enumNode = nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration');
+      const initialCount = ((enumNode!.data as any).enumValues ?? []).length;
 
       store.getState().removeEnumValue(enumNode!.id, 'USD');
 
       const updated = store.getState().nodes.find((n) => n.id === enumNode!.id);
-      expect(updated!.data.members.length).toBe(initialCount - 1);
-      expect(updated!.data.members.find((m) => m.name === 'USD')).toBeUndefined();
+      const vals = (updated!.data as any).enumValues ?? [];
+      expect(vals.length).toBe(initialCount - 1);
+      expect(vals.find((m: any) => m.name === 'USD')).toBeUndefined();
     });
   });
 
   describe('updateEnumValue', () => {
     it('renames an enum value and sets display name', () => {
       const nodes = store.getState().nodes;
-      const enumNode = nodes.find((n) => n.data.kind === 'enum');
+      const enumNode = nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration');
 
       store.getState().updateEnumValue(enumNode!.id, 'USD', 'US_Dollar', 'US Dollar');
 
       const updated = store.getState().nodes.find((n) => n.id === enumNode!.id);
-      const val = updated!.data.members.find((m) => m.name === 'US_Dollar');
+      const vals = (updated!.data as any).enumValues ?? [];
+      const val = vals.find((m: any) => m.name === 'US_Dollar');
       expect(val).toBeDefined();
-      expect(val!.displayName).toBe('US Dollar');
-      expect(updated!.data.members.find((m) => m.name === 'USD')).toBeUndefined();
+      expect(val!.display).toBe('US Dollar');
+      expect(vals.find((m: any) => m.name === 'USD')).toBeUndefined();
     });
   });
 
   describe('reorderEnumValue', () => {
     it('reorders enum values', () => {
       const nodes = store.getState().nodes;
-      const enumNode = nodes.find((n) => n.data.kind === 'enum');
+      const enumNode = nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration');
+      const vals = (enumNode!.data as any).enumValues ?? [];
 
-      const first = enumNode!.data.members[0]!.name;
-      const last = enumNode!.data.members[enumNode!.data.members.length - 1]!.name;
+      const first = vals[0]!.name;
+      const last = vals[vals.length - 1]!.name;
 
-      store.getState().reorderEnumValue(enumNode!.id, 0, enumNode!.data.members.length - 1);
+      store.getState().reorderEnumValue(enumNode!.id, 0, vals.length - 1);
 
       const updated = store.getState().nodes.find((n) => n.id === enumNode!.id);
-      expect(updated!.data.members[updated!.data.members.length - 1]!.name).toBe(first);
-      expect(updated!.data.members[0]!.name).not.toBe(first);
+      const updatedVals = (updated!.data as any).enumValues ?? [];
+      expect(updatedVals[updatedVals.length - 1]!.name).toBe(first);
+      expect(updatedVals[0]!.name).not.toBe(first);
     });
   });
 
@@ -242,7 +259,7 @@ describe('EditorStore — enum operations', () => {
       store.getState().setEnumParent(childEnum!.id, parentEnum!.id);
 
       const updatedChild = store.getState().nodes.find((n) => n.id === childEnum!.id);
-      expect(updatedChild!.data.parentName).toBe('BaseCurrency');
+      expect((updatedChild!.data as any).parent?.$refText).toBe('BaseCurrency');
 
       const extendsEdge = store
         .getState()
@@ -261,7 +278,7 @@ describe('EditorStore — enum operations', () => {
       store.getState().setEnumParent(childEnum!.id, null);
 
       const updatedChild = store.getState().nodes.find((n) => n.id === childEnum!.id);
-      expect(updatedChild!.data.parentName).toBeUndefined();
+      expect((updatedChild!.data as any).parent).toBeUndefined();
 
       const extendsEdge = store
         .getState()
@@ -287,8 +304,8 @@ describe('EditorStore — choice operations', () => {
   describe('addChoiceOption', () => {
     it('adds a member and edge for a choice option', () => {
       const nodes = store.getState().nodes;
-      const choiceNode = nodes.find((n) => n.data.kind === 'choice');
-      const initialMembers = choiceNode!.data.members.length;
+      const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
+      const initialAttrs = ((choiceNode!.data as any).attributes ?? []).length;
       const initialEdges = store.getState().edges.length;
 
       // Add a new option referencing CashPayment
@@ -296,24 +313,33 @@ describe('EditorStore — choice operations', () => {
 
       const updated = store.getState().nodes.find((n) => n.id === choiceNode!.id);
       // The member might already exist from parsing, so check for the new typeName
-      expect(updated!.data.members.some((m) => m.typeName === 'CashPayment')).toBe(true);
+      expect(
+        ((updated!.data as any).attributes ?? []).some(
+          (m: any) => m.typeCall?.type?.$refText === 'CashPayment'
+        )
+      ).toBe(true);
     });
   });
 
   describe('removeChoiceOption', () => {
     it('removes both member and edge for a choice option', () => {
       const nodes = store.getState().nodes;
-      const choiceNode = nodes.find((n) => n.data.kind === 'choice');
-      const member = choiceNode!.data.members[0];
+      const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
+      const member = ((choiceNode!.data as any).attributes ?? [])[0];
+      const memberTypeName = member!.typeCall?.type?.$refText;
 
-      store.getState().removeChoiceOption(choiceNode!.id, member!.typeName!);
+      store.getState().removeChoiceOption(choiceNode!.id, memberTypeName!);
 
       const updated = store.getState().nodes.find((n) => n.id === choiceNode!.id);
-      expect(updated!.data.members.find((m) => m.typeName === member!.typeName)).toBeUndefined();
+      expect(
+        ((updated!.data as any).attributes ?? []).find(
+          (m: any) => m.typeCall?.type?.$refText === memberTypeName
+        )
+      ).toBeUndefined();
 
       const choiceEdge = store
         .getState()
-        .edges.find((e) => e.source === choiceNode!.id && e.data?.label === member!.typeName);
+        .edges.find((e) => e.source === choiceNode!.id && e.data?.label === memberTypeName);
       expect(choiceEdge).toBeUndefined();
     });
   });

@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FunctionForm } from '../../src/components/editors/FunctionForm.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,21 +43,38 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' }
 ];
 
-function makeFuncData(overrides: Partial<TypeNodeData<'func'>> = {}): TypeNodeData<'func'> {
+function makeFuncData(overrides: Partial<AnyGraphNode> = {}): AnyGraphNode {
   return {
-    kind: 'func',
+    $type: 'RosettaFunction',
     name: 'CalculateNotional',
     namespace: 'test.model',
-    members: [
-      { name: 'trade', typeName: 'Trade', cardinality: '(1..1)', isOverride: false },
-      { name: 'price', typeName: 'Price', cardinality: '(1..1)', isOverride: false }
+    inputs: [
+      {
+        $type: 'Attribute',
+        name: 'trade',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'Trade' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      },
+      {
+        $type: 'Attribute',
+        name: 'price',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'Price' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      }
     ],
+    output: { typeCall: { $type: 'TypeCall', type: { $refText: 'number' } } },
+    expressionText: 'trade -> price -> amount',
+    conditions: [],
+    postConditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
     hasExternalRefs: false,
     errors: [],
-    outputType: 'number',
-    expressionText: 'trade -> price -> amount',
     ...overrides
-  };
+  } as AnyGraphNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +143,7 @@ describe('FunctionForm', () => {
     render(
       <FunctionForm
         nodeId="fn1"
-        data={makeFuncData({ members: [] })}
+        data={makeFuncData({ inputs: [] } as any)}
         availableTypes={AVAILABLE_TYPES}
         actions={actions}
       />
@@ -163,7 +180,7 @@ describe('FunctionForm', () => {
     render(
       <FunctionForm
         nodeId="fn1"
-        data={makeFuncData({ expressionText: '' })}
+        data={makeFuncData({ expressionText: '' } as any)}
         availableTypes={AVAILABLE_TYPES}
         actions={actions}
       />
@@ -182,7 +199,7 @@ describe('FunctionForm', () => {
     render(
       <FunctionForm
         nodeId="fn1"
-        data={makeFuncData({ expressionText: '' })}
+        data={makeFuncData({ expressionText: '' } as any)}
         availableTypes={AVAILABLE_TYPES}
         actions={actions}
       />
@@ -205,7 +222,7 @@ describe('FunctionForm', () => {
     render(
       <FunctionForm
         nodeId="fn1"
-        data={makeFuncData({ expressionText: '' })}
+        data={makeFuncData({ expressionText: '' } as any)}
         availableTypes={AVAILABLE_TYPES}
         actions={actions}
       />
@@ -244,7 +261,7 @@ describe('FunctionForm', () => {
     render(
       <FunctionForm
         nodeId="fn1"
-        data={makeFuncData({ members: [] })}
+        data={makeFuncData({ inputs: [] } as any)}
         availableTypes={AVAILABLE_TYPES}
         actions={actions}
       />

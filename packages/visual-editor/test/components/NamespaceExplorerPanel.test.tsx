@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
-import type { TypeGraphNode, TypeNodeData } from '../../src/types.js';
+import type { TypeGraphNode, AnyGraphNode, TypeKind } from '../../src/types.js';
 
 // Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
 vi.mock('@tanstack/react-virtual', () => ({
@@ -33,19 +33,29 @@ vi.mock('@tanstack/react-virtual', () => ({
   }
 }));
 
-function makeNode(ns: string, name: string, kind: TypeNodeData['kind'] = 'data'): TypeGraphNode {
+function makeNode(ns: string, name: string, astType: string = 'Data'): TypeGraphNode {
+  const nodeTypeMap: Record<string, string> = {
+    Data: 'data',
+    Choice: 'choice',
+    RosettaEnumeration: 'enum',
+    RosettaFunction: 'func'
+  };
   return {
     id: `${ns}::${name}`,
-    type: kind,
+    type: nodeTypeMap[astType] ?? 'data',
     position: { x: 0, y: 0 },
     data: {
-      kind,
+      $type: astType,
       name,
       namespace: ns,
-      members: [],
+      attributes: [],
+      conditions: [],
+      annotations: [],
+      synonyms: [],
+      position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
-    }
+    } as AnyGraphNode
   };
 }
 
@@ -53,7 +63,7 @@ const defaultNodes = [
   makeNode('com.model', 'Trade'),
   makeNode('com.model', 'Event'),
   makeNode('com.lib', 'Date'),
-  makeNode('cdm.product', 'Asset', 'choice')
+  makeNode('cdm.product', 'Asset', 'Choice')
 ];
 
 function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExplorerPanel>> = {}) {

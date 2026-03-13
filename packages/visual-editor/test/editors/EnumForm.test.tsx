@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { EnumForm } from '../../src/components/editors/EnumForm.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,38 +46,23 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' }
 ];
 
-function makeEnumData(overrides: Partial<TypeNodeData<'enum'>> = {}): TypeNodeData<'enum'> {
+function makeEnumData(overrides: Record<string, unknown> = {}): AnyGraphNode {
   return {
-    kind: 'enum',
+    $type: 'RosettaEnumeration',
     name: 'CurrencyEnum',
     namespace: 'test.enums',
-    members: [
-      {
-        name: 'USD',
-        typeName: undefined,
-        cardinality: undefined,
-        isOverride: false,
-        displayName: 'US Dollar'
-      },
-      {
-        name: 'EUR',
-        typeName: undefined,
-        cardinality: undefined,
-        isOverride: false,
-        displayName: 'Euro'
-      },
-      {
-        name: 'GBP',
-        typeName: undefined,
-        cardinality: undefined,
-        isOverride: false,
-        displayName: 'British Pound'
-      }
+    enumValues: [
+      { $type: 'RosettaEnumValue', name: 'USD', display: 'US Dollar' },
+      { $type: 'RosettaEnumValue', name: 'EUR', display: 'Euro' },
+      { $type: 'RosettaEnumValue', name: 'GBP', display: 'British Pound' }
     ],
+    synonyms: [],
+    annotations: [],
+    position: { x: 0, y: 0 },
     hasExternalRefs: false,
     errors: [],
     ...overrides
-  };
+  } as AnyGraphNode;
 }
 
 // ---------------------------------------------------------------------------

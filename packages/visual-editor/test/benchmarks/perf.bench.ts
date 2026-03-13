@@ -9,7 +9,7 @@
 
 import { describe, bench } from 'vitest';
 import { parse } from '@rune-langium/core';
-import { astToGraph } from '../../src/adapters/ast-to-graph.js';
+import { astToModel } from '../../src/adapters/ast-to-model.js';
 import { computeLayout } from '../../src/layout/dagre-layout.js';
 import type { TypeGraphNode, TypeGraphEdge } from '../../src/types.js';
 
@@ -60,11 +60,11 @@ describe('Performance Benchmarks (T005)', () => {
   );
 
   bench('ast-to-graph: 500 nodes', () => {
-    graph500 = astToGraph(models500 ?? []);
+    graph500 = astToModel(models500 ?? []);
   });
 
   bench('ast-to-graph: 100 nodes', () => {
-    graph100 = astToGraph(models100 ?? []);
+    graph100 = astToModel(models100 ?? []);
   });
 
   bench('dagre layout: 500 nodes', () => {
@@ -81,7 +81,7 @@ describe('Performance Benchmarks (T005)', () => {
 
   bench('full pipeline: 100 nodes (parse + graph + layout)', async () => {
     const result = await parse(MEDIUM_MODEL_100);
-    const { nodes, edges } = astToGraph([result.value]);
+    const { nodes, edges } = astToModel([result.value]);
     computeLayout(nodes, edges, { direction: 'TB' });
   });
 });

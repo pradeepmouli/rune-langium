@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ChoiceForm } from '../../src/components/editors/ChoiceForm.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,24 +44,26 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' }
 ];
 
-function makeChoiceData(overrides: Partial<TypeNodeData<'choice'>> = {}): TypeNodeData<'choice'> {
+function makeChoiceData(overrides: Record<string, unknown> = {}): AnyGraphNode {
   return {
-    kind: 'choice',
+    $type: 'Choice',
     name: 'PaymentType',
     namespace: 'test.model',
-    members: [
-      { name: 'cashPayment', typeName: 'CashPayment', cardinality: undefined, isOverride: false },
+    attributes: [
+      { $type: 'ChoiceOption', typeCall: { $type: 'TypeCall', type: { $refText: 'CashPayment' } } },
       {
-        name: 'physicalSettlement',
-        typeName: 'PhysicalSettlement',
-        cardinality: undefined,
-        isOverride: false
+        $type: 'ChoiceOption',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'PhysicalSettlement' } }
       }
     ],
+    conditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
     hasExternalRefs: false,
     errors: [],
     ...overrides
-  };
+  } as AnyGraphNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +179,7 @@ describe('ChoiceForm', () => {
     render(
       <ChoiceForm
         nodeId="node-1"
-        data={makeChoiceData({ members: [] })}
+        data={makeChoiceData({ attributes: [] })}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
       />
