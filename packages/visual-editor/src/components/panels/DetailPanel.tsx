@@ -66,7 +66,7 @@ export function DetailPanel({ nodeData }: DetailPanelProps) {
 
   const d = nodeData as any;
   const kind = AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data';
-  const parentName = getRefText(d.superType) ?? getRefText(d.parent);
+  const parentName = getRefText(d.superType) ?? getRefText(d.parent) ?? getRefText(d.superFunction);
   const members = extractMembers(d);
   const errors: ValidationError[] = d.errors ?? [];
 

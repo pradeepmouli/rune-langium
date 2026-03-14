@@ -8,6 +8,7 @@
  * @module
  */
 
+import type { ReactNode } from 'react';
 import { Input as DesignInput } from '@rune-langium/design-system/ui/input';
 import { Textarea as DesignTextarea } from '@rune-langium/design-system/ui/textarea';
 export * from '@rune-langium/design-system/ui/components';
@@ -72,14 +73,36 @@ type ControlledProps = {
   [key: string]: unknown;
 };
 
-export function Select({ value, onChange, ...rest }: ControlledProps) {
+export function Select({
+  value,
+  onChange,
+  id,
+  disabled,
+  options,
+  children,
+  ...rest
+}: ControlledProps & {
+  disabled?: boolean;
+  options?: Array<{ label: string; value: string }>;
+  children?: ReactNode;
+}) {
   return (
-    <RadixSelect value={(value as string) ?? ''} onValueChange={onChange as (v: string) => void}>
-      <SelectTrigger>
+    <RadixSelect
+      value={(value as string) ?? ''}
+      onValueChange={onChange as (v: string) => void}
+      disabled={disabled}
+    >
+      <SelectTrigger id={id}>
         <SelectValue placeholder="Select..." />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={(value as string) ?? ''}>{(value as string) ?? '—'}</SelectItem>
+        {options
+          ? options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))
+          : children}
       </SelectContent>
     </RadixSelect>
   );
