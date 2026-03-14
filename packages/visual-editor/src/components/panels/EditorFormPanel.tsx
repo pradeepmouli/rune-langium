@@ -24,16 +24,19 @@ import { DataTypeForm } from '../editors/DataTypeForm.js';
 import { EnumForm } from '../editors/EnumForm.js';
 import { ChoiceForm } from '../editors/ChoiceForm.js';
 import { FunctionForm } from '../editors/FunctionForm.js';
+import { TypeAliasForm } from '../editors/TypeAliasForm.js';
 import { DetailPanel } from './DetailPanel.js';
 import { getKindLabel } from '../editors/TypeSelector.js';
 import { useInheritedMembers } from '../../hooks/useInheritedMembers.js';
 import type {
-  TypeNodeData,
+  AnyGraphNode,
+  TypeKind,
   TypeOption,
   EditorFormActions,
   TypeGraphNode,
   ExpressionEditorSlotProps
 } from '../../types.js';
+import { AST_TYPE_TO_NODE_TYPE } from '../../adapters/model-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Error Boundary
@@ -87,7 +90,7 @@ class FormErrorBoundary extends Component<
 
 export interface EditorFormPanelProps {
   /** The selected node's data, or null if nothing is selected. */
-  nodeData: TypeNodeData | null;
+  nodeData: AnyGraphNode | null;
   /** Node ID of the selected node. */
   nodeId: string | null;
   /** Whether the node is read-only (from external/locked source). */
@@ -123,7 +126,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
 }: EditorFormPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
 
-  const inheritedGroups = useInheritedMembers(nodeData, allNodes);
+  const inheritedGroups = useInheritedMembers(nodeData as AnyGraphNode | null, allNodes);
 
   // ---- Escape key closes panel --------------------------------------------
 
@@ -162,13 +165,13 @@ const EditorFormPanel = memo(function EditorFormPanel({
 
   // ---- Read-only fallback --------------------------------------------------
 
-  if (isReadOnly || nodeData.isReadOnly) {
+  if (isReadOnly || (nodeData as any).isReadOnly) {
     return (
       <aside
         ref={panelRef}
         data-slot="editor-form-panel"
         role="complementary"
-        aria-label={`Details for ${nodeData.name}`}
+        aria-label={`Details for ${(nodeData as any).name}`}
         className="flex flex-col h-full overflow-hidden"
         tabIndex={-1}
       >
@@ -177,16 +180,18 @@ const EditorFormPanel = memo(function EditorFormPanel({
     );
   }
 
-  // ---- Dispatch by kind ----------------------------------------------------
+  // ---- Dispatch by $type → kind --------------------------------------------
+
+  const kind = AST_TYPE_TO_NODE_TYPE[(nodeData as any).$type] ?? 'data';
 
   function renderForm() {
-    switch (nodeData!.kind) {
+    switch (kind) {
       case 'data':
         return (
           <DataTypeForm
             key={nodeId!}
             nodeId={nodeId!}
-            data={nodeData as TypeNodeData<'data'>}
+            data={nodeData!}
             availableTypes={availableTypes}
             actions={actions}
             inheritedGroups={inheritedGroups}
@@ -198,7 +203,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
           <EnumForm
             key={nodeId!}
             nodeId={nodeId!}
-            data={nodeData as TypeNodeData<'enum'>}
+            data={nodeData!}
             availableTypes={availableTypes}
             actions={actions}
             inheritedGroups={inheritedGroups}
@@ -210,7 +215,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
           <ChoiceForm
             key={nodeId!}
             nodeId={nodeId!}
-            data={nodeData as TypeNodeData<'choice'>}
+            data={nodeData!}
             availableTypes={availableTypes}
             actions={actions}
           />
@@ -221,7 +226,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
           <FunctionForm
             key={nodeId!}
             nodeId={nodeId!}
-            data={nodeData as TypeNodeData<'func'>}
+            data={nodeData!}
             availableTypes={availableTypes}
             actions={actions}
             inheritedGroups={inheritedGroups}
@@ -229,25 +234,30 @@ const EditorFormPanel = memo(function EditorFormPanel({
           />
         );
 
-      // record, typeAlias, basicType, and annotation are currently view-only;
+      case 'typeAlias':
+        return <TypeAliasForm key={nodeId!} nodeId={nodeId!} data={nodeData!} actions={actions} />;
+
+      // record, basicType, and annotation are currently view-only;
       // full editor forms for these kinds are tracked for a future iteration.
       case 'record':
-      case 'typeAlias':
       case 'basicType':
       case 'annotation':
-        return <DetailPanel nodeData={nodeData} />;
+        return <DetailPanel nodeData={nodeData!} />;
 
       default:
-        return <DetailPanel nodeData={nodeData} />;
+        return <DetailPanel nodeData={nodeData!} />;
     }
   }
+
+  const displayName = (nodeData as any).name as string;
+  const displayKind = kind as TypeKind;
 
   return (
     <aside
       ref={panelRef}
       data-slot="editor-form-panel"
       role="complementary"
-      aria-label={`Edit ${nodeData.name}`}
+      aria-label={`Edit ${displayName}`}
       className="flex flex-col h-full overflow-hidden"
       tabIndex={-1}
     >
@@ -257,8 +267,8 @@ const EditorFormPanel = memo(function EditorFormPanel({
         className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3
           border-b bg-muted"
       >
-        <span className="text-sm font-semibold truncate">{nodeData.name}</span>
-        <Badge variant={nodeData.kind}>{getKindLabel(nodeData.kind)}</Badge>
+        <span className="text-sm font-semibold truncate">{displayName}</span>
+        <Badge variant={displayKind}>{getKindLabel(displayKind)}</Badge>
         {onClose && (
           <Button
             variant="ghost"

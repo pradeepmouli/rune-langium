@@ -5,22 +5,38 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DetailPanel } from '../../src/components/panels/DetailPanel.js';
-import type { TypeNodeData } from '../../src/types.js';
+import type { AnyGraphNode } from '../../src/types.js';
 
 describe('DetailPanel', () => {
-  const mockNodeData: TypeNodeData = {
-    kind: 'data',
+  const mockNodeData: AnyGraphNode = {
+    $type: 'Data',
     name: 'Trade',
     namespace: 'test.model',
     definition: 'Represents a trade event',
-    members: [
-      { name: 'tradeDate', typeName: 'date', cardinality: '(1..1)', isOverride: false },
-      { name: 'product', typeName: 'Product', cardinality: '(1..1)', isOverride: false }
+    attributes: [
+      {
+        $type: 'Attribute',
+        name: 'tradeDate',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'date' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      },
+      {
+        $type: 'Attribute',
+        name: 'product',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'Product' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      }
     ],
-    parentName: 'Event',
+    superType: { $refText: 'Event' },
+    conditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
     hasExternalRefs: false,
     errors: []
-  };
+  } as AnyGraphNode;
 
   it('renders type name and kind', () => {
     render(<DetailPanel nodeData={mockNodeData} />);
@@ -55,10 +71,10 @@ describe('DetailPanel', () => {
   });
 
   it('renders validation errors when present', () => {
-    const dataWithErrors: TypeNodeData = {
+    const dataWithErrors: AnyGraphNode = {
       ...mockNodeData,
       errors: [{ nodeId: 'test', severity: 'error', message: 'Circular inheritance detected' }]
-    };
+    } as AnyGraphNode;
     render(<DetailPanel nodeData={dataWithErrors} />);
     expect(screen.getByText('Circular inheritance detected')).toBeTruthy();
   });

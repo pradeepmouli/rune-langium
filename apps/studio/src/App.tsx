@@ -9,12 +9,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import '@rune-langium/visual-editor/styles.css';
 import { FileLoader } from './components/FileLoader.js';
+import { ModelLoader } from './components/ModelLoader.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
-import { parseWorkspaceFiles } from './services/workspace.js';
+import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
+import { useModelStore } from './store/model-store.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
@@ -111,6 +113,19 @@ export function App() {
     setErrors(new Map());
   }, []);
 
+  // Merge reference model files into workspace when models change
+  const loadedModels = useModelStore((s) => s.models);
+  useEffect(() => {
+    if (loadedModels.size === 0) return;
+    setFiles((prev) => {
+      let result = prev.filter((f) => !f.path.startsWith('['));
+      for (const model of loadedModels.values()) {
+        result = mergeModelFiles(result, model);
+      }
+      return result;
+    });
+  }, [loadedModels]);
+
   const hasErrors = errors.size > 0;
   const userFiles = files.filter((f) => !f.readOnly);
 
@@ -145,7 +160,14 @@ export function App() {
           </div>
         )}
 
-        {!loading && userFiles.length === 0 && <FileLoader onFilesLoaded={handleFilesLoaded} />}
+        {!loading && userFiles.length === 0 && (
+          <div className="flex flex-col h-full">
+            <FileLoader onFilesLoaded={handleFilesLoaded} />
+            <div className="border-t px-8 py-6">
+              <ModelLoader />
+            </div>
+          </div>
+        )}
 
         {!loading && userFiles.length > 0 && (
           <EditorPage

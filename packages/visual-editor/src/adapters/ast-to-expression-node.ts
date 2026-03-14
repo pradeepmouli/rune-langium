@@ -8,6 +8,22 @@
  *   3. Wraps unrecognized sub-trees as { $type: 'Unsupported', rawText }
  *   4. Preserves $type discriminator unchanged
  *
+ * Intentionally excluded expression types (wrapped as Unsupported):
+ *
+ *   - **RosettaMapTestExistsExpression** — Mapping qualifier `exists` test.
+ *     Used only in `set` operations with mapping qualifiers (e.g., `set [exists]`).
+ *     These are structural mapping directives, not user-editable expressions.
+ *
+ *   - **RosettaMapTestAbsentExpression** — Mapping qualifier `absent` test.
+ *     Same rationale as above — structural mapping, not editable.
+ *
+ *   - **RosettaMapTestEqualityOperation** — Mapping qualifier equality comparison.
+ *     Used in `set [= value]` patterns. Structural, not user-authored.
+ *
+ *   - **RosettaAttributeReference** — Direct attribute reference (e.g., `-> attr`).
+ *     Represented as navigation in the UI via RosettaFeatureCall instead.
+ *     AttributeReference is a legacy construct rarely encountered in CDM models.
+ *
  * @module
  */
 

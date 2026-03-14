@@ -1,17 +1,18 @@
 /**
- * Tests for AST source provenance on graph nodes and members.
+ * Tests for AST source provenance on graph nodes.
  *
- * Verifies that astToGraph populates the `source` field on TypeNodeData
- * and MemberDisplay, preserving full Langium AST type information across
- * the AST → graph → synthetic-AST pipeline.
+ * Verifies that astToModel populates the AST fields on GraphNode<T>,
+ * preserving full Langium AST type information across
+ * the AST → model → serialized-AST pipeline.
  */
 
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
-import type { Data, Choice, RosettaEnumeration, Attribute } from '@rune-langium/core';
-import { astToGraph } from '../../src/adapters/ast-to-graph.js';
-import { graphToModels } from '../../src/adapters/graph-to-ast.js';
-import type { TypeNodeData } from '../../src/types.js';
+import type { Attribute } from '@rune-langium/core';
+import { astToModel } from '../../src/adapters/ast-to-model.js';
+import { modelsToAst } from '../../src/adapters/model-to-ast.js';
+import type { GraphNode } from '../../src/types.js';
+import type { Data, Choice, RosettaEnumeration } from '@rune-langium/core';
 import {
   SIMPLE_INHERITANCE_SOURCE,
   CHOICE_MODEL_SOURCE,
@@ -20,51 +21,48 @@ import {
 } from '../helpers/fixture-loader.js';
 
 // ---------------------------------------------------------------------------
-// astToGraph source provenance
+// astToModel source provenance
 // ---------------------------------------------------------------------------
 
 describe('AST source provenance on graph nodes', () => {
-  it('Data nodes carry the source Data AST node', async () => {
+  it('Data nodes carry the Data AST fields', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes } = astToGraph(result.value);
+    const { nodes } = astToModel(result.value);
 
     const tradeNode = nodes.find((n) => n.data.name === 'Trade');
     expect(tradeNode).toBeDefined();
 
-    const data = tradeNode!.data as TypeNodeData<'data'>;
-    expect(data.source).toBeDefined();
-    expect(data.source!.$type).toBe('Data');
-    expect(data.source!.name).toBe('Trade');
+    const data = tradeNode!.data as GraphNode<Data>;
+    expect(data.$type).toBe('Data');
+    expect(data.name).toBe('Trade');
     // Rich info preserved: superType reference is accessible
-    expect(data.source!.superType?.$refText).toBe('Event');
+    expect(data.superType?.$refText).toBe('Event');
   });
 
-  it('Choice nodes carry the source Choice AST node', async () => {
+  it('Choice nodes carry the Choice AST fields', async () => {
     const result = await parse(CHOICE_MODEL_SOURCE);
-    const { nodes } = astToGraph(result.value);
+    const { nodes } = astToModel(result.value);
 
     const choiceNode = nodes.find((n) => n.data.name === 'PaymentType');
     expect(choiceNode).toBeDefined();
 
-    const data = choiceNode!.data as TypeNodeData<'choice'>;
-    expect(data.source).toBeDefined();
-    expect(data.source!.$type).toBe('Choice');
-    expect(data.source!.name).toBe('PaymentType');
+    const data = choiceNode!.data as GraphNode<Choice>;
+    expect(data.$type).toBe('Choice');
+    expect(data.name).toBe('PaymentType');
   });
 
-  it('Enum nodes carry the source RosettaEnumeration AST node', async () => {
+  it('Enum nodes carry the RosettaEnumeration AST fields', async () => {
     const result = await parse(ENUM_MODEL_SOURCE);
-    const { nodes } = astToGraph(result.value);
+    const { nodes } = astToModel(result.value);
 
     const enumNode = nodes.find((n) => n.data.name === 'CurrencyEnum');
     expect(enumNode).toBeDefined();
 
-    const data = enumNode!.data as TypeNodeData<'enum'>;
-    expect(data.source).toBeDefined();
-    expect(data.source!.$type).toBe('RosettaEnumeration');
-    expect(data.source!.name).toBe('CurrencyEnum');
-    // Rich info: enumValues are accessible from source
-    expect(data.source!.enumValues.length).toBe(3);
+    const data = enumNode!.data as GraphNode<RosettaEnumeration>;
+    expect(data.$type).toBe('RosettaEnumeration');
+    expect(data.name).toBe('CurrencyEnum');
+    // Rich info: enumValues are accessible
+    expect(data.enumValues.length).toBe(3);
   });
 });
 
@@ -73,158 +71,151 @@ describe('AST source provenance on graph nodes', () => {
 // ---------------------------------------------------------------------------
 
 describe('AST source provenance on graph members', () => {
-  it('Data attribute members carry source Attribute AST nodes', async () => {
+  it('Data attribute members carry Attribute AST fields', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes } = astToGraph(result.value);
+    const { nodes } = astToModel(result.value);
 
     const tradeNode = nodes.find((n) => n.data.name === 'Trade');
-    const tradeDateMember = tradeNode!.data.members.find((m) => m.name === 'tradeDate');
+    const data = tradeNode!.data as GraphNode<Data>;
+    const tradeDateAttr = data.attributes.find((a) => a.name === 'tradeDate');
 
-    expect(tradeDateMember).toBeDefined();
-    expect(tradeDateMember!.source).toBeDefined();
-
-    const attr = tradeDateMember!.source as Attribute;
-    expect(attr.$type).toBe('Attribute');
-    expect(attr.name).toBe('tradeDate');
+    expect(tradeDateAttr).toBeDefined();
+    expect((tradeDateAttr as unknown as Attribute).$type).toBe('Attribute');
+    expect(tradeDateAttr!.name).toBe('tradeDate');
     // Rich info: cardinality object is accessible
-    expect(attr.card).toBeDefined();
-    expect(attr.card.inf).toBe(1);
+    expect(tradeDateAttr!.card).toBeDefined();
+    expect(tradeDateAttr!.card.inf).toBe(1);
   });
 
-  it('Choice member carries source ChoiceOption AST node', async () => {
+  it('Choice member carries ChoiceOption AST fields', async () => {
     const result = await parse(CHOICE_MODEL_SOURCE);
-    const { nodes } = astToGraph(result.value);
+    const { nodes } = astToModel(result.value);
 
     const choiceNode = nodes.find((n) => n.data.name === 'PaymentType');
-    expect(choiceNode!.data.members.length).toBe(2);
+    const data = choiceNode!.data as GraphNode<Choice>;
+    expect(data.attributes.length).toBe(2);
 
-    const firstOption = choiceNode!.data.members[0]!;
-    expect(firstOption.source).toBeDefined();
-    expect((firstOption.source as { $type: string }).$type).toBe('ChoiceOption');
+    const firstOption = data.attributes[0]!;
+    expect((firstOption as unknown as { $type: string }).$type).toBe('ChoiceOption');
   });
 
-  it('Enum member carries source RosettaEnumValue AST node', async () => {
+  it('Enum member carries RosettaEnumValue AST fields', async () => {
     const result = await parse(ENUM_MODEL_SOURCE);
-    const { nodes } = astToGraph(result.value);
+    const { nodes } = astToModel(result.value);
 
     const enumNode = nodes.find((n) => n.data.name === 'CurrencyEnum');
-    const usdMember = enumNode!.data.members.find((m) => m.name === 'USD');
+    const data = enumNode!.data as GraphNode<RosettaEnumeration>;
+    const usdValue = data.enumValues.find((v) => v.name === 'USD');
 
-    expect(usdMember).toBeDefined();
-    expect(usdMember!.source).toBeDefined();
-    expect((usdMember!.source as { $type: string }).$type).toBe('RosettaEnumValue');
+    expect(usdValue).toBeDefined();
+    expect((usdValue as unknown as { $type: string }).$type).toBe('RosettaEnumValue');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Rich metadata access via source
+// Rich metadata access
 // ---------------------------------------------------------------------------
 
-describe('Rich metadata accessible through source references', () => {
-  it('Data.conditions is accessible via source', async () => {
+describe('Rich metadata accessible through AST fields', () => {
+  it('Data.conditions is accessible', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes } = astToGraph(result.value);
+    const { nodes } = astToModel(result.value);
 
     const eventNode = nodes.find((n) => n.data.name === 'Event');
-    const data = eventNode!.data as TypeNodeData<'data'>;
-    expect(data.source).toBeDefined();
+    const data = eventNode!.data as GraphNode<Data>;
     // conditions array is accessible (even if empty for this fixture)
-    expect(Array.isArray(data.source!.conditions)).toBe(true);
+    expect(Array.isArray(data.conditions)).toBe(true);
   });
 
-  it('Data.annotations is accessible via source', async () => {
+  it('Data.annotations is accessible', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes } = astToGraph(result.value);
+    const { nodes } = astToModel(result.value);
 
     const eventNode = nodes.find((n) => n.data.name === 'Event');
-    const data = eventNode!.data as TypeNodeData<'data'>;
-    expect(Array.isArray(data.source!.annotations)).toBe(true);
+    const data = eventNode!.data as GraphNode<Data>;
+    expect(Array.isArray(data.annotations)).toBe(true);
   });
 
-  it('Attribute.typeCall is accessible via member source', async () => {
+  it('Attribute.typeCall is accessible via attribute', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes } = astToGraph(result.value);
+    const { nodes } = astToModel(result.value);
 
     const tradeNode = nodes.find((n) => n.data.name === 'Trade');
-    const productMember = tradeNode!.data.members.find((m) => m.name === 'product');
-    const attr = productMember!.source as Attribute;
+    const data = tradeNode!.data as GraphNode<Data>;
+    const productAttr = data.attributes.find((a) => a.name === 'product');
 
-    expect(attr.typeCall).toBeDefined();
-    expect(attr.typeCall.type?.$refText).toBe('Product');
+    expect(productAttr!.typeCall).toBeDefined();
+    expect(productAttr!.typeCall.type?.$refText).toBe('Product');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Source round-trip through graphToModels
+// Source round-trip through modelsToAst
 // ---------------------------------------------------------------------------
 
-describe('Source round-trip via graphToModels', () => {
-  it('SyntheticData carries source from graph node', async () => {
+describe('Source round-trip via modelsToAst', () => {
+  it('Model element carries Data fields from graph node', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes, edges } = astToGraph(result.value);
-    const models = graphToModels(nodes, edges);
+    const { nodes, edges } = astToModel(result.value);
+    const models = modelsToAst(nodes, edges);
 
     const model = models.find((m) => m.name === 'test.model');
     expect(model).toBeDefined();
 
-    const tradeElement = model!.elements.find((e) => e.name === 'Trade');
+    const tradeElement = model!.elements.find((e) => (e as { name?: string }).name === 'Trade') as
+      | Record<string, unknown>
+      | undefined;
     expect(tradeElement).toBeDefined();
     expect(tradeElement!.$type).toBe('Data');
-
-    if (tradeElement!.$type === 'Data') {
-      expect(tradeElement!.source).toBeDefined();
-      expect(tradeElement!.source!.$type).toBe('Data');
-      expect(tradeElement!.source!.name).toBe('Trade');
-    }
+    expect(tradeElement!.name).toBe('Trade');
   });
 
-  it('SyntheticAttribute carries source Attribute', async () => {
+  it('Model element carries attributes', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes, edges } = astToGraph(result.value);
-    const models = graphToModels(nodes, edges);
+    const { nodes, edges } = astToModel(result.value);
+    const models = modelsToAst(nodes, edges);
 
     const model = models.find((m) => m.name === 'test.model');
-    const tradeElement = model!.elements.find((e) => e.name === 'Trade');
+    const tradeElement = model!.elements.find((e) => (e as { name?: string }).name === 'Trade') as
+      | Record<string, unknown>
+      | undefined;
 
     if (tradeElement!.$type === 'Data') {
-      const tradeDateAttr = tradeElement!.attributes.find((a) => a.name === 'tradeDate');
+      const attributes = tradeElement!.attributes as Array<{ name: string; $type?: string }>;
+      const tradeDateAttr = attributes.find((a) => a.name === 'tradeDate');
       expect(tradeDateAttr).toBeDefined();
-      expect(tradeDateAttr!.source).toBeDefined();
-      expect(tradeDateAttr!.source!.$type).toBe('Attribute');
+      expect(tradeDateAttr!.$type).toBe('Attribute');
     }
   });
 
-  it('SyntheticEnum carries source RosettaEnumeration', async () => {
+  it('Model element carries RosettaEnumeration fields', async () => {
     const result = await parse(COMBINED_MODEL_SOURCE);
-    const { nodes, edges } = astToGraph(result.value);
-    const models = graphToModels(nodes, edges);
+    const { nodes, edges } = astToModel(result.value);
+    const models = modelsToAst(nodes, edges);
 
     const model = models[0]!;
-    const enumElement = model.elements.find((e) => e.$type === 'RosettaEnumeration');
+    const enumElement = model.elements.find(
+      (e) => (e as { $type?: string }).$type === 'RosettaEnumeration'
+    ) as Record<string, unknown> | undefined;
     expect(enumElement).toBeDefined();
-
-    if (enumElement!.$type === 'RosettaEnumeration') {
-      expect(enumElement!.source).toBeDefined();
-      expect(enumElement!.source!.$type).toBe('RosettaEnumeration');
-    }
+    expect(enumElement!.$type).toBe('RosettaEnumeration');
   });
 
-  it('SyntheticEnumValue carries definition from source', async () => {
-    // The enum values in our fixture don't have definitions,
-    // but verify the round-trip pathway works
+  it('Model element carries enum values', async () => {
     const result = await parse(ENUM_MODEL_SOURCE);
-    const { nodes, edges } = astToGraph(result.value);
-    const models = graphToModels(nodes, edges);
+    const { nodes, edges } = astToModel(result.value);
+    const models = modelsToAst(nodes, edges);
 
     const model = models[0]!;
-    const enumElement = model.elements.find((e) => e.$type === 'RosettaEnumeration');
+    const enumElement = model.elements.find(
+      (e) => (e as { $type?: string }).$type === 'RosettaEnumeration'
+    ) as Record<string, unknown> | undefined;
 
     if (enumElement!.$type === 'RosettaEnumeration') {
-      expect(enumElement!.enumValues.length).toBe(3);
-      // source is preserved on each enum value
-      for (const val of enumElement!.enumValues) {
-        expect(val.source).toBeDefined();
-        expect(val.source!.$type).toBe('RosettaEnumValue');
+      const enumValues = enumElement!.enumValues as Array<{ name: string; $type?: string }>;
+      expect(enumValues.length).toBe(3);
+      for (const val of enumValues) {
+        expect(val.$type).toBe('RosettaEnumValue');
       }
     }
   });

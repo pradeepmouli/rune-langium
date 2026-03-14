@@ -9,7 +9,13 @@
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import type { TypeNodeData } from '../../types.js';
+import type { AnyGraphNode } from '../../types.js';
+import {
+  AST_TYPE_TO_NODE_TYPE,
+  getTypeRefText,
+  formatCardinality,
+  getRefText
+} from '../../adapters/model-helpers.js';
 
 const KIND_LABELS: Record<string, string> = {
   record: 'Record',
@@ -26,45 +32,48 @@ const KIND_CSS: Record<string, string> = {
 };
 
 export const GenericNode = memo(function GenericNode({ data, selected }: NodeProps) {
-  const nodeData = data as unknown as TypeNodeData;
-  const kindLabel = KIND_LABELS[nodeData.kind] ?? nodeData.kind;
-  const kindCss = KIND_CSS[nodeData.kind] ?? '';
+  const d = data as unknown as AnyGraphNode;
+  const kind = AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data';
+  const kindLabel = KIND_LABELS[kind] ?? kind;
+  const kindCss = KIND_CSS[kind] ?? '';
+  const parentName = getRefText((d as any).superType);
+  const members = ((d as any).attributes ?? (d as any).features ?? []) as any[];
 
   return (
     <div className={`rune-node ${kindCss}${selected ? ' rune-node-selected' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="rune-node-header">
         <span className="rune-node-kind-badge">{kindLabel}</span>
-        <span>{nodeData.name}</span>
+        <span>{d.name}</span>
       </div>
       <div className="rune-node-body">
-        {nodeData.parentName && (
+        {parentName && (
           <div className="rune-node-parent">
             <span className="rune-node-parent-label">→ </span>
-            <span>{nodeData.parentName}</span>
+            <span>{parentName}</span>
           </div>
         )}
-        {nodeData.members.length > 0 && (
+        {members.length > 0 && (
           <div className="rune-node-members">
-            {nodeData.members.map((member) => (
-              <div
-                key={member.name}
-                className={`rune-node-member${member.isOverride ? ' rune-node-member-override' : ''}`}
-              >
-                <span className="rune-node-member-name">{member.name}</span>
-                {member.typeName && (
-                  <span className="rune-node-member-type">{member.typeName}</span>
-                )}
-                {member.cardinality && (
-                  <span className="rune-node-member-cardinality">{member.cardinality}</span>
-                )}
-              </div>
-            ))}
+            {members.map((member: any) => {
+              const typeName = getTypeRefText(member.typeCall);
+              const card = formatCardinality(member.card);
+              return (
+                <div
+                  key={member.name}
+                  className={`rune-node-member${member.override ? ' rune-node-member-override' : ''}`}
+                >
+                  <span className="rune-node-member-name">{member.name}</span>
+                  {typeName && <span className="rune-node-member-type">{typeName}</span>}
+                  {card && <span className="rune-node-member-cardinality">{card}</span>}
+                </div>
+              );
+            })}
           </div>
         )}
-        {nodeData.errors.length > 0 && (
+        {(d as any).errors?.length > 0 && (
           <div className="rune-node-errors">
-            {nodeData.errors.map((err, i) => (
+            {((d as any).errors as any[]).map((err: any, i: number) => (
               <div key={i}>{err.message}</div>
             ))}
           </div>

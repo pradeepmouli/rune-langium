@@ -1,11 +1,12 @@
-// @ts-nocheck — Generated scaffold; component props require controlled-component adapters
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useEffect } from 'react';
+import { useForm, useFieldArray, Controller, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import type { StripIndexSignature } from '@zod-to-form/core';
 import {
   CardinalitySelector,
   Field,
-  FieldContent,
+  FieldControl,
   FieldLabel,
   Input,
   Select,
@@ -13,140 +14,145 @@ import {
 } from '@/components/zod-form-components';
 import { DataSchema } from '../../../generated/zod-schemas.js';
 
-type StripIndexSignature<T> = T extends readonly (infer U)[]
-  ? StripIndexSignature<U>[]
-  : T extends object
-    ? {
-        [K in keyof T as string extends K
-          ? never
-          : number extends K
-            ? never
-            : symbol extends K
-              ? never
-              : K]: StripIndexSignature<T[K]>;
-      }
-    : T;
-
 type FormData = StripIndexSignature<z.output<typeof DataSchema>>;
 
-export function DataForm(props: { onSubmit: (data: FormData) => void }) {
-  const { register, handleSubmit, control } = useForm<FormData>({
-    resolver: zodResolver(DataSchema)
+export function DataForm(props: {
+  onValueChange?: (data: FormData) => void;
+  onSubmit?: (data: FormData) => void;
+  defaultValues?: Partial<FormData>;
+  values?: FormData;
+}) {
+  const form = useForm<FormData>({
+    resolver: zodResolver(DataSchema),
+    mode: 'onChange',
+    defaultValues: props.defaultValues,
+    values: props.values
   });
+  const { register, watch, control } = form;
   const {
     fields: attributesFields,
     append: appendAttributes,
     remove: removeAttributes
   } = useFieldArray<FormData, 'attributes'>({ control, name: 'attributes' });
+  useEffect(() => {
+    const subscription = watch((values) => {
+      props.onValueChange?.(values as FormData);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [watch, props.onValueChange]);
 
   return (
-    <form onSubmit={handleSubmit(props.onSubmit)}>
-      <Field>
-        <FieldLabel htmlFor="$type">$Type</FieldLabel>
-        <FieldContent>
-          <Select id="$type" {...register('$type')} />
-        </FieldContent>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="name">Name</FieldLabel>
-        <FieldContent>
-          <Input id="name" {...register('name')} />
-        </FieldContent>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="superType">Super Type</FieldLabel>
-        <FieldContent>
-          <TypeSelector id="superType" {...register('superType')} />
-        </FieldContent>
-      </Field>
-      <div>
-        <label>Attributes</label>
-        {attributesFields.map((item, index) => (
-          <div key={item.id}>
-            <div>
-              <label>0</label>
-              <fieldset>
-                <legend>0</legend>
-                <Field>
-                  <FieldLabel htmlFor="attributes.${index}.$type">$Type</FieldLabel>
-                  <FieldContent>
-                    <Select
-                      id="attributes.${index}.$type"
-                      {...register(`attributes.${index}.$type`)}
-                    />
-                  </FieldContent>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="attributes.${index}.name">Name</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="attributes.${index}.name"
-                      {...register(`attributes.${index}.name`)}
-                    />
-                  </FieldContent>
-                </Field>
-                <div>
-                  <label>Type Call</label>
-                  <fieldset>
-                    <legend>Type Call</legend>
-                    <Field>
-                      <FieldLabel htmlFor="attributes.${index}.typeCall.$type">$Type</FieldLabel>
-                      <FieldContent>
-                        <Select
-                          id="attributes.${index}.typeCall.$type"
-                          {...register(`attributes.${index}.typeCall.$type`)}
-                        />
-                      </FieldContent>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="attributes.${index}.typeCall.type">Type</FieldLabel>
-                      <FieldContent>
-                        <TypeSelector
-                          id="attributes.${index}.typeCall.type"
-                          {...register(`attributes.${index}.typeCall.type`)}
-                        />
-                      </FieldContent>
-                    </Field>
-                    <div>
-                      <label>Arguments</label>
-                      <p>
-                        Nested array editing is not auto-generated for dynamic paths. Use a custom
-                        renderer for attributes.${index}.typeCall.arguments.
-                      </p>
-                    </div>
-                  </fieldset>
-                </div>
-                <Field>
-                  <FieldLabel htmlFor="attributes.${index}.card">Card</FieldLabel>
-                  <FieldContent>
-                    <CardinalitySelector
-                      id="attributes.${index}.card"
-                      {...register(`attributes.${index}.card`)}
-                    />
-                  </FieldContent>
-                </Field>
-              </fieldset>
+    <FormProvider {...form}>
+      <form>
+        <Field>
+          <FieldLabel htmlFor="name">Name</FieldLabel>
+          <FieldControl>
+            <Input id="name" {...register('name')} />
+          </FieldControl>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="superType">Super Type</FieldLabel>
+          <FieldControl>
+            <Controller
+              name={'superType'}
+              control={control}
+              render={({ field }) => (
+                <TypeSelector
+                  id="superType"
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  ref={field.ref}
+                  name={field.name}
+                />
+              )}
+            />
+          </FieldControl>
+        </Field>
+        <div>
+          <label>Attributes</label>
+          {attributesFields.map((item, index) => (
+            <div key={item.id}>
+              <div>
+                <label>0</label>
+                <fieldset>
+                  <legend>0</legend>
+                  <Field>
+                    <FieldLabel htmlFor="attributes.${index}.name">Name</FieldLabel>
+                    <FieldControl>
+                      <Input
+                        id="attributes.${index}.name"
+                        {...register(`attributes.${index}.name`)}
+                      />
+                    </FieldControl>
+                  </Field>
+                  <div>
+                    <label>Type Call</label>
+                    <fieldset>
+                      <legend>Type Call</legend>
+                      <Field>
+                        <FieldLabel htmlFor="attributes.${index}.typeCall.type">Type</FieldLabel>
+                        <FieldControl>
+                          <Controller
+                            name={`attributes.${index}.typeCall.type`}
+                            control={control}
+                            render={({ field }) => (
+                              <TypeSelector
+                                id={`attributes.${index}.typeCall.type`}
+                                value={field.value}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                ref={field.ref}
+                                name={field.name}
+                              />
+                            )}
+                          />
+                        </FieldControl>
+                      </Field>
+                    </fieldset>
+                  </div>
+                  <Field>
+                    <FieldLabel htmlFor="attributes.${index}.card">Card</FieldLabel>
+                    <FieldControl>
+                      <Controller
+                        name={`attributes.${index}.card`}
+                        control={control}
+                        render={({ field }) => (
+                          <CardinalitySelector
+                            id={`attributes.${index}.card`}
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            ref={field.ref}
+                            name={field.name}
+                          />
+                        )}
+                      />
+                    </FieldControl>
+                  </Field>
+                </fieldset>
+              </div>
+              <button type="button" onClick={() => removeAttributes(index)}>
+                Remove
+              </button>
             </div>
-            <button type="button" onClick={() => removeAttributes(index)}>
-              Remove
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() =>
-            appendAttributes({
-              $type: 'Attribute',
-              name: '',
-              typeCall: { $type: 'TypeCall', type: { $refText: '', ref: '' }, arguments: [] },
-              card: { $type: 'RosettaCardinality', inf: 0, sup: 0, unbounded: false }
-            })
-          }
-        >
-          Add
-        </button>
-      </div>
-      <button type="submit">Submit</button>
-    </form>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              appendAttributes({
+                $type: 'Attribute',
+                name: '',
+                typeCall: { $type: 'TypeCall', type: { $refText: '', ref: '' }, arguments: [] },
+                card: { $type: 'RosettaCardinality', inf: 0, sup: 0, unbounded: false }
+              })
+            }
+          >
+            Add
+          </button>
+        </div>
+      </form>
+    </FormProvider>
   );
 }

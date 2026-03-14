@@ -28,20 +28,16 @@ function makeEnumNode(id: string, name: string, values: string[]): TypeGraphNode
     type: 'type',
     position: { x: 0, y: 0 },
     data: {
-      kind: 'enum' as const,
+      $type: 'RosettaEnumeration',
       name,
       namespace: 'test',
-      members: values.map((v) => ({
-        name: v,
-        typeName: undefined,
-        cardinality: undefined,
-        description: undefined,
-        isOverride: false
+      enumValues: values.map((v) => ({
+        $type: 'RosettaEnumValue',
+        name: v
       })),
-      parentName: undefined,
       hasExternalRefs: false,
       errors: []
-    }
+    } as any
   };
 }
 
@@ -55,20 +51,18 @@ function makeDataNode(
     type: 'type',
     position: { x: 0, y: 0 },
     data: {
-      kind: 'data' as const,
+      $type: 'Data',
       name,
       namespace: 'test',
-      members: members.map((m) => ({
+      attributes: members.map((m) => ({
+        $type: 'Attribute',
         name: m.name,
-        typeName: m.typeName,
-        cardinality: '(1..1)',
-        description: undefined,
-        isOverride: false
+        override: false,
+        typeCall: m.typeName ? { $type: 'TypeCall', type: { $refText: m.typeName } } : undefined
       })),
-      parentName: undefined,
       hasExternalRefs: false,
       errors: []
-    }
+    } as any
   };
 }
 

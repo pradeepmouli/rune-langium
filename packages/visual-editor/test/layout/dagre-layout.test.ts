@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
-import { astToGraph } from '../../src/adapters/ast-to-graph.js';
+import { astToModel } from '../../src/adapters/ast-to-model.js';
 import { computeLayout } from '../../src/layout/dagre-layout.js';
 import {
   SIMPLE_INHERITANCE_SOURCE,
@@ -17,7 +17,7 @@ import {
 describe('computeLayout', () => {
   it('assigns positions to all nodes', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes, edges } = astToGraph(result.value);
+    const { nodes, edges } = astToModel(result.value);
     const layouted = computeLayout(nodes, edges);
 
     expect(layouted).toHaveLength(nodes.length);
@@ -31,7 +31,7 @@ describe('computeLayout', () => {
 
   it('places parent above child in TB direction', async () => {
     const result = await parse(DEEP_INHERITANCE_SOURCE);
-    const { nodes, edges } = astToGraph(result.value);
+    const { nodes, edges } = astToModel(result.value);
     const layouted = computeLayout(nodes, edges, { direction: 'TB' });
 
     const baseNode = layouted.find((n) => n.data.name === 'Base');
@@ -51,7 +51,7 @@ describe('computeLayout', () => {
 
   it('respects LR direction', async () => {
     const result = await parse(DEEP_INHERITANCE_SOURCE);
-    const { nodes, edges } = astToGraph(result.value);
+    const { nodes, edges } = astToModel(result.value);
     const layouted = computeLayout(nodes, edges, { direction: 'LR' });
 
     const baseNode = layouted.find((n) => n.data.name === 'Base');
@@ -72,7 +72,7 @@ describe('computeLayout', () => {
 
   it('handles nodes with many members by increasing height', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes, edges } = astToGraph(result.value);
+    const { nodes, edges } = astToModel(result.value);
     const layouted = computeLayout(nodes, edges);
 
     // Nodes with members should have distinct positions
@@ -81,7 +81,7 @@ describe('computeLayout', () => {
 
   it('applies custom node and rank separation', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
-    const { nodes, edges } = astToGraph(result.value);
+    const { nodes, edges } = astToModel(result.value);
 
     const tight = computeLayout(nodes, edges, { nodeSeparation: 10, rankSeparation: 30 });
     const wide = computeLayout(nodes, edges, { nodeSeparation: 200, rankSeparation: 300 });

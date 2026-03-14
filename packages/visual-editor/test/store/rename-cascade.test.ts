@@ -13,7 +13,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import { SIMPLE_INHERITANCE_SOURCE, COMBINED_MODEL_SOURCE } from '../helpers/fixture-loader.js';
-import type { TypeNodeData, MemberDisplay } from '../../src/types.js';
 
 /**
  * Builds a large synthetic graph with N data nodes where every node
@@ -72,7 +71,9 @@ describe('renameType — cascade', () => {
     const tradeNode = store.getState().nodes.find((n) => n.data.name === 'Trade');
     expect(tradeNode).toBeDefined();
 
-    const hasCurrencyRef = tradeNode!.data.members.some((m) => m.typeName === 'CurrencyEnum');
+    const hasCurrencyRef = ((tradeNode!.data as any).attributes ?? []).some(
+      (m: any) => m.typeCall?.type?.$refText === 'CurrencyEnum'
+    );
     expect(hasCurrencyRef).toBe(true);
 
     // Rename CurrencyEnum → CcyCode
@@ -81,11 +82,15 @@ describe('renameType — cascade', () => {
 
     // Verify cascade: Trade.currency.typeName should now be CcyCode
     const updatedTrade = store.getState().nodes.find((n) => n.data.name === 'Trade');
-    const ref = updatedTrade!.data.members.find((m) => m.typeName === 'CcyCode');
+    const ref = ((updatedTrade!.data as any).attributes ?? []).find(
+      (m: any) => m.typeCall?.type?.$refText === 'CcyCode'
+    );
     expect(ref).toBeDefined();
 
     // Old reference should be gone
-    const oldRef = updatedTrade!.data.members.find((m) => m.typeName === 'CurrencyEnum');
+    const oldRef = ((updatedTrade!.data as any).attributes ?? []).find(
+      (m: any) => m.typeCall?.type?.$refText === 'CurrencyEnum'
+    );
     expect(oldRef).toBeUndefined();
   });
 
@@ -94,13 +99,13 @@ describe('renameType — cascade', () => {
     const eventNode = store.getState().nodes.find((n) => n.data.name === 'Event');
     const tradeNode = store.getState().nodes.find((n) => n.data.name === 'Trade');
 
-    // Verify Trade has parentName = Event
-    expect(tradeNode!.data.parentName).toBe('Event');
+    // Verify Trade has superType.$refText = Event
+    expect((tradeNode!.data as any).superType?.$refText).toBe('Event');
 
     store.getState().renameType(eventNode!.id, 'BaseEvent');
 
     const updatedTrade = store.getState().nodes.find((n) => n.data.name === 'Trade');
-    expect(updatedTrade!.data.parentName).toBe('BaseEvent');
+    expect((updatedTrade!.data as any).superType?.$refText).toBe('BaseEvent');
   });
 
   it('cascades into edge source, target, and labels', () => {
@@ -171,12 +176,20 @@ describe('renameType — cascade', () => {
     // Verify all references updated
     const staleRefs = freshStore
       .getState()
-      .nodes.flatMap((n) => n.data.members.filter((m) => m.typeName === 'RootType'));
+      .nodes.flatMap((n) =>
+        ((n.data as any).attributes ?? []).filter(
+          (m: any) => m.typeCall?.type?.$refText === 'RootType'
+        )
+      );
     expect(staleRefs.length).toBe(0);
 
     const freshRefs = freshStore
       .getState()
-      .nodes.flatMap((n) => n.data.members.filter((m) => m.typeName === 'NewRootType'));
+      .nodes.flatMap((n) =>
+        ((n.data as any).attributes ?? []).filter(
+          (m: any) => m.typeCall?.type?.$refText === 'NewRootType'
+        )
+      );
     expect(freshRefs.length).toBe(399);
   });
 });

@@ -15,8 +15,8 @@
  * @module
  */
 
-import { useCallback, useRef, useMemo } from 'react';
-import { FormProvider, Controller } from 'react-hook-form';
+import { useCallback, useRef } from 'react';
+import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
 import {
   Field,
   FieldError,
@@ -31,31 +31,40 @@ import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { AnnotationSection } from './AnnotationSection.js';
+import { ConditionSection } from './ConditionSection.js';
+import {
+  formatCardinality,
+  getTypeRefText,
+  getRefText,
+  classExprSynonymsToStrings
+} from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useNodeForm } from '../../hooks/useNodeForm.js';
+import { useZodForm } from '@zod-to-form/react';
+import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { dataTypeFormSchema, type DataTypeFormValues } from '../../schemas/form-schemas.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../../types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../types.js';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Convert TypeNodeData to form-managed values. */
-function toFormValues(data: TypeNodeData<'data'>): DataTypeFormValues {
+/** Convert AnyGraphNode to form-managed values. */
+function toFormValues(data: AnyGraphNode): DataTypeFormValues {
+  const d = data as any;
   return {
-    name: data.name,
-    parentName: data.parentName ?? '',
-    members: data.members.map((m) => ({
-      name: m.name,
-      typeName: m.typeName ?? 'string',
-      cardinality: m.cardinality ?? '(1..1)',
-      isOverride: m.isOverride,
-      displayName: m.displayName
+    name: d.name ?? '',
+    parentName: getRefText(d.superType) ?? '',
+    members: (d.attributes ?? []).map((a: any) => ({
+      name: a.name ?? '',
+      typeName: getTypeRefText(a.typeCall) ?? 'string',
+      cardinality: formatCardinality(a.card) || '(1..1)',
+      isOverride: a.override ?? false,
+      displayName: a.name ?? ''
     })),
-    definition: data.definition ?? '',
-    comments: data.comments ?? '',
-    synonyms: data.synonyms ?? []
+    definition: d.definition ?? '',
+    comments: d.comments ?? '',
+    synonyms: classExprSynonymsToStrings(d.synonyms)
   };
 }
 
@@ -66,8 +75,8 @@ function toFormValues(data: TypeNodeData<'data'>): DataTypeFormValues {
 export interface DataTypeFormProps {
   /** Node ID of the Data type being edited. */
   nodeId: string;
-  /** Data payload for the selected node. */
-  data: TypeNodeData<'data'>;
+  /** Data payload for the selected node (AnyGraphNode with $type='Data'). */
+  data: AnyGraphNode;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
   /** Data-specific editor form action callbacks. */
@@ -87,17 +96,17 @@ function DataTypeForm({
   actions,
   inheritedGroups = []
 }: DataTypeFormProps) {
-  // ---- Form setup (full model via useNodeForm) -----------------------------
+  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
-  const resetKey = useMemo(() => JSON.stringify(toFormValues(data)), [data]);
-
-  const { form, members } = useNodeForm<DataTypeFormValues>({
-    schema: dataTypeFormSchema,
-    defaultValues: () => toFormValues(data),
-    resetKey
+  const { form } = useZodForm(dataTypeFormSchema, {
+    defaultValues: toFormValues(data),
+    mode: 'onChange'
   });
 
-  const { fields, append, remove, move } = members;
+  const { fields, append, remove, move } = useFieldArray({
+    control: form.control,
+    name: 'members'
+  });
 
   // Track the committed (graph-confirmed) data for diffing
   const committedRef = useRef(data);
@@ -136,7 +145,8 @@ function DataTypeForm({
 
   const handleRemoveAttribute = useCallback(
     (index: number) => {
-      const committed = committedRef.current.members[index];
+      const attrs = (committedRef.current as any).attributes ?? [];
+      const committed = attrs[index];
       if (committed) {
         remove(index);
         actions.removeAttribute(nodeId, committed.name);
@@ -206,20 +216,26 @@ function DataTypeForm({
     [nodeId, actions]
   );
 
+  // ---- (conditions and annotations are handled internally by their sections)
+
   // ---- Resolve parent type option for display ------------------------------
 
+  const d = data as any;
+  const parentName = getRefText(d.superType);
+
   const parentOptions = availableTypes.filter(
-    (opt) => (opt.kind === 'data' || opt.kind === 'builtin') && opt.label !== data.name
+    (opt) => (opt.kind === 'data' || opt.kind === 'builtin') && opt.label !== d.name
   );
 
-  const parentValue = data.parentName
-    ? (availableTypes.find((opt) => opt.label === data.parentName)?.value ?? null)
+  const parentValue = parentName
+    ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null)
     : null;
 
   // ---- Render --------------------------------------------------------------
 
   return (
     <FormProvider {...form}>
+      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="data-type-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">
@@ -288,7 +304,7 @@ function DataTypeForm({
               <AttributeRow
                 key={field.id}
                 index={i}
-                committedName={committedRef.current.members[i]?.name ?? ''}
+                committedName={((committedRef.current as any).attributes ?? [])[i]?.name ?? ''}
                 availableTypes={availableTypes}
                 onUpdate={handleUpdateAttribute}
                 onRemove={handleRemoveAttribute}
@@ -304,12 +320,15 @@ function DataTypeForm({
           </FieldGroup>
         </FieldSet>
 
+        {/* Conditions */}
+        <ConditionSection label="Conditions" conditions={d.conditions} readOnly={d.isReadOnly} />
+
         {/* Inherited Members */}
         <InheritedMembersSection groups={inheritedGroups} />
 
         {/* Annotations */}
         <AnnotationSection
-          annotations={data.annotations ?? []}
+          annotations={d.annotations}
           onAdd={handleAddAnnotation}
           onRemove={handleRemoveAnnotation}
         />

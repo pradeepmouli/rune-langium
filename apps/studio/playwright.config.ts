@@ -6,17 +6,20 @@ export default defineConfig({
   forbidOnly: false,
   retries: 1,
   workers: 1,
-  reporter: 'html',
+  reporter: process.env.CI ? 'list' : 'html',
+  timeout: 30000,
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173',
     trace: 'on-first-retry'
   },
-  webServer: {
-    command: 'pnpm run dev',
-    port: 5173,
-    reuseExistingServer: true,
-    timeout: 30000
-  },
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: 'pnpm run dev',
+        port: 5173,
+        reuseExistingServer: true,
+        timeout: 30000
+      },
   projects: [
     {
       name: 'chromium',

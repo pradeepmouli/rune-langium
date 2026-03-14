@@ -13,7 +13,7 @@
  * - S-07: Invalid name characters per Rune DSL identifier rules
  */
 
-import type { TypeGraphNode, TypeGraphEdge, ValidationError } from '../types.js';
+import type { TypeGraphNode, TypeGraphEdge, ValidationError, AnyGraphNode } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Circular inheritance detection (S-02)
@@ -73,7 +73,13 @@ export function detectDuplicateName(
     // Check for duplicate attribute within a node
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return false;
-    return node.data.members.some((m) => m.name === name);
+    const d = node.data as AnyGraphNode;
+    const members = ((d as any).attributes ??
+      (d as any).enumValues ??
+      (d as any).inputs ??
+      (d as any).features ??
+      []) as { name?: string }[];
+    return members.some((m) => m.name === name);
   }
 
   // Check for duplicate type name in the namespace
@@ -133,8 +139,11 @@ export function detectDuplicateEnumValue(
   nodes: TypeGraphNode[]
 ): boolean {
   const node = nodes.find((n) => n.id === nodeId);
-  if (!node || node.data.kind !== 'enum') return false;
-  return node.data.members.some((m) => m.name === valueName);
+  if (!node) return false;
+  const d = node.data as AnyGraphNode;
+  if (d.$type !== 'RosettaEnumeration') return false;
+  const vals = ((d as any).enumValues ?? []) as { name?: string }[];
+  return vals.some((v) => v.name === valueName);
 }
 
 // ---------------------------------------------------------------------------
@@ -291,9 +300,13 @@ export function validateGraph(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): V
 
   // Check for duplicate attribute names within each type
   for (const node of nodes) {
+    const d = node.data as AnyGraphNode;
+    const members = ((d as any).attributes ?? (d as any).inputs ?? (d as any).features ?? []) as {
+      name?: string;
+    }[];
     const attrNames = new Set<string>();
-    for (const member of node.data.members) {
-      if (attrNames.has(member.name)) {
+    for (const member of members) {
+      if (member.name && attrNames.has(member.name)) {
         errors.push({
           nodeId: node.id,
           severity: 'error',
@@ -301,24 +314,26 @@ export function validateGraph(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): V
           ruleId: 'S-01'
         });
       }
-      attrNames.add(member.name);
+      if (member.name) attrNames.add(member.name);
     }
   }
 
   // S-05: Check for duplicate enum value names within each enum
   for (const node of nodes) {
-    if (node.data.kind !== 'enum') continue;
+    const d = node.data as AnyGraphNode;
+    if (d.$type !== 'RosettaEnumeration') continue;
+    const vals = ((d as any).enumValues ?? []) as { name?: string }[];
     const valueNames = new Set<string>();
-    for (const member of node.data.members) {
-      if (valueNames.has(member.name)) {
+    for (const val of vals) {
+      if (val.name && valueNames.has(val.name)) {
         errors.push({
           nodeId: node.id,
           severity: 'error',
-          message: `Duplicate enum value: "${member.name}"`,
+          message: `Duplicate enum value: "${val.name}"`,
           ruleId: 'S-05'
         });
       }
-      valueNames.add(member.name);
+      if (val.name) valueNames.add(val.name);
     }
   }
 

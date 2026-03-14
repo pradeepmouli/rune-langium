@@ -13,7 +13,7 @@ import { render } from '@testing-library/react';
 import { ChoiceForm } from '../src/components/editors/ChoiceForm.js';
 import { DataTypeForm } from '../src/components/editors/DataTypeForm.js';
 import { FunctionForm } from '../src/components/editors/FunctionForm.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -24,16 +24,51 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'test::string', label: 'string', kind: 'builtin' }
 ];
 
-/** Build a minimal TypeNodeData fixture for any kind. */
-function makeData<K extends 'choice' | 'data' | 'func'>(kind: K, name: string): TypeNodeData<K> {
+/** Build a minimal AnyGraphNode fixture for any AST type. */
+function makeChoiceNode(name: string): AnyGraphNode {
   return {
-    kind,
+    $type: 'Choice',
     name,
     namespace: 'test',
-    members: [],
+    attributes: [],
+    conditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
     hasExternalRefs: false,
     errors: []
-  } as TypeNodeData<K>;
+  } as AnyGraphNode;
+}
+
+function makeDataNode(name: string): AnyGraphNode {
+  return {
+    $type: 'Data',
+    name,
+    namespace: 'test',
+    attributes: [],
+    conditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
+    hasExternalRefs: false,
+    errors: []
+  } as AnyGraphNode;
+}
+
+function makeFuncNode(name: string): AnyGraphNode {
+  return {
+    $type: 'RosettaFunction',
+    name,
+    namespace: 'test',
+    inputs: [],
+    conditions: [],
+    postConditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
+    hasExternalRefs: false,
+    errors: []
+  } as AnyGraphNode;
 }
 
 /** Create a minimal all-vi.fn() action map compatible with any form kind. */
@@ -100,7 +135,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
       render(
         <ChoiceForm
           nodeId="node-choice"
-          data={makeData('choice', 'PaymentMethod')}
+          data={makeChoiceNode('PaymentMethod')}
           availableTypes={AVAILABLE_TYPES}
           actions={makeChoiceActions()}
         />
@@ -113,7 +148,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
       render(
         <DataTypeForm
           nodeId="node-data"
-          data={makeData('data', 'Party')}
+          data={makeDataNode('Party')}
           availableTypes={AVAILABLE_TYPES}
           actions={makeDataActions()}
         />
@@ -126,7 +161,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
       render(
         <FunctionForm
           nodeId="node-func"
-          data={makeData('func', 'Calculate')}
+          data={makeFuncNode('Calculate')}
           availableTypes={AVAILABLE_TYPES}
           actions={makeFuncActions()}
         />
@@ -136,16 +171,16 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
 
   it('ChoiceForm accepts its original prop shape (nodeId, data, availableTypes, actions)', () => {
     // Verifies the prop interface has not regressed
-    const data = makeData('choice', 'Settlement');
+    const data = makeChoiceNode('Settlement');
     const actions = makeChoiceActions();
-    // render → no TS error here means the prop types are intact
+    // render -> no TS error here means the prop types are intact
     expect(() =>
       render(<ChoiceForm nodeId="n1" data={data} availableTypes={[]} actions={actions} />)
     ).not.toThrow();
   });
 
   it('DataTypeForm accepts its original prop shape (nodeId, data, availableTypes, actions)', () => {
-    const data = makeData('data', 'Counterparty');
+    const data = makeDataNode('Counterparty');
     const actions = makeDataActions();
     expect(() =>
       render(<DataTypeForm nodeId="n2" data={data} availableTypes={[]} actions={actions} />)
@@ -153,7 +188,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
   });
 
   it('FunctionForm accepts its original prop shape (nodeId, data, availableTypes, actions)', () => {
-    const data = makeData('func', 'Evaluate');
+    const data = makeFuncNode('Evaluate');
     const actions = makeFuncActions();
     expect(() =>
       render(<FunctionForm nodeId="n3" data={data} availableTypes={[]} actions={actions} />)

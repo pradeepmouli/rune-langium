@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse, serializeModel } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
-import { graphToModels } from '../../src/adapters/graph-to-ast.js';
+import { modelsToAst } from '../../src/adapters/model-to-ast.js';
 
 const ROUNDTRIP_SOURCE = `
 namespace test.roundtrip
@@ -30,7 +30,7 @@ describe('Round-trip edits', () => {
     store.getState().loadModels(result.value);
 
     // Export via graph-to-models helper
-    const models = graphToModels(store.getState().nodes, store.getState().edges);
+    const models = modelsToAst(store.getState().nodes, store.getState().edges);
     expect(models.length).toBeGreaterThan(0);
 
     // Serialize back to text
@@ -49,7 +49,7 @@ describe('Round-trip edits', () => {
     store.getState().createType('data', 'NewThing', 'test.roundtrip');
 
     // Export graph to synthetic models
-    const models = graphToModels(store.getState().nodes, store.getState().edges);
+    const models = modelsToAst(store.getState().nodes, store.getState().edges);
     const text = serializeModel(models[0]);
 
     // Re-parse
@@ -71,7 +71,7 @@ describe('Round-trip edits', () => {
     expect(barNode).toBeDefined();
     store.getState().deleteType(barNode!.id);
 
-    const models = graphToModels(store.getState().nodes, store.getState().edges);
+    const models = modelsToAst(store.getState().nodes, store.getState().edges);
     const text = serializeModel(models[0]);
 
     const reparsed = await parse(text);
@@ -91,7 +91,7 @@ describe('Round-trip edits', () => {
 
     store.getState().addAttribute(fooNode!.id, 'newField', 'date', '1..1');
 
-    const models = graphToModels(store.getState().nodes, store.getState().edges);
+    const models = modelsToAst(store.getState().nodes, store.getState().edges);
     const text = serializeModel(models[0]);
 
     expect(text).toContain('newField date');
@@ -113,7 +113,7 @@ describe('Round-trip edits', () => {
 
     store.getState().setInheritance(fooNode!.id, superNode!.id);
 
-    const models = graphToModels(store.getState().nodes, store.getState().edges);
+    const models = modelsToAst(store.getState().nodes, store.getState().edges);
     const text = serializeModel(models[0]);
 
     expect(text).toContain('type Foo extends SuperBase:');

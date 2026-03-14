@@ -3,7 +3,7 @@
  *
  * Validates that the schemas correctly parse valid form data and
  * reject invalid inputs. Also verifies runtime conformance by
- * parsing real TypeNodeData fixtures through the schemas.
+ * parsing real AnyGraphNode fixtures through the schemas.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -176,76 +176,91 @@ describe('functionFormSchema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Runtime conformance: parse actual TypeNodeData projections
+// Runtime conformance: parse actual AnyGraphNode projections
 // ---------------------------------------------------------------------------
 
-describe('runtime conformance with TypeNodeData', () => {
-  it('dataTypeFormSchema parses TypeNodeData<data> fields', () => {
+describe('runtime conformance with AnyGraphNode', () => {
+  it('dataTypeFormSchema parses GraphNode<Data> fields', () => {
     const nodeData = {
-      kind: 'data' as const,
+      $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.event',
-      parentName: 'Event',
-      members: [],
+      superType: { $refText: 'Event' },
+      attributes: [],
+      conditions: [],
+      annotations: [],
+      synonyms: [],
+      position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
     };
     // Extract only the form-surface fields
     const result = dataTypeFormSchema.parse({
       name: nodeData.name,
-      parentName: nodeData.parentName,
+      parentName: nodeData.superType?.$refText ?? '',
       members: []
     });
     expect(result.name).toBe('Trade');
     expect(result.parentName).toBe('Event');
   });
 
-  it('enumFormSchema parses TypeNodeData<enum> fields', () => {
+  it('enumFormSchema parses GraphNode<RosettaEnumeration> fields', () => {
     const nodeData = {
-      kind: 'enum' as const,
+      $type: 'RosettaEnumeration' as const,
       name: 'ActionEnum',
       namespace: 'cdm.event',
-      parentName: undefined,
-      members: [],
+      parent: undefined,
+      enumValues: [],
+      synonyms: [],
+      position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
     };
     const result = enumFormSchema.parse({
       name: nodeData.name,
-      parentName: nodeData.parentName ?? ''
+      parentName: nodeData.parent?.$refText ?? ''
     });
     expect(result.name).toBe('ActionEnum');
     expect(result.parentName).toBe('');
   });
 
-  it('functionFormSchema parses TypeNodeData<func> fields', () => {
+  it('functionFormSchema parses GraphNode<RosettaFunction> fields', () => {
     const nodeData = {
-      kind: 'func' as const,
+      $type: 'RosettaFunction' as const,
       name: 'Qualify',
       namespace: 'cdm.event.qualification',
-      outputType: 'boolean',
+      output: { typeCall: { $type: 'TypeCall' as const, type: { $refText: 'boolean' } } },
       expressionText: 'trade exists',
-      members: [],
+      inputs: [],
+      conditions: [],
+      postConditions: [],
+      annotations: [],
+      synonyms: [],
+      position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
     };
     const result = functionFormSchema.parse({
       name: nodeData.name,
-      outputType: nodeData.outputType,
+      outputType: nodeData.output?.typeCall?.type?.$refText ?? '',
       expressionText: nodeData.expressionText
     });
     expect(result.name).toBe('Qualify');
     expect(result.outputType).toBe('boolean');
   });
 
-  it('metadataSchema parses TypeNodeData metadata fields', () => {
+  it('metadataSchema parses AnyGraphNode metadata fields', () => {
     const nodeData = {
-      kind: 'data' as const,
+      $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.event',
       definition: 'Represents a trade execution event.',
       comments: 'Added in CDM 2.0',
-      members: [],
+      attributes: [],
+      conditions: [],
+      annotations: [],
+      synonyms: [],
+      position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
     };
@@ -257,17 +272,18 @@ describe('runtime conformance with TypeNodeData', () => {
     expect(result.comments).toBe('Added in CDM 2.0');
   });
 
-  it('attributeSchema parses MemberDisplay fields', () => {
-    const member = {
+  it('attributeSchema parses Attribute model fields', () => {
+    const attribute = {
+      $type: 'Attribute' as const,
       name: 'notionalAmount',
-      typeName: 'Money',
-      cardinality: '(1..1)',
-      isOverride: false
+      typeCall: { $type: 'TypeCall' as const, type: { $refText: 'Money' } },
+      card: { inf: 1, sup: 1, unbounded: false },
+      override: false
     };
     const result = attributeSchema.parse({
-      name: member.name,
-      typeName: member.typeName,
-      cardinality: member.cardinality
+      name: attribute.name,
+      typeName: attribute.typeCall.type.$refText,
+      cardinality: '(1..1)'
     });
     expect(result.name).toBe('notionalAmount');
     expect(result.typeName).toBe('Money');

@@ -15,8 +15,8 @@
  * @module
  */
 
-import { useCallback, useRef, useMemo } from 'react';
-import { FormProvider, Controller } from 'react-hook-form';
+import { useCallback, useRef } from 'react';
+import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
 import {
   Field,
   FieldError,
@@ -30,28 +30,31 @@ import { ChoiceOptionRow } from './ChoiceOptionRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useNodeForm } from '../../hooks/useNodeForm.js';
+import { useZodForm } from '@zod-to-form/react';
+import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { choiceFormSchema, type ChoiceFormValues } from '../../schemas/form-schemas.js';
-import type { TypeNodeData, TypeOption, EditorFormActions, MemberDisplay } from '../../types.js';
+import { getTypeRefText, classExprSynonymsToStrings } from '../../adapters/model-helpers.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Convert TypeNodeData to form-managed values. */
-function toFormValues(data: TypeNodeData<'choice'>): ChoiceFormValues {
+/** Convert AnyGraphNode to form-managed values. */
+function toFormValues(data: AnyGraphNode): ChoiceFormValues {
+  const d = data as any;
   return {
-    name: data.name,
-    members: data.members.map((m) => ({
-      name: m.name,
-      typeName: m.typeName ?? '',
-      cardinality: m.cardinality ?? '',
-      isOverride: m.isOverride,
-      displayName: m.displayName
+    name: d.name ?? '',
+    members: (d.attributes ?? []).map((o: any) => ({
+      name: getTypeRefText(o.typeCall) ?? '',
+      typeName: getTypeRefText(o.typeCall) ?? '',
+      cardinality: '',
+      isOverride: false,
+      displayName: getTypeRefText(o.typeCall) ?? ''
     })),
-    definition: data.definition ?? '',
-    comments: data.comments ?? '',
-    synonyms: data.synonyms ?? []
+    definition: d.definition ?? '',
+    comments: d.comments ?? '',
+    synonyms: classExprSynonymsToStrings(d.synonyms)
   };
 }
 
@@ -62,8 +65,8 @@ function toFormValues(data: TypeNodeData<'choice'>): ChoiceFormValues {
 export interface ChoiceFormProps {
   /** Node ID of the Choice being edited. */
   nodeId: string;
-  /** Data payload for the selected choice node. */
-  data: TypeNodeData<'choice'>;
+  /** Data payload for the selected choice node (AnyGraphNode with $type='Choice'). */
+  data: AnyGraphNode;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
   /** Choice-specific editor form action callbacks. */
@@ -75,17 +78,18 @@ export interface ChoiceFormProps {
 // ---------------------------------------------------------------------------
 
 function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) {
-  // ---- Form setup (full model via useNodeForm) -----------------------------
+  const d = data as any;
+  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
-  const resetKey = useMemo(() => JSON.stringify(toFormValues(data)), [data]);
-
-  const { form, members } = useNodeForm<ChoiceFormValues>({
-    schema: choiceFormSchema,
-    defaultValues: () => toFormValues(data),
-    resetKey
+  const { form } = useZodForm(choiceFormSchema, {
+    defaultValues: toFormValues(data),
+    mode: 'onChange'
   });
 
-  const { fields } = members;
+  const { fields: _fields } = useFieldArray({
+    control: form.control,
+    name: 'members'
+  });
 
   // Track committed data for diffing
   const committedRef = useRef(data);
@@ -155,13 +159,20 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
     [nodeId, actions]
   );
 
+  // ---- Derived members from AST attributes ---------------------------------
+
+  const members = (d.attributes ?? []).map((o: any) => ({
+    name: getTypeRefText(o.typeCall) ?? '',
+    typeName: getTypeRefText(o.typeCall) ?? ''
+  }));
+
   // ---- Filter out types already used as options ----------------------------
 
-  const usedTypeNames = new Set(data.members.map((m) => m.typeName));
+  const usedTypeNames = new Set(members.map((m: any) => m.typeName));
   const addableTypes = availableTypes.filter(
     (opt) =>
       (opt.kind === 'data' || opt.kind === 'choice') &&
-      opt.label !== data.name &&
+      opt.label !== d.name &&
       !usedTypeNames.has(opt.label)
   );
 
@@ -169,6 +180,7 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
 
   return (
     <FormProvider {...form}>
+      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="choice-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">
@@ -202,11 +214,11 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
         {/* Options */}
         <FieldSet className="gap-1">
           <FieldLegend variant="label" className="mb-0 text-muted-foreground">
-            Options ({data.members.length})
+            Options ({members.length})
           </FieldLegend>
 
           <FieldGroup className="gap-0.5">
-            {data.members.map((member: MemberDisplay, i: number) => (
+            {members.map((member: { name: string; typeName: string }, i: number) => (
               <ChoiceOptionRow
                 key={`${member.typeName}-${i}`}
                 typeName={member.typeName ?? member.name}
@@ -216,7 +228,7 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
               />
             ))}
 
-            {data.members.length === 0 && (
+            {members.length === 0 && (
               <p className="text-xs text-muted-foreground italic py-2 text-center">
                 No options defined. Use the selector below to add one.
               </p>

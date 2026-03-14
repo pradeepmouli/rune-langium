@@ -1,7 +1,7 @@
 /**
  * useInheritedMembers — Resolves the inheritance chain for a graph node.
  *
- * Walks up the `parentName` chain through the editor store's nodes,
+ * Walks up the superType/parent chain through the editor store's nodes,
  * collecting members from each ancestor. Returns an array of groups,
  * one per ancestor, ordered from immediate parent to root.
  *
@@ -9,7 +9,8 @@
  */
 
 import { useMemo } from 'react';
-import type { MemberDisplay, TypeNodeData } from '../types.js';
+import type { AnyGraphNode, TypeGraphNode } from '../types.js';
+import { getRefText, AST_TYPE_TO_NODE_TYPE } from '../adapters/model-helpers.js';
 
 export interface InheritedGroup {
   /** Name of the ancestor type. */
@@ -18,8 +19,35 @@ export interface InheritedGroup {
   namespace: string;
   /** Kind of the ancestor node. */
   kind: string;
-  /** Members inherited from this ancestor. */
-  members: MemberDisplay[];
+  /** Members inherited from this ancestor (raw AST-shaped objects). */
+  members: unknown[];
+}
+
+/**
+ * Get the parent/super type name from a node's data based on its $type.
+ */
+function getParentName(d: AnyGraphNode): string | undefined {
+  switch (d.$type) {
+    case 'Data':
+      return getRefText((d as any).superType);
+    case 'RosettaEnumeration':
+      return getRefText((d as any).parent);
+    case 'RosettaFunction':
+      return getRefText((d as any).superFunction);
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Get the member array from a node based on its $type.
+ */
+function getMembers(d: AnyGraphNode): unknown[] {
+  return ((d as any).attributes ??
+    (d as any).enumValues ??
+    (d as any).inputs ??
+    (d as any).features ??
+    []) as unknown[];
 }
 
 /**
@@ -31,43 +59,45 @@ export interface InheritedGroup {
  * @returns Array of inherited groups, one per ancestor (parent first).
  */
 export function useInheritedMembers(
-  nodeData: TypeNodeData | null,
-  allNodes: Array<{ data: TypeNodeData }>,
+  nodeData: AnyGraphNode | null,
+  allNodes: TypeGraphNode[],
   maxDepth = 20
 ): InheritedGroup[] {
+  const parentName = nodeData ? getParentName(nodeData) : undefined;
   return useMemo(() => {
-    if (!nodeData?.parentName || allNodes.length === 0) return [];
+    if (!parentName || allNodes.length === 0) return [];
 
     const groups: InheritedGroup[] = [];
     const visited = new Set<string>();
-    let currentParentName: string | undefined = nodeData.parentName;
+    let currentParentName: string | undefined = parentName;
     let depth = 0;
 
     while (currentParentName && depth < maxDepth) {
       if (visited.has(currentParentName)) break; // cycle guard
       visited.add(currentParentName);
 
-      const parentNode = allNodes.find(
-        (n) =>
-          n.data.name === currentParentName ||
-          `${n.data.namespace}::${n.data.name}` === currentParentName
-      );
+      const parentNode = allNodes.find((n) => {
+        const pd = n.data as AnyGraphNode;
+        return pd.name === currentParentName || `${pd.namespace}::${pd.name}` === currentParentName;
+      });
 
       if (!parentNode) break;
 
-      if (parentNode.data.members.length > 0) {
+      const pd = parentNode.data as AnyGraphNode;
+      const members = getMembers(pd);
+      if (members.length > 0) {
         groups.push({
-          ancestorName: parentNode.data.name,
-          namespace: parentNode.data.namespace,
-          kind: parentNode.data.kind,
-          members: parentNode.data.members
+          ancestorName: pd.name as string,
+          namespace: pd.namespace as string,
+          kind: AST_TYPE_TO_NODE_TYPE[pd.$type] ?? 'data',
+          members
         });
       }
 
-      currentParentName = parentNode.data.parentName;
+      currentParentName = getParentName(pd);
       depth++;
     }
 
     return groups;
-  }, [nodeData?.parentName, allNodes, maxDepth]);
+  }, [parentName, allNodes, maxDepth]);
 }

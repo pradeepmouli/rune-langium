@@ -1,153 +1,135 @@
-// @ts-nocheck — Generated scaffold; component props require controlled-component adapters
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useEffect } from 'react';
+import { useForm, useFieldArray, Controller, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import type { StripIndexSignature } from '@zod-to-form/core';
 import {
   Field,
-  FieldContent,
+  FieldControl,
   FieldLabel,
   Input,
-  Select,
+  Textarea,
   TypeSelector
 } from '@/components/zod-form-components';
 import { RosettaEnumerationSchema } from '../../../generated/zod-schemas.js';
 
-type StripIndexSignature<T> = T extends readonly (infer U)[]
-  ? StripIndexSignature<U>[]
-  : T extends object
-    ? {
-        [K in keyof T as string extends K
-          ? never
-          : number extends K
-            ? never
-            : symbol extends K
-              ? never
-              : K]: StripIndexSignature<T[K]>;
-      }
-    : T;
-
 type FormData = StripIndexSignature<z.output<typeof RosettaEnumerationSchema>>;
 
-export function RosettaEnumerationForm(props: { onSubmit: (data: FormData) => void }) {
-  const { register, handleSubmit, control } = useForm<FormData>({
-    resolver: zodResolver(RosettaEnumerationSchema)
+export function RosettaEnumerationForm(props: {
+  onValueChange?: (data: FormData) => void;
+  onSubmit?: (data: FormData) => void;
+  defaultValues?: Partial<FormData>;
+  values?: FormData;
+}) {
+  const form = useForm<FormData>({
+    resolver: zodResolver(RosettaEnumerationSchema),
+    mode: 'onChange',
+    defaultValues: props.defaultValues,
+    values: props.values
   });
+  const { register, watch, control } = form;
   const {
     fields: enumValuesFields,
     append: appendEnumValues,
     remove: removeEnumValues
   } = useFieldArray<FormData, 'enumValues'>({ control, name: 'enumValues' });
+  useEffect(() => {
+    const subscription = watch((values) => {
+      props.onValueChange?.(values as FormData);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [watch, props.onValueChange]);
 
   return (
-    <form onSubmit={handleSubmit(props.onSubmit)}>
-      <Field>
-        <FieldLabel htmlFor="$type">$Type</FieldLabel>
-        <FieldContent>
-          <Select id="$type" {...register('$type')} />
-        </FieldContent>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="name">Name</FieldLabel>
-        <FieldContent>
-          <Input id="name" {...register('name')} />
-        </FieldContent>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="parent">Parent</FieldLabel>
-        <FieldContent>
-          <TypeSelector id="parent" {...register('parent')} />
-        </FieldContent>
-      </Field>
-      <div>
-        <label>Enum Values</label>
-        {enumValuesFields.map((item, index) => (
-          <div key={item.id}>
-            <div>
-              <label>0</label>
-              <fieldset>
-                <legend>0</legend>
-                <Field>
-                  <FieldLabel htmlFor="enumValues.${index}.$type">$Type</FieldLabel>
-                  <FieldContent>
-                    <Select
-                      id="enumValues.${index}.$type"
-                      {...register(`enumValues.${index}.$type`)}
-                    />
-                  </FieldContent>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="enumValues.${index}.name">Name</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="enumValues.${index}.name"
-                      {...register(`enumValues.${index}.name`)}
-                    />
-                  </FieldContent>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="enumValues.${index}.display">Display</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="enumValues.${index}.display"
-                      {...register(`enumValues.${index}.display`)}
-                    />
-                  </FieldContent>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="enumValues.${index}.definition">Definition</FieldLabel>
-                  <FieldContent>
-                    <Input
-                      id="enumValues.${index}.definition"
-                      {...register(`enumValues.${index}.definition`)}
-                    />
-                  </FieldContent>
-                </Field>
-                <div>
-                  <label>References</label>
-                  <p>
-                    Nested array editing is not auto-generated for dynamic paths. Use a custom
-                    renderer for enumValues.${index}.references.
-                  </p>
-                </div>
-                <div>
-                  <label>Annotations</label>
-                  <p>
-                    Nested array editing is not auto-generated for dynamic paths. Use a custom
-                    renderer for enumValues.${index}.annotations.
-                  </p>
-                </div>
-                <div>
-                  <label>Enum Synonyms</label>
-                  <p>
-                    Nested array editing is not auto-generated for dynamic paths. Use a custom
-                    renderer for enumValues.${index}.enumSynonyms.
-                  </p>
-                </div>
-              </fieldset>
+    <FormProvider {...form}>
+      <form>
+        <Field>
+          <FieldLabel htmlFor="name">Name</FieldLabel>
+          <FieldControl>
+            <Input id="name" {...register('name')} />
+          </FieldControl>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="parent">Parent</FieldLabel>
+          <FieldControl>
+            <Controller
+              name={'parent'}
+              control={control}
+              render={({ field }) => (
+                <TypeSelector
+                  id="parent"
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  ref={field.ref}
+                  name={field.name}
+                />
+              )}
+            />
+          </FieldControl>
+        </Field>
+        <div>
+          <label>Enum Values</label>
+          {enumValuesFields.map((item, index) => (
+            <div key={item.id}>
+              <div>
+                <label>0</label>
+                <fieldset>
+                  <legend>0</legend>
+                  <Field>
+                    <FieldLabel htmlFor="enumValues.${index}.name">Name</FieldLabel>
+                    <FieldControl>
+                      <Input
+                        id="enumValues.${index}.name"
+                        {...register(`enumValues.${index}.name`)}
+                      />
+                    </FieldControl>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="enumValues.${index}.display">Display</FieldLabel>
+                    <FieldControl>
+                      <Input
+                        id="enumValues.${index}.display"
+                        {...register(`enumValues.${index}.display`)}
+                      />
+                    </FieldControl>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="enumValues.${index}.definition">Definition</FieldLabel>
+                    <FieldControl>
+                      <Textarea
+                        id="enumValues.${index}.definition"
+                        {...register(`enumValues.${index}.definition`)}
+                        rows={2}
+                      />
+                    </FieldControl>
+                  </Field>
+                </fieldset>
+              </div>
+              <button type="button" onClick={() => removeEnumValues(index)}>
+                Remove
+              </button>
             </div>
-            <button type="button" onClick={() => removeEnumValues(index)}>
-              Remove
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() =>
-            appendEnumValues({
-              $type: 'RosettaEnumValue',
-              name: '',
-              display: '',
-              definition: '',
-              references: [],
-              annotations: [],
-              enumSynonyms: []
-            })
-          }
-        >
-          Add
-        </button>
-      </div>
-      <button type="submit">Submit</button>
-    </form>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              appendEnumValues({
+                $type: 'RosettaEnumValue',
+                name: '',
+                display: '',
+                definition: '',
+                references: [],
+                annotations: [],
+                enumSynonyms: []
+              })
+            }
+          >
+            Add
+          </button>
+        </div>
+      </form>
+    </FormProvider>
   );
 }

@@ -1,0 +1,33 @@
+/**
+ * Known generators available in rosetta-code-generators.
+ */
+
+import type { GeneratorInfo } from './types.js';
+
+/** Known generators from rosetta-code-generators and rune-dsl. */
+export const KNOWN_GENERATORS: readonly GeneratorInfo[] = [
+  { id: 'java', label: 'Java' },
+  { id: 'scala', label: 'Scala' },
+  { id: 'typescript', label: 'TypeScript' },
+  { id: 'kotlin', label: 'Kotlin' },
+  { id: 'c-sharp', label: 'C#' },
+  { id: 'golang', label: 'Go' },
+  { id: 'daml', label: 'DAML' },
+  { id: 'json-schema', label: 'JSON Schema' },
+  { id: 'csv', label: 'CSV' },
+  { id: 'excel', label: 'Excel' }
+] as const;
+
+/**
+ * Check if a language ID corresponds to a known generator.
+ */
+export function isKnownGenerator(language: string): boolean {
+  return KNOWN_GENERATORS.some((g) => g.id === language);
+}
+
+/**
+ * Get generator info by ID.
+ */
+export function getGenerator(language: string): GeneratorInfo | undefined {
+  return KNOWN_GENERATORS.find((g) => g.id === language);
+}

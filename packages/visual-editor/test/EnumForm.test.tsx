@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { EnumForm } from '../src/components/editors/EnumForm.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,16 +42,19 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'test::CurrencyEnum', label: 'CurrencyEnum', kind: 'enum', namespace: 'test' }
 ];
 
-function makeEnumData(overrides: Partial<TypeNodeData<'enum'>> = {}): TypeNodeData<'enum'> {
+function makeEnumData(overrides: Record<string, unknown> = {}): AnyGraphNode {
   return {
-    kind: 'enum',
+    $type: 'RosettaEnumeration',
     name: 'StatusEnum',
     namespace: 'test',
-    members: [],
+    enumValues: [],
+    synonyms: [],
+    annotations: [],
+    position: { x: 0, y: 0 },
     hasExternalRefs: false,
     errors: [],
     ...overrides
-  };
+  } as AnyGraphNode;
 }
 
 // ---------------------------------------------------------------------------

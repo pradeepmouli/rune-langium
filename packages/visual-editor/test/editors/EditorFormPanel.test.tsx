@@ -2,7 +2,7 @@
  * Integration tests for EditorFormPanel (T048).
  *
  * Covers:
- * - Dispatch by kind (data → DataTypeForm, readOnly → DetailPanel, null → empty)
+ * - Dispatch by kind (data -> DataTypeForm, readOnly -> DetailPanel, null -> empty)
  * - Accessibility attributes (role, aria-label)
  * - Escape key closes panel
  * - Sticky header renders name + kind badge
@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { EditorFormPanel } from '../../src/components/panels/EditorFormPanel.js';
-import type { TypeNodeData, TypeOption, EditorFormActions } from '../../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,19 +50,35 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::number', label: 'number', kind: 'builtin' }
 ];
 
-function makeNodeData(overrides: Partial<TypeNodeData> = {}): TypeNodeData {
+function makeNodeData(overrides: Record<string, unknown> = {}): AnyGraphNode {
   return {
-    kind: 'data',
+    $type: 'Data',
     name: 'Trade',
     namespace: 'test.model',
-    members: [
-      { name: 'tradeDate', typeName: 'date', cardinality: '(1..1)', isOverride: false },
-      { name: 'currency', typeName: 'string', cardinality: '(1..1)', isOverride: false }
+    attributes: [
+      {
+        $type: 'Attribute',
+        name: 'tradeDate',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'date' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      },
+      {
+        $type: 'Attribute',
+        name: 'currency',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'string' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      }
     ],
+    conditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
     hasExternalRefs: false,
     errors: [],
     ...overrides
-  };
+  } as AnyGraphNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +154,7 @@ describe('EditorFormPanel', () => {
   it('renders DataTypeForm for data kind', () => {
     render(
       <EditorFormPanel
-        nodeData={makeNodeData({ kind: 'data' })}
+        nodeData={makeNodeData({ $type: 'Data' })}
         nodeId="node-1"
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -168,17 +184,17 @@ describe('EditorFormPanel', () => {
     expect(screen.getByText('Namespace')).toBeDefined();
   });
 
-  it('renders DetailPanel for unknown kind', () => {
+  it('renders DetailPanel for view-only kinds (e.g. Annotation)', () => {
     render(
       <EditorFormPanel
-        nodeData={makeNodeData({ kind: 'unknown' as 'data' })}
+        nodeData={makeNodeData({ $type: 'Annotation' })}
         nodeId="node-1"
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
       />
     );
 
-    // Falls through to DetailPanel default case — shows Namespace label
+    // Falls through to DetailPanel for annotation kind — shows Namespace label
     expect(screen.getByText('Namespace')).toBeDefined();
   });
 

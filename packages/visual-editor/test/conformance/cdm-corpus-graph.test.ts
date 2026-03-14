@@ -7,7 +7,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
-import { astToGraph } from '../../src/adapters/ast-to-graph.js';
+import { astToModel } from '../../src/adapters/ast-to-model.js';
+import { AST_TYPE_TO_NODE_TYPE } from '../../src/adapters/model-helpers.js';
 import {
   SIMPLE_INHERITANCE_SOURCE,
   COMBINED_MODEL_SOURCE,
@@ -17,7 +18,7 @@ import {
 describe('CDM Corpus Graph Conformance (T002)', () => {
   async function parseAndConvert(source: string) {
     const result = await parse(source);
-    return astToGraph([result.value]);
+    return astToModel([result.value]);
   }
 
   it('should convert simple inheritance model to graph', async () => {
@@ -30,11 +31,11 @@ describe('CDM Corpus Graph Conformance (T002)', () => {
 
   it('should convert combined model (Data+Choice+Enum) to graph', async () => {
     const { nodes, edges } = await parseAndConvert(COMBINED_MODEL_SOURCE);
-    // Should have Data, Choice, and Enum nodes
-    const kinds = new Set(nodes.map((n) => n.data.kind));
-    expect(kinds.has('data')).toBe(true);
-    expect(kinds.has('choice')).toBe(true);
-    expect(kinds.has('enum')).toBe(true);
+    // Should have Data, Choice, and Enum nodes (check via $type → node type mapping)
+    const nodeTypes = new Set(nodes.map((n) => AST_TYPE_TO_NODE_TYPE[n.data.$type]));
+    expect(nodeTypes.has('data')).toBe(true);
+    expect(nodeTypes.has('choice')).toBe(true);
+    expect(nodeTypes.has('enum')).toBe(true);
     // Should have edges
     expect(edges.length).toBeGreaterThan(0);
   });
@@ -49,7 +50,7 @@ describe('CDM Corpus Graph Conformance (T002)', () => {
   it('should handle multiple models at once', async () => {
     const r1 = await parse(SIMPLE_INHERITANCE_SOURCE);
     const r2 = await parse(COMBINED_MODEL_SOURCE);
-    const { nodes, edges } = astToGraph([r1.value, r2.value]);
+    const { nodes, edges } = astToModel([r1.value, r2.value]);
     expect(nodes.length).toBeGreaterThan(5);
     expect(edges.length).toBeGreaterThan(0);
   });
@@ -57,10 +58,11 @@ describe('CDM Corpus Graph Conformance (T002)', () => {
   it('should assign correct node data for each kind', async () => {
     const { nodes } = await parseAndConvert(COMBINED_MODEL_SOURCE);
     for (const node of nodes) {
-      expect(node.data).toHaveProperty('kind');
+      expect(node.data).toHaveProperty('$type');
       expect(node.data).toHaveProperty('name');
       expect(node.data).toHaveProperty('namespace');
-      expect(['data', 'choice', 'enum']).toContain(node.data.kind);
+      const nodeType = AST_TYPE_TO_NODE_TYPE[node.data.$type];
+      expect(['data', 'choice', 'enum']).toContain(nodeType);
     }
   });
 

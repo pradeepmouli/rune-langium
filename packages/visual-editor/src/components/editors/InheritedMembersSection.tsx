@@ -17,6 +17,7 @@ import {
 } from '@rune-langium/design-system/ui/collapsible';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
+import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
 
 export interface InheritedMembersSectionProps {
   /** Groups of inherited members, one per ancestor. */
@@ -54,20 +55,22 @@ function InheritedGroupCollapsible({ group }: { group: InheritedGroup }) {
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="ml-4 border-l border-border pl-2 space-y-0.5 py-1">
-          {group.members.map((member) => (
-            <div
-              key={member.name}
-              className="flex items-center gap-2 text-xs text-muted-foreground py-0.5 px-1"
-            >
-              <span className="font-mono">{member.name}</span>
-              {member.typeName && (
-                <span className="text-muted-foreground/60">{member.typeName}</span>
-              )}
-              {member.cardinality && (
-                <span className="text-muted-foreground/40">{member.cardinality}</span>
-              )}
-            </div>
-          ))}
+          {group.members.map((m) => {
+            const member = m as Record<string, unknown>;
+            const name = (member.name as string) ?? '';
+            const typeName = getTypeRefText(member.typeCall as any);
+            const cardinality = formatCardinality(member.card as any);
+            return (
+              <div
+                key={name}
+                className="flex items-center gap-2 text-xs text-muted-foreground py-0.5 px-1"
+              >
+                <span className="font-mono">{name}</span>
+                {typeName && <span className="text-muted-foreground/60">{typeName}</span>}
+                {cardinality && <span className="text-muted-foreground/40">{cardinality}</span>}
+              </div>
+            );
+          })}
         </div>
       </CollapsibleContent>
     </Collapsible>

@@ -1,17 +1,14 @@
 /**
  * Form-surface Zod schemas — field-level validation for editor forms.
  *
- * Each schema is a small projection of TypeNodeData / MemberDisplay,
- * covering only the user-editable fields that the corresponding form
- * component manages. Compile-time conformance checks at the bottom of
- * this file ensure that every schema field exists on the source type
- * with a compatible type.
+ * Each schema is a small projection of the user-editable fields that
+ * each form component manages. Forms accept AnyGraphNode as input and
+ * use toFormValues() to extract these fields from the AST-shaped data.
  *
  * @module
  */
 
 import { z } from 'zod';
-import type { TypeNodeData, MemberDisplay } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Metadata (shared across all forms)
@@ -129,59 +126,17 @@ export const functionFormSchema = z.object({
 export type FunctionFormValues = z.infer<typeof functionFormSchema>;
 
 // ---------------------------------------------------------------------------
-// Compile-time conformance checks
-// ---------------------------------------------------------------------------
-//
-// These type assertions ensure that every property in a schema's inferred
-// type actually exists on the corresponding TypeNodeData or MemberDisplay
-// interface with an assignable type. If a schema field drifts out of sync
-// with the source type, TypeScript will report a compile error here.
-//
-// The pattern:
-//   type _Check = <SchemaType> extends Pick<SourceType, keyof SchemaType>
-//                 ? true : never;
-//
-// If _Check resolves to `never`, the schema has a field that doesn't
-// match the source type, and tsc will flag it.
+// TypeAliasForm
 // ---------------------------------------------------------------------------
 
-/** DataTypeFormValues fields must exist on TypeNodeData<'data'>. */
-type _DataFormCheck =
-  DataTypeFormValues extends Pick<TypeNodeData<'data'>, keyof DataTypeFormValues> ? true : never;
+/** Schema for the TypeAlias form (name + metadata). */
+export const typeAliasFormSchema = z.object({
+  name: z.string().min(1, 'Type alias name is required'),
+  ...metadataFields
+});
 
-/** EnumFormValues fields must exist on TypeNodeData<'enum'>. */
-type _EnumFormCheck =
-  EnumFormValues extends Pick<TypeNodeData<'enum'>, keyof EnumFormValues> ? true : never;
+export type TypeAliasFormValues = z.infer<typeof typeAliasFormSchema>;
 
-/** ChoiceFormValues fields must exist on TypeNodeData<'choice'>. */
-type _ChoiceFormCheck =
-  ChoiceFormValues extends Pick<TypeNodeData<'choice'>, keyof ChoiceFormValues> ? true : never;
-
-/** FunctionFormValues fields must exist on TypeNodeData<'func'>. */
-type _FuncFormCheck =
-  FunctionFormValues extends Pick<TypeNodeData<'func'>, keyof FunctionFormValues> ? true : never;
-
-/** MetadataValues fields must exist on TypeNodeData. */
-type _MetaCheck = MetadataValues extends Pick<TypeNodeData, keyof MetadataValues> ? true : never;
-
-/** AttributeValues fields must exist on MemberDisplay. */
-type _AttrCheck = AttributeValues extends Pick<MemberDisplay, keyof AttributeValues> ? true : never;
-
-/** EnumValueValues fields must exist on MemberDisplay. */
-type _EnumValCheck =
-  EnumValueValues extends Pick<MemberDisplay, keyof EnumValueValues> ? true : never;
-
-/** MemberValues fields must exist on MemberDisplay. */
-type _MemberCheck = MemberValues extends Pick<MemberDisplay, keyof MemberValues> ? true : never;
-
-// Force TypeScript to evaluate the assertions (unused vars are fine — these are type-only)
-export type ConformanceChecks = {
-  dataForm: _DataFormCheck;
-  enumForm: _EnumFormCheck;
-  choiceForm: _ChoiceFormCheck;
-  funcForm: _FuncFormCheck;
-  metadata: _MetaCheck;
-  attribute: _AttrCheck;
-  enumValue: _EnumValCheck;
-  member: _MemberCheck;
-};
+// Conformance checks removed — forms now accept AnyGraphNode directly
+// and extract fields via toFormValues(). Schema shapes are validated at
+// runtime by zod, not at compile time against a specific source type.
