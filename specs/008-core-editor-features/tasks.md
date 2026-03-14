@@ -164,15 +164,15 @@ This task list aligns with the following constitutional principles:
 
 ### Implementation for User Story 5
 
-- [ ] T033 [US5] Research rosetta-code-generators CLI interface: determine available generators, input format expected, invocation method (subprocess, Docker, or API) — document findings in specs/008-core-editor-features/research.md (append)
-- [ ] T034 [US5] Create generate command in packages/cli/src/generate.ts: parse input .rosetta files using existing parse API, invoke rosetta-code-generators, capture output files and errors per contracts/codegen-api.md CLI section
-- [ ] T035 [US5] Add --list-languages flag to enumerate available code generators in packages/cli/src/generate.ts
-- [ ] T036 [US5] Register generate command in CLI entry point in packages/cli/src/index.ts
-- [ ] T037 [US5] Add user-file vs reference-file distinction: ensure generate command only exports user-authored files, passing reference model files as compilation context in packages/cli/src/generate.ts
-- [ ] T038 [US5] Create codegen service client for Studio (HTTP client to code generation service endpoint) in apps/studio/src/services/codegen-service.ts per contracts/codegen-api.md service section
-- [ ] T039 [US5] Create ExportDialog component with language selector, progress indicator, generated code preview, and download as zip in apps/studio/src/components/ExportDialog.tsx
-- [ ] T040 [US5] Integrate ExportDialog into Studio toolbar/menu, wire to codegen service and existing export.ts download helpers in apps/studio/src/App.tsx or layout component
-- [ ] T041 [US5] Add pre-export validation: validate DSL model before code generation, warn user of errors that may affect output quality in apps/studio/src/components/ExportDialog.tsx
+- [x] T033 [US5] Research rosetta-code-generators CLI interface: determine available generators, input format expected, invocation method (subprocess, Docker, or API) — document findings in specs/008-core-editor-features/research.md (append)
+- [x] T034 [US5] Create generate command in packages/cli/src/generate.ts: parse input .rosetta files using existing parse API, invoke rosetta-code-generators, capture output files and errors per contracts/codegen-api.md CLI section
+- [x] T035 [US5] Add --list-languages flag to enumerate available code generators in packages/cli/src/generate.ts
+- [x] T036 [US5] Register generate command in CLI entry point in packages/cli/src/index.ts
+- [x] T037 [US5] Add user-file vs reference-file distinction: ensure generate command only exports user-authored files, passing reference model files as compilation context in packages/cli/src/generate.ts
+- [x] T038 [US5] Create codegen service proxy in packages/codegen/ (separate package @rune-langium/codegen with shared types, generators list, and HTTP proxy client) per contracts/codegen-api.md service section
+- [x] T039 [US5] Create ExportDialog component with language selector, progress indicator, generated code preview, and download as zip in apps/studio/src/components/ExportDialog.tsx
+- [x] T040 [US5] Integrate ExportDialog into Studio toolbar/menu, wire to codegen service and existing export.ts download helpers in apps/studio/src/pages/EditorPage.tsx
+- [x] T041 [US5] Add pre-export validation: validate DSL model before code generation, warn user of errors that may affect output quality in apps/studio/src/pages/EditorPage.tsx
 
 **Checkpoint**: CLI `rune-dsl generate` works end-to-end. Studio Export dialog shows language options, preview, and download.
 

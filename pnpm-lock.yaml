@@ -91,6 +91,9 @@ importers:
       '@lspeasy/core':
         specifier: ^2.1.1
         version: 2.1.1(ws@8.19.0)
+      '@rune-langium/codegen':
+        specifier: workspace:*
+        version: link:../../packages/codegen
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -170,6 +173,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@rune-langium/codegen':
+        specifier: workspace:*
+        version: link:../codegen
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../core
@@ -183,6 +189,12 @@ importers:
       '@types/node':
         specifier: ^25.4.0
         version: 25.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/codegen:
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

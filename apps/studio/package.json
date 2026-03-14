@@ -24,6 +24,7 @@
     "@codemirror/view": "^6.39.17",
     "@isomorphic-git/lightning-fs": "^4.6.2",
     "@lspeasy/core": "^2.1.1",
+    "@rune-langium/codegen": "workspace:*",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
     "@rune-langium/lsp-server": "workspace:*",

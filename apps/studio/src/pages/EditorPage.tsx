@@ -30,6 +30,7 @@ import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
+import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import {
@@ -68,6 +69,7 @@ export function EditorPage({
   const [showSource, setShowSource] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showEditor, setShowEditor] = useState(true);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
   /** Tracks file paths explicitly opened in the source editor (by node navigation). */
   const [openedFilePaths, setOpenedFilePaths] = useState<Set<string>>(new Set<string>());
@@ -365,6 +367,24 @@ export function EditorPage({
     return graphRef.current?.exportImage(format) ?? Promise.resolve(new Blob());
   }, []);
 
+  const validateModelForExport = useCallback((): string[] => {
+    const warnings: string[] = [];
+    const { totalErrors, totalWarnings } = useDiagnosticsStore.getState();
+    if (totalErrors > 0) {
+      warnings.push(
+        `Model has ${totalErrors} error(s) that may affect code generation output quality.`
+      );
+    }
+    if (totalWarnings > 0) {
+      warnings.push(`Model has ${totalWarnings} warning(s).`);
+    }
+    const serialized = getSerializedFiles();
+    if (serialized.size === 0) {
+      warnings.push('No user-authored files found to export.');
+    }
+    return warnings;
+  }, [getSerializedFiles]);
+
   // --- Available types for editor form TypeSelector ---
   const availableTypes: TypeOption[] = useMemo(() => {
     const builtinOptions: TypeOption[] = BUILTIN_TYPES.map((t) => ({
@@ -476,6 +496,15 @@ export function EditorPage({
             exportImage={handleExportImage}
             hasModels={models.length > 0}
           />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowExportDialog(true)}
+            disabled={models.length === 0}
+            title="Generate code from model"
+          >
+            Export Code
+          </Button>
         </div>
       </nav>
       <Separator />
@@ -598,6 +627,14 @@ export function EditorPage({
         {selectedNodeId && <span>Selected: {selectedNodeId}</span>}
         {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
       </footer>
+
+      {/* Code Generation Export Dialog */}
+      <ExportDialog
+        open={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        getUserFiles={getSerializedFiles}
+        validateModel={validateModelForExport}
+      />
     </div>
   );
 }

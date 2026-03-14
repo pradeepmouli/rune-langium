@@ -61,9 +61,16 @@ Only 4 types are excluded: `RosettaMapTestExistsExpression`, `RosettaMapTestAbse
 
 ## R4: Rosetta Code Generators Integration
 
-**Decision**: Subprocess-based CLI integration for MVP; service endpoint for Studio UI in Phase 3.
+**Decision**: Java subprocess wrapper for CLI; HTTP service endpoint for Studio UI.
 
-**Rationale**: rosetta-code-generators is a Java/Maven project. No WASM or TypeScript port exists. The simplest integration is invoking the Java codegen as a subprocess from the CLI package, passing serialized .rosetta text as input. For the browser-based Studio, a lightweight HTTP service wrapper around the Java codegen would be needed.
+**Rationale**: rosetta-code-generators (REGnosys/rosetta-code-generators) is a Java/Maven multi-module framework — NOT a standalone CLI tool. It provides `AbstractExternalGenerator` as a base class for language-specific generators. Available generators: DAML, Scala, TypeScript, C#, Go, Kotlin (plus Java built into finos/rune-dsl). The codebase is 71% Xtend, 19.5% C#, 9.5% Java. Requires Java 21+.
+
+**Key finding**: There is no runnable JAR, no CLI interface, and no standalone executable. Code generation is invoked programmatically by subclassing `AbstractExternalGenerator`. Integration requires building a custom Maven wrapper project that:
+1. Depends on `com.regnosys.rosetta.code-generators` Maven artifacts
+2. Loads requested generator modules
+3. Accepts .rosetta files as input (directory or stdin)
+4. Writes generated output to a directory
+5. Packages as a fat JAR for `java -jar` invocation
 
 **Current infrastructure**:
 - CLI framework (Commander.js) ready for new `generate` command
@@ -72,13 +79,25 @@ Only 4 types are excluded: `RosettaMapTestExistsExpression`, `RosettaMapTestAbse
 - LSP server with WebSocket transport could be extended with custom handlers
 
 **Integration approach**:
-1. CLI: `rune-dsl generate --language java --input <files> --output <dir>` — spawns Java codegen subprocess
-2. Studio: POST to code generation service → receive generated files → download as zip
-3. Input format: serialized .rosetta text (what rosetta-code-generators expects)
+1. CLI: `rune-dsl generate --language java --input <files> --output <dir>` — validates input, writes .rosetta files to temp dir, spawns `java -jar <codegen-jar>` subprocess, captures output
+2. Studio: POST to code generation HTTP service → receive generated files → preview + download as zip
+3. Codegen JAR path configurable via `--codegen-jar` flag or `RUNE_CODEGEN_JAR` env var
+4. Input format: .rosetta file directory (what rosetta-code-generators expects via Ecore parsing)
+
+**Available generators** (from rosetta-code-generators repo):
+- `daml` — DAML (Digital Asset)
+- `scala` — Scala
+- `typescript` — TypeScript
+- `c-sharp` — C# (8.0 and 9.0)
+- `golang` — Go
+- `kotlin` — Kotlin
+- `java` — Java (built into finos/rune-dsl, not in rosetta-code-generators)
+- `json-schema` — JSON Schema
+- `csv` — CSV
+- `excel` — Excel
 
 **Alternatives considered**:
 - GraalVM native-image — would remove JVM dependency but complex build pipeline
-- Rewriting codegen in TypeScript — massive effort, duplicates existing work
+- Rewriting codegen in TypeScript — massive effort, duplicates existing work; viable long-term
 - Docker container — adds deployment complexity for a CLI tool
-
-**Open question**: Exact CLI interface and available generators from rosetta-code-generators need verification against the actual project. Assumed: Java, Python, Scala, C# generators available.
+- Direct Maven invocation — too heavy; requires Maven installation on user machine
