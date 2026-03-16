@@ -17,13 +17,13 @@ describe('RosettaEnumerationForm widget resolution (SC-001, FR-011)', () => {
     expect(typeSelector).not.toBeNull();
   });
 
-  it('renders a submit button for the generated form', () => {
+  it('auto-save forms do not render a submit button', () => {
     const onValueChange = vi.fn();
     const { queryByRole } = render(<RosettaEnumerationForm onValueChange={onValueChange} />);
 
-    // Generated @zod-to-form forms include a submit button
+    // Auto-save mode forms use watch + onValueChange, no submit button
     const submitButton = queryByRole('button', { name: /submit/i });
-    expect(submitButton).not.toBeNull();
+    expect(submitButton).toBeNull();
   });
 
   it('renders a standard <input> for the name (unmapped) field', () => {
