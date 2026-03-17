@@ -14,6 +14,7 @@ export const nodeTypes: NodeTypes = {
   data: DataNode,
   choice: ChoiceNode,
   enum: EnumNode,
+  func: GenericNode,
   record: GenericNode,
   typeAlias: GenericNode,
   basicType: GenericNode,

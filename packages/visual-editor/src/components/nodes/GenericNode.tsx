@@ -18,6 +18,7 @@ import {
 } from '../../adapters/model-helpers.js';
 
 const KIND_LABELS: Record<string, string> = {
+  func: 'Function',
   record: 'Record',
   typeAlias: 'Alias',
   basicType: 'Basic',
@@ -25,6 +26,7 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 const KIND_CSS: Record<string, string> = {
+  func: 'rune-node-func',
   record: 'rune-node-record',
   typeAlias: 'rune-node-typealias',
   basicType: 'rune-node-basictype',
@@ -37,7 +39,12 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
   const kindLabel = KIND_LABELS[kind] ?? kind;
   const kindCss = KIND_CSS[kind] ?? '';
   const parentName = getRefText((d as any).superType);
-  const members = ((d as any).attributes ?? (d as any).features ?? []) as any[];
+  // For functions, show inputs as members; otherwise show attributes/features
+  const members = (
+    kind === 'func'
+      ? ((d as any).inputs ?? [])
+      : ((d as any).attributes ?? (d as any).features ?? [])
+  ) as any[];
 
   return (
     <div className={`rune-node ${kindCss}${selected ? ' rune-node-selected' : ''}`}>
@@ -69,6 +76,16 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
                 </div>
               );
             })}
+          </div>
+        )}
+        {kind === 'func' && (d as any).output && (
+          <div className="rune-node-members" style={{ borderTop: '1px solid var(--border)' }}>
+            <div className="rune-node-member">
+              <span className="rune-node-member-name">output</span>
+              <span className="rune-node-member-type">
+                {getTypeRefText((d as any).output?.typeCall)}
+              </span>
+            </div>
           </div>
         )}
         {(d as any).errors?.length > 0 && (

@@ -217,6 +217,8 @@ export interface ExpressionEditorSlotProps {
   error?: string | null;
   /** Placeholder text shown when the editor is empty. */
   placeholder?: string;
+  /** Raw AST expression object — enables direct tree conversion without reparsing text. */
+  expressionAst?: unknown;
 }
 
 // ---------------------------------------------------------------------------

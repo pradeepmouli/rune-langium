@@ -58,13 +58,69 @@ import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Extract preserved CST text from an AST node (tries $cstText then $cstNode.text). */
+function getCstText(node: unknown): string {
+  if (node && typeof node === 'object') {
+    const obj = node as Record<string, unknown>;
+    if (typeof obj.$cstText === 'string') return obj.$cstText.trim();
+    const cst = obj.$cstNode;
+    if (cst && typeof cst === 'object') {
+      const text = (cst as Record<string, unknown>).text;
+      if (typeof text === 'string') return text.trim();
+    }
+  }
+  return '';
+}
+
+/**
+ * Build the full function body text from AST shortcuts (aliases) and operations.
+ * Each alias becomes `alias <name>: <expression>` and each operation becomes
+ * `set <path>:\n    <expression>`, joined by newlines.
+ */
+function buildBodyText(data: any): string {
+  const parts: string[] = [];
+
+  // Aliases (shortcuts in the AST)
+  for (const shortcut of data.shortcuts ?? []) {
+    const text = getCstText(shortcut);
+    if (text) {
+      parts.push(text);
+    } else {
+      const name = shortcut.name ?? '';
+      const expr = getCstText(shortcut.expression);
+      if (name && expr) parts.push(`alias ${name}: ${expr}`);
+    }
+  }
+
+  // Operations (set statements)
+  for (const op of data.operations ?? []) {
+    const text = getCstText(op);
+    if (text) {
+      parts.push(text);
+    } else {
+      const exprText = getCstText(op.expression);
+      if (exprText) {
+        const assignRoot = op.assignRoot ?? 'result';
+        parts.push(`set ${assignRoot}:\n    ${exprText}`);
+      }
+    }
+  }
+
+  return parts.join('\n\n');
+}
+
 /** Convert AnyGraphNode to form-managed values. */
 function toFormValues(data: AnyGraphNode): FunctionFormValues {
   const d = data as any;
+  // Derive expressionText: prefer explicit expressionText, then build from AST body
+  let expressionText = d.expressionText ?? '';
+  if (!expressionText) {
+    expressionText = buildBodyText(d);
+  }
   return {
     name: d.name ?? '',
     outputType: getTypeRefText(d.output?.typeCall) ?? d.outputType ?? '',
-    expressionText: d.expressionText ?? '',
+    expressionText,
     members: (d.inputs ?? []).map((p: any) => ({
       name: p.name ?? '',
       typeName: getTypeRefText(p.typeCall) ?? 'string',
@@ -447,61 +503,145 @@ function FunctionForm({
           />
         </FieldSet>
 
-        {/* Expression Editor */}
-        <Controller
-          control={form.control}
-          name="expressionText"
-          render={({ field, fieldState }) => (
-            <Field>
-              <FieldLabel
-                htmlFor="expressionText"
-                className="text-xs font-medium text-muted-foreground"
+        {/* Function Body — aliases + operations, each with its own expression builder */}
+        <FieldSet className="gap-2">
+          <FieldLegend variant="label" className="mb-0 text-muted-foreground">
+            Function Body
+          </FieldLegend>
+
+          {/* Aliases (shortcuts) */}
+          {(d.shortcuts ?? []).map((shortcut: any, i: number) => {
+            const aliasText = getCstText(shortcut.expression);
+            return (
+              <div
+                key={`alias-${shortcut.name ?? i}`}
+                data-slot="alias-section"
+                className="flex flex-col gap-1"
               >
-                Expression
-              </FieldLabel>
-              {renderExpressionEditor ? (
-                renderExpressionEditor({
-                  value: field.value,
-                  onChange: (val: string) => {
-                    field.onChange(val);
-                    if (expressionError) setExpressionError(null);
-                  },
-                  onBlur: () => {
-                    field.onBlur();
-                    handleExpressionBlur();
-                  },
-                  error: expressionError,
-                  placeholder: 'Enter function expression...'
-                })
-              ) : (
-                <Textarea
-                  {...field}
-                  id="expressionText"
-                  data-slot="expression-editor"
-                  aria-invalid={fieldState.invalid}
-                  onBlur={() => {
-                    field.onBlur();
-                    handleExpressionBlur();
-                  }}
-                  onChange={(e) => {
-                    field.onChange(e);
-                    if (expressionError) setExpressionError(null);
-                  }}
-                  rows={4}
-                  className={`text-sm font-mono resize-y ${expressionError ? 'border-red-500' : ''}`}
-                  placeholder="Enter function expression..."
-                  aria-label="Function expression"
-                />
+                <span className="text-xs font-medium text-muted-foreground">
+                  alias {shortcut.name ?? `#${i}`}
+                </span>
+                {renderExpressionEditor ? (
+                  renderExpressionEditor({
+                    value: aliasText,
+                    onChange: () => {},
+                    onBlur: () => {},
+                    placeholder: 'Alias expression...',
+                    expressionAst: shortcut.expression
+                  })
+                ) : (
+                  <Textarea
+                    value={aliasText}
+                    readOnly
+                    rows={1}
+                    className="text-sm font-mono resize-none bg-muted/30"
+                  />
+                )}
+              </div>
+            );
+          })}
+
+          {/* Operations (set / add statements) */}
+          {(d.operations ?? []).map((op: any, i: number) => {
+            const opText = getCstText(op.expression);
+            // assignRoot is a Langium Reference — resolve to $refText string
+            const assignRoot =
+              typeof op.assignRoot === 'string' ? op.assignRoot : (op.assignRoot?.$refText ?? '');
+            // Fall back to extracting from CST text: "set <target>: <expr>"
+            const assignTarget =
+              assignRoot ||
+              getCstText(op)
+                .split(':')[0]
+                ?.replace(/^(set|add)\s+/, '')
+                .trim() ||
+              'result';
+            const isAdd = op.add === true;
+            return (
+              <div key={`op-${i}`} data-slot="operation-section" className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {isAdd ? 'add' : 'set'} {assignTarget}
+                </span>
+                {renderExpressionEditor ? (
+                  renderExpressionEditor({
+                    value: opText,
+                    onChange: (val: string) => {
+                      // Update the expressionText form field for backward compat
+                      const currentVals = form.getValues('expressionText');
+                      if (val !== currentVals) {
+                        form.setValue('expressionText', val, { shouldDirty: true });
+                      }
+                    },
+                    onBlur: handleExpressionBlur,
+                    error: i === 0 ? expressionError : null,
+                    placeholder: 'Enter expression...',
+                    expressionAst: op.expression
+                  })
+                ) : (
+                  <Textarea
+                    value={opText}
+                    onChange={(e) => {
+                      form.setValue('expressionText', e.target.value, { shouldDirty: true });
+                    }}
+                    onBlur={handleExpressionBlur}
+                    rows={2}
+                    className={`text-sm font-mono resize-y ${i === 0 && expressionError ? 'border-red-500' : ''}`}
+                    placeholder="Enter expression..."
+                  />
+                )}
+              </div>
+            );
+          })}
+
+          {/* Empty state — no operations yet */}
+          {(d.operations ?? []).length === 0 && (d.shortcuts ?? []).length === 0 && (
+            <Controller
+              control={form.control}
+              name="expressionText"
+              render={({ field, fieldState }) => (
+                <Field>
+                  {renderExpressionEditor ? (
+                    renderExpressionEditor({
+                      value: field.value,
+                      onChange: (val: string) => {
+                        field.onChange(val);
+                        if (expressionError) setExpressionError(null);
+                      },
+                      onBlur: () => {
+                        field.onBlur();
+                        handleExpressionBlur();
+                      },
+                      error: expressionError,
+                      placeholder: 'Enter function expression...'
+                    })
+                  ) : (
+                    <Textarea
+                      {...field}
+                      data-slot="expression-editor"
+                      aria-invalid={fieldState.invalid}
+                      onBlur={() => {
+                        field.onBlur();
+                        handleExpressionBlur();
+                      }}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        if (expressionError) setExpressionError(null);
+                      }}
+                      rows={4}
+                      className={`text-sm font-mono resize-y ${expressionError ? 'border-red-500' : ''}`}
+                      placeholder="Enter function expression..."
+                    />
+                  )}
+                  {expressionError && (
+                    <p data-slot="expression-error" className="text-xs text-red-500 mt-0.5">
+                      {expressionError}
+                    </p>
+                  )}
+                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                </Field>
               )}
-              {expressionError && (
-                <p data-slot="expression-error" className="text-xs text-red-500 mt-0.5">
-                  {expressionError}
-                </p>
-              )}
-              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-            </Field>
+            />
           )}
-        />
+        </FieldSet>
 
         {/* Conditions (pre + post handled internally by ConditionSection) */}
         <ConditionSection

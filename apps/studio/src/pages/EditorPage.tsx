@@ -170,7 +170,10 @@ export function EditorPage({
       output: d.output?.typeCall?.type?.$refText
         ? { name: 'output', typeName: d.output.typeCall.type.$refText }
         : null,
-      aliases: []
+      aliases: (d.shortcuts ?? []).map((s: any) => ({
+        name: s.name,
+        typeName: s.typeCall?.type?.$refText
+      }))
     };
   }, [selectedNodeData]);
 

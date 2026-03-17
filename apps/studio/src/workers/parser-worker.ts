@@ -49,11 +49,15 @@ export type WorkerResponse = ParseResponse | ParseWorkspaceResponse;
 function preserveCstText(model: any): void {
   for (const elem of model?.elements ?? []) {
     // Function body parts: shortcuts, conditions, operations, postConditions
-    if (elem.$type === 'Function') {
+    if (elem.$type === 'RosettaFunction') {
       for (const arr of [elem.shortcuts, elem.conditions, elem.operations, elem.postConditions]) {
         for (const part of arr ?? []) {
           if (part?.$cstNode?.text) {
             part.$cstText = part.$cstNode.text;
+          }
+          // Also preserve expression-level text for the expression builder
+          if (part?.expression?.$cstNode?.text) {
+            part.expression.$cstText = part.expression.$cstNode.text;
           }
         }
       }
@@ -63,6 +67,9 @@ function preserveCstText(model: any): void {
       for (const cond of elem.conditions) {
         if (cond?.$cstNode?.text) {
           cond.$cstText = cond.$cstNode.text;
+        }
+        if (cond?.expression?.$cstNode?.text) {
+          cond.expression.$cstText = cond.expression.$cstNode.text;
         }
       }
     }

@@ -23,12 +23,15 @@ import { useContextFilter } from '../../../hooks/useContextFilter.js';
 import { useExpressionBuilder } from '../../../hooks/useExpressionBuilder.js';
 import { useKeyboardNavigation } from '../../../hooks/useKeyboardNavigation.js';
 import { parseExpression } from '../../../adapters/parse-expression.js';
+import { astToExpressionNode } from '../../../adapters/ast-to-expression-node.js';
 
 export interface ExpressionBuilderProps extends ExpressionEditorSlotProps {
   scope: FunctionScope;
   defaultMode?: 'builder' | 'text';
   /** Callback when a node is dragged to a placeholder target. */
   onDragNode?: (draggedNodeId: string, targetNodeId: string) => void;
+  /** Optional raw AST expression object — when provided, used directly instead of parsing value text. */
+  expressionAst?: unknown;
 }
 
 export function ExpressionBuilder({
@@ -39,10 +42,13 @@ export function ExpressionBuilder({
   placeholder,
   error,
   defaultMode = 'builder',
-  onDragNode
+  onDragNode,
+  expressionAst
 }: ExpressionBuilderProps) {
-  // Parse incoming value into an initial tree
-  const initialTree = parseExpression(value ?? '');
+  // Convert AST directly if available, otherwise fall back to text parsing
+  const initialTree = expressionAst
+    ? astToExpressionNode(expressionAst, value ?? '')
+    : parseExpression(value ?? '');
 
   const {
     tree,
