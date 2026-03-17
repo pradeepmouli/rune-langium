@@ -261,6 +261,26 @@ export interface CommonFormActions {
   removeSynonym(nodeId: string, index: number): void;
   addAnnotation(nodeId: string, annotationName: string): void;
   removeAnnotation(nodeId: string, index: number): void;
+  addCondition(
+    nodeId: string,
+    condition: {
+      name?: string;
+      definition?: string;
+      expressionText: string;
+      isPostCondition?: boolean;
+    }
+  ): void;
+  removeCondition(nodeId: string, index: number): void;
+  updateCondition(
+    nodeId: string,
+    index: number,
+    updates: {
+      name?: string;
+      definition?: string;
+      expressionText?: string;
+    }
+  ): void;
+  reorderCondition(nodeId: string, fromIndex: number, toIndex: number): void;
   validate(): ValidationError[];
 }
 

@@ -344,3 +344,135 @@ describe('EditorStore — choice operations', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Condition operations + updateExpression
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — condition and expression operations', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    store = createEditorStore();
+    const result = await parse(COMBINED_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+  });
+
+  describe('addCondition', () => {
+    it('adds a condition to a Data type', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+
+      store.getState().addCondition(dataNode!.id, {
+        name: 'ValidDate',
+        expressionText: 'tradeDate exists'
+      });
+
+      const updated = store.getState().nodes.find((n) => n.id === dataNode!.id);
+      const conditions = (updated!.data as any).conditions ?? [];
+      expect(conditions.length).toBe(1);
+      expect(conditions[0].name).toBe('ValidDate');
+      expect(conditions[0].expression.$cstText).toBe('tradeDate exists');
+    });
+  });
+
+  describe('removeCondition', () => {
+    it('removes a condition by index', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+
+      // Add two conditions
+      store.getState().addCondition(dataNode!.id, {
+        name: 'C1',
+        expressionText: 'expr1'
+      });
+      store.getState().addCondition(dataNode!.id, {
+        name: 'C2',
+        expressionText: 'expr2'
+      });
+
+      // Remove first
+      store.getState().removeCondition(dataNode!.id, 0);
+
+      const updated = store.getState().nodes.find((n) => n.id === dataNode!.id);
+      const conditions = (updated!.data as any).conditions ?? [];
+      expect(conditions.length).toBe(1);
+      expect(conditions[0].name).toBe('C2');
+    });
+  });
+
+  describe('updateCondition', () => {
+    it('updates condition name and expression', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+
+      store.getState().addCondition(dataNode!.id, {
+        name: 'C1',
+        expressionText: 'old expression'
+      });
+
+      store.getState().updateCondition(dataNode!.id, 0, {
+        name: 'C1_Updated',
+        expressionText: 'new expression'
+      });
+
+      const updated = store.getState().nodes.find((n) => n.id === dataNode!.id);
+      const conditions = (updated!.data as any).conditions ?? [];
+      expect(conditions[0].name).toBe('C1_Updated');
+      expect(conditions[0].expression.$cstText).toBe('new expression');
+    });
+  });
+
+  describe('reorderCondition', () => {
+    it('reorders conditions by index', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+
+      store.getState().addCondition(dataNode!.id, { name: 'First', expressionText: 'e1' });
+      store.getState().addCondition(dataNode!.id, { name: 'Second', expressionText: 'e2' });
+      store.getState().addCondition(dataNode!.id, { name: 'Third', expressionText: 'e3' });
+
+      store.getState().reorderCondition(dataNode!.id, 0, 2);
+
+      const updated = store.getState().nodes.find((n) => n.id === dataNode!.id);
+      const conditions = (updated!.data as any).conditions ?? [];
+      expect(conditions[0].name).toBe('Second');
+      expect(conditions[1].name).toBe('Third');
+      expect(conditions[2].name).toBe('First');
+    });
+  });
+
+  describe('updateExpression', () => {
+    it('updates the function body expression via operations', async () => {
+      const funcStore = createEditorStore();
+      const funcResult = await parse(`
+        namespace test.func
+        version "test"
+
+        func MyFunc:
+          inputs:
+            x int (1..1)
+          output:
+            result int (1..1)
+          set result:
+            x + 1
+      `);
+      funcStore.getState().loadModels(funcResult.value);
+
+      const funcNode = funcStore.getState().nodes.find((n) => n.data.name === 'MyFunc');
+      expect(funcNode).toBeDefined();
+
+      funcStore.getState().updateExpression(funcNode!.id, 'x * 2');
+
+      const updated = funcStore.getState().nodes.find((n) => n.id === funcNode!.id);
+      const ops = (updated!.data as any).operations ?? [];
+      expect(ops.length).toBeGreaterThan(0);
+      expect(ops[0].expression.$cstText).toBe('x * 2');
+      expect((updated!.data as any).expressionText).toBe('x * 2');
+    });
+  });
+});

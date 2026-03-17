@@ -125,6 +125,28 @@ export interface EditorActions {
   updateOutputType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
 
+  // --- Condition operations ---
+  addCondition(
+    nodeId: string,
+    condition: {
+      name?: string;
+      definition?: string;
+      expressionText: string;
+      isPostCondition?: boolean;
+    }
+  ): void;
+  removeCondition(nodeId: string, index: number): void;
+  updateCondition(
+    nodeId: string,
+    index: number,
+    updates: {
+      name?: string;
+      definition?: string;
+      expressionText?: string;
+    }
+  ): void;
+  reorderCondition(nodeId: string, fromIndex: number, toIndex: number): void;
+
   // --- Metadata operations ---
   updateDefinition(nodeId: string, definition: string): void;
   updateComments(nodeId: string, comments: string): void;
@@ -988,28 +1010,129 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         updateExpression(nodeId: string, expressionText: string) {
-          // Expression text is stored on conditions. This updates
-          // the first condition's expression $cstText for display purposes.
           set((state) => ({
             nodes: state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
-              if (
-                d.$type === 'RosettaFunction' ||
-                d.$type === 'Data' ||
-                d.$type === 'RosettaTypeAlias'
-              ) {
-                const conditions = [...((d as any).conditions ?? [])];
-                if (conditions.length > 0) {
-                  const cond = conditions[0];
-                  conditions[0] = {
-                    ...cond,
-                    expression: { ...cond.expression, $cstText: expressionText }
+              if (d.$type === 'RosettaFunction') {
+                // Function body is in operations[0].expression
+                const operations = [...((d as any).operations ?? [])];
+                if (operations.length === 0) {
+                  operations.push({
+                    $type: 'Operation',
+                    operator: 'set',
+                    expression: { $cstText: expressionText }
+                  });
+                } else {
+                  operations[0] = {
+                    ...operations[0],
+                    expression: {
+                      ...operations[0].expression,
+                      $cstText: expressionText
+                    }
                   };
                 }
-                return { ...n, data: { ...d, conditions } };
+                return { ...n, data: { ...d, operations, expressionText } };
               }
-              return n;
+              // For Data/TypeAlias, store as a display field
+              return { ...n, data: { ...d, expressionText } };
+            })
+          }));
+        },
+
+        // -----------------------------------------------------------------------
+        // Condition operations
+        // -----------------------------------------------------------------------
+
+        addCondition(
+          nodeId: string,
+          condition: {
+            name?: string;
+            definition?: string;
+            expressionText: string;
+            isPostCondition?: boolean;
+          }
+        ) {
+          const newCondition = {
+            $type: 'Condition',
+            name: condition.name,
+            definition: condition.definition,
+            expression: { $cstText: condition.expressionText },
+            postCondition: condition.isPostCondition ?? false
+          };
+
+          set((state) => ({
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (condition.isPostCondition) {
+                const postConditions = [...((d as any).postConditions ?? []), newCondition];
+                return { ...n, data: { ...d, postConditions } };
+              }
+              const conditions = [...((d as any).conditions ?? []), newCondition];
+              return { ...n, data: { ...d, conditions } };
+            })
+          }));
+        },
+
+        removeCondition(nodeId: string, index: number) {
+          set((state) => ({
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              const allConditions = [
+                ...((d as any).conditions ?? []),
+                ...((d as any).postConditions ?? [])
+              ];
+              allConditions.splice(index, 1);
+              const conditions = allConditions.filter((c: any) => !c.postCondition);
+              const postConditions = allConditions.filter((c: any) => c.postCondition);
+              return { ...n, data: { ...d, conditions, postConditions } };
+            })
+          }));
+        },
+
+        updateCondition(
+          nodeId: string,
+          index: number,
+          updates: { name?: string; definition?: string; expressionText?: string }
+        ) {
+          set((state) => ({
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              const allConditions = [
+                ...((d as any).conditions ?? []),
+                ...((d as any).postConditions ?? [])
+              ];
+              if (index < 0 || index >= allConditions.length) return n;
+              const cond = allConditions[index];
+              allConditions[index] = {
+                ...cond,
+                ...(updates.name !== undefined ? { name: updates.name } : {}),
+                ...(updates.definition !== undefined ? { definition: updates.definition } : {}),
+                ...(updates.expressionText !== undefined
+                  ? { expression: { ...cond.expression, $cstText: updates.expressionText } }
+                  : {})
+              };
+              const conditions = allConditions.filter((c: any) => !c.postCondition);
+              const postConditions = allConditions.filter((c: any) => c.postCondition);
+              return { ...n, data: { ...d, conditions, postConditions } };
+            })
+          }));
+        },
+
+        reorderCondition(nodeId: string, fromIndex: number, toIndex: number) {
+          set((state) => ({
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              const conditions = [...((d as any).conditions ?? [])];
+              const [moved] = conditions.splice(fromIndex, 1);
+              if (moved) {
+                conditions.splice(toIndex, 0, moved);
+              }
+              return { ...n, data: { ...d, conditions } };
             })
           }));
         },

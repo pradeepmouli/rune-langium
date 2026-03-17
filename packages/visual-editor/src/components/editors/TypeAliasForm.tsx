@@ -19,7 +19,10 @@ import { Badge } from '@rune-langium/design-system/ui/badge';
 import { MetadataSection } from './MetadataSection.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
-import { classExprSynonymsToStrings } from '../../adapters/model-helpers.js';
+import {
+  classExprSynonymsToStrings,
+  type ConditionDisplayInfo
+} from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm } from '@zod-to-form/react';
 import { ExternalDataSync } from '../forms/ExternalDataSync.js';
@@ -130,7 +133,40 @@ function TypeAliasForm({ nodeId, data, actions }: TypeAliasFormProps) {
     [nodeId, actions]
   );
 
-  // ---- (conditions and annotations handled by their sections internally)
+  // ---- Condition callbacks -------------------------------------------------
+
+  const handleAddCondition = useCallback(
+    (condition: {
+      name?: string;
+      definition?: string;
+      expressionText: string;
+      isPostCondition?: boolean;
+    }) => {
+      actions.addCondition(nodeId, condition);
+    },
+    [nodeId, actions]
+  );
+
+  const handleRemoveCondition = useCallback(
+    (index: number) => {
+      actions.removeCondition(nodeId, index);
+    },
+    [nodeId, actions]
+  );
+
+  const handleUpdateCondition = useCallback(
+    (index: number, updates: Partial<ConditionDisplayInfo>) => {
+      actions.updateCondition(nodeId, index, updates);
+    },
+    [nodeId, actions]
+  );
+
+  const handleReorderCondition = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      actions.reorderCondition(nodeId, fromIndex, toIndex);
+    },
+    [nodeId, actions]
+  );
 
   // ---- Render --------------------------------------------------------------
 
@@ -168,7 +204,15 @@ function TypeAliasForm({ nodeId, data, actions }: TypeAliasFormProps) {
         </div>
 
         {/* Conditions */}
-        <ConditionSection label="Conditions" conditions={d.conditions} readOnly={d.isReadOnly} />
+        <ConditionSection
+          label="Conditions"
+          conditions={d.conditions}
+          readOnly={d.isReadOnly}
+          onAdd={handleAddCondition}
+          onRemove={handleRemoveCondition}
+          onUpdate={handleUpdateCondition}
+          onReorder={handleReorderCondition}
+        />
 
         {/* Annotations */}
         <AnnotationSection

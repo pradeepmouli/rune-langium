@@ -37,7 +37,8 @@ import { InheritedMembersSection } from './InheritedMembersSection.js';
 import {
   formatCardinality,
   getTypeRefText,
-  classExprSynonymsToStrings
+  classExprSynonymsToStrings,
+  type ConditionDisplayInfo
 } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm } from '@zod-to-form/react';
@@ -307,7 +308,40 @@ function FunctionForm({
     [nodeId, actions]
   );
 
-  // ---- (conditions and annotations are handled internally by their sections)
+  // ---- Condition callbacks -------------------------------------------------
+
+  const handleAddCondition = useCallback(
+    (condition: {
+      name?: string;
+      definition?: string;
+      expressionText: string;
+      isPostCondition?: boolean;
+    }) => {
+      actions.addCondition(nodeId, condition);
+    },
+    [nodeId, actions]
+  );
+
+  const handleRemoveCondition = useCallback(
+    (index: number) => {
+      actions.removeCondition(nodeId, index);
+    },
+    [nodeId, actions]
+  );
+
+  const handleUpdateCondition = useCallback(
+    (index: number, updates: Partial<ConditionDisplayInfo>) => {
+      actions.updateCondition(nodeId, index, updates);
+    },
+    [nodeId, actions]
+  );
+
+  const handleReorderCondition = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      actions.reorderCondition(nodeId, fromIndex, toIndex);
+    },
+    [nodeId, actions]
+  );
 
   // ---- Render --------------------------------------------------------------
 
@@ -475,7 +509,11 @@ function FunctionForm({
           conditions={d.conditions}
           postConditions={d.postConditions}
           readOnly={d.isReadOnly}
-          showPostConditionToggle={false}
+          showPostConditionToggle={true}
+          onAdd={handleAddCondition}
+          onRemove={handleRemoveCondition}
+          onUpdate={handleUpdateCondition}
+          onReorder={handleReorderCondition}
           renderExpressionEditor={renderExpressionEditor}
         />
 

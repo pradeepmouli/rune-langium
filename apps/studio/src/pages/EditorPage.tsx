@@ -431,6 +431,10 @@ export function EditorPage({
       updateExpression: (nodeId, expr) => s().updateExpression(nodeId, expr),
       addAnnotation: (nodeId, name) => s().addAnnotation(nodeId, name),
       removeAnnotation: (nodeId, index) => s().removeAnnotation(nodeId, index),
+      addCondition: (nodeId, condition) => s().addCondition(nodeId, condition),
+      removeCondition: (nodeId, index) => s().removeCondition(nodeId, index),
+      updateCondition: (nodeId, index, updates) => s().updateCondition(nodeId, index, updates),
+      reorderCondition: (nodeId, from, to) => s().reorderCondition(nodeId, from, to),
       validate: () => s().validate()
     };
   }, []);
