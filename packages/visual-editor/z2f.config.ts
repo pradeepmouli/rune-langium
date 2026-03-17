@@ -1,6 +1,9 @@
 import { defineConfig } from '@zod-to-form/core';
 
-export default defineConfig({
+import type * as Components from './src/components/zod-form-components.js';
+import type * as ZodSchemas from './src/generated/zod-schemas.js';
+
+export default defineConfig<typeof Components, typeof ZodSchemas>({
   components: '@/components/zod-form-components',
   formPrimitives: {
     field: 'Field',
