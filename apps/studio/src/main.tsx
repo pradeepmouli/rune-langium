@@ -1,6 +1,6 @@
 import { Buffer } from 'buffer';
 // isomorphic-git requires global Buffer in the browser
-globalThis.Buffer = Buffer;
+(globalThis as any).Buffer = Buffer;
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

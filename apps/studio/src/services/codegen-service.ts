@@ -27,13 +27,13 @@ export class BrowserCodegenProxy {
   private readonly baseUrl: string;
 
   constructor(baseUrl?: string) {
-    this.baseUrl =
-      baseUrl ??
-      (typeof import.meta !== 'undefined' &&
-        (import.meta as unknown as Record<string, Record<string, string>>).env?.[
-          'VITE_CODEGEN_URL'
-        ]) ??
-      DEFAULT_CODEGEN_URL;
+    const envUrl =
+      typeof import.meta !== 'undefined'
+        ? (import.meta as unknown as Record<string, Record<string, string>>).env?.[
+            'VITE_CODEGEN_URL'
+          ]
+        : undefined;
+    this.baseUrl = baseUrl ?? envUrl ?? DEFAULT_CODEGEN_URL;
   }
 
   async generate(
