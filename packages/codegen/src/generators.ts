@@ -6,14 +6,14 @@ import type { GeneratorInfo } from './types.js';
 
 /** Known generators from rosetta-code-generators and rune-dsl. */
 export const KNOWN_GENERATORS: readonly GeneratorInfo[] = [
-  { id: 'java', label: 'Java' },
   { id: 'scala', label: 'Scala' },
   { id: 'typescript', label: 'TypeScript' },
   { id: 'kotlin', label: 'Kotlin' },
-  { id: 'c-sharp', label: 'C#' },
+  { id: 'csharp9', label: 'C# 9' },
+  { id: 'csharp8', label: 'C# 8' },
   { id: 'golang', label: 'Go' },
   { id: 'daml', label: 'DAML' },
-  { id: 'json-schema', label: 'JSON Schema' },
+  { id: 'jsonschema', label: 'JSON Schema' },
   { id: 'csv', label: 'CSV' },
   { id: 'excel', label: 'Excel' }
 ] as const;

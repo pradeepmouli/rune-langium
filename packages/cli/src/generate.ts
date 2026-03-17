@@ -1,17 +1,14 @@
 import { readFile, readdir, stat, mkdir, writeFile } from 'node:fs/promises';
-import { resolve, relative, extname, join, basename } from 'node:path';
-import { spawn } from 'node:child_process';
-import { tmpdir } from 'node:os';
-import { KNOWN_GENERATORS } from '@rune-langium/codegen';
-import type { CodeGenerationResult, GeneratedFile, GenerationError } from '@rune-langium/codegen';
+import { resolve, extname } from 'node:path';
+import { CodegenServiceProxy, KNOWN_GENERATORS } from '@rune-langium/codegen/node';
+import type { CodeGenerationResult } from '@rune-langium/codegen';
 
 export interface GenerateCommandOptions {
   language: string;
   input: string[];
   output: string;
   reference?: string[];
-  codegenJar?: string;
-  generatorOpts?: string;
+  codegenCli?: string;
   listLanguages?: boolean;
   json?: boolean;
 }
@@ -29,7 +26,8 @@ export function listLanguages(options: { json?: boolean }): number {
       console.log(`  ${gen.id.padEnd(14)} ${gen.label}`);
     }
     console.log();
-    console.log('Note: Requires rosetta-code-generators JAR and Java 21+ runtime.');
+    console.log('Note: Requires rosetta-code-generators and Java 21+.');
+    console.log('Build: pnpm codegen:build-deps && pnpm codegen:build');
   }
   return 0;
 }
@@ -54,153 +52,6 @@ async function discoverFiles(paths: string[]): Promise<string[]> {
     }
   }
   return files;
-}
-
-/**
- * Resolve the path to the code generation JAR.
- * Priority: --codegen-jar flag > RUNE_CODEGEN_JAR env var.
- */
-function resolveCodegenJar(options: GenerateCommandOptions): string | undefined {
-  return options.codegenJar ?? process.env['RUNE_CODEGEN_JAR'];
-}
-
-/**
- * Copy .rosetta files into a temporary directory structure for the Java codegen.
- */
-async function prepareInputDirectory(
-  userFiles: string[],
-  referenceFiles: string[]
-): Promise<{ inputDir: string; userFilePaths: string[] }> {
-  const inputDir = join(tmpdir(), `rune-codegen-${Date.now()}`);
-  const userDir = join(inputDir, 'user');
-  const refDir = join(inputDir, 'reference');
-
-  await mkdir(userDir, { recursive: true });
-  await mkdir(refDir, { recursive: true });
-
-  const userFilePaths: string[] = [];
-
-  for (const file of userFiles) {
-    const name = basename(file);
-    const dest = join(userDir, name);
-    const content = await readFile(file, 'utf-8');
-    await writeFile(dest, content, 'utf-8');
-    userFilePaths.push(relative(inputDir, dest));
-  }
-
-  for (const file of referenceFiles) {
-    const name = basename(file);
-    const dest = join(refDir, name);
-    const content = await readFile(file, 'utf-8');
-    await writeFile(dest, content, 'utf-8');
-  }
-
-  return { inputDir, userFilePaths };
-}
-
-/**
- * Invoke the Java code generator via subprocess.
- */
-function invokeCodegen(
-  jarPath: string,
-  language: string,
-  inputDir: string,
-  outputDir: string,
-  generatorOpts?: string
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    const args = [
-      '-jar',
-      jarPath,
-      '--language',
-      language,
-      '--input',
-      inputDir,
-      '--output',
-      outputDir
-    ];
-
-    if (generatorOpts) {
-      args.push('--generator-opts', generatorOpts);
-    }
-
-    const child = spawn('java', args, {
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    child.on('close', (code) => {
-      resolve({ exitCode: code ?? 1, stdout, stderr });
-    });
-
-    child.on('error', (err) => {
-      resolve({ exitCode: 2, stdout: '', stderr: `Failed to spawn java process: ${err.message}` });
-    });
-  });
-}
-
-/**
- * Collect generated output files from the output directory.
- */
-async function collectOutputFiles(outputDir: string): Promise<GeneratedFile[]> {
-  const files: GeneratedFile[] = [];
-
-  try {
-    const entries = await readdir(outputDir, { recursive: true });
-    for (const entry of entries) {
-      const fullPath = resolve(outputDir, entry);
-      const s = await stat(fullPath);
-      if (s.isFile()) {
-        const content = await readFile(fullPath, 'utf-8');
-        files.push({
-          path: entry,
-          content
-        });
-      }
-    }
-  } catch {
-    // Output directory may not exist if generation failed
-  }
-
-  return files;
-}
-
-/**
- * Parse error output from the Java codegen process.
- */
-function parseErrors(stderr: string): GenerationError[] {
-  const errors: GenerationError[] = [];
-  const lines = stderr.split('\n').filter((l) => l.trim());
-
-  for (const line of lines) {
-    // Try to parse structured error format: "file.rosetta:construct: message"
-    const match = line.match(/^(.+?\.rosetta):(.+?):\s*(.+)$/);
-    if (match) {
-      errors.push({
-        sourceFile: match[1]!,
-        construct: match[2]!,
-        message: match[3]!
-      });
-    } else if (line.startsWith('ERROR') || line.startsWith('error')) {
-      errors.push({
-        sourceFile: '',
-        construct: '',
-        message: line
-      });
-    }
-  }
-
-  return errors;
 }
 
 /**
@@ -230,13 +81,16 @@ export async function runGenerate(options: GenerateCommandOptions): Promise<numb
     return 2;
   }
 
-  // Resolve codegen JAR
-  const jarPath = resolveCodegenJar(options);
-  if (!jarPath) {
+  // Create proxy (uses CLI subprocess)
+  const proxy = new CodegenServiceProxy(options.codegenCli ?? undefined);
+
+  // Check availability
+  const available = await proxy.isAvailable();
+  if (!available) {
     console.error(
-      'Error: Code generation JAR not found. Set RUNE_CODEGEN_JAR environment variable or use --codegen-jar flag.'
+      'Error: Codegen CLI not available. Build it first:\n' +
+        '  pnpm codegen:build-deps && pnpm codegen:build'
     );
-    console.error('The JAR must be built from https://github.com/REGnosys/rosetta-code-generators');
     return 2;
   }
 
@@ -258,43 +112,37 @@ export async function runGenerate(options: GenerateCommandOptions): Promise<numb
     );
   }
 
-  // Prepare input directory
-  const { inputDir, userFilePaths } = await prepareInputDirectory(userFiles, referenceFiles);
+  // Read all files into memory for the JSON request
+  const files: Array<{ path: string; content: string }> = [];
+  for (const file of [...userFiles, ...referenceFiles]) {
+    const content = await readFile(file, 'utf-8');
+    files.push({ path: file, content });
+  }
 
-  // Ensure output directory exists
+  // Generate via CLI subprocess
+  let codegenResult: CodeGenerationResult;
+  try {
+    codegenResult = await proxy.generate({
+      language: options.language,
+      files
+    });
+  } catch (err) {
+    console.error(`Code generation failed: ${err instanceof Error ? err.message : err}`);
+    return 1;
+  }
+
+  // Write output files
   const outputDir = resolve(options.output);
   await mkdir(outputDir, { recursive: true });
 
-  // Invoke codegen
-  const result = await invokeCodegen(
-    jarPath,
-    options.language,
-    inputDir,
-    outputDir,
-    options.generatorOpts
-  );
-
-  // Collect output files
-  const generatedFiles = await collectOutputFiles(outputDir);
-
-  // Parse errors
-  const errors = result.exitCode !== 0 ? parseErrors(result.stderr) : [];
-
-  // Extract warnings from stdout
-  const warnings = result.stdout
-    .split('\n')
-    .filter((l) => l.startsWith('WARN') || l.startsWith('warning'))
-    .map((l) => l.trim());
-
-  const codegenResult: CodeGenerationResult = {
-    language: options.language,
-    files: generatedFiles,
-    errors,
-    warnings
-  };
+  for (const f of codegenResult.files) {
+    const dest = resolve(outputDir, f.path);
+    const dir = resolve(dest, '..');
+    await mkdir(dir, { recursive: true });
+    await writeFile(dest, f.content, 'utf-8');
+  }
 
   if (options.json) {
-    // JSON output: include file paths and sizes (not full content for CLI)
     const jsonOutput = {
       language: codegenResult.language,
       files: codegenResult.files.map((f) => ({
@@ -302,35 +150,34 @@ export async function runGenerate(options: GenerateCommandOptions): Promise<numb
         size: f.content.length
       })),
       errors: codegenResult.errors,
-      warnings: codegenResult.warnings,
-      userFiles: userFilePaths
+      warnings: codegenResult.warnings
     };
     console.log(JSON.stringify(jsonOutput, null, 2));
   } else {
-    if (errors.length > 0) {
-      console.error(`\nCode generation completed with ${errors.length} error(s):`);
-      for (const err of errors) {
+    if (codegenResult.errors.length > 0) {
+      console.error(`\nCode generation completed with ${codegenResult.errors.length} error(s):`);
+      for (const err of codegenResult.errors) {
         const location = [err.sourceFile, err.construct].filter(Boolean).join(':');
         console.error(`  ${location ? `${location}: ` : ''}${err.message}`);
       }
     }
 
-    if (warnings.length > 0) {
-      console.warn(`\n${warnings.length} warning(s):`);
-      for (const w of warnings) {
+    if (codegenResult.warnings.length > 0) {
+      console.warn(`\n${codegenResult.warnings.length} warning(s):`);
+      for (const w of codegenResult.warnings) {
         console.warn(`  ${w}`);
       }
     }
 
-    if (generatedFiles.length > 0) {
-      console.log(`\nGenerated ${generatedFiles.length} file(s) in ${outputDir}`);
-      for (const f of generatedFiles) {
+    if (codegenResult.files.length > 0) {
+      console.log(`\nGenerated ${codegenResult.files.length} file(s) in ${outputDir}`);
+      for (const f of codegenResult.files) {
         console.log(`  ${f.path}`);
       }
-    } else if (errors.length === 0) {
+    } else if (codegenResult.errors.length === 0) {
       console.log('\nNo files generated.');
     }
   }
 
-  return result.exitCode === 0 ? 0 : 1;
+  return codegenResult.errors.length > 0 ? 1 : 0;
 }

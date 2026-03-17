@@ -31,6 +31,7 @@
     "@rune-langium/visual-editor": "workspace:*",
     "@tanstack/react-virtual": "^3.13.6",
     "@xyflow/react": "^12.10.1",
+    "buffer": "^6.0.3",
     "codemirror": "6.0.2",
     "idb": "^8.0.3",
     "isomorphic-git": "^1.37.3",

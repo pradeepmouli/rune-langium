@@ -32,15 +32,11 @@ program
 program
   .command('generate')
   .description('Generate code from Rosetta DSL files via rosetta-code-generators')
-  .requiredOption('-l, --language <lang>', 'Target language (e.g., java, scala, typescript)')
-  .requiredOption('-i, --input <paths...>', '.rosetta file paths or directories')
-  .requiredOption('-o, --output <dir>', 'Output directory for generated code')
+  .option('-l, --language <lang>', 'Target language (e.g., typescript, scala, kotlin)')
+  .option('-i, --input <paths...>', '.rosetta file paths or directories')
+  .option('-o, --output <dir>', 'Output directory for generated code')
   .option('-r, --reference <paths...>', 'Reference model paths (compilation context, not exported)')
-  .option(
-    '--codegen-jar <path>',
-    'Path to rosetta-code-generators JAR (or set RUNE_CODEGEN_JAR env var)'
-  )
-  .option('--generator-opts <json>', 'JSON string of generator-specific options')
+  .option('--codegen-cli <path>', 'Path to codegen CLI script (default: auto-detected)')
   .option('--list-languages', 'List available code generators and exit')
   .option('--json', 'Output results as JSON')
   .action(async (options: GenerateCommandOptions) => {
