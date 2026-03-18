@@ -195,6 +195,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             availableTypes={availableTypes}
             actions={actions}
             inheritedGroups={inheritedGroups}
+            renderExpressionEditor={renderExpressionEditor}
           />
         );
 
@@ -235,7 +236,15 @@ const EditorFormPanel = memo(function EditorFormPanel({
         );
 
       case 'typeAlias':
-        return <TypeAliasForm key={nodeId!} nodeId={nodeId!} data={nodeData!} actions={actions} />;
+        return (
+          <TypeAliasForm
+            key={nodeId!}
+            nodeId={nodeId!}
+            data={nodeData!}
+            actions={actions}
+            renderExpressionEditor={renderExpressionEditor}
+          />
+        );
 
       // record, basicType, and annotation are currently view-only;
       // full editor forms for these kinds are tracked for a future iteration.

@@ -43,7 +43,13 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm } from '@zod-to-form/react';
 import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { dataTypeFormSchema, type DataTypeFormValues } from '../../schemas/form-schemas.js';
-import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../types.js';
+import type {
+  AnyGraphNode,
+  TypeOption,
+  EditorFormActions,
+  ExpressionEditorSlotProps
+} from '../../types.js';
+import type { ReactNode } from 'react';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
@@ -84,6 +90,8 @@ export interface DataTypeFormProps {
   actions: EditorFormActions<'data'>;
   /** Inherited member groups from ancestors. */
   inheritedGroups?: InheritedGroup[];
+  /** Optional render-prop for a rich expression editor. */
+  renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +103,8 @@ function DataTypeForm({
   data,
   availableTypes,
   actions,
-  inheritedGroups = []
+  inheritedGroups = [],
+  renderExpressionEditor
 }: DataTypeFormProps) {
   // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
@@ -363,6 +372,7 @@ function DataTypeForm({
           onRemove={handleRemoveCondition}
           onUpdate={handleUpdateCondition}
           onReorder={handleReorderCondition}
+          renderExpressionEditor={renderExpressionEditor}
         />
 
         {/* Inherited Members */}

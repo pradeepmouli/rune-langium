@@ -199,7 +199,8 @@ function ConditionRow({
               onChange: (val: string) => onUpdate?.(index, { expressionText: val }),
               onBlur: () => {},
               error: null,
-              placeholder: 'Condition expression...'
+              placeholder: 'Condition expression...',
+              expressionAst: condition.expressionAst
             })
           ) : (
             <Textarea

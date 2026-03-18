@@ -121,13 +121,17 @@ export function EditorPage({
     if (filePath) openFileInSource(filePath);
 
     // Navigate source editor to the AST node's definition line
-    const cstNode = (
-      selectedNodeData.source as { $cstNode?: { range?: { start?: { line?: number } } } }
-    )?.$cstNode;
-    if (cstNode?.range?.start?.line !== undefined) {
-      const line = cstNode.range.start.line + 1;
+    // $cstNode lives directly on the node data (spread from the AST element)
+    const nodeData = selectedNodeData as unknown as Record<string, unknown>;
+    const cstNode = nodeData['$cstNode'] as
+      | { range?: { start?: { line?: number } }; _rangeCache?: { start?: { line?: number } } }
+      | undefined;
+    const range = cstNode?._rangeCache ?? cstNode?.range;
+    if (range?.start?.line !== undefined) {
+      const line = range.start.line + 1;
       if (filePath) {
         pendingRevealRef.current = { line, filePath };
+        expandSource();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -244,14 +248,32 @@ export function EditorPage({
     return map;
   }, [models, files]);
 
-  /** Resolve which workspace file contains a given node (by unique nodeId). */
+  /** Resolve which workspace file contains a given node. */
   const resolveNodeFile = useCallback(
     (nodeData: AnyGraphNode): string | undefined => {
       const d = nodeData as any;
+
+      // Primary: use the Langium document URI from the AST container
+      const docPath = d.$container?.$document?.uri?.path as string | undefined;
+      if (docPath) {
+        // docPath is like "/base-math-type.rosetta" — match against file paths
+        const match = files.find(
+          (f) => f.path === docPath || f.path.endsWith(docPath) || docPath.endsWith(f.path)
+        );
+        if (match) return match.path;
+        // Try matching just the filename
+        const fileName = docPath.split('/').pop();
+        if (fileName) {
+          const byName = files.find((f) => f.path.endsWith(fileName) || f.name === fileName);
+          if (byName) return byName.path;
+        }
+      }
+
+      // Fallback: index-based mapping
       const nodeId = `${d.namespace}::${d.name}`;
       return nodeIdToFilePath.get(nodeId);
     },
-    [nodeIdToFilePath]
+    [files, nodeIdToFilePath]
   );
 
   /** Open a file in the source editor tabs (adds to openedFilePaths). */

@@ -182,7 +182,7 @@ export function ExpressionBuilder({
       {/* Builder mode */}
       {mode === 'builder' && (
         <>
-          <div className="relative min-h-[32px] rounded border border-border/50 bg-background/50 p-2">
+          <div className="relative min-h-8 rounded border border-border/50 bg-background/50 p-2">
             <BlockRenderer
               node={tree}
               selectedNodeId={selectedNodeId}
@@ -211,7 +211,7 @@ export function ExpressionBuilder({
       {/* Text mode */}
       {mode === 'text' && (
         <textarea
-          className="min-h-[80px] w-full rounded border border-input bg-background p-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="min-h-20 w-full rounded border border-input bg-background p-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           value={textValue}
           onChange={handleTextChange}
           onBlur={handleTextBlur}

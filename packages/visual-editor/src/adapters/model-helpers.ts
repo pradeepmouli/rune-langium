@@ -102,6 +102,8 @@ export interface ConditionDisplayInfo {
   definition?: string;
   expressionText: string;
   isPostCondition?: boolean;
+  /** Raw AST expression object for direct tree conversion in the expression builder. */
+  expressionAst?: unknown;
 }
 
 /**
@@ -135,7 +137,8 @@ export function conditionsToDisplay(
       name: c.name ?? undefined,
       definition: c.definition ?? undefined,
       expressionText: getExpressionText(c),
-      isPostCondition: false
+      isPostCondition: false,
+      expressionAst: c.expression
     });
   }
   for (const c of postConditions ?? []) {
@@ -143,7 +146,8 @@ export function conditionsToDisplay(
       name: c.name ?? undefined,
       definition: c.definition ?? undefined,
       expressionText: getExpressionText(c),
-      isPostCondition: true
+      isPostCondition: true,
+      expressionAst: c.expression
     });
   }
   return result;
