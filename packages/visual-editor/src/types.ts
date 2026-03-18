@@ -414,8 +414,13 @@ export interface RuneTypeGraphConfig {
 // Event Callbacks
 // ---------------------------------------------------------------------------
 
+/** Callback for navigating to a type definition by node ID (namespace::name). */
+export type NavigateToNodeCallback = (nodeId: string) => void;
+
 export interface RuneTypeGraphCallbacks {
   onNodeDoubleClick?: (nodeId: string, data: AnyGraphNode) => void;
+  /** Called when a type reference is clicked within a graph node (e.g., attribute type name). */
+  onNavigateToType?: NavigateToNodeCallback;
   onEdgeSelect?: (edgeId: string, data: EdgeData) => void;
   onSelectionClear?: () => void;
   onContextMenu?: (position: { x: number; y: number }) => void;

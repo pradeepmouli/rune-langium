@@ -65,6 +65,16 @@
   font-style: italic;
 }
 
+.rune-node-member-type[data-navigable] {
+  cursor: pointer;
+  transition: text-decoration 0.15s;
+}
+
+.rune-node-member-type[data-navigable]:hover {
+  text-decoration: underline;
+  color: var(--color-primary, #3182ce);
+}
+
 .rune-node-member-cardinality {
   color: var(--color-node-member-card, #a0aec0);
   font-size: var(--text-xs, 11px);

@@ -85,7 +85,8 @@ export type {
   TypeGraphEdge,
   NamespaceTreeNode,
   NamespaceTypeEntry,
-  VisibilityState
+  VisibilityState,
+  NavigateToNodeCallback
 } from './types.js';
 export { BUILTIN_TYPES } from './types.js';
 

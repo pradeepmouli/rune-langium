@@ -43,11 +43,13 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm } from '@zod-to-form/react';
 import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { dataTypeFormSchema, type DataTypeFormValues } from '../../schemas/form-schemas.js';
+import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
   TypeOption,
   EditorFormActions,
-  ExpressionEditorSlotProps
+  ExpressionEditorSlotProps,
+  NavigateToNodeCallback
 } from '../../types.js';
 import type { ReactNode } from 'react';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
@@ -92,6 +94,10 @@ export interface DataTypeFormProps {
   inheritedGroups?: InheritedGroup[];
   /** Optional render-prop for a rich expression editor. */
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
+  /** Callback to navigate to a type's graph node. */
+  onNavigateToNode?: NavigateToNodeCallback;
+  /** All loaded graph node IDs for resolving type name to node ID. */
+  allNodeIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -104,7 +110,9 @@ function DataTypeForm({
   availableTypes,
   actions,
   inheritedGroups = [],
-  renderExpressionEditor
+  renderExpressionEditor,
+  onNavigateToNode,
+  allNodeIds
 }: DataTypeFormProps) {
   // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
@@ -314,6 +322,14 @@ function DataTypeForm({
           <FieldLegend variant="label" className="mb-0 text-muted-foreground">
             Extends
           </FieldLegend>
+          {parentName && (
+            <TypeLink
+              typeName={parentName}
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
+              className="text-sm font-mono mb-1"
+            />
+          )}
           <TypeSelector
             value={parentValue ?? ''}
             options={parentOptions}
@@ -352,6 +368,8 @@ function DataTypeForm({
                 onUpdate={handleUpdateAttribute}
                 onRemove={handleRemoveAttribute}
                 onReorder={handleReorderAttribute}
+                onNavigateToNode={onNavigateToNode}
+                allNodeIds={allNodeIds}
               />
             ))}
 

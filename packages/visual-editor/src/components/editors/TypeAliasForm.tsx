@@ -27,7 +27,12 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm } from '@zod-to-form/react';
 import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { typeAliasFormSchema, type TypeAliasFormValues } from '../../schemas/form-schemas.js';
-import type { AnyGraphNode, EditorFormActions, ExpressionEditorSlotProps } from '../../types.js';
+import type {
+  AnyGraphNode,
+  EditorFormActions,
+  ExpressionEditorSlotProps,
+  NavigateToNodeCallback
+} from '../../types.js';
 import type { ReactNode } from 'react';
 
 // ---------------------------------------------------------------------------
@@ -58,13 +63,24 @@ export interface TypeAliasFormProps {
   actions: EditorFormActions<'typeAlias'>;
   /** Optional render-prop for a rich expression editor. */
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
+  /** Callback to navigate to a type's graph node. */
+  onNavigateToNode?: NavigateToNodeCallback;
+  /** All loaded graph node IDs for resolving type name to node ID. */
+  allNodeIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-function TypeAliasForm({ nodeId, data, actions, renderExpressionEditor }: TypeAliasFormProps) {
+function TypeAliasForm({
+  nodeId,
+  data,
+  actions,
+  renderExpressionEditor,
+  onNavigateToNode: _onNavigateToNode,
+  allNodeIds: _allNodeIds
+}: TypeAliasFormProps) {
   const d = data as any;
   // ---- Form setup (useZodForm + ExternalDataSync) --------------------------
 

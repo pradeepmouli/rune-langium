@@ -34,7 +34,13 @@ import { useZodForm } from '@zod-to-form/react';
 import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { choiceFormSchema, type ChoiceFormValues } from '../../schemas/form-schemas.js';
 import { getTypeRefText, classExprSynonymsToStrings } from '../../adapters/model-helpers.js';
-import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../types.js';
+import { TypeLink } from './TypeLink.js';
+import type {
+  AnyGraphNode,
+  TypeOption,
+  EditorFormActions,
+  NavigateToNodeCallback
+} from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,13 +77,24 @@ export interface ChoiceFormProps {
   availableTypes: TypeOption[];
   /** Choice-specific editor form action callbacks. */
   actions: EditorFormActions<'choice'>;
+  /** Callback to navigate to a type's graph node. */
+  onNavigateToNode?: NavigateToNodeCallback;
+  /** All loaded graph node IDs for resolving type name to node ID. */
+  allNodeIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) {
+function ChoiceForm({
+  nodeId,
+  data,
+  availableTypes,
+  actions,
+  onNavigateToNode,
+  allNodeIds
+}: ChoiceFormProps) {
   const d = data as any;
   // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 
@@ -225,6 +242,8 @@ function ChoiceForm({ nodeId, data, availableTypes, actions }: ChoiceFormProps) 
                 nodeId={nodeId}
                 availableTypes={availableTypes}
                 onRemove={handleRemoveOption}
+                onNavigateToNode={onNavigateToNode}
+                allNodeIds={allNodeIds}
               />
             ))}
 

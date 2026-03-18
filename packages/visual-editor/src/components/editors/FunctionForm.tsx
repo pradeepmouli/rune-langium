@@ -46,11 +46,13 @@ import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
 import { validateExpression } from '../../validation/edit-validator.js';
 import { functionFormSchema, type FunctionFormValues } from '../../schemas/form-schemas.js';
+import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
   TypeOption,
   EditorFormActions,
-  ExpressionEditorSlotProps
+  ExpressionEditorSlotProps,
+  NavigateToNodeCallback
 } from '../../types.js';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
@@ -154,6 +156,10 @@ export interface FunctionFormProps {
    * When omitted, a plain `<Textarea>` is rendered as fallback.
    */
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
+  /** Callback to navigate to a type's graph node. */
+  onNavigateToNode?: NavigateToNodeCallback;
+  /** All loaded graph node IDs for resolving type name to node ID. */
+  allNodeIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -166,6 +172,8 @@ interface InputParamRowProps {
   availableTypes: TypeOption[];
   onRemove: (nodeId: string, paramName: string) => void;
   disabled?: boolean;
+  onNavigateToNode?: NavigateToNodeCallback;
+  allNodeIds?: string[];
 }
 
 function InputParamRow({
@@ -173,7 +181,9 @@ function InputParamRow({
   nodeId,
   availableTypes: _availableTypes,
   onRemove,
-  disabled = false
+  disabled = false,
+  onNavigateToNode,
+  allNodeIds
 }: InputParamRowProps) {
   return (
     <div
@@ -187,9 +197,12 @@ function InputParamRow({
         {member.name || '(unnamed)'}
       </span>
 
-      <span data-slot="param-type" className="text-xs text-muted-foreground">
-        {member.typeName ?? 'string'}
-      </span>
+      <TypeLink
+        typeName={member.typeName ?? 'string'}
+        onNavigateToNode={onNavigateToNode}
+        allNodeIds={allNodeIds}
+        className="text-xs text-muted-foreground"
+      />
 
       <button
         data-slot="remove-param-btn"
@@ -216,7 +229,9 @@ function FunctionForm({
   availableTypes,
   actions,
   inheritedGroups = [],
-  renderExpressionEditor
+  renderExpressionEditor,
+  onNavigateToNode,
+  allNodeIds
 }: FunctionFormProps) {
   const d = data as any;
 
@@ -448,6 +463,8 @@ function FunctionForm({
                 nodeId={nodeId}
                 availableTypes={availableTypes}
                 onRemove={handleRemoveInput}
+                onNavigateToNode={onNavigateToNode}
+                allNodeIds={allNodeIds}
               />
             ))}
 
@@ -495,6 +512,14 @@ function FunctionForm({
           <FieldLegend variant="label" className="mb-0 text-muted-foreground">
             Output Type
           </FieldLegend>
+          {outputType && (
+            <TypeLink
+              typeName={outputType}
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
+              className="text-sm font-mono mb-1"
+            />
+          )}
           <TypeSelector
             value={outputValue}
             options={availableTypes}
@@ -618,6 +643,7 @@ function FunctionForm({
                       {...field}
                       data-slot="expression-editor"
                       aria-invalid={fieldState.invalid}
+                      aria-label="Function expression"
                       onBlur={() => {
                         field.onBlur();
                         handleExpressionBlur();

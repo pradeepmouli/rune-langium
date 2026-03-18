@@ -5,15 +5,25 @@
  * and visual indicators for inheritance and validation errors.
  */
 
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode } from '../../types.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
+import { useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 
 export const DataNode = memo(function DataNode({ data, selected }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
   const members = ((d as any).attributes ?? []) as any[];
+  const { onNavigateToType, allNodeIds } = useNavigation();
+
+  const handleTypeClick = useCallback(
+    (e: React.MouseEvent, nodeId: string) => {
+      e.preventDefault();
+      onNavigateToType?.(nodeId);
+    },
+    [onNavigateToType]
+  );
 
   return (
     <div className={`rune-node rune-node-data${selected ? ' rune-node-selected' : ''}`}>
@@ -28,13 +38,31 @@ export const DataNode = memo(function DataNode({ data, selected }: NodeProps) {
             {members.map((member: any) => {
               const typeName = getTypeRefText(member.typeCall);
               const card = formatCardinality(member.card);
+              const targetId = typeName ? resolveTypeNodeId(typeName, allNodeIds) : undefined;
               return (
                 <div
                   key={member.name}
                   className={`rune-node-member${member.override ? ' rune-node-member-override' : ''}`}
                 >
                   <span className="rune-node-member-name">{member.name}</span>
-                  {typeName && <span className="rune-node-member-type">{typeName}</span>}
+                  {typeName &&
+                    (targetId && onNavigateToType ? (
+                      <span
+                        className="rune-node-member-type"
+                        style={{ cursor: 'pointer' }}
+                        onClick={(e) => handleTypeClick(e, targetId)}
+                        onMouseOver={(e) => {
+                          (e.currentTarget as HTMLElement).style.textDecoration = 'underline';
+                        }}
+                        onMouseOut={(e) => {
+                          (e.currentTarget as HTMLElement).style.textDecoration = 'none';
+                        }}
+                      >
+                        {typeName}
+                      </span>
+                    ) : (
+                      <span className="rune-node-member-type">{typeName}</span>
+                    ))}
                   {card && <span className="rune-node-member-cardinality">{card}</span>}
                 </div>
               );
