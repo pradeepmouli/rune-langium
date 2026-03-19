@@ -1,0 +1,1743 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - heading "Rune DSL Studio" [level=1] [ref=e5]
+    - generic [ref=e25]:
+      - generic [ref=e26]: 3 file(s)
+      - button "Close" [ref=e27]
+  - main [ref=e6]:
+    - generic [ref=e28]:
+      - navigation "Editor toolbar" [ref=e29]:
+        - generic [ref=e30]:
+          - button "Explorer" [ref=e31]
+          - button "Fit View" [ref=e32]
+          - button "Re-layout" [ref=e33]
+          - button "Editor" [ref=e34]
+          - button "Source" [ref=e35]
+          - button "Problems" [ref=e36]
+        - generic [ref=e37]:
+          - list [ref=e38]:
+            - listitem [ref=e39]:
+              - button "Export .rosetta" [ref=e40]
+            - listitem [ref=e41]:
+              - button "Export SVG" [ref=e42]
+            - listitem [ref=e43]:
+              - button "Export PNG" [ref=e44]
+          - button "Export Code" [ref=e45]
+      - generic [ref=e46]:
+        - complementary "Namespace explorer" [ref=e47]:
+          - generic [ref=e51]:
+            - generic [ref=e52]:
+              - text: Explorer
+              - generic [ref=e53]: 70/70
+            - generic [ref=e54]:
+              - textbox "Filter namespaces..." [ref=e55]
+              - button "Show all" [ref=e56]:
+                - img [ref=e57]
+                - text: Show all
+              - button "Hide all" [ref=e59]:
+                - img [ref=e60]
+                - text: Hide all
+            - generic [ref=e63]:
+              - generic [ref=e66]:
+                - button "Expand tree" [ref=e67]:
+                  - img [ref=e68]
+                - button "Hide namespace from graph" [ref=e70]:
+                  - img [ref=e71]
+                - text: cdm.base.math49
+              - generic [ref=e76]:
+                - button "Expand tree" [ref=e77]:
+                  - img [ref=e78]
+                - button "Hide namespace from graph" [ref=e80]:
+                  - img [ref=e81]
+                - text: com.rosetta.model21
+        - generic [ref=e84]:
+          - application [ref=e88]:
+            - generic [ref=e90]:
+              - generic:
+                - generic:
+                  - img:
+                    - group "Edge from com.rosetta.model::int to com.rosetta.model::number" [ref=e91] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::date to com.rosetta.model::int" [ref=e94] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::date to com.rosetta.model::int" [ref=e97] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::date to com.rosetta.model::int" [ref=e100] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::dateTime to com.rosetta.model::date" [ref=e103] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::dateTime to com.rosetta.model::time" [ref=e106] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::zonedDateTime to com.rosetta.model::date" [ref=e109] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::zonedDateTime to com.rosetta.model::time" [ref=e112] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::zonedDateTime to com.rosetta.model::string" [ref=e115] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::productType to com.rosetta.model::string" [ref=e118] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::eventType to com.rosetta.model::string" [ref=e121] [cursor=pointer]
+                  - img:
+                    - group "Edge from com.rosetta.model::calculation to com.rosetta.model::string" [ref=e124] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::CompareNumbers to com.rosetta.model::number" [ref=e127] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::CompareNumbers to cdm.base.math::CompareOp" [ref=e130] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::CompareNumbers to com.rosetta.model::number" [ref=e133] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::CompareNumbers to com.rosetta.model::boolean" [ref=e136] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Abs to com.rosetta.model::number" [ref=e139] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Abs to com.rosetta.model::number" [ref=e142] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Max to com.rosetta.model::number" [ref=e145] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Max to com.rosetta.model::number" [ref=e148] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Max to com.rosetta.model::number" [ref=e151] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Min to com.rosetta.model::number" [ref=e154] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Min to com.rosetta.model::number" [ref=e157] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Min to com.rosetta.model::number" [ref=e160] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToNearest to com.rosetta.model::number" [ref=e163] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToNearest to com.rosetta.model::number" [ref=e166] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToNearest to cdm.base.math::RoundingModeEnum" [ref=e169] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToNearest to com.rosetta.model::number" [ref=e172] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToPrecision to com.rosetta.model::number" [ref=e175] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToPrecision to com.rosetta.model::int" [ref=e178] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToPrecision to cdm.base.math::RoundingDirectionEnum" [ref=e181] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToPrecision to com.rosetta.model::boolean" [ref=e184] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToPrecision to com.rosetta.model::number" [ref=e187] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToSignificantFigures to com.rosetta.model::number" [ref=e190] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToSignificantFigures to com.rosetta.model::int" [ref=e193] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToSignificantFigures to cdm.base.math::RoundingDirectionEnum" [ref=e196] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::RoundToSignificantFigures to com.rosetta.model::number" [ref=e199] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::CompareQuantityByUnitOfAmount to cdm.base.math::Quantity" [ref=e202] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::CompareQuantityByUnitOfAmount to cdm.base.math::CompareOp" [ref=e205] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::CompareQuantityByUnitOfAmount to cdm.base.math::Quantity" [ref=e208] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::CompareQuantityByUnitOfAmount to cdm.base.math::UnitType" [ref=e211] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::CompareQuantityByUnitOfAmount to com.rosetta.model::boolean" [ref=e214] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UnitEquals to cdm.base.math::UnitType" [ref=e217] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UnitEquals to cdm.base.math::UnitType" [ref=e220] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UnitEquals to com.rosetta.model::boolean" [ref=e223] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::StringEquals to com.rosetta.model::string" [ref=e226] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::StringEquals to com.rosetta.model::string" [ref=e229] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::StringEquals to com.rosetta.model::boolean" [ref=e232] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UpdateAmount to com.rosetta.model::number" [ref=e235] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UpdateAmount to com.rosetta.model::number" [ref=e238] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UpdateAmount to cdm.base.math::QuantityChangeDirectionEnum" [ref=e241] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UpdateAmount to com.rosetta.model::number" [ref=e244] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UpdateDatedValues to cdm.base.math::DatedValue" [ref=e247] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UpdateDatedValues to com.rosetta.model::number" [ref=e250] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UpdateDatedValues to cdm.base.math::QuantityChangeDirectionEnum" [ref=e253] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UpdateDatedValues to com.rosetta.model::date" [ref=e256] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UpdateDatedValues to cdm.base.math::DatedValue" [ref=e259] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantity to cdm.base.math::Quantity" [ref=e262] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantity to cdm.base.math::UnitType" [ref=e265] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantity to cdm.base.math::Quantity" [ref=e268] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantityByCurrency to cdm.base.math::QuantitySchedule" [ref=e271] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantityByCurrency to com.rosetta.model::string" [ref=e274] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantityByCurrency to cdm.base.math::QuantitySchedule" [ref=e277] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantityByCurrencyExists to cdm.base.math::QuantitySchedule" [ref=e280] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantityByCurrencyExists to cdm.base.math::QuantitySchedule" [ref=e283] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantityByFinancialUnit to cdm.base.math::QuantitySchedule" [ref=e286] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantityByFinancialUnit to cdm.base.math::FinancialUnitEnum" [ref=e289] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::FilterQuantityByFinancialUnit to cdm.base.math::QuantitySchedule" [ref=e292] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::AppendToVector to com.rosetta.model::number" [ref=e295] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::AppendToVector to com.rosetta.model::number" [ref=e298] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::AppendToVector to com.rosetta.model::number" [ref=e301] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorOperation to cdm.base.math::ArithmeticOperationEnum" [ref=e304] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorOperation to com.rosetta.model::number" [ref=e307] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorOperation to com.rosetta.model::number" [ref=e310] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorOperation to com.rosetta.model::number" [ref=e313] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorScalarOperation to cdm.base.math::ArithmeticOperationEnum" [ref=e316] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorScalarOperation to com.rosetta.model::number" [ref=e319] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorScalarOperation to com.rosetta.model::number" [ref=e322] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorScalarOperation to com.rosetta.model::number" [ref=e325] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorGrowthOperation to com.rosetta.model::number" [ref=e328] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorGrowthOperation to com.rosetta.model::number" [ref=e331] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::VectorGrowthOperation to com.rosetta.model::number" [ref=e334] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::ArithmeticOperation to com.rosetta.model::number" [ref=e337] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::ArithmeticOperation to cdm.base.math::ArithmeticOperationEnum" [ref=e340] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::ArithmeticOperation to com.rosetta.model::number" [ref=e343] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::ArithmeticOperation to com.rosetta.model::number" [ref=e346] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UnitType to cdm.base.math::CapacityUnitEnum" [ref=e349] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UnitType to cdm.base.math::WeatherUnitEnum" [ref=e352] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UnitType to cdm.base.math::FinancialUnitEnum" [ref=e355] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::UnitType to com.rosetta.model::string" [ref=e358] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::MeasureBase to com.rosetta.model::number" [ref=e361] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::MeasureBase to cdm.base.math::UnitType" [ref=e364] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Measure to cdm.base.math::MeasureBase" [ref=e367] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::MeasureSchedule to cdm.base.math::MeasureBase" [ref=e370] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::MeasureSchedule to cdm.base.math::DatedValue" [ref=e373] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::QuantitySchedule to cdm.base.math::MeasureSchedule" [ref=e376] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::QuantitySchedule to cdm.base.math::Measure" [ref=e379] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Quantity to cdm.base.math::QuantitySchedule" [ref=e382] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::NonNegativeQuantity to cdm.base.math::Quantity" [ref=e385] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::NonNegativeStep to com.rosetta.model::date" [ref=e388] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::NonNegativeStep to com.rosetta.model::number" [ref=e391] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::NonNegativeQuantitySchedule to cdm.base.math::QuantitySchedule" [ref=e394] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Rounding to cdm.base.math::RoundingDirectionEnum" [ref=e397] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Rounding to com.rosetta.model::int" [ref=e400] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Schedule to com.rosetta.model::number" [ref=e403] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::Schedule to cdm.base.math::DatedValue" [ref=e406] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::DatedValue to com.rosetta.model::date" [ref=e409] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::DatedValue to com.rosetta.model::number" [ref=e412] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::NumberRange to cdm.base.math::NumberBound" [ref=e415] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::NumberRange to cdm.base.math::NumberBound" [ref=e418] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::NumberBound to com.rosetta.model::number" [ref=e421] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::NumberBound to com.rosetta.model::boolean" [ref=e424] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::MoneyRange to cdm.base.math::MoneyBound" [ref=e427] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::MoneyRange to cdm.base.math::MoneyBound" [ref=e430] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::MoneyBound to com.rosetta.model::boolean" [ref=e433] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::AveragingCalculationMethod to com.rosetta.model::boolean" [ref=e436] [cursor=pointer]
+                  - img:
+                    - group "Edge from cdm.base.math::AveragingCalculationMethod to cdm.base.math::AveragingCalculationMethodEnum" [ref=e439] [cursor=pointer]
+                - generic:
+                  - generic [ref=e442]: day
+                  - generic [ref=e443]: month
+                  - generic [ref=e444]: year
+                  - generic [ref=e445]: date
+                  - generic [ref=e446]: time
+                  - generic [ref=e447]: date
+                  - generic [ref=e448]: time
+                  - generic [ref=e449]: timezone
+                  - generic [ref=e450]: n1(1..1)
+                  - generic [ref=e451]: op(1..1)
+                  - generic [ref=e452]: n2(1..1)
+                  - generic [ref=e453]: output
+                  - generic [ref=e454]: arg(1..1)
+                  - generic [ref=e455]: output
+                  - generic [ref=e456]: a(1..1)
+                  - generic [ref=e457]: b(1..1)
+                  - generic [ref=e458]: output
+                  - generic [ref=e459]: a(1..1)
+                  - generic [ref=e460]: b(1..1)
+                  - generic [ref=e461]: output
+                  - generic [ref=e462]: value(1..1)
+                  - generic [ref=e463]: nearest(1..1)
+                  - generic [ref=e464]: roundingMode(1..1)
+                  - generic [ref=e465]: output
+                  - generic [ref=e466]: value(1..1)
+                  - generic [ref=e467]: precision(1..1)
+                  - generic [ref=e468]: roundingMode(1..1)
+                  - generic [ref=e469]: removeTrailingZeros(1..1)
+                  - generic [ref=e470]: output
+                  - generic [ref=e471]: value(1..1)
+                  - generic [ref=e472]: significantFigures(1..1)
+                  - generic [ref=e473]: roundingMode(1..1)
+                  - generic [ref=e474]: output
+                  - generic [ref=e475]: quantity1(0..*)
+                  - generic [ref=e476]: op(1..1)
+                  - generic [ref=e477]: quantity2(0..*)
+                  - generic [ref=e478]: unitOfAmount(1..1)
+                  - generic [ref=e479]: output
+                  - generic [ref=e480]: u1(0..1)
+                  - generic [ref=e481]: u2(0..1)
+                  - generic [ref=e482]: output
+                  - generic [ref=e483]: s1(0..1)
+                  - generic [ref=e484]: s2(0..1)
+                  - generic [ref=e485]: output
+                  - generic [ref=e486]: oldAmount(0..1)
+                  - generic [ref=e487]: changeAmount(0..1)
+                  - generic [ref=e488]: direction(1..1)
+                  - generic [ref=e489]: output
+                  - generic [ref=e490]: datedValues(0..*)
+                  - generic [ref=e491]: changeAmount(0..1)
+                  - generic [ref=e492]: direction(1..1)
+                  - generic [ref=e493]: effectiveDate(0..1)
+                  - generic [ref=e494]: output
+                  - generic [ref=e495]: quantities(0..*)
+                  - generic [ref=e496]: unit(1..1)
+                  - generic [ref=e497]: output
+                  - generic [ref=e498]: quantities(0..*)
+                  - generic [ref=e499]: currency(1..1)
+                  - generic [ref=e500]: output
+                  - generic [ref=e501]: quantities(0..*)
+                  - generic [ref=e502]: output
+                  - generic [ref=e503]: quantities(0..*)
+                  - generic [ref=e504]: financialUnit(1..1)
+                  - generic [ref=e505]: output
+                  - generic [ref=e506]: vector(0..*)
+                  - generic [ref=e507]: value(1..1)
+                  - generic [ref=e508]: output
+                  - generic [ref=e509]: arithmeticOp(1..1)
+                  - generic [ref=e510]: left(0..*)
+                  - generic [ref=e511]: right(0..*)
+                  - generic [ref=e512]: output
+                  - generic [ref=e513]: arithmeticOp(1..1)
+                  - generic [ref=e514]: left(0..*)
+                  - generic [ref=e515]: right(0..1)
+                  - generic [ref=e516]: output
+                  - generic [ref=e517]: baseValue(1..1)
+                  - generic [ref=e518]: factor(0..*)
+                  - generic [ref=e519]: output
+                  - generic [ref=e520]: n1(1..1)
+                  - generic [ref=e521]: op(1..1)
+                  - generic [ref=e522]: n2(1..1)
+                  - generic [ref=e523]: output
+                  - generic [ref=e524]: capacityUnit(0..1)
+                  - generic [ref=e525]: weatherUnit(0..1)
+                  - generic [ref=e526]: financialUnit(0..1)
+                  - generic [ref=e527]: currency(0..1)
+                  - generic [ref=e528]: value(0..1)
+                  - generic [ref=e529]: unit(0..1)
+                  - generic [ref=e530]: datedValue(0..*)
+                  - generic [ref=e531]: multiplier(0..1)
+                  - generic [ref=e532]: stepDate(1..1)
+                  - generic [ref=e533]: stepValue(1..1)
+                  - generic [ref=e534]: roundingDirection(1..1)
+                  - generic [ref=e535]: precision(0..1)
+                  - generic [ref=e536]: value(1..1)
+                  - generic [ref=e537]: datedValue(0..*)
+                  - generic [ref=e538]: date(1..1)
+                  - generic [ref=e539]: value(1..1)
+                  - generic [ref=e540]: lowerBound(0..1)
+                  - generic [ref=e541]: upperBound(0..1)
+                  - generic [ref=e542]: number(1..1)
+                  - generic [ref=e543]: inclusive(1..1)
+                  - generic [ref=e544]: lowerBound(0..1)
+                  - generic [ref=e545]: upperBound(0..1)
+                  - generic [ref=e546]: inclusive(1..1)
+                  - generic [ref=e547]: isWeighted(1..1)
+                  - generic [ref=e548]: calculationMethod(1..1)
+                - generic:
+                  - group [ref=e549]:
+                    - generic [ref=e552]:
+                      - generic [ref=e553]: Basic
+                      - generic [ref=e554]: boolean
+                  - group [ref=e557]:
+                    - generic [ref=e560]:
+                      - generic [ref=e561]: Basic
+                      - generic [ref=e562]: number
+                  - group [ref=e565]:
+                    - generic [ref=e568]:
+                      - generic [ref=e569]: Basic
+                      - generic [ref=e570]: string
+                  - group [ref=e573]:
+                    - generic [ref=e576]:
+                      - generic [ref=e577]: Basic
+                      - generic [ref=e578]: time
+                  - group [ref=e581]:
+                    - generic [ref=e584]:
+                      - generic [ref=e585]: Basic
+                      - generic [ref=e586]: pattern
+                  - group [ref=e589]:
+                    - generic [ref=e592]:
+                      - generic [ref=e593]: Alias
+                      - generic [ref=e594]: int
+                  - group [ref=e597]:
+                    - generic [ref=e598]:
+                      - generic [ref=e600]:
+                        - generic [ref=e601]: Record
+                        - generic [ref=e602]: date
+                      - generic [ref=e604]:
+                        - generic [ref=e605]:
+                          - generic [ref=e606]: day
+                          - generic [ref=e607] [cursor=pointer]: int
+                        - generic [ref=e608]:
+                          - generic [ref=e609]: month
+                          - generic [ref=e610] [cursor=pointer]: int
+                        - generic [ref=e611]:
+                          - generic [ref=e612]: year
+                          - generic [ref=e613] [cursor=pointer]: int
+                  - group [ref=e615]:
+                    - generic [ref=e616]:
+                      - generic [ref=e618]:
+                        - generic [ref=e619]: Record
+                        - generic [ref=e620]: dateTime
+                      - generic [ref=e622]:
+                        - generic [ref=e623]:
+                          - generic [ref=e624]: date
+                          - generic [ref=e625] [cursor=pointer]: date
+                        - generic [ref=e626]:
+                          - generic [ref=e627]: time
+                          - generic [ref=e628] [cursor=pointer]: time
+                  - group [ref=e630]:
+                    - generic [ref=e631]:
+                      - generic [ref=e633]:
+                        - generic [ref=e634]: Record
+                        - generic [ref=e635]: zonedDateTime
+                      - generic [ref=e637]:
+                        - generic [ref=e638]:
+                          - generic [ref=e639]: date
+                          - generic [ref=e640] [cursor=pointer]: date
+                        - generic [ref=e641]:
+                          - generic [ref=e642]: time
+                          - generic [ref=e643] [cursor=pointer]: time
+                        - generic [ref=e644]:
+                          - generic [ref=e645]: timezone
+                          - generic [ref=e646] [cursor=pointer]: string
+                  - group [ref=e648]:
+                    - generic [ref=e651]:
+                      - generic [ref=e652]: Alias
+                      - generic [ref=e653]: productType
+                  - group [ref=e656]:
+                    - generic [ref=e659]:
+                      - generic [ref=e660]: Alias
+                      - generic [ref=e661]: eventType
+                  - group [ref=e664]:
+                    - generic [ref=e667]:
+                      - generic [ref=e668]: Alias
+                      - generic [ref=e669]: calculation
+                  - group [ref=e672]:
+                    - generic [ref=e673]:
+                      - generic [ref=e675]:
+                        - generic [ref=e676]: Annotation
+                        - generic [ref=e677]: metadata
+                      - generic [ref=e679]:
+                        - generic [ref=e680]:
+                          - generic [ref=e681]: id
+                          - generic [ref=e682] [cursor=pointer]: string
+                          - generic [ref=e683]: (0..1)
+                        - generic [ref=e684]:
+                          - generic [ref=e685]: key
+                          - generic [ref=e686] [cursor=pointer]: string
+                          - generic [ref=e687]: (0..1)
+                        - generic [ref=e688]:
+                          - generic [ref=e689]: reference
+                          - generic [ref=e690] [cursor=pointer]: string
+                          - generic [ref=e691]: (0..1)
+                        - generic [ref=e692]:
+                          - generic [ref=e693]: scheme
+                          - generic [ref=e694] [cursor=pointer]: string
+                          - generic [ref=e695]: (0..1)
+                        - generic [ref=e696]:
+                          - generic [ref=e697]: template
+                          - generic [ref=e698] [cursor=pointer]: string
+                          - generic [ref=e699]: (0..1)
+                        - generic [ref=e700]:
+                          - generic [ref=e701]: location
+                          - generic [ref=e702] [cursor=pointer]: string
+                          - generic [ref=e703]: (0..1)
+                        - generic [ref=e704]:
+                          - generic [ref=e705]: address
+                          - generic [ref=e706] [cursor=pointer]: string
+                          - generic [ref=e707]: (0..1)
+                  - group [ref=e709]:
+                    - generic [ref=e712]:
+                      - generic [ref=e713]: Annotation
+                      - generic [ref=e714]: rootType
+                  - group [ref=e717]:
+                    - generic [ref=e718]:
+                      - generic [ref=e720]:
+                        - generic [ref=e721]: Annotation
+                        - generic [ref=e722]: qualification
+                      - generic [ref=e724]:
+                        - generic [ref=e725]:
+                          - generic [ref=e726]: Product
+                          - generic [ref=e727] [cursor=pointer]: boolean
+                          - generic [ref=e728]: (0..1)
+                        - generic [ref=e729]:
+                          - generic [ref=e730]: BusinessEvent
+                          - generic [ref=e731] [cursor=pointer]: boolean
+                          - generic [ref=e732]: (0..1)
+                  - group [ref=e734]:
+                    - generic [ref=e737]:
+                      - generic [ref=e738]: Annotation
+                      - generic [ref=e739]: deprecated
+                  - group [ref=e742]:
+                    - generic [ref=e743]:
+                      - generic [ref=e745]:
+                        - generic [ref=e746]: Annotation
+                        - generic [ref=e747]: ingest
+                      - generic [ref=e749]:
+                        - generic [ref=e750]:
+                          - generic [ref=e751]: JSON
+                          - generic [ref=e752] [cursor=pointer]: boolean
+                          - generic [ref=e753]: (0..1)
+                        - generic [ref=e754]:
+                          - generic [ref=e755]: RUNE_JSON
+                          - generic [ref=e756] [cursor=pointer]: boolean
+                          - generic [ref=e757]: (0..1)
+                        - generic [ref=e758]:
+                          - generic [ref=e759]: XML
+                          - generic [ref=e760] [cursor=pointer]: boolean
+                          - generic [ref=e761]: (0..1)
+                        - generic [ref=e762]:
+                          - generic [ref=e763]: CSV
+                          - generic [ref=e764] [cursor=pointer]: boolean
+                          - generic [ref=e765]: (0..1)
+                  - group [ref=e767]:
+                    - generic [ref=e770]:
+                      - generic [ref=e771]: Annotation
+                      - generic [ref=e772]: enrich
+                  - group [ref=e775]:
+                    - generic [ref=e776]:
+                      - generic [ref=e778]:
+                        - generic [ref=e779]: Annotation
+                        - generic [ref=e780]: projection
+                      - generic [ref=e782]:
+                        - generic [ref=e783]:
+                          - generic [ref=e784]: JSON
+                          - generic [ref=e785] [cursor=pointer]: boolean
+                          - generic [ref=e786]: (0..1)
+                        - generic [ref=e787]:
+                          - generic [ref=e788]: RUNE_JSON
+                          - generic [ref=e789] [cursor=pointer]: boolean
+                          - generic [ref=e790]: (0..1)
+                        - generic [ref=e791]:
+                          - generic [ref=e792]: XML
+                          - generic [ref=e793] [cursor=pointer]: boolean
+                          - generic [ref=e794]: (0..1)
+                        - generic [ref=e795]:
+                          - generic [ref=e796]: CSV
+                          - generic [ref=e797] [cursor=pointer]: boolean
+                          - generic [ref=e798]: (0..1)
+                  - group [ref=e800]:
+                    - generic [ref=e803]:
+                      - generic [ref=e804]: Annotation
+                      - generic [ref=e805]: codeImplementation
+                  - group [ref=e808]:
+                    - generic [ref=e809]:
+                      - generic [ref=e811]:
+                        - generic [ref=e812]: Annotation
+                        - generic [ref=e813]: suppressWarnings
+                      - generic [ref=e816]:
+                        - generic [ref=e817]: capitalisation
+                        - generic [ref=e818] [cursor=pointer]: boolean
+                        - generic [ref=e819]: (0..1)
+                  - group [ref=e821]:
+                    - generic [ref=e822]:
+                      - generic [ref=e824]:
+                        - generic [ref=e825]: Function
+                        - generic [ref=e826]: CompareNumbers
+                      - generic [ref=e827]:
+                        - generic [ref=e828]:
+                          - generic [ref=e829]:
+                            - generic [ref=e830]: n1
+                            - generic [ref=e831] [cursor=pointer]: number
+                            - generic [ref=e832]: (1..1)
+                          - generic [ref=e833]:
+                            - generic [ref=e834]: op
+                            - generic [ref=e835] [cursor=pointer]: CompareOp
+                            - generic [ref=e836]: (1..1)
+                          - generic [ref=e837]:
+                            - generic [ref=e838]: n2
+                            - generic [ref=e839] [cursor=pointer]: number
+                            - generic [ref=e840]: (1..1)
+                        - generic [ref=e842]:
+                          - generic [ref=e843]: output
+                          - generic [ref=e844] [cursor=pointer]: boolean
+                  - group [ref=e846]:
+                    - generic [ref=e847]:
+                      - generic [ref=e849]:
+                        - generic [ref=e850]: Function
+                        - generic [ref=e851]: Abs
+                      - generic [ref=e852]:
+                        - generic [ref=e854]:
+                          - generic [ref=e855]: arg
+                          - generic [ref=e856] [cursor=pointer]: number
+                          - generic [ref=e857]: (1..1)
+                        - generic [ref=e859]:
+                          - generic [ref=e860]: output
+                          - generic [ref=e861] [cursor=pointer]: number
+                  - group [ref=e863]:
+                    - generic [ref=e864]:
+                      - generic [ref=e866]:
+                        - generic [ref=e867]: Function
+                        - generic [ref=e868]: Max
+                      - generic [ref=e869]:
+                        - generic [ref=e870]:
+                          - generic [ref=e871]:
+                            - generic [ref=e872]: a
+                            - generic [ref=e873] [cursor=pointer]: number
+                            - generic [ref=e874]: (1..1)
+                          - generic [ref=e875]:
+                            - generic [ref=e876]: b
+                            - generic [ref=e877] [cursor=pointer]: number
+                            - generic [ref=e878]: (1..1)
+                        - generic [ref=e880]:
+                          - generic [ref=e881]: output
+                          - generic [ref=e882] [cursor=pointer]: number
+                  - group [ref=e884]:
+                    - generic [ref=e885]:
+                      - generic [ref=e887]:
+                        - generic [ref=e888]: Function
+                        - generic [ref=e889]: Min
+                      - generic [ref=e890]:
+                        - generic [ref=e891]:
+                          - generic [ref=e892]:
+                            - generic [ref=e893]: a
+                            - generic [ref=e894] [cursor=pointer]: number
+                            - generic [ref=e895]: (1..1)
+                          - generic [ref=e896]:
+                            - generic [ref=e897]: b
+                            - generic [ref=e898] [cursor=pointer]: number
+                            - generic [ref=e899]: (1..1)
+                        - generic [ref=e901]:
+                          - generic [ref=e902]: output
+                          - generic [ref=e903] [cursor=pointer]: number
+                  - group [ref=e905]:
+                    - generic [ref=e906]:
+                      - generic [ref=e908]:
+                        - generic [ref=e909]: Function
+                        - generic [ref=e910]: RoundToNearest
+                      - generic [ref=e911]:
+                        - generic [ref=e912]:
+                          - generic [ref=e913]:
+                            - generic [ref=e914]: value
+                            - generic [ref=e915] [cursor=pointer]: number
+                            - generic [ref=e916]: (1..1)
+                          - generic [ref=e917]:
+                            - generic [ref=e918]: nearest
+                            - generic [ref=e919] [cursor=pointer]: number
+                            - generic [ref=e920]: (1..1)
+                          - generic [ref=e921]:
+                            - generic [ref=e922]: roundingMode
+                            - generic [ref=e923] [cursor=pointer]: RoundingModeEnum
+                            - generic [ref=e924]: (1..1)
+                        - generic [ref=e926]:
+                          - generic [ref=e927]: output
+                          - generic [ref=e928] [cursor=pointer]: number
+                  - group [ref=e930]:
+                    - generic [ref=e931]:
+                      - generic [ref=e933]:
+                        - generic [ref=e934]: Function
+                        - generic [ref=e935]: RoundToPrecision
+                      - generic [ref=e936]:
+                        - generic [ref=e937]:
+                          - generic [ref=e938]:
+                            - generic [ref=e939]: value
+                            - generic [ref=e940] [cursor=pointer]: number
+                            - generic [ref=e941]: (1..1)
+                          - generic [ref=e942]:
+                            - generic [ref=e943]: precision
+                            - generic [ref=e944] [cursor=pointer]: int
+                            - generic [ref=e945]: (1..1)
+                          - generic [ref=e946]:
+                            - generic [ref=e947]: roundingMode
+                            - generic [ref=e948] [cursor=pointer]: RoundingDirectionEnum
+                            - generic [ref=e949]: (1..1)
+                          - generic [ref=e950]:
+                            - generic [ref=e951]: removeTrailingZeros
+                            - generic [ref=e952] [cursor=pointer]: boolean
+                            - generic [ref=e953]: (1..1)
+                        - generic [ref=e955]:
+                          - generic [ref=e956]: output
+                          - generic [ref=e957] [cursor=pointer]: number
+                  - group [ref=e959]:
+                    - generic [ref=e960]:
+                      - generic [ref=e962]:
+                        - generic [ref=e963]: Function
+                        - generic [ref=e964]: RoundToSignificantFigures
+                      - generic [ref=e965]:
+                        - generic [ref=e966]:
+                          - generic [ref=e967]:
+                            - generic [ref=e968]: value
+                            - generic [ref=e969] [cursor=pointer]: number
+                            - generic [ref=e970]: (1..1)
+                          - generic [ref=e971]:
+                            - generic [ref=e972]: significantFigures
+                            - generic [ref=e973] [cursor=pointer]: int
+                            - generic [ref=e974]: (1..1)
+                          - generic [ref=e975]:
+                            - generic [ref=e976]: roundingMode
+                            - generic [ref=e977] [cursor=pointer]: RoundingDirectionEnum
+                            - generic [ref=e978]: (1..1)
+                        - generic [ref=e980]:
+                          - generic [ref=e981]: output
+                          - generic [ref=e982] [cursor=pointer]: number
+                  - group [ref=e984]:
+                    - generic [ref=e985]:
+                      - generic [ref=e987]:
+                        - generic [ref=e988]: Function
+                        - generic [ref=e989]: CompareQuantityByUnitOfAmount
+                      - generic [ref=e990]:
+                        - generic [ref=e991]:
+                          - generic [ref=e992]:
+                            - generic [ref=e993]: quantity1
+                            - generic [ref=e994] [cursor=pointer]: Quantity
+                            - generic [ref=e995]: (0..*)
+                          - generic [ref=e996]:
+                            - generic [ref=e997]: op
+                            - generic [ref=e998] [cursor=pointer]: CompareOp
+                            - generic [ref=e999]: (1..1)
+                          - generic [ref=e1000]:
+                            - generic [ref=e1001]: quantity2
+                            - generic [ref=e1002] [cursor=pointer]: Quantity
+                            - generic [ref=e1003]: (0..*)
+                          - generic [ref=e1004]:
+                            - generic [ref=e1005]: unitOfAmount
+                            - generic [ref=e1006] [cursor=pointer]: UnitType
+                            - generic [ref=e1007]: (1..1)
+                        - generic [ref=e1009]:
+                          - generic [ref=e1010]: output
+                          - generic [ref=e1011] [cursor=pointer]: boolean
+                  - group [ref=e1013]:
+                    - generic [ref=e1014]:
+                      - generic [ref=e1016]:
+                        - generic [ref=e1017]: Function
+                        - generic [ref=e1018]: UnitEquals
+                      - generic [ref=e1019]:
+                        - generic [ref=e1020]:
+                          - generic [ref=e1021]:
+                            - generic [ref=e1022]: u1
+                            - generic [ref=e1023] [cursor=pointer]: UnitType
+                            - generic [ref=e1024]: (0..1)
+                          - generic [ref=e1025]:
+                            - generic [ref=e1026]: u2
+                            - generic [ref=e1027] [cursor=pointer]: UnitType
+                            - generic [ref=e1028]: (0..1)
+                        - generic [ref=e1030]:
+                          - generic [ref=e1031]: output
+                          - generic [ref=e1032] [cursor=pointer]: boolean
+                  - group [ref=e1034]:
+                    - generic [ref=e1035]:
+                      - generic [ref=e1037]:
+                        - generic [ref=e1038]: Function
+                        - generic [ref=e1039]: StringEquals
+                      - generic [ref=e1040]:
+                        - generic [ref=e1041]:
+                          - generic [ref=e1042]:
+                            - generic [ref=e1043]: s1
+                            - generic [ref=e1044] [cursor=pointer]: string
+                            - generic [ref=e1045]: (0..1)
+                          - generic [ref=e1046]:
+                            - generic [ref=e1047]: s2
+                            - generic [ref=e1048] [cursor=pointer]: string
+                            - generic [ref=e1049]: (0..1)
+                        - generic [ref=e1051]:
+                          - generic [ref=e1052]: output
+                          - generic [ref=e1053] [cursor=pointer]: boolean
+                  - group [ref=e1055]:
+                    - generic [ref=e1056]:
+                      - generic [ref=e1058]:
+                        - generic [ref=e1059]: Function
+                        - generic [ref=e1060]: UpdateAmount
+                      - generic [ref=e1061]:
+                        - generic [ref=e1062]:
+                          - generic [ref=e1063]:
+                            - generic [ref=e1064]: oldAmount
+                            - generic [ref=e1065] [cursor=pointer]: number
+                            - generic [ref=e1066]: (0..1)
+                          - generic [ref=e1067]:
+                            - generic [ref=e1068]: changeAmount
+                            - generic [ref=e1069] [cursor=pointer]: number
+                            - generic [ref=e1070]: (0..1)
+                          - generic [ref=e1071]:
+                            - generic [ref=e1072]: direction
+                            - generic [ref=e1073] [cursor=pointer]: QuantityChangeDirectionEnum
+                            - generic [ref=e1074]: (1..1)
+                        - generic [ref=e1076]:
+                          - generic [ref=e1077]: output
+                          - generic [ref=e1078] [cursor=pointer]: number
+                  - group [ref=e1080]:
+                    - generic [ref=e1081]:
+                      - generic [ref=e1083]:
+                        - generic [ref=e1084]: Function
+                        - generic [ref=e1085]: UpdateDatedValues
+                      - generic [ref=e1086]:
+                        - generic [ref=e1087]:
+                          - generic [ref=e1088]:
+                            - generic [ref=e1089]: datedValues
+                            - generic [ref=e1090] [cursor=pointer]: DatedValue
+                            - generic [ref=e1091]: (0..*)
+                          - generic [ref=e1092]:
+                            - generic [ref=e1093]: changeAmount
+                            - generic [ref=e1094] [cursor=pointer]: number
+                            - generic [ref=e1095]: (0..1)
+                          - generic [ref=e1096]:
+                            - generic [ref=e1097]: direction
+                            - generic [ref=e1098] [cursor=pointer]: QuantityChangeDirectionEnum
+                            - generic [ref=e1099]: (1..1)
+                          - generic [ref=e1100]:
+                            - generic [ref=e1101]: effectiveDate
+                            - generic [ref=e1102] [cursor=pointer]: date
+                            - generic [ref=e1103]: (0..1)
+                        - generic [ref=e1105]:
+                          - generic [ref=e1106]: output
+                          - generic [ref=e1107] [cursor=pointer]: DatedValue
+                  - group [ref=e1109]:
+                    - generic [ref=e1110]:
+                      - generic [ref=e1112]:
+                        - generic [ref=e1113]: Function
+                        - generic [ref=e1114]: FilterQuantity
+                      - generic [ref=e1115]:
+                        - generic [ref=e1116]:
+                          - generic [ref=e1117]:
+                            - generic [ref=e1118]: quantities
+                            - generic [ref=e1119] [cursor=pointer]: Quantity
+                            - generic [ref=e1120]: (0..*)
+                          - generic [ref=e1121]:
+                            - generic [ref=e1122]: unit
+                            - generic [ref=e1123] [cursor=pointer]: UnitType
+                            - generic [ref=e1124]: (1..1)
+                        - generic [ref=e1126]:
+                          - generic [ref=e1127]: output
+                          - generic [ref=e1128] [cursor=pointer]: Quantity
+                  - group [ref=e1130]:
+                    - generic [ref=e1131]:
+                      - generic [ref=e1133]:
+                        - generic [ref=e1134]: Function
+                        - generic [ref=e1135]: FilterQuantityByCurrency
+                      - generic [ref=e1136]:
+                        - generic [ref=e1137]:
+                          - generic [ref=e1138]:
+                            - generic [ref=e1139]: quantities
+                            - generic [ref=e1140] [cursor=pointer]: QuantitySchedule
+                            - generic [ref=e1141]: (0..*)
+                          - generic [ref=e1142]:
+                            - generic [ref=e1143]: currency
+                            - generic [ref=e1144] [cursor=pointer]: string
+                            - generic [ref=e1145]: (1..1)
+                        - generic [ref=e1147]:
+                          - generic [ref=e1148]: output
+                          - generic [ref=e1149] [cursor=pointer]: QuantitySchedule
+                  - group [ref=e1151]:
+                    - generic [ref=e1152]:
+                      - generic [ref=e1154]:
+                        - generic [ref=e1155]: Function
+                        - generic [ref=e1156]: FilterQuantityByCurrencyExists
+                      - generic [ref=e1157]:
+                        - generic [ref=e1159]:
+                          - generic [ref=e1160]: quantities
+                          - generic [ref=e1161] [cursor=pointer]: QuantitySchedule
+                          - generic [ref=e1162]: (0..*)
+                        - generic [ref=e1164]:
+                          - generic [ref=e1165]: output
+                          - generic [ref=e1166] [cursor=pointer]: QuantitySchedule
+                  - group [ref=e1168]:
+                    - generic [ref=e1169]:
+                      - generic [ref=e1171]:
+                        - generic [ref=e1172]: Function
+                        - generic [ref=e1173]: FilterQuantityByFinancialUnit
+                      - generic [ref=e1174]:
+                        - generic [ref=e1175]:
+                          - generic [ref=e1176]:
+                            - generic [ref=e1177]: quantities
+                            - generic [ref=e1178] [cursor=pointer]: QuantitySchedule
+                            - generic [ref=e1179]: (0..*)
+                          - generic [ref=e1180]:
+                            - generic [ref=e1181]: financialUnit
+                            - generic [ref=e1182] [cursor=pointer]: FinancialUnitEnum
+                            - generic [ref=e1183]: (1..1)
+                        - generic [ref=e1185]:
+                          - generic [ref=e1186]: output
+                          - generic [ref=e1187] [cursor=pointer]: QuantitySchedule
+                  - group [ref=e1189]:
+                    - generic [ref=e1190]:
+                      - generic [ref=e1192]:
+                        - generic [ref=e1193]: Function
+                        - generic [ref=e1194]: AppendToVector
+                      - generic [ref=e1195]:
+                        - generic [ref=e1196]:
+                          - generic [ref=e1197]:
+                            - generic [ref=e1198]: vector
+                            - generic [ref=e1199] [cursor=pointer]: number
+                            - generic [ref=e1200]: (0..*)
+                          - generic [ref=e1201]:
+                            - generic [ref=e1202]: value
+                            - generic [ref=e1203] [cursor=pointer]: number
+                            - generic [ref=e1204]: (1..1)
+                        - generic [ref=e1206]:
+                          - generic [ref=e1207]: output
+                          - generic [ref=e1208] [cursor=pointer]: number
+                  - group [ref=e1210]:
+                    - generic [ref=e1211]:
+                      - generic [ref=e1213]:
+                        - generic [ref=e1214]: Function
+                        - generic [ref=e1215]: VectorOperation
+                      - generic [ref=e1216]:
+                        - generic [ref=e1217]:
+                          - generic [ref=e1218]:
+                            - generic [ref=e1219]: arithmeticOp
+                            - generic [ref=e1220] [cursor=pointer]: ArithmeticOperationEnum
+                            - generic [ref=e1221]: (1..1)
+                          - generic [ref=e1222]:
+                            - generic [ref=e1223]: left
+                            - generic [ref=e1224] [cursor=pointer]: number
+                            - generic [ref=e1225]: (0..*)
+                          - generic [ref=e1226]:
+                            - generic [ref=e1227]: right
+                            - generic [ref=e1228] [cursor=pointer]: number
+                            - generic [ref=e1229]: (0..*)
+                        - generic [ref=e1231]:
+                          - generic [ref=e1232]: output
+                          - generic [ref=e1233] [cursor=pointer]: number
+                  - group [ref=e1235]:
+                    - generic [ref=e1236]:
+                      - generic [ref=e1238]:
+                        - generic [ref=e1239]: Function
+                        - generic [ref=e1240]: VectorScalarOperation
+                      - generic [ref=e1241]:
+                        - generic [ref=e1242]:
+                          - generic [ref=e1243]:
+                            - generic [ref=e1244]: arithmeticOp
+                            - generic [ref=e1245] [cursor=pointer]: ArithmeticOperationEnum
+                            - generic [ref=e1246]: (1..1)
+                          - generic [ref=e1247]:
+                            - generic [ref=e1248]: left
+                            - generic [ref=e1249] [cursor=pointer]: number
+                            - generic [ref=e1250]: (0..*)
+                          - generic [ref=e1251]:
+                            - generic [ref=e1252]: right
+                            - generic [ref=e1253] [cursor=pointer]: number
+                            - generic [ref=e1254]: (0..1)
+                        - generic [ref=e1256]:
+                          - generic [ref=e1257]: output
+                          - generic [ref=e1258] [cursor=pointer]: number
+                  - group [ref=e1260]:
+                    - generic [ref=e1261]:
+                      - generic [ref=e1263]:
+                        - generic [ref=e1264]: Function
+                        - generic [ref=e1265]: VectorGrowthOperation
+                      - generic [ref=e1266]:
+                        - generic [ref=e1267]:
+                          - generic [ref=e1268]:
+                            - generic [ref=e1269]: baseValue
+                            - generic [ref=e1270] [cursor=pointer]: number
+                            - generic [ref=e1271]: (1..1)
+                          - generic [ref=e1272]:
+                            - generic [ref=e1273]: factor
+                            - generic [ref=e1274] [cursor=pointer]: number
+                            - generic [ref=e1275]: (0..*)
+                        - generic [ref=e1277]:
+                          - generic [ref=e1278]: output
+                          - generic [ref=e1279] [cursor=pointer]: number
+                  - group [ref=e1281]:
+                    - generic [ref=e1282]:
+                      - generic [ref=e1284]:
+                        - generic [ref=e1285]: Function
+                        - generic [ref=e1286]: ArithmeticOperation
+                      - generic [ref=e1287]:
+                        - generic [ref=e1288]:
+                          - generic [ref=e1289]:
+                            - generic [ref=e1290]: n1
+                            - generic [ref=e1291] [cursor=pointer]: number
+                            - generic [ref=e1292]: (1..1)
+                          - generic [ref=e1293]:
+                            - generic [ref=e1294]: op
+                            - generic [ref=e1295] [cursor=pointer]: ArithmeticOperationEnum
+                            - generic [ref=e1296]: (1..1)
+                          - generic [ref=e1297]:
+                            - generic [ref=e1298]: n2
+                            - generic [ref=e1299] [cursor=pointer]: number
+                            - generic [ref=e1300]: (1..1)
+                        - generic [ref=e1302]:
+                          - generic [ref=e1303]: output
+                          - generic [ref=e1304] [cursor=pointer]: number
+                  - group [ref=e1306]:
+                    - generic [ref=e1307]:
+                      - generic [ref=e1309]:
+                        - generic [ref=e1310]: Enum
+                        - generic [ref=e1311]: AveragingWeightingMethodEnum
+                      - generic [ref=e1313]:
+                        - generic [ref=e1315]: Unweighted
+                        - generic [ref=e1317]: Weighted
+                  - group [ref=e1319]:
+                    - generic [ref=e1320]:
+                      - generic [ref=e1322]:
+                        - generic [ref=e1323]: Enum
+                        - generic [ref=e1324]: AveragingCalculationMethodEnum
+                      - generic [ref=e1326]:
+                        - generic [ref=e1328]: Arithmetic
+                        - generic [ref=e1330]: Geometric
+                        - generic [ref=e1332]: Harmonic
+                  - group [ref=e1334]:
+                    - generic [ref=e1335]:
+                      - generic [ref=e1337]:
+                        - generic [ref=e1338]: Enum
+                        - generic [ref=e1339]: RoundingDirectionEnum
+                      - generic [ref=e1341]:
+                        - generic [ref=e1343]: Up
+                        - generic [ref=e1345]: Down
+                        - generic [ref=e1347]: Nearest
+                  - group [ref=e1349]:
+                    - generic [ref=e1350]:
+                      - generic [ref=e1352]:
+                        - generic [ref=e1353]: Enum
+                        - generic [ref=e1354]: RoundingModeEnum
+                      - generic [ref=e1356]:
+                        - generic [ref=e1358]: Down
+                        - generic [ref=e1360]: Up
+                  - group [ref=e1362]:
+                    - generic [ref=e1363]:
+                      - generic [ref=e1365]:
+                        - generic [ref=e1366]: Enum
+                        - generic [ref=e1367]: QuantifierEnum
+                      - generic [ref=e1369]:
+                        - generic [ref=e1371]: All
+                        - generic [ref=e1373]: Any
+                  - group [ref=e1375]:
+                    - generic [ref=e1376]:
+                      - generic [ref=e1378]:
+                        - generic [ref=e1379]: Enum
+                        - generic [ref=e1380]: CompareOp
+                      - generic [ref=e1382]:
+                        - generic [ref=e1384]: GreaterThan
+                        - generic [ref=e1386]: GreaterThanOrEquals
+                        - generic [ref=e1388]: Equals
+                        - generic [ref=e1390]: LessThanOrEquals
+                        - generic [ref=e1392]: LessThan
+                  - group [ref=e1394]:
+                    - generic [ref=e1395]:
+                      - generic [ref=e1397]:
+                        - generic [ref=e1398]: Enum
+                        - generic [ref=e1399]: CapacityUnitEnum
+                      - generic [ref=e1401]:
+                        - generic [ref=e1403]: ALW
+                        - generic [ref=e1405]: BBL
+                        - generic [ref=e1407]: BCF
+                        - generic [ref=e1409]: BDFT
+                        - generic [ref=e1411]: CBM
+                        - generic [ref=e1413]: CER
+                        - generic [ref=e1415]: CRT
+                        - generic [ref=e1417]: DAG
+                        - generic [ref=e1419]: DAY
+                        - generic [ref=e1421]: DMTU
+                        - generic [ref=e1423]: ENVCRD
+                        - generic [ref=e1425]: ENVOFST
+                        - generic [ref=e1427]: FEU
+                        - generic [ref=e1429]: G
+                        - generic [ref=e1431]: GBBSH
+                        - generic [ref=e1433]: GBBTU
+                        - generic [ref=e1435]: GBCWT
+                        - generic [ref=e1437]: GBGAL
+                        - generic [ref=e1439]: GBMBTU
+                        - generic [ref=e1441]: GBMMBTU
+                        - generic [ref=e1443]: GBT
+                        - generic [ref=e1445]: GBTHM
+                        - generic [ref=e1447]: GJ
+                        - generic [ref=e1449]: GW
+                        - generic [ref=e1451]: GWH
+                        - generic [ref=e1453]: HL
+                        - generic [ref=e1455]: HOGB
+                        - generic [ref=e1457]: ISOBTU
+                        - generic [ref=e1459]: ISOMBTU
+                        - generic [ref=e1461]: ISOMMBTU
+                        - generic [ref=e1463]: ISOTHM
+                        - generic [ref=e1465]: J
+                        - generic [ref=e1467]: KG
+                        - generic [ref=e1469]: KL
+                        - generic [ref=e1471]: KW
+                        - generic [ref=e1473]: KWD
+                        - generic [ref=e1475]: KWH
+                        - generic [ref=e1477]: KWM
+                        - generic [ref=e1479]: KWMIN
+                        - generic [ref=e1481]: KWY
+                        - generic [ref=e1483]: L
+                        - generic [ref=e1485]: LB
+                        - generic [ref=e1487]: MB
+                        - generic [ref=e1489]: MBF
+                        - generic [ref=e1491]: MJ
+                        - generic [ref=e1493]: MMBF
+                        - generic [ref=e1495]: MMBBL
+                        - generic [ref=e1497]: MSF
+                        - generic [ref=e1499]: MT
+                        - generic [ref=e1501]: MW
+                        - generic [ref=e1503]: MWD
+                        - generic [ref=e1505]: MWH
+                        - generic [ref=e1507]: MWM
+                        - generic [ref=e1509]: MWMIN
+                        - generic [ref=e1511]: MWY
+                        - generic [ref=e1513]: OZT
+                        - generic [ref=e1515]: SGB
+                        - generic [ref=e1517]: TEU
+                        - generic [ref=e1519]: USBSH
+                        - generic [ref=e1521]: USBTU
+                        - generic [ref=e1523]: USCWT
+                        - generic [ref=e1525]: USGAL
+                        - generic [ref=e1527]: USMBTU
+                        - generic [ref=e1529]: USMMBTU
+                        - generic [ref=e1531]: UST
+                        - generic [ref=e1533]: USTHM
+                  - group [ref=e1535]:
+                    - generic [ref=e1536]:
+                      - generic [ref=e1538]:
+                        - generic [ref=e1539]: Enum
+                        - generic [ref=e1540]: WeatherUnitEnum
+                      - generic [ref=e1542]:
+                        - generic [ref=e1544]: CDD
+                        - generic [ref=e1546]: CPD
+                        - generic [ref=e1548]: HDD
+                  - group [ref=e1550]:
+                    - generic [ref=e1551]:
+                      - generic [ref=e1553]:
+                        - generic [ref=e1554]: Enum
+                        - generic [ref=e1555]: FinancialUnitEnum
+                      - generic [ref=e1557]:
+                        - generic [ref=e1559]: Contract
+                        - generic [ref=e1561]: ContractualProduct
+                        - generic [ref=e1563]: IndexUnit
+                        - generic [ref=e1565]: LogNormalVolatility
+                        - generic [ref=e1567]: Share
+                        - generic [ref=e1569]: ValuePerDay
+                        - generic [ref=e1571]: ValuePerPercent
+                        - generic [ref=e1573]: Weight
+                  - group [ref=e1575]:
+                    - generic [ref=e1576]:
+                      - generic [ref=e1578]:
+                        - generic [ref=e1579]: Enum
+                        - generic [ref=e1580]: ArithmeticOperationEnum
+                      - generic [ref=e1582]:
+                        - generic [ref=e1584]: Add
+                        - generic [ref=e1586]: Subtract
+                        - generic [ref=e1588]: Multiply
+                        - generic [ref=e1590]: Divide
+                        - generic [ref=e1592]: Max
+                        - generic [ref=e1594]: Min
+                  - group [ref=e1596]:
+                    - generic [ref=e1597]:
+                      - generic [ref=e1599]:
+                        - generic [ref=e1600]: Enum
+                        - generic [ref=e1601]: QuantityChangeDirectionEnum
+                      - generic [ref=e1603]:
+                        - generic [ref=e1605]: Increase
+                        - generic [ref=e1607]: Decrease
+                        - generic [ref=e1609]: Replace
+                  - group [ref=e1611]:
+                    - generic [ref=e1612]:
+                      - generic [ref=e1614]:
+                        - generic [ref=e1615]: Type
+                        - generic [ref=e1616]: UnitType
+                      - generic [ref=e1618]:
+                        - generic [ref=e1619]:
+                          - generic [ref=e1620]: capacityUnit
+                          - generic [ref=e1621] [cursor=pointer]: CapacityUnitEnum
+                          - generic [ref=e1622]: (0..1)
+                        - generic [ref=e1623]:
+                          - generic [ref=e1624]: weatherUnit
+                          - generic [ref=e1625] [cursor=pointer]: WeatherUnitEnum
+                          - generic [ref=e1626]: (0..1)
+                        - generic [ref=e1627]:
+                          - generic [ref=e1628]: financialUnit
+                          - generic [ref=e1629] [cursor=pointer]: FinancialUnitEnum
+                          - generic [ref=e1630]: (0..1)
+                        - generic [ref=e1631]:
+                          - generic [ref=e1632]: currency
+                          - generic [ref=e1633] [cursor=pointer]: string
+                          - generic [ref=e1634]: (0..1)
+                  - group [ref=e1636]:
+                    - generic [ref=e1637]:
+                      - generic [ref=e1639]:
+                        - generic [ref=e1640]: Type
+                        - generic [ref=e1641]: MeasureBase
+                      - generic [ref=e1643]:
+                        - generic [ref=e1644]:
+                          - generic [ref=e1645]: value
+                          - generic [ref=e1646] [cursor=pointer]: number
+                          - generic [ref=e1647]: (0..1)
+                        - generic [ref=e1648]:
+                          - generic [ref=e1649]: unit
+                          - generic [ref=e1650] [cursor=pointer]: UnitType
+                          - generic [ref=e1651]: (0..1)
+                  - group [ref=e1653]:
+                    - generic [ref=e1656]:
+                      - generic [ref=e1657]: Type
+                      - generic [ref=e1658]: Measure
+                  - group [ref=e1661]:
+                    - generic [ref=e1662]:
+                      - generic [ref=e1664]:
+                        - generic [ref=e1665]: Type
+                        - generic [ref=e1666]: MeasureSchedule
+                      - generic [ref=e1669]:
+                        - generic [ref=e1670]: datedValue
+                        - generic [ref=e1671] [cursor=pointer]: DatedValue
+                        - generic [ref=e1672]: (0..*)
+                  - group [ref=e1674]:
+                    - generic [ref=e1675]:
+                      - generic [ref=e1677]:
+                        - generic [ref=e1678]: Type
+                        - generic [ref=e1679]: QuantitySchedule
+                      - generic [ref=e1681]:
+                        - generic [ref=e1682]:
+                          - generic [ref=e1683]: multiplier
+                          - generic [ref=e1684] [cursor=pointer]: Measure
+                          - generic [ref=e1685]: (0..1)
+                        - generic [ref=e1686]:
+                          - generic [ref=e1687]: frequency
+                          - generic [ref=e1688]: Frequency
+                          - generic [ref=e1689]: (0..1)
+                  - group [ref=e1691]:
+                    - generic [ref=e1694]:
+                      - generic [ref=e1695]: Type
+                      - generic [ref=e1696]: Quantity
+                  - group [ref=e1699]:
+                    - generic [ref=e1702]:
+                      - generic [ref=e1703]: Type
+                      - generic [ref=e1704]: NonNegativeQuantity
+                  - group [ref=e1707]:
+                    - generic [ref=e1708]:
+                      - generic [ref=e1710]:
+                        - generic [ref=e1711]: Type
+                        - generic [ref=e1712]: NonNegativeStep
+                      - generic [ref=e1714]:
+                        - generic [ref=e1715]:
+                          - generic [ref=e1716]: stepDate
+                          - generic [ref=e1717] [cursor=pointer]: date
+                          - generic [ref=e1718]: (1..1)
+                        - generic [ref=e1719]:
+                          - generic [ref=e1720]: stepValue
+                          - generic [ref=e1721] [cursor=pointer]: number
+                          - generic [ref=e1722]: (1..1)
+                  - group [ref=e1724]:
+                    - generic [ref=e1727]:
+                      - generic [ref=e1728]: Type
+                      - generic [ref=e1729]: NonNegativeQuantitySchedule
+                  - group [ref=e1732]:
+                    - generic [ref=e1733]:
+                      - generic [ref=e1735]:
+                        - generic [ref=e1736]: Type
+                        - generic [ref=e1737]: Rounding
+                      - generic [ref=e1739]:
+                        - generic [ref=e1740]:
+                          - generic [ref=e1741]: roundingDirection
+                          - generic [ref=e1742] [cursor=pointer]: RoundingDirectionEnum
+                          - generic [ref=e1743]: (1..1)
+                        - generic [ref=e1744]:
+                          - generic [ref=e1745]: precision
+                          - generic [ref=e1746] [cursor=pointer]: int
+                          - generic [ref=e1747]: (0..1)
+                  - group [ref=e1749]:
+                    - generic [ref=e1750]:
+                      - generic [ref=e1752]:
+                        - generic [ref=e1753]: Type
+                        - generic [ref=e1754]: Schedule
+                      - generic [ref=e1756]:
+                        - generic [ref=e1757]:
+                          - generic [ref=e1758]: value
+                          - generic [ref=e1759] [cursor=pointer]: number
+                          - generic [ref=e1760]: (1..1)
+                        - generic [ref=e1761]:
+                          - generic [ref=e1762]: datedValue
+                          - generic [ref=e1763] [cursor=pointer]: DatedValue
+                          - generic [ref=e1764]: (0..*)
+                  - group [ref=e1766]:
+                    - generic [ref=e1767]:
+                      - generic [ref=e1769]:
+                        - generic [ref=e1770]: Type
+                        - generic [ref=e1771]: DatedValue
+                      - generic [ref=e1773]:
+                        - generic [ref=e1774]:
+                          - generic [ref=e1775]: date
+                          - generic [ref=e1776] [cursor=pointer]: date
+                          - generic [ref=e1777]: (1..1)
+                        - generic [ref=e1778]:
+                          - generic [ref=e1779]: value
+                          - generic [ref=e1780] [cursor=pointer]: number
+                          - generic [ref=e1781]: (1..1)
+                  - group [ref=e1783]:
+                    - generic [ref=e1784]:
+                      - generic [ref=e1786]:
+                        - generic [ref=e1787]: Type
+                        - generic [ref=e1788]: NumberRange
+                      - generic [ref=e1790]:
+                        - generic [ref=e1791]:
+                          - generic [ref=e1792]: lowerBound
+                          - generic [ref=e1793] [cursor=pointer]: NumberBound
+                          - generic [ref=e1794]: (0..1)
+                        - generic [ref=e1795]:
+                          - generic [ref=e1796]: upperBound
+                          - generic [ref=e1797] [cursor=pointer]: NumberBound
+                          - generic [ref=e1798]: (0..1)
+                  - group [ref=e1800]:
+                    - generic [ref=e1801]:
+                      - generic [ref=e1803]:
+                        - generic [ref=e1804]: Type
+                        - generic [ref=e1805]: NumberBound
+                      - generic [ref=e1807]:
+                        - generic [ref=e1808]:
+                          - generic [ref=e1809]: number
+                          - generic [ref=e1810] [cursor=pointer]: number
+                          - generic [ref=e1811]: (1..1)
+                        - generic [ref=e1812]:
+                          - generic [ref=e1813]: inclusive
+                          - generic [ref=e1814] [cursor=pointer]: boolean
+                          - generic [ref=e1815]: (1..1)
+                  - group [ref=e1817]:
+                    - generic [ref=e1818]:
+                      - generic [ref=e1820]:
+                        - generic [ref=e1821]: Type
+                        - generic [ref=e1822]: MoneyRange
+                      - generic [ref=e1824]:
+                        - generic [ref=e1825]:
+                          - generic [ref=e1826]: lowerBound
+                          - generic [ref=e1827] [cursor=pointer]: MoneyBound
+                          - generic [ref=e1828]: (0..1)
+                        - generic [ref=e1829]:
+                          - generic [ref=e1830]: upperBound
+                          - generic [ref=e1831] [cursor=pointer]: MoneyBound
+                          - generic [ref=e1832]: (0..1)
+                  - group [ref=e1834]:
+                    - generic [ref=e1835]:
+                      - generic [ref=e1837]:
+                        - generic [ref=e1838]: Type
+                        - generic [ref=e1839]: MoneyBound
+                      - generic [ref=e1841]:
+                        - generic [ref=e1842]:
+                          - generic [ref=e1843]: money
+                          - generic [ref=e1844]: Money
+                          - generic [ref=e1845]: (1..1)
+                        - generic [ref=e1846]:
+                          - generic [ref=e1847]: inclusive
+                          - generic [ref=e1848] [cursor=pointer]: boolean
+                          - generic [ref=e1849]: (1..1)
+                  - group [ref=e1851]:
+                    - generic [ref=e1852]:
+                      - generic [ref=e1854]:
+                        - generic [ref=e1855]: Type
+                        - generic [ref=e1856]: AveragingCalculationMethod
+                      - generic [ref=e1858]:
+                        - generic [ref=e1859]:
+                          - generic [ref=e1860]: isWeighted
+                          - generic [ref=e1861] [cursor=pointer]: boolean
+                          - generic [ref=e1862]: (1..1)
+                        - generic [ref=e1863]:
+                          - generic [ref=e1864]: calculationMethod
+                          - generic [ref=e1865] [cursor=pointer]: AveragingCalculationMethodEnum
+                          - generic [ref=e1866]: (1..1)
+            - generic "Control Panel" [ref=e1868]:
+              - button "Zoom In" [ref=e1869] [cursor=pointer]:
+                - img [ref=e1870]
+              - button "Zoom Out" [ref=e2518] [cursor=pointer]:
+                - img [ref=e2519]
+              - button "Fit View" [ref=e1872] [cursor=pointer]:
+                - img [ref=e1873]
+              - button "Toggle Interactivity" [ref=e1875] [cursor=pointer]:
+                - img [ref=e1876]
+            - img "Mini Map" [ref=e1879]
+            - img
+          - separator [ref=e1951]:
+            - img [ref=e1953]
+          - complementary "Source editor" [ref=e1979]:
+            - generic [ref=e1980]:
+              - tablist "Open files" [ref=e1981]:
+                - generic [ref=e2211]:
+                  - tab "base-math-func.rosetta" [selected] [ref=e2212]
+                  - button "Close base-math-func.rosetta" [ref=e2213]:
+                    - img [ref=e2214]
+                - generic [ref=e2521]:
+                  - tab "base-math-enum.rosetta" [ref=e2522]
+                  - button "Close base-math-enum.rosetta" [ref=e2523]:
+                    - img [ref=e2524]
+                - generic [ref=e1982]:
+                  - tab "base-math-type.rosetta" [ref=e1983]
+                  - button "Close base-math-type.rosetta" [ref=e1984]:
+                    - img [ref=e1985]
+              - tabpanel "base-math-func.rosetta" [ref=e2216]:
+                - generic [ref=e2805]:
+                  - generic [ref=e2807]:
+                    - generic [ref=e2808]: "1"
+                    - generic [ref=e2809]: "2"
+                    - generic [ref=e2810]: "3"
+                    - generic [ref=e2811]: "4"
+                    - generic [ref=e2812]: "5"
+                    - generic [ref=e2813]: "6"
+                    - generic [ref=e2814]: "7"
+                    - generic [ref=e2815]: "8"
+                    - generic [ref=e2816]: "9"
+                    - generic [ref=e2817]: "10"
+                    - generic [ref=e2818]: "11"
+                    - generic [ref=e2819]: "12"
+                    - generic [ref=e2820]: "13"
+                    - generic [ref=e2821]: "14"
+                    - generic [ref=e2822]: "15"
+                    - generic [ref=e2823]: "16"
+                    - generic [ref=e2824]: "17"
+                    - generic [ref=e2825]: "18"
+                    - generic [ref=e2826]: "19"
+                    - generic [ref=e2827]: "20"
+                    - generic [ref=e2828]: "21"
+                    - generic [ref=e2829]: "22"
+                    - generic [ref=e2830]: "23"
+                    - generic [ref=e2831]: "24"
+                    - generic [ref=e2832]: "25"
+                    - generic [ref=e2833]: "26"
+                    - generic [ref=e2834]: "27"
+                    - generic [ref=e2835]: "28"
+                    - generic [ref=e2836]: "29"
+                    - generic [ref=e2837]: "30"
+                    - generic [ref=e2838]: "31"
+                    - generic [ref=e2839]: "32"
+                    - generic [ref=e2840]: "33"
+                    - generic [ref=e2841]: "34"
+                    - generic [ref=e2842]: "35"
+                    - generic [ref=e2843]: "36"
+                  - textbox [ref=e2846]:
+                    - generic [ref=e2847]: "namespace cdm.base.math : <\"Basic maths concepts: quantity and unit, rounding, curve / schedule, non-negativity constraint etc.\">"
+                    - generic [ref=e2848]: "version \"${project.version}\""
+                    - generic [ref=e2850]: "func CompareNumbers:"
+                    - generic [ref=e2851]: "inputs:"
+                    - generic [ref=e2852]: n1 number (1..1)
+                    - generic [ref=e2853]: op CompareOp (1..1)
+                    - generic [ref=e2854]: n2 number (1..1)
+                    - generic [ref=e2855]: "output:"
+                    - generic [ref=e2856]: result boolean (1..1)
+                    - generic [ref=e2858]: "set result:"
+                    - generic [ref=e2859]: if op = CompareOp -> GreaterThan
+                    - generic [ref=e2860]: then n1 > n2 = True
+                    - generic [ref=e2861]: else if op = CompareOp -> GreaterThanOrEquals
+                    - generic [ref=e2862]: then n1 >= n2 = True
+                    - generic [ref=e2863]: else if op = CompareOp -> Equals
+                    - generic [ref=e2864]: then n1 = n2 = True
+                    - generic [ref=e2865]: else if op = CompareOp -> LessThanOrEquals
+                    - generic [ref=e2866]: then n1 <= n2 = True
+                    - generic [ref=e2867]: else if op = CompareOp -> LessThan
+                    - generic [ref=e2868]: then n1 < n2 = True
+                    - generic [ref=e2869]: else False
+                    - generic [ref=e2871]: "func Abs: <\"Returns the absolute value of a number. If the argument is not negative, the argument is returned. If the argument is negative, the negation of the argument is returned.\">"
+                    - generic [ref=e2872]: "inputs:"
+                    - generic [ref=e2873]: arg number (1..1)
+                    - generic [ref=e2874]: "output:"
+                    - generic [ref=e2875]: result number (1..1)
+                    - generic [ref=e2876]: "set result: if arg < 0 then -1 * arg else arg"
+                    - generic [ref=e2878]: "func Max: <\"Returns the greater number of two supplied numbers.\">"
+                    - generic [ref=e2879]: "inputs:"
+                    - generic [ref=e2880]: a number (1..1)
+                    - generic [ref=e2881]: b number (1..1)
+                    - generic [ref=e2882]: "output:"
+          - separator [ref=e1960]:
+            - img [ref=e1962]
+          - complementary "Edit CompareNumbers" [ref=e2317]:
+            - generic [ref=e2318]:
+              - text: CompareNumbersFunction
+              - button "Close editor panel" [ref=e2138]:
+                - img [ref=e2139]
+            - generic [ref=e2884]:
+              - generic [ref=e2885]:
+                - group [ref=e2886]:
+                  - textbox "Function type name" [ref=e2887]:
+                    - /placeholder: Function name
+                    - text: CompareNumbers
+                - text: Function
+              - group "Inputs (3)" [ref=e2888]:
+                - generic [ref=e2889]: Inputs (3)
+                - generic [ref=e2890]:
+                  - listitem [ref=e2891]:
+                    - text: ⠇n1
+                    - button "number" [ref=e2892]
+                    - button "Remove input n1" [ref=e2893]: ✕
+                  - listitem [ref=e2894]:
+                    - text: ⠇op
+                    - button "CompareOp" [ref=e2895]
+                    - button "Remove input op" [ref=e2896]: ✕
+                  - listitem [ref=e2897]:
+                    - text: ⠇n2
+                    - button "number" [ref=e2898]
+                    - button "Remove input n2" [ref=e2899]: ✕
+                - generic [ref=e2900]:
+                  - textbox "New input parameter name" [ref=e2901]:
+                    - /placeholder: Name
+                  - combobox [ref=e2903]:
+                    - text: Type...
+                    - img [ref=e2904]
+                  - button "+ Add Input" [ref=e2906]
+              - group "Output Type" [ref=e2907]:
+                - generic [ref=e2908]: Output Type
+                - button "boolean" [ref=e2909]
+                - combobox [ref=e2910]:
+                  - generic:
+                    - generic: boolean
+                  - img [ref=e2911]
+              - group "Function Body" [ref=e2913]:
+                - generic [ref=e2914]: Function Body
+                - generic [ref=e2915]:
+                  - generic [ref=e2916]: set result
+                  - generic [ref=e2917]:
+                    - generic [ref=e2918]:
+                      - button "Builder" [ref=e2919]
+                      - button "Text" [ref=e2920]
+                    - treeitem "if op = CompareOp ->GreaterThan then n1 > n2 = true else if op = Collapse sub-expression CompareOp ->GreaterThanOrEquals then Collapse sub-expression n1 >= n2 = true else if Collapse sub-expression op = Collapse sub-expression CompareOp ->Equals then Collapse sub-expression Collapse sub-expression n1 = n2 = true else Collapse sub-expression if Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThanOrEquals then Collapse sub-expression Collapse sub-expression n1 <= n2 = true else Collapse sub-expression if Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThan then Collapse sub-expression Collapse sub-expression n1 < n2 = true else false" [ref=e2922]:
+                      - generic [ref=e2923]:
+                        - generic [ref=e2924]:
+                          - text: if
+                          - treeitem "op = CompareOp ->GreaterThan" [ref=e2925]:
+                            - generic [ref=e2926]:
+                              - treeitem "op" [ref=e2927]:
+                                - generic [ref=e2928]: op
+                              - text: =
+                              - treeitem "CompareOp ->GreaterThan" [ref=e2929]:
+                                - generic [ref=e2930]:
+                                  - treeitem "CompareOp" [ref=e2931]:
+                                    - generic [ref=e2932]: CompareOp
+                                  - text: "->GreaterThan"
+                        - generic [ref=e2933]:
+                          - text: then
+                          - treeitem "n1 > n2 = true" [ref=e2934]:
+                            - generic [ref=e2935]:
+                              - treeitem "n1 > n2" [ref=e2936]:
+                                - generic [ref=e2937]:
+                                  - treeitem "n1" [ref=e2938]:
+                                    - generic [ref=e2939]: n1
+                                  - text: ">"
+                                  - treeitem "n2" [ref=e2940]:
+                                    - generic [ref=e2941]: n2
+                              - text: =
+                              - treeitem "true" [ref=e2942]
+                        - generic [ref=e2943]:
+                          - text: else
+                          - treeitem "if op = Collapse sub-expression CompareOp ->GreaterThanOrEquals then Collapse sub-expression n1 >= n2 = true else if Collapse sub-expression op = Collapse sub-expression CompareOp ->Equals then Collapse sub-expression Collapse sub-expression n1 = n2 = true else Collapse sub-expression if Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThanOrEquals then Collapse sub-expression Collapse sub-expression n1 <= n2 = true else Collapse sub-expression if Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThan then Collapse sub-expression Collapse sub-expression n1 < n2 = true else false" [ref=e2944]:
+                            - generic [ref=e2945]:
+                              - generic [ref=e2946]:
+                                - text: if
+                                - treeitem "op = Collapse sub-expression CompareOp ->GreaterThanOrEquals" [ref=e2947]:
+                                  - generic [ref=e2948]:
+                                    - treeitem "op" [ref=e2949]:
+                                      - generic [ref=e2950]: op
+                                    - text: =
+                                    - treeitem "Collapse sub-expression CompareOp ->GreaterThanOrEquals" [expanded] [ref=e2951]:
+                                      - button "Collapse sub-expression" [ref=e2952]: ▾
+                                      - generic [ref=e2953]:
+                                        - treeitem "CompareOp" [ref=e2954]:
+                                          - generic [ref=e2955]: CompareOp
+                                        - text: "->GreaterThanOrEquals"
+                              - generic [ref=e2956]:
+                                - text: then
+                                - treeitem "Collapse sub-expression n1 >= n2 = true" [ref=e2957]:
+                                  - generic [ref=e2958]:
+                                    - treeitem "Collapse sub-expression n1 >= n2" [expanded] [ref=e2959]:
+                                      - button "Collapse sub-expression" [ref=e2960]: ▾
+                                      - generic [ref=e2961]:
+                                        - treeitem "n1" [ref=e2962]:
+                                          - generic [ref=e2963]: n1
+                                        - text: ">="
+                                        - treeitem "n2" [ref=e2964]:
+                                          - generic [ref=e2965]: n2
+                                    - text: =
+                                    - treeitem "true" [ref=e2966]
+                              - generic [ref=e2967]:
+                                - text: else
+                                - treeitem "if Collapse sub-expression op = Collapse sub-expression CompareOp ->Equals then Collapse sub-expression Collapse sub-expression n1 = n2 = true else Collapse sub-expression if Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThanOrEquals then Collapse sub-expression Collapse sub-expression n1 <= n2 = true else Collapse sub-expression if Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThan then Collapse sub-expression Collapse sub-expression n1 < n2 = true else false" [ref=e2968]:
+                                  - generic [ref=e2969]:
+                                    - generic [ref=e2970]:
+                                      - text: if
+                                      - treeitem "Collapse sub-expression op = Collapse sub-expression CompareOp ->Equals" [expanded] [ref=e2971]:
+                                        - button "Collapse sub-expression" [ref=e2972]: ▾
+                                        - generic [ref=e2973]:
+                                          - treeitem "op" [ref=e2974]:
+                                            - generic [ref=e2975]: op
+                                          - text: =
+                                          - treeitem "Collapse sub-expression CompareOp ->Equals" [expanded] [ref=e2976]:
+                                            - button "Collapse sub-expression" [ref=e2977]: ▾
+                                            - generic [ref=e2978]:
+                                              - treeitem "CompareOp" [ref=e2979]:
+                                                - generic [ref=e2980]: CompareOp
+                                              - text: "->Equals"
+                                    - generic [ref=e2981]:
+                                      - text: then
+                                      - treeitem "Collapse sub-expression Collapse sub-expression n1 = n2 = true" [expanded] [ref=e2982]:
+                                        - button "Collapse sub-expression" [ref=e2983]: ▾
+                                        - generic [ref=e2984]:
+                                          - treeitem "Collapse sub-expression n1 = n2" [expanded] [ref=e2985]:
+                                            - button "Collapse sub-expression" [ref=e2986]: ▾
+                                            - generic [ref=e2987]:
+                                              - treeitem "n1" [ref=e2988]:
+                                                - generic [ref=e2989]: n1
+                                              - text: =
+                                              - treeitem "n2" [ref=e2990]:
+                                                - generic [ref=e2991]: n2
+                                          - text: =
+                                          - treeitem "true" [ref=e2992]
+                                    - generic [ref=e2993]:
+                                      - text: else
+                                      - treeitem "Collapse sub-expression if Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThanOrEquals then Collapse sub-expression Collapse sub-expression n1 <= n2 = true else Collapse sub-expression if Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThan then Collapse sub-expression Collapse sub-expression n1 < n2 = true else false" [expanded] [ref=e2994]:
+                                        - button "Collapse sub-expression" [ref=e2995]: ▾
+                                        - generic [ref=e2996]:
+                                          - generic [ref=e2997]:
+                                            - text: if
+                                            - treeitem "Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThanOrEquals" [expanded] [ref=e2998]:
+                                              - button "Collapse sub-expression" [ref=e2999]: ▾
+                                              - generic [ref=e3000]:
+                                                - treeitem "op" [ref=e3001]:
+                                                  - generic [ref=e3002]: op
+                                                - text: =
+                                                - treeitem "Collapse sub-expression CompareOp ->LessThanOrEquals" [expanded] [ref=e3003]:
+                                                  - button "Collapse sub-expression" [ref=e3004]: ▾
+                                                  - generic [ref=e3005]:
+                                                    - treeitem "CompareOp" [ref=e3006]:
+                                                      - generic [ref=e3007]: CompareOp
+                                                    - text: "->LessThanOrEquals"
+                                          - generic [ref=e3008]:
+                                            - text: then
+                                            - treeitem "Collapse sub-expression Collapse sub-expression n1 <= n2 = true" [expanded] [ref=e3009]:
+                                              - button "Collapse sub-expression" [ref=e3010]: ▾
+                                              - generic [ref=e3011]:
+                                                - treeitem "Collapse sub-expression n1 <= n2" [expanded] [ref=e3012]:
+                                                  - button "Collapse sub-expression" [ref=e3013]: ▾
+                                                  - generic [ref=e3014]:
+                                                    - treeitem "n1" [ref=e3015]:
+                                                      - generic [ref=e3016]: n1
+                                                    - text: <=
+                                                    - treeitem "n2" [ref=e3017]:
+                                                      - generic [ref=e3018]: n2
+                                                - text: =
+                                                - treeitem "true" [ref=e3019]
+                                          - generic [ref=e3020]:
+                                            - text: else
+                                            - treeitem "Collapse sub-expression if Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThan then Collapse sub-expression Collapse sub-expression n1 < n2 = true else false" [expanded] [ref=e3021]:
+                                              - button "Collapse sub-expression" [ref=e3022]: ▾
+                                              - generic [ref=e3023]:
+                                                - generic [ref=e3024]:
+                                                  - text: if
+                                                  - treeitem "Collapse sub-expression op = Collapse sub-expression CompareOp ->LessThan" [expanded] [ref=e3025]:
+                                                    - button "Collapse sub-expression" [ref=e3026]: ▾
+                                                    - generic [ref=e3027]:
+                                                      - treeitem "op" [ref=e3028]:
+                                                        - generic [ref=e3029]: op
+                                                      - text: =
+                                                      - treeitem "Collapse sub-expression CompareOp ->LessThan" [expanded] [ref=e3030]:
+                                                        - button "Collapse sub-expression" [ref=e3031]: ▾
+                                                        - generic [ref=e3032]:
+                                                          - treeitem "CompareOp" [ref=e3033]:
+                                                            - generic [ref=e3034]: CompareOp
+                                                          - text: "->LessThan"
+                                                - generic [ref=e3035]:
+                                                  - text: then
+                                                  - treeitem "Collapse sub-expression Collapse sub-expression n1 < n2 = true" [expanded] [ref=e3036]:
+                                                    - button "Collapse sub-expression" [ref=e3037]: ▾
+                                                    - generic [ref=e3038]:
+                                                      - treeitem "Collapse sub-expression n1 < n2" [expanded] [ref=e3039]:
+                                                        - button "Collapse sub-expression" [ref=e3040]: ▾
+                                                        - generic [ref=e3041]:
+                                                          - treeitem "n1" [ref=e3042]:
+                                                            - generic [ref=e3043]: n1
+                                                          - text: <
+                                                          - treeitem "n2" [ref=e3044]:
+                                                            - generic [ref=e3045]: n2
+                                                      - text: =
+                                                      - treeitem "true" [ref=e3046]
+                                                - generic [ref=e3047]:
+                                                  - text: else
+                                                  - treeitem "false" [ref=e3048]
+                    - generic [ref=e3049]:
+                      - generic [ref=e3050]: DSL Preview
+                      - generic [ref=e3051]: if op = CompareOp -> GreaterThan then n1 > n2 = True else if op = CompareOp -> GreaterThanOrEquals then n1 >= n2 = True else if op = CompareOp -> Equals then n1 = n2 = True else if op = CompareOp -> LessThanOrEquals then n1 <= n2 = True else if op = CompareOp -> LessThan then n1 < n2 = True else False
+                    - generic [ref=e3052]:
+                      - text: Inputs
+                      - generic [ref=e3053]:
+                        - generic [ref=e3054]: "n1: number"
+                        - generic [ref=e3055]: "op: CompareOp"
+                        - generic [ref=e3056]: "n2: number"
+                    - generic [ref=e3057]:
+                      - text: Output
+                      - generic [ref=e3058]: "output: boolean"
+              - group "Conditions (0) Add condition" [ref=e3059]:
+                - generic [ref=e3060]:
+                  - generic [ref=e3061]: Conditions (0)
+                  - button "Add condition" [ref=e3062]:
+                    - img [ref=e3063]
+                - paragraph [ref=e3065]: No conditions defined.
+              - generic [ref=e3066]:
+                - generic [ref=e3067]:
+                  - text: Annotations
+                  - button "Add annotation" [ref=e3068]:
+                    - img [ref=e3069]
+                - generic [ref=e3070]: No annotations
+              - generic [ref=e3071]:
+                - button "Metadata▾" [expanded] [ref=e3072]
+                - generic [ref=e3073]:
+                  - group [ref=e3074]:
+                    - text: Description
+                    - textbox "Add a description..." [ref=e3075]
+                  - group [ref=e3076]:
+                    - text: Comments
+                    - textbox "Add comments..." [ref=e3077]
+                  - group [ref=e3078]:
+                    - text: Synonyms
+                    - generic [ref=e3079]:
+                      - textbox "Add synonym..." [ref=e3080]
+                      - button "Add" [disabled] [ref=e3081]
+      - generic [ref=e1972]:
+        - generic [ref=e1973]: 5 model(s) loaded
+        - generic [ref=e1974]: 0 modified
+        - generic [ref=e2210]: "Selected: cdm.base.math::CompareNumbers"
+        - status [ref=e1975]:
+          - text: ErrorLSP server unavailable — start the external server on ws://localhost:3001
+          - button "Reconnect" [ref=e1976]

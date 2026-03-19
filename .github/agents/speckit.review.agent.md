@@ -1,16 +1,19 @@
 ---
 description: Review completed implementation work and update task status.
 handoffs:
-  - label: Create Implementation Plan
-    agent: speckit.plan
-    prompt: Create a plan based on review feedback
-    send: true
-  - label: Update Tasks
-    agent: speckit.tasks
-    prompt: Update tasks based on review feedback
-    send: true
+- label: Create Implementation Plan
+  agent: speckit.plan
+  prompt: Create a plan based on review feedback
+  send: true
+- label: Update Tasks
+  agent: speckit.tasks
+  prompt: Update tasks based on review feedback
+  send: true
 ---
 
+
+<!-- Extension: workflows -->
+<!-- Config: .specify/extensions/workflows/ -->
 The user input to you can be provided directly by the agent or as a command argument - you **MUST** consider it before proceeding with the prompt (if not empty).
 
 User input:
@@ -102,7 +105,7 @@ go test ./...         # Go projects
 
 Choose one of three outcomes:
 
-**✅ Approved - Implementation Ready**
+**Approved - Implementation Ready**
 
 Criteria:
 - All acceptance criteria met
@@ -111,7 +114,7 @@ Criteria:
 - Code quality acceptable
 - Ready to merge
 
-**⚠️ Approved with Minor Notes**
+**Approved with Minor Notes**
 
 Criteria:
 - Core functionality works correctly
@@ -120,7 +123,7 @@ Criteria:
 - Can be addressed in follow-up
 - OK to merge with notes
 
-**❌ Needs Changes - Issues Must Be Fixed**
+**Needs Changes - Issues Must Be Fixed**
 
 Criteria:
 - Bugs or regressions found
@@ -131,19 +134,19 @@ Criteria:
 
 ### 5. Update Tasks (For Approved Work Only)
 
-For approved work (✅ or ⚠️), mark completed tasks as done:
+For approved work, mark completed tasks as done:
 
 ```bash
 # Mark specific task as done
-.specify/scripts/bash/mark-task-status.sh --task-id T001 --status done
+.specify/extensions/workflows/scripts/bash/mark-task-status.sh --task-id T001 --status done
 
 # Mark multiple tasks
-.specify/scripts/bash/mark-task-status.sh --task-id T002 --status done
-.specify/scripts/bash/mark-task-status.sh --task-id T003 --status done
+.specify/extensions/workflows/scripts/bash/mark-task-status.sh --task-id T002 --status done
+.specify/extensions/workflows/scripts/bash/mark-task-status.sh --task-id T003 --status done
 ```
 
 This updates tasks.md, changing:
-- `[ ] T001: Task description` → `[X] T001: Task description`
+- `[ ] T001: Task description` -> `[X] T001: Task description`
 
 **For "Needs Changes" outcome**: Do NOT mark tasks as done. They remain pending until issues are fixed.
 
@@ -157,7 +160,7 @@ Create a comprehensive review report:
 **Feature**: [Feature name from branch/spec]
 **Reviewer**: [Your agent identifier]
 **Date**: [Current date]
-**Status**: [✅ Approved / ⚠️ Approved with Notes / ❌ Needs Changes]
+**Status**: [Approved / Approved with Notes / Needs Changes]
 
 ## Summary
 
@@ -184,12 +187,12 @@ Create a comprehensive review report:
 
 ## Findings
 
-### ✅ What Worked Well
+### What Worked Well
 - [Positive aspect 1]
 - [Positive aspect 2]
 - [Positive aspect 3]
 
-### ⚠️ Issues / Concerns (if any)
+### Issues / Concerns (if any)
 
 #### [Issue Title]
 - **Severity**: [Critical / High / Medium / Low]
@@ -215,20 +218,20 @@ Create a comprehensive review report:
 
 ## Next Steps
 
-**For ✅ Approved**:
+**For Approved**:
 1. Tasks marked as complete in tasks.md
 2. Ready to merge feature branch
 3. Consider creating PR for team review
 
-**For ⚠️ Approved with Notes**:
+**For Approved with Notes**:
 1. Tasks marked as complete in tasks.md
 2. Can merge with documented follow-up items
 3. Create follow-up tasks for minor improvements
 
-**For ❌ Needs Changes**:
+**For Needs Changes**:
 1. Fix listed issues
 2. Run tests to verify fixes
-3. Request re-review with `/speckit.review`
+3. Request re-review with `/speckit.workflows.review`
 ```
 
 ### 7. Output Summary
