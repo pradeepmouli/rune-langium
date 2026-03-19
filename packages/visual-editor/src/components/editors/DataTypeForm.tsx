@@ -15,7 +15,7 @@
  * @module
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
 import {
   Field,
@@ -27,9 +27,11 @@ import {
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { AttributeRow } from './AttributeRow.js';
+import { InheritedAttributeRow } from './AttributeRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { buildMergedAttributeList } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import {
@@ -156,6 +158,14 @@ function DataTypeForm({
 
   // ---- Attribute actions ---------------------------------------------------
 
+  const handleOverrideInherited = useCallback(
+    (name: string, typeName: string, cardinality: string) => {
+      append({ name, typeName, cardinality, isOverride: true });
+      actions.addAttribute(nodeId, name, typeName, cardinality);
+    },
+    [nodeId, actions, append]
+  );
+
   const handleAddAttribute = useCallback(() => {
     append({ name: '', typeName: 'string', cardinality: '(1..1)', isOverride: false });
     actions.addAttribute(nodeId, '', 'string', '(1..1)');
@@ -274,6 +284,12 @@ function DataTypeForm({
   const d = data as any;
   const parentName = getRefText(d.superType);
 
+  const mergedAttributeList = useMemo(
+    () => buildMergedAttributeList(fields, inheritedGroups),
+    [fields, inheritedGroups]
+  );
+  const inheritedCount = mergedAttributeList.filter((e) => !e.isLocal).length;
+
   const parentOptions = availableTypes.filter(
     (opt) => (opt.kind === 'data' || opt.kind === 'builtin') && opt.label !== d.name
   );
@@ -345,7 +361,7 @@ function DataTypeForm({
             variant="label"
             className="mb-0 text-muted-foreground flex items-center justify-between"
           >
-            <span>Attributes ({fields.length})</span>
+            <span>Attributes ({fields.length + inheritedCount})</span>
             <button
               data-slot="add-attribute-btn"
               type="button"
@@ -359,21 +375,38 @@ function DataTypeForm({
           </FieldLegend>
 
           <FieldGroup className="gap-1">
-            {fields.map((field, i) => (
-              <AttributeRow
-                key={field.id}
-                index={i}
-                committedName={((committedRef.current as any).attributes ?? [])[i]?.name ?? ''}
-                availableTypes={availableTypes}
-                onUpdate={handleUpdateAttribute}
-                onRemove={handleRemoveAttribute}
-                onReorder={handleReorderAttribute}
-                onNavigateToNode={onNavigateToNode}
-                allNodeIds={allNodeIds}
-              />
-            ))}
+            {mergedAttributeList.map((entry) =>
+              entry.isLocal ? (
+                <AttributeRow
+                  key={entry.id}
+                  index={entry.fieldIndex}
+                  committedName={
+                    ((committedRef.current as any).attributes ?? [])[entry.fieldIndex]?.name ?? ''
+                  }
+                  availableTypes={availableTypes}
+                  onUpdate={handleUpdateAttribute}
+                  onRemove={handleRemoveAttribute}
+                  onReorder={handleReorderAttribute}
+                  onNavigateToNode={onNavigateToNode}
+                  allNodeIds={allNodeIds}
+                />
+              ) : (
+                <InheritedAttributeRow
+                  key={entry.id}
+                  name={entry.name}
+                  typeName={entry.typeName}
+                  cardinality={entry.cardinality}
+                  ancestorName={entry.inheritedFrom.ancestorName}
+                  onOverride={() =>
+                    handleOverrideInherited(entry.name, entry.typeName, entry.cardinality)
+                  }
+                  onNavigateToNode={onNavigateToNode}
+                  allNodeIds={allNodeIds}
+                />
+              )
+            )}
 
-            {fields.length === 0 && (
+            {mergedAttributeList.length === 0 && (
               <p className="text-xs text-muted-foreground italic py-2 text-center">
                 No attributes defined. Click &quot;+ Add Attribute&quot; to create one.
               </p>
@@ -392,9 +425,6 @@ function DataTypeForm({
           onReorder={handleReorderCondition}
           renderExpressionEditor={renderExpressionEditor}
         />
-
-        {/* Inherited Members */}
-        <InheritedMembersSection groups={inheritedGroups} />
 
         {/* Annotations */}
         <AnnotationSection

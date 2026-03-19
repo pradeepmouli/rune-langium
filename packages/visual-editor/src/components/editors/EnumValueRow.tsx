@@ -186,3 +186,64 @@ function EnumValueRow({
 }
 
 export { EnumValueRow };
+
+// ---------------------------------------------------------------------------
+// InheritedEnumValueRow — read-only row for an inherited enum value
+// ---------------------------------------------------------------------------
+
+export interface InheritedEnumValueRowProps {
+  name: string;
+  displayName?: string;
+  ancestorName: string;
+  onOverride: () => void;
+}
+
+function InheritedEnumValueRow({
+  name,
+  displayName,
+  ancestorName,
+  onOverride
+}: InheritedEnumValueRowProps) {
+  return (
+    <div
+      data-slot="inherited-enum-value-row"
+      data-name={name}
+      className="flex items-center gap-1.5 py-1 rounded border border-transparent
+        bg-muted/20 opacity-70"
+      role="listitem"
+    >
+      {/* Spacer aligns with drag handle */}
+      <span className="w-3 shrink-0" />
+
+      <span className="flex-1 min-w-0 px-2 py-1 text-sm text-muted-foreground font-mono truncate">
+        {name}
+      </span>
+
+      {displayName && (
+        <span className="flex-1 min-w-0 px-2 py-1 text-sm text-muted-foreground italic truncate">
+          {displayName}
+        </span>
+      )}
+
+      <span
+        data-slot="inherited-from-label"
+        className="text-xs text-muted-foreground italic whitespace-nowrap"
+      >
+        inherited from {ancestorName}
+      </span>
+
+      <button
+        data-slot="enum-value-override"
+        type="button"
+        onClick={onOverride}
+        aria-label={`Override inherited value ${name} from ${ancestorName}`}
+        className="ml-auto shrink-0 text-xs px-2 py-0.5 border border-border rounded
+          text-muted-foreground hover:text-foreground hover:border-input transition-colors"
+      >
+        Override
+      </button>
+    </div>
+  );
+}
+
+export { InheritedEnumValueRow };

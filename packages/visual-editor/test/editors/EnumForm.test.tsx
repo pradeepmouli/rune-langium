@@ -192,3 +192,140 @@ describe('EnumForm', () => {
     expect(screen.getByText(/3/)).toBeDefined();
   });
 });
+
+describe('EnumForm – merged inherited enum value list', () => {
+  it('renders inherited enum value rows when inheritedGroups provided', () => {
+    const { container } = render(
+      <EnumForm
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        inheritedGroups={[
+          {
+            ancestorName: 'BaseEnum',
+            namespace: 'test',
+            kind: 'enum',
+            members: [{ $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }]
+          }
+        ]}
+      />
+    );
+    const inherited = container.querySelectorAll('[data-slot="inherited-enum-value-row"]');
+    expect(inherited.length).toBe(1);
+  });
+
+  it('shows inherited-from label with ancestor name', () => {
+    render(
+      <EnumForm
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        inheritedGroups={[
+          {
+            ancestorName: 'BaseEnum',
+            namespace: 'test',
+            kind: 'enum',
+            members: [{ $type: 'RosettaEnumValue', name: 'JPY', display: '' }]
+          }
+        ]}
+      />
+    );
+    expect(screen.getByText(/inherited from BaseEnum/)).toBeDefined();
+  });
+
+  it('includes inherited count in Values label', () => {
+    render(
+      <EnumForm
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        inheritedGroups={[
+          {
+            ancestorName: 'BaseEnum',
+            namespace: 'test',
+            kind: 'enum',
+            members: [
+              { $type: 'RosettaEnumValue', name: 'JPY', display: '' },
+              { $type: 'RosettaEnumValue', name: 'CHF', display: '' }
+            ]
+          }
+        ]}
+      />
+    );
+    // 3 local + 2 inherited = 5
+    expect(screen.getByText(/Values \(5\)/)).toBeDefined();
+  });
+
+  it('local value shadows inherited value with same name', () => {
+    const data = makeEnumData({
+      enumValues: [{ $type: 'RosettaEnumValue', name: 'GBP', display: '' }]
+    });
+    const { container } = render(
+      <EnumForm
+        nodeId="node-1"
+        data={data}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        inheritedGroups={[
+          {
+            ancestorName: 'BaseEnum',
+            namespace: 'test',
+            kind: 'enum',
+            members: [{ $type: 'RosettaEnumValue', name: 'GBP', display: 'Pound' }]
+          }
+        ]}
+      />
+    );
+    const local = container.querySelectorAll('[data-slot="enum-value-row"]');
+    const inherited = container.querySelectorAll('[data-slot="inherited-enum-value-row"]');
+    expect(local.length).toBe(1);
+    expect(inherited.length).toBe(0);
+  });
+
+  it('Override button calls addEnumValue', () => {
+    const addEnumValue = vi.fn();
+    const { container } = render(
+      <EnumForm
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={{ ...makeActions(), addEnumValue }}
+        inheritedGroups={[
+          {
+            ancestorName: 'BaseEnum',
+            namespace: 'test',
+            kind: 'enum',
+            members: [{ $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }]
+          }
+        ]}
+      />
+    );
+    const overrideBtn = container.querySelector('[data-slot="enum-value-override"]');
+    fireEvent.click(overrideBtn!);
+    expect(addEnumValue).toHaveBeenCalledWith('node-1', 'JPY', 'Yen');
+  });
+
+  it('inherited rows have no remove control', () => {
+    const { container } = render(
+      <EnumForm
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        inheritedGroups={[
+          {
+            ancestorName: 'BaseEnum',
+            namespace: 'test',
+            kind: 'enum',
+            members: [{ $type: 'RosettaEnumValue', name: 'JPY', display: '' }]
+          }
+        ]}
+      />
+    );
+    const inheritedRow = container.querySelector('[data-slot="inherited-enum-value-row"]')!;
+    expect(inheritedRow.querySelector('button[aria-label*="Remove"]')).toBeNull();
+  });
+});

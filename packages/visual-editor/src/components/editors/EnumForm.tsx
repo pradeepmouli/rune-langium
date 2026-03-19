@@ -15,7 +15,7 @@
  * @module
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
 import {
   Field,
@@ -27,9 +27,11 @@ import {
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { EnumValueRow } from './EnumValueRow.js';
+import { InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { buildMergedEnumValueList } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm } from '@zod-to-form/react';
@@ -145,6 +147,14 @@ function EnumForm({
 
   // ---- Enum value actions --------------------------------------------------
 
+  const handleOverrideInheritedValue = useCallback(
+    (name: string, displayName: string) => {
+      append({ name, typeName: '', cardinality: '', isOverride: true, displayName });
+      actions.addEnumValue(nodeId, name, displayName || undefined);
+    },
+    [nodeId, actions, append]
+  );
+
   const handleAddValue = useCallback(() => {
     append({ name: '', typeName: '', cardinality: '', isOverride: false, displayName: '' });
     actions.addEnumValue(nodeId, '', undefined);
@@ -225,6 +235,12 @@ function EnumForm({
 
   const parentName = getRefText(d.parent);
 
+  const mergedValueList = useMemo(
+    () => buildMergedEnumValueList(fields, inheritedGroups),
+    [fields, inheritedGroups]
+  );
+  const inheritedCount = mergedValueList.filter((e) => !e.isLocal).length;
+
   // ---- Resolve parent enum option ------------------------------------------
 
   const parentOptions = availableTypes.filter((opt) => opt.kind === 'enum' && opt.label !== d.name);
@@ -288,7 +304,7 @@ function EnumForm({
             variant="label"
             className="mb-0 text-muted-foreground flex items-center justify-between"
           >
-            <span>Values ({fields.length})</span>
+            <span>Values ({fields.length + inheritedCount})</span>
             <button
               data-slot="add-value-btn"
               type="button"
@@ -302,29 +318,41 @@ function EnumForm({
           </FieldLegend>
 
           <FieldGroup className="gap-0.5">
-            {fields.map((field, i) => (
-              <EnumValueRow
-                key={field.id}
-                index={i}
-                name={((committedRef.current as any).enumValues ?? [])[i]?.name ?? ''}
-                displayName={((committedRef.current as any).enumValues ?? [])[i]?.display ?? ''}
-                nodeId={nodeId}
-                onUpdate={handleUpdateValue}
-                onRemove={() => handleRemoveValue(i)}
-                onReorder={handleReorderValue}
-              />
-            ))}
+            {mergedValueList.map((entry) =>
+              entry.isLocal ? (
+                <EnumValueRow
+                  key={entry.id}
+                  index={entry.fieldIndex}
+                  name={
+                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex]?.name ?? ''
+                  }
+                  displayName={
+                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex]?.display ??
+                    ''
+                  }
+                  nodeId={nodeId}
+                  onUpdate={handleUpdateValue}
+                  onRemove={() => handleRemoveValue(entry.fieldIndex)}
+                  onReorder={handleReorderValue}
+                />
+              ) : (
+                <InheritedEnumValueRow
+                  key={entry.id}
+                  name={entry.name}
+                  displayName={entry.displayName}
+                  ancestorName={entry.inheritedFrom.ancestorName}
+                  onOverride={() => handleOverrideInheritedValue(entry.name, entry.displayName)}
+                />
+              )
+            )}
 
-            {fields.length === 0 && (
+            {mergedValueList.length === 0 && (
               <p className="text-xs text-muted-foreground italic py-2 text-center">
                 No values defined. Click &quot;+ Add Value&quot; to create one.
               </p>
             )}
           </FieldGroup>
         </FieldSet>
-
-        {/* Inherited Members */}
-        <InheritedMembersSection groups={inheritedGroups} />
 
         {/* Annotations */}
         <AnnotationSection

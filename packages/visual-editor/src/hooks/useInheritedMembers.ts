@@ -10,7 +10,12 @@
 
 import { useMemo } from 'react';
 import type { AnyGraphNode, TypeGraphNode } from '../types.js';
-import { getRefText, AST_TYPE_TO_NODE_TYPE } from '../adapters/model-helpers.js';
+import {
+  getRefText,
+  AST_TYPE_TO_NODE_TYPE,
+  getTypeRefText,
+  formatCardinality
+} from '../adapters/model-helpers.js';
 
 export interface InheritedGroup {
   /** Name of the ancestor type. */
@@ -100,4 +105,132 @@ export function useInheritedMembers(
 
     return groups;
   }, [parentName, allNodes, maxDepth]);
+}
+
+// ---------------------------------------------------------------------------
+// Merged list types
+// ---------------------------------------------------------------------------
+
+export type MergedAttributeEntry =
+  | {
+      isLocal: true;
+      /** Stable key from useFieldArray. */
+      id: string;
+      /** Index in the useFieldArray `fields` array. */
+      fieldIndex: number;
+      name: string;
+    }
+  | {
+      isLocal: false;
+      /** Stable key: `inherited-{ancestorName}-{name}`. */
+      id: string;
+      name: string;
+      typeName: string;
+      cardinality: string;
+      inheritedFrom: { ancestorName: string; inheritanceDepth: number };
+      rawMember: unknown;
+    };
+
+export type MergedEnumValueEntry =
+  | {
+      isLocal: true;
+      id: string;
+      fieldIndex: number;
+      name: string;
+    }
+  | {
+      isLocal: false;
+      id: string;
+      name: string;
+      displayName: string;
+      inheritedFrom: { ancestorName: string; inheritanceDepth: number };
+      rawMember: unknown;
+    };
+
+// ---------------------------------------------------------------------------
+// Builder functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a flat merged attribute list: local entries first (in field order),
+ * then inherited entries (nearest ancestor first).  A local entry with the
+ * same name as an inherited entry shadows the inherited one.
+ */
+export function buildMergedAttributeList(
+  localFields: Array<{ id: string; name?: string }>,
+  inheritedGroups: InheritedGroup[]
+): MergedAttributeEntry[] {
+  const localNames = new Set(localFields.map((f) => (f as any).name ?? ''));
+
+  const localEntries: MergedAttributeEntry[] = localFields.map((f, i) => ({
+    isLocal: true as const,
+    id: f.id,
+    fieldIndex: i,
+    name: (f as any).name ?? ''
+  }));
+
+  const inheritedEntries: MergedAttributeEntry[] = [];
+  const seenNames = new Set(localNames);
+
+  inheritedGroups.forEach((group, depth) => {
+    for (const member of group.members) {
+      const m = member as any;
+      const name: string = m.name ?? '';
+      if (!seenNames.has(name)) {
+        seenNames.add(name);
+        inheritedEntries.push({
+          isLocal: false as const,
+          id: `inherited:${group.ancestorName}:${name}`,
+          name,
+          typeName: getTypeRefText(m.typeCall) ?? 'string',
+          cardinality: formatCardinality(m.card) || '(1..1)',
+          inheritedFrom: { ancestorName: group.ancestorName, inheritanceDepth: depth + 1 },
+          rawMember: member
+        });
+      }
+    }
+  });
+
+  return [...localEntries, ...inheritedEntries];
+}
+
+/**
+ * Build a flat merged enum value list: local entries first, then inherited
+ * entries (nearest ancestor first). Local names shadow inherited.
+ */
+export function buildMergedEnumValueList(
+  localFields: Array<{ id: string; name?: string }>,
+  inheritedGroups: InheritedGroup[]
+): MergedEnumValueEntry[] {
+  const localNames = new Set(localFields.map((f) => (f as any).name ?? ''));
+
+  const localEntries: MergedEnumValueEntry[] = localFields.map((f, i) => ({
+    isLocal: true as const,
+    id: f.id,
+    fieldIndex: i,
+    name: (f as any).name ?? ''
+  }));
+
+  const inheritedEntries: MergedEnumValueEntry[] = [];
+  const seenNames = new Set(localNames);
+
+  inheritedGroups.forEach((group, depth) => {
+    for (const member of group.members) {
+      const m = member as any;
+      const name: string = m.name ?? '';
+      if (!seenNames.has(name)) {
+        seenNames.add(name);
+        inheritedEntries.push({
+          isLocal: false as const,
+          id: `inherited:${group.ancestorName}:${name}`,
+          name,
+          displayName: m.display ?? m.displayName ?? '',
+          inheritedFrom: { ancestorName: group.ancestorName, inheritanceDepth: depth + 1 },
+          rawMember: member
+        });
+      }
+    }
+  });
+
+  return [...localEntries, ...inheritedEntries];
 }
