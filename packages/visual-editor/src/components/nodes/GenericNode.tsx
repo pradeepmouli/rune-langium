@@ -72,18 +72,14 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
           <div className="rune-node-parent">
             <span className="rune-node-parent-label">→ </span>
             {parentTargetId && onNavigateToType ? (
-              <span
-                style={{ cursor: 'pointer' }}
+              <button
+                type="button"
+                className="nodrag nopan"
+                data-navigable
                 onClick={(e) => handleTypeClick(e, parentTargetId)}
-                onMouseOver={(e) => {
-                  (e.currentTarget as HTMLElement).style.textDecoration = 'underline';
-                }}
-                onMouseOut={(e) => {
-                  (e.currentTarget as HTMLElement).style.textDecoration = 'none';
-                }}
               >
                 {parentName}
-              </span>
+              </button>
             ) : (
               <span>{parentName}</span>
             )}
@@ -103,19 +99,14 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
                   <span className="rune-node-member-name">{member.name}</span>
                   {typeName &&
                     (targetId && onNavigateToType ? (
-                      <span
-                        className="rune-node-member-type"
-                        style={{ cursor: 'pointer' }}
+                      <button
+                        type="button"
+                        className="rune-node-member-type nodrag nopan"
+                        data-navigable
                         onClick={(e) => handleTypeClick(e, targetId)}
-                        onMouseOver={(e) => {
-                          (e.currentTarget as HTMLElement).style.textDecoration = 'underline';
-                        }}
-                        onMouseOut={(e) => {
-                          (e.currentTarget as HTMLElement).style.textDecoration = 'none';
-                        }}
                       >
                         {typeName}
-                      </span>
+                      </button>
                     ) : (
                       <span className="rune-node-member-type">{typeName}</span>
                     ))}
@@ -130,19 +121,14 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
             <div className="rune-node-member">
               <span className="rune-node-member-name">output</span>
               {outputTargetId && onNavigateToType ? (
-                <span
-                  className="rune-node-member-type"
-                  style={{ cursor: 'pointer' }}
+                <button
+                  type="button"
+                  className="rune-node-member-type nodrag nopan"
+                  data-navigable
                   onClick={(e) => handleTypeClick(e, outputTargetId)}
-                  onMouseOver={(e) => {
-                    (e.currentTarget as HTMLElement).style.textDecoration = 'underline';
-                  }}
-                  onMouseOut={(e) => {
-                    (e.currentTarget as HTMLElement).style.textDecoration = 'none';
-                  }}
                 >
                   {outputTypeName}
-                </span>
+                </button>
               ) : (
                 <span className="rune-node-member-type">{outputTypeName}</span>
               )}

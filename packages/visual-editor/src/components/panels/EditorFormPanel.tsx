@@ -261,8 +261,6 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             actions={actions}
             renderExpressionEditor={renderExpressionEditor}
-            onNavigateToNode={onNavigateToNode}
-            allNodeIds={allNodeIds}
           />
         );
 

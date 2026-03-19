@@ -307,7 +307,8 @@ export function EditorPage({
     (nodeId: string) => {
       const exists = storeNodes.some((n) => n.id === nodeId);
       if (!exists) {
-        setToastMessage(`Node "${nodeId}" not found in graph`);
+        const shortName = nodeId.includes('::') ? nodeId.split('::').pop() : nodeId;
+        setToastMessage(`Type "${shortName}" not loaded — load the file containing this type`);
         return;
       }
       // Task 8: push current selection onto history before navigating (capped at 100)
@@ -383,8 +384,14 @@ export function EditorPage({
   useEffect(() => {
     if (!lspClient) return;
     const unsub = lspClient.onDisplayFile(async (uri: string) => {
-      // Convert URI to file path: "file:///base-math-type.rosetta" → "/base-math-type.rosetta"
-      const path = uri.startsWith('file://') ? uri.slice(7) : uri;
+      // Parse URI properly to handle encoding (e.g., %20 for spaces)
+      let path: string;
+      try {
+        const parsed = new URL(uri);
+        path = decodeURIComponent(parsed.pathname);
+      } catch {
+        path = uri.startsWith('file://') ? decodeURIComponent(uri.slice(7)) : uri;
+      }
       const fileName = path.split('/').pop() ?? path;
       const file = files.find(
         (f) => f.path === path || f.path.endsWith(fileName) || path.endsWith(f.path)

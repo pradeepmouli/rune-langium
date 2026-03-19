@@ -65,14 +65,28 @@
   font-style: italic;
 }
 
-.rune-node-member-type[data-navigable] {
+/* Navigable type references in graph nodes — rendered as semantic <button> */
+button[data-navigable] {
+  all: unset;
   cursor: pointer;
-  transition: text-decoration 0.15s;
+  transition: text-decoration 0.15s, color 0.15s;
 }
 
-.rune-node-member-type[data-navigable]:hover {
+button[data-navigable]:hover,
+button[data-navigable]:focus-visible {
   text-decoration: underline;
   color: var(--color-primary, #3182ce);
+}
+
+button[data-navigable]:focus-visible {
+  outline: 2px solid var(--color-primary, #3182ce);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+.rune-node-member-type[data-navigable] {
+  color: var(--color-node-member-type, #718096);
+  font-style: italic;
 }
 
 .rune-node-member-cardinality {

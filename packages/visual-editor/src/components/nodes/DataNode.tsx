@@ -47,19 +47,14 @@ export const DataNode = memo(function DataNode({ data, selected }: NodeProps) {
                   <span className="rune-node-member-name">{member.name}</span>
                   {typeName &&
                     (targetId && onNavigateToType ? (
-                      <span
-                        className="rune-node-member-type"
-                        style={{ cursor: 'pointer' }}
+                      <button
+                        type="button"
+                        className="rune-node-member-type nodrag nopan"
+                        data-navigable
                         onClick={(e) => handleTypeClick(e, targetId)}
-                        onMouseOver={(e) => {
-                          (e.currentTarget as HTMLElement).style.textDecoration = 'underline';
-                        }}
-                        onMouseOut={(e) => {
-                          (e.currentTarget as HTMLElement).style.textDecoration = 'none';
-                        }}
                       >
                         {typeName}
-                      </span>
+                      </button>
                     ) : (
                       <span className="rune-node-member-type">{typeName}</span>
                     ))}

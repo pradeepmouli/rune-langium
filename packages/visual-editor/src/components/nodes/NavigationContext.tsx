@@ -27,6 +27,9 @@ export const useNavigation = () => useContext(NavigationContext);
  * Returns the first matching node ID, or undefined if not navigable.
  */
 export function resolveTypeNodeId(typeName: string, allNodeIds: Set<string>): string | undefined {
+  // Exact match first (already fully qualified, e.g., "cdm.base.math::Quantity")
+  if (allNodeIds.has(typeName)) return typeName;
+  // Suffix match on ::name
   const suffix = `::${typeName}`;
   for (const id of allNodeIds) {
     if (id.endsWith(suffix)) return id;

@@ -107,10 +107,12 @@ class StudioWorkspace extends Workspace {
   }
 
   openFile(uri: string, languageId: string, view: EditorView): void {
-    // Allow re-opening the same file (tab switch destroys + recreates)
+    // Allow re-opening the same file (tab switch destroys + recreates).
+    // Send didClose first to keep open/close pairs balanced for the LSP server.
     const existing = this.files.findIndex((f) => f.uri === uri);
     if (existing >= 0) {
       this.files.splice(existing, 1);
+      this.client.didClose(uri);
     }
     const file: StudioWorkspaceFile = {
       uri,
