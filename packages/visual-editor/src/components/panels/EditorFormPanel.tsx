@@ -15,7 +15,7 @@
  * @module
  */
 
-import { useEffect, useCallback, useRef, Component, memo } from 'react';
+import { useEffect, useCallback, useRef, useMemo, Component, memo } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
@@ -108,6 +108,8 @@ export interface EditorFormPanelProps {
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
   /** Called when the panel requests to close (e.g., Escape key). */
   onClose?: () => void;
+  /** Called when a type reference is clicked to navigate to that type's definition. */
+  onNavigateToNode?: (nodeId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,11 +124,15 @@ const EditorFormPanel = memo(function EditorFormPanel({
   actions,
   allNodes = [],
   renderExpressionEditor,
-  onClose
+  onClose,
+  onNavigateToNode
 }: EditorFormPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
 
   const inheritedGroups = useInheritedMembers(nodeData as AnyGraphNode | null, allNodes);
+
+  // Derive allNodeIds for TypeLink resolution
+  const allNodeIds = useMemo(() => allNodes.map((n) => n.id), [allNodes]);
 
   // ---- Escape key closes panel --------------------------------------------
 
@@ -175,7 +181,11 @@ const EditorFormPanel = memo(function EditorFormPanel({
         className="flex flex-col h-full overflow-hidden"
         tabIndex={-1}
       >
-        <DetailPanel nodeData={nodeData} />
+        <DetailPanel
+          nodeData={nodeData}
+          onNavigateToNode={onNavigateToNode}
+          allNodeIds={allNodeIds}
+        />
       </aside>
     );
   }
@@ -196,6 +206,8 @@ const EditorFormPanel = memo(function EditorFormPanel({
             actions={actions}
             inheritedGroups={inheritedGroups}
             renderExpressionEditor={renderExpressionEditor}
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
           />
         );
 
@@ -208,6 +220,8 @@ const EditorFormPanel = memo(function EditorFormPanel({
             availableTypes={availableTypes}
             actions={actions}
             inheritedGroups={inheritedGroups}
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
           />
         );
 
@@ -219,6 +233,8 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             availableTypes={availableTypes}
             actions={actions}
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
           />
         );
 
@@ -232,6 +248,8 @@ const EditorFormPanel = memo(function EditorFormPanel({
             actions={actions}
             inheritedGroups={inheritedGroups}
             renderExpressionEditor={renderExpressionEditor}
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
           />
         );
 
@@ -251,10 +269,22 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'record':
       case 'basicType':
       case 'annotation':
-        return <DetailPanel nodeData={nodeData!} />;
+        return (
+          <DetailPanel
+            nodeData={nodeData!}
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
+          />
+        );
 
       default:
-        return <DetailPanel nodeData={nodeData!} />;
+        return (
+          <DetailPanel
+            nodeData={nodeData!}
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
+          />
+        );
     }
   }
 

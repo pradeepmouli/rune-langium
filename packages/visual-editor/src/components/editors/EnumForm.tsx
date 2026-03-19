@@ -36,7 +36,13 @@ import { useZodForm } from '@zod-to-form/react';
 import { ExternalDataSync } from '../forms/ExternalDataSync.js';
 import { enumFormSchema, type EnumFormValues } from '../../schemas/form-schemas.js';
 import { getRefText, enumSynonymsToStrings } from '../../adapters/model-helpers.js';
-import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../types.js';
+import { TypeLink } from './TypeLink.js';
+import type {
+  AnyGraphNode,
+  TypeOption,
+  EditorFormActions,
+  NavigateToNodeCallback
+} from '../../types.js';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
@@ -77,13 +83,25 @@ export interface EnumFormProps {
   actions: EditorFormActions<'enum'>;
   /** Inherited member groups from ancestors. */
   inheritedGroups?: InheritedGroup[];
+  /** Callback to navigate to a type's graph node. */
+  onNavigateToNode?: NavigateToNodeCallback;
+  /** All loaded graph node IDs for resolving type name to node ID. */
+  allNodeIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-function EnumForm({ nodeId, data, availableTypes, actions, inheritedGroups = [] }: EnumFormProps) {
+function EnumForm({
+  nodeId,
+  data,
+  availableTypes,
+  actions,
+  inheritedGroups = [],
+  onNavigateToNode,
+  allNodeIds
+}: EnumFormProps) {
   const d = data as any;
   // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
 

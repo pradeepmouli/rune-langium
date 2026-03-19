@@ -28,6 +28,30 @@ const {
 }));
 
 vi.mock('@codemirror/lsp-client', () => {
+  class MockWorkspace {
+    client: unknown;
+    files: unknown[] = [];
+    constructor(client: unknown) {
+      this.client = client;
+    }
+    getFile() {
+      return null;
+    }
+    syncFiles() {
+      return [];
+    }
+    openFile() {}
+    closeFile() {}
+    connected() {}
+    disconnected() {}
+    displayFile() {
+      return Promise.resolve(null);
+    }
+    requestFile() {
+      return Promise.resolve(null);
+    }
+    updateFile() {}
+  }
   class MockLSPClient {
     didOpen = mockDidOpen;
     didClose = mockDidClose;
@@ -35,10 +59,19 @@ vi.mock('@codemirror/lsp-client', () => {
     disconnect = mockLspDisconnect;
     connect = mockLspConnect;
     plugin = mockPlugin;
-    constructor(_opts: unknown) {}
+    workspace: MockWorkspace;
+    constructor(opts: any) {
+      if (opts?.workspace) {
+        this.workspace = opts.workspace(this);
+      } else {
+        this.workspace = new MockWorkspace(this);
+      }
+    }
   }
   return {
     LSPClient: MockLSPClient,
+    Workspace: MockWorkspace,
+    LSPPlugin: { get: vi.fn().mockReturnValue(null) },
     languageServerExtensions: vi.fn().mockReturnValue([])
   };
 });

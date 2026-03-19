@@ -20,6 +20,7 @@ import {
 } from '@xyflow/react';
 import type { OnSelectionChangeParams } from '@xyflow/react';
 import { nodeTypes } from './nodes/index.js';
+import { NavigationContext } from './nodes/NavigationContext.js';
 import { edgeTypes } from './edges/index.js';
 import { computeLayout } from '../layout/dagre-layout.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
@@ -140,6 +141,12 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
       [selectNode, callbacks]
     );
 
+    // Navigation context value for clickable type references in nodes
+    const navigationCtx = useMemo(() => {
+      const allNodeIds = new Set(storeNodes.map((n) => n.id));
+      return { onNavigateToType: callbacks?.onNavigateToType, allNodeIds };
+    }, [storeNodes, callbacks?.onNavigateToType]);
+
     // Node double-click handler
     const handleNodeDoubleClick = useCallback(
       (_event: React.MouseEvent, node: TypeGraphNode) => {
@@ -160,6 +167,13 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
           const node = nodes.find((n) => n.id === nodeId);
           if (node) {
             setCenter(node.position.x + 110, node.position.y + 60, { zoom: 1.5, duration: 300 });
+            // Programmatically select the target node in React Flow
+            setNodes((prev) =>
+              prev.map((n) => ({
+                ...n,
+                selected: n.id === nodeId
+              }))
+            );
           }
         },
 
@@ -226,25 +240,27 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
 
     return (
       <div className={`rune-type-graph ${className ?? ''}`}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onSelectionChange={handleSelectionChange}
-          onNodeDoubleClick={handleNodeDoubleClick}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          fitView
-          nodesDraggable={!mergedConfig.readOnly}
-          nodesConnectable={!mergedConfig.readOnly}
-          elementsSelectable
-          proOptions={{ hideAttribution: true }}
-        >
-          {mergedConfig.showControls && <Controls />}
-          {mergedConfig.showMinimap && <MiniMap />}
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        </ReactFlow>
+        <NavigationContext.Provider value={navigationCtx}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onSelectionChange={handleSelectionChange}
+            onNodeDoubleClick={handleNodeDoubleClick}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            fitView
+            nodesDraggable={!mergedConfig.readOnly}
+            nodesConnectable={!mergedConfig.readOnly}
+            elementsSelectable
+            proOptions={{ hideAttribution: true }}
+          >
+            {mergedConfig.showControls && <Controls />}
+            {mergedConfig.showMinimap && <MiniMap />}
+            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+          </ReactFlow>
+        </NavigationContext.Provider>
       </div>
     );
   }

@@ -15,10 +15,15 @@ import {
   getTypeRefText,
   getRefText
 } from '../../adapters/model-helpers.js';
-import type { AnyGraphNode, ValidationError } from '../../types.js';
+import { TypeLink } from '../editors/TypeLink.js';
+import type { AnyGraphNode, ValidationError, NavigateToNodeCallback } from '../../types.js';
 
 export interface DetailPanelProps {
   nodeData: AnyGraphNode | null;
+  /** Callback to navigate to a type's graph node. */
+  onNavigateToNode?: NavigateToNodeCallback;
+  /** All loaded graph node IDs for resolving type name to node ID. */
+  allNodeIds?: string[];
 }
 
 /** Extract a flat list of {name, typeName, cardinality} from any node type. */
@@ -61,7 +66,7 @@ function extractMembers(d: any): Array<{ name: string; typeName?: string; cardin
   }
 }
 
-export function DetailPanel({ nodeData }: DetailPanelProps) {
+export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds }: DetailPanelProps) {
   if (!nodeData) return null;
 
   const d = nodeData as any;
@@ -93,7 +98,12 @@ export function DetailPanel({ nodeData }: DetailPanelProps) {
             <span className="text-xs font-medium text-muted-foreground">Extends</span>
             <span className="inline-flex items-center gap-1.5 text-sm">
               <GitFork className="size-3.5 text-muted-foreground" />
-              {parentName}
+              <TypeLink
+                typeName={parentName}
+                onNavigateToNode={onNavigateToNode}
+                allNodeIds={allNodeIds}
+                className="text-sm"
+              />
             </span>
           </div>
         )}
@@ -111,7 +121,15 @@ export function DetailPanel({ nodeData }: DetailPanelProps) {
                   <div key={member.name} className="flex items-baseline gap-1 text-sm font-mono">
                     <span>{member.name}</span>
                     {member.typeName && (
-                      <span className="text-muted-foreground">: {member.typeName}</span>
+                      <span className="text-muted-foreground">
+                        :{' '}
+                        <TypeLink
+                          typeName={member.typeName}
+                          onNavigateToNode={onNavigateToNode}
+                          allNodeIds={allNodeIds}
+                          className="text-muted-foreground"
+                        />
+                      </span>
                     )}
                     {member.cardinality && (
                       <span className="text-xs text-muted-foreground">{member.cardinality}</span>

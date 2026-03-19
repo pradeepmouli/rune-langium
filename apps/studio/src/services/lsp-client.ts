@@ -8,9 +8,12 @@
  *   - Reconnect and cleanup
  */
 
-import { LSPClient, languageServerExtensions } from '@codemirror/lsp-client';
+import { LSPClient, languageServerExtensions, Workspace } from '@codemirror/lsp-client';
+import type { WorkspaceFile } from '@codemirror/lsp-client';
 import type { Extension } from '@codemirror/state';
-import { Text } from '@codemirror/state';
+import { ChangeSet, Text } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { LSPPlugin } from '@codemirror/lsp-client';
 import {
   createTransportProvider,
   type TransportProvider,
@@ -41,10 +44,109 @@ export interface LspClientService {
   onDiagnostics(handler: (uri: string, diagnostics: LspDiagnostic[]) => void): () => void;
   /** Keep the server-side workspace in sync with loaded files (for cross-file refs). */
   syncWorkspaceFiles(files: Array<{ path: string; content: string }>): void;
+  /**
+   * Register a handler for cross-file definition navigation (Task 7).
+   *
+   * When `jumpToDefinition` resolves to a file URI that is known in the
+   * workspace snapshot, `displayFile` on the custom workspace calls this
+   * handler with the target URI so the host can open the file tab and
+   * return the resulting EditorView.
+   *
+   * Returns an unsubscribe function.
+   */
+  onDisplayFile(
+    handler: (uri: string) => Promise<import('@codemirror/view').EditorView | null>
+  ): () => void;
   /** Force reconnect (tries WebSocket first). */
   reconnect(): Promise<void>;
   /** Clean up all resources. */
   dispose(): void;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Custom Workspace (Task 7) — extends DefaultWorkspace to support
+// cross-file displayFile via a registered callback.
+// ────────────────────────────────────────────────────────────────────────────
+
+type DisplayFileHandler = (uri: string) => Promise<EditorView | null>;
+
+interface StudioWorkspaceFile extends WorkspaceFile {
+  view: EditorView;
+}
+
+/**
+ * A workspace implementation that supports cross-file go-to-definition
+ * by delegating `displayFile` to an externally registered handler.
+ *
+ * The handler (set via `onDisplayFile`) is responsible for opening the
+ * target file tab in the SourceEditor and returning the EditorView.
+ */
+class StudioWorkspace extends Workspace {
+  files: StudioWorkspaceFile[] = [];
+  private fileVersions: Record<string, number> = Object.create(null);
+  displayFileHandler: DisplayFileHandler | null = null;
+
+  nextFileVersion(uri: string): number {
+    return (this.fileVersions[uri] = (this.fileVersions[uri] ?? -1) + 1);
+  }
+
+  syncFiles() {
+    const result: Array<{ file: WorkspaceFile; prevDoc: Text; changes: ChangeSet }> = [];
+    for (const file of this.files) {
+      const plugin = LSPPlugin.get(file.view);
+      if (!plugin) continue;
+      const changes = plugin.unsyncedChanges;
+      if (!changes.empty) {
+        result.push({ changes, file, prevDoc: file.doc });
+        file.doc = file.view.state.doc;
+        file.version = this.nextFileVersion(file.uri);
+        plugin.clear();
+      }
+    }
+    return result;
+  }
+
+  openFile(uri: string, languageId: string, view: EditorView): void {
+    // Allow re-opening the same file (tab switch destroys + recreates).
+    // Send didClose first to keep open/close pairs balanced for the LSP server.
+    const existing = this.files.findIndex((f) => f.uri === uri);
+    if (existing >= 0) {
+      this.files.splice(existing, 1);
+      this.client.didClose(uri);
+    }
+    const file: StudioWorkspaceFile = {
+      uri,
+      languageId,
+      version: this.nextFileVersion(uri),
+      doc: view.state.doc,
+      view,
+      getView: () => view
+    };
+    this.files.push(file);
+    this.client.didOpen(file);
+  }
+
+  closeFile(uri: string, _view: EditorView): void {
+    const file = this.getFile(uri);
+    if (file) {
+      this.files = this.files.filter((f) => f !== file);
+      this.client.didClose(uri);
+    }
+  }
+
+  override displayFile(uri: string): Promise<EditorView | null> {
+    // Try to find an already-open file first
+    const file = this.getFile(uri);
+    if (file) {
+      const view = file.getView();
+      if (view) return Promise.resolve(view);
+    }
+    // Delegate to the registered handler for cross-file navigation
+    if (this.displayFileHandler) {
+      return this.displayFileHandler(uri);
+    }
+    return Promise.resolve(null);
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -61,6 +163,9 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
 
   const diagnosticHandlers: ((uri: string, diagnostics: LspDiagnostic[]) => void)[] = [];
 
+  // Task 7: displayFile handler for cross-file go-to-definition
+  let displayFileHandler: DisplayFileHandler | null = null;
+
   function cancelPendingRefresh(): void {
     if (_pendingRefreshId !== null) {
       clearTimeout(_pendingRefreshId);
@@ -71,6 +176,11 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
   function buildClient(): LSPClient {
     return new LSPClient({
       rootUri: 'file:///workspace',
+      workspace: (lspClient) => {
+        const ws = new StudioWorkspace(lspClient);
+        ws.displayFileHandler = displayFileHandler;
+        return ws;
+      },
       notificationHandlers: {
         'textDocument/publishDiagnostics': (_client, params) => {
           const { uri, diagnostics } = params as {
@@ -205,6 +315,28 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
           }
         }, 0);
       }
+    },
+
+    onDisplayFile(handler: (uri: string) => Promise<EditorView | null>): () => void {
+      displayFileHandler = handler;
+      // Update existing workspace if client is already connected
+      if (client) {
+        const ws = client.workspace as StudioWorkspace;
+        if (ws && 'displayFileHandler' in ws) {
+          ws.displayFileHandler = handler;
+        }
+      }
+      return () => {
+        if (displayFileHandler === handler) {
+          displayFileHandler = null;
+          if (client) {
+            const ws = client.workspace as StudioWorkspace;
+            if (ws && 'displayFileHandler' in ws) {
+              ws.displayFileHandler = null;
+            }
+          }
+        }
+      };
     },
 
     async reconnect(): Promise<void> {

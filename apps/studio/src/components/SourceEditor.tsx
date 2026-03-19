@@ -19,7 +19,7 @@ import {
   forwardRef
 } from 'react';
 import { EditorView, keymap } from '@codemirror/view';
-import { EditorState, type Extension } from '@codemirror/state';
+import { EditorState, Transaction, type Extension } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
 import { defaultKeymap } from '@codemirror/commands';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
@@ -57,6 +57,16 @@ export interface SourceEditorProps {
   onContentChange?: (path: string, content: string) => void;
   /** LSP client service (injected). */
   lspClient?: LspClientService;
+  /**
+   * Called when go-to-definition resolves to a graph node (Task 7).
+   * The nodeId is derived from the definition target URI.
+   */
+  onNavigateToNode?: (nodeId: string) => void;
+  /**
+   * Called when a new EditorView is created for a file (e.g., after tab switch).
+   * Used by cross-file go-to-definition to resolve pending displayFile promises.
+   */
+  onEditorViewCreated?: (filePath: string, view: EditorView) => void;
 }
 
 /** Imperative handle exposed by SourceEditor for programmatic navigation. */
@@ -91,12 +101,75 @@ function scrollToLine(view: EditorView | null, line: number): void {
   view.focus();
 }
 
+/**
+ * Extract a graph nodeId (namespace::TypeName) from the cursor position
+ * after a go-to-definition jump (Task 7).
+ *
+ * When jumpToDefinition places the cursor at a type definition, we scan
+ * backwards to find the `namespace` declaration and forwards/around to
+ * find the type keyword + name (e.g. `type Foo:`, `enum Bar:`, `func Baz:`).
+ *
+ * Returns null if the position doesn't correspond to a recognizable type definition.
+ */
+function extractNodeIdAtPosition(state: EditorState, pos: number): string | null {
+  const doc = state.doc;
+  const lineAt = doc.lineAt(pos);
+
+  // Find the type name on the current line or nearby lines.
+  // Rosetta DSL patterns: `type <Name>:`, `enum <Name>:`, `func <Name>:`,
+  // `choice <Name>:`, `typeAlias <Name>`, `metaType <Name>`
+  const typePattern = /\b(?:type|enum|func|choice|typeAlias|metaType)\s+(\w+)/;
+
+  // Check the line where the cursor landed
+  let match = typePattern.exec(lineAt.text);
+
+  // If not on this line, check a few lines around (definition might span lines)
+  if (!match) {
+    for (let delta = -2; delta <= 2; delta++) {
+      if (delta === 0) continue;
+      const lineNum = lineAt.number + delta;
+      if (lineNum < 1 || lineNum > doc.lines) continue;
+      const nearbyLine = doc.line(lineNum);
+      match = typePattern.exec(nearbyLine.text);
+      if (match) break;
+    }
+  }
+
+  if (!match) return null;
+  const typeName = match[1];
+
+  // Scan backwards from the cursor to find the `namespace` declaration
+  const nsPattern = /^namespace\s+([\w.]+)/;
+  let namespace: string | null = null;
+  for (let ln = lineAt.number; ln >= 1; ln--) {
+    const nsMatch = nsPattern.exec(doc.line(ln).text);
+    if (nsMatch) {
+      namespace = nsMatch[1]!;
+      break;
+    }
+  }
+
+  // Skip graph navigation if namespace can't be determined
+  if (!namespace) return null;
+
+  return `${namespace}::${typeName}`;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────────────────────────────────
 
 export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(function SourceEditor(
-  { files, activeFile, onFileSelect, onFileClose, onContentChange, lspClient },
+  {
+    files,
+    activeFile,
+    onFileSelect,
+    onFileClose,
+    onContentChange,
+    lspClient,
+    onNavigateToNode,
+    onEditorViewCreated
+  },
   ref
 ) {
   const [selectedPath, setSelectedPath] = useState<string>(activeFile ?? files[0]?.path ?? '');
@@ -147,6 +220,16 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
   useEffect(() => {
     onContentChangeRef.current = onContentChange;
   }, [onContentChange]);
+
+  const onNavigateToNodeRef = useRef(onNavigateToNode);
+  useEffect(() => {
+    onNavigateToNodeRef.current = onNavigateToNode;
+  }, [onNavigateToNode]);
+
+  const onEditorViewCreatedRef = useRef(onEditorViewCreated);
+  useEffect(() => {
+    onEditorViewCreatedRef.current = onEditorViewCreated;
+  }, [onEditorViewCreated]);
 
   // Initialise content map (new files only)
   useEffect(() => {
@@ -216,6 +299,26 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
         );
       }
 
+      // Task 7: detect go-to-definition navigation and fire onNavigateToNode.
+      // The @codemirror/lsp-client jumpToDefinition dispatches transactions with
+      // userEvent "select.definition". We listen for these and attempt to derive
+      // a graph nodeId from the definition target position in the document.
+      exts.push(
+        EditorView.updateListener.of((update) => {
+          for (const tr of update.transactions) {
+            if (tr.isUserEvent('select.definition')) {
+              // The transaction has already moved the cursor to the definition site.
+              // Try to extract the type name at the cursor position for graph navigation.
+              const pos = tr.newSelection.main.head;
+              const nodeId = extractNodeIdAtPosition(update.state, pos);
+              if (nodeId && onNavigateToNodeRef.current) {
+                onNavigateToNodeRef.current(nodeId);
+              }
+            }
+          }
+        })
+      );
+
       // Wire LSP plugin if client is available
       if (lspClient?.isInitialized()) {
         const lspPlugin = lspClient.getPlugin(pathToUri(filePath));
@@ -251,6 +354,11 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
     });
 
     editorViewRef.current = view;
+
+    // Notify host that a new EditorView was created (for cross-file go-to-definition)
+    if (currentFile?.path) {
+      onEditorViewCreatedRef.current?.(currentFile.path, view);
+    }
 
     return () => {
       view.destroy();

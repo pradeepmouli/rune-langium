@@ -16,8 +16,9 @@ import { useCallback, useMemo } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { TypeSelector } from './TypeSelector.js';
+import { TypeLink } from './TypeLink.js';
 import { CardinalityPicker } from './CardinalityPicker.js';
-import type { TypeOption } from '../../types.js';
+import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -44,6 +45,10 @@ export interface AttributeRowProps {
   onReorder: (fromIndex: number, toIndex: number) => void;
   /** Whether the form is read-only. */
   disabled?: boolean;
+  /** Callback to navigate to a type's graph node. */
+  onNavigateToNode?: NavigateToNodeCallback;
+  /** All loaded graph node IDs for resolving type name to node ID. */
+  allNodeIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +62,9 @@ function AttributeRow({
   onUpdate,
   onRemove,
   onReorder,
-  disabled = false
+  disabled = false,
+  onNavigateToNode,
+  allNodeIds
 }: AttributeRowProps) {
   const { control, getValues, setValue, watch } = useFormContext();
   const prefix = `members.${index}`;
@@ -185,8 +192,14 @@ function AttributeRow({
         )}
       />
 
-      {/* Type selector */}
-      <div data-slot="attribute-type" className="w-32 shrink-0">
+      {/* Type selector + navigation link */}
+      <div data-slot="attribute-type" className="w-32 shrink-0 flex items-center gap-1">
+        <TypeLink
+          typeName={typeName}
+          onNavigateToNode={onNavigateToNode}
+          allNodeIds={allNodeIds}
+          className="text-xs font-mono truncate"
+        />
         <TypeSelector
           value={typeValue}
           options={availableTypes}

@@ -6,7 +6,7 @@
  * and validation errors.
  */
 
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode } from '../../types.js';
@@ -16,6 +16,7 @@ import {
   formatCardinality,
   getRefText
 } from '../../adapters/model-helpers.js';
+import { useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 
 const KIND_LABELS: Record<string, string> = {
   func: 'Function',
@@ -39,12 +40,25 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
   const kindLabel = KIND_LABELS[kind] ?? kind;
   const kindCss = KIND_CSS[kind] ?? '';
   const parentName = getRefText((d as any).superType);
+  const { onNavigateToType, allNodeIds } = useNavigation();
   // For functions, show inputs as members; otherwise show attributes/features
   const members = (
     kind === 'func'
       ? ((d as any).inputs ?? [])
       : ((d as any).attributes ?? (d as any).features ?? [])
   ) as any[];
+
+  const handleTypeClick = useCallback(
+    (e: React.MouseEvent, nodeId: string) => {
+      e.preventDefault();
+      onNavigateToType?.(nodeId);
+    },
+    [onNavigateToType]
+  );
+
+  const outputTypeName = kind === 'func' ? getTypeRefText((d as any).output?.typeCall) : undefined;
+  const outputTargetId = outputTypeName ? resolveTypeNodeId(outputTypeName, allNodeIds) : undefined;
+  const parentTargetId = parentName ? resolveTypeNodeId(parentName, allNodeIds) : undefined;
 
   return (
     <div className={`rune-node ${kindCss}${selected ? ' rune-node-selected' : ''}`}>
@@ -57,7 +71,18 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
         {parentName && (
           <div className="rune-node-parent">
             <span className="rune-node-parent-label">→ </span>
-            <span>{parentName}</span>
+            {parentTargetId && onNavigateToType ? (
+              <button
+                type="button"
+                className="nodrag nopan"
+                data-navigable
+                onClick={(e) => handleTypeClick(e, parentTargetId)}
+              >
+                {parentName}
+              </button>
+            ) : (
+              <span>{parentName}</span>
+            )}
           </div>
         )}
         {members.length > 0 && (
@@ -65,13 +90,26 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
             {members.map((member: any) => {
               const typeName = getTypeRefText(member.typeCall);
               const card = formatCardinality(member.card);
+              const targetId = typeName ? resolveTypeNodeId(typeName, allNodeIds) : undefined;
               return (
                 <div
                   key={member.name}
                   className={`rune-node-member${member.override ? ' rune-node-member-override' : ''}`}
                 >
                   <span className="rune-node-member-name">{member.name}</span>
-                  {typeName && <span className="rune-node-member-type">{typeName}</span>}
+                  {typeName &&
+                    (targetId && onNavigateToType ? (
+                      <button
+                        type="button"
+                        className="rune-node-member-type nodrag nopan"
+                        data-navigable
+                        onClick={(e) => handleTypeClick(e, targetId)}
+                      >
+                        {typeName}
+                      </button>
+                    ) : (
+                      <span className="rune-node-member-type">{typeName}</span>
+                    ))}
                   {card && <span className="rune-node-member-cardinality">{card}</span>}
                 </div>
               );
@@ -82,9 +120,18 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
           <div className="rune-node-members" style={{ borderTop: '1px solid var(--border)' }}>
             <div className="rune-node-member">
               <span className="rune-node-member-name">output</span>
-              <span className="rune-node-member-type">
-                {getTypeRefText((d as any).output?.typeCall)}
-              </span>
+              {outputTargetId && onNavigateToType ? (
+                <button
+                  type="button"
+                  className="rune-node-member-type nodrag nopan"
+                  data-navigable
+                  onClick={(e) => handleTypeClick(e, outputTargetId)}
+                >
+                  {outputTypeName}
+                </button>
+              ) : (
+                <span className="rune-node-member-type">{outputTypeName}</span>
+              )}
             </div>
           </div>
         )}
