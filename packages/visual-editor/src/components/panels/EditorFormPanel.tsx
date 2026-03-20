@@ -204,7 +204,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             availableTypes={availableTypes}
             actions={actions}
-            inheritedGroups={inheritedGroups}
+            allNodes={allNodes}
             renderExpressionEditor={renderExpressionEditor}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
@@ -219,7 +219,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             availableTypes={availableTypes}
             actions={actions}
-            inheritedGroups={inheritedGroups}
+            allNodes={allNodes}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
           />

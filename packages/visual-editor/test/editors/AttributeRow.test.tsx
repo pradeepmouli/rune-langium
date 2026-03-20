@@ -177,13 +177,14 @@ describe('AttributeRow', () => {
     expect(screen.getByText('override')).toBeDefined();
   });
 
-  it('disables remove button for override attributes', () => {
+  it('shows Revert button instead of remove for override attributes', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
+    const onRevert = vi.fn();
     const member = baseMember({ isOverride: true });
 
-    render(
+    const { container } = render(
       <FormWrapper members={[toMemberValues(member)]}>
         <AttributeRow
           index={0}
@@ -192,12 +193,17 @@ describe('AttributeRow', () => {
           onUpdate={onUpdate}
           onRemove={onRemove}
           onReorder={onReorder}
+          isOverride
+          onRevert={onRevert}
         />
       </FormWrapper>
     );
 
-    const removeBtn = screen.getByLabelText(/remove attribute/i);
-    expect(removeBtn).toHaveProperty('disabled', true);
+    // Override rows show a Revert button instead of a remove button
+    const revertBtn = container.querySelector('[data-slot="attribute-revert"]');
+    expect(revertBtn).toBeDefined();
+    expect(revertBtn).not.toBeNull();
+    expect(container.querySelector('[data-slot="attribute-remove"]')).toBeNull();
   });
 
   it('renders drag handle', () => {

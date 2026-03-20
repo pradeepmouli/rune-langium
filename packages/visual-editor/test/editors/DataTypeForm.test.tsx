@@ -11,7 +11,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DataTypeForm } from '../../src/components/editors/DataTypeForm.js';
-import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
+import type {
+  AnyGraphNode,
+  TypeOption,
+  EditorFormActions,
+  TypeGraphNode
+} from '../../src/types.js';
 
 function makeActions(
   overrides: Partial<EditorFormActions<'data'>> = {}
@@ -217,5 +222,198 @@ describe('DataTypeForm', () => {
     );
 
     expect(screen.getByText(/no attributes defined/i)).toBeDefined();
+  });
+});
+
+describe('DataTypeForm – merged inherited attribute list', () => {
+  /** Build a parent node with given attributes, and a child node pointing to it. */
+  function makeInheritanceNodes(
+    childData: AnyGraphNode,
+    parentAttrs: Record<string, unknown>[]
+  ): TypeGraphNode[] {
+    const parentNode = {
+      id: 'test::BaseType',
+      type: 'data',
+      position: { x: 0, y: 0 },
+      data: {
+        $type: 'Data',
+        name: 'BaseType',
+        namespace: 'test',
+        attributes: parentAttrs,
+        conditions: [],
+        annotations: [],
+        synonyms: [],
+        position: { x: 0, y: 0 },
+        hasExternalRefs: false,
+        errors: []
+      }
+    } as TypeGraphNode;
+    const childNode = {
+      id: 'test::Trade',
+      type: 'data',
+      position: { x: 0, y: 0 },
+      data: childData
+    } as TypeGraphNode;
+    return [childNode, parentNode];
+  }
+
+  const baseTypeAttr = {
+    $type: 'Attribute',
+    name: 'id',
+    typeCall: { $type: 'TypeCall', type: { $refText: 'string' } },
+    card: { inf: 1, sup: 1, unbounded: false },
+    override: false
+  };
+
+  /** makeDataNode already has superType: { $refText: 'Event' }; override to 'BaseType'. */
+  function makeChildData(overrides: Record<string, unknown> = {}): AnyGraphNode {
+    const d = makeDataNode();
+    (d as any).superType = { $refText: 'BaseType' };
+    return { ...d, ...overrides } as AnyGraphNode;
+  }
+
+  it('renders inherited attribute rows when allNodes provided', () => {
+    const childData = makeChildData();
+    const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={allNodes}
+      />
+    );
+    const inherited = container.querySelectorAll('[data-slot="inherited-attribute-row"]');
+    expect(inherited.length).toBe(1);
+  });
+
+  it('shows inherited-from label with ancestor name', () => {
+    const childData = makeChildData();
+    const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
+    render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={allNodes}
+      />
+    );
+    expect(screen.getByText(/inherited from BaseType/)).toBeDefined();
+  });
+
+  it('includes inherited count in Attributes label', () => {
+    const childData = makeChildData();
+    const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
+    render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={allNodes}
+      />
+    );
+    // 2 local + 1 inherited = 3
+    expect(screen.getByText(/Attributes \(3\)/)).toBeDefined();
+  });
+
+  it('does not render a separate InheritedMembersSection', () => {
+    const childData = makeChildData();
+    const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={allNodes}
+      />
+    );
+    expect(container.querySelector('[data-slot="inherited-members-section"]')).toBeNull();
+  });
+
+  it('local attribute shadows inherited attribute with same name', () => {
+    const childData = makeChildData({
+      attributes: [
+        {
+          $type: 'Attribute',
+          name: 'id',
+          typeCall: { $type: 'TypeCall', type: { $refText: 'string' } },
+          card: { inf: 1, sup: 1, unbounded: false },
+          override: false
+        }
+      ]
+    });
+    const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={allNodes}
+      />
+    );
+    const local = container.querySelectorAll('[data-slot="attribute-row"]');
+    const inherited = container.querySelectorAll('[data-slot="inherited-attribute-row"]');
+    expect(local.length).toBe(1);
+    expect(inherited.length).toBe(0);
+  });
+
+  it('Override button calls addAttribute', () => {
+    const addAttribute = vi.fn();
+    const childData = makeChildData();
+    const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions({ addAttribute })}
+        allNodes={allNodes}
+      />
+    );
+    const overrideBtn = container.querySelector('[data-slot="attribute-override"]');
+    fireEvent.click(overrideBtn!);
+    expect(addAttribute).toHaveBeenCalledWith('test::Trade', 'id', 'string', '(1..1)');
+  });
+
+  it('after Override, addAttribute action is dispatched for the inherited attribute', () => {
+    const addAttribute = vi.fn();
+    const childData = makeChildData();
+    const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions({ addAttribute })}
+        allNodes={allNodes}
+      />
+    );
+    const overrideBtn = container.querySelector('[data-slot="attribute-override"]');
+    fireEvent.click(overrideBtn!);
+    // The action dispatches addAttribute; when the store updates and re-renders
+    // with the new data, the inherited row will be shadowed by the local one.
+    expect(addAttribute).toHaveBeenCalledWith('test::Trade', 'id', 'string', '(1..1)');
+  });
+
+  it('inherited rows have no remove or drag controls', () => {
+    const childData = makeChildData();
+    const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={allNodes}
+      />
+    );
+    const inheritedRow = container.querySelector('[data-slot="inherited-attribute-row"]')!;
+    expect(inheritedRow.querySelector('[data-slot="attribute-remove"]')).toBeNull();
+    expect(inheritedRow.querySelector('[data-slot="drag-handle"]')).toBeNull();
   });
 });

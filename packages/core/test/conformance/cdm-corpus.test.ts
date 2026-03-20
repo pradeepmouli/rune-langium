@@ -15,7 +15,7 @@ describe('CDM Corpus Conformance (SC-001)', () => {
     expect(fixtures.length).toBeGreaterThan(0);
 
     const results: Array<{ name: string; errors: string[] }> = [];
-    let totalErrors = 0;
+    let _totalErrors = 0;
 
     for (const { name, content } of fixtures) {
       const result = await parse(content, `inmemory:///cdm/${name}`);
@@ -25,7 +25,7 @@ describe('CDM Corpus Conformance (SC-001)', () => {
       ];
       if (errors.length > 0) {
         results.push({ name, errors });
-        totalErrors += errors.length;
+        _totalErrors += errors.length;
       }
     }
 

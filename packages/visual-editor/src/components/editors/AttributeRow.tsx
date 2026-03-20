@@ -49,6 +49,10 @@ export interface AttributeRowProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /** Whether this attribute overrides an inherited member. */
+  isOverride?: boolean;
+  /** Callback to revert an override (remove local, restore inherited). */
+  onRevert?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,12 +68,15 @@ function AttributeRow({
   onReorder,
   disabled = false,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  isOverride: isOverrideProp,
+  onRevert
 }: AttributeRowProps) {
   const { control, getValues, setValue, watch } = useFormContext();
   const prefix = `members.${index}`;
 
-  const isOverride: boolean = watch(`${prefix}.isOverride`);
+  const isOverrideForm: boolean = watch(`${prefix}.isOverride`);
+  const isOverride = isOverrideProp ?? isOverrideForm;
   const typeName: string = watch(`${prefix}.typeName`);
   const cardinality: string = watch(`${prefix}.cardinality`);
 
@@ -228,20 +235,111 @@ function AttributeRow({
         </span>
       )}
 
-      {/* Remove button */}
-      <button
-        data-slot="attribute-remove"
-        type="button"
-        onClick={() => onRemove(index)}
-        disabled={disabled || isOverride}
-        className="ml-auto shrink-0 p-0.5 text-muted-foreground hover:text-destructive
-          disabled:opacity-30 disabled:cursor-not-allowed"
-        aria-label={`Remove attribute ${committedName || 'unnamed'}`}
-      >
-        ✕
-      </button>
+      {/* Remove / Revert button */}
+      {isOverride && onRevert ? (
+        <button
+          data-slot="attribute-revert"
+          type="button"
+          onClick={onRevert}
+          disabled={disabled}
+          className="ml-auto shrink-0 text-xs px-2 py-0.5 border border-border rounded
+            text-muted-foreground hover:text-foreground hover:border-input transition-colors
+            disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label={`Revert override for attribute ${committedName || 'unnamed'}`}
+        >
+          Revert
+        </button>
+      ) : (
+        <button
+          data-slot="attribute-remove"
+          type="button"
+          onClick={() => onRemove(index)}
+          disabled={disabled}
+          className="ml-auto shrink-0 p-0.5 text-muted-foreground hover:text-destructive
+            disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label={`Remove attribute ${committedName || 'unnamed'}`}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
 
 export { AttributeRow };
+
+// ---------------------------------------------------------------------------
+// InheritedAttributeRow — read-only row for an inherited attribute
+// ---------------------------------------------------------------------------
+
+export interface InheritedAttributeRowProps {
+  name: string;
+  typeName: string;
+  cardinality: string;
+  ancestorName: string;
+  onOverride: () => void;
+  onNavigateToNode?: NavigateToNodeCallback;
+  allNodeIds?: string[];
+}
+
+function InheritedAttributeRow({
+  name,
+  typeName,
+  cardinality,
+  ancestorName,
+  onOverride,
+  onNavigateToNode,
+  allNodeIds
+}: InheritedAttributeRowProps) {
+  return (
+    <div
+      data-slot="inherited-attribute-row"
+      data-name={name}
+      className="flex items-center gap-1.5 py-1 px-1.5 rounded border border-transparent
+        bg-muted/20 opacity-70"
+    >
+      {/* Spacer aligns with drag handle */}
+      <span className="w-3 shrink-0" />
+
+      <span
+        data-slot="attribute-name"
+        className="flex-1 min-w-0 px-1.5 py-0.5 text-sm font-mono text-muted-foreground truncate"
+      >
+        {name}
+      </span>
+
+      <div data-slot="attribute-type" className="w-32 shrink-0 flex items-center gap-1">
+        <TypeLink
+          typeName={typeName}
+          onNavigateToNode={onNavigateToNode}
+          allNodeIds={allNodeIds}
+          className="text-xs font-mono truncate"
+        />
+      </div>
+
+      <span data-slot="attribute-cardinality" className="shrink-0 text-xs text-muted-foreground">
+        {cardinality}
+      </span>
+
+      <span
+        data-slot="inherited-from-label"
+        className="text-xs text-muted-foreground italic whitespace-nowrap"
+      >
+        inherited from {ancestorName}
+      </span>
+
+      <button
+        data-slot="attribute-override"
+        type="button"
+        onClick={onOverride}
+        aria-label={`Override inherited attribute ${name} from ${ancestorName}`}
+        className="ml-auto shrink-0 text-xs px-2 py-0.5 border border-border rounded
+          text-muted-foreground hover:text-foreground hover:border-input transition-colors"
+      >
+        Override
+      </button>
+    </div>
+  );
+}
+
+export { InheritedAttributeRow };

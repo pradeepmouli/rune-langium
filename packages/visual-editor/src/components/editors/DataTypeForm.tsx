@@ -27,9 +27,10 @@ import {
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { AttributeRow } from './AttributeRow.js';
+import { InheritedAttributeRow } from './AttributeRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
-import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import {
@@ -46,13 +47,13 @@ import { dataTypeFormSchema, type DataTypeFormValues } from '../../schemas/form-
 import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
+  TypeGraphNode,
   TypeOption,
   EditorFormActions,
   ExpressionEditorSlotProps,
   NavigateToNodeCallback
 } from '../../types.js';
 import type { ReactNode } from 'react';
-import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,8 +91,8 @@ export interface DataTypeFormProps {
   availableTypes: TypeOption[];
   /** Data-specific editor form action callbacks. */
   actions: EditorFormActions<'data'>;
-  /** Inherited member groups from ancestors. */
-  inheritedGroups?: InheritedGroup[];
+  /** All graph nodes (for inherited member resolution via useEffectiveMembers). */
+  allNodes?: TypeGraphNode[];
   /** Optional render-prop for a rich expression editor. */
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
   /** Callback to navigate to a type's graph node. */
@@ -109,7 +110,7 @@ function DataTypeForm({
   data,
   availableTypes,
   actions,
-  inheritedGroups = [],
+  allNodes = [],
   renderExpressionEditor,
   onNavigateToNode,
   allNodeIds
@@ -155,6 +156,30 @@ function DataTypeForm({
   );
 
   // ---- Attribute actions ---------------------------------------------------
+
+  const handleOverrideInherited = useCallback(
+    (attr: { name: string; typeName: string; cardinality: string }) => {
+      append({
+        name: attr.name,
+        typeName: attr.typeName,
+        cardinality: attr.cardinality,
+        isOverride: false
+      });
+      actions.addAttribute(nodeId, attr.name, attr.typeName, attr.cardinality);
+    },
+    [nodeId, actions, append]
+  );
+
+  const handleRevertOverride = useCallback(
+    (attrName: string) => {
+      const fieldIdx = fields.findIndex((f) => f.name === attrName);
+      if (fieldIdx >= 0) {
+        remove(fieldIdx);
+        actions.removeAttribute(nodeId, attrName);
+      }
+    },
+    [nodeId, actions, fields, remove]
+  );
 
   const handleAddAttribute = useCallback(() => {
     append({ name: '', typeName: 'string', cardinality: '(1..1)', isOverride: false });
@@ -271,6 +296,11 @@ function DataTypeForm({
 
   // ---- Resolve parent type option for display ------------------------------
 
+  // ---- Effective members (local + inherited) via hook ----------------------
+
+  const { effective: effectiveAttributes } = useEffectiveMembers(data, allNodes, fields);
+  const inheritedCount = effectiveAttributes.filter((e) => e.source === 'inherited').length;
+
   const d = data as any;
   const parentName = getRefText(d.superType);
 
@@ -345,7 +375,7 @@ function DataTypeForm({
             variant="label"
             className="mb-0 text-muted-foreground flex items-center justify-between"
           >
-            <span>Attributes ({fields.length})</span>
+            <span>Attributes ({fields.length + inheritedCount})</span>
             <button
               data-slot="add-attribute-btn"
               type="button"
@@ -359,21 +389,44 @@ function DataTypeForm({
           </FieldLegend>
 
           <FieldGroup className="gap-1">
-            {fields.map((field, i) => (
-              <AttributeRow
-                key={field.id}
-                index={i}
-                committedName={((committedRef.current as any).attributes ?? [])[i]?.name ?? ''}
-                availableTypes={availableTypes}
-                onUpdate={handleUpdateAttribute}
-                onRemove={handleRemoveAttribute}
-                onReorder={handleReorderAttribute}
-                onNavigateToNode={onNavigateToNode}
-                allNodeIds={allNodeIds}
-              />
-            ))}
+            {effectiveAttributes.map((entry) =>
+              entry.source === 'local' ? (
+                <AttributeRow
+                  key={entry.id}
+                  index={entry.fieldIndex!}
+                  committedName={
+                    ((committedRef.current as any).attributes ?? [])[entry.fieldIndex!]?.name ?? ''
+                  }
+                  availableTypes={availableTypes}
+                  onUpdate={handleUpdateAttribute}
+                  onRemove={handleRemoveAttribute}
+                  onReorder={handleReorderAttribute}
+                  onNavigateToNode={onNavigateToNode}
+                  allNodeIds={allNodeIds}
+                  isOverride={entry.isOverride}
+                  onRevert={entry.isOverride ? () => handleRevertOverride(entry.name) : undefined}
+                />
+              ) : (
+                <InheritedAttributeRow
+                  key={entry.id}
+                  name={entry.name}
+                  typeName={entry.typeName ?? 'string'}
+                  cardinality={entry.cardinality ?? '(1..1)'}
+                  ancestorName={entry.ancestorName ?? ''}
+                  onOverride={() =>
+                    handleOverrideInherited({
+                      name: entry.name,
+                      typeName: entry.typeName ?? 'string',
+                      cardinality: entry.cardinality ?? '(1..1)'
+                    })
+                  }
+                  onNavigateToNode={onNavigateToNode}
+                  allNodeIds={allNodeIds}
+                />
+              )
+            )}
 
-            {fields.length === 0 && (
+            {effectiveAttributes.length === 0 && (
               <p className="text-xs text-muted-foreground italic py-2 text-center">
                 No attributes defined. Click &quot;+ Add Attribute&quot; to create one.
               </p>
@@ -392,9 +445,6 @@ function DataTypeForm({
           onReorder={handleReorderCondition}
           renderExpressionEditor={renderExpressionEditor}
         />
-
-        {/* Inherited Members */}
-        <InheritedMembersSection groups={inheritedGroups} />
 
         {/* Annotations */}
         <AnnotationSection

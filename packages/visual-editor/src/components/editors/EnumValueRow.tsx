@@ -37,6 +37,10 @@ export interface EnumValueRowProps {
   onReorder: (fromIndex: number, toIndex: number) => void;
   /** Whether the row is disabled. */
   disabled?: boolean;
+  /** Whether this local value overrides an inherited value with the same name. */
+  isOverride?: boolean;
+  /** Callback to revert this override, restoring the inherited value. */
+  onRevert?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,7 +55,9 @@ function EnumValueRow({
   onUpdate,
   onRemove,
   onReorder,
-  disabled = false
+  disabled = false,
+  isOverride = false,
+  onRevert
 }: EnumValueRowProps) {
   const { control, getValues } = useFormContext();
   const prefix = `members.${index}`;
@@ -170,19 +176,105 @@ function EnumValueRow({
         )}
       />
 
-      {/* Remove button */}
-      <button
-        type="button"
-        onClick={() => onRemove(nodeId, name)}
-        disabled={disabled}
-        aria-label={`Remove value ${name || 'unnamed'}`}
-        className="shrink-0 p-1 text-muted-foreground hover:text-destructive
-          disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        ✕
-      </button>
+      {/* Override badge */}
+      {isOverride && (
+        <span
+          data-slot="override-badge"
+          className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded
+            bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+        >
+          override
+        </span>
+      )}
+
+      {/* Revert button (for overrides) or Remove button */}
+      {isOverride && onRevert ? (
+        <button
+          type="button"
+          onClick={onRevert}
+          disabled={disabled}
+          aria-label={`Revert override for value ${name || 'unnamed'}`}
+          className="shrink-0 text-xs px-2 py-0.5 border border-border rounded
+            text-muted-foreground hover:text-foreground hover:border-input transition-colors
+            disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Revert
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onRemove(nodeId, name)}
+          disabled={disabled}
+          aria-label={`Remove value ${name || 'unnamed'}`}
+          className="shrink-0 p-1 text-muted-foreground hover:text-destructive
+            disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
 
 export { EnumValueRow };
+
+// ---------------------------------------------------------------------------
+// InheritedEnumValueRow — read-only row for an inherited enum value
+// ---------------------------------------------------------------------------
+
+export interface InheritedEnumValueRowProps {
+  name: string;
+  displayName?: string;
+  ancestorName: string;
+  onOverride: () => void;
+}
+
+function InheritedEnumValueRow({
+  name,
+  displayName,
+  ancestorName,
+  onOverride
+}: InheritedEnumValueRowProps) {
+  return (
+    <div
+      data-slot="inherited-enum-value-row"
+      data-name={name}
+      className="flex items-center gap-1.5 py-1 rounded border border-transparent
+        bg-muted/20 opacity-70"
+      role="listitem"
+    >
+      {/* Spacer aligns with drag handle */}
+      <span className="w-3 shrink-0" />
+
+      <span className="flex-1 min-w-0 px-2 py-1 text-sm text-muted-foreground font-mono truncate">
+        {name}
+      </span>
+
+      {displayName && (
+        <span className="flex-1 min-w-0 px-2 py-1 text-sm text-muted-foreground italic truncate">
+          {displayName}
+        </span>
+      )}
+
+      <span
+        data-slot="inherited-from-label"
+        className="text-xs text-muted-foreground italic whitespace-nowrap"
+      >
+        inherited from {ancestorName}
+      </span>
+
+      <button
+        data-slot="enum-value-override"
+        type="button"
+        onClick={onOverride}
+        aria-label={`Override inherited value ${name} from ${ancestorName}`}
+        className="ml-auto shrink-0 text-xs px-2 py-0.5 border border-border rounded
+          text-muted-foreground hover:text-foreground hover:border-input transition-colors"
+      >
+        Override
+      </button>
+    </div>
+  );
+}
+
+export { InheritedEnumValueRow };

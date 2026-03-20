@@ -27,9 +27,10 @@ import {
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { EnumValueRow } from './EnumValueRow.js';
+import { InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
-import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm } from '@zod-to-form/react';
@@ -40,10 +41,10 @@ import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
   TypeOption,
+  TypeGraphNode,
   EditorFormActions,
   NavigateToNodeCallback
 } from '../../types.js';
-import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,8 +82,8 @@ export interface EnumFormProps {
   availableTypes: TypeOption[];
   /** Enum-specific editor form action callbacks. */
   actions: EditorFormActions<'enum'>;
-  /** Inherited member groups from ancestors. */
-  inheritedGroups?: InheritedGroup[];
+  /** All graph nodes for inherited member resolution. */
+  allNodes?: TypeGraphNode[];
   /** Callback to navigate to a type's graph node. */
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
@@ -98,7 +99,7 @@ function EnumForm({
   data,
   availableTypes,
   actions,
-  inheritedGroups = [],
+  allNodes = [],
   onNavigateToNode,
   allNodeIds
 }: EnumFormProps) {
@@ -145,6 +146,14 @@ function EnumForm({
 
   // ---- Enum value actions --------------------------------------------------
 
+  const handleOverrideInheritedValue = useCallback(
+    (name: string, displayName: string) => {
+      append({ name, typeName: '', cardinality: '', isOverride: false, displayName });
+      actions.addEnumValue(nodeId, name, displayName || undefined);
+    },
+    [nodeId, actions, append]
+  );
+
   const handleAddValue = useCallback(() => {
     append({ name: '', typeName: '', cardinality: '', isOverride: false, displayName: '' });
     actions.addEnumValue(nodeId, '', undefined);
@@ -175,6 +184,17 @@ function EnumForm({
       actions.updateEnumValue(nodeId, oldName, newName, displayName);
     },
     [nodeId, actions]
+  );
+
+  const handleRevertEnumOverride = useCallback(
+    (valueName: string) => {
+      const fieldIdx = fields.findIndex((f) => f.name === valueName);
+      if (fieldIdx >= 0) {
+        remove(fieldIdx);
+        actions.removeEnumValue(nodeId, valueName);
+      }
+    },
+    [nodeId, actions, fields, remove]
   );
 
   // ---- Metadata callbacks --------------------------------------------------
@@ -225,6 +245,9 @@ function EnumForm({
 
   const parentName = getRefText(d.parent);
 
+  const { effective: effectiveValues } = useEffectiveMembers(data, allNodes);
+  const inheritedCount = effectiveValues.filter((e) => e.source === 'inherited').length;
+
   // ---- Resolve parent enum option ------------------------------------------
 
   const parentOptions = availableTypes.filter((opt) => opt.kind === 'enum' && opt.label !== d.name);
@@ -273,6 +296,14 @@ function EnumForm({
           <FieldLegend variant="label" className="mb-0 text-muted-foreground">
             Extends
           </FieldLegend>
+          {parentName && (
+            <TypeLink
+              typeName={parentName}
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
+              className="text-sm font-mono mb-1"
+            />
+          )}
           <TypeSelector
             value={parentValue ?? ''}
             options={parentOptions}
@@ -288,7 +319,7 @@ function EnumForm({
             variant="label"
             className="mb-0 text-muted-foreground flex items-center justify-between"
           >
-            <span>Values ({fields.length})</span>
+            <span>Values ({fields.length + inheritedCount})</span>
             <button
               data-slot="add-value-btn"
               type="button"
@@ -302,29 +333,47 @@ function EnumForm({
           </FieldLegend>
 
           <FieldGroup className="gap-0.5">
-            {fields.map((field, i) => (
-              <EnumValueRow
-                key={field.id}
-                index={i}
-                name={((committedRef.current as any).enumValues ?? [])[i]?.name ?? ''}
-                displayName={((committedRef.current as any).enumValues ?? [])[i]?.display ?? ''}
-                nodeId={nodeId}
-                onUpdate={handleUpdateValue}
-                onRemove={() => handleRemoveValue(i)}
-                onReorder={handleReorderValue}
-              />
-            ))}
+            {effectiveValues.map((entry) =>
+              entry.source === 'local' ? (
+                <EnumValueRow
+                  key={entry.id}
+                  index={entry.fieldIndex!}
+                  name={
+                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''
+                  }
+                  displayName={
+                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ??
+                    ''
+                  }
+                  nodeId={nodeId}
+                  onUpdate={handleUpdateValue}
+                  onRemove={() => handleRemoveValue(entry.fieldIndex!)}
+                  onReorder={handleReorderValue}
+                  isOverride={entry.isOverride}
+                  onRevert={
+                    entry.isOverride ? () => handleRevertEnumOverride(entry.name) : undefined
+                  }
+                />
+              ) : (
+                <InheritedEnumValueRow
+                  key={entry.id}
+                  name={entry.name}
+                  displayName={entry.displayName}
+                  ancestorName={entry.ancestorName!}
+                  onOverride={() =>
+                    handleOverrideInheritedValue(entry.name, entry.displayName ?? '')
+                  }
+                />
+              )
+            )}
 
-            {fields.length === 0 && (
+            {effectiveValues.length === 0 && (
               <p className="text-xs text-muted-foreground italic py-2 text-center">
                 No values defined. Click &quot;+ Add Value&quot; to create one.
               </p>
             )}
           </FieldGroup>
         </FieldSet>
-
-        {/* Inherited Members */}
-        <InheritedMembersSection groups={inheritedGroups} />
 
         {/* Annotations */}
         <AnnotationSection
