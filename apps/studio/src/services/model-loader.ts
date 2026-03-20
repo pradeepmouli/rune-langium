@@ -12,8 +12,7 @@ import type {
   CachedModel,
   CachedFile,
   LoadProgress,
-  LoadedModel,
-  ModelLoadErrorCode
+  LoadedModel
 } from '../types/model-types.js';
 import { ModelLoadError } from '../types/model-types.js';
 import { getCachedModel, getCachedModelIfFresh, setCachedModel } from './model-cache.js';

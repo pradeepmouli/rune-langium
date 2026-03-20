@@ -15,11 +15,12 @@ import type { InheritedGroup } from '../../src/hooks/useInheritedMembers.js';
 // ---------------------------------------------------------------------------
 
 function makeAttrMember(name: string, type = 'string', card = '(1..1)'): Record<string, unknown> {
+  const parsed = parseCardinality(card);
   return {
     $type: 'Attribute',
     name,
     typeCall: { $type: 'TypeCall', type: { $refText: type } },
-    card: parseCardinality(card),
+    card: { inf: parsed.inf, sup: parsed.sup, unbounded: parsed.unbounded },
     override: false
   };
 }

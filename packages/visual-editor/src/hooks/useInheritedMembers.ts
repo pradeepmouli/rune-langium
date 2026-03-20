@@ -17,6 +17,26 @@ import {
   formatCardinality
 } from '../adapters/model-helpers.js';
 
+// Narrow shapes for type-safe access to union members
+interface RefShape {
+  $refText?: string;
+}
+interface DataShape {
+  superType?: RefShape;
+  attributes?: unknown[];
+}
+interface EnumShape {
+  parent?: RefShape;
+  enumValues?: unknown[];
+}
+interface FuncShape {
+  superFunction?: RefShape;
+  inputs?: unknown[];
+}
+interface RecordShape {
+  features?: unknown[];
+}
+
 export interface InheritedGroup {
   /** Name of the ancestor type. */
   ancestorName: string;
@@ -34,11 +54,11 @@ export interface InheritedGroup {
 function getParentName(d: AnyGraphNode): string | undefined {
   switch (d.$type) {
     case 'Data':
-      return getRefText((d as any).superType);
+      return getRefText((d as unknown as DataShape).superType);
     case 'RosettaEnumeration':
-      return getRefText((d as any).parent);
+      return getRefText((d as unknown as EnumShape).parent);
     case 'RosettaFunction':
-      return getRefText((d as any).superFunction);
+      return getRefText((d as unknown as FuncShape).superFunction);
     default:
       return undefined;
   }
@@ -48,11 +68,8 @@ function getParentName(d: AnyGraphNode): string | undefined {
  * Get the member array from a node based on its $type.
  */
 function getMembers(d: AnyGraphNode): unknown[] {
-  return ((d as any).attributes ??
-    (d as any).enumValues ??
-    (d as any).inputs ??
-    (d as any).features ??
-    []) as unknown[];
+  const rec = d as unknown as DataShape & EnumShape & FuncShape & RecordShape;
+  return (rec.attributes ?? rec.enumValues ?? rec.inputs ?? rec.features ?? []) as unknown[];
 }
 
 /**

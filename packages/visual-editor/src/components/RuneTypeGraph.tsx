@@ -97,7 +97,13 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
         setNodes(layoutedNodes);
         setEdges(visibleEdges);
         if (layoutedNodes.length > 0) {
-          setTimeout(() => fitView({ duration: 200 }), 50);
+          setTimeout(() => {
+            try {
+              fitView({ duration: 200 });
+            } catch {
+              /* SSR/test guard */
+            }
+          }, 50);
         }
         return;
       }
@@ -124,7 +130,13 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
 
       // Auto fit-view when visibility changes
       if (layoutedNodes.length > 0 && layoutedNodes.length !== prev.length) {
-        setTimeout(() => fitView({ duration: 200 }), 50);
+        setTimeout(() => {
+          try {
+            fitView({ duration: 200 });
+          } catch {
+            /* SSR/test guard */
+          }
+        }, 50);
       }
     }, [layoutedNodes, visibleEdges, setNodes, setEdges, fitView]);
 

@@ -148,7 +148,7 @@ function EnumForm({
 
   const handleOverrideInheritedValue = useCallback(
     (name: string, displayName: string) => {
-      append({ name, typeName: '', cardinality: '', isOverride: true, displayName });
+      append({ name, typeName: '', cardinality: '', isOverride: false, displayName });
       actions.addEnumValue(nodeId, name, displayName || undefined);
     },
     [nodeId, actions, append]
