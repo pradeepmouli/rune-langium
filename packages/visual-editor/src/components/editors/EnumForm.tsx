@@ -30,7 +30,6 @@ import { EnumValueRow } from './EnumValueRow.js';
 import { InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
-import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { buildMergedEnumValueList } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
@@ -289,6 +288,14 @@ function EnumForm({
           <FieldLegend variant="label" className="mb-0 text-muted-foreground">
             Extends
           </FieldLegend>
+          {parentName && (
+            <TypeLink
+              typeName={parentName}
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
+              className="text-sm font-mono mb-1"
+            />
+          )}
           <TypeSelector
             value={parentValue ?? ''}
             options={parentOptions}
