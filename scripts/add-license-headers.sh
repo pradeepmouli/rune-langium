@@ -60,6 +60,7 @@ while IFS= read -r -d '' file; do
 done < <(find packages -type f \( -name '*.ts' -o -name '*.tsx' \) \
   -not -path '*/node_modules/*' \
   -not -path '*/dist/*' \
+  -not -path '*/generated/*' \
   -not -path '*/.d.ts' \
   -not -name '*.d.ts' \
   -print0)

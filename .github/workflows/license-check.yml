@@ -21,7 +21,7 @@ jobs:
             if ! head -3 "$file" | grep -q "SPDX-License-Identifier: MIT"; then
               MISSING="$MISSING\n  $file"
             fi
-          done < <(find packages -name '*.ts' -o -name '*.tsx' | grep -v node_modules | grep -v '.d.ts')
+          done < <(find packages -name '*.ts' -o -name '*.tsx' | grep -v node_modules | grep -v '.d.ts' | grep -v '/generated/')
           if [ -n "$MISSING" ]; then
             echo "::error::Missing MIT SPDX header in:$MISSING"
             exit 1
