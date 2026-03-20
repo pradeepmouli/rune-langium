@@ -147,6 +147,53 @@ export type MergedEnumValueEntry =
       rawMember: unknown;
     };
 
+interface LocalMemberField {
+  id: string;
+  name?: string;
+}
+
+interface ReferenceTextShape {
+  $refText?: string;
+}
+
+interface TypeCallShape {
+  type?: ReferenceTextShape;
+}
+
+interface CardinalityShape {
+  inf: number;
+  sup?: number;
+  unbounded: boolean;
+}
+
+interface InheritedAttributeMemberShape {
+  name?: string;
+  typeCall?: TypeCallShape;
+  card?: CardinalityShape;
+}
+
+interface InheritedEnumValueMemberShape {
+  name?: string;
+  display?: string;
+  displayName?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getLocalMemberName(field: LocalMemberField): string {
+  return field.name ?? '';
+}
+
+function getInheritedAttributeMember(member: unknown): InheritedAttributeMemberShape | undefined {
+  return isRecord(member) ? (member as InheritedAttributeMemberShape) : undefined;
+}
+
+function getInheritedEnumValueMember(member: unknown): InheritedEnumValueMemberShape | undefined {
+  return isRecord(member) ? (member as InheritedEnumValueMemberShape) : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Builder functions
 // ---------------------------------------------------------------------------
@@ -157,16 +204,16 @@ export type MergedEnumValueEntry =
  * same name as an inherited entry shadows the inherited one.
  */
 export function buildMergedAttributeList(
-  localFields: Array<{ id: string; name?: string }>,
+  localFields: LocalMemberField[],
   inheritedGroups: InheritedGroup[]
 ): MergedAttributeEntry[] {
-  const localNames = new Set(localFields.map((f) => (f as any).name ?? ''));
+  const localNames = new Set(localFields.map(getLocalMemberName));
 
   const localEntries: MergedAttributeEntry[] = localFields.map((f, i) => ({
     isLocal: true as const,
     id: f.id,
     fieldIndex: i,
-    name: (f as any).name ?? ''
+    name: getLocalMemberName(f)
   }));
 
   const inheritedEntries: MergedAttributeEntry[] = [];
@@ -174,16 +221,16 @@ export function buildMergedAttributeList(
 
   inheritedGroups.forEach((group, depth) => {
     for (const member of group.members) {
-      const m = member as any;
-      const name: string = m.name ?? '';
+      const inheritedMember = getInheritedAttributeMember(member);
+      const name = inheritedMember?.name ?? '';
       if (!seenNames.has(name)) {
         seenNames.add(name);
         inheritedEntries.push({
           isLocal: false as const,
           id: `inherited:${group.ancestorName}:${name}`,
           name,
-          typeName: getTypeRefText(m.typeCall) ?? 'string',
-          cardinality: formatCardinality(m.card) || '(1..1)',
+          typeName: getTypeRefText(inheritedMember?.typeCall) ?? 'string',
+          cardinality: formatCardinality(inheritedMember?.card) || '(1..1)',
           inheritedFrom: { ancestorName: group.ancestorName, inheritanceDepth: depth + 1 },
           rawMember: member
         });
@@ -199,16 +246,16 @@ export function buildMergedAttributeList(
  * entries (nearest ancestor first). Local names shadow inherited.
  */
 export function buildMergedEnumValueList(
-  localFields: Array<{ id: string; name?: string }>,
+  localFields: LocalMemberField[],
   inheritedGroups: InheritedGroup[]
 ): MergedEnumValueEntry[] {
-  const localNames = new Set(localFields.map((f) => (f as any).name ?? ''));
+  const localNames = new Set(localFields.map(getLocalMemberName));
 
   const localEntries: MergedEnumValueEntry[] = localFields.map((f, i) => ({
     isLocal: true as const,
     id: f.id,
     fieldIndex: i,
-    name: (f as any).name ?? ''
+    name: getLocalMemberName(f)
   }));
 
   const inheritedEntries: MergedEnumValueEntry[] = [];
@@ -216,15 +263,15 @@ export function buildMergedEnumValueList(
 
   inheritedGroups.forEach((group, depth) => {
     for (const member of group.members) {
-      const m = member as any;
-      const name: string = m.name ?? '';
+      const inheritedMember = getInheritedEnumValueMember(member);
+      const name = inheritedMember?.name ?? '';
       if (!seenNames.has(name)) {
         seenNames.add(name);
         inheritedEntries.push({
           isLocal: false as const,
           id: `inherited:${group.ancestorName}:${name}`,
           name,
-          displayName: m.display ?? m.displayName ?? '',
+          displayName: inheritedMember?.display ?? inheritedMember?.displayName ?? '',
           inheritedFrom: { ancestorName: group.ancestorName, inheritanceDepth: depth + 1 },
           rawMember: member
         });

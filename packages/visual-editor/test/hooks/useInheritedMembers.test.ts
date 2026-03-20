@@ -7,6 +7,7 @@ import {
   buildMergedAttributeList,
   buildMergedEnumValueList
 } from '../../src/hooks/useInheritedMembers.js';
+import { parseCardinality } from '../../src/adapters/model-helpers.js';
 import type { InheritedGroup } from '../../src/hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
@@ -18,7 +19,7 @@ function makeAttrMember(name: string, type = 'string', card = '(1..1)'): Record<
     $type: 'Attribute',
     name,
     typeCall: { $type: 'TypeCall', type: { $refText: type } },
-    card: { inf: 1, sup: 1, unbounded: false },
+    card: parseCardinality(card),
     override: false
   };
 }

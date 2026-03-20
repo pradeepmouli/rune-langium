@@ -160,7 +160,7 @@ function DataTypeForm({
 
   const handleOverrideInherited = useCallback(
     (name: string, typeName: string, cardinality: string) => {
-      append({ name, typeName, cardinality, isOverride: true });
+      append({ name, typeName, cardinality, isOverride: false });
       actions.addAttribute(nodeId, name, typeName, cardinality);
     },
     [nodeId, actions, append]
