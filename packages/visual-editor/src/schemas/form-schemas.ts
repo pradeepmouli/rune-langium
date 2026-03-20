@@ -31,7 +31,7 @@ export const memberSchema = z.object({
   name: z.string(),
   typeName: z.string(),
   cardinality: z.string(),
-  isOverride: z.boolean(),
+  isOverride: z.boolean().optional().default(false),
   displayName: z.string().optional()
 });
 
