@@ -153,3 +153,131 @@ describe('buildMergedEnumValueList', () => {
     expect(result[0]?.id).toBe('inherited:ParentEnum:EUR');
   });
 });
+
+// ---------------------------------------------------------------------------
+// useEffectiveMembers
+// ---------------------------------------------------------------------------
+
+import { renderHook } from '@testing-library/react';
+import { useEffectiveMembers } from '../../src/hooks/useInheritedMembers.js';
+import type { AnyGraphNode, TypeGraphNode } from '../../src/types.js';
+
+function makeDataNode(
+  name: string,
+  superType: string | undefined,
+  attrs: Record<string, unknown>[]
+) {
+  const data = {
+    $type: 'Data',
+    name,
+    namespace: 'test',
+    superType: superType ? { $refText: superType } : undefined,
+    attributes: attrs,
+    position: { x: 0, y: 0 },
+    errors: [],
+    isReadOnly: false,
+    hasExternalRefs: false
+  };
+  return {
+    id: `test::${name}`,
+    type: 'data',
+    position: { x: 0, y: 0 },
+    data
+  } as unknown as TypeGraphNode;
+}
+
+function makeEnumNode(name: string, parent: string | undefined, values: Record<string, unknown>[]) {
+  const data = {
+    $type: 'RosettaEnumeration',
+    name,
+    namespace: 'test',
+    parent: parent ? { $refText: parent } : undefined,
+    enumValues: values,
+    position: { x: 0, y: 0 },
+    errors: [],
+    isReadOnly: false,
+    hasExternalRefs: false
+  };
+  return {
+    id: `test::${name}`,
+    type: 'enum',
+    position: { x: 0, y: 0 },
+    data
+  } as unknown as TypeGraphNode;
+}
+
+describe('useEffectiveMembers', () => {
+  function renderEffective(nodeData: unknown, allNodes: unknown[]) {
+    const { result } = renderHook(() =>
+      useEffectiveMembers(nodeData as AnyGraphNode, allNodes as TypeGraphNode[])
+    );
+    return result.current;
+  }
+
+  it('returns empty effective list for null node', () => {
+    const { effective } = renderEffective(null, []);
+    expect(effective).toEqual([]);
+  });
+
+  it('returns local-only entries when no parent', () => {
+    const node = makeDataNode('Foo', undefined, [makeAttrMember('x', 'string')]);
+    const { effective } = renderEffective(node.data, [node]);
+    expect(effective).toHaveLength(1);
+    expect(effective[0]!.source).toBe('local');
+    expect(effective[0]!.name).toBe('x');
+    expect(effective[0]!.isOverride).toBe(false);
+  });
+
+  it('merges inherited members after local', () => {
+    const parent = makeDataNode('Parent', undefined, [makeAttrMember('a', 'int')]);
+    const child = makeDataNode('Child', 'Parent', [makeAttrMember('b', 'string')]);
+    const { effective } = renderEffective(child.data, [child, parent]);
+    expect(effective).toHaveLength(2);
+    expect(effective[0]).toMatchObject({ name: 'b', source: 'local' });
+    expect(effective[1]).toMatchObject({ name: 'a', source: 'inherited', ancestorName: 'Parent' });
+  });
+
+  it('marks local member as override when it shadows inherited', () => {
+    const parent = makeDataNode('Parent', undefined, [makeAttrMember('x', 'int')]);
+    const child = makeDataNode('Child', 'Parent', [makeAttrMember('x', 'string')]);
+    const { effective, overrideNames } = renderEffective(child.data, [child, parent]);
+    expect(effective).toHaveLength(1);
+    expect(effective[0]).toMatchObject({ name: 'x', source: 'local', isOverride: true });
+    expect(overrideNames.has('x')).toBe(true);
+  });
+
+  it('tracks inheritedNames including shadowed ones', () => {
+    const parent = makeDataNode('Parent', undefined, [makeAttrMember('x', 'int')]);
+    const child = makeDataNode('Child', 'Parent', [makeAttrMember('x', 'string')]);
+    const { inheritedNames } = renderEffective(child.data, [child, parent]);
+    expect(inheritedNames.has('x')).toBe(true);
+  });
+
+  it('works for enum types', () => {
+    const parent = makeEnumNode('ParentEnum', undefined, [
+      makeEnumMember('A'),
+      makeEnumMember('B')
+    ]);
+    const child = makeEnumNode('ChildEnum', 'ParentEnum', [makeEnumMember('C')]);
+    const { effective } = renderEffective(child.data, [child, parent]);
+    expect(effective).toHaveLength(3);
+    expect(effective[0]).toMatchObject({ name: 'C', source: 'local' });
+    expect(effective[1]).toMatchObject({ name: 'A', source: 'inherited' });
+    expect(effective[2]).toMatchObject({ name: 'B', source: 'inherited' });
+  });
+
+  it('revert: removing local override reveals inherited member', () => {
+    const parent = makeDataNode('Parent', undefined, [makeAttrMember('x', 'int')]);
+
+    const childWithOverride = makeDataNode('Child', 'Parent', [makeAttrMember('x', 'string')]);
+    const r1 = renderEffective(childWithOverride.data, [childWithOverride, parent]);
+    expect(r1.effective).toHaveLength(1);
+    expect(r1.effective[0]!.source).toBe('local');
+
+    const childWithoutOverride = makeDataNode('Child', 'Parent', []);
+    const r2 = renderEffective(childWithoutOverride.data, [childWithoutOverride, parent]);
+    expect(r2.effective).toHaveLength(1);
+    expect(r2.effective[0]!.source).toBe('inherited');
+    expect(r2.effective[0]!.name).toBe('x');
+  });
+});

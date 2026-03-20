@@ -298,3 +298,107 @@ export function buildMergedEnumValueList(
 
   return [...localEntries, ...inheritedEntries];
 }
+
+// ---------------------------------------------------------------------------
+// Effective Members — unified view of local + inherited
+// ---------------------------------------------------------------------------
+
+export interface EffectiveEntry {
+  id: string;
+  name: string;
+  source: 'local' | 'inherited';
+  typeName?: string;
+  cardinality?: string;
+  displayName?: string;
+  fieldIndex?: number;
+  ancestorName?: string;
+  inheritanceDepth?: number;
+  isOverride: boolean;
+  rawMember?: unknown;
+}
+
+export interface EffectiveMembersResult {
+  effective: EffectiveEntry[];
+  overrideNames: Set<string>;
+  inheritedNames: Set<string>;
+}
+
+/**
+ * Compute effective members by merging local + inherited.
+ *
+ * Local members come from the node's own member array.
+ * Inherited members come from walking the parent chain.
+ * A local member with the same name as an inherited one is an "override" —
+ * the inherited version is excluded from the effective list.
+ *
+ * Removing a local override causes the inherited member to reappear on re-render.
+ */
+export function useEffectiveMembers(
+  nodeData: AnyGraphNode | null,
+  allNodes: TypeGraphNode[],
+  localFields?: LocalMemberField[]
+): EffectiveMembersResult {
+  const inheritedGroups = useInheritedMembers(nodeData, allNodes);
+
+  return useMemo(() => {
+    if (!nodeData)
+      return { effective: [], overrideNames: new Set<string>(), inheritedNames: new Set<string>() };
+
+    const localMembers = getMembers(nodeData);
+    const localNames = new Set<string>();
+
+    const localEntries: EffectiveEntry[] = localMembers.map((member, i) => {
+      const m = member as InheritedAttributeMemberShape & InheritedEnumValueMemberShape;
+      const name = m.name ?? '';
+      localNames.add(name);
+      return {
+        id: localFields?.[i]?.id ?? `local:${name}:${i}`,
+        name,
+        source: 'local' as const,
+        typeName: getTypeRefText(m.typeCall),
+        cardinality: formatCardinality(m.card),
+        displayName: m.display ?? m.displayName,
+        fieldIndex: i,
+        isOverride: false
+      };
+    });
+
+    const inheritedNames = new Set<string>();
+    const inheritedEntries: EffectiveEntry[] = [];
+    const seenNames = new Set(localNames);
+
+    for (let depth = 0; depth < inheritedGroups.length; depth++) {
+      const group = inheritedGroups[depth]!;
+      for (const member of group.members) {
+        const m = member as InheritedAttributeMemberShape & InheritedEnumValueMemberShape;
+        const name = m.name ?? '';
+        inheritedNames.add(name);
+        if (!seenNames.has(name)) {
+          seenNames.add(name);
+          inheritedEntries.push({
+            id: `inherited:${group.ancestorName}:${name}`,
+            name,
+            source: 'inherited' as const,
+            typeName: getTypeRefText(m.typeCall),
+            cardinality: formatCardinality(m.card),
+            displayName: m.display ?? m.displayName,
+            ancestorName: group.ancestorName,
+            inheritanceDepth: depth + 1,
+            isOverride: false,
+            rawMember: member
+          });
+        }
+      }
+    }
+
+    const overrideNames = new Set<string>();
+    for (const entry of localEntries) {
+      if (inheritedNames.has(entry.name)) {
+        entry.isOverride = true;
+        overrideNames.add(entry.name);
+      }
+    }
+
+    return { effective: [...localEntries, ...inheritedEntries], overrideNames, inheritedNames };
+  }, [nodeData, localFields, inheritedGroups]);
+}
