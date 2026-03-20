@@ -49,6 +49,10 @@ export interface AttributeRowProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /** Whether this attribute overrides an inherited member. */
+  isOverride?: boolean;
+  /** Callback to revert an override (remove local, restore inherited). */
+  onRevert?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,12 +68,15 @@ function AttributeRow({
   onReorder,
   disabled = false,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  isOverride: isOverrideProp,
+  onRevert
 }: AttributeRowProps) {
   const { control, getValues, setValue, watch } = useFormContext();
   const prefix = `members.${index}`;
 
-  const isOverride: boolean = watch(`${prefix}.isOverride`);
+  const isOverrideForm: boolean = watch(`${prefix}.isOverride`);
+  const isOverride = isOverrideProp ?? isOverrideForm;
   const typeName: string = watch(`${prefix}.typeName`);
   const cardinality: string = watch(`${prefix}.cardinality`);
 
@@ -228,18 +235,33 @@ function AttributeRow({
         </span>
       )}
 
-      {/* Remove button */}
-      <button
-        data-slot="attribute-remove"
-        type="button"
-        onClick={() => onRemove(index)}
-        disabled={disabled || isOverride}
-        className="ml-auto shrink-0 p-0.5 text-muted-foreground hover:text-destructive
-          disabled:opacity-30 disabled:cursor-not-allowed"
-        aria-label={`Remove attribute ${committedName || 'unnamed'}`}
-      >
-        ✕
-      </button>
+      {/* Remove / Revert button */}
+      {isOverride && onRevert ? (
+        <button
+          data-slot="attribute-revert"
+          type="button"
+          onClick={onRevert}
+          disabled={disabled}
+          className="ml-auto shrink-0 text-xs px-2 py-0.5 border border-border rounded
+            text-muted-foreground hover:text-foreground hover:border-input transition-colors
+            disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label={`Revert override for attribute ${committedName || 'unnamed'}`}
+        >
+          Revert
+        </button>
+      ) : (
+        <button
+          data-slot="attribute-remove"
+          type="button"
+          onClick={() => onRemove(index)}
+          disabled={disabled}
+          className="ml-auto shrink-0 p-0.5 text-muted-foreground hover:text-destructive
+            disabled:opacity-30 disabled:cursor-not-allowed"
+          aria-label={`Remove attribute ${committedName || 'unnamed'}`}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }

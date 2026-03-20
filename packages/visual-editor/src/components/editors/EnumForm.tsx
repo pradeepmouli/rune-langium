@@ -15,7 +15,7 @@
  * @module
  */
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
 import {
   Field,
@@ -30,7 +30,7 @@ import { EnumValueRow } from './EnumValueRow.js';
 import { InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
-import { buildMergedEnumValueList } from '../../hooks/useInheritedMembers.js';
+import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm } from '@zod-to-form/react';
@@ -41,10 +41,10 @@ import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
   TypeOption,
+  TypeGraphNode,
   EditorFormActions,
   NavigateToNodeCallback
 } from '../../types.js';
-import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -82,8 +82,8 @@ export interface EnumFormProps {
   availableTypes: TypeOption[];
   /** Enum-specific editor form action callbacks. */
   actions: EditorFormActions<'enum'>;
-  /** Inherited member groups from ancestors. */
-  inheritedGroups?: InheritedGroup[];
+  /** All graph nodes for inherited member resolution. */
+  allNodes?: TypeGraphNode[];
   /** Callback to navigate to a type's graph node. */
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
@@ -99,7 +99,7 @@ function EnumForm({
   data,
   availableTypes,
   actions,
-  inheritedGroups = [],
+  allNodes = [],
   onNavigateToNode,
   allNodeIds
 }: EnumFormProps) {
@@ -186,6 +186,17 @@ function EnumForm({
     [nodeId, actions]
   );
 
+  const handleRevertEnumOverride = useCallback(
+    (valueName: string) => {
+      const fieldIdx = fields.findIndex((f) => f.name === valueName);
+      if (fieldIdx >= 0) {
+        remove(fieldIdx);
+        actions.removeEnumValue(nodeId, valueName);
+      }
+    },
+    [nodeId, actions, fields, remove]
+  );
+
   // ---- Metadata callbacks --------------------------------------------------
 
   const commitDefinition = useCallback(
@@ -234,11 +245,8 @@ function EnumForm({
 
   const parentName = getRefText(d.parent);
 
-  const mergedValueList = useMemo(
-    () => buildMergedEnumValueList(fields, inheritedGroups),
-    [fields, inheritedGroups]
-  );
-  const inheritedCount = mergedValueList.filter((e) => !e.isLocal).length;
+  const { effective: effectiveValues } = useEffectiveMembers(data, allNodes);
+  const inheritedCount = effectiveValues.filter((e) => e.source === 'inherited').length;
 
   // ---- Resolve parent enum option ------------------------------------------
 
@@ -325,35 +333,41 @@ function EnumForm({
           </FieldLegend>
 
           <FieldGroup className="gap-0.5">
-            {mergedValueList.map((entry) =>
-              entry.isLocal ? (
+            {effectiveValues.map((entry) =>
+              entry.source === 'local' ? (
                 <EnumValueRow
                   key={entry.id}
-                  index={entry.fieldIndex}
+                  index={entry.fieldIndex!}
                   name={
-                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex]?.name ?? ''
+                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''
                   }
                   displayName={
-                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex]?.display ??
+                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ??
                     ''
                   }
                   nodeId={nodeId}
                   onUpdate={handleUpdateValue}
-                  onRemove={() => handleRemoveValue(entry.fieldIndex)}
+                  onRemove={() => handleRemoveValue(entry.fieldIndex!)}
                   onReorder={handleReorderValue}
+                  isOverride={entry.isOverride}
+                  onRevert={
+                    entry.isOverride ? () => handleRevertEnumOverride(entry.name) : undefined
+                  }
                 />
               ) : (
                 <InheritedEnumValueRow
                   key={entry.id}
                   name={entry.name}
                   displayName={entry.displayName}
-                  ancestorName={entry.inheritedFrom.ancestorName}
-                  onOverride={() => handleOverrideInheritedValue(entry.name, entry.displayName)}
+                  ancestorName={entry.ancestorName!}
+                  onOverride={() =>
+                    handleOverrideInheritedValue(entry.name, entry.displayName ?? '')
+                  }
                 />
               )
             )}
 
-            {mergedValueList.length === 0 && (
+            {effectiveValues.length === 0 && (
               <p className="text-xs text-muted-foreground italic py-2 text-center">
                 No values defined. Click &quot;+ Add Value&quot; to create one.
               </p>

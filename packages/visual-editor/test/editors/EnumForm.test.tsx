@@ -12,7 +12,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { EnumForm } from '../../src/components/editors/EnumForm.js';
-import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
+import type {
+  AnyGraphNode,
+  TypeOption,
+  EditorFormActions,
+  TypeGraphNode
+} from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -194,21 +199,53 @@ describe('EnumForm', () => {
 });
 
 describe('EnumForm – merged inherited enum value list', () => {
-  it('renders inherited enum value rows when inheritedGroups provided', () => {
+  /** Build parent and child enum nodes for inheritance tests. */
+  function makeEnumInheritanceNodes(
+    childData: AnyGraphNode,
+    parentValues: Record<string, unknown>[]
+  ): TypeGraphNode[] {
+    const parentNode = {
+      id: 'test::BaseEnum',
+      type: 'enum',
+      position: { x: 0, y: 0 },
+      data: {
+        $type: 'RosettaEnumeration',
+        name: 'BaseEnum',
+        namespace: 'test',
+        enumValues: parentValues,
+        synonyms: [],
+        annotations: [],
+        position: { x: 0, y: 0 },
+        hasExternalRefs: false,
+        errors: []
+      }
+    } as TypeGraphNode;
+    const childNode = {
+      id: 'node-1',
+      type: 'enum',
+      position: { x: 0, y: 0 },
+      data: childData
+    } as TypeGraphNode;
+    return [childNode, parentNode];
+  }
+
+  /** Make child enum data with parent ref to BaseEnum. */
+  function makeChildEnum(overrides: Record<string, unknown> = {}): AnyGraphNode {
+    return makeEnumData({ parent: { $refText: 'BaseEnum' }, ...overrides });
+  }
+
+  it('renders inherited enum value rows when allNodes provided', () => {
+    const childData = makeChildEnum();
+    const allNodes = makeEnumInheritanceNodes(childData, [
+      { $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }
+    ]);
     const { container } = render(
       <EnumForm
         nodeId="node-1"
-        data={makeEnumData()}
+        data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
-        inheritedGroups={[
-          {
-            ancestorName: 'BaseEnum',
-            namespace: 'test',
-            kind: 'enum',
-            members: [{ $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }]
-          }
-        ]}
+        allNodes={allNodes}
       />
     );
     const inherited = container.querySelectorAll('[data-slot="inherited-enum-value-row"]');
@@ -216,43 +253,35 @@ describe('EnumForm – merged inherited enum value list', () => {
   });
 
   it('shows inherited-from label with ancestor name', () => {
+    const childData = makeChildEnum();
+    const allNodes = makeEnumInheritanceNodes(childData, [
+      { $type: 'RosettaEnumValue', name: 'JPY', display: '' }
+    ]);
     render(
       <EnumForm
         nodeId="node-1"
-        data={makeEnumData()}
+        data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
-        inheritedGroups={[
-          {
-            ancestorName: 'BaseEnum',
-            namespace: 'test',
-            kind: 'enum',
-            members: [{ $type: 'RosettaEnumValue', name: 'JPY', display: '' }]
-          }
-        ]}
+        allNodes={allNodes}
       />
     );
     expect(screen.getByText(/inherited from BaseEnum/)).toBeDefined();
   });
 
   it('includes inherited count in Values label', () => {
+    const childData = makeChildEnum();
+    const allNodes = makeEnumInheritanceNodes(childData, [
+      { $type: 'RosettaEnumValue', name: 'JPY', display: '' },
+      { $type: 'RosettaEnumValue', name: 'CHF', display: '' }
+    ]);
     render(
       <EnumForm
         nodeId="node-1"
-        data={makeEnumData()}
+        data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
-        inheritedGroups={[
-          {
-            ancestorName: 'BaseEnum',
-            namespace: 'test',
-            kind: 'enum',
-            members: [
-              { $type: 'RosettaEnumValue', name: 'JPY', display: '' },
-              { $type: 'RosettaEnumValue', name: 'CHF', display: '' }
-            ]
-          }
-        ]}
+        allNodes={allNodes}
       />
     );
     // 3 local + 2 inherited = 5
@@ -260,23 +289,19 @@ describe('EnumForm – merged inherited enum value list', () => {
   });
 
   it('local value shadows inherited value with same name', () => {
-    const data = makeEnumData({
+    const childData = makeChildEnum({
       enumValues: [{ $type: 'RosettaEnumValue', name: 'GBP', display: '' }]
     });
+    const allNodes = makeEnumInheritanceNodes(childData, [
+      { $type: 'RosettaEnumValue', name: 'GBP', display: 'Pound' }
+    ]);
     const { container } = render(
       <EnumForm
         nodeId="node-1"
-        data={data}
+        data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
-        inheritedGroups={[
-          {
-            ancestorName: 'BaseEnum',
-            namespace: 'test',
-            kind: 'enum',
-            members: [{ $type: 'RosettaEnumValue', name: 'GBP', display: 'Pound' }]
-          }
-        ]}
+        allNodes={allNodes}
       />
     );
     const local = container.querySelectorAll('[data-slot="enum-value-row"]');
@@ -287,20 +312,17 @@ describe('EnumForm – merged inherited enum value list', () => {
 
   it('Override button calls addEnumValue', () => {
     const addEnumValue = vi.fn();
+    const childData = makeChildEnum();
+    const allNodes = makeEnumInheritanceNodes(childData, [
+      { $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }
+    ]);
     const { container } = render(
       <EnumForm
         nodeId="node-1"
-        data={makeEnumData()}
+        data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={{ ...makeActions(), addEnumValue }}
-        inheritedGroups={[
-          {
-            ancestorName: 'BaseEnum',
-            namespace: 'test',
-            kind: 'enum',
-            members: [{ $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }]
-          }
-        ]}
+        allNodes={allNodes}
       />
     );
     const overrideBtn = container.querySelector('[data-slot="enum-value-override"]');
@@ -309,20 +331,17 @@ describe('EnumForm – merged inherited enum value list', () => {
   });
 
   it('inherited rows have no remove control', () => {
+    const childData = makeChildEnum();
+    const allNodes = makeEnumInheritanceNodes(childData, [
+      { $type: 'RosettaEnumValue', name: 'JPY', display: '' }
+    ]);
     const { container } = render(
       <EnumForm
         nodeId="node-1"
-        data={makeEnumData()}
+        data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
-        inheritedGroups={[
-          {
-            ancestorName: 'BaseEnum',
-            namespace: 'test',
-            kind: 'enum',
-            members: [{ $type: 'RosettaEnumValue', name: 'JPY', display: '' }]
-          }
-        ]}
+        allNodes={allNodes}
       />
     );
     const inheritedRow = container.querySelector('[data-slot="inherited-enum-value-row"]')!;
