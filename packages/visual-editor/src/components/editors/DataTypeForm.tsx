@@ -31,6 +31,7 @@ import { InheritedAttributeRow } from './AttributeRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { buildMergedAttributeList } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import {
