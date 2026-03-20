@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: MIT
-// Copyright (c) 2026 Pradeep Mouli
-
 // generated conformance file
 import type { z } from 'zod';
 import type * as AST from '../../../core/src/generated/ast.js';
