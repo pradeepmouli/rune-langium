@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 export * from './badge.js';
 export * from './field.js';
 export * from './input.js';

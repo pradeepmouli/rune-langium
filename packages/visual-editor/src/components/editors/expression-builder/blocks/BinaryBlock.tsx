@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * BinaryBlock — renders binary operations (arithmetic, comparison, logic, etc.).
  *

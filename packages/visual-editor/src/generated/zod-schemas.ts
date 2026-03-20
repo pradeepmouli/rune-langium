@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 // @ts-nocheck — generated file; edit generate-zod.ts to regenerate
 import { z } from 'zod';
 import { zRef } from 'langium-zod';

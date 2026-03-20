@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Tests for ExpressionNode schemas — validate schema shapes,
  * discriminated union parsing, placeholder/unsupported variants.

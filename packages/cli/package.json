@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "CLI tools for the Rune DSL (Langium-based parser)",
   "type": "module",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "bin": {
     "rune-dsl": "./dist/index.js"
   },

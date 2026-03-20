@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Git-based model loader using isomorphic-git.
  * Clones public repositories, discovers .rosetta files, and yields progress.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * MapFormRegistry — Map-backed implementation of ZodFormRegistry (T032).
  *

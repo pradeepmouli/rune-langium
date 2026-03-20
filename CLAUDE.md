@@ -18,3 +18,12 @@ This ensures skills are discoverable from both `.agents/skills/` and `.github/sk
 
 ## Recent Changes
 - 002-reactflow-visual-editor: Added TypeScript 5.9+ (strict mode, ESM)
+
+## Licensing Boundary
+
+This repo uses split licensing:
+- `packages/` = MIT
+- `apps/studio/` = FSL-1.1-ALv2
+
+When creating new source files, always include the correct SPDX header for the directory.
+Never refer to the studio as "open source" — it is "source-available."

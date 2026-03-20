@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Round-trip conformance tests — edit → serialize → re-parse (T003).
  *

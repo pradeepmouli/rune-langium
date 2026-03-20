@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Code generation service integration for Studio.
  * In the browser, code generation is done via HTTP POST to a local codegen server.

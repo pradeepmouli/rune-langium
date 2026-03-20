@@ -1,3 +1,12 @@
+This repository uses a split licensing model:
+
+- Code under packages/ is licensed under the MIT License (below)
+- Code under apps/studio/ is licensed under FSL-1.1-ALv2 (see apps/studio/LICENSE)
+
+All other files (docs, scripts, config, specs) are MIT unless otherwise noted.
+
+---
+
 MIT License
 
 Copyright (c) 2024-present Pradeep Mouli

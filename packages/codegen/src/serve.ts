@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Standalone entry point: starts the codegen HTTP server.
  * Usage: node dist/serve.js [--port 8377] [--cli /path/to/codegen-cli.sh]

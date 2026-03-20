@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * ConditionSection — Reusable conditions editor for Data, Function, and TypeAlias forms.
  *

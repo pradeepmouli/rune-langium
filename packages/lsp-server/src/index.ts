@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * @rune-langium/lsp-server — LSP server for Rune DSL powered by Langium
  * and @lspeasy/server.

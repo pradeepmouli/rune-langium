@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * DataNode — Custom ReactFlow node for Rune DSL `Data` types.
  *

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * ExternalDataSync — synchronises external data prop changes into a
  * react-hook-form FormProvider context (T033).

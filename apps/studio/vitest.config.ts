@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 import path from 'path';
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'url';

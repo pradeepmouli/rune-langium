@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Curated registry of well-known Rune DSL model repositories.
  * @see specs/008-core-editor-features/data-model.md — ModelRegistry, ModelSource

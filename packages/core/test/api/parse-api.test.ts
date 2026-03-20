@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { describe, it, expect } from 'vitest';
 import { parse, parseWorkspace } from '../../src/api/parse.js';
 import type { ParseResult } from '../../src/api/parse.js';

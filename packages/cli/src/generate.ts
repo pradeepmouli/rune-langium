@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { readFile, readdir, stat, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, extname } from 'node:path';
 import { CodegenServiceProxy, KNOWN_GENERATORS } from '@rune-langium/codegen/node';
