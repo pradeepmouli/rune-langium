@@ -16,18 +16,19 @@
 
 .rune-node {
   border-radius: var(--radius-lg, 8px);
-  border: 1px solid var(--color-node-border, rgba(255, 255, 255, 0.06));
-  background: var(--color-node-bg, #181824);
-  font-family: var(--font-display, 'Outfit', sans-serif);
+  border: 1px solid transparent;
+  background: oklch(0.19 0.02 280);
+  font-family: var(--font-sans, 'Inter', ui-sans-serif, system-ui, sans-serif);
   font-size: var(--text-base, 13px);
   min-width: 200px;
   color: var(--color-node-text, #E8E6E1);
-  transition: border-color 0.15s, background-color 0.15s;
+  box-shadow: 0 1px 4px oklch(0 0 0 / 0.4);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .rune-node:hover {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: #1E1E2C;
+  border-color: oklch(1 0 0 / 0.15);
+  box-shadow: 0 2px 12px oklch(0 0 0 / 0.5);
 }
 
 .rune-node-header {
@@ -348,9 +349,11 @@ button[data-navigable]:focus-visible {
 /* ── Selection / search highlight ─────────────────────────────── */
 
 .rune-node-selected {
-  border-color: rgba(0, 212, 170, 0.4);
-  background: rgba(0, 212, 170, 0.06);
-  box-shadow: 0 0 20px rgba(0, 212, 170, 0.06);
+  border-color: oklch(0.78 0.17 168 / 0.5);
+  background: oklch(0.78 0.17 168 / 0.08);
+  box-shadow:
+    0 0 20px oklch(0.78 0.17 168 / 0.12),
+    0 2px 8px oklch(0 0 0 / 0.3);
 }
 
 .rune-node-search-match {
