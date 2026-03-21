@@ -27,7 +27,6 @@
 }
 
 .rune-node:hover {
-  border-color: oklch(1 0 0 / 0.15);
   box-shadow: 0 2px 12px oklch(0 0 0 / 0.5);
 }
 
@@ -105,10 +104,14 @@ button[data-navigable]:focus-visible {
   font-style: italic;
 }
 
-/* ── Data node (blue) ─────────────────────────────────────────── */
+/* ── Data node (teal) ─────────────────────────────────────────── */
+/* Default: subtle tinted border. Hover: stronger. Selected handled by .rune-node-selected. */
 
 .rune-node-data {
-  border-color: var(--color-data, #4299e1);
+  border-color: color-mix(in oklch, var(--color-data, #00D4AA) 25%, transparent);
+}
+.rune-node-data:hover {
+  border-color: color-mix(in oklch, var(--color-data, #00D4AA) 50%, transparent);
 }
 
 .rune-node-data .rune-node-header {
@@ -124,7 +127,10 @@ button[data-navigable]:focus-visible {
 /* ── Choice node (amber) ──────────────────────────────────────── */
 
 .rune-node-choice {
-  border-color: var(--color-choice, #ed8936);
+  border-color: color-mix(in oklch, var(--color-choice, #E8913A) 25%, transparent);
+}
+.rune-node-choice:hover {
+  border-color: color-mix(in oklch, var(--color-choice, #E8913A) 50%, transparent);
 }
 
 .rune-node-choice .rune-node-header {
@@ -137,10 +143,13 @@ button[data-navigable]:focus-visible {
   color: var(--color-choice-text, #c05621);
 }
 
-/* ── Enum node (green) ────────────────────────────────────────── */
+/* ── Enum node (purple) ──────────────────────────────────────── */
 
 .rune-node-enum {
-  border-color: var(--color-enum, #48bb78);
+  border-color: color-mix(in oklch, var(--color-enum, #8B7BF4) 25%, transparent);
+}
+.rune-node-enum:hover {
+  border-color: color-mix(in oklch, var(--color-enum, #8B7BF4) 50%, transparent);
 }
 
 .rune-node-enum .rune-node-header {
@@ -153,10 +162,13 @@ button[data-navigable]:focus-visible {
   color: var(--color-enum-text, #276749);
 }
 
-/* ── Function node (purple) ───────────────────────────────────── */
+/* ── Function node (blue) ───────────────────────────────────── */
 
 .rune-node-func {
-  border-color: var(--color-func, #a855f7);
+  border-color: color-mix(in oklch, var(--color-func, #82AAFF) 25%, transparent);
+}
+.rune-node-func:hover {
+  border-color: color-mix(in oklch, var(--color-func, #82AAFF) 50%, transparent);
 }
 
 .rune-node-func .rune-node-header {
