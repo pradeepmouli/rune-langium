@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rune Studio — Web-native tooling for the Rune DSL</title>
+<meta name="description" content="Explore, edit, and validate CDM models and DRR reporting logic in your browser. No Eclipse. No Java. No setup.">
+<meta property="og:title" content="Rune Studio — Web-native tooling for the Rune DSL">
+<meta property="og:description" content="Explore, edit, and validate CDM models and DRR reporting logic in your browser.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-primary: #0C0C14;
+  --bg-secondary: #12121C;
+  --bg-card: #181824;
+  --bg-card-hover: #1E1E2C;
+  --border: rgba(255,255,255,0.06);
+  --border-accent: rgba(255,255,255,0.1);
+  --text-primary: #E8E6E1;
+  --text-secondary: #8A8A96;
+  --text-tertiary: #5C5C6A;
+  --teal: #00D4AA;
+  --teal-dim: rgba(0,212,170,0.12);
+  --teal-glow: rgba(0,212,170,0.06);
+  --amber: #E8913A;
+  --amber-dim: rgba(232,145,58,0.12);
+  --font-display: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 80px 80px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+section { position: relative; z-index: 1; }
+
+.container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 40px;
+}
+
+/* Nav */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  padding: 20px 0;
+  background: rgba(12,12,20,0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+nav .container { display: flex; align-items: center; justify-content: space-between; }
+.nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.nav-mark {
+  width: 28px; height: 28px;
+  border: 2px solid var(--teal);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+  color: var(--teal); background: var(--teal-dim);
+}
+.nav-name { font-weight: 600; font-size: 15px; color: var(--text-primary); letter-spacing: 0.02em; }
+.nav-links { display: flex; gap: 32px; list-style: none; }
+.nav-links a {
+  color: var(--text-secondary); text-decoration: none;
+  font-size: 13px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--text-primary); }
+
+/* Hero */
+.hero { padding: 180px 0 120px; position: relative; }
+.hero::before {
+  content: ''; position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, var(--teal-glow) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-label {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  color: var(--teal); letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 24px; display: flex; align-items: center; gap: 10px;
+}
+.hero-label::before { content: ''; width: 24px; height: 1px; background: var(--teal); }
+.hero h1 {
+  font-size: clamp(48px, 6vw, 72px); font-weight: 700;
+  line-height: 1.05; letter-spacing: -0.03em; margin-bottom: 28px; max-width: 700px;
+}
+.hero h1 span {
+  background: linear-gradient(135deg, var(--teal), #4AEACC);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.hero-sub {
+  font-size: 18px; color: var(--text-secondary); max-width: 540px;
+  line-height: 1.7; margin-bottom: 48px;
+}
+.hero-actions { display: flex; gap: 16px; align-items: center; }
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 28px; background: var(--teal); color: var(--bg-primary);
+  font-family: var(--font-display); font-size: 14px; font-weight: 600;
+  border: none; border-radius: 8px; cursor: pointer; text-decoration: none;
+  transition: all 0.2s;
+}
+.btn-primary:hover { background: #4AEACC; transform: translateY(-1px); }
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 28px; background: transparent; color: var(--text-primary);
+  font-family: var(--font-display); font-size: 14px; font-weight: 500;
+  border: 1px solid var(--border-accent); border-radius: 8px; cursor: pointer;
+  text-decoration: none; transition: all 0.2s;
+}
+.btn-secondary:hover { border-color: var(--text-secondary); background: rgba(255,255,255,0.03); }
+
+/* Section headers */
+.section-label {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  color: var(--text-tertiary); letter-spacing: 0.14em; text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.section-title { font-size: 36px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 16px; line-height: 1.2; }
+.section-desc { font-size: 16px; color: var(--text-secondary); max-width: 540px; line-height: 1.7; }
+
+/* Why grid */
+.why { padding: 100px 0; border-top: 1px solid var(--border); }
+.why-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 64px; }
+.why-item {
+  padding: 32px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-card); transition: all 0.3s;
+}
+.why-item:hover { background: var(--bg-card-hover); border-color: var(--border-accent); }
+.why-icon {
+  width: 40px; height: 40px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 16px; font-weight: 600; margin-bottom: 20px;
+}
+.why-icon.teal { background: var(--teal-dim); color: var(--teal); }
+.why-icon.amber { background: var(--amber-dim); color: var(--amber); }
+.why-item h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em; }
+.why-item p { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+
+/* Audience cards */
+.audiences { padding: 100px 0; border-top: 1px solid var(--border); }
+.audience-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 64px; }
+.audience-card {
+  padding: 36px 32px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-card); position: relative; overflow: hidden; transition: all 0.3s;
+}
+.audience-card:hover { border-color: var(--border-accent); background: var(--bg-card-hover); transform: translateY(-2px); }
+.audience-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+.audience-card.card-teal::before { background: var(--teal); }
+.audience-card.card-amber::before { background: var(--amber); }
+.audience-card.card-purple::before { background: #8B7BF4; }
+.audience-tag {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 20px;
+}
+.card-teal .audience-tag { color: var(--teal); }
+.card-amber .audience-tag { color: var(--amber); }
+.card-purple .audience-tag { color: #8B7BF4; }
+.audience-card h3 { font-size: 20px; font-weight: 600; margin-bottom: 12px; letter-spacing: -0.01em; }
+.audience-card p { font-size: 14px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 24px; }
+.audience-features { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.audience-features li {
+  font-size: 13px; color: var(--text-secondary);
+  display: flex; align-items: flex-start; gap: 8px;
+}
+.audience-features li::before {
+  content: '\2192'; color: var(--text-tertiary);
+  font-family: var(--font-mono); font-size: 12px; flex-shrink: 0; margin-top: 2px;
+}
+
+/* Screenshot */
+.screenshot { padding: 100px 0; border-top: 1px solid var(--border); }
+.screenshot-frame {
+  margin-top: 64px; border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; background: var(--bg-card);
+}
+.screenshot-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-secondary);
+}
+.screenshot-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-tertiary); opacity: 0.4; }
+.screenshot-dot:first-child { background: #FF6058; opacity: 0.7; }
+.screenshot-dot:nth-child(2) { background: #FFBD2E; opacity: 0.7; }
+.screenshot-dot:nth-child(3) { background: #27CA40; opacity: 0.7; }
+.screenshot-tab {
+  margin-left: 16px; font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-secondary); padding: 4px 12px; background: var(--bg-card); border-radius: 4px;
+}
+.screenshot-frame img {
+  width: 100%; display: block;
+}
+
+/* Code preview */
+.preview { padding: 100px 0; border-top: 1px solid var(--border); }
+.preview-window {
+  margin-top: 64px; border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; background: var(--bg-card);
+}
+.preview-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-secondary);
+}
+.preview-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-tertiary); opacity: 0.4; }
+.preview-dot:first-child { background: #FF6058; opacity: 0.7; }
+.preview-dot:nth-child(2) { background: #FFBD2E; opacity: 0.7; }
+.preview-dot:nth-child(3) { background: #27CA40; opacity: 0.7; }
+.preview-tab {
+  margin-left: 16px; font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-secondary); padding: 4px 12px; background: var(--bg-card); border-radius: 4px;
+}
+.preview-code {
+  padding: 32px; font-family: var(--font-mono); font-size: 13px;
+  line-height: 1.8; overflow-x: auto; white-space: pre;
+}
+.kw { color: #C792EA; }
+.ty { color: #00D4AA; }
+.attr { color: #82AAFF; }
+.str { color: #C3E88D; }
+.cm { color: #5C5C6A; font-style: italic; }
+.num { color: #E8913A; }
+.op { color: #8A8A96; }
+
+/* Ecosystem */
+.ecosystem { padding: 100px 0; border-top: 1px solid var(--border); }
+.eco-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 40px; }
+.eco-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-card); font-size: 13px; font-weight: 500; color: var(--text-secondary);
+}
+.eco-badge .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.dot.green { background: #27CA40; }
+.dot.blue { background: #4A9EFF; }
+.dot.amber { background: var(--amber); }
+.dot.teal { background: var(--teal); }
+
+/* CTA */
+.cta { padding: 120px 0; border-top: 1px solid var(--border); text-align: center; }
+.cta .section-title { max-width: 600px; margin: 0 auto 16px; }
+.cta .section-desc { margin: 0 auto 48px; text-align: center; }
+.cta-actions { display: flex; gap: 16px; justify-content: center; }
+
+/* Footer */
+footer { padding: 40px 0; border-top: 1px solid var(--border); }
+footer .container { display: flex; justify-content: space-between; align-items: center; }
+.footer-left { font-size: 12px; color: var(--text-tertiary); font-family: var(--font-mono); line-height: 1.8; }
+.footer-left a { color: var(--text-secondary); text-decoration: none; }
+.footer-left a:hover { color: var(--text-primary); }
+.footer-badges { display: flex; gap: 12px; }
+.license-badge {
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); color: var(--text-secondary);
+}
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hero-label, .hero h1, .hero-sub, .hero-actions { animation: fadeUp 0.6s ease-out both; }
+.hero h1 { animation-delay: 0.1s; }
+.hero-sub { animation-delay: 0.2s; }
+.hero-actions { animation-delay: 0.3s; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container { padding: 0 24px; }
+  .why-grid { grid-template-columns: 1fr; }
+  .audience-cards { grid-template-columns: 1fr; }
+  .nav-links { display: none; }
+  footer .container { flex-direction: column; gap: 16px; text-align: center; }
+  .footer-badges { flex-wrap: wrap; justify-content: center; }
+}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<nav>
+  <div class="container">
+    <a class="nav-brand" href="#">
+      <div class="nav-mark">R</div>
+      <span class="nav-name">Rune Studio</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#why">Why</a></li>
+      <li><a href="#audiences">Use cases</a></li>
+      <li><a href="#preview">Preview</a></li>
+      <li><a href="https://github.com/pradeepmouli/rune-langium">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-label">Source-available &middot; FSL-1.1-ALv2</div>
+    <h1>Web-native tooling for the <span>Rune DSL</span></h1>
+    <p class="hero-sub">Explore, edit, and validate CDM models and DRR reporting logic &mdash; right in your browser. No Eclipse. No Java. No setup.</p>
+    <div class="hero-actions">
+      <a href="https://github.com/pradeepmouli/rune-langium" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        View on GitHub
+      </a>
+      <a href="#screenshot" class="btn-secondary">See it in action</a>
+    </div>
+  </div>
+</section>
+
+<section class="why" id="why">
+  <div class="container">
+    <div class="section-label">Architecture</div>
+    <h2 class="section-title">Why Rune Studio</h2>
+    <p class="section-desc">A generational shift from Xtext/Eclipse to Langium/TypeScript. The same DSL, built for the modern web.</p>
+    <div class="why-grid">
+      <div class="why-item">
+        <div class="why-icon teal">TS</div>
+        <h3>Built on Langium</h3>
+        <p>Pure TypeScript language server. Runs in the browser, in VS Code, on a server &mdash; anywhere JavaScript runs. No JVM dependency.</p>
+      </div>
+      <div class="why-item">
+        <div class="why-icon amber">LS</div>
+        <h3>Full language server protocol</h3>
+        <p>Autocomplete, validation, go-to-definition, hover info, diagnostics. The complete IDE experience backed by a real LSP implementation.</p>
+      </div>
+      <div class="why-item">
+        <div class="why-icon teal">&#9671;</div>
+        <h3>CDM &amp; DRR out of the box</h3>
+        <p>Load the ISDA Common Domain Model and Digital Regulatory Reporting models directly. Parse, validate, and explore 12 rule sets across 9 jurisdictions.</p>
+      </div>
+      <div class="why-item">
+        <div class="why-icon amber">&#10216;&#10217;</div>
+        <h3>Embeddable architecture</h3>
+        <p>Monaco editor + web worker language server = a drop-in component for any web application. License it for your platform.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="screenshot" id="screenshot">
+  <div class="container">
+    <div class="section-label">Studio</div>
+    <h2 class="section-title">Three-panel IDE in your browser</h2>
+    <p class="section-desc">Visual graph navigation, structured form editing, and a full code editor &mdash; all synchronized in real time.</p>
+    <div class="screenshot-frame">
+      <div class="screenshot-bar">
+        <div class="screenshot-dot"></div>
+        <div class="screenshot-dot"></div>
+        <div class="screenshot-dot"></div>
+        <div class="screenshot-tab">Rune Studio</div>
+      </div>
+      <img src="assets/studio-all-panels.png" alt="Rune Studio three-panel interface showing graph view, form editor, and code editor" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<section class="audiences" id="audiences">
+  <div class="container">
+    <div class="section-label">Use cases</div>
+    <h2 class="section-title">Built for three audiences</h2>
+    <p class="section-desc">Different users, same underlying toolchain. Each gets what they need.</p>
+    <div class="audience-cards">
+      <div class="audience-card card-teal">
+        <div class="audience-tag">RegTech platforms</div>
+        <h3>Embeddable editor</h3>
+        <p>License Rune DSL editing as a web component inside your platform. Full LSP support with a single script tag.</p>
+        <ul class="audience-features">
+          <li>Drop-in Monaco integration</li>
+          <li>Custom validation rules</li>
+          <li>Theming &amp; branding API</li>
+          <li>Commercial license available</li>
+        </ul>
+      </div>
+      <div class="audience-card card-amber">
+        <div class="audience-tag">Developers</div>
+        <h3>Free CDM explorer</h3>
+        <p>Browse types, relationships, and reporting logic visually. The fastest way to understand what's in the model.</p>
+        <ul class="audience-features">
+          <li>Interactive type graph</li>
+          <li>Full-text search across CDM</li>
+          <li>VS Code extension support</li>
+          <li>MIT-licensed core packages</li>
+        </ul>
+      </div>
+      <div class="audience-card card-purple">
+        <div class="audience-tag">Compliance teams</div>
+        <h3>Visual model browser</h3>
+        <p>Understand CDM data types and DRR reporting flows through an interactive interface. No coding required.</p>
+        <ul class="audience-features">
+          <li>Visual graph navigation</li>
+          <li>Plain-language annotations</li>
+          <li>Export to documentation</li>
+          <li>Audit trail support</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="preview" id="preview">
+  <div class="container">
+    <div class="section-label">Editor</div>
+    <h2 class="section-title">Real DSL, real tooling</h2>
+    <p class="section-desc">Full Rune DSL support with intelligent editing &mdash; autocomplete, inline diagnostics, cross-file references.</p>
+    <div class="preview-window">
+      <div class="preview-bar">
+        <div class="preview-dot"></div>
+        <div class="preview-dot"></div>
+        <div class="preview-dot"></div>
+        <div class="preview-tab">party.rosetta</div>
+      </div>
+      <div class="preview-code"><span class="cm">// CDM Party model — type-safe, validated in real-time</span>
+
+<span class="kw">namespace</span> <span class="ty">cdm.base.staticdata.party</span>
+
+<span class="kw">type</span> <span class="ty">Party</span><span class="op">:</span>
+  [<span class="attr">metadata</span> <span class="attr">key</span>]
+  <span class="attr">partyId</span>       <span class="ty">PartyIdentifier</span> (<span class="num">1</span>..<span class="num">*</span>)
+  <span class="attr">name</span>          <span class="ty">FieldWithMetaString</span> (<span class="num">0</span>..<span class="num">1</span>)
+  <span class="attr">businessUnit</span>  <span class="ty">BusinessUnit</span> (<span class="num">0</span>..<span class="num">*</span>)
+  <span class="attr">person</span>        <span class="ty">NaturalPerson</span> (<span class="num">0</span>..<span class="num">*</span>)
+  <span class="attr">account</span>       <span class="ty">Account</span> (<span class="num">0</span>..<span class="num">*</span>)
+
+  <span class="kw">condition</span> <span class="ty">PartyIdentifierExists</span><span class="op">:</span>
+    <span class="attr">partyId</span> <span class="kw">count</span> <span class="op">&gt;=</span> <span class="num">1</span>
+
+<span class="kw">type</span> <span class="ty">PartyIdentifier</span><span class="op">:</span>
+  <span class="attr">identifierType</span>  <span class="ty">PartyIdentifierTypeEnum</span> (<span class="num">0</span>..<span class="num">1</span>)
+  <span class="attr">identifier</span>      <span class="ty">FieldWithMetaString</span> (<span class="num">1</span>..<span class="num">1</span>)</div>
+    </div>
+  </div>
+</section>
+
+<section class="ecosystem">
+  <div class="container">
+    <div class="section-label">Ecosystem</div>
+    <h2 class="section-title">Standing on open foundations</h2>
+    <p class="section-desc">Rune Studio builds on a mature ecosystem of open-source financial infrastructure.</p>
+    <div class="eco-row">
+      <div class="eco-badge"><span class="dot green"></span> FINOS Rune DSL &mdash; Apache 2.0</div>
+      <div class="eco-badge"><span class="dot blue"></span> Eclipse Langium &mdash; MIT</div>
+      <div class="eco-badge"><span class="dot amber"></span> ISDA CDM &mdash; Community Spec</div>
+      <div class="eco-badge"><span class="dot teal"></span> ISDA DRR &mdash; 9 jurisdictions</div>
+    </div>
+    <div class="eco-row" style="margin-top: 12px;">
+      <div class="eco-badge"><span class="dot green"></span> Monaco Editor &mdash; MIT</div>
+      <div class="eco-badge"><span class="dot blue"></span> Language Server Protocol</div>
+      <div class="eco-badge"><span class="dot amber"></span> TypeScript / Node.js</div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="container">
+    <div class="section-label">Get started</div>
+    <h2 class="section-title">Ready to explore?</h2>
+    <p class="section-desc">Clone the repo and run the studio locally, or reach out to discuss embedding or licensing for your platform.</p>
+    <div class="cta-actions">
+      <a href="https://github.com/pradeepmouli/rune-langium" class="btn-primary">Clone the repo</a>
+      <a href="mailto:pradeep@refactory.dev" class="btn-secondary">Contact for licensing</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-left">
+      Rune Studio &middot; by <a href="https://github.com/pradeepmouli">Pradeep Mouli</a><br>
+      Built on <a href="https://github.com/finos/rune-dsl">FINOS Rune DSL</a> &amp; <a href="https://langium.org">Langium</a>
+    </div>
+    <div class="footer-badges">
+      <span class="license-badge">Studio: FSL-1.1-ALv2</span>
+      <span class="license-badge">Core: MIT</span>
+      <span class="license-badge">Upstream: Apache 2.0</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
