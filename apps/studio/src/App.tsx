@@ -12,7 +12,6 @@ import { FileLoader } from './components/FileLoader.js';
 import { ModelLoader } from './components/ModelLoader.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { Separator } from '@rune-langium/design-system/ui/separator';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { FileText, AlertTriangle, XCircle } from 'lucide-react';
 import type { WorkspaceFile } from './services/workspace.js';
