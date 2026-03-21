@@ -572,7 +572,7 @@ function showScreenshot(id) {
   document.querySelectorAll('.screenshot-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.screenshot-tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('panel-' + id).classList.add('active');
-  event.currentTarget.classList.add('active');
+  this.classList.add('active');
 }
 </script>
 
