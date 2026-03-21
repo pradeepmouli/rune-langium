@@ -174,11 +174,6 @@ export function App() {
             <div className="border-t px-8 py-6">
               <ModelLoader />
             </div>
-            <footer className="border-t px-8 py-4 text-xs text-muted-foreground leading-relaxed">
-              <p>ISDA® is a registered trademark of the International Swaps and Derivatives Association, Inc.</p>
-              <p>CDM is hosted by FINOS under the Community Specification License.</p>
-              <p>Rune Studio is not affiliated with or endorsed by ISDA or FINOS.</p>
-            </footer>
           </div>
         )}
 
