@@ -187,6 +187,9 @@ export type EditorStore = EditorState & EditorActions;
 
 let nodeCounter = 0;
 
+/** Sequence counter to cancel in-flight progressive namespace expansion. */
+let expandSeq = 0;
+
 function makeNodeId(namespace: string, name: string): string {
   return `${namespace}::${name}`;
 }
@@ -1342,8 +1345,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
           // Progressive expand: batch namespaces to keep each frame under ~100 nodes.
           // Sort namespaces by node count (smallest first) for faster visual feedback.
+          const nsCountMap = new Map<string, number>();
+          for (const n of nodes) {
+            nsCountMap.set(n.data.namespace, (nsCountMap.get(n.data.namespace) ?? 0) + 1);
+          }
           const nsByCount = allNs
-            .map((ns) => ({ ns, count: nodes.filter((n) => n.data.namespace === ns).length }))
+            .map((ns) => ({ ns, count: nsCountMap.get(ns) ?? 0 }))
             .sort((a, b) => a.count - b.count);
 
           const BATCH_NODE_LIMIT = 100;
@@ -1369,9 +1376,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           }));
 
           // Expand batches progressively using requestAnimationFrame
+          const seq = ++expandSeq;
           let batchIndex = 0;
           const expandNextBatch = () => {
-            if (batchIndex >= batches.length) return;
+            if (expandSeq !== seq || batchIndex >= batches.length) return;
             const batch = batches[batchIndex++]!;
             set((state) => {
               const next = new Set(state.visibility.expandedNamespaces);
@@ -1388,6 +1396,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         collapseAllNamespaces() {
+          expandSeq++; // Cancel any in-flight progressive expansion
           set((state) => ({
             visibility: {
               ...state.visibility,

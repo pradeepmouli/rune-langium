@@ -5,8 +5,9 @@
  * extends/enum-extends edges), lays out each tree independently
  * with dagre, then arranges the groups in a compact grid.
  *
- * Orphan nodes (no inheritance edges) are collected into a
- * separate "orphans" group laid out in a simple grid.
+ * Orphan nodes (no inheritance edges) form individual single-node
+ * groups via union-find and are arranged alongside other groups
+ * in the final grid layout.
  */
 
 import dagre from '@dagrejs/dagre';
