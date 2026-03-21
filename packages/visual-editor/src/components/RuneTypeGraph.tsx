@@ -6,7 +6,15 @@
  * All domain mutations go through the store — this component is view-only.
  */
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useCallback, useMemo } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useCallback,
+  useMemo,
+  useState
+} from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -22,7 +30,10 @@ import type { OnSelectionChangeParams } from '@xyflow/react';
 import { nodeTypes } from './nodes/index.js';
 import { NavigationContext } from './nodes/NavigationContext.js';
 import { edgeTypes } from './edges/index.js';
-import { computeLayout } from '../layout/dagre-layout.js';
+import { GraphContextMenu } from './GraphContextMenu.js';
+import type { ContextMenuState } from './GraphContextMenu.js';
+import { computeLayout, computeLayoutIncremental } from '../layout/dagre-layout.js';
+import { computeLayoutAsync, cancelAsyncLayout } from '../layout/layout-worker.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
@@ -63,22 +74,63 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     const visibility = useEditorStore((s) => s.visibility);
     const selectNode = useEditorStore((s) => s.selectNode);
 
-    // Derive visible nodes/edges from store
+    // Derive visible nodes/edges from store, respecting namespace, kind, and individual visibility
     const { visibleNodes, visibleEdges } = useMemo(() => {
-      const { expandedNamespaces, hiddenNodeIds } = visibility;
+      const { expandedNamespaces, hiddenNodeIds, visibleNodeKinds, visibleEdgeKinds } = visibility;
       const vNodes = storeNodes.filter(
-        (n) => expandedNamespaces.has(n.data.namespace) && !hiddenNodeIds.has(n.id)
+        (n) =>
+          expandedNamespaces.has(n.data.namespace) &&
+          !hiddenNodeIds.has(n.id) &&
+          visibleNodeKinds.has(n.type as import('../types.js').TypeKind)
       );
       const visibleIds = new Set(vNodes.map((n) => n.id));
-      const vEdges = storeEdges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target));
+      const vEdges = storeEdges.filter(
+        (e) =>
+          visibleIds.has(e.source) &&
+          visibleIds.has(e.target) &&
+          visibleEdgeKinds.has((e.data as import('../types.js').EdgeData).kind)
+      );
       return { visibleNodes: vNodes, visibleEdges: vEdges };
     }, [storeNodes, storeEdges, visibility]);
 
-    // Apply layout to visible nodes
-    const layoutedNodes = useMemo(() => {
-      if (visibleNodes.length === 0) return [];
-      return computeLayout(visibleNodes, visibleEdges, mergedConfig.layout);
+    // Apply layout to visible nodes.
+    // Small graphs (<500 nodes): synchronous incremental layout (cache-first).
+    // Large graphs (>=500 nodes): async layout off the main thread.
+    const isInitialLoad = useRef(true);
+    const ASYNC_LAYOUT_THRESHOLD = 500;
+    const [asyncLayoutResult, setAsyncLayoutResult] = useState<TypeGraphNode[]>([]);
+    const asyncLayoutPending = useRef(false);
+
+    // Synchronous path for small/medium graphs
+    const syncLayoutedNodes = useMemo(() => {
+      if (visibleNodes.length === 0 || visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD) return [];
+      if (isInitialLoad.current) {
+        isInitialLoad.current = false;
+        return computeLayout(visibleNodes, visibleEdges, mergedConfig.layout);
+      }
+      return computeLayoutIncremental(visibleNodes, visibleEdges, mergedConfig.layout);
     }, [visibleNodes, visibleEdges, mergedConfig.layout]);
+
+    // Async path for large graphs
+    useEffect(() => {
+      if (visibleNodes.length < ASYNC_LAYOUT_THRESHOLD) {
+        asyncLayoutPending.current = false;
+        return;
+      }
+      asyncLayoutPending.current = true;
+      cancelAsyncLayout();
+      computeLayoutAsync(visibleNodes, visibleEdges, mergedConfig.layout).then((result) => {
+        if (result) {
+          setAsyncLayoutResult(result);
+          asyncLayoutPending.current = false;
+          isInitialLoad.current = false;
+        }
+      });
+      return () => cancelAsyncLayout();
+    }, [visibleNodes, visibleEdges, mergedConfig.layout]);
+
+    const layoutedNodes =
+      visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD ? asyncLayoutResult : syncLayoutedNodes;
 
     const [nodes, setNodes, onNodesChange] = useNodesState<TypeGraphNode>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<TypeGraphEdge>([]);
@@ -250,6 +302,28 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
       [nodes, edges, storeNodes, storeEdges, mergedConfig, fitView, setCenter, setNodes, callbacks]
     );
 
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+    const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: TypeGraphNode) => {
+      event.preventDefault();
+      setContextMenu({ x: event.clientX, y: event.clientY, node });
+    }, []);
+
+    const handlePaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
+      event.preventDefault();
+      setContextMenu({ x: event.clientX, y: event.clientY, node: null });
+    }, []);
+
+    const handleCloseContextMenu = useCallback(() => {
+      setContextMenu(null);
+    }, []);
+
+    // Close context menu on pane click
+    const handlePaneClick = useCallback(() => {
+      setContextMenu(null);
+    }, []);
+
     return (
       <div className={`rune-type-graph ${className ?? ''}`}>
         <NavigationContext.Provider value={navigationCtx}>
@@ -260,6 +334,9 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
             onEdgesChange={onEdgesChange}
             onSelectionChange={handleSelectionChange}
             onNodeDoubleClick={handleNodeDoubleClick}
+            onNodeContextMenu={handleNodeContextMenu}
+            onPaneContextMenu={handlePaneContextMenu}
+            onPaneClick={handlePaneClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
@@ -273,6 +350,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
           </ReactFlow>
         </NavigationContext.Provider>
+        <GraphContextMenu state={contextMenu} onClose={handleCloseContextMenu} />
       </div>
     );
   }

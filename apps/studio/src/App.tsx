@@ -14,6 +14,7 @@ import { EditorPage } from './pages/EditorPage.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
+import { FileText, AlertTriangle, XCircle } from 'lucide-react';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
@@ -131,26 +132,33 @@ export function App() {
 
   return (
     <div className="studio-app flex flex-col h-full font-sans text-foreground bg-background">
-      <header className="flex items-center justify-between px-4 py-2 bg-card min-h-[44px]">
-        <h1 className="text-lg font-semibold text-foreground">Rune DSL Studio</h1>
+      <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
+        <div className="studio-brand">
+          <div className="studio-brand__mark">R</div>
+          <span className="studio-brand__name">Rune Studio</span>
+        </div>
         {files.length > 0 && (
           <div className="flex items-center gap-3">
-            <span className="text-base text-muted-foreground">
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <FileText className="w-3.5 h-3.5" />
               {userFiles.length} file(s)
-              {hasErrors && (
-                <span className="text-destructive" title="Parse errors detected">
-                  {' '}
-                  · {errors.size} with errors
-                </span>
-              )}
             </span>
+            {hasErrors && (
+              <span
+                className="flex items-center gap-1.5 text-sm text-destructive"
+                title="Parse errors detected"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                {errors.size} with errors
+              </span>
+            )}
             <Button variant="secondary" size="sm" onClick={handleReset} title="Close all files">
+              <XCircle className="w-3.5 h-3.5 mr-1" />
               Close
             </Button>
           </div>
         )}
       </header>
-      <Separator />
 
       <main className="flex-1 overflow-hidden relative">
         {loading && (

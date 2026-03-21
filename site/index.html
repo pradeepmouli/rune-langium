@@ -197,8 +197,20 @@ nav .container { display: flex; align-items: center; justify-content: space-betw
 
 /* Screenshot */
 .screenshot { padding: 100px 0; border-top: 1px solid var(--border); }
+.screenshot-tabs {
+  display: flex; gap: 8px; margin-top: 64px; margin-bottom: 24px;
+}
+.screenshot-tab-btn {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 10px 20px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-card); color: var(--text-secondary);
+  cursor: pointer; transition: all 0.2s;
+}
+.screenshot-tab-btn:hover { border-color: var(--border-accent); color: var(--text-primary); }
+.screenshot-tab-btn.active { background: var(--teal-dim); border-color: var(--teal); color: var(--teal); }
 .screenshot-frame {
-  margin-top: 64px; border: 1px solid var(--border); border-radius: 12px;
+  border: 1px solid var(--border); border-radius: 12px;
   overflow: hidden; background: var(--bg-card);
 }
 .screenshot-bar {
@@ -209,10 +221,12 @@ nav .container { display: flex; align-items: center; justify-content: space-betw
 .screenshot-dot:first-child { background: #FF6058; opacity: 0.7; }
 .screenshot-dot:nth-child(2) { background: #FFBD2E; opacity: 0.7; }
 .screenshot-dot:nth-child(3) { background: #27CA40; opacity: 0.7; }
-.screenshot-tab {
+.screenshot-bar-label {
   margin-left: 16px; font-family: var(--font-mono); font-size: 12px;
   color: var(--text-secondary); padding: 4px 12px; background: var(--bg-card); border-radius: 4px;
 }
+.screenshot-panel { display: none; }
+.screenshot-panel.active { display: block; }
 .screenshot-frame img {
   width: 100%; display: block;
 }
@@ -368,14 +382,27 @@ footer .container { display: flex; justify-content: space-between; align-items: 
     <div class="section-label">Studio</div>
     <h2 class="section-title">Three-panel IDE in your browser</h2>
     <p class="section-desc">Visual graph navigation, structured form editing, and a full code editor &mdash; all synchronized in real time.</p>
+    <div class="screenshot-tabs">
+      <button class="screenshot-tab-btn active" onclick="showScreenshot('landing')">Load models</button>
+      <button class="screenshot-tab-btn" onclick="showScreenshot('graph')">Graph view</button>
+      <button class="screenshot-tab-btn" onclick="showScreenshot('editor')">Graph + editor</button>
+    </div>
     <div class="screenshot-frame">
       <div class="screenshot-bar">
         <div class="screenshot-dot"></div>
         <div class="screenshot-dot"></div>
         <div class="screenshot-dot"></div>
-        <div class="screenshot-tab">Rune Studio</div>
+        <div class="screenshot-bar-label">Rune Studio</div>
       </div>
-      <img src="assets/studio-all-panels.png" alt="Rune Studio three-panel interface showing graph view, form editor, and code editor" loading="lazy">
+      <div class="screenshot-panel active" id="panel-landing">
+        <img src="assets/screenshot-landing.png" alt="Rune Studio landing screen with CDM, FpML, and Rune DSL model loading" loading="lazy">
+      </div>
+      <div class="screenshot-panel" id="panel-graph">
+        <img src="assets/screenshot-graph.png" alt="Rune Studio graph view showing CDM type relationships with interactive nodes" loading="lazy">
+      </div>
+      <div class="screenshot-panel" id="panel-editor">
+        <img src="assets/screenshot-editor.png" alt="Rune Studio three-panel view with graph navigation and code editor" loading="lazy">
+      </div>
     </div>
   </div>
 </section>
@@ -501,6 +528,15 @@ footer .container { display: flex; justify-content: space-between; align-items: 
     </div>
   </div>
 </footer>
+
+<script>
+function showScreenshot(id) {
+  document.querySelectorAll('.screenshot-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.screenshot-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+</script>
 
 </body>
 </html>
