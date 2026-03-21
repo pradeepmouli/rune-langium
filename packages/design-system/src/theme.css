@@ -6,8 +6,7 @@
  *  1. shadcn @theme inline bridge (--color-* → var(--*))
  *  2. Domain-specific color tokens (data/choice/enum/func/status)
  *  3. :root / .dark color palettes (Refactory Dark)
- *  4. Base layer defaults
- *  5. Panel, graph node, and diagnostic styling
+ *  4. Base layer defaults (typography, borders)
  */
 
 @custom-variant dark (&:is(.dark *));

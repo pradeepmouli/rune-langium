@@ -62,11 +62,11 @@
 }
 
 .rune-node-member-name {
-  color: var(--color-node-text, #1a202c);
+  color: var(--color-node-text, #E8E6E1);
 }
 
 .rune-node-member-type {
-  color: var(--color-node-member-type, #718096);
+  color: var(--color-node-member-type, #8A8A96);
   font-style: italic;
 }
 
@@ -90,7 +90,7 @@ button[data-navigable]:focus-visible {
 }
 
 .rune-node-member-type[data-navigable] {
-  color: var(--color-node-member-type, #718096);
+  color: var(--color-node-member-type, #8A8A96);
   font-style: italic;
 }
 
@@ -187,7 +187,7 @@ button[data-navigable]:focus-visible {
 }
 
 .rune-edge-attribute-ref {
-  stroke: var(--color-edge-ref, #718096);
+  stroke: var(--color-edge-ref, #5C5C6A);
   stroke-width: 1.5;
   stroke-dasharray: 5 3;
 }
@@ -205,11 +205,11 @@ button[data-navigable]:focus-visible {
 /* Edge label (positioned by EdgeLabelRenderer) */
 .rune-edge-label {
   font-size: var(--text-xs, 11px);
-  background: var(--color-edge-label-bg, #ffffff);
+  background: var(--color-edge-label-bg, #181824);
   padding: var(--space-1, 1px) var(--space-2, 4px);
   border-radius: var(--radius-sm, 3px);
-  border: 1px solid var(--color-edge-label-border, #e2e8f0);
-  color: var(--color-node-text, #1a202c);
+  border: 1px solid var(--color-edge-label-border, rgba(255, 255, 255, 0.06));
+  color: var(--color-node-text, #E8E6E1);
   pointer-events: all;
 }
 

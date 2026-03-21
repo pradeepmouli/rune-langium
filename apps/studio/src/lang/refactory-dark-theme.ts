@@ -19,7 +19,7 @@ export const refactoryDarkTheme = EditorView.theme(
     },
     '.cm-content': {
       caretColor: '#00D4AA',
-      fontFamily: '"JetBrains Mono", monospace',
+      fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
       fontSize: '13px',
       lineHeight: '1.6'
     },
@@ -88,16 +88,7 @@ export const refactoryDarkHighlightStyle = HighlightStyle.define([
   { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: '#00D4AA' },
   { tag: [t.definition(t.name), t.separator], color: '#E8E6E1' },
   {
-    tag: [
-      t.typeName,
-      t.className,
-      t.number,
-      t.changed,
-      t.annotation,
-      t.modifier,
-      t.self,
-      t.namespace
-    ],
+    tag: [t.typeName, t.className, t.changed, t.annotation, t.modifier, t.self, t.namespace],
     color: '#00D4AA'
   },
   {
