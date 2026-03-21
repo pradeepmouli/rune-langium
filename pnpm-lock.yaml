@@ -122,8 +122,8 @@ importers:
         specifier: ^8.0.3
         version: 8.0.3
       isomorphic-git:
-        specifier: ^1.37.3
-        version: 1.37.3
+        specifier: ^1.37.4
+        version: 1.37.4
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -575,6 +575,10 @@ packages:
 
   '@babel/runtime@7.28.6':
     resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/runtime@7.29.2':
+    resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
     engines: {node: '>=6.9.0'}
 
   '@babel/template@7.28.6':
@@ -3485,8 +3489,8 @@ packages:
     resolution: {integrity: sha512-6B3tLtFqtQS4ekarvLVMZ+X+VlvQekbe4taUkf/rhVO3d/h0M2rfARm/pXLcPEsjjMsFgrFgSrhQIxcSVrBz8w==}
     engines: {node: '>=18'}
 
-  isomorphic-git@1.37.3:
-    resolution: {integrity: sha512-F2iwcB/pTniPKXNv5BfHWGrYnXLqlKitm3QAcV63M9DhP5lpmbhel5yNmtiaZ//2lfgNEU/r9muXHD6Oonxg8w==}
+  isomorphic-git@1.37.4:
+    resolution: {integrity: sha512-fNnCEJtI1refeVxysiuqGP9cubUoLibUS6UIDUWSy5Op6sVdFwGv/SpzfhMFiDkfgYoXKqurZ+LVxEeesy+T0Q==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -5067,6 +5071,8 @@ snapshots:
       - supports-color
 
   '@babel/runtime@7.28.6': {}
+
+  '@babel/runtime@7.29.2': {}
 
   '@babel/template@7.28.6':
     dependencies:
@@ -6718,7 +6724,7 @@ snapshots:
   '@testing-library/dom@10.4.1':
     dependencies:
       '@babel/code-frame': 7.29.0
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       '@types/aria-query': 5.0.4
       aria-query: 5.3.0
       dom-accessibility-api: 0.5.16
@@ -7866,7 +7872,7 @@ snapshots:
 
   isexe@3.1.5: {}
 
-  isomorphic-git@1.37.3:
+  isomorphic-git@1.37.4:
     dependencies:
       async-lock: 1.4.1
       clean-git-ref: 2.0.1
