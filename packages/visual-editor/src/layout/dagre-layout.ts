@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Dagre-based auto-layout engine for ReactFlow graphs.
  *

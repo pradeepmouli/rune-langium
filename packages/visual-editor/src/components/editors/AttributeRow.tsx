@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * AttributeRow — inline editable row for a single Data type attribute.
  *

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * DataTypeForm — structured editor form for a Data type node.
  *

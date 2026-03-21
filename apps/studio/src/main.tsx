@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 import { Buffer } from 'buffer';
 // isomorphic-git requires global Buffer in the browser
 (globalThis as any).Buffer = Buffer;

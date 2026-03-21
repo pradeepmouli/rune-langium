@@ -57,5 +57,5 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "license": "MIT"
+  "license": "FSL-1.1-ALv2"
 }

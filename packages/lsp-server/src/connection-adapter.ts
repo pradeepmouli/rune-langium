@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Connection adapter — makes an @lspeasy/server LSPServer look like a
  * vscode-languageserver Connection so Langium's `startLanguageServer()`

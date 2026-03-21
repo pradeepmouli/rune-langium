@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Types for code generation via rosetta-code-generators.
  * @see specs/008-core-editor-features/data-model.md

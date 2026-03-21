@@ -88,7 +88,16 @@ Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT - See [LICENSE](LICENSE) for details
+This project uses a split licensing model:
+
+- **Core packages** (`packages/`) — [MIT License](./LICENSE)
+- **Rune Studio** (`apps/studio/`) — [FSL-1.1-ALv2](./apps/studio/LICENSE) (Functional Source License v1.1, Apache 2.0 Future License)
+
+The FSL allows you to use, copy, modify, and redistribute the Studio source code for any purpose **except** offering a commercial product that competes with Rune Studio. Each release converts to Apache 2.0 two years after its release date.
+
+The core grammar, language server, and library packages are and will remain MIT-licensed.
+
+See [NOTICE](./NOTICE) for third-party attribution.
 
 ---
 

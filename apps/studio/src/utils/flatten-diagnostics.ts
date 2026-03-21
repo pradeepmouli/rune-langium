@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Flatten diagnostics grouped by file into a flat row array for virtualization.
  */

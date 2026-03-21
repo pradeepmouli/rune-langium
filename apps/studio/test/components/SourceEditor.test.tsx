@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * SourceEditor component tests (T018, T019, T022, T023).
  *

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import type { Choice, ChoiceOption, Condition } from '../generated/ast.js';
 
 /**

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import type { AstNode, LangiumCoreServices } from 'langium';
 import type { ParseResult, ParserOptions } from 'langium';
 import { LangiumParser, createParser } from 'langium';

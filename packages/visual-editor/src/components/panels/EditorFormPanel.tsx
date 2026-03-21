@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * EditorFormPanel — dispatch component that renders the appropriate editor
  * form based on the selected node's type kind.

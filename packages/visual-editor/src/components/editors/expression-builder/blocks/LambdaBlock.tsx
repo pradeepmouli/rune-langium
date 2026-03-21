@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * LambdaBlock — renders lambda operations (filter, map, reduce, sort, etc.).
  *

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * FileLoader — Drag-and-drop + file picker for loading .rosetta files (T084, T099).
  *

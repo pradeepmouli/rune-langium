@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import '@testing-library/jest-dom/vitest';
 
 // jsdom does not implement ResizeObserver — required by ReactFlow

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * expression-node-to-dsl — Serialize an ExpressionNode tree to Rune DSL text.
  *

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, extname } from 'node:path';
 import { createRuneDslServices } from '@rune-langium/core';
