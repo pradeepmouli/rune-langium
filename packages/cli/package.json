@@ -4,6 +4,16 @@
   "description": "CLI tools for the Rune DSL (Langium-based parser)",
   "type": "module",
   "license": "Apache-2.0",
+  "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/cli",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pradeepmouli/rune-langium.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/pradeepmouli/rune-langium/issues"
+  },
+  "keywords": ["rune", "rosetta", "dsl", "langium", "cli", "cdm", "parser"],
   "bin": {
     "rune-dsl": "./dist/index.js"
   },
