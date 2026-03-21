@@ -678,6 +678,88 @@
   border-top: 1px solid oklch(1 0 0 / 0.06);
 }
 
+/* ── Glass toolbar buttons ─────────────────────────────────── */
+/* Override default/secondary button variants inside the toolbar
+   with translucent glass treatment, glow hover, and lift.
+   Uses !important to override Tailwind utility classes from CVA. */
+.glass-toolbar [data-slot="button"],
+.glass-toolbar [data-slot="button"][data-variant="secondary"] {
+  background: oklch(1 0 0 / 0.04) !important;
+  border: 1px solid oklch(1 0 0 / 0.08) !important;
+  color: oklch(0.75 0.01 280) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
+}
+
+.glass-toolbar [data-slot="button"]:hover,
+.glass-toolbar [data-slot="button"][data-variant="secondary"]:hover {
+  background: oklch(1 0 0 / 0.08) !important;
+  border-color: oklch(1 0 0 / 0.15) !important;
+  color: oklch(0.92 0.01 280) !important;
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 8px oklch(0 0 0 / 0.3),
+    0 0 12px oklch(0.78 0.17 168 / 0.08);
+}
+
+.glass-toolbar [data-slot="button"]:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
+}
+
+/* Active toggle state — teal glow ring */
+.glass-toolbar [data-slot="button"][data-variant="default"] {
+  background: oklch(0.78 0.17 168 / 0.12) !important;
+  border-color: oklch(0.78 0.17 168 / 0.35) !important;
+  color: oklch(0.78 0.17 168) !important;
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 0.2),
+    0 0 8px oklch(0.78 0.17 168 / 0.15),
+    inset 0 0 12px oklch(0.78 0.17 168 / 0.06);
+}
+
+.glass-toolbar [data-slot="button"][data-variant="default"]:hover {
+  background: oklch(0.78 0.17 168 / 0.18) !important;
+  border-color: oklch(0.78 0.17 168 / 0.5) !important;
+  color: oklch(0.85 0.15 168) !important;
+  box-shadow:
+    0 2px 8px oklch(0 0 0 / 0.3),
+    0 0 16px oklch(0.78 0.17 168 / 0.25),
+    inset 0 0 16px oklch(0.78 0.17 168 / 0.08);
+}
+
+/* Apply same glass treatment to header buttons */
+.glass-header [data-slot="button"] {
+  background: oklch(1 0 0 / 0.04) !important;
+  border: 1px solid oklch(1 0 0 / 0.08) !important;
+  color: oklch(0.75 0.01 280) !important;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
+}
+
+.glass-header [data-slot="button"]:hover {
+  background: oklch(1 0 0 / 0.08) !important;
+  border-color: oklch(1 0 0 / 0.15) !important;
+  color: oklch(0.92 0.01 280) !important;
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 8px oklch(0 0 0 / 0.3),
+    0 0 10px oklch(0.78 0.17 168 / 0.08);
+}
+
+/* Glass popover content (filter menu, export menu) */
+[data-slot="popover-content"] {
+  background: oklch(0.14 0.02 280 / 0.92) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: oklch(1 0 0 / 0.1) !important;
+  box-shadow:
+    0 8px 32px oklch(0 0 0 / 0.5),
+    0 0 1px oklch(1 0 0 / 0.1);
+}
+
 /* ── Branded header ─────────────────────────────────────────── */
 .studio-brand {
   display: flex;

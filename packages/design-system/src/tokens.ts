@@ -54,6 +54,7 @@ export const colors = {
 
 export const fonts = {
   display: '"Outfit", ui-sans-serif, system-ui, sans-serif',
+  sans: '"Inter", ui-sans-serif, system-ui, -apple-system, sans-serif',
   mono: '"JetBrains Mono", ui-monospace, SFMono-Regular, monospace'
 } as const;
 

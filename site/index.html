@@ -383,9 +383,9 @@ footer .container { display: flex; justify-content: space-between; align-items: 
     <h2 class="section-title">Three-panel IDE in your browser</h2>
     <p class="section-desc">Visual graph navigation, structured form editing, and a full code editor &mdash; all synchronized in real time.</p>
     <div class="screenshot-tabs">
-      <button class="screenshot-tab-btn active" onclick="showScreenshot('landing')">Load models</button>
-      <button class="screenshot-tab-btn" onclick="showScreenshot('graph')">Graph view</button>
-      <button class="screenshot-tab-btn" onclick="showScreenshot('editor')">Graph + editor</button>
+      <button class="screenshot-tab-btn active" onclick="showScreenshot('graph')">Graph View</button>
+      <button class="screenshot-tab-btn" onclick="showScreenshot('source')">Graph + Source</button>
+      <button class="screenshot-tab-btn" onclick="showScreenshot('editor')">Graph + Editor</button>
     </div>
     <div class="screenshot-frame">
       <div class="screenshot-bar">
@@ -394,14 +394,14 @@ footer .container { display: flex; justify-content: space-between; align-items: 
         <div class="screenshot-dot"></div>
         <div class="screenshot-bar-label">Rune Studio</div>
       </div>
-      <div class="screenshot-panel active" id="panel-landing">
-        <img src="assets/screenshot-landing.png" alt="Rune Studio landing screen with CDM, FpML, and Rune DSL model loading" loading="lazy">
+      <div class="screenshot-panel active" id="panel-graph">
+        <img src="assets/screenshot-graph.png" alt="Rune Studio graph view showing CDM type inheritance trees with grouped layout, namespace explorer, and type/edge filtering" loading="lazy">
       </div>
-      <div class="screenshot-panel" id="panel-graph">
-        <img src="assets/screenshot-graph.png" alt="Rune Studio graph view showing CDM type relationships with interactive nodes" loading="lazy">
+      <div class="screenshot-panel" id="panel-source">
+        <img src="assets/screenshot-source.png" alt="Rune Studio graph view with synchronized source code editor showing Rune DSL syntax highlighting" loading="lazy">
       </div>
       <div class="screenshot-panel" id="panel-editor">
-        <img src="assets/screenshot-editor.png" alt="Rune Studio three-panel view with graph navigation and code editor" loading="lazy">
+        <img src="assets/screenshot-editor.png" alt="Rune Studio graph view with structured editor form showing function inputs, output type, and expression builder tree" loading="lazy">
       </div>
     </div>
   </div>
