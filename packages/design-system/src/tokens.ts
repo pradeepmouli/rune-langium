@@ -4,66 +4,66 @@
 /**
  * Rune DSL Design System — TypeScript token exports.
  *
- * These match the CSS custom properties in theme.css.
+ * These match the CSS custom properties in theme.css (Refactory Dark palette).
  * Use for JS-side color references (e.g., ReactFlow config, chart colors).
  */
 
 export const colors = {
   data: {
-    DEFAULT: '#3b82f6',
-    bg: 'rgba(59, 130, 246, 0.15)',
-    text: '#93c5fd',
-    badge: 'rgba(59, 130, 246, 0.25)'
+    DEFAULT: '#00D4AA',
+    bg: 'rgba(0, 212, 170, 0.12)',
+    text: '#00D4AA',
+    badge: 'rgba(0, 212, 170, 0.20)'
   },
   choice: {
-    DEFAULT: '#f59e0b',
-    bg: 'rgba(245, 158, 11, 0.15)',
-    text: '#fcd34d',
-    badge: 'rgba(245, 158, 11, 0.25)'
+    DEFAULT: '#E8913A',
+    bg: 'rgba(232, 145, 58, 0.12)',
+    text: '#E8913A',
+    badge: 'rgba(232, 145, 58, 0.20)'
   },
   enum: {
-    DEFAULT: '#22c55e',
-    bg: 'rgba(34, 197, 94, 0.15)',
-    text: '#86efac',
-    badge: 'rgba(34, 197, 94, 0.25)'
+    DEFAULT: '#8B7BF4',
+    bg: 'rgba(139, 123, 244, 0.12)',
+    text: '#8B7BF4',
+    badge: 'rgba(139, 123, 244, 0.20)'
   },
   func: {
-    DEFAULT: '#a855f7',
-    bg: 'rgba(168, 85, 247, 0.15)',
-    text: '#d8b4fe',
-    badge: 'rgba(168, 85, 247, 0.25)'
+    DEFAULT: '#82AAFF',
+    bg: 'rgba(130, 170, 255, 0.12)',
+    text: '#82AAFF',
+    badge: 'rgba(130, 170, 255, 0.20)'
   },
   edge: {
-    ref: '#94a3b8'
+    ref: '#5C5C6A'
   },
   status: {
-    success: '#4ade80',
-    warning: '#fbbf24',
-    error: '#f87171',
-    info: '#38bdf8'
+    success: '#00D4AA',
+    warning: '#E8913A',
+    error: '#FF6058',
+    info: '#82AAFF'
   },
   expr: {
-    arithmetic: { DEFAULT: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
-    comparison: { DEFAULT: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)' },
-    logic: { DEFAULT: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)' },
-    navigation: { DEFAULT: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)' },
-    collection: { DEFAULT: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' },
-    control: { DEFAULT: '#ec4899', bg: 'rgba(236, 72, 153, 0.15)' },
-    literal: { DEFAULT: '#94a3b8', bg: 'rgba(148, 163, 184, 0.15)' },
-    reference: { DEFAULT: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' },
-    placeholder: { DEFAULT: '#64748b', bg: 'rgba(100, 116, 139, 0.10)' }
+    arithmetic: { DEFAULT: '#82AAFF', bg: 'rgba(130, 170, 255, 0.12)' },
+    comparison: { DEFAULT: '#00D4AA', bg: 'rgba(0, 212, 170, 0.12)' },
+    logic: { DEFAULT: '#C792EA', bg: 'rgba(199, 146, 234, 0.12)' },
+    navigation: { DEFAULT: '#00D4AA', bg: 'rgba(0, 212, 170, 0.12)' },
+    collection: { DEFAULT: '#E8913A', bg: 'rgba(232, 145, 58, 0.12)' },
+    control: { DEFAULT: '#C792EA', bg: 'rgba(199, 146, 234, 0.12)' },
+    literal: { DEFAULT: '#8A8A96', bg: 'rgba(138, 138, 150, 0.12)' },
+    reference: { DEFAULT: '#8B7BF4', bg: 'rgba(139, 123, 244, 0.12)' },
+    placeholder: { DEFAULT: '#5C5C6A', bg: 'rgba(92, 92, 106, 0.10)' }
   }
 } as const;
 
 export const fonts = {
-  sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace'
+  display: '"Outfit", ui-sans-serif, system-ui, sans-serif',
+  mono: '"JetBrains Mono", ui-monospace, SFMono-Regular, monospace'
 } as const;
 
 export const radii = {
-  sm: '3px',
-  md: '4px',
-  lg: '6px'
+  sm: '4px',
+  md: '6px',
+  lg: '8px'
 } as const;
 
 export type Colors = typeof colors;

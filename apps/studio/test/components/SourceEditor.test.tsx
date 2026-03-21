@@ -23,6 +23,7 @@ vi.mock('@codemirror/view', () => {
     dispatch = vi.fn();
     destroy = mockEditorViewDestroy;
     static updateListener = { of: vi.fn().mockReturnValue([]) };
+    static theme = vi.fn().mockReturnValue([]);
     constructor() {
       // no-op
     }
@@ -50,8 +51,32 @@ vi.mock('@codemirror/commands', () => ({
   defaultKeymap: []
 }));
 
+vi.mock('@codemirror/language', () => ({
+  HighlightStyle: { define: vi.fn().mockReturnValue([]) },
+  syntaxHighlighting: vi.fn().mockReturnValue([]),
+  defaultHighlightStyle: []
+}));
+
+vi.mock('@lezer/highlight', () => ({
+  tags: new Proxy(
+    {},
+    {
+      get:
+        () =>
+        (..._args: unknown[]) =>
+          'tag'
+    }
+  )
+}));
+
 vi.mock('../../src/lang/rune-dsl.js', () => ({
   runeDslLanguage: vi.fn().mockReturnValue([])
+}));
+
+vi.mock('../../src/lang/refactory-dark-theme.js', () => ({
+  refactoryDark: [],
+  refactoryDarkTheme: [],
+  refactoryDarkHighlightStyle: []
 }));
 
 const sampleFiles: SourceEditorProps['files'] = [

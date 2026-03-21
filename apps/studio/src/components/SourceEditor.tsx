@@ -25,8 +25,8 @@ import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, Transaction, type Extension } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
 import { defaultKeymap } from '@codemirror/commands';
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
+import { refactoryDark } from '../lang/refactory-dark-theme.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
 import { cn } from '@rune-langium/design-system/utils';
@@ -284,7 +284,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
       const exts: Extension[] = [
         basicSetup,
         keymap.of(defaultKeymap),
-        syntaxHighlighting(defaultHighlightStyle),
+        ...refactoryDark,
         runeDslLanguage()
       ];
 
