@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import type { AstNode, AstNodeDescription, ReferenceInfo, Scope } from 'langium';
 import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope } from 'langium';
 import type { LangiumCoreServices } from 'langium';

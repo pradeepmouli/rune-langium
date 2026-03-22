@@ -35,7 +35,7 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.9.3"
   },
-  "license": "Apache-2.0",
+  "license": "MIT",
   "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen",
   "repository": {
     "type": "git",

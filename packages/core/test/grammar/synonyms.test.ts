@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { describe, it, expect } from 'vitest';
 import { parse } from '../../src/index.js';
 import type { RosettaModel, Data, RosettaEnumeration } from '../../src/index.js';

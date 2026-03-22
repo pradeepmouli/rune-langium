@@ -1,0 +1,15 @@
+rune-langium
+Copyright 2026 Pradeep Mouli
+
+This product includes software developed by:
+
+- The Eclipse Langium Project (https://langium.org/)
+  Licensed under MIT License
+  Copyright Eclipse Foundation and contributors
+
+- FINOS Rune DSL (https://github.com/finos/rune-dsl)
+  Licensed under Apache License, Version 2.0
+  Copyright REGnosys Limited and contributors
+
+- Additional third-party licenses are listed in each package's
+  node_modules directory and in the pnpm-lock.yaml file.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * InheritanceEdge — Custom ReactFlow edge for `extends` and `enum-extends` relationships.
  *

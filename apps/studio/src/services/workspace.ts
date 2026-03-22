@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Workspace service — manages multi-file loading, dirty tracking,
  * and cross-file resolution for the studio app (T083, T098, T100, T102).

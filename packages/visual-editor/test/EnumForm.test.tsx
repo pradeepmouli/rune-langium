@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Tests for EnumForm debounce behaviour and dirty-field preservation (T029).
  *

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * ToolbarPanel — Toolbar with fit-view, relayout, and direction controls.
  *

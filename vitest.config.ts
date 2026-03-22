@@ -19,7 +19,11 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
-      include: ['packages/*/src/**/*.ts'],
+      include: [
+        'packages/cli/src/**/*.ts',
+        'packages/core/src/**/*.ts',
+        'packages/lsp-server/src/**/*.ts'
+      ],
       exclude: ['**/*.test.ts', '**/*.spec.ts', '**/test/**', '**/dist/**', '**/node_modules/**'],
       thresholds: {
         lines: 30,

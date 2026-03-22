@@ -5,7 +5,7 @@
   "description": "Langium port for Rune DSL tooling",
   "type": "module",
   "author": "Pradeep Mouli <pmouli@mac.com>",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://pradeepmouli.github.io/rune-langium/",
   "repository": {
     "type": "git",

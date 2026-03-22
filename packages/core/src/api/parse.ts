@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
 import type { RosettaModel } from '../generated/ast.js';

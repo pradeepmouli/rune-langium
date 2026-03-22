@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Async layout computation with Web Worker support.
  *
@@ -41,10 +44,13 @@ let layoutSeq = 0;
 
 let worker: Worker | null = null;
 let workerFailed = false;
-const pendingRequests = new Map<number, {
-  resolve: (positions: Record<string, { x: number; y: number }>) => void;
-  reject: (err: Error) => void;
-}>();
+const pendingRequests = new Map<
+  number,
+  {
+    resolve: (positions: Record<string, { x: number; y: number }>) => void;
+    reject: (err: Error) => void;
+  }
+>();
 let requestId = 0;
 
 function getWorker(): Worker | null {
@@ -52,10 +58,7 @@ function getWorker(): Worker | null {
   if (worker) return worker;
 
   try {
-    worker = new Worker(
-      new URL('./dagre-worker-script.js', import.meta.url),
-      { type: 'module' }
-    );
+    worker = new Worker(new URL('./dagre-worker-script.js', import.meta.url), { type: 'module' });
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const pending = pendingRequests.get(e.data.id);
       if (pending) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * useInheritedMembers — Resolves the inheritance chain for a graph node.
  *

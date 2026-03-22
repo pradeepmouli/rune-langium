@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { defineConfig } from 'vitest/config';
 import path from 'node:path';
 

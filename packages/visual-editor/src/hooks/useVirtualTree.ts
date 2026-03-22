@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Virtual tree hook — wraps @tanstack/react-virtual for namespace explorer tree.
  */
