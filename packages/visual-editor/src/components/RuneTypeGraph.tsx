@@ -99,7 +99,6 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     const isInitialLoad = useRef(true);
     const ASYNC_LAYOUT_THRESHOLD = 500;
     const [asyncLayoutResult, setAsyncLayoutResult] = useState<TypeGraphNode[]>([]);
-    const asyncLayoutPending = useRef(false);
 
     // Synchronous path for small/medium graphs
     const syncLayoutedNodes = useMemo(() => {
@@ -113,16 +112,11 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
 
     // Async path for large graphs
     useEffect(() => {
-      if (visibleNodes.length < ASYNC_LAYOUT_THRESHOLD) {
-        asyncLayoutPending.current = false;
-        return;
-      }
-      asyncLayoutPending.current = true;
+      if (visibleNodes.length < ASYNC_LAYOUT_THRESHOLD) return;
       cancelAsyncLayout();
       computeLayoutAsync(visibleNodes, visibleEdges, mergedConfig.layout).then((result) => {
         if (result) {
           setAsyncLayoutResult(result);
-          asyncLayoutPending.current = false;
           isInitialLoad.current = false;
         }
       });

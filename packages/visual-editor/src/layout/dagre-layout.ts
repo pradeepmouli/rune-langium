@@ -186,7 +186,7 @@ export function computeLayoutIncremental(
 
   // For uncached nodes, run dagre on just the uncached set with their edges
   const uncachedIds = new Set(uncached.map((n) => n.id));
-  const uncachedEdges = edges.filter((e) => uncachedIds.has(e.source) || uncachedIds.has(e.target));
+  const uncachedEdges = edges.filter((e) => uncachedIds.has(e.source) && uncachedIds.has(e.target));
 
   // Run dagre on the uncached subset
   const layouted = computeLayout(uncached, uncachedEdges, options);

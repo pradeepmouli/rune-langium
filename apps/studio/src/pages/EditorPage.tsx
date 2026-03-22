@@ -32,7 +32,6 @@ import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { Separator } from '@rune-langium/design-system/ui/separator';
 import {
   ResizablePanelGroup,
   ResizablePanel,
