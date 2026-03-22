@@ -17,6 +17,7 @@ import type {
   TypeGraphEdge,
   GraphFilters,
   TypeKind,
+  EdgeKind,
   ValidationError,
   EdgeData,
   LayoutOptions,
@@ -33,7 +34,7 @@ import type {
   Annotation
 } from '@rune-langium/core';
 import { astToModel } from '../adapters/ast-to-model.js';
-import { computeLayout } from '../layout/dagre-layout.js';
+import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
 import {
   getTypeRefText,
@@ -92,6 +93,22 @@ export interface EditorActions {
   toggleExplorer(): void;
   getVisibleNodes(): TypeGraphNode[];
   getVisibleEdges(): TypeGraphEdge[];
+
+  // --- Kind-based visibility ---
+  toggleNodeKind(kind: TypeKind): void;
+  toggleEdgeKind(kind: EdgeKind): void;
+  showAllNodeKinds(): void;
+  showAllEdgeKinds(): void;
+
+  // --- Isolation / focus ---
+  /** Hide all nodes except the given node and its directly connected neighbors. */
+  isolateNode(nodeId: string): void;
+  /** Unhide the direct neighbors of a node (expand their namespaces too). */
+  revealNeighbors(nodeId: string): void;
+  /** Hide all nodes except the given set. */
+  showOnly(nodeIds: Set<string>): void;
+  /** Unhide all nodes (reset hiddenNodeIds). */
+  showAllNodes(): void;
 
   // --- Editing (P2) ---
   createType(kind: TypeKind, name: string, namespace: string): string;
@@ -172,6 +189,9 @@ export type EditorStore = EditorState & EditorActions;
 // ---------------------------------------------------------------------------
 
 let nodeCounter = 0;
+
+/** Sequence counter to cancel in-flight progressive namespace expansion. */
+let expandSeq = 0;
 
 function makeNodeId(namespace: string, name: string): string {
   return `${namespace}::${name}`;
@@ -285,6 +305,27 @@ function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string)
 /** Threshold above which namespaces start collapsed for performance. */
 const LARGE_MODEL_THRESHOLD = 100;
 
+/** All node kinds — default visibility. */
+const ALL_NODE_KINDS = new Set<TypeKind>([
+  'data',
+  'choice',
+  'enum',
+  'func',
+  'record',
+  'typeAlias',
+  'basicType',
+  'annotation'
+]);
+
+/** All edge kinds — default visibility. */
+const ALL_EDGE_KINDS = new Set<EdgeKind>([
+  'extends',
+  'attribute-ref',
+  'choice-option',
+  'enum-extends',
+  'type-alias-ref'
+]);
+
 const initialState: EditorState = {
   nodes: [],
   edges: [],
@@ -298,7 +339,9 @@ const initialState: EditorState = {
   visibility: {
     expandedNamespaces: new Set<string>(),
     hiddenNodeIds: new Set<string>(),
-    explorerOpen: true
+    explorerOpen: true,
+    visibleNodeKinds: new Set(ALL_NODE_KINDS),
+    visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
   }
 };
 
@@ -318,6 +361,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // -----------------------------------------------------------------------
 
         loadModels(models, layoutOpts) {
+          // Clear layout cache on full model reload
+          clearLayoutCache();
+
           const opts = layoutOpts ?? get().layoutOptions;
           const filters = get().activeFilters;
           const { nodes: rawNodes, edges } = astToModel(models, { filters });
@@ -344,7 +390,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             visibility: {
               expandedNamespaces,
               hiddenNodeIds: new Set<string>(),
-              explorerOpen: true
+              explorerOpen: true,
+              visibleNodeKinds: new Set(ALL_NODE_KINDS),
+              visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
             }
           });
         },
@@ -1283,19 +1331,75 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         expandAllNamespaces() {
-          set((state) => {
-            const allNs = new Set(state.nodes.map((n) => n.data.namespace));
-            return {
+          const nodes = get().nodes;
+          const allNs = [...new Set(nodes.map((n) => n.data.namespace))];
+
+          // For small models, expand all at once
+          if (nodes.length <= LARGE_MODEL_THRESHOLD) {
+            set((state) => ({
               visibility: {
                 ...state.visibility,
-                expandedNamespaces: allNs,
+                expandedNamespaces: new Set(allNs),
                 hiddenNodeIds: new Set<string>()
               }
-            };
-          });
+            }));
+            return;
+          }
+
+          // Progressive expand: batch namespaces to keep each frame under ~100 nodes.
+          // Sort namespaces by node count (smallest first) for faster visual feedback.
+          const nsCountMap = new Map<string, number>();
+          for (const n of nodes) {
+            nsCountMap.set(n.data.namespace, (nsCountMap.get(n.data.namespace) ?? 0) + 1);
+          }
+          const nsByCount = allNs
+            .map((ns) => ({ ns, count: nsCountMap.get(ns) ?? 0 }))
+            .sort((a, b) => a.count - b.count);
+
+          const BATCH_NODE_LIMIT = 100;
+          const batches: string[][] = [];
+          let currentBatch: string[] = [];
+          let currentCount = 0;
+
+          for (const { ns, count } of nsByCount) {
+            if (currentCount + count > BATCH_NODE_LIMIT && currentBatch.length > 0) {
+              batches.push(currentBatch);
+              currentBatch = [ns];
+              currentCount = count;
+            } else {
+              currentBatch.push(ns);
+              currentCount += count;
+            }
+          }
+          if (currentBatch.length > 0) batches.push(currentBatch);
+
+          // Clear hidden nodes immediately
+          set((state) => ({
+            visibility: { ...state.visibility, hiddenNodeIds: new Set<string>() }
+          }));
+
+          // Expand batches progressively using requestAnimationFrame
+          const seq = ++expandSeq;
+          let batchIndex = 0;
+          const expandNextBatch = () => {
+            if (expandSeq !== seq || batchIndex >= batches.length) return;
+            const batch = batches[batchIndex++]!;
+            set((state) => {
+              const next = new Set(state.visibility.expandedNamespaces);
+              for (const ns of batch) next.add(ns);
+              return {
+                visibility: { ...state.visibility, expandedNamespaces: next }
+              };
+            });
+            if (batchIndex < batches.length) {
+              requestAnimationFrame(expandNextBatch);
+            }
+          };
+          requestAnimationFrame(expandNextBatch);
         },
 
         collapseAllNamespaces() {
+          expandSeq++; // Cancel any in-flight progressive expansion
           set((state) => ({
             visibility: {
               ...state.visibility,
@@ -1333,18 +1437,160 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           return nodes.filter(
             (n) =>
               visibility.expandedNamespaces.has(n.data.namespace) &&
-              !visibility.hiddenNodeIds.has(n.id)
+              !visibility.hiddenNodeIds.has(n.id) &&
+              visibility.visibleNodeKinds.has(n.type as TypeKind)
           );
         },
 
         getVisibleEdges(): TypeGraphEdge[] {
-          const { edges } = get();
+          const { edges, visibility } = get();
           const visibleNodeIds = new Set(
             get()
               .getVisibleNodes()
               .map((n) => n.id)
           );
-          return edges.filter((e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target));
+          return edges.filter(
+            (e) =>
+              visibleNodeIds.has(e.source) &&
+              visibleNodeIds.has(e.target) &&
+              visibility.visibleEdgeKinds.has((e.data as EdgeData).kind)
+          );
+        },
+
+        // -----------------------------------------------------------------------
+        // Kind-based visibility
+        // -----------------------------------------------------------------------
+
+        toggleNodeKind(kind: TypeKind) {
+          set((state) => {
+            const next = new Set(state.visibility.visibleNodeKinds);
+            if (next.has(kind)) {
+              next.delete(kind);
+            } else {
+              next.add(kind);
+            }
+            return {
+              visibility: { ...state.visibility, visibleNodeKinds: next }
+            };
+          });
+        },
+
+        toggleEdgeKind(kind: EdgeKind) {
+          set((state) => {
+            const next = new Set(state.visibility.visibleEdgeKinds);
+            if (next.has(kind)) {
+              next.delete(kind);
+            } else {
+              next.add(kind);
+            }
+            return {
+              visibility: { ...state.visibility, visibleEdgeKinds: next }
+            };
+          });
+        },
+
+        showAllNodeKinds() {
+          set((state) => ({
+            visibility: {
+              ...state.visibility,
+              visibleNodeKinds: new Set(ALL_NODE_KINDS)
+            }
+          }));
+        },
+
+        showAllEdgeKinds() {
+          set((state) => ({
+            visibility: {
+              ...state.visibility,
+              visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
+            }
+          }));
+        },
+
+        // -----------------------------------------------------------------------
+        // Isolation / focus
+        // -----------------------------------------------------------------------
+
+        isolateNode(nodeId: string) {
+          const { nodes, edges } = get();
+          // Find directly connected neighbors via all edge types
+          const neighbors = new Set<string>([nodeId]);
+          for (const edge of edges) {
+            if (edge.source === nodeId) neighbors.add(edge.target);
+            if (edge.target === nodeId) neighbors.add(edge.source);
+          }
+          // Hide everything except neighbors
+          const hiddenNodeIds = new Set<string>();
+          for (const n of nodes) {
+            if (!neighbors.has(n.id)) hiddenNodeIds.add(n.id);
+          }
+          // Ensure namespaces of visible nodes are expanded
+          const expandedNamespaces = new Set(get().visibility.expandedNamespaces);
+          for (const id of neighbors) {
+            const node = nodes.find((n) => n.id === id);
+            if (node) expandedNamespaces.add(node.data.namespace);
+          }
+          set((state) => ({
+            visibility: {
+              ...state.visibility,
+              hiddenNodeIds,
+              expandedNamespaces
+            }
+          }));
+        },
+
+        revealNeighbors(nodeId: string) {
+          const { nodes, edges, visibility } = get();
+          // Find directly connected neighbors
+          const neighbors = new Set<string>([nodeId]);
+          for (const edge of edges) {
+            if (edge.source === nodeId) neighbors.add(edge.target);
+            if (edge.target === nodeId) neighbors.add(edge.source);
+          }
+          // Unhide neighbors and expand their namespaces
+          const hiddenNodeIds = new Set(visibility.hiddenNodeIds);
+          const expandedNamespaces = new Set(visibility.expandedNamespaces);
+          for (const id of neighbors) {
+            hiddenNodeIds.delete(id);
+            const node = nodes.find((n) => n.id === id);
+            if (node) expandedNamespaces.add(node.data.namespace);
+          }
+          set((state) => ({
+            visibility: {
+              ...state.visibility,
+              hiddenNodeIds,
+              expandedNamespaces
+            }
+          }));
+        },
+
+        showOnly(nodeIds: Set<string>) {
+          const { nodes } = get();
+          const hiddenNodeIds = new Set<string>();
+          for (const n of nodes) {
+            if (!nodeIds.has(n.id)) hiddenNodeIds.add(n.id);
+          }
+          const expandedNamespaces = new Set(get().visibility.expandedNamespaces);
+          for (const id of nodeIds) {
+            const node = nodes.find((n) => n.id === id);
+            if (node) expandedNamespaces.add(node.data.namespace);
+          }
+          set((state) => ({
+            visibility: {
+              ...state.visibility,
+              hiddenNodeIds,
+              expandedNamespaces
+            }
+          }));
+        },
+
+        showAllNodes() {
+          set((state) => ({
+            visibility: {
+              ...state.visibility,
+              hiddenNodeIds: new Set<string>()
+            }
+          }));
         }
       }),
       {

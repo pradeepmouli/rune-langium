@@ -19,11 +19,11 @@ jobs:
           MISSING=""
           while IFS= read -r file; do
             if ! head -3 "$file" | grep -q "SPDX-License-Identifier: MIT"; then
-              MISSING="$MISSING\n  $file"
+              MISSING="$MISSING"$'\n'"  $file"
             fi
-          done < <(find packages -name '*.ts' -o -name '*.tsx' | grep -v node_modules | grep -v '.d.ts' | grep -v '/generated/')
+          done < <(find packages \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' ! -path '*/node_modules/*' ! -path '*/generated/*')
           if [ -n "$MISSING" ]; then
-            echo "::error::Missing MIT SPDX header in:$MISSING"
+            printf "::error::Missing MIT SPDX header in:%s\n" "$MISSING"
             exit 1
           fi
 
@@ -32,10 +32,10 @@ jobs:
           MISSING=""
           while IFS= read -r file; do
             if ! head -3 "$file" | grep -q "SPDX-License-Identifier: FSL-1.1-ALv2"; then
-              MISSING="$MISSING\n  $file"
+              MISSING="$MISSING"$'\n'"  $file"
             fi
-          done < <(find apps/studio -name '*.ts' -o -name '*.tsx' | grep -v node_modules | grep -v '.d.ts')
+          done < <(find apps/studio \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' ! -path '*/node_modules/*')
           if [ -n "$MISSING" ]; then
-            echo "::error::Missing FSL-1.1-ALv2 SPDX header in:$MISSING"
+            printf "::error::Missing FSL-1.1-ALv2 SPDX header in:%s\n" "$MISSING"
             exit 1
           fi

@@ -111,7 +111,14 @@ export {
 } from './adapters/model-helpers.js';
 
 // Layout
-export { computeLayout } from './layout/dagre-layout.js';
+export {
+  computeLayout,
+  computeLayoutIncremental,
+  clearLayoutCache
+} from './layout/dagre-layout.js';
+export { computeLayoutAsync, cancelAsyncLayout } from './layout/layout-worker.js';
+export { computeGroupedLayout, findInheritanceGroups } from './layout/grouped-layout.js';
+export type { GroupInfo } from './layout/grouped-layout.js';
 
 // Namespace tree utilities
 export { buildNamespaceTree, filterNamespaceTree } from './utils/namespace-tree.js';

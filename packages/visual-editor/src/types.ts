@@ -388,6 +388,8 @@ export interface LayoutOptions {
   direction?: LayoutDirection;
   nodeSeparation?: number;
   rankSeparation?: number;
+  /** Group nodes into inheritance trees and lay out each tree independently. */
+  groupByInheritance?: boolean;
 }
 
 export interface NodeStyleConfig {
@@ -489,6 +491,10 @@ export interface VisibilityState {
   hiddenNodeIds: Set<string>;
   /** Whether the explorer panel is open. */
   explorerOpen: boolean;
+  /** Which node kinds are visible (all visible by default). */
+  visibleNodeKinds: Set<TypeKind>;
+  /** Which edge kinds are visible (all visible by default). */
+  visibleEdgeKinds: Set<EdgeKind>;
 }
 
 // ---------------------------------------------------------------------------

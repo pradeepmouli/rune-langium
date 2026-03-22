@@ -35,5 +35,15 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.9.3"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pradeepmouli/rune-langium.git",
+    "directory": "packages/codegen"
+  },
+  "bugs": {
+    "url": "https://github.com/pradeepmouli/rune-langium/issues"
+  },
+  "keywords": ["rune", "rosetta", "dsl", "codegen", "code-generation", "cdm"]
 }

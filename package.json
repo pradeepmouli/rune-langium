@@ -6,10 +6,28 @@
   "type": "module",
   "author": "Pradeep Mouli <pmouli@mac.com>",
   "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://pradeepmouli.github.io/rune-langium/",
   "repository": {
     "type": "git",
     "url": "https://github.com/pradeepmouli/rune-langium.git"
   },
+  "bugs": {
+    "url": "https://github.com/pradeepmouli/rune-langium/issues"
+  },
+  "keywords": [
+    "rune",
+    "rosetta",
+    "dsl",
+    "langium",
+    "cdm",
+    "isda",
+    "drr",
+    "finos",
+    "language-server",
+    "lsp",
+    "visual-editor",
+    "reactflow"
+  ],
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -55,6 +73,9 @@
     "oxfmt": "^0.38.0",
     "oxlint": "^1.53.0",
     "simple-git-hooks": "^2.13.1",
+    "typedoc": "^0.28.17",
+    "typedoc-plugin-markdown": "^4.11.0",
+    "typedoc-plugin-to-skills": "^0.4.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

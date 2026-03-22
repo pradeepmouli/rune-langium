@@ -35,13 +35,27 @@ import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { Separator } from '@rune-langium/design-system/ui/separator';
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle
 } from '@rune-langium/design-system/ui/resizable';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
+import {
+  PanelLeft,
+  Maximize2,
+  LayoutGrid,
+  FormInput,
+  FileCode2,
+  AlertCircle,
+  Download,
+  Code2,
+  FileText,
+  Edit3,
+  Activity,
+  Network
+} from 'lucide-react';
+import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
@@ -73,6 +87,7 @@ export function EditorPage({
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showEditor, setShowEditor] = useState(true);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [groupedLayout, setGroupedLayout] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
   /** Tracks file paths explicitly opened in the source editor (by node navigation). */
@@ -595,7 +610,18 @@ export function EditorPage({
   }, []);
 
   const handleRelayout = useCallback(() => {
-    graphRef.current?.relayout();
+    graphRef.current?.relayout({ groupByInheritance: groupedLayout });
+  }, [groupedLayout]);
+
+  const handleToggleGroupedLayout = useCallback(() => {
+    setGroupedLayout((prev) => {
+      const next = !prev;
+      // Trigger relayout with the new setting after state updates
+      setTimeout(() => {
+        graphRef.current?.relayout({ groupByInheritance: next });
+      }, 0);
+      return next;
+    });
   }, []);
 
   return (
@@ -607,7 +633,7 @@ export function EditorPage({
     >
       {/* Toolbar */}
       <nav
-        className="flex items-center justify-between px-3 py-1.5 bg-card gap-2"
+        className="glass-toolbar flex items-center justify-between px-3 py-1.5 gap-2 border-b border-border"
         aria-label="Editor toolbar"
       >
         <div className="flex items-center gap-1.5">
@@ -617,20 +643,34 @@ export function EditorPage({
             onClick={storeToggleExplorer}
             title="Toggle namespace explorer"
           >
+            <PanelLeft className="w-3.5 h-3.5 mr-1" />
             Explorer
           </Button>
           <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
+            <Maximize2 className="w-3.5 h-3.5 mr-1" />
             Fit View
           </Button>
           <Button variant="secondary" size="sm" onClick={handleRelayout} title="Re-run auto layout">
+            <LayoutGrid className="w-3.5 h-3.5 mr-1" />
             Re-layout
           </Button>
+          <Button
+            variant={groupedLayout ? 'default' : 'secondary'}
+            size="sm"
+            onClick={handleToggleGroupedLayout}
+            title="Group by inheritance trees"
+          >
+            <Network className="w-3.5 h-3.5 mr-1" />
+            Grouped
+          </Button>
+          <GraphFilterMenu />
           <Button
             variant={showEditor ? 'default' : 'secondary'}
             size="sm"
             onClick={toggleEditor}
             title="Toggle editor form panel"
           >
+            <FormInput className="w-3.5 h-3.5 mr-1" />
             Editor
           </Button>
           <Button
@@ -639,6 +679,7 @@ export function EditorPage({
             onClick={toggleSource}
             title="Toggle source view"
           >
+            <FileCode2 className="w-3.5 h-3.5 mr-1" />
             Source
           </Button>
           <Button
@@ -647,6 +688,7 @@ export function EditorPage({
             onClick={() => setShowDiagnostics(!showDiagnostics)}
             title="Toggle diagnostics panel"
           >
+            <AlertCircle className="w-3.5 h-3.5 mr-1" />
             Problems{totalErrors + totalWarnings > 0 ? ` (${totalErrors + totalWarnings})` : ''}
           </Button>
         </div>
@@ -663,11 +705,11 @@ export function EditorPage({
             disabled={models.length === 0}
             title="Generate code from model"
           >
+            <Code2 className="w-3.5 h-3.5 mr-1" />
             Export Code
           </Button>
         </div>
       </nav>
-      <Separator />
 
       {/* Toast message (Task 2) */}
       {toastMessage && (
@@ -716,7 +758,7 @@ export function EditorPage({
             <RuneTypeGraph
               ref={graphRef}
               config={{
-                layout: { direction: 'TB' },
+                layout: { direction: 'TB', groupByInheritance: groupedLayout },
                 showControls: true,
                 showMinimap: true,
                 readOnly: false
@@ -801,11 +843,21 @@ export function EditorPage({
       )}
 
       {/* Status bar */}
-      <Separator />
-      <footer className="flex items-center gap-4 px-3 py-1 text-sm text-muted-foreground bg-card">
-        <span>{models.length} model(s) loaded</span>
-        <span>{files.filter((f) => f.dirty).length} modified</span>
-        {selectedNodeId && <span>Selected: {selectedNodeId}</span>}
+      <footer className="glass-statusbar flex items-center gap-4 px-3 py-1 text-sm text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <FileText className="w-3 h-3" />
+          {models.length} model(s)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Edit3 className="w-3 h-3" />
+          {files.filter((f) => f.dirty).length} modified
+        </span>
+        {selectedNodeId && (
+          <span className="flex items-center gap-1.5">
+            <Activity className="w-3 h-3" />
+            {selectedNodeId}
+          </span>
+        )}
         {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
       </footer>
 
