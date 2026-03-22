@@ -109,7 +109,7 @@ This project uses a split licensing model:
 - **Core packages** (`packages/`) — [MIT License](./LICENSE)
 - **Rune Studio** (`apps/studio/`) — [FSL-1.1-ALv2](./apps/studio/LICENSE) (Functional Source License v1.1, Apache 2.0 Future License)
 
-The FSL allows you to use, copy, modify, and redistribute the Studio source code for any purpose **except** offering a commercial product that competes with Rune Studio. Each release converts to Apache 2.0 two years after its release date.
+The FSL allows you to use, copy, modify, and redistribute the Studio source code for any purpose **except** offering a commercial product that competes with Rune Studio. Under FSL-1.1-ALv2, each release is scheduled to convert to Apache 2.0 after a delay (typically two years); the authoritative conversion date for any given release is the `Change Date` specified in `apps/studio/LICENSE` for that release (which may differ between tags).
 
 The core grammar, language server, and library packages are and will remain MIT-licensed.
 
