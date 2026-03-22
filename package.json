@@ -61,7 +61,7 @@
     "codegen:build": "packages/codegen/server/build.sh",
     "codegen:test": "packages/codegen/server/target/codegen-cli.sh --list-languages",
     "codegen:start": "node packages/codegen/dist/serve.js",
-    "docs": "typedoc --options typedoc.html.json",
+    "docs": "typedoc --out docs/html --plugin typedoc-plugin-to-skills",
     "docs:md": "typedoc"
   },
   "devDependencies": {
