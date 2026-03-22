@@ -1,11 +1,8 @@
 name: CI
 
-# TEMPLATE: Customize branches and workflow triggers for your project
 on:
   push:
-    branches: [master, develop, "changeset-release/**"]
-  pull_request:
-    branches: [master, develop]
+    branches-ignore: ["sub**"]
 
 jobs:
   lint-and-test:
