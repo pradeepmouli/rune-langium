@@ -1,0 +1,11 @@
+[**Documentation v0.1.0**](../../../../README.md)
+
+***
+
+[Documentation](../../../../README.md) / [@rune-langium/core](../../README.md) / [zod-schemas](../README.md) / RosettaDocReferenceSchema
+
+# Variable: RosettaDocReferenceSchema
+
+> `const` **RosettaDocReferenceSchema**: `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaDocReference"`\>; `docReference`: `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RegulatoryDocumentReference"`\>; `body`: `ZodObject`\<\{ `$refText`: `ZodString`; `ref`: `ZodOptional`\<`ZodUnknown`\>; \}, `$loose`\>; `corpusList`: `ZodArray`\<`ZodObject`\<\{ `$refText`: `ZodString`; `ref`: `ZodOptional`\<`ZodUnknown`\>; \}, `$loose`\>\>; `segments`: `ZodOptional`\<`ZodArray`\<`ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaSegmentRef"`\>; `segment`: `ZodObject`\<\{ `$refText`: `ZodString`; `ref`: `ZodOptional`\<...\>; \}, `$loose`\>; `segmentRef`: `ZodString`; \}, `$loose`\>\>\>; \}, `$loose`\>; `name`: `ZodUnion`\<readonly \[`ZodLiteral`\<`"regulatoryReference"`\>, `ZodLiteral`\<`"docReference"`\>\]\>; `path`: `ZodOptional`\<`ZodLazy`\<`ZodDiscriminatedUnion`\<\[`ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaImplicitVariable"`\>; `name`: `ZodLiteral`\<`"item"`\>; \}, `$loose`\>, `any`, `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"AnnotationDeepPath"`\>; `attribute`: `ZodObject`\<\{ `$refText`: `ZodString`; `ref`: `ZodOptional`\<...\>; \}, `$loose`\>; `operator`: `ZodLiteral`\<`"->>"`\>; `receiver`: `ZodLazy`\<`any`\>; \}, `$loose`\>, `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"AnnotationPathAttributeReference"`\>; `attribute`: `ZodObject`\<\{ `$refText`: `ZodString`; `ref`: `ZodOptional`\<...\>; \}, `$loose`\>; \}, `$loose`\>\], `"$type"`\>\>\>; `provision`: `ZodOptional`\<`ZodString`\>; `rationales`: `ZodOptional`\<`ZodArray`\<`ZodObject`\<\{ `$type`: `ZodLiteral`\<`"DocumentRationale"`\>; `rationale`: `ZodString`; `rationaleAuthor`: `ZodOptional`\<`ZodString`\>; \}, `$loose`\>\>\>; `reportedField`: `ZodOptional`\<`ZodBoolean`\>; `structuredProvision`: `ZodOptional`\<`ZodString`\>; \}, `$loose`\>
+
+Defined in: [packages/core/src/generated/zod-schemas.ts:78](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/zod-schemas.ts#L78)

@@ -1,0 +1,21 @@
+[**Documentation v0.1.0**](../../../../../README.md)
+
+***
+
+[Documentation](../../../../../README.md) / [@rune-langium/design-system](../../../README.md) / [ui/command](../README.md) / CommandEmpty
+
+# Function: CommandEmpty()
+
+> **CommandEmpty**(`__namedParameters`): `Element`
+
+Defined in: [packages/design-system/src/ui/command.tsx:56](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/design-system/src/ui/command.tsx#L56)
+
+## Parameters
+
+### \_\_namedParameters
+
+`Children` & `Pick`\<`Pick`\<`DetailedHTMLProps`\<`HTMLAttributes`\<`HTMLDivElement`\>, `HTMLDivElement`\>, `"key"` \| keyof HTMLAttributes\<HTMLDivElement\>\> & `object` & `object`, `"key"` \| `"asChild"` \| keyof HTMLAttributes\<HTMLDivElement\>\> & `RefAttributes`\<`HTMLDivElement`\>
+
+## Returns
+
+`Element`

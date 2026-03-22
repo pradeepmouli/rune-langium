@@ -1,0 +1,33 @@
+[**Documentation v0.1.0**](../../../README.md)
+
+***
+
+[Documentation](../../../README.md) / [@rune-langium/core](../README.md) / [](../README.md) / ComparisonOperation
+
+# Variable: ComparisonOperation
+
+> **ComparisonOperation**: `object`
+
+Defined in: [packages/core/src/generated/ast.ts:682](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L682)
+
+## Type Declaration
+
+### $type
+
+> `readonly` **$type**: `"ComparisonOperation"` = `'ComparisonOperation'`
+
+### cardMod
+
+> `readonly` **cardMod**: `"cardMod"` = `'cardMod'`
+
+### left
+
+> `readonly` **left**: `"left"` = `'left'`
+
+### operator
+
+> `readonly` **operator**: `"operator"` = `'operator'`
+
+### right
+
+> `readonly` **right**: `"right"` = `'right'`

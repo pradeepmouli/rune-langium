@@ -60,7 +60,9 @@
     "codegen:build-deps": "cd ../rosetta-code-generators && JAVA_HOME=${JAVA21_HOME:-/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home} mvn package -DskipTests -pl default-cdm-generators -am",
     "codegen:build": "packages/codegen/server/build.sh",
     "codegen:test": "packages/codegen/server/target/codegen-cli.sh --list-languages",
-    "codegen:start": "node packages/codegen/dist/serve.js"
+    "codegen:start": "node packages/codegen/dist/serve.js",
+    "docs": "typedoc --options typedoc.html.json",
+    "docs:md": "typedoc"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.6.0",
