@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Types for git-based model loading, caching, and progress tracking.
  * @see specs/008-core-editor-features/data-model.md

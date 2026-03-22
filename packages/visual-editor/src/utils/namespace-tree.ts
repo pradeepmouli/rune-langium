@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Namespace tree builder — groups graph nodes by namespace
  * for the NamespaceExplorerPanel.

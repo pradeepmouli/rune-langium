@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 export { TypeCreator } from './TypeCreator.js';
 export type { TypeCreatorProps } from './TypeCreator.js';
 export { AttributeEditor } from './AttributeEditor.js';

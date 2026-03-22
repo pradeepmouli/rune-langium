@@ -1,0 +1,41 @@
+name: License Header Check
+
+on:
+  pull_request:
+    paths:
+      - 'packages/**/*.ts'
+      - 'packages/**/*.tsx'
+      - 'apps/studio/**/*.ts'
+      - 'apps/studio/**/*.tsx'
+
+jobs:
+  check-headers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check license headers in packages/
+        run: |
+          MISSING=""
+          while IFS= read -r file; do
+            if ! head -3 "$file" | grep -q "SPDX-License-Identifier: MIT"; then
+              MISSING="$MISSING"$'\n'"  $file"
+            fi
+          done < <(find packages \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' ! -path '*/node_modules/*' ! -path '*/generated/*')
+          if [ -n "$MISSING" ]; then
+            printf "::error::Missing MIT SPDX header in:%s\n" "$MISSING"
+            exit 1
+          fi
+
+      - name: Check license headers in apps/studio/
+        run: |
+          MISSING=""
+          while IFS= read -r file; do
+            if ! head -3 "$file" | grep -q "SPDX-License-Identifier: FSL-1.1-ALv2"; then
+              MISSING="$MISSING"$'\n'"  $file"
+            fi
+          done < <(find apps/studio \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' ! -path '*/node_modules/*')
+          if [ -n "$MISSING" ]; then
+            printf "::error::Missing FSL-1.1-ALv2 SPDX header in:%s\n" "$MISSING"
+            exit 1
+          fi

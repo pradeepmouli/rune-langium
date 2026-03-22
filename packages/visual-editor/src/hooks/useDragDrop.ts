@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * useDragDrop — native HTML drag-and-drop for expression blocks.
  *

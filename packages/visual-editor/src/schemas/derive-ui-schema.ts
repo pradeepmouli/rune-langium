@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Generic schema transformation utility for deriving UI schemas from
  * generated z.looseObject schemas.

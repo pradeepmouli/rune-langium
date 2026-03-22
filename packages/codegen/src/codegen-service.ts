@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Code generation service proxy.
  * Spawns the rosetta-code-generators CLI as a subprocess,

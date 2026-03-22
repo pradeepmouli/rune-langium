@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Expression node schemas — derived from generated zod-schemas via deriveUiSchema().
  *
@@ -356,9 +359,7 @@ const SuperCallNodeSchema = deriveUiSchema(RosettaSuperCallSchema, {
 const PlaceholderNodeSchema = z.looseObject({
   $type: z.literal('Placeholder'),
   id: z.string().min(1),
-  expectedType: z
-    .enum(['any', 'boolean', 'numeric', 'collection'])
-    .optional()
+  expectedType: z.enum(['any', 'boolean', 'numeric', 'collection']).optional()
 });
 
 const UnsupportedNodeSchema = z.looseObject({

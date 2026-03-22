@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * PlaceholderBlock — renders dashed border placeholder with expected type hint.
  *

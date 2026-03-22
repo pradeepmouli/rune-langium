@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { Command } from 'commander';
 import { runParse } from './parse.js';
 import { runValidate } from './validate.js';

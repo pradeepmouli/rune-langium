@@ -288,3 +288,26 @@ Contributors will be recognized in:
 ---
 
 Thank you for making this project better! 🎉
+
+## Licensing
+
+This repository uses split licensing. By contributing, you agree that:
+
+- Contributions to `packages/` are licensed under the **MIT License**
+- Contributions to `apps/studio/` are licensed under **FSL-1.1-ALv2**
+
+Please include the appropriate SPDX header in new source files:
+
+**For `packages/` files:**
+```typescript
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+```
+
+**For `apps/studio/` files:**
+```typescript
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+```
+
+If you are contributing on behalf of your employer, please ensure you have the necessary rights to contribute under these terms.

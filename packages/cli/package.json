@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "CLI tools for the Rune DSL (Langium-based parser)",
   "type": "module",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/cli",
   "repository": {
     "type": "git",

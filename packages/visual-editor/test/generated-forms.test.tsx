@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { RosettaEnumerationForm } from '../src/components/forms/generated/RosettaEnumerationForm.js';

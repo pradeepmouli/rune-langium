@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * UnsupportedBlock — renders rawText with warning styling for unrecognized nodes.
  *

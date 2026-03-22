@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { describe, it, expect } from 'vitest';
 import { loadAllFixtures, fixtureVersion, listFixtures } from '../helpers/fixture-loader.js';
 import { parse } from '../../src/api/parse.js';
