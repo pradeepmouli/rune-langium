@@ -17,10 +17,10 @@ importers:
     dependencies:
       '@lspeasy/client':
         specifier: ^3.0.1
-        version: 3.0.1(ws@8.19.0)
+        version: 3.0.1(ws@8.20.0)
       '@lspeasy/core':
         specifier: ^2.1.1
-        version: 2.1.1(ws@8.19.0)
+        version: 2.1.1(ws@8.20.0)
       '@zod-to-form/cli':
         specifier: ^0.4.0
         version: 0.4.0(zod@4.3.6)
@@ -102,7 +102,7 @@ importers:
         version: 1.2.3
       '@lspeasy/core':
         specifier: ^2.1.1
-        version: 2.1.1(ws@8.19.0)
+        version: 2.1.1(ws@8.20.0)
       '@rune-langium/codegen':
         specifier: workspace:*
         version: link:../../packages/codegen
@@ -334,10 +334,10 @@ importers:
     dependencies:
       '@lspeasy/core':
         specifier: ^2.1.1
-        version: 2.1.1(ws@8.19.0)
+        version: 2.1.1(ws@8.20.0)
       '@lspeasy/server':
         specifier: ^4.0.1
-        version: 4.0.1(ws@8.19.0)
+        version: 4.0.1(ws@8.20.0)
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../core
@@ -348,12 +348,12 @@ importers:
         specifier: ~9.0.1
         version: 9.0.1
       ws:
-        specifier: ^8.19.0
-        version: 8.19.0
+        specifier: ^8.20.0
+        version: 8.20.0
     devDependencies:
       '@lspeasy/client':
         specifier: ^3.0.1
-        version: 3.0.1(ws@8.19.0)
+        version: 3.0.1(ws@8.20.0)
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -4861,8 +4861,8 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
-  ws@8.19.0:
-    resolution: {integrity: sha512-blAT2mjOEIi0ZzruJfIhb3nps74PRWTCz1IjglWEEpQl5XS/UNama6u2/rjFkDDouqr4L67ry+1aGIALViWjDg==}
+  ws@8.20.0:
+    resolution: {integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -5667,22 +5667,22 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.1
 
-  '@lspeasy/client@3.0.1(ws@8.19.0)':
+  '@lspeasy/client@3.0.1(ws@8.20.0)':
     dependencies:
-      '@lspeasy/core': 2.1.1(ws@8.19.0)
+      '@lspeasy/core': 2.1.1(ws@8.20.0)
     optionalDependencies:
       zod: 4.3.6
     transitivePeerDependencies:
       - ws
 
-  '@lspeasy/core@2.1.1(ws@8.19.0)':
+  '@lspeasy/core@2.1.1(ws@8.20.0)':
     optionalDependencies:
-      ws: 8.19.0
+      ws: 8.20.0
       zod: 4.3.6
 
-  '@lspeasy/server@4.0.1(ws@8.19.0)':
+  '@lspeasy/server@4.0.1(ws@8.20.0)':
     dependencies:
-      '@lspeasy/core': 2.1.1(ws@8.19.0)
+      '@lspeasy/core': 2.1.1(ws@8.20.0)
     optionalDependencies:
       zod: 4.3.6
     transitivePeerDependencies:
@@ -9389,7 +9389,7 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  ws@8.19.0: {}
+  ws@8.20.0: {}
 
   wsl-utils@0.3.1:
     dependencies:
