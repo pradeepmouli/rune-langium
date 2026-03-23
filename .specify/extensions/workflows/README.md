@@ -102,8 +102,8 @@ specify-extend --patch
 specify extension list
 
 # Should show:
-#   Spec Kit Workflow Extensions (v3.0.0)
-#   Commands: 11 | Status: Enabled
+#   Spec Kit Workflow Extensions (v3.2.0)
+#   Commands: 19 | Status: Enabled
 
 # Try a command:
 /speckit.workflows.bugfix "test bug"
@@ -121,9 +121,10 @@ your-project/
 │   ├── extensions/
 │   │   └── workflows/           # Extension install directory
 │   │       ├── extension.yml    # Extension manifest
-│   │       ├── commands/        # 11 command files
+│   │       ├── commands/        # 19 command files (11 user + hook helpers)
 │   │       │   ├── bugfix.md
 │   │       │   ├── hotfix.md
+│   │       │   ├── issue-sync-before-specify.md
 │   │       │   └── ...
 │   │       ├── scripts/
 │   │       │   ├── bash/        # Bash create scripts + utils
@@ -200,6 +201,29 @@ Creating GitHub issues?
 # Step 3-5: Plan, tasks, implement (same as above)
 ```
 
+### Native Hook Issue Sync
+
+The extension now supports native lifecycle hook syncing for linked GitHub issues at:
+
+- `before_specify`, `after_specify`
+- `before_plan`, `after_plan`
+- `before_tasks`, `after_tasks`
+- `before_implement`, `after_implement`
+
+Hook commands call `scripts/bash/update-linked-issue.sh`, which:
+
+- Resolves the linked issue (PR closing references, feature docs, or explicit env var)
+- Applies event-specific labels
+- Optionally posts event status comments
+- Optionally bootstraps missing labels in the target repository
+
+Configuration files installed with the extension:
+
+- `.specify/extensions/workflows/workflows-config.yml`
+- `.specify/extensions/workflows/issue-sync.env`
+
+Use `issue-sync.env` to customize per-event mappings (`SPECKIT_ISSUE_SYNC_LABEL_*` and `SPECKIT_ISSUE_SYNC_STATUS_*`).
+
 ## Workflow Cheat Sheet
 
 | Workflow | Command | Alias | Key Feature |
@@ -221,7 +245,7 @@ Creating GitHub issues?
 
 ### spec-kit Versions
 
-- **Required**: spec-kit v0.2.0+ (with extension system support)
+- **Required**: spec-kit v0.3.1+ (with extension system support)
 - Install from source: `uv tool install specify-cli --from "git+https://github.com/github/spec-kit.git"`
 
 ### AI Agents
@@ -240,8 +264,8 @@ Commands are registered by spec-kit's extension system and work with any support
 
 ### Component Versions
 
-- **Extension** (v3.0.0) — Workflows, commands, templates, and scripts
-- **CLI Tool** (v2.0.0) — `specify-extend` installation and patching tool
+- **Extension** (v3.2.0) — Workflows, commands, templates, and scripts
+- **CLI Tool** (v2.2.1) — `specify-extend` installation and patching tool
 
 ## FAQ
 
