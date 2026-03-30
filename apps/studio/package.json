@@ -30,7 +30,7 @@
     "@rune-langium/design-system": "workspace:*",
     "@rune-langium/lsp-server": "workspace:*",
     "@rune-langium/visual-editor": "workspace:*",
-    "@tanstack/react-virtual": "^3.13.6",
+    "@tanstack/react-virtual": "^3.13.23",
     "@xyflow/react": "^12.10.1",
     "buffer": "^6.0.3",
     "codemirror": "6.0.2",
