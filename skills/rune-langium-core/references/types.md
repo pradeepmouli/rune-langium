@@ -18,12 +18,51 @@ RuneDslTerminalNames | RuneDslKeywordNames
 ```
 
 ### `Annotation`
+**Properties:**
+- `$container: RosettaModel` — The container node in the AST; every node except the root node has a container.
+- `$type: "Annotation"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `attributes: Attribute[]` — 
+- `definition: string` (optional) — 
+- `name: string` — 
+- `prefix: string` (optional) — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `AnnotationDeepPath`
+**Properties:**
+- `$container: AnnotationDeepPath | AnnotationPath | LabelAnnotation | RosettaDocReference | RuleReferenceAnnotation` — The container node in the AST; every node except the root node has a container.
+- `$type: "AnnotationDeepPath"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `attribute: Reference<AttributeOrChoiceOption>` — 
+- `operator: "->>"` — 
+- `receiver: AnnotationPathExpression` — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `AnnotationPath`
+**Properties:**
+- `$container: AnnotationDeepPath | AnnotationPath | LabelAnnotation | RosettaDocReference | RuleReferenceAnnotation` — The container node in the AST; every node except the root node has a container.
+- `$type: "AnnotationPath"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `attribute: Reference<AttributeOrChoiceOption>` — 
+- `operator: "->"` — 
+- `receiver: AnnotationPathExpression` — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `AnnotationPathAttributeReference`
+**Properties:**
+- `$container: AnnotationDeepPath | AnnotationPath | LabelAnnotation | RosettaDocReference | RuleReferenceAnnotation` — The container node in the AST; every node except the root node has a container.
+- `$type: "AnnotationPathAttributeReference"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `attribute: Reference<AttributeOrChoiceOption>` — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `AnnotationPathExpression`
 ```ts
@@ -31,12 +70,51 @@ AnnotationDeepPath | AnnotationPath | AnnotationPathAttributeReference | Rosetta
 ```
 
 ### `AnnotationQualifier`
+**Properties:**
+- `$container: AnnotationRef` — The container node in the AST; every node except the root node has a container.
+- `$type: "AnnotationQualifier"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `qualName: string` — 
+- `qualPath: RosettaAttributeReference` (optional) — 
+- `qualValue: string` (optional) — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `AnnotationRef`
+**Properties:**
+- `$container: Attribute | ChoiceOption | Data | RosettaFunction | Choice | Condition | RosettaEnumValue | RosettaEnumeration` — The container node in the AST; every node except the root node has a container.
+- `$type: "AnnotationRef"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `annotation: Reference<Annotation>` — 
+- `attribute: Reference<Attribute>` (optional) — 
+- `qualifiers: AnnotationQualifier[]` — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `ArithmeticOperation`
+**Properties:**
+- `$container: Condition | RosettaRule | ArithmeticOperation | AsKeyOperation | ChoiceOperation | ComparisonOperation | ConstructorKeyValuePair | DefaultOperation | DistinctOperation | EqualityOperation | FilterOperation | FirstOperation | FlattenOperation | InlineFunction | JoinOperation | LastOperation | ListLiteral | LogicalOperation | MapOperation | MaxOperation | MinOperation | OneOfOperation | Operation | ReduceOperation | ReverseOperation | RosettaAbsentExpression | RosettaConditionalExpression | RosettaContainsExpression | RosettaCountOperation | RosettaDeepFeatureCall | RosettaDisjointExpression | RosettaExistsExpression | RosettaFeatureCall | RosettaOnlyElement | RosettaOnlyExistsExpression | RosettaSuperCall | RosettaSymbolReference | ShortcutDeclaration | SortOperation | SumOperation | SwitchCaseOrDefault | SwitchOperation | ThenOperation | ToDateOperation | ToDateTimeOperation | ToEnumOperation | ToIntOperation | ToNumberOperation | ToStringOperation | ToTimeOperation | ToZonedDateTimeOperation | TypeCallArgument | WithMetaEntry | WithMetaOperation` — The container node in the AST; every node except the root node has a container.
+- `$type: "ArithmeticOperation"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `left: RosettaExpression` — 
+- `operator: "*" | "+" | "-" | "/"` — 
+- `right: RosettaExpression` — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `AsKeyOperation`
+**Properties:**
+- `$container: Condition | RosettaRule | ArithmeticOperation | AsKeyOperation | ChoiceOperation | ComparisonOperation | ConstructorKeyValuePair | DefaultOperation | DistinctOperation | EqualityOperation | FilterOperation | FirstOperation | FlattenOperation | InlineFunction | JoinOperation | LastOperation | ListLiteral | LogicalOperation | MapOperation | MaxOperation | MinOperation | OneOfOperation | Operation | ReduceOperation | ReverseOperation | RosettaAbsentExpression | RosettaConditionalExpression | RosettaContainsExpression | RosettaCountOperation | RosettaDeepFeatureCall | RosettaDisjointExpression | RosettaExistsExpression | RosettaFeatureCall | RosettaOnlyElement | RosettaOnlyExistsExpression | RosettaSuperCall | RosettaSymbolReference | ShortcutDeclaration | SortOperation | SumOperation | SwitchCaseOrDefault | SwitchOperation | ThenOperation | ToDateOperation | ToDateTimeOperation | ToEnumOperation | ToIntOperation | ToNumberOperation | ToStringOperation | ToTimeOperation | ToZonedDateTimeOperation | TypeCallArgument | WithMetaEntry | WithMetaOperation` — The container node in the AST; every node except the root node has a container.
+- `$type: "AsKeyOperation"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `argument: RosettaExpression` — 
+- `operator: "as-key"` — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `AssignPathRoot`
 ```ts
@@ -44,6 +122,24 @@ Attribute | ShortcutDeclaration
 ```
 
 ### `Attribute`
+**Properties:**
+- `$container: Annotation | Data | RosettaFunction` — The container node in the AST; every node except the root node has a container.
+- `$type: "Attribute"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `annotations: AnnotationRef[]` — 
+- `card: RosettaCardinality` — 
+- `definition: string` (optional) — 
+- `labels: LabelAnnotation[]` — 
+- `name: string` — 
+- `override: boolean` — 
+- `references: RosettaDocReference[]` — 
+- `ruleReferences: RuleReferenceAnnotation[]` — 
+- `synonyms: RosettaSynonym[]` — 
+- `typeCall: TypeCall` — 
+- `typeCallArgs: TypeCallArgument[]` — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `AttributeOrChoiceOption`
 ```ts
@@ -61,358 +157,28 @@ string
 ```
 
 ### `Choice`
+**Properties:**
+- `$container: RosettaModel` — The container node in the AST; every node except the root node has a container.
+- `$type: "Choice"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `annotations: AnnotationRef[]` — 
+- `attributes: ChoiceOption[]` — 
+- `definition: string` (optional) — 
+- `name: string` — 
+- `synonyms: RosettaClassSynonym[]` — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
+- `$document: LangiumDocument<AstNode>` (optional) — The document containing the AST; only the root node has a direct reference to the document.
 
 ### `ChoiceOperation`
-
-### `ChoiceOption`
-
-### `ClosureParameter`
-
-### `ComparisonOperation`
-
-### `Condition`
-
-### `ConstructorKeyValuePair`
-
-### `Data`
-
-### `DataOrChoice`
-```ts
-Choice | Data
-```
-
-### `DefaultOperation`
-
-### `DistinctOperation`
-
-### `DocumentRationale`
-
-### `EqualityOperation`
-
-### `ExistsModifier`
-```ts
-"multiple" | "single"
-```
-
-### `ExternalValueOperator`
-```ts
-"+" | "-"
-```
-
-### `FilterOperation`
-
-### `FirstOperation`
-
-### `FlattenOperation`
-
-### `Import`
-
-### `InlineFunction`
-
-### `Integer`
-```ts
-bigint
-```
-
-### `JoinOperation`
-
-### `LabelAnnotation`
-
-### `LastOperation`
-
-### `ListLiteral`
-
-### `LogicalOperation`
-
-### `MapOperation`
-
-### `MaxOperation`
-
-### `MinOperation`
-
-### `Necessity`
-```ts
-"optional" | "required"
-```
-
-### `OneOfOperation`
-
-### `Operation`
-
-### `QualifiedName`
-```ts
-string
-```
-
-### `QualifiedNameWithWildcard`
-```ts
-string
-```
-
-### `ReduceOperation`
-
-### `RegulatoryDocumentReference`
-
-### `ReverseOperation`
-
-### `RosettaAbsentExpression`
-
-### `RosettaAttributeReference`
-
-### `RosettaBasicType`
-
-### `RosettaBody`
-
-### `RosettaBooleanLiteral`
-
-### `RosettaCallableWithArgs`
-```ts
-RosettaExternalFunction | RosettaFunction | RosettaRule
-```
-
-### `RosettaCardinality`
-
-### `RosettaClassSynonym`
-
-### `RosettaConditionalExpression`
-
-### `RosettaConstructorExpression`
-
-### `RosettaContainsExpression`
-
-### `RosettaCorpus`
-
-### `RosettaCountOperation`
-
-### `RosettaDataReference`
-
-### `RosettaDeepFeatureCall`
-
-### `RosettaDisjointExpression`
-
-### `RosettaDocReference`
-
-### `RosettaEnumeration`
-
-### `RosettaEnumSynonym`
-
-### `RosettaEnumValue`
-
-### `RosettaEnumValueReference`
-
-### `RosettaExistsExpression`
-
-### `RosettaExpression`
-```ts
-ArithmeticOperation | AsKeyOperation | ChoiceOperation | ComparisonOperation | DefaultOperation | DistinctOperation | EqualityOperation | FilterOperation | FirstOperation | FlattenOperation | JoinOperation | LastOperation | ListLiteral | LogicalOperation | MapOperation | MaxOperation | MinOperation | OneOfOperation | ReduceOperation | ReverseOperation | RosettaAbsentExpression | RosettaConditionalExpression | RosettaConstructorExpression | RosettaContainsExpression | RosettaCountOperation | RosettaDeepFeatureCall | RosettaDisjointExpression | RosettaExistsExpression | RosettaFeatureCall | RosettaImplicitVariable | RosettaLiteral | RosettaOnlyElement | RosettaOnlyExistsExpression | RosettaSuperCall | RosettaSymbolReference | SortOperation | SumOperation | SwitchOperation | ThenOperation | ToDateOperation | ToDateTimeOperation | ToEnumOperation | ToIntOperation | ToNumberOperation | ToStringOperation | ToTimeOperation | ToZonedDateTimeOperation | WithMetaOperation
-```
-
-### `RosettaExternalClass`
-
-### `RosettaExternalClassSynonym`
-
-### `RosettaExternalEnum`
-
-### `RosettaExternalEnumValue`
-
-### `RosettaExternalFunction`
-
-### `RosettaExternalRegularAttribute`
-
-### `RosettaExternalRuleSource`
-
-### `RosettaExternalSynonym`
-
-### `RosettaFeature`
-```ts
-Attribute | ChoiceOption | RosettaEnumValue | RosettaMetaType | RosettaRecordFeature
-```
-
-### `RosettaFeatureCall`
-
-### `RosettaFunction`
-
-### `RosettaImplicitVariable`
-
-### `RosettaIntLiteral`
-
-### `RosettaLiteral`
-```ts
-RosettaBooleanLiteral | RosettaIntLiteral | RosettaNumberLiteral | RosettaStringLiteral
-```
-
-### `RosettaMapPath`
-
-### `RosettaMapPathValue`
-
-### `RosettaMapping`
-
-### `RosettaMappingInstance`
-
-### `RosettaMappingPathTests`
-
-### `RosettaMapRosettaPath`
-
-### `RosettaMapTest`
-```ts
-RosettaMapPath | RosettaMapRosettaPath | RosettaMapTestExpression | RosettaMapTestFunc
-```
-
-### `RosettaMapTestAbsentExpression`
-
-### `RosettaMapTestEqualityOperation`
-
-### `RosettaMapTestExistsExpression`
-
-### `RosettaMapTestExpression`
-```ts
-RosettaEnumValueReference | RosettaLiteral | RosettaMapPathValue | RosettaMapTestAbsentExpression | RosettaMapTestEqualityOperation | RosettaMapTestExistsExpression
-```
-
-### `RosettaMapTestFunc`
-
-### `RosettaMergeSynonymValue`
-
-### `RosettaMetaType`
-
-### `RosettaModel`
-
-### `RosettaNumberLiteral`
-
-### `RosettaOnlyElement`
-
-### `RosettaOnlyExistsExpression`
-
-### `RosettaParameter`
-
-### `RosettaQualifiableConfiguration`
-
-### `RosettaQualifiableType`
-```ts
-"isEvent" | "isProduct"
-```
-
-### `RosettaRecordFeature`
-
-### `RosettaRecordType`
-
-### `RosettaReport`
-
-### `RosettaRootElement`
-```ts
-Annotation | Choice | Data | RosettaBasicType | RosettaBody | RosettaCorpus | RosettaEnumeration | RosettaExternalFunction | RosettaExternalRuleSource | RosettaFunction | RosettaMetaType | RosettaRecordType | RosettaReport | RosettaRule | RosettaSegment | RosettaSynonymSource | RosettaTypeAlias
-```
-
-### `RosettaRule`
-
-### `RosettaScope`
-
-### `RosettaSegment`
-
-### `RosettaSegmentRef`
-
-### `RosettaStringLiteral`
-
-### `RosettaSuperCall`
-
-### `RosettaSymbol`
-```ts
-Attribute | Choice | ClosureParameter | Data | RosettaEnumValue | RosettaEnumeration | RosettaExternalFunction | RosettaFunction | RosettaMetaType | RosettaParameter | RosettaRule | ShortcutDeclaration | TypeParameter
-```
-
-### `RosettaSymbolReference`
-
-### `RosettaSynonym`
-
-### `RosettaSynonymBody`
-
-### `RosettaSynonymRef`
-```ts
-"componentID" | "tag"
-```
-
-### `RosettaSynonymSource`
-
-### `RosettaSynonymValueBase`
-
-### `RosettaType`
-```ts
-Choice | Data | RosettaBasicType | RosettaEnumeration | RosettaRecordType | RosettaTypeAlias
-```
-
-### `RosettaTypeAlias`
-
-### `RosettaTypedFeature`
-```ts
-Attribute | RosettaRecordFeature
-```
-
-### `RuleReferenceAnnotation`
-
-### `Segment`
-
-### `ShortcutDeclaration`
-
-### `SortOperation`
-
-### `SumOperation`
-
-### `SwitchCaseGuard`
-
-### `SwitchCaseOrDefault`
-
-### `SwitchCaseTarget`
-```ts
-Choice | Data | RosettaEnumValue | RosettaEnumeration
-```
-
-### `SwitchOperation`
-
-### `ThenOperation`
-
-### `ToDateOperation`
-
-### `ToDateTimeOperation`
-
-### `ToEnumOperation`
-
-### `ToIntOperation`
-
-### `ToNumberOperation`
-
-### `ToStringOperation`
-
-### `ToTimeOperation`
-
-### `ToZonedDateTimeOperation`
-
-### `TypeCall`
-
-### `TypeCallArgument`
-
-### `TypeParameter`
-
-### `TypeParameterValidID`
-```ts
-"max" | "min" | ValidID
-```
-
-### `ValidID`
-```ts
-"condition" | "pattern" | "scope" | "source" | "value" | "version" | string
-```
-
-### `WithMetaEntry`
-
-### `WithMetaOperation`
-
-### `RuneDslAstType`
-
-### `ParseResult`
-Result of parsing a Rosetta DSL source string.
-
-### `RuneDslServices`
-Union type for all services available in the Rune DSL language.
-```ts
-LangiumCoreServices
-```
+**Properties:**
+- `$container: Condition | RosettaRule | ArithmeticOperation | AsKeyOperation | ChoiceOperation | ComparisonOperation | ConstructorKeyValuePair | DefaultOperation | DistinctOperation | EqualityOperation | FilterOperation | FirstOperation | FlattenOperation | InlineFunction | JoinOperation | LastOperation | ListLiteral | LogicalOperation | MapOperation | MaxOperation | MinOperation | OneOfOperation | Operation | ReduceOperation | ReverseOperation | RosettaAbsentExpression | RosettaConditionalExpression | RosettaContainsExpression | RosettaCountOperation | RosettaDeepFeatureCall | RosettaDisjointExpression | RosettaExistsExpression | RosettaFeatureCall | RosettaOnlyElement | RosettaOnlyExistsExpression | RosettaSuperCall | RosettaSymbolReference | ShortcutDeclaration | SortOperation | SumOperation | SwitchCaseOrDefault | SwitchOperation | ThenOperation | ToDateOperation | ToDateTimeOperation | ToEnumOperation | ToIntOperation | ToNumberOperation | ToStringOperation | ToTimeOperation | ToZonedDateTimeOperation | TypeCallArgument | WithMetaEntry | WithMetaOperation` — The container node in the AST; every node except the root node has a container.
+- `$type: "ChoiceOperation"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
+- `argument: RosettaExpression` (optional) — 
+- `attributes: Reference<Attribute>[]` — 
+- `necessity: Necessity` — 
+- `operator: "choice"` — 
+- `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
+- `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+
+<!-- truncated -->

@@ -1,6 +1,7 @@
 # Classes
 
 ## `RuneDslAstReflection`
+*extends `AbstractAstReflection`*
 ```ts
 constructor(): RuneDslAstReflection
 ```

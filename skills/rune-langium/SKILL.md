@@ -1,7 +1,7 @@
 ---
 name: rune-langium
-description: "API reference for rune-langium Use when working with createRuneLspServer, createConnectionAdapter."
-license: MIT
+description: "API reference for rune-langium Use when working with createRuneLspServer, createConnectionAdapter. Keywords: rune, rosetta, dsl, langium, cdm, isda, drr, finos, language-server, lsp, visual-editor, reactflow."
+license: SEE LICENSE IN LICENSE
 ---
 
 # rune-langium

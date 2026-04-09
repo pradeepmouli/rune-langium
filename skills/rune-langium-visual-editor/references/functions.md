@@ -259,8 +259,10 @@ clearLayoutCache(): void
 ```
 
 ## `computeLayoutAsync`
-Compute layout asynchronously, yielding to the main thread
-between phases to keep the UI responsive.
+Compute layout asynchronously.
+
+Prefers a Web Worker for true off-main-thread execution.
+Falls back to requestIdleCallback-based yielding on the main thread.
 
 Returns null if a newer layout request superseded this one.
 ```ts
@@ -341,7 +343,7 @@ useTemporalStore<T>(selector: (state: TemporalState<TrackedState>) => T): T
 ```
 **Parameters:**
 - `selector: (state: TemporalState<TrackedState>) => T` — Selector function to pick values from the temporal state.
-**Returns:** `T`
+**Returns:** `T` — The selected value from the temporal store.
 
 ## `useCanUndo`
 Whether there are past states to undo to.
@@ -388,7 +390,7 @@ useAutoSave<T>(onCommit: (value: T) => void, delay: number): (value: T) => void
 **Parameters:**
 - `onCommit: (value: T) => void` — Callback invoked with the latest value on commit.
 - `delay: number` — default: `500` — Debounce delay in milliseconds (default 500).
-**Returns:** `(value: T) => void`
+**Returns:** `(value: T) => void` — A debounced setter function.
 
 ## `useExpressionAutocomplete`
 ```ts
@@ -485,7 +487,7 @@ validateExpression(expression: string): ExpressionValidationResult
 ```
 **Parameters:**
 - `expression: string` — The expression text to validate.
-**Returns:** `ExpressionValidationResult`
+**Returns:** `ExpressionValidationResult` — Validation result with error message if invalid.
 
 ## `validateGraph`
 Run all validations on the current graph state and return errors.
