@@ -6,7 +6,7 @@
 
 # Interface: NamespaceTypeEntry
 
-Defined in: [packages/visual-editor/src/types.ts:479](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L479)
+Defined in: [packages/visual-editor/src/types.ts:479](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L479)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:479](https://github.com/pradeep
 
 > `optional` **isSystem?**: `boolean`
 
-Defined in: [packages/visual-editor/src/types.ts:484](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L484)
+Defined in: [packages/visual-editor/src/types.ts:484](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L484)
 
 Whether this entry is from a system/base-type file (read-only).
 
@@ -24,7 +24,7 @@ Whether this entry is from a system/base-type file (read-only).
 
 > **kind**: [`TypeKind`](../type-aliases/TypeKind.md)
 
-Defined in: [packages/visual-editor/src/types.ts:482](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L482)
+Defined in: [packages/visual-editor/src/types.ts:482](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L482)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/visual-editor/src/types.ts:482](https://github.com/pradeep
 
 > **name**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:481](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L481)
+Defined in: [packages/visual-editor/src/types.ts:481](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L481)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [packages/visual-editor/src/types.ts:481](https://github.com/pradeep
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:480](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L480)
+Defined in: [packages/visual-editor/src/types.ts:480](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L480)

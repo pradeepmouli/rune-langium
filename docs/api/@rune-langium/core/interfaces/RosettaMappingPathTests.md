@@ -6,7 +6,7 @@
 
 # Interface: RosettaMappingPathTests
 
-Defined in: [packages/core/src/generated/ast.ts:3651](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3651)
+Defined in: [packages/core/src/generated/ast.ts:3651](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3651)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:3651](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaMappingInstance`](RosettaMappingInstance.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3652](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3652)
+Defined in: [packages/core/src/generated/ast.ts:3652](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3652)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaMappingPathTests"`
 
-Defined in: [packages/core/src/generated/ast.ts:3653](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3653)
+Defined in: [packages/core/src/generated/ast.ts:3653](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3653)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,4 +102,4 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **tests**: [`RosettaMapTest`](../type-aliases/RosettaMapTest.md)[]
 
-Defined in: [packages/core/src/generated/ast.ts:3654](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3654)
+Defined in: [packages/core/src/generated/ast.ts:3654](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3654)

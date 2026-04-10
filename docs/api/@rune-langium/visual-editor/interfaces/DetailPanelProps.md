@@ -6,7 +6,7 @@
 
 # Interface: DetailPanelProps
 
-Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:24](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/DetailPanel.tsx#L24)
+Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:24](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/DetailPanel.tsx#L24)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:24](ht
 
 > `optional` **allNodeIds?**: `string`[]
 
-Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/DetailPanel.tsx#L29)
+Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/DetailPanel.tsx#L29)
 
 All loaded graph node IDs for resolving type name to node ID.
 
@@ -24,7 +24,7 @@ All loaded graph node IDs for resolving type name to node ID.
 
 > **nodeData**: [`AnyGraphNode`](../type-aliases/AnyGraphNode.md) \| `null`
 
-Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:25](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/DetailPanel.tsx#L25)
+Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:25](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/DetailPanel.tsx#L25)
 
 ***
 
@@ -32,6 +32,6 @@ Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:25](ht
 
 > `optional` **onNavigateToNode?**: [`NavigateToNodeCallback`](../type-aliases/NavigateToNodeCallback.md)
 
-Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:27](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/DetailPanel.tsx#L27)
+Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:27](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/DetailPanel.tsx#L27)
 
 Callback to navigate to a type's graph node.

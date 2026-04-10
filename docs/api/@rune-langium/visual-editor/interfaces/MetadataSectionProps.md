@@ -6,7 +6,7 @@
 
 # Interface: MetadataSectionProps
 
-Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:25](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/MetadataSection.tsx#L25)
+Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:25](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/MetadataSection.tsx#L25)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:2
 
 > **onCommentsCommit**: (`comments`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:31](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/MetadataSection.tsx#L31)
+Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:31](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/MetadataSection.tsx#L31)
 
 Called when comments change (debounced commit to graph).
 
@@ -34,7 +34,7 @@ Called when comments change (debounced commit to graph).
 
 > **onDefinitionCommit**: (`definition`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/MetadataSection.tsx#L29)
+Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/MetadataSection.tsx#L29)
 
 Called when definition changes (debounced commit to graph).
 
@@ -54,7 +54,7 @@ Called when definition changes (debounced commit to graph).
 
 > **onSynonymAdd**: (`synonym`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:33](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/MetadataSection.tsx#L33)
+Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:33](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/MetadataSection.tsx#L33)
 
 Called when a synonym is added (immediate commit to graph).
 
@@ -74,7 +74,7 @@ Called when a synonym is added (immediate commit to graph).
 
 > **onSynonymRemove**: (`index`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:35](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/MetadataSection.tsx#L35)
+Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:35](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/MetadataSection.tsx#L35)
 
 Called when a synonym is removed by index (immediate commit to graph).
 
@@ -94,6 +94,6 @@ Called when a synonym is removed by index (immediate commit to graph).
 
 > `optional` **readOnly?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:27](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/MetadataSection.tsx#L27)
+Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:27](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/MetadataSection.tsx#L27)
 
 Whether the metadata section is read-only.

@@ -6,7 +6,7 @@
 
 # Interface: RosettaExternalClassSynonym
 
-Defined in: [packages/core/src/generated/ast.ts:3161](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3161)
+Defined in: [packages/core/src/generated/ast.ts:3161](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3161)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:3161](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaExternalClass`](RosettaExternalClass.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3162](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3162)
+Defined in: [packages/core/src/generated/ast.ts:3162](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3162)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaExternalClassSynonym"`
 
-Defined in: [packages/core/src/generated/ast.ts:3163](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3163)
+Defined in: [packages/core/src/generated/ast.ts:3163](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3163)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **metaValue**: [`RosettaSynonymValueBase`](RosettaSynonymValueBase.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3164](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3164)
+Defined in: [packages/core/src/generated/ast.ts:3164](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3164)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:3164](https://github.com/pradeep
 
 > `optional` **value?**: [`RosettaSynonymValueBase`](RosettaSynonymValueBase.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3165](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3165)
+Defined in: [packages/core/src/generated/ast.ts:3165](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3165)

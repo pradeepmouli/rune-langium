@@ -8,7 +8,7 @@
 
 > **parseWorkspace**(`entries`): `Promise`\<[`ParseResult`](../interfaces/ParseResult.md)[]\>
 
-Defined in: [packages/core/src/api/parse.ts:86](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/api/parse.ts#L86)
+Defined in: [packages/core/src/api/parse.ts:86](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/api/parse.ts#L86)
 
 Parse multiple Rosetta DSL source strings as a workspace.
 Cross-references between documents will be resolved.

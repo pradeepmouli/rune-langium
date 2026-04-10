@@ -8,7 +8,7 @@
 
 > **validateNotEmpty**(`name`, `context?`): `string` \| `null`
 
-Defined in: [packages/visual-editor/src/validation/edit-validator.ts:161](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/validation/edit-validator.ts#L161)
+Defined in: [packages/visual-editor/src/validation/edit-validator.ts:161](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/validation/edit-validator.ts#L161)
 
 Validate that a name is non-empty after trimming whitespace.
 

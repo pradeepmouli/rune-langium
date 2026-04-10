@@ -6,7 +6,7 @@
 
 # Interface: InlineFunction
 
-Defined in: [packages/core/src/generated/ast.ts:1318](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L1318)
+Defined in: [packages/core/src/generated/ast.ts:1318](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L1318)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:1318](https://github.com/pradeep
 
 > `readonly` **$container**: [`FilterOperation`](FilterOperation.md) \| [`MapOperation`](MapOperation.md) \| [`MaxOperation`](MaxOperation.md) \| [`MinOperation`](MinOperation.md) \| [`ReduceOperation`](ReduceOperation.md) \| [`SortOperation`](SortOperation.md) \| [`ThenOperation`](ThenOperation.md)
 
-Defined in: [packages/core/src/generated/ast.ts:1319](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L1319)
+Defined in: [packages/core/src/generated/ast.ts:1319](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L1319)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"InlineFunction"`
 
-Defined in: [packages/core/src/generated/ast.ts:1327](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L1327)
+Defined in: [packages/core/src/generated/ast.ts:1327](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L1327)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **body**: [`RosettaExpression`](../type-aliases/RosettaExpression.md)
 
-Defined in: [packages/core/src/generated/ast.ts:1328](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L1328)
+Defined in: [packages/core/src/generated/ast.ts:1328](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L1328)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:1328](https://github.com/pradeep
 
 > **parameters**: [`ClosureParameter`](ClosureParameter.md)[]
 
-Defined in: [packages/core/src/generated/ast.ts:1329](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L1329)
+Defined in: [packages/core/src/generated/ast.ts:1329](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L1329)

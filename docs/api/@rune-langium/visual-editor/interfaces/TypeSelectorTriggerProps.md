@@ -6,7 +6,7 @@
 
 # Interface: TypeSelectorTriggerProps
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:50](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L50)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:50](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L50)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:50](
 
 > **disabled**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:60](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L60)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:60](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L60)
 
 Whether the selector is disabled.
 
@@ -24,7 +24,7 @@ Whether the selector is disabled.
 
 > **onToggle**: () => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:58](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L58)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:58](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L58)
 
 Toggle the popover.
 
@@ -38,7 +38,7 @@ Toggle the popover.
 
 > **open**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:56](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L56)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:56](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L56)
 
 Whether the popover is open.
 
@@ -48,7 +48,7 @@ Whether the popover is open.
 
 > **placeholder**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:54](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L54)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:54](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L54)
 
 Placeholder text.
 
@@ -58,6 +58,6 @@ Placeholder text.
 
 > **selected**: [`TypeOption`](TypeOption.md) \| `null`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:52](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L52)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:52](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L52)
 
 Currently selected option, or null.

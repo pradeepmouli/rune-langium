@@ -8,7 +8,7 @@
 
 > `const` **RuneDslModule**: `Module`\<`LangiumCoreServices`, `PartialLangiumCoreServices`\>
 
-Defined in: [packages/core/src/services/rune-dsl-module.ts:33](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/services/rune-dsl-module.ts#L33)
+Defined in: [packages/core/src/services/rune-dsl-module.ts:33](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/services/rune-dsl-module.ts#L33)
 
 Dependency injection module for the Rune DSL language.
 

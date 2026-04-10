@@ -8,4 +8,4 @@
 
 > `const` **SwitchCaseOrDefaultSchema**: `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"SwitchCaseOrDefault"`\>; `expression`: `ZodLazy`\<`any`\>; `guard`: `ZodOptional`\<`ZodObject`\<\{ `$type`: `ZodLiteral`\<`"SwitchCaseGuard"`\>; `literalGuard`: `ZodOptional`\<`ZodLazy`\<`ZodDiscriminatedUnion`\<\[`ZodObject`\<\{ `$type`: ...; `value`: ...; \}, `$loose`\>, `ZodObject`\<\{ `$type`: ...; `value`: ...; \}, `$loose`\>, `ZodObject`\<\{ `$type`: ...; `value`: ...; \}, `$loose`\>, `ZodObject`\<\{ `$type`: ...; `value`: ...; \}, `$loose`\>\], `"$type"`\>\>\>; `referenceGuard`: `ZodOptional`\<`ZodObject`\<\{ `$refText`: `ZodString`; `ref`: `ZodOptional`\<`ZodUnknown`\>; \}, `$loose`\>\>; \}, `$loose`\>\>; \}, `$loose`\>
 
-Defined in: [packages/core/src/generated/zod-schemas.ts:861](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/zod-schemas.ts#L861)
+Defined in: [packages/core/src/generated/zod-schemas.ts:861](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/zod-schemas.ts#L861)

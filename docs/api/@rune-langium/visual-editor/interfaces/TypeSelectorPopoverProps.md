@@ -6,7 +6,7 @@
 
 # Interface: TypeSelectorPopoverProps
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:63](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L63)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:63](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L63)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:63](
 
 > **allowClear**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:73](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L73)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:73](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L73)
 
 Whether to show a "None" clear option.
 
@@ -24,7 +24,7 @@ Whether to show a "None" clear option.
 
 > **groups**: [`TypeSelectorGroup`](TypeSelectorGroup.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:65](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L65)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:65](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L65)
 
 Grouped and filtered options ready for rendering.
 
@@ -34,7 +34,7 @@ Grouped and filtered options ready for rendering.
 
 > **onSearchChange**: (`query`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:69](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L69)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:69](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L69)
 
 Update the search query.
 
@@ -54,7 +54,7 @@ Update the search query.
 
 > **onSelect**: (`value`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:71](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L71)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:71](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L71)
 
 Handle option selection.
 
@@ -74,7 +74,7 @@ Handle option selection.
 
 > **searchQuery**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:67](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L67)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:67](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L67)
 
 Current search query.
 
@@ -84,6 +84,6 @@ Current search query.
 
 > **selectedValue**: `string` \| `null`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:75](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/TypeSelector.tsx#L75)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:75](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeSelector.tsx#L75)
 
 The currently selected value.

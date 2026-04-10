@@ -6,7 +6,7 @@
 
 # Interface: CodeGenerationRequest
 
-Defined in: [types.ts:11](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/codegen/src/types.ts#L11)
+Defined in: [types.ts:11](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L11)
 
 Request to generate code from Rune DSL model files.
 
@@ -16,7 +16,7 @@ Request to generate code from Rune DSL model files.
 
 > **files**: `object`[]
 
-Defined in: [types.ts:15](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/codegen/src/types.ts#L15)
+Defined in: [types.ts:15](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L15)
 
 .rosetta files with path and content
 
@@ -34,7 +34,7 @@ Defined in: [types.ts:15](https://github.com/pradeepmouli/rune-langium/blob/24ec
 
 > **language**: `string`
 
-Defined in: [types.ts:13](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/codegen/src/types.ts#L13)
+Defined in: [types.ts:13](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L13)
 
 Target language (e.g., "java", "python", "scala", "csharp")
 
@@ -44,6 +44,6 @@ Target language (e.g., "java", "python", "scala", "csharp")
 
 > `optional` **options?**: `Record`\<`string`, `string`\>
 
-Defined in: [types.ts:17](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/codegen/src/types.ts#L17)
+Defined in: [types.ts:17](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L17)
 
 Generator-specific options

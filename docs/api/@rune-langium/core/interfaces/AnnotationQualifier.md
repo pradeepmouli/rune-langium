@@ -6,7 +6,7 @@
 
 # Interface: AnnotationQualifier
 
-Defined in: [packages/core/src/generated/ast.ts:285](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L285)
+Defined in: [packages/core/src/generated/ast.ts:285](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L285)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:285](https://github.com/pradeepm
 
 > `readonly` **$container**: [`AnnotationRef`](AnnotationRef.md)
 
-Defined in: [packages/core/src/generated/ast.ts:286](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L286)
+Defined in: [packages/core/src/generated/ast.ts:286](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L286)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"AnnotationQualifier"`
 
-Defined in: [packages/core/src/generated/ast.ts:287](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L287)
+Defined in: [packages/core/src/generated/ast.ts:287](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L287)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **qualName**: `string`
 
-Defined in: [packages/core/src/generated/ast.ts:288](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L288)
+Defined in: [packages/core/src/generated/ast.ts:288](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L288)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [packages/core/src/generated/ast.ts:288](https://github.com/pradeepm
 
 > `optional` **qualPath?**: [`RosettaAttributeReference`](RosettaAttributeReference.md)
 
-Defined in: [packages/core/src/generated/ast.ts:289](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L289)
+Defined in: [packages/core/src/generated/ast.ts:289](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L289)
 
 ***
 
@@ -118,4 +118,4 @@ Defined in: [packages/core/src/generated/ast.ts:289](https://github.com/pradeepm
 
 > `optional` **qualValue?**: `string`
 
-Defined in: [packages/core/src/generated/ast.ts:290](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L290)
+Defined in: [packages/core/src/generated/ast.ts:290](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L290)

@@ -6,7 +6,7 @@
 
 # Interface: ChoiceOptionRowProps
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:21](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L21)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:21](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L21)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:2
 
 > `optional` **allNodeIds?**: `string`[]
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:35](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L35)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:35](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L35)
 
 All loaded graph node IDs for resolving type name to node ID.
 
@@ -24,7 +24,7 @@ All loaded graph node IDs for resolving type name to node ID.
 
 > **availableTypes**: [`TypeOption`](TypeOption.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:27](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L27)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:27](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L27)
 
 Available type options (for badge styling lookup).
 
@@ -34,7 +34,7 @@ Available type options (for badge styling lookup).
 
 > `optional` **disabled?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:31](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L31)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:31](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L31)
 
 Whether the row is disabled.
 
@@ -44,7 +44,7 @@ Whether the row is disabled.
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:25](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L25)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:25](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L25)
 
 Node ID owning this choice.
 
@@ -54,7 +54,7 @@ Node ID owning this choice.
 
 > `optional` **onNavigateToNode?**: [`NavigateToNodeCallback`](../type-aliases/NavigateToNodeCallback.md)
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:33](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L33)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:33](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L33)
 
 Callback to navigate to a type's graph node.
 
@@ -64,7 +64,7 @@ Callback to navigate to a type's graph node.
 
 > **onRemove**: (`nodeId`, `typeName`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L29)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L29)
 
 Remove this option.
 
@@ -88,6 +88,6 @@ Remove this option.
 
 > **typeName**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:23](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L23)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx:23](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/ChoiceOptionRow.tsx#L23)
 
 The type name for this choice option.

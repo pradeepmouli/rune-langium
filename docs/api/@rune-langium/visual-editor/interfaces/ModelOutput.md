@@ -6,7 +6,7 @@
 
 # Interface: ModelOutput
 
-Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:35](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/adapters/model-to-ast.ts#L35)
+Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:35](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/adapters/model-to-ast.ts#L35)
 
 A serializer-compatible model object.
 Same shape as the legacy SyntheticModel but typed against AstNodeModel.
@@ -17,7 +17,7 @@ Same shape as the legacy SyntheticModel but typed against AstNodeModel.
 
 > **$type**: `"RosettaModel"`
 
-Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:36](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/adapters/model-to-ast.ts#L36)
+Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:36](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/adapters/model-to-ast.ts#L36)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:36](https://git
 
 > **elements**: `unknown`[]
 
-Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:39](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/adapters/model-to-ast.ts#L39)
+Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:39](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/adapters/model-to-ast.ts#L39)
 
 ***
 
@@ -33,7 +33,7 @@ Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:39](https://git
 
 > **imports**: `never`[]
 
-Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:40](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/adapters/model-to-ast.ts#L40)
+Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:40](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/adapters/model-to-ast.ts#L40)
 
 ***
 
@@ -41,7 +41,7 @@ Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:40](https://git
 
 > **name**: `string`
 
-Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:37](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/adapters/model-to-ast.ts#L37)
+Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:37](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/adapters/model-to-ast.ts#L37)
 
 ***
 
@@ -49,4 +49,4 @@ Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:37](https://git
 
 > **version**: `string`
 
-Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:38](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/adapters/model-to-ast.ts#L38)
+Defined in: [packages/visual-editor/src/adapters/model-to-ast.ts:38](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/adapters/model-to-ast.ts#L38)

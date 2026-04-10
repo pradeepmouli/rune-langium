@@ -8,7 +8,7 @@
 
 > **getFunctionInputs**(`func`): [`Attribute`](../interfaces/Attribute.md)[]
 
-Defined in: [packages/core/src/utils/expression-utils.ts:36](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/utils/expression-utils.ts#L36)
+Defined in: [packages/core/src/utils/expression-utils.ts:36](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/utils/expression-utils.ts#L36)
 
 Get all input attributes from a RosettaFunction.
 

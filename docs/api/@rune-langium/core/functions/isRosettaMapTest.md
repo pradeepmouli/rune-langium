@@ -8,7 +8,7 @@
 
 > **isRosettaMapTest**(`item`): `item is RosettaMapTest`
 
-Defined in: [packages/core/src/generated/ast.ts:3691](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3691)
+Defined in: [packages/core/src/generated/ast.ts:3691](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3691)
 
 ## Parameters
 

@@ -6,7 +6,7 @@
 
 # Interface: EnumFormProps
 
-Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:79](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/EnumForm.tsx#L79)
+Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:79](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumForm.tsx#L79)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:79](http
 
 > **actions**: [`EnumFormActions`](EnumFormActions.md)
 
-Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:87](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/EnumForm.tsx#L87)
+Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:87](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumForm.tsx#L87)
 
 Enum-specific editor form action callbacks.
 
@@ -24,7 +24,7 @@ Enum-specific editor form action callbacks.
 
 > `optional` **allNodeIds?**: `string`[]
 
-Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:93](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/EnumForm.tsx#L93)
+Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:93](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumForm.tsx#L93)
 
 All loaded graph node IDs for resolving type name to node ID.
 
@@ -34,7 +34,7 @@ All loaded graph node IDs for resolving type name to node ID.
 
 > `optional` **allNodes?**: [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:89](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/EnumForm.tsx#L89)
+Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:89](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumForm.tsx#L89)
 
 All graph nodes for inherited member resolution.
 
@@ -44,7 +44,7 @@ All graph nodes for inherited member resolution.
 
 > **availableTypes**: [`TypeOption`](TypeOption.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:85](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/EnumForm.tsx#L85)
+Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:85](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumForm.tsx#L85)
 
 Available type options for selectors.
 
@@ -54,7 +54,7 @@ Available type options for selectors.
 
 > **data**: [`AnyGraphNode`](../type-aliases/AnyGraphNode.md)
 
-Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:83](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/EnumForm.tsx#L83)
+Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:83](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumForm.tsx#L83)
 
 Data payload for the selected enum node (AnyGraphNode with $type='RosettaEnumeration').
 
@@ -64,7 +64,7 @@ Data payload for the selected enum node (AnyGraphNode with $type='RosettaEnumera
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:81](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/EnumForm.tsx#L81)
+Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:81](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumForm.tsx#L81)
 
 Node ID of the Enum being edited.
 
@@ -74,6 +74,6 @@ Node ID of the Enum being edited.
 
 > `optional` **onNavigateToNode?**: [`NavigateToNodeCallback`](../type-aliases/NavigateToNodeCallback.md)
 
-Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:91](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/EnumForm.tsx#L91)
+Defined in: [packages/visual-editor/src/components/editors/EnumForm.tsx:91](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumForm.tsx#L91)
 
 Callback to navigate to a type's graph node.

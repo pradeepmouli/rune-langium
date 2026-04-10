@@ -6,7 +6,7 @@
 
 # Interface: GeneratedFile
 
-Defined in: [types.ts:33](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/codegen/src/types.ts#L33)
+Defined in: [types.ts:33](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L33)
 
 A single generated output file.
 
@@ -16,7 +16,7 @@ A single generated output file.
 
 > **content**: `string`
 
-Defined in: [types.ts:37](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/codegen/src/types.ts#L37)
+Defined in: [types.ts:37](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L37)
 
 Generated source code
 
@@ -26,6 +26,6 @@ Generated source code
 
 > **path**: `string`
 
-Defined in: [types.ts:35](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/codegen/src/types.ts#L35)
+Defined in: [types.ts:35](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L35)
 
 Output file path (e.g., "com/rosetta/model/MyType.java")

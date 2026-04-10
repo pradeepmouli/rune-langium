@@ -6,7 +6,7 @@
 
 # Interface: NamespaceExplorerPanelProps
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:53](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L53)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:53](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L53)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel
 
 > `optional` **className?**: `string`
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:73](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L73)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:73](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L73)
 
 Optional className for outer container.
 
@@ -24,7 +24,7 @@ Optional className for outer container.
 
 > **expandedNamespaces**: `Set`\<`string`\>
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:57](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L57)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:57](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L57)
 
 Set of currently expanded (visible) namespaces.
 
@@ -34,7 +34,7 @@ Set of currently expanded (visible) namespaces.
 
 > **hiddenNodeIds**: `Set`\<`string`\>
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:59](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L59)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:59](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L59)
 
 Set of individually hidden node IDs.
 
@@ -44,7 +44,7 @@ Set of individually hidden node IDs.
 
 > `optional` **hiddenRefCounts?**: `Map`\<`string`, `number`\>
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:75](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L75)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:75](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L75)
 
 Total edge count for cross-namespace reference detection.
 
@@ -54,7 +54,7 @@ Total edge count for cross-namespace reference detection.
 
 > **nodes**: [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:55](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L55)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:55](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L55)
 
 All graph nodes (full set, including hidden ones).
 
@@ -64,7 +64,7 @@ All graph nodes (full set, including hidden ones).
 
 > **onCollapseAll**: () => `void`
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:67](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L67)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:67](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L67)
 
 Collapse all namespaces.
 
@@ -78,7 +78,7 @@ Collapse all namespaces.
 
 > **onExpandAll**: () => `void`
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:65](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L65)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:65](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L65)
 
 Expand all namespaces.
 
@@ -92,7 +92,7 @@ Expand all namespaces.
 
 > `optional` **onSelectNode?**: (`nodeId`) => `void`
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:69](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L69)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:69](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L69)
 
 Called when a node is clicked to select it in the graph.
 
@@ -112,7 +112,7 @@ Called when a node is clicked to select it in the graph.
 
 > **onToggleNamespace**: (`namespace`) => `void`
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:61](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L61)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:61](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L61)
 
 Toggle a namespace's visibility on the graph.
 
@@ -132,7 +132,7 @@ Toggle a namespace's visibility on the graph.
 
 > **onToggleNode**: (`nodeId`) => `void`
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:63](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L63)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:63](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L63)
 
 Toggle an individual node's visibility.
 
@@ -152,6 +152,6 @@ Toggle an individual node's visibility.
 
 > `optional` **selectedNodeId?**: `string` \| `null`
 
-Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:71](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L71)
+Defined in: [packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx:71](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx#L71)
 
 Currently selected node ID (for highlighting).

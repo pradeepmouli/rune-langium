@@ -6,7 +6,7 @@
 
 # Interface: TypeCall
 
-Defined in: [packages/core/src/generated/ast.ts:5633](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L5633)
+Defined in: [packages/core/src/generated/ast.ts:5633](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L5633)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:5633](https://github.com/pradeep
 
 > `readonly` **$container**: [`Attribute`](Attribute.md) \| [`ChoiceOption`](ChoiceOption.md) \| [`RosettaRule`](RosettaRule.md) \| [`RosettaTypeAlias`](RosettaTypeAlias.md) \| [`RosettaExternalFunction`](RosettaExternalFunction.md) \| [`RosettaMetaType`](RosettaMetaType.md) \| [`RosettaParameter`](RosettaParameter.md) \| [`RosettaRecordFeature`](RosettaRecordFeature.md) \| [`RosettaReport`](RosettaReport.md) \| [`TypeParameter`](TypeParameter.md)
 
-Defined in: [packages/core/src/generated/ast.ts:5634](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L5634)
+Defined in: [packages/core/src/generated/ast.ts:5634](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L5634)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"TypeCall"`
 
-Defined in: [packages/core/src/generated/ast.ts:5645](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L5645)
+Defined in: [packages/core/src/generated/ast.ts:5645](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L5645)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **arguments**: [`TypeCallArgument`](TypeCallArgument.md)[]
 
-Defined in: [packages/core/src/generated/ast.ts:5646](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L5646)
+Defined in: [packages/core/src/generated/ast.ts:5646](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L5646)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:5646](https://github.com/pradeep
 
 > **type**: `Reference`\<[`RosettaType`](../type-aliases/RosettaType.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:5647](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L5647)
+Defined in: [packages/core/src/generated/ast.ts:5647](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L5647)

@@ -6,7 +6,7 @@
 
 # Interface: RosettaDocReference
 
-Defined in: [packages/core/src/generated/ast.ts:2878](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2878)
+Defined in: [packages/core/src/generated/ast.ts:2878](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2878)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:2878](https://github.com/pradeep
 
 > `readonly` **$container**: [`Attribute`](Attribute.md) \| [`ChoiceOption`](ChoiceOption.md) \| [`Data`](Data.md) \| [`RosettaFunction`](RosettaFunction.md) \| [`Condition`](Condition.md) \| [`RosettaEnumValue`](RosettaEnumValue.md) \| [`RosettaEnumeration`](RosettaEnumeration.md) \| [`RosettaRule`](RosettaRule.md)
 
-Defined in: [packages/core/src/generated/ast.ts:2879](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2879)
+Defined in: [packages/core/src/generated/ast.ts:2879](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2879)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaDocReference"`
 
-Defined in: [packages/core/src/generated/ast.ts:2888](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2888)
+Defined in: [packages/core/src/generated/ast.ts:2888](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2888)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **docReference**: [`RegulatoryDocumentReference`](RegulatoryDocumentReference.md)
 
-Defined in: [packages/core/src/generated/ast.ts:2889](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2889)
+Defined in: [packages/core/src/generated/ast.ts:2889](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2889)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [packages/core/src/generated/ast.ts:2889](https://github.com/pradeep
 
 > **name**: `"docReference"` \| `"regulatoryReference"`
 
-Defined in: [packages/core/src/generated/ast.ts:2890](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2890)
+Defined in: [packages/core/src/generated/ast.ts:2890](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2890)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [packages/core/src/generated/ast.ts:2890](https://github.com/pradeep
 
 > `optional` **path?**: [`AnnotationPathExpression`](../type-aliases/AnnotationPathExpression.md)
 
-Defined in: [packages/core/src/generated/ast.ts:2891](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2891)
+Defined in: [packages/core/src/generated/ast.ts:2891](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2891)
 
 ***
 
@@ -126,7 +126,7 @@ Defined in: [packages/core/src/generated/ast.ts:2891](https://github.com/pradeep
 
 > `optional` **provision?**: `string`
 
-Defined in: [packages/core/src/generated/ast.ts:2892](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2892)
+Defined in: [packages/core/src/generated/ast.ts:2892](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2892)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: [packages/core/src/generated/ast.ts:2892](https://github.com/pradeep
 
 > **rationales**: [`DocumentRationale`](DocumentRationale.md)[]
 
-Defined in: [packages/core/src/generated/ast.ts:2893](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2893)
+Defined in: [packages/core/src/generated/ast.ts:2893](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2893)
 
 ***
 
@@ -142,7 +142,7 @@ Defined in: [packages/core/src/generated/ast.ts:2893](https://github.com/pradeep
 
 > **reportedField**: `boolean`
 
-Defined in: [packages/core/src/generated/ast.ts:2894](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2894)
+Defined in: [packages/core/src/generated/ast.ts:2894](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2894)
 
 ***
 
@@ -150,4 +150,4 @@ Defined in: [packages/core/src/generated/ast.ts:2894](https://github.com/pradeep
 
 > `optional` **structuredProvision?**: `string`
 
-Defined in: [packages/core/src/generated/ast.ts:2895](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2895)
+Defined in: [packages/core/src/generated/ast.ts:2895](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L2895)

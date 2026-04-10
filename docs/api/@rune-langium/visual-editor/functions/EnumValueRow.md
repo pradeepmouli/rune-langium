@@ -8,7 +8,7 @@
 
 > **EnumValueRow**(`__namedParameters`): `Element`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:53](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L53)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:53](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L53)
 
 ## Parameters
 

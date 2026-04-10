@@ -6,7 +6,7 @@
 
 # Interface: RosettaExternalEnumValue
 
-Defined in: [packages/core/src/generated/ast.ts:3195](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3195)
+Defined in: [packages/core/src/generated/ast.ts:3195](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3195)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:3195](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaExternalEnum`](RosettaExternalEnum.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3196](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3196)
+Defined in: [packages/core/src/generated/ast.ts:3196](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3196)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaExternalEnumValue"`
 
-Defined in: [packages/core/src/generated/ast.ts:3197](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3197)
+Defined in: [packages/core/src/generated/ast.ts:3197](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3197)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **enumRef**: `Reference`\<[`RosettaEnumValue`](RosettaEnumValue.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:3198](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3198)
+Defined in: [packages/core/src/generated/ast.ts:3198](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3198)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [packages/core/src/generated/ast.ts:3198](https://github.com/pradeep
 
 > **externalEnumSynonyms**: [`RosettaEnumSynonym`](RosettaEnumSynonym.md)[]
 
-Defined in: [packages/core/src/generated/ast.ts:3199](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3199)
+Defined in: [packages/core/src/generated/ast.ts:3199](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3199)
 
 ***
 
@@ -118,4 +118,4 @@ Defined in: [packages/core/src/generated/ast.ts:3199](https://github.com/pradeep
 
 > **operator**: [`ExternalValueOperator`](../type-aliases/ExternalValueOperator.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3200](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3200)
+Defined in: [packages/core/src/generated/ast.ts:3200](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3200)

@@ -6,7 +6,7 @@
 
 # Interface: SwitchCaseGuard
 
-Defined in: [packages/core/src/generated/ast.ts:4873](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4873)
+Defined in: [packages/core/src/generated/ast.ts:4873](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4873)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:4873](https://github.com/pradeep
 
 > `readonly` **$container**: [`SwitchCaseOrDefault`](SwitchCaseOrDefault.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4874](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4874)
+Defined in: [packages/core/src/generated/ast.ts:4874](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4874)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"SwitchCaseGuard"`
 
-Defined in: [packages/core/src/generated/ast.ts:4875](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4875)
+Defined in: [packages/core/src/generated/ast.ts:4875](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4875)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > `optional` **literalGuard?**: [`RosettaLiteral`](../type-aliases/RosettaLiteral.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4876](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4876)
+Defined in: [packages/core/src/generated/ast.ts:4876](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4876)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:4876](https://github.com/pradeep
 
 > `optional` **referenceGuard?**: `Reference`\<[`SwitchCaseTarget`](../type-aliases/SwitchCaseTarget.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:4877](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4877)
+Defined in: [packages/core/src/generated/ast.ts:4877](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4877)

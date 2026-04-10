@@ -6,7 +6,7 @@
 
 # Interface: RosettaExternalSynonym
 
-Defined in: [packages/core/src/generated/ast.ts:3279](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3279)
+Defined in: [packages/core/src/generated/ast.ts:3279](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3279)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:3279](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaExternalRegularAttribute`](RosettaExternalRegularAttribute.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3280](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3280)
+Defined in: [packages/core/src/generated/ast.ts:3280](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3280)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaExternalSynonym"`
 
-Defined in: [packages/core/src/generated/ast.ts:3281](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3281)
+Defined in: [packages/core/src/generated/ast.ts:3281](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3281)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,4 +102,4 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **body**: [`RosettaSynonymBody`](RosettaSynonymBody.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3282](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3282)
+Defined in: [packages/core/src/generated/ast.ts:3282](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3282)

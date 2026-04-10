@@ -8,7 +8,7 @@
 
 > **SelectLabel**(`__namedParameters`): `Element`
 
-Defined in: [packages/design-system/src/ui/select.tsx:85](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/design-system/src/ui/select.tsx#L85)
+Defined in: [packages/design-system/src/ui/select.tsx:85](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/design-system/src/ui/select.tsx#L85)
 
 ## Parameters
 

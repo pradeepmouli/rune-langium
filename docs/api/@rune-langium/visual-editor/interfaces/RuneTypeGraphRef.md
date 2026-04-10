@@ -6,7 +6,7 @@
 
 # Interface: RuneTypeGraphRef
 
-Defined in: [packages/visual-editor/src/types.ts:448](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L448)
+Defined in: [packages/visual-editor/src/types.ts:448](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L448)
 
 ## Methods
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:448](https://github.com/pradeep
 
 > **exportImage**(`format`): `Promise`\<`Blob`\>
 
-Defined in: [packages/visual-editor/src/types.ts:455](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L455)
+Defined in: [packages/visual-editor/src/types.ts:455](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L455)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [packages/visual-editor/src/types.ts:455](https://github.com/pradeep
 
 > **exportRosetta**(): `Map`\<`string`, `string`\>
 
-Defined in: [packages/visual-editor/src/types.ts:456](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L456)
+Defined in: [packages/visual-editor/src/types.ts:456](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L456)
 
 #### Returns
 
@@ -44,7 +44,7 @@ Defined in: [packages/visual-editor/src/types.ts:456](https://github.com/pradeep
 
 > **fitView**(): `void`
 
-Defined in: [packages/visual-editor/src/types.ts:449](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L449)
+Defined in: [packages/visual-editor/src/types.ts:449](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L449)
 
 #### Returns
 
@@ -56,7 +56,7 @@ Defined in: [packages/visual-editor/src/types.ts:449](https://github.com/pradeep
 
 > **focusNode**(`nodeId`): `void`
 
-Defined in: [packages/visual-editor/src/types.ts:450](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L450)
+Defined in: [packages/visual-editor/src/types.ts:450](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L450)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [packages/visual-editor/src/types.ts:450](https://github.com/pradeep
 
 > **getFilters**(): [`GraphFilters`](GraphFilters.md)
 
-Defined in: [packages/visual-editor/src/types.ts:453](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L453)
+Defined in: [packages/visual-editor/src/types.ts:453](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L453)
 
 #### Returns
 
@@ -86,7 +86,7 @@ Defined in: [packages/visual-editor/src/types.ts:453](https://github.com/pradeep
 
 > **getNodeData**(`nodeId`): [`AnyGraphNode`](../type-aliases/AnyGraphNode.md) \| `null`
 
-Defined in: [packages/visual-editor/src/types.ts:458](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L458)
+Defined in: [packages/visual-editor/src/types.ts:458](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L458)
 
 Get current data for a node by ID (returns null if not found).
 
@@ -106,7 +106,7 @@ Get current data for a node by ID (returns null if not found).
 
 > **getNodes**(): [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/types.ts:460](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L460)
+Defined in: [packages/visual-editor/src/types.ts:460](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L460)
 
 Get all current nodes (for building availableTypes list).
 
@@ -120,7 +120,7 @@ Get all current nodes (for building availableTypes list).
 
 > **relayout**(`options?`): `void`
 
-Defined in: [packages/visual-editor/src/types.ts:454](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L454)
+Defined in: [packages/visual-editor/src/types.ts:454](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L454)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [packages/visual-editor/src/types.ts:454](https://github.com/pradeep
 
 > **search**(`query`): `string`[]
 
-Defined in: [packages/visual-editor/src/types.ts:451](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L451)
+Defined in: [packages/visual-editor/src/types.ts:451](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L451)
 
 #### Parameters
 
@@ -156,7 +156,7 @@ Defined in: [packages/visual-editor/src/types.ts:451](https://github.com/pradeep
 
 > **setFilters**(`filters`): `void`
 
-Defined in: [packages/visual-editor/src/types.ts:452](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L452)
+Defined in: [packages/visual-editor/src/types.ts:452](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L452)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ Defined in: [packages/visual-editor/src/types.ts:452](https://github.com/pradeep
 
 > **validate**(): [`ValidationError`](ValidationError.md)[]
 
-Defined in: [packages/visual-editor/src/types.ts:462](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L462)
+Defined in: [packages/visual-editor/src/types.ts:462](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L462)
 
 Validate the current graph and return errors.
 

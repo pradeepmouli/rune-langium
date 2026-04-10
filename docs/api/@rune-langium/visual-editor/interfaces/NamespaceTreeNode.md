@@ -6,7 +6,7 @@
 
 # Interface: NamespaceTreeNode
 
-Defined in: [packages/visual-editor/src/types.ts:469](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L469)
+Defined in: [packages/visual-editor/src/types.ts:469](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L469)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:469](https://github.com/pradeep
 
 > **choiceCount**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:474](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L474)
+Defined in: [packages/visual-editor/src/types.ts:474](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L474)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/types.ts:474](https://github.com/pradeep
 
 > **dataCount**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:473](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L473)
+Defined in: [packages/visual-editor/src/types.ts:473](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L473)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/visual-editor/src/types.ts:473](https://github.com/pradeep
 
 > **enumCount**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:475](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L475)
+Defined in: [packages/visual-editor/src/types.ts:475](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L475)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/visual-editor/src/types.ts:475](https://github.com/pradeep
 
 > **funcCount**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:476](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L476)
+Defined in: [packages/visual-editor/src/types.ts:476](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L476)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/visual-editor/src/types.ts:476](https://github.com/pradeep
 
 > **namespace**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:470](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L470)
+Defined in: [packages/visual-editor/src/types.ts:470](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L470)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [packages/visual-editor/src/types.ts:470](https://github.com/pradeep
 
 > **totalCount**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:472](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L472)
+Defined in: [packages/visual-editor/src/types.ts:472](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L472)
 
 ***
 
@@ -62,4 +62,4 @@ Defined in: [packages/visual-editor/src/types.ts:472](https://github.com/pradeep
 
 > **types**: [`NamespaceTypeEntry`](NamespaceTypeEntry.md)[]
 
-Defined in: [packages/visual-editor/src/types.ts:471](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L471)
+Defined in: [packages/visual-editor/src/types.ts:471](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L471)

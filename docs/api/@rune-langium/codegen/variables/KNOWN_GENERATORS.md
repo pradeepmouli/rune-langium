@@ -8,6 +8,6 @@
 
 > `const` **KNOWN\_GENERATORS**: readonly [`GeneratorInfo`](../interfaces/GeneratorInfo.md)[]
 
-Defined in: [generators.ts:11](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/codegen/src/generators.ts#L11)
+Defined in: [generators.ts:11](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/generators.ts#L11)
 
 Known generators from rosetta-code-generators and rune-dsl.
