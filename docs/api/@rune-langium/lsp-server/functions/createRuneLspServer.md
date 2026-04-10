@@ -8,7 +8,7 @@
 
 > **createRuneLspServer**(): [`RuneLspServer`](../interfaces/RuneLspServer.md)
 
-Defined in: [rune-dsl-server.ts:55](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/lsp-server/src/rune-dsl-server.ts#L55)
+Defined in: [rune-dsl-server.ts:55](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/lsp-server/src/rune-dsl-server.ts#L55)
 
 Create a fully-wired Rune DSL LSP server.
 

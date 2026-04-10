@@ -6,7 +6,7 @@
 
 # Interface: DocumentRationale
 
-Defined in: [packages/core/src/generated/ast.ts:982](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L982)
+Defined in: [packages/core/src/generated/ast.ts:982](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L982)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:982](https://github.com/pradeepm
 
 > `readonly` **$container**: [`RosettaDocReference`](RosettaDocReference.md)
 
-Defined in: [packages/core/src/generated/ast.ts:983](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L983)
+Defined in: [packages/core/src/generated/ast.ts:983](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L983)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"DocumentRationale"`
 
-Defined in: [packages/core/src/generated/ast.ts:984](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L984)
+Defined in: [packages/core/src/generated/ast.ts:984](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L984)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **rationale**: `string`
 
-Defined in: [packages/core/src/generated/ast.ts:985](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L985)
+Defined in: [packages/core/src/generated/ast.ts:985](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L985)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:985](https://github.com/pradeepm
 
 > `optional` **rationaleAuthor?**: `string`
 
-Defined in: [packages/core/src/generated/ast.ts:986](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L986)
+Defined in: [packages/core/src/generated/ast.ts:986](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L986)

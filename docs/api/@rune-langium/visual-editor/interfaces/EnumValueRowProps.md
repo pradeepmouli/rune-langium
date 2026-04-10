@@ -6,7 +6,7 @@
 
 # Interface: EnumValueRowProps
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:26](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L26)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:26](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L26)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:26](
 
 > `optional` **disabled?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:42](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L42)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:42](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L42)
 
 Whether the row is disabled.
 
@@ -24,7 +24,7 @@ Whether the row is disabled.
 
 > **displayName**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:30](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L30)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:30](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L30)
 
 Last-committed display name (used as diff anchor in callbacks).
 
@@ -34,7 +34,7 @@ Last-committed display name (used as diff anchor in callbacks).
 
 > **index**: `number`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:34](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L34)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:34](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L34)
 
 Index position of this member in the useFieldArray.
 
@@ -44,7 +44,7 @@ Index position of this member in the useFieldArray.
 
 > `optional` **isOverride?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:44](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L44)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:44](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L44)
 
 Whether this local value overrides an inherited value with the same name.
 
@@ -54,7 +54,7 @@ Whether this local value overrides an inherited value with the same name.
 
 > **name**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:28](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L28)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:28](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L28)
 
 Last-committed value name (used as oldName diff anchor in callbacks).
 
@@ -64,7 +64,7 @@ Last-committed value name (used as oldName diff anchor in callbacks).
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:32](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L32)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:32](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L32)
 
 Node ID of the parent Enum — forwarded to callbacks for store dispatch.
 
@@ -74,7 +74,7 @@ Node ID of the parent Enum — forwarded to callbacks for store dispatch.
 
 > **onRemove**: (`nodeId`, `valueName`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:38](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L38)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:38](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L38)
 
 Remove this enum value.
 
@@ -98,7 +98,7 @@ Remove this enum value.
 
 > **onReorder**: (`fromIndex`, `toIndex`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:40](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L40)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:40](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L40)
 
 Reorder (drag) callback; fromIndex → toIndex.
 
@@ -122,7 +122,7 @@ Reorder (drag) callback; fromIndex → toIndex.
 
 > `optional` **onRevert?**: () => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:46](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L46)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:46](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L46)
 
 Callback to revert this override, restoring the inherited value.
 
@@ -136,7 +136,7 @@ Callback to revert this override, restoring the inherited value.
 
 > **onUpdate**: (`nodeId`, `oldName`, `newName`, `displayName?`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:36](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L36)
+Defined in: [packages/visual-editor/src/components/editors/EnumValueRow.tsx:36](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/EnumValueRow.tsx#L36)
 
 Commit value name/displayName changes to the graph.
 

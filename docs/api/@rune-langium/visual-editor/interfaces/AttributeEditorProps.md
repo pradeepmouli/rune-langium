@@ -6,7 +6,7 @@
 
 # Interface: AttributeEditorProps
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:10](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L10)
+Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:10](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L10)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:1
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:11](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L11)
+Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:11](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L11)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:1
 
 > **onAddAttribute**: (`nodeId`, `name`, `typeName`, `cardinality`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:12](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L12)
+Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:12](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L12)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:1
 
 > `optional` **onCancel?**: () => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:14](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L14)
+Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:14](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L14)
 
 #### Returns
 
@@ -64,7 +64,7 @@ Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:1
 
 > **onRemoveAttribute**: (`nodeId`, `name`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:13](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L13)
+Defined in: [packages/visual-editor/src/components/editors/AttributeEditor.tsx:13](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/AttributeEditor.tsx#L13)
 
 #### Parameters
 

@@ -8,7 +8,7 @@
 
 > **hasGeneratedInput**(`node`): `boolean`
 
-Defined in: [packages/core/src/utils/expression-utils.ts:17](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/utils/expression-utils.ts#L17)
+Defined in: [packages/core/src/utils/expression-utils.ts:17](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/utils/expression-utils.ts#L17)
 
 Check if an expression node has a generated (synthetic) input marker.
 This is used during code generation to track inputs that were

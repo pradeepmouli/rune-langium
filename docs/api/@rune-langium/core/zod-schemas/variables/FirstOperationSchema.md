@@ -8,4 +8,4 @@
 
 > `const` **FirstOperationSchema**: `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"FirstOperation"`\>; `argument`: `ZodOptional`\<`ZodLazy`\<`any`\>\>; `operator`: `ZodLiteral`\<`"first"`\>; \}, `$loose`\>
 
-Defined in: [packages/core/src/generated/zod-schemas.ts:347](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/zod-schemas.ts#L347)
+Defined in: [packages/core/src/generated/zod-schemas.ts:347](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/zod-schemas.ts#L347)

@@ -6,7 +6,7 @@
 
 # Interface: DataTypeFormProps
 
-Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:88](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L88)
+Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:88](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L88)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:88](
 
 > **actions**: [`DataFormActions`](DataFormActions.md)
 
-Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:96](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L96)
+Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:96](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L96)
 
 Data-specific editor form action callbacks.
 
@@ -24,7 +24,7 @@ Data-specific editor form action callbacks.
 
 > `optional` **allNodeIds?**: `string`[]
 
-Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:104](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L104)
+Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:104](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L104)
 
 All loaded graph node IDs for resolving type name to node ID.
 
@@ -34,7 +34,7 @@ All loaded graph node IDs for resolving type name to node ID.
 
 > `optional` **allNodes?**: [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:98](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L98)
+Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:98](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L98)
 
 All graph nodes (for inherited member resolution via useEffectiveMembers).
 
@@ -44,7 +44,7 @@ All graph nodes (for inherited member resolution via useEffectiveMembers).
 
 > **availableTypes**: [`TypeOption`](TypeOption.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:94](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L94)
+Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:94](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L94)
 
 Available type options for selectors.
 
@@ -54,7 +54,7 @@ Available type options for selectors.
 
 > **data**: [`AnyGraphNode`](../type-aliases/AnyGraphNode.md)
 
-Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:92](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L92)
+Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:92](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L92)
 
 Data payload for the selected node (AnyGraphNode with $type='Data').
 
@@ -64,7 +64,7 @@ Data payload for the selected node (AnyGraphNode with $type='Data').
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:90](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L90)
+Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:90](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L90)
 
 Node ID of the Data type being edited.
 
@@ -74,7 +74,7 @@ Node ID of the Data type being edited.
 
 > `optional` **onNavigateToNode?**: [`NavigateToNodeCallback`](../type-aliases/NavigateToNodeCallback.md)
 
-Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:102](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L102)
+Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:102](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L102)
 
 Callback to navigate to a type's graph node.
 
@@ -84,7 +84,7 @@ Callback to navigate to a type's graph node.
 
 > `optional` **renderExpressionEditor?**: (`props`) => `ReactNode`
 
-Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:100](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L100)
+Defined in: [packages/visual-editor/src/components/editors/DataTypeForm.tsx:100](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/DataTypeForm.tsx#L100)
 
 Optional render-prop for a rich expression editor.
 

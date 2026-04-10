@@ -8,4 +8,4 @@
 
 > `const` **RosettaOnlyExistsExpressionSchema**: `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaOnlyExistsExpression"`\>; `args`: `ZodOptional`\<`ZodArray`\<`ZodLazy`\<`any`\>\>\>; `argument`: `ZodOptional`\<`ZodLazy`\<`any`\>\>; `operator`: `ZodOptional`\<`ZodLiteral`\<`"exists"`\>\>; \}, `$loose`\>
 
-Defined in: [packages/core/src/generated/zod-schemas.ts:769](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/zod-schemas.ts#L769)
+Defined in: [packages/core/src/generated/zod-schemas.ts:769](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/zod-schemas.ts#L769)

@@ -6,7 +6,7 @@
 
 # Interface: EdgeStyleConfig
 
-Defined in: [packages/visual-editor/src/types.ts:401](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L401)
+Defined in: [packages/visual-editor/src/types.ts:401](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L401)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:401](https://github.com/pradeep
 
 > `optional` **attribute-ref?**: `object`
 
-Defined in: [packages/visual-editor/src/types.ts:403](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L403)
+Defined in: [packages/visual-editor/src/types.ts:403](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L403)
 
 #### color?
 
@@ -34,7 +34,7 @@ Defined in: [packages/visual-editor/src/types.ts:403](https://github.com/pradeep
 
 > `optional` **choice-option?**: `object`
 
-Defined in: [packages/visual-editor/src/types.ts:404](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L404)
+Defined in: [packages/visual-editor/src/types.ts:404](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L404)
 
 #### color?
 
@@ -50,7 +50,7 @@ Defined in: [packages/visual-editor/src/types.ts:404](https://github.com/pradeep
 
 > `optional` **enum-extends?**: `object`
 
-Defined in: [packages/visual-editor/src/types.ts:405](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L405)
+Defined in: [packages/visual-editor/src/types.ts:405](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L405)
 
 #### color?
 
@@ -66,7 +66,7 @@ Defined in: [packages/visual-editor/src/types.ts:405](https://github.com/pradeep
 
 > `optional` **extends?**: `object`
 
-Defined in: [packages/visual-editor/src/types.ts:402](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L402)
+Defined in: [packages/visual-editor/src/types.ts:402](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L402)
 
 #### color?
 

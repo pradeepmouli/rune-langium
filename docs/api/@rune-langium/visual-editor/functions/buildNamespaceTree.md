@@ -8,7 +8,7 @@
 
 > **buildNamespaceTree**(`nodes`): [`NamespaceTreeNode`](../interfaces/NamespaceTreeNode.md)[]
 
-Defined in: [packages/visual-editor/src/utils/namespace-tree.ts:38](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/utils/namespace-tree.ts#L38)
+Defined in: [packages/visual-editor/src/utils/namespace-tree.ts:38](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/utils/namespace-tree.ts#L38)
 
 Build a sorted list of namespace tree entries from graph nodes.
 

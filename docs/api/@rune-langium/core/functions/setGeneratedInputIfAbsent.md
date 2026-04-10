@@ -8,7 +8,7 @@
 
 > **setGeneratedInputIfAbsent**(`node`): `boolean`
 
-Defined in: [packages/core/src/utils/expression-utils.ts:25](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/utils/expression-utils.ts#L25)
+Defined in: [packages/core/src/utils/expression-utils.ts:25](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/utils/expression-utils.ts#L25)
 
 Set the generated input marker on an expression node if not already set.
 Returns `true` if the marker was set, `false` if it was already present.

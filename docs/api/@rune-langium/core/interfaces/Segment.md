@@ -6,7 +6,7 @@
 
 # Interface: Segment
 
-Defined in: [packages/core/src/generated/ast.ts:4693](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4693)
+Defined in: [packages/core/src/generated/ast.ts:4693](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4693)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:4693](https://github.com/pradeep
 
 > `readonly` **$container**: [`Operation`](Operation.md) \| `Segment`
 
-Defined in: [packages/core/src/generated/ast.ts:4694](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4694)
+Defined in: [packages/core/src/generated/ast.ts:4694](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4694)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"Segment"`
 
-Defined in: [packages/core/src/generated/ast.ts:4695](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4695)
+Defined in: [packages/core/src/generated/ast.ts:4695](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4695)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **feature**: `Reference`\<[`RosettaTypedFeature`](../type-aliases/RosettaTypedFeature.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:4696](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4696)
+Defined in: [packages/core/src/generated/ast.ts:4696](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4696)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:4696](https://github.com/pradeep
 
 > `optional` **next?**: `Segment`
 
-Defined in: [packages/core/src/generated/ast.ts:4697](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4697)
+Defined in: [packages/core/src/generated/ast.ts:4697](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4697)

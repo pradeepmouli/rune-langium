@@ -8,7 +8,7 @@
 
 > **AttributeRow**(`__namedParameters`): `Element`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:65](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/AttributeRow.tsx#L65)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:65](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/AttributeRow.tsx#L65)
 
 ## Parameters
 

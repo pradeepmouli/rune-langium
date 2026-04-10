@@ -8,7 +8,7 @@
 
 > **useExpressionAutocomplete**(`availableTypes`, `inputParams?`): [`UseExpressionAutocompleteResult`](../interfaces/UseExpressionAutocompleteResult.md)
 
-Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:85](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L85)
+Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:85](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L85)
 
 ## Parameters
 

@@ -8,7 +8,7 @@
 
 > **clearLayoutCache**(): `void`
 
-Defined in: [packages/visual-editor/src/layout/dagre-layout.ts:60](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/layout/dagre-layout.ts#L60)
+Defined in: [packages/visual-editor/src/layout/dagre-layout.ts:60](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/layout/dagre-layout.ts#L60)
 
 Clear the entire position cache (call on model reload).
 

@@ -6,7 +6,7 @@
 
 # Interface: CompletionItem
 
-Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:65](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L65)
+Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:65](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L65)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:65](h
 
 > `optional` **detail?**: `string`
 
-Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:71](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L71)
+Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:71](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L71)
 
 Optional detail text.
 
@@ -24,7 +24,7 @@ Optional detail text.
 
 > **insertText**: `string`
 
-Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:73](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L73)
+Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:73](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L73)
 
 The text to insert.
 
@@ -34,7 +34,7 @@ The text to insert.
 
 > **kind**: `"function"` \| `"type"` \| `"feature"`
 
-Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:69](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L69)
+Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:69](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L69)
 
 Kind of completion (type, function, feature).
 
@@ -44,6 +44,6 @@ Kind of completion (type, function, feature).
 
 > **label**: `string`
 
-Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:67](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L67)
+Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:67](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L67)
 
 Display label for the completion.

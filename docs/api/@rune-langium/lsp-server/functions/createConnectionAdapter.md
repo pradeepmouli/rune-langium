@@ -8,7 +8,7 @@
 
 > **createConnectionAdapter**(`server`): `any`
 
-Defined in: [connection-adapter.ts:259](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/lsp-server/src/connection-adapter.ts#L259)
+Defined in: [connection-adapter.ts:259](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/lsp-server/src/connection-adapter.ts#L259)
 
 Create a vscode-languageserver-compatible Connection backed by an
 @lspeasy/server LSPServer.

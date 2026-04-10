@@ -6,7 +6,7 @@
 
 # Interface: CardinalityPickerProps
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:25](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L25)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:25](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L25)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx
 
 > `optional` **disabled?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:31](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L31)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:31](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L31)
 
 Whether the picker is disabled.
 
@@ -24,7 +24,7 @@ Whether the picker is disabled.
 
 > **onChange**: (`cardinality`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L29)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L29)
 
 Called when cardinality changes.
 
@@ -44,6 +44,6 @@ Called when cardinality changes.
 
 > **value**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:27](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L27)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:27](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L27)
 
 Current cardinality value (e.g., "(0..*)").

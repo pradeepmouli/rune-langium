@@ -8,4 +8,4 @@
 
 > **Fonts** = *typeof* [`fonts`](../variables/fonts.md)
 
-Defined in: [packages/design-system/src/tokens.ts:71](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/design-system/src/tokens.ts#L71)
+Defined in: [packages/design-system/src/tokens.ts:71](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/design-system/src/tokens.ts#L71)

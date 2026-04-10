@@ -8,7 +8,7 @@
 
 > **serializeModel**(`model`): `string`
 
-Defined in: [packages/core/src/serializer/rosetta-serializer.ts:247](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/serializer/rosetta-serializer.ts#L247)
+Defined in: [packages/core/src/serializer/rosetta-serializer.ts:247](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/serializer/rosetta-serializer.ts#L247)
 
 Serialize a single RosettaModel AST node to `.rosetta` text.
 

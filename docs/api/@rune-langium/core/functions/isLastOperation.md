@@ -8,7 +8,7 @@
 
 > **isLastOperation**(`item`): `item is LastOperation`
 
-Defined in: [packages/core/src/generated/ast.ts:1509](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L1509)
+Defined in: [packages/core/src/generated/ast.ts:1509](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L1509)
 
 ## Parameters
 

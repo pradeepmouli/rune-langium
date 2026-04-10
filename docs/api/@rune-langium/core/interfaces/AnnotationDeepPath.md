@@ -6,7 +6,7 @@
 
 # Interface: AnnotationDeepPath
 
-Defined in: [packages/core/src/generated/ast.ts:201](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L201)
+Defined in: [packages/core/src/generated/ast.ts:201](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L201)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:201](https://github.com/pradeepm
 
 > `readonly` **$container**: `AnnotationDeepPath` \| [`AnnotationPath`](AnnotationPath.md) \| [`LabelAnnotation`](LabelAnnotation.md) \| [`RosettaDocReference`](RosettaDocReference.md) \| [`RuleReferenceAnnotation`](RuleReferenceAnnotation.md)
 
-Defined in: [packages/core/src/generated/ast.ts:202](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L202)
+Defined in: [packages/core/src/generated/ast.ts:202](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L202)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"AnnotationDeepPath"`
 
-Defined in: [packages/core/src/generated/ast.ts:208](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L208)
+Defined in: [packages/core/src/generated/ast.ts:208](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L208)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **attribute**: `Reference`\<[`AttributeOrChoiceOption`](../type-aliases/AttributeOrChoiceOption.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:209](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L209)
+Defined in: [packages/core/src/generated/ast.ts:209](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L209)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [packages/core/src/generated/ast.ts:209](https://github.com/pradeepm
 
 > **operator**: `"->>"`
 
-Defined in: [packages/core/src/generated/ast.ts:210](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L210)
+Defined in: [packages/core/src/generated/ast.ts:210](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L210)
 
 ***
 
@@ -118,4 +118,4 @@ Defined in: [packages/core/src/generated/ast.ts:210](https://github.com/pradeepm
 
 > **receiver**: [`AnnotationPathExpression`](../type-aliases/AnnotationPathExpression.md)
 
-Defined in: [packages/core/src/generated/ast.ts:211](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L211)
+Defined in: [packages/core/src/generated/ast.ts:211](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L211)

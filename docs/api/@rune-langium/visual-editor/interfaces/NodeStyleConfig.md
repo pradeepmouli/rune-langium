@@ -6,7 +6,7 @@
 
 # Interface: NodeStyleConfig
 
-Defined in: [packages/visual-editor/src/types.ts:395](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L395)
+Defined in: [packages/visual-editor/src/types.ts:395](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L395)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:395](https://github.com/pradeep
 
 > `optional` **choice?**: `object`
 
-Defined in: [packages/visual-editor/src/types.ts:397](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L397)
+Defined in: [packages/visual-editor/src/types.ts:397](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L397)
 
 #### borderColor?
 
@@ -30,7 +30,7 @@ Defined in: [packages/visual-editor/src/types.ts:397](https://github.com/pradeep
 
 > `optional` **data?**: `object`
 
-Defined in: [packages/visual-editor/src/types.ts:396](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L396)
+Defined in: [packages/visual-editor/src/types.ts:396](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L396)
 
 #### borderColor?
 
@@ -46,7 +46,7 @@ Defined in: [packages/visual-editor/src/types.ts:396](https://github.com/pradeep
 
 > `optional` **enum?**: `object`
 
-Defined in: [packages/visual-editor/src/types.ts:398](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L398)
+Defined in: [packages/visual-editor/src/types.ts:398](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L398)
 
 #### borderColor?
 

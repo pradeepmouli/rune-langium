@@ -6,7 +6,7 @@
 
 # Interface: RosettaQualifiableConfiguration
 
-Defined in: [packages/core/src/generated/ast.ts:4090](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4090)
+Defined in: [packages/core/src/generated/ast.ts:4090](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4090)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:4090](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaModel`](RosettaModel.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4091](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4091)
+Defined in: [packages/core/src/generated/ast.ts:4091](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4091)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaQualifiableConfiguration"`
 
-Defined in: [packages/core/src/generated/ast.ts:4092](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4092)
+Defined in: [packages/core/src/generated/ast.ts:4092](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4092)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **qType**: [`RosettaQualifiableType`](../type-aliases/RosettaQualifiableType.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4093](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4093)
+Defined in: [packages/core/src/generated/ast.ts:4093](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4093)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:4093](https://github.com/pradeep
 
 > **rosettaClass**: `Reference`\<[`Data`](Data.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:4094](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4094)
+Defined in: [packages/core/src/generated/ast.ts:4094](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4094)

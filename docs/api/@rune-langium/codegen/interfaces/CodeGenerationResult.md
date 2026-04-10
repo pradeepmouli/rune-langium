@@ -6,7 +6,7 @@
 
 # Interface: CodeGenerationResult
 
-Defined in: [types.ts:21](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L21)
+Defined in: [types.ts:21](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/codegen/src/types.ts#L21)
 
 Result of a code generation run.
 
@@ -16,7 +16,7 @@ Result of a code generation run.
 
 > **errors**: [`GenerationError`](GenerationError.md)[]
 
-Defined in: [types.ts:27](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L27)
+Defined in: [types.ts:27](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/codegen/src/types.ts#L27)
 
 Errors encountered during generation
 
@@ -26,7 +26,7 @@ Errors encountered during generation
 
 > **files**: [`GeneratedFile`](GeneratedFile.md)[]
 
-Defined in: [types.ts:25](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L25)
+Defined in: [types.ts:25](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/codegen/src/types.ts#L25)
 
 Output code files
 
@@ -36,7 +36,7 @@ Output code files
 
 > **language**: `string`
 
-Defined in: [types.ts:23](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L23)
+Defined in: [types.ts:23](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/codegen/src/types.ts#L23)
 
 Target language used
 
@@ -46,6 +46,6 @@ Target language used
 
 > **warnings**: `string`[]
 
-Defined in: [types.ts:29](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/types.ts#L29)
+Defined in: [types.ts:29](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/codegen/src/types.ts#L29)
 
 Non-fatal warnings

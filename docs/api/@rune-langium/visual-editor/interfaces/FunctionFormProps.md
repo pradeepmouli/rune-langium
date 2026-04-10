@@ -6,7 +6,7 @@
 
 # Interface: FunctionFormProps
 
-Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:146](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/FunctionForm.tsx#L146)
+Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:146](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/FunctionForm.tsx#L146)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:146]
 
 > **actions**: [`FuncFormActions`](FuncFormActions.md)
 
-Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:154](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/FunctionForm.tsx#L154)
+Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:154](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/FunctionForm.tsx#L154)
 
 Function-specific editor form action callbacks.
 
@@ -24,7 +24,7 @@ Function-specific editor form action callbacks.
 
 > `optional` **allNodeIds?**: `string`[]
 
-Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:165](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/FunctionForm.tsx#L165)
+Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:165](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/FunctionForm.tsx#L165)
 
 All loaded graph node IDs for resolving type name to node ID.
 
@@ -34,7 +34,7 @@ All loaded graph node IDs for resolving type name to node ID.
 
 > **availableTypes**: [`TypeOption`](TypeOption.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:152](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/FunctionForm.tsx#L152)
+Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:152](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/FunctionForm.tsx#L152)
 
 Available type options for selectors.
 
@@ -44,7 +44,7 @@ Available type options for selectors.
 
 > **data**: [`AnyGraphNode`](../type-aliases/AnyGraphNode.md)
 
-Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:150](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/FunctionForm.tsx#L150)
+Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:150](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/FunctionForm.tsx#L150)
 
 Data payload for the selected function node (AnyGraphNode with $type='RosettaFunction').
 
@@ -54,7 +54,7 @@ Data payload for the selected function node (AnyGraphNode with $type='RosettaFun
 
 > `optional` **inheritedGroups?**: `InheritedGroup`[]
 
-Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:156](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/FunctionForm.tsx#L156)
+Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:156](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/FunctionForm.tsx#L156)
 
 Inherited member groups from super-function (if any).
 
@@ -64,7 +64,7 @@ Inherited member groups from super-function (if any).
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:148](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/FunctionForm.tsx#L148)
+Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:148](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/FunctionForm.tsx#L148)
 
 Node ID of the Function being edited.
 
@@ -74,7 +74,7 @@ Node ID of the Function being edited.
 
 > `optional` **onNavigateToNode?**: [`NavigateToNodeCallback`](../type-aliases/NavigateToNodeCallback.md)
 
-Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:163](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/FunctionForm.tsx#L163)
+Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:163](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/FunctionForm.tsx#L163)
 
 Callback to navigate to a type's graph node.
 
@@ -84,7 +84,7 @@ Callback to navigate to a type's graph node.
 
 > `optional` **renderExpressionEditor?**: (`props`) => `ReactNode`
 
-Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:161](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/FunctionForm.tsx#L161)
+Defined in: [packages/visual-editor/src/components/editors/FunctionForm.tsx:161](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/FunctionForm.tsx#L161)
 
 Optional render-prop for a rich expression editor (e.g. CodeMirror).
 When omitted, a plain `<Textarea>` is rendered as fallback.

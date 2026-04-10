@@ -8,7 +8,7 @@
 
 > **getOptions**(`choice`): [`ChoiceOption`](../interfaces/ChoiceOption.md)[]
 
-Defined in: [packages/core/src/utils/choice-utils.ts:9](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/utils/choice-utils.ts#L9)
+Defined in: [packages/core/src/utils/choice-utils.ts:9](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/utils/choice-utils.ts#L9)
 
 Get the list of choice options from a Choice type.
 

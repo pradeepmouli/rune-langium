@@ -6,7 +6,7 @@
 
 # Interface: RosettaMapPathValue
 
-Defined in: [packages/core/src/generated/ast.ts:3595](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3595)
+Defined in: [packages/core/src/generated/ast.ts:3595](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L3595)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:3595](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaMappingPathTests`](RosettaMappingPathTests.md) \| [`RosettaMappingInstance`](RosettaMappingInstance.md) \| [`RosettaMapTestEqualityOperation`](RosettaMapTestEqualityOperation.md) \| [`RosettaMapPath`](RosettaMapPath.md) \| [`RosettaMapTestAbsentExpression`](RosettaMapTestAbsentExpression.md) \| [`RosettaMapTestExistsExpression`](RosettaMapTestExistsExpression.md) \| [`RosettaMapTestFunc`](RosettaMapTestFunc.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3596](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3596)
+Defined in: [packages/core/src/generated/ast.ts:3596](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L3596)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaMapPathValue"`
 
-Defined in: [packages/core/src/generated/ast.ts:3604](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3604)
+Defined in: [packages/core/src/generated/ast.ts:3604](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L3604)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,4 +102,4 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **path**: `string`
 
-Defined in: [packages/core/src/generated/ast.ts:3605](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3605)
+Defined in: [packages/core/src/generated/ast.ts:3605](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L3605)

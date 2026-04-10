@@ -6,7 +6,7 @@
 
 # Interface: RosettaMapping
 
-Defined in: [packages/core/src/generated/ast.ts:3617](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3617)
+Defined in: [packages/core/src/generated/ast.ts:3617](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L3617)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:3617](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaSynonymBody`](RosettaSynonymBody.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3618](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3618)
+Defined in: [packages/core/src/generated/ast.ts:3618](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L3618)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaMapping"`
 
-Defined in: [packages/core/src/generated/ast.ts:3619](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3619)
+Defined in: [packages/core/src/generated/ast.ts:3619](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L3619)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,4 +102,4 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **instances**: [`RosettaMappingInstance`](RosettaMappingInstance.md)[]
 
-Defined in: [packages/core/src/generated/ast.ts:3620](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L3620)
+Defined in: [packages/core/src/generated/ast.ts:3620](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L3620)

@@ -8,7 +8,7 @@
 
 > **isKnownGenerator**(`language`): `boolean`
 
-Defined in: [generators.ts:27](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/codegen/src/generators.ts#L27)
+Defined in: [generators.ts:27](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/codegen/src/generators.ts#L27)
 
 Check if a language ID corresponds to a known generator.
 

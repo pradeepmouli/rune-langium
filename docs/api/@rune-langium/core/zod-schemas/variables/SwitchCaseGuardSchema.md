@@ -8,4 +8,4 @@
 
 > `const` **SwitchCaseGuardSchema**: `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"SwitchCaseGuard"`\>; `literalGuard`: `ZodOptional`\<`ZodLazy`\<`ZodDiscriminatedUnion`\<\[`ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaBooleanLiteral"`\>; `value`: `ZodOptional`\<`ZodBoolean`\>; \}, `$loose`\>, `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaStringLiteral"`\>; `value`: `ZodString`; \}, `$loose`\>, `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaNumberLiteral"`\>; `value`: `ZodString`; \}, `$loose`\>, `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaIntLiteral"`\>; `value`: `ZodBigInt`; \}, `$loose`\>\], `"$type"`\>\>\>; `referenceGuard`: `ZodOptional`\<`ZodObject`\<\{ `$refText`: `ZodString`; `ref`: `ZodOptional`\<`ZodUnknown`\>; \}, `$loose`\>\>; \}, `$loose`\>
 
-Defined in: [packages/core/src/generated/zod-schemas.ts:855](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/zod-schemas.ts#L855)
+Defined in: [packages/core/src/generated/zod-schemas.ts:855](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/zod-schemas.ts#L855)

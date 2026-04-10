@@ -8,4 +8,4 @@
 
 > `const` **RosettaSegmentRefSchema**: `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaSegmentRef"`\>; `segment`: `ZodObject`\<\{ `$refText`: `ZodString`; `ref`: `ZodOptional`\<`ZodUnknown`\>; \}, `$loose`\>; `segmentRef`: `ZodString`; \}, `$loose`\>
 
-Defined in: [packages/core/src/generated/zod-schemas.ts:59](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/zod-schemas.ts#L59)
+Defined in: [packages/core/src/generated/zod-schemas.ts:59](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/zod-schemas.ts#L59)

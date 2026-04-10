@@ -8,4 +8,4 @@
 
 > `const` **MinOperationSchema**: `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"MinOperation"`\>; `argument`: `ZodOptional`\<`ZodLazy`\<`any`\>\>; `function`: `ZodOptional`\<`ZodObject`\<\{ `$type`: `ZodLiteral`\<`"InlineFunction"`\>; `body`: `ZodLazy`\<`any`\>; `parameters`: `ZodOptional`\<`ZodArray`\<`ZodObject`\<\{ `$type`: `ZodLiteral`\<`"ClosureParameter"`\>; `name`: `ZodString`; \}, `$loose`\>\>\>; \}, `$loose`\>\>; `operator`: `ZodLiteral`\<`"min"`\>; \}, `$loose`\>
 
-Defined in: [packages/core/src/generated/zod-schemas.ts:404](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/zod-schemas.ts#L404)
+Defined in: [packages/core/src/generated/zod-schemas.ts:404](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/zod-schemas.ts#L404)

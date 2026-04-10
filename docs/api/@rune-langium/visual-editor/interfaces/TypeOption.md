@@ -6,7 +6,7 @@
 
 # Interface: TypeOption
 
-Defined in: [packages/visual-editor/src/types.ts:244](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L244)
+Defined in: [packages/visual-editor/src/types.ts:244](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L244)
 
 A type option for searchable type selectors.
 
@@ -16,7 +16,7 @@ A type option for searchable type selectors.
 
 > **kind**: [`TypeKind`](../type-aliases/TypeKind.md) \| `"builtin"`
 
-Defined in: [packages/visual-editor/src/types.ts:250](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L250)
+Defined in: [packages/visual-editor/src/types.ts:250](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L250)
 
 Type kind for badge coloring.
 
@@ -26,7 +26,7 @@ Type kind for badge coloring.
 
 > **label**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:248](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L248)
+Defined in: [packages/visual-editor/src/types.ts:248](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L248)
 
 Display label (type name).
 
@@ -36,7 +36,7 @@ Display label (type name).
 
 > `optional` **namespace?**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:252](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L252)
+Defined in: [packages/visual-editor/src/types.ts:252](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L252)
 
 Namespace for grouping in the dropdown.
 
@@ -46,6 +46,6 @@ Namespace for grouping in the dropdown.
 
 > **value**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:246](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L246)
+Defined in: [packages/visual-editor/src/types.ts:246](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L246)
 
 Node ID, or special ID for built-in types.

@@ -6,7 +6,7 @@
 
 # Interface: GraphMetadata
 
-Defined in: [packages/visual-editor/src/types.ts:116](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L116)
+Defined in: [packages/visual-editor/src/types.ts:116](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L116)
 
 ## Indexable
 
@@ -20,7 +20,7 @@ Required for ReactFlow compatibility: Node<T> requires T extends Record<string, 
 
 > `optional` **comments?**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:123](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L123)
+Defined in: [packages/visual-editor/src/types.ts:123](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L123)
 
 UI-only annotation (not from AST).
 
@@ -30,7 +30,7 @@ UI-only annotation (not from AST).
 
 > **errors**: [`ValidationError`](ValidationError.md)[]
 
-Defined in: [packages/visual-editor/src/types.ts:119](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L119)
+Defined in: [packages/visual-editor/src/types.ts:119](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L119)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/visual-editor/src/types.ts:119](https://github.com/pradeep
 
 > **hasExternalRefs**: `boolean`
 
-Defined in: [packages/visual-editor/src/types.ts:121](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L121)
+Defined in: [packages/visual-editor/src/types.ts:121](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L121)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/visual-editor/src/types.ts:121](https://github.com/pradeep
 
 > `optional` **isReadOnly?**: `boolean`
 
-Defined in: [packages/visual-editor/src/types.ts:120](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L120)
+Defined in: [packages/visual-editor/src/types.ts:120](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L120)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [packages/visual-editor/src/types.ts:120](https://github.com/pradeep
 
 > **namespace**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:117](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L117)
+Defined in: [packages/visual-editor/src/types.ts:117](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L117)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [packages/visual-editor/src/types.ts:117](https://github.com/pradeep
 
 > **position**: `object`
 
-Defined in: [packages/visual-editor/src/types.ts:118](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L118)
+Defined in: [packages/visual-editor/src/types.ts:118](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L118)
 
 #### x
 

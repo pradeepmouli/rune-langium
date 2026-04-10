@@ -8,7 +8,7 @@
 
 > **CardinalityPicker**(`__namedParameters`): `ReactNode`
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:58](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L58)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityPicker.tsx:58](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/CardinalityPicker.tsx#L58)
 
 Cardinality picker as a compact dropdown with 4 presets and a custom option.
 

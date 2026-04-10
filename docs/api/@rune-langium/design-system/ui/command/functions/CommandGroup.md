@@ -8,7 +8,7 @@
 
 > **CommandGroup**(`__namedParameters`): `Element`
 
-Defined in: [packages/design-system/src/ui/command.tsx:69](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/design-system/src/ui/command.tsx#L69)
+Defined in: [packages/design-system/src/ui/command.tsx:69](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/design-system/src/ui/command.tsx#L69)
 
 ## Parameters
 

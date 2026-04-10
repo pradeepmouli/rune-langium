@@ -8,4 +8,4 @@
 
 > `const` **TypeCreator**: `NamedExoticComponent`\<[`TypeCreatorProps`](../interfaces/TypeCreatorProps.md)\>
 
-Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:24](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeCreator.tsx#L24)
+Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:24](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/TypeCreator.tsx#L24)

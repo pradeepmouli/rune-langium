@@ -6,7 +6,7 @@
 
 # Class: RuneDslParser
 
-Defined in: [packages/core/src/services/rune-dsl-parser.ts:27](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/services/rune-dsl-parser.ts#L27)
+Defined in: [packages/core/src/services/rune-dsl-parser.ts:27](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/services/rune-dsl-parser.ts#L27)
 
 Custom parser for the Rune DSL that pre-processes input text to insert
 implicit `[` and `]` brackets around bare expressions after `extract`,
@@ -36,7 +36,7 @@ handle them.
 
 > **new RuneDslParser**(`services`): `RuneDslParser`
 
-Defined in: [packages/core/src/services/rune-dsl-parser.ts:28](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/services/rune-dsl-parser.ts#L28)
+Defined in: [packages/core/src/services/rune-dsl-parser.ts:28](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/services/rune-dsl-parser.ts#L28)
 
 #### Parameters
 
@@ -403,7 +403,7 @@ Parses the callback as optional (the `?` operation in EBNF/Langium)
 
 > **parse**\<`T`\>(`input`, `options?`): `ParseResult`\<`T`\>
 
-Defined in: [packages/core/src/services/rune-dsl-parser.ts:32](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/services/rune-dsl-parser.ts#L32)
+Defined in: [packages/core/src/services/rune-dsl-parser.ts:32](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/services/rune-dsl-parser.ts#L32)
 
 #### Type Parameters
 

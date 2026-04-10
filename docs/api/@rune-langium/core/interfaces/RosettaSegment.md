@@ -6,7 +6,7 @@
 
 # Interface: RosettaSegment
 
-Defined in: [packages/core/src/generated/ast.ts:4247](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4247)
+Defined in: [packages/core/src/generated/ast.ts:4247](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4247)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:4247](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaModel`](RosettaModel.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4248](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4248)
+Defined in: [packages/core/src/generated/ast.ts:4248](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4248)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaSegment"`
 
-Defined in: [packages/core/src/generated/ast.ts:4249](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4249)
+Defined in: [packages/core/src/generated/ast.ts:4249](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4249)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,4 +102,4 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **name**: `string`
 
-Defined in: [packages/core/src/generated/ast.ts:4250](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4250)
+Defined in: [packages/core/src/generated/ast.ts:4250](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4250)

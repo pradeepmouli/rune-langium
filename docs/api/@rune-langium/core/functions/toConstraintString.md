@@ -8,7 +8,7 @@
 
 > **toConstraintString**(`card`): `string`
 
-Defined in: [packages/core/src/utils/cardinality-utils.ts:37](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/utils/cardinality-utils.ts#L37)
+Defined in: [packages/core/src/utils/cardinality-utils.ts:37](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/utils/cardinality-utils.ts#L37)
 
 Produce a human-readable constraint string like "(1..1)", "(0..*)", etc.
 

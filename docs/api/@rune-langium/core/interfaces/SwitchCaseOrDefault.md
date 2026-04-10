@@ -6,7 +6,7 @@
 
 # Interface: SwitchCaseOrDefault
 
-Defined in: [packages/core/src/generated/ast.ts:4890](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4890)
+Defined in: [packages/core/src/generated/ast.ts:4890](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4890)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:4890](https://github.com/pradeep
 
 > `readonly` **$container**: [`SwitchOperation`](SwitchOperation.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4891](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4891)
+Defined in: [packages/core/src/generated/ast.ts:4891](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4891)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"SwitchCaseOrDefault"`
 
-Defined in: [packages/core/src/generated/ast.ts:4892](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4892)
+Defined in: [packages/core/src/generated/ast.ts:4892](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4892)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **expression**: [`RosettaExpression`](../type-aliases/RosettaExpression.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4893](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4893)
+Defined in: [packages/core/src/generated/ast.ts:4893](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4893)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:4893](https://github.com/pradeep
 
 > `optional` **guard?**: [`SwitchCaseGuard`](SwitchCaseGuard.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4894](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/core/src/generated/ast.ts#L4894)
+Defined in: [packages/core/src/generated/ast.ts:4894](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/core/src/generated/ast.ts#L4894)

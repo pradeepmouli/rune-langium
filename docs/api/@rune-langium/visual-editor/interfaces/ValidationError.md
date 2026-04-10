@@ -6,7 +6,7 @@
 
 # Interface: ValidationError
 
-Defined in: [packages/visual-editor/src/types.ts:196](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L196)
+Defined in: [packages/visual-editor/src/types.ts:196](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L196)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:196](https://github.com/pradeep
 
 > `optional` **column?**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:202](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L202)
+Defined in: [packages/visual-editor/src/types.ts:202](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L202)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/types.ts:202](https://github.com/pradeep
 
 > `optional` **line?**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:201](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L201)
+Defined in: [packages/visual-editor/src/types.ts:201](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L201)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/visual-editor/src/types.ts:201](https://github.com/pradeep
 
 > **message**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:199](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L199)
+Defined in: [packages/visual-editor/src/types.ts:199](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L199)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/visual-editor/src/types.ts:199](https://github.com/pradeep
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:197](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L197)
+Defined in: [packages/visual-editor/src/types.ts:197](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L197)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/visual-editor/src/types.ts:197](https://github.com/pradeep
 
 > `optional` **ruleId?**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:200](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L200)
+Defined in: [packages/visual-editor/src/types.ts:200](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L200)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: [packages/visual-editor/src/types.ts:200](https://github.com/pradeep
 
 > **severity**: `"error"` \| `"warning"` \| `"info"`
 
-Defined in: [packages/visual-editor/src/types.ts:198](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/types.ts#L198)
+Defined in: [packages/visual-editor/src/types.ts:198](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/types.ts#L198)

@@ -6,7 +6,7 @@
 
 # Interface: TypeCreatorProps
 
-Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:18](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeCreator.tsx#L18)
+Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:18](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/TypeCreator.tsx#L18)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:18](h
 
 > `optional` **defaultNamespace?**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:20](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeCreator.tsx#L20)
+Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:20](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/TypeCreator.tsx#L20)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:20](h
 
 > `optional` **onCancel?**: () => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:21](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeCreator.tsx#L21)
+Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:21](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/TypeCreator.tsx#L21)
 
 #### Returns
 
@@ -34,7 +34,7 @@ Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:21](h
 
 > **onCreateType**: (`kind`, `name`, `namespace`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:19](https://github.com/pradeepmouli/rune-langium/blob/095f0b2311b606267c849137017446993ee7dcd2/packages/visual-editor/src/components/editors/TypeCreator.tsx#L19)
+Defined in: [packages/visual-editor/src/components/editors/TypeCreator.tsx:19](https://github.com/pradeepmouli/rune-langium/blob/98476119ca38c1f47043813735e8e4e260c1e61b/packages/visual-editor/src/components/editors/TypeCreator.tsx#L19)
 
 #### Parameters
 
