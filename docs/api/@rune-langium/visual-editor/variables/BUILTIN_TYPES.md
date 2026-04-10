@@ -8,6 +8,6 @@
 
 > `const` **BUILTIN\_TYPES**: readonly \[`"string"`, `"int"`, `"number"`, `"boolean"`, `"date"`, `"time"`, `"dateTime"`, `"zonedDateTime"`\]
 
-Defined in: [packages/visual-editor/src/types.ts:232](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L232)
+Defined in: [packages/visual-editor/src/types.ts:232](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L232)
 
 Built-in primitive types available in the Rune DSL.

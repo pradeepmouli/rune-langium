@@ -1,20 +1,22 @@
 ---
 name: rune-langium
-description: "API reference for rune-langium Use when working with createRuneLspServer, createConnectionAdapter. Keywords: rune, rosetta, dsl, langium, cdm, isda, drr, finos, language-server, lsp, visual-editor, reactflow."
+description: "Langium port for Rune DSL tooling Use when working with rune, rosetta, dsl, langium, cdm, isda, drr, finos, language-server, lsp, visual-editor, reactflow."
 license: SEE LICENSE IN LICENSE
 ---
 
 # rune-langium
 
+Langium port for Rune DSL tooling
+
 ## When to Use
 
-- Calling `createRuneLspServer()`, `createConnectionAdapter()`
-- Typing with `RuneLspServer`
+- Working with rune, rosetta, dsl, langium, cdm, isda, drr, finos, language-server, lsp, visual-editor, reactflow
+- API surface: 2 functions, 1 types
 
 ## Quick Reference
 
-**2 functions** — `createRuneLspServer`, `createConnectionAdapter`
-**1 types** — `RuneLspServer`
+**rune-dsl-server:** `createRuneLspServer`, `RuneLspServer`
+**connection-adapter:** `createConnectionAdapter`
 
 ## Links
 

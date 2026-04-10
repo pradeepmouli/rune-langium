@@ -1,6 +1,8 @@
 # Functions
 
-## `createRuneLspServer`
+## rune-dsl-server
+
+### `createRuneLspServer`
 Create a fully-wired Rune DSL LSP server.
 
 All Langium providers (hover, completion, definition, diagnostics, …)
@@ -12,7 +14,9 @@ createRuneLspServer(): RuneLspServer
 ```
 **Returns:** `RuneLspServer`
 
-## `createConnectionAdapter`
+## connection-adapter
+
+### `createConnectionAdapter`
 Create a vscode-languageserver-compatible Connection backed by an
 @lspeasy/server LSPServer.
 
@@ -23,5 +27,5 @@ Pass the returned object as `connection` to Langium's
 createConnectionAdapter(server: LSPServer<ServerCapabilities<any>>): any
 ```
 **Parameters:**
-- `server: LSPServer<ServerCapabilities<any>>` — 
+- `server: LSPServer<ServerCapabilities<any>>`
 **Returns:** `any`

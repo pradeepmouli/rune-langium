@@ -6,7 +6,7 @@
 
 # Interface: AnnotationPathAttributeReference
 
-Defined in: [packages/core/src/generated/ast.ts:249](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L249)
+Defined in: [packages/core/src/generated/ast.ts:249](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L249)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:249](https://github.com/pradeepm
 
 > `readonly` **$container**: [`AnnotationDeepPath`](AnnotationDeepPath.md) \| [`AnnotationPath`](AnnotationPath.md) \| [`LabelAnnotation`](LabelAnnotation.md) \| [`RosettaDocReference`](RosettaDocReference.md) \| [`RuleReferenceAnnotation`](RuleReferenceAnnotation.md)
 
-Defined in: [packages/core/src/generated/ast.ts:250](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L250)
+Defined in: [packages/core/src/generated/ast.ts:250](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L250)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"AnnotationPathAttributeReference"`
 
-Defined in: [packages/core/src/generated/ast.ts:256](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L256)
+Defined in: [packages/core/src/generated/ast.ts:256](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L256)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,4 +102,4 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **attribute**: `Reference`\<[`AttributeOrChoiceOption`](../type-aliases/AttributeOrChoiceOption.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:257](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L257)
+Defined in: [packages/core/src/generated/ast.ts:257](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L257)

@@ -1,6 +1,6 @@
 # Types & Enums
 
-## Types
+## rune-dsl-server
 
 ### `RuneLspServer`
 **Properties:**

@@ -8,7 +8,7 @@
 
 > **serializeModels**(`models`): `Map`\<`string`, `string`\>
 
-Defined in: [packages/core/src/serializer/rosetta-serializer.ts:311](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/serializer/rosetta-serializer.ts#L311)
+Defined in: [packages/core/src/serializer/rosetta-serializer.ts:311](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/serializer/rosetta-serializer.ts#L311)
 
 Serialize multiple models, returning a Map of namespace → source text.
 

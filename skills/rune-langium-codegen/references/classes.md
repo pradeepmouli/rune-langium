@@ -1,6 +1,8 @@
 # Classes
 
-## `CodegenServiceProxy`
+## codegen-service
+
+### `CodegenServiceProxy`
 Proxy that spawns the codegen CLI subprocess for each request.
 The CLI reads JSON from stdin (--json mode) and writes JSON to stdout.
 ```ts

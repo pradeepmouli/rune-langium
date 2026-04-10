@@ -1,6 +1,6 @@
 # Types & Enums
 
-## Types
+## types
 
 ### `CodeGenerationRequest`
 Request to generate code from Rune DSL model files.

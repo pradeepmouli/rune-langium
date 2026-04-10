@@ -6,7 +6,7 @@
 
 # Interface: AstNodeShape
 
-Defined in: [packages/visual-editor/src/types.ts:42](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L42)
+Defined in: [packages/visual-editor/src/types.ts:42](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L42)
 
 Structural constraint matching Langium's AstNode interface.
 Used instead of importing langium directly (it's not a visual-editor dependency).
@@ -17,7 +17,7 @@ Used instead of importing langium directly (it's not a visual-editor dependency)
 
 > `readonly` `optional` **$container?**: `AstNodeShape`
 
-Defined in: [packages/visual-editor/src/types.ts:44](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L44)
+Defined in: [packages/visual-editor/src/types.ts:44](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L44)
 
 ***
 
@@ -25,7 +25,7 @@ Defined in: [packages/visual-editor/src/types.ts:44](https://github.com/pradeepm
 
 > `readonly` `optional` **$containerIndex?**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:46](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L46)
+Defined in: [packages/visual-editor/src/types.ts:46](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L46)
 
 ***
 
@@ -33,7 +33,7 @@ Defined in: [packages/visual-editor/src/types.ts:46](https://github.com/pradeepm
 
 > `readonly` `optional` **$containerProperty?**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:45](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L45)
+Defined in: [packages/visual-editor/src/types.ts:45](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L45)
 
 ***
 
@@ -41,7 +41,7 @@ Defined in: [packages/visual-editor/src/types.ts:45](https://github.com/pradeepm
 
 > `readonly` `optional` **$cstNode?**: `unknown`
 
-Defined in: [packages/visual-editor/src/types.ts:47](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L47)
+Defined in: [packages/visual-editor/src/types.ts:47](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L47)
 
 ***
 
@@ -49,7 +49,7 @@ Defined in: [packages/visual-editor/src/types.ts:47](https://github.com/pradeepm
 
 > `readonly` `optional` **$document?**: `unknown`
 
-Defined in: [packages/visual-editor/src/types.ts:48](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L48)
+Defined in: [packages/visual-editor/src/types.ts:48](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L48)
 
 ***
 
@@ -57,4 +57,4 @@ Defined in: [packages/visual-editor/src/types.ts:48](https://github.com/pradeepm
 
 > `readonly` **$type**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:43](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L43)
+Defined in: [packages/visual-editor/src/types.ts:43](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L43)

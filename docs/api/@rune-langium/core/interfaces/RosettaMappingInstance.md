@@ -6,7 +6,7 @@
 
 # Interface: RosettaMappingInstance
 
-Defined in: [packages/core/src/generated/ast.ts:3632](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3632)
+Defined in: [packages/core/src/generated/ast.ts:3632](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3632)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:3632](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaMapping`](RosettaMapping.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3633](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3633)
+Defined in: [packages/core/src/generated/ast.ts:3633](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3633)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaMappingInstance"`
 
-Defined in: [packages/core/src/generated/ast.ts:3634](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3634)
+Defined in: [packages/core/src/generated/ast.ts:3634](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3634)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **default**: `boolean`
 
-Defined in: [packages/core/src/generated/ast.ts:3635](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3635)
+Defined in: [packages/core/src/generated/ast.ts:3635](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3635)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [packages/core/src/generated/ast.ts:3635](https://github.com/pradeep
 
 > `optional` **set?**: [`RosettaMapTestExpression`](../type-aliases/RosettaMapTestExpression.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3636](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3636)
+Defined in: [packages/core/src/generated/ast.ts:3636](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3636)
 
 ***
 
@@ -118,4 +118,4 @@ Defined in: [packages/core/src/generated/ast.ts:3636](https://github.com/pradeep
 
 > `optional` **when?**: [`RosettaMappingPathTests`](RosettaMappingPathTests.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3637](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3637)
+Defined in: [packages/core/src/generated/ast.ts:3637](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L3637)

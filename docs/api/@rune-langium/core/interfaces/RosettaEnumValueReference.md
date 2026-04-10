@@ -6,7 +6,7 @@
 
 # Interface: RosettaEnumValueReference
 
-Defined in: [packages/core/src/generated/ast.ts:2990](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L2990)
+Defined in: [packages/core/src/generated/ast.ts:2990](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2990)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:2990](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaFunction`](RosettaFunction.md) \| [`RosettaMappingPathTests`](RosettaMappingPathTests.md) \| [`RosettaMappingInstance`](RosettaMappingInstance.md) \| [`RosettaMapTestEqualityOperation`](RosettaMapTestEqualityOperation.md)
 
-Defined in: [packages/core/src/generated/ast.ts:2991](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L2991)
+Defined in: [packages/core/src/generated/ast.ts:2991](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2991)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaEnumValueReference"`
 
-Defined in: [packages/core/src/generated/ast.ts:2996](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L2996)
+Defined in: [packages/core/src/generated/ast.ts:2996](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2996)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **enumeration**: `Reference`\<[`RosettaEnumeration`](RosettaEnumeration.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:2997](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L2997)
+Defined in: [packages/core/src/generated/ast.ts:2997](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2997)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:2997](https://github.com/pradeep
 
 > **value**: `Reference`\<[`RosettaEnumValue`](RosettaEnumValue.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:2998](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L2998)
+Defined in: [packages/core/src/generated/ast.ts:2998](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L2998)

@@ -8,4 +8,4 @@
 
 > `const` **RosettaConditionalExpressionSchema**: `ZodObject`\<\{ `$type`: `ZodLiteral`\<`"RosettaConditionalExpression"`\>; `elsethen`: `ZodOptional`\<`ZodLazy`\<`any`\>\>; `full`: `ZodOptional`\<`ZodBoolean`\>; `if`: `ZodOptional`\<`ZodLazy`\<`any`\>\>; `ifthen`: `ZodOptional`\<`ZodLazy`\<`any`\>\>; \}, `$loose`\>
 
-Defined in: [packages/core/src/generated/zod-schemas.ts:479](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/zod-schemas.ts#L479)
+Defined in: [packages/core/src/generated/zod-schemas.ts:479](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/zod-schemas.ts#L479)

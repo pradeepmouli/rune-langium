@@ -8,6 +8,6 @@
 
 > **AnyGraphNode** = [`GraphNode`](GraphNode.md)\<[`Data`](../../core/interfaces/Data.md)\> \| [`GraphNode`](GraphNode.md)\<[`Choice`](../../core/interfaces/Choice.md)\> \| [`GraphNode`](GraphNode.md)\<[`RosettaEnumeration`](../../core/interfaces/RosettaEnumeration.md)\> \| [`GraphNode`](GraphNode.md)\<[`RosettaFunction`](../../core/interfaces/RosettaFunction.md)\> \| [`GraphNode`](GraphNode.md)\<[`RosettaRecordType`](../../core/interfaces/RosettaRecordType.md)\> \| [`GraphNode`](GraphNode.md)\<[`RosettaTypeAlias`](../../core/interfaces/RosettaTypeAlias.md)\> \| [`GraphNode`](GraphNode.md)\<[`RosettaBasicType`](../../core/interfaces/RosettaBasicType.md)\> \| [`GraphNode`](GraphNode.md)\<[`Annotation`](../../core/interfaces/Annotation.md)\>
 
-Defined in: [packages/visual-editor/src/types.ts:150](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L150)
+Defined in: [packages/visual-editor/src/types.ts:150](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L150)
 
 Union of all GraphNode variants for top-level elements.

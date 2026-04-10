@@ -6,7 +6,7 @@
 
 # Class: RuneDslScopeProvider
 
-Defined in: [packages/core/src/services/rune-dsl-scope-provider.ts:147](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-scope-provider.ts#L147)
+Defined in: [packages/core/src/services/rune-dsl-scope-provider.ts:147](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/services/rune-dsl-scope-provider.ts#L147)
 
 Custom scope provider for the Rune DSL.
 
@@ -27,7 +27,7 @@ Handles the 21 cross-reference patterns from the original Xtext implementation:
 
 > **new RuneDslScopeProvider**(`services`): `RuneDslScopeProvider`
 
-Defined in: [packages/core/src/services/rune-dsl-scope-provider.ts:148](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-scope-provider.ts#L148)
+Defined in: [packages/core/src/services/rune-dsl-scope-provider.ts:148](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/services/rune-dsl-scope-provider.ts#L148)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ descriptions first. This is done using the `NameProvider` and `AstNodeDescriptio
 
 > `protected` **getGlobalScope**(`referenceType`, `context`): `Scope`
 
-Defined in: [packages/core/src/services/rune-dsl-scope-provider.ts:1355](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-scope-provider.ts#L1355)
+Defined in: [packages/core/src/services/rune-dsl-scope-provider.ts:1355](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/services/rune-dsl-scope-provider.ts#L1355)
 
 Override global scope lookup to support `import ... as <alias>` resolution.
 
@@ -208,7 +208,7 @@ a known alias prefix with the full namespace prefix and retry the lookup.
 
 > **getScope**(`context`): `Scope`
 
-Defined in: [packages/core/src/services/rune-dsl-scope-provider.ts:152](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-scope-provider.ts#L152)
+Defined in: [packages/core/src/services/rune-dsl-scope-provider.ts:152](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/services/rune-dsl-scope-provider.ts#L152)
 
 #### Parameters
 

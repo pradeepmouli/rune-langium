@@ -1,12 +1,14 @@
 # Types & Enums
 
-## Types
+## DetailPanel
 
 ### `DetailPanelProps`
 **Properties:**
-- `nodeData: AnyGraphNode | null` — 
+- `nodeData: AnyGraphNode | null`
 - `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
 - `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
+
+## EditorFormPanel
 
 ### `EditorFormPanelProps`
 **Properties:**
@@ -20,6 +22,8 @@
 When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `onClose: () => void` (optional) — Called when the panel requests to close (e.g., Escape key).
 - `onNavigateToNode: (nodeId: string) => void` (optional) — Called when a type reference is clicked to navigate to that type's definition.
+
+## NamespaceExplorerPanel
 
 ### `NamespaceExplorerPanelProps`
 **Properties:**
@@ -35,26 +39,34 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `className: string` (optional) — Optional className for outer container.
 - `hiddenRefCounts: Map<string, number>` (optional) — Total edge count for cross-namespace reference detection.
 
+## TypeCreator
+
 ### `TypeCreatorProps`
 **Properties:**
-- `onCreateType: (kind: TypeKind, name: string, namespace: string) => void` — 
-- `defaultNamespace: string` (optional) — 
-- `onCancel: () => void` (optional) — 
+- `onCreateType: (kind: TypeKind, name: string, namespace: string) => void`
+- `defaultNamespace: string` (optional)
+- `onCancel: () => void` (optional)
+
+## AttributeEditor
 
 ### `AttributeEditorProps`
 **Properties:**
-- `nodeId: string` — 
-- `onAddAttribute: (nodeId: string, name: string, typeName: string, cardinality: string) => void` — 
-- `onRemoveAttribute: (nodeId: string, name: string) => void` — 
-- `onCancel: () => void` (optional) — 
+- `nodeId: string`
+- `onAddAttribute: (nodeId: string, name: string, typeName: string, cardinality: string) => void`
+- `onRemoveAttribute: (nodeId: string, name: string) => void`
+- `onCancel: () => void` (optional)
+
+## CardinalityEditor
 
 ### `CardinalityEditorProps`
 **Properties:**
-- `nodeId: string` — 
-- `attrName: string` — 
-- `currentCardinality: string` — 
-- `onUpdateCardinality: (nodeId: string, attrName: string, cardinality: string) => void` — 
-- `onCancel: () => void` (optional) — 
+- `nodeId: string`
+- `attrName: string`
+- `currentCardinality: string`
+- `onUpdateCardinality: (nodeId: string, attrName: string, cardinality: string) => void`
+- `onCancel: () => void` (optional)
+
+## TypeSelector
 
 ### `TypeSelectorProps`
 **Properties:**
@@ -87,14 +99,18 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 
 ### `TypeSelectorGroup`
 **Properties:**
-- `label: string` — 
-- `options: TypeOption[]` — 
+- `label: string`
+- `options: TypeOption[]`
+
+## CardinalityPicker
 
 ### `CardinalityPickerProps`
 **Properties:**
 - `value: string` — Current cardinality value (e.g., "(0..*)").
 - `onChange: (cardinality: string) => void` — Called when cardinality changes.
 - `disabled: boolean` (optional) — Whether the picker is disabled.
+
+## MetadataSection
 
 ### `MetadataSectionProps`
 **Properties:**
@@ -103,6 +119,8 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `onCommentsCommit: (comments: string) => void` — Called when comments change (debounced commit to graph).
 - `onSynonymAdd: (synonym: string) => void` — Called when a synonym is added (immediate commit to graph).
 - `onSynonymRemove: (index: number) => void` — Called when a synonym is removed by index (immediate commit to graph).
+
+## AttributeRow
 
 ### `AttributeRowProps`
 **Properties:**
@@ -118,6 +136,8 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `isOverride: boolean` (optional) — Whether this attribute overrides an inherited member.
 - `onRevert: () => void` (optional) — Callback to revert an override (remove local, restore inherited).
 
+## DataTypeForm
+
 ### `DataTypeFormProps`
 **Properties:**
 - `nodeId: string` — Node ID of the Data type being edited.
@@ -128,6 +148,8 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `renderExpressionEditor: (props: ExpressionEditorSlotProps) => ReactNode` (optional) — Optional render-prop for a rich expression editor.
 - `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
 - `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
+
+## EnumValueRow
 
 ### `EnumValueRowProps`
 **Properties:**
@@ -142,6 +164,8 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `isOverride: boolean` (optional) — Whether this local value overrides an inherited value with the same name.
 - `onRevert: () => void` (optional) — Callback to revert this override, restoring the inherited value.
 
+## EnumForm
+
 ### `EnumFormProps`
 **Properties:**
 - `nodeId: string` — Node ID of the Enum being edited.
@@ -151,6 +175,8 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `allNodes: TypeGraphNode[]` (optional) — All graph nodes for inherited member resolution.
 - `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
 - `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
+
+## ChoiceOptionRow
 
 ### `ChoiceOptionRowProps`
 **Properties:**
@@ -162,6 +188,8 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
 - `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
 
+## ChoiceForm
+
 ### `ChoiceFormProps`
 **Properties:**
 - `nodeId: string` — Node ID of the Choice being edited.
@@ -170,6 +198,8 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `actions: ChoiceFormActions` — Choice-specific editor form action callbacks.
 - `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
 - `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
+
+## FunctionForm
 
 ### `FunctionFormProps`
 **Properties:**
@@ -182,6 +212,8 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 When omitted, a plain `<Textarea>` is rendered as fallback.
 - `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
 - `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
+
+## types
 
 ### `AstNodeModel`
 Mapped type that plucks and recursively serializes fields from any
@@ -197,12 +229,12 @@ for runtime discrimination. All other fields are made mutable for editing.
 Structural constraint matching Langium's AstNode interface.
 Used instead of importing langium directly (it's not a visual-editor dependency).
 **Properties:**
-- `$type: string` — 
-- `$container: AstNodeShape` (optional) — 
-- `$containerProperty: string` (optional) — 
-- `$containerIndex: number` (optional) — 
-- `$cstNode: unknown` (optional) — 
-- `$document: unknown` (optional) — 
+- `$type: string`
+- `$container: AstNodeShape` (optional)
+- `$containerProperty: string` (optional)
+- `$containerIndex: number` (optional)
+- `$cstNode: unknown` (optional)
+- `$document: unknown` (optional)
 
 ### `GraphNode`
 Top-level graph node data: AstNodeModel with graph/editor metadata.
@@ -219,11 +251,11 @@ GraphNode<Data> | GraphNode<Choice> | GraphNode<RosettaEnumeration> | GraphNode<
 
 ### `GraphMetadata`
 **Properties:**
-- `namespace: string` — 
-- `position: { x: number; y: number }` — 
-- `errors: ValidationError[]` — 
-- `isReadOnly: boolean` (optional) — 
-- `hasExternalRefs: boolean` — 
+- `namespace: string`
+- `position: { x: number; y: number }`
+- `errors: ValidationError[]`
+- `isReadOnly: boolean` (optional)
+- `hasExternalRefs: boolean`
 - `comments: string` (optional) — UI-only annotation (not from AST).
 
 ### `RootAstElement`
@@ -249,18 +281,18 @@ Data payload for graph edges.
 The index signature is required for compatibility with ReactFlow's
 `Edge<T extends Record<string, unknown>>` constraint.
 **Properties:**
-- `kind: EdgeKind` — 
-- `label: string` (optional) — 
-- `cardinality: string` (optional) — 
+- `kind: EdgeKind`
+- `label: string` (optional)
+- `cardinality: string` (optional)
 
 ### `ValidationError`
 **Properties:**
-- `nodeId: string` — 
-- `severity: "error" | "warning" | "info"` — 
-- `message: string` — 
-- `ruleId: string` (optional) — 
-- `line: number` (optional) — 
-- `column: number` (optional) — 
+- `nodeId: string`
+- `severity: "error" | "warning" | "info"`
+- `message: string`
+- `ruleId: string` (optional)
+- `line: number` (optional)
+- `column: number` (optional)
 
 ### `ExpressionEditorSlotProps`
 Props provided to the expression editor render-prop slot.
@@ -302,14 +334,14 @@ Function-specific editor actions.
 ### `FormActionsKindMap`
 Maps each `TypeKind` to its form actions interface.
 **Properties:**
-- `data: DataFormActions` — 
-- `enum: EnumFormActions` — 
-- `choice: ChoiceFormActions` — 
-- `func: FuncFormActions` — 
-- `record: CommonFormActions` — 
-- `typeAlias: CommonFormActions` — 
-- `basicType: CommonFormActions` — 
-- `annotation: CommonFormActions` — 
+- `data: DataFormActions`
+- `enum: EnumFormActions`
+- `choice: ChoiceFormActions`
+- `func: FuncFormActions`
+- `record: CommonFormActions`
+- `typeAlias: CommonFormActions`
+- `basicType: CommonFormActions`
+- `annotation: CommonFormActions`
 
 ### `AllEditorFormActions`
 Intersection of all kind-specific actions (every method available).
@@ -321,10 +353,5 @@ DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions
 Kind-aware editor form actions.
 
 When parameterized with a specific kind (e.g. `EditorFormActions<'data'>`),
-only that kind's actions + common actions are available.
-
-When unparameterized (`EditorFormActions`), resolves to the full intersection
-of all kind-specific actions for backward compatibility.
-```ts
 
 <!-- truncated -->

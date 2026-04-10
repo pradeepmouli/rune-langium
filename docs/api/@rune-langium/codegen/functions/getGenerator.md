@@ -8,7 +8,7 @@
 
 > **getGenerator**(`language`): [`GeneratorInfo`](../interfaces/GeneratorInfo.md) \| `undefined`
 
-Defined in: [generators.ts:34](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/generators.ts#L34)
+Defined in: [generators.ts:34](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/codegen/src/generators.ts#L34)
 
 Get generator info by ID.
 

@@ -6,7 +6,7 @@
 
 # Class: RuneDslAstReflection
 
-Defined in: [packages/core/src/generated/ast.ts:5951](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5951)
+Defined in: [packages/core/src/generated/ast.ts:5951](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L5951)
 
 ## Extends
 
@@ -56,7 +56,7 @@ Defined in: node\_modules/.pnpm/langium@4.2.1/node\_modules/langium/lib/syntax-t
 
 > `readonly` **types**: `object`
 
-Defined in: [packages/core/src/generated/ast.ts:5952](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5952)
+Defined in: [packages/core/src/generated/ast.ts:5952](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L5952)
 
 #### Annotation
 

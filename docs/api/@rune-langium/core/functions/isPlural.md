@@ -8,7 +8,7 @@
 
 > **isPlural**(`card`): `boolean`
 
-Defined in: [packages/core/src/utils/cardinality-utils.ts:23](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/utils/cardinality-utils.ts#L23)
+Defined in: [packages/core/src/utils/cardinality-utils.ts:23](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/utils/cardinality-utils.ts#L23)
 
 Whether the cardinality allows more than one instance (sup > 1 or unbounded).
 

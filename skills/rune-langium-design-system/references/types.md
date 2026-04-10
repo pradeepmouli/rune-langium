@@ -1,6 +1,6 @@
 # Types & Enums
 
-## Types
+## tokens
 
 ### `Colors`
 ```ts
@@ -11,6 +11,8 @@ typeof colors
 ```ts
 typeof fonts
 ```
+
+## react-resizable-panels.d
 
 ### `PanelImperativeHandle`
 Imperative Panel API

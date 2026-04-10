@@ -6,7 +6,7 @@
 
 # Interface: EditorState
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:50](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L50)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:50](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L50)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:50](https://github
 
 > **activeFilters**: [`GraphFilters`](GraphFilters.md)
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:59](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L59)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:59](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L59)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:59](https://github
 
 > **detailPanelOpen**: `boolean`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:60](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L60)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:60](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L60)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:60](https://github
 
 > **edges**: [`TypeGraphEdge`](../type-aliases/TypeGraphEdge.md)[]
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:53](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L53)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:53](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L53)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:53](https://github
 
 > **layoutOptions**: [`LayoutOptions`](LayoutOptions.md)
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:64](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L64)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:64](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L64)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:64](https://github
 
 > **nodes**: [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:52](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L52)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:52](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L52)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:52](https://github
 
 > **searchQuery**: `string`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:57](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L57)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:57](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L57)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:57](https://github
 
 > **searchResults**: `string`[]
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:58](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L58)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:58](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L58)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:58](https://github
 
 > **selectedNodeId**: `string` \| `null`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:56](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L56)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:56](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L56)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:56](https://github
 
 > **validationErrors**: [`ValidationError`](ValidationError.md)[]
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:61](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L61)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:61](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L61)
 
 ***
 
@@ -86,4 +86,4 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:61](https://github
 
 > **visibility**: [`VisibilityState`](VisibilityState.md)
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:67](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L67)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:67](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L67)

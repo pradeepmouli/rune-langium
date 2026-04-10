@@ -1,521 +1,518 @@
 # Variables & Constants
 
-## `RuneDslTerminals`
+## ast
+
+### `RuneDslTerminals`
 ```ts
 const RuneDslTerminals: { ID: RegExp; INT: RegExp; STRING: RegExp; ML_COMMENT: RegExp; SL_COMMENT: RegExp; WS: RegExp }
 ```
 
-## `Annotation`
+### `Annotation`
 ```ts
 let Annotation: { $type: "Annotation"; attributes: "attributes"; definition: "definition"; name: "name"; prefix: "prefix" }
 ```
 
-## `AnnotationDeepPath`
+### `AnnotationDeepPath`
 ```ts
 let AnnotationDeepPath: { $type: "AnnotationDeepPath"; attribute: "attribute"; operator: "operator"; receiver: "receiver" }
 ```
 
-## `AnnotationPath`
+### `AnnotationPath`
 ```ts
 let AnnotationPath: { $type: "AnnotationPath"; attribute: "attribute"; operator: "operator"; receiver: "receiver" }
 ```
 
-## `AnnotationPathAttributeReference`
+### `AnnotationPathAttributeReference`
 ```ts
 let AnnotationPathAttributeReference: { $type: "AnnotationPathAttributeReference"; attribute: "attribute" }
 ```
 
-## `AnnotationPathExpression`
+### `AnnotationPathExpression`
 ```ts
 let AnnotationPathExpression: { $type: "AnnotationPathExpression" }
 ```
 
-## `AnnotationQualifier`
+### `AnnotationQualifier`
 ```ts
 let AnnotationQualifier: { $type: "AnnotationQualifier"; qualName: "qualName"; qualPath: "qualPath"; qualValue: "qualValue" }
 ```
 
-## `AnnotationRef`
+### `AnnotationRef`
 ```ts
 let AnnotationRef: { $type: "AnnotationRef"; annotation: "annotation"; attribute: "attribute"; qualifiers: "qualifiers" }
 ```
 
-## `ArithmeticOperation`
+### `ArithmeticOperation`
 ```ts
 let ArithmeticOperation: { $type: "ArithmeticOperation"; left: "left"; operator: "operator"; right: "right" }
 ```
 
-## `AsKeyOperation`
+### `AsKeyOperation`
 ```ts
 let AsKeyOperation: { $type: "AsKeyOperation"; argument: "argument"; operator: "operator" }
 ```
 
-## `AssignPathRoot`
+### `AssignPathRoot`
 ```ts
 let AssignPathRoot: { $type: "AssignPathRoot" }
 ```
 
-## `Attribute`
+### `Attribute`
 ```ts
 let Attribute: { $type: "Attribute"; annotations: "annotations"; card: "card"; definition: "definition"; labels: "labels"; name: "name"; override: "override"; references: "references"; ruleReferences: "ruleReferences"; synonyms: "synonyms"; typeCall: "typeCall"; typeCallArgs: "typeCallArgs" }
 ```
 
-## `AttributeOrChoiceOption`
+### `AttributeOrChoiceOption`
 ```ts
 let AttributeOrChoiceOption: { $type: "AttributeOrChoiceOption" }
 ```
 
-## `Choice`
+### `Choice`
 ```ts
 let Choice: { $type: "Choice"; annotations: "annotations"; attributes: "attributes"; definition: "definition"; name: "name"; synonyms: "synonyms" }
 ```
 
-## `ChoiceOperation`
+### `ChoiceOperation`
 ```ts
 let ChoiceOperation: { $type: "ChoiceOperation"; argument: "argument"; attributes: "attributes"; necessity: "necessity"; operator: "operator" }
 ```
 
-## `ChoiceOption`
+### `ChoiceOption`
 ```ts
 let ChoiceOption: { $type: "ChoiceOption"; annotations: "annotations"; definition: "definition"; labels: "labels"; references: "references"; ruleReferences: "ruleReferences"; synonyms: "synonyms"; typeCall: "typeCall" }
 ```
 
-## `ClosureParameter`
+### `ClosureParameter`
 ```ts
 let ClosureParameter: { $type: "ClosureParameter"; name: "name" }
 ```
 
-## `ComparisonOperation`
+### `ComparisonOperation`
 ```ts
 let ComparisonOperation: { $type: "ComparisonOperation"; cardMod: "cardMod"; left: "left"; operator: "operator"; right: "right" }
 ```
 
-## `Condition`
+### `Condition`
 ```ts
 let Condition: { $type: "Condition"; annotations: "annotations"; definition: "definition"; expression: "expression"; name: "name"; postCondition: "postCondition"; references: "references" }
 ```
 
-## `ConstructorKeyValuePair`
+### `ConstructorKeyValuePair`
 ```ts
 let ConstructorKeyValuePair: { $type: "ConstructorKeyValuePair"; key: "key"; value: "value" }
 ```
 
-## `Data`
+### `Data`
 ```ts
 let Data: { $type: "Data"; annotations: "annotations"; attributes: "attributes"; conditions: "conditions"; definition: "definition"; name: "name"; references: "references"; superType: "superType"; synonyms: "synonyms" }
 ```
 
-## `DataOrChoice`
+### `DataOrChoice`
 ```ts
 let DataOrChoice: { $type: "DataOrChoice" }
 ```
 
-## `DefaultOperation`
+### `DefaultOperation`
 ```ts
 let DefaultOperation: { $type: "DefaultOperation"; left: "left"; operator: "operator"; right: "right" }
 ```
 
-## `DistinctOperation`
+### `DistinctOperation`
 ```ts
 let DistinctOperation: { $type: "DistinctOperation"; argument: "argument"; operator: "operator" }
 ```
 
-## `DocumentRationale`
+### `DocumentRationale`
 ```ts
 let DocumentRationale: { $type: "DocumentRationale"; rationale: "rationale"; rationaleAuthor: "rationaleAuthor" }
 ```
 
-## `EqualityOperation`
+### `EqualityOperation`
 ```ts
 let EqualityOperation: { $type: "EqualityOperation"; cardMod: "cardMod"; left: "left"; operator: "operator"; right: "right" }
 ```
 
-## `FilterOperation`
+### `FilterOperation`
 ```ts
 let FilterOperation: { $type: "FilterOperation"; argument: "argument"; function: "function"; operator: "operator" }
 ```
 
-## `FirstOperation`
+### `FirstOperation`
 ```ts
 let FirstOperation: { $type: "FirstOperation"; argument: "argument"; operator: "operator" }
 ```
 
-## `FlattenOperation`
+### `FlattenOperation`
 ```ts
 let FlattenOperation: { $type: "FlattenOperation"; argument: "argument"; operator: "operator" }
 ```
 
-## `Import`
+### `Import`
 ```ts
 let Import: { $type: "Import"; importedNamespace: "importedNamespace"; namespaceAlias: "namespaceAlias" }
 ```
 
-## `InlineFunction`
+### `InlineFunction`
 ```ts
 let InlineFunction: { $type: "InlineFunction"; body: "body"; parameters: "parameters" }
 ```
 
-## `JoinOperation`
+### `JoinOperation`
 ```ts
 let JoinOperation: { $type: "JoinOperation"; left: "left"; operator: "operator"; right: "right" }
 ```
 
-## `LabelAnnotation`
+### `LabelAnnotation`
 ```ts
 let LabelAnnotation: { $type: "LabelAnnotation"; deprecatedAs: "deprecatedAs"; label: "label"; name: "name"; path: "path" }
 ```
 
-## `LastOperation`
+### `LastOperation`
 ```ts
 let LastOperation: { $type: "LastOperation"; argument: "argument"; operator: "operator" }
 ```
 
-## `ListLiteral`
+### `ListLiteral`
 ```ts
 let ListLiteral: { $type: "ListLiteral"; elements: "elements" }
 ```
 
-## `LogicalOperation`
+### `LogicalOperation`
 ```ts
 let LogicalOperation: { $type: "LogicalOperation"; left: "left"; operator: "operator"; right: "right" }
 ```
 
-## `MapOperation`
+### `MapOperation`
 ```ts
 let MapOperation: { $type: "MapOperation"; argument: "argument"; function: "function"; operator: "operator" }
 ```
 
-## `MaxOperation`
+### `MaxOperation`
 ```ts
 let MaxOperation: { $type: "MaxOperation"; argument: "argument"; function: "function"; operator: "operator" }
 ```
 
-## `MinOperation`
+### `MinOperation`
 ```ts
 let MinOperation: { $type: "MinOperation"; argument: "argument"; function: "function"; operator: "operator" }
 ```
 
-## `OneOfOperation`
+### `OneOfOperation`
 ```ts
 let OneOfOperation: { $type: "OneOfOperation"; argument: "argument"; operator: "operator" }
 ```
 
-## `Operation`
+### `Operation`
 ```ts
 let Operation: { $type: "Operation"; add: "add"; assignRoot: "assignRoot"; definition: "definition"; expression: "expression"; path: "path" }
 ```
 
-## `ReduceOperation`
+### `ReduceOperation`
 ```ts
 let ReduceOperation: { $type: "ReduceOperation"; argument: "argument"; function: "function"; operator: "operator" }
 ```
 
-## `RegulatoryDocumentReference`
+### `RegulatoryDocumentReference`
 ```ts
 let RegulatoryDocumentReference: { $type: "RegulatoryDocumentReference"; body: "body"; corpusList: "corpusList"; segments: "segments" }
 ```
 
-## `ReverseOperation`
+### `ReverseOperation`
 ```ts
 let ReverseOperation: { $type: "ReverseOperation"; argument: "argument"; operator: "operator" }
 ```
 
-## `RosettaAbsentExpression`
+### `RosettaAbsentExpression`
 ```ts
 let RosettaAbsentExpression: { $type: "RosettaAbsentExpression"; argument: "argument"; operator: "operator" }
 ```
 
-## `RosettaAttributeReference`
+### `RosettaAttributeReference`
 ```ts
 let RosettaAttributeReference: { $type: "RosettaAttributeReference"; attribute: "attribute"; receiver: "receiver" }
 ```
 
-## `RosettaBasicType`
+### `RosettaBasicType`
 ```ts
 let RosettaBasicType: { $type: "RosettaBasicType"; definition: "definition"; name: "name"; parameters: "parameters" }
 ```
 
-## `RosettaBody`
+### `RosettaBody`
 ```ts
 let RosettaBody: { $type: "RosettaBody"; bodyType: "bodyType"; definition: "definition"; name: "name" }
 ```
 
-## `RosettaBooleanLiteral`
+### `RosettaBooleanLiteral`
 ```ts
 let RosettaBooleanLiteral: { $type: "RosettaBooleanLiteral"; value: "value" }
 ```
 
-## `RosettaCallableWithArgs`
+### `RosettaCallableWithArgs`
 ```ts
 let RosettaCallableWithArgs: { $type: "RosettaCallableWithArgs" }
 ```
 
-## `RosettaCardinality`
+### `RosettaCardinality`
 ```ts
 let RosettaCardinality: { $type: "RosettaCardinality"; inf: "inf"; sup: "sup"; unbounded: "unbounded" }
 ```
 
-## `RosettaClassSynonym`
+### `RosettaClassSynonym`
 ```ts
 let RosettaClassSynonym: { $type: "RosettaClassSynonym"; metaValue: "metaValue"; sources: "sources"; value: "value" }
 ```
 
-## `RosettaConditionalExpression`
+### `RosettaConditionalExpression`
 ```ts
 let RosettaConditionalExpression: { $type: "RosettaConditionalExpression"; elsethen: "elsethen"; full: "full"; if: "if"; ifthen: "ifthen" }
 ```
 
-## `RosettaConstructorExpression`
+### `RosettaConstructorExpression`
 ```ts
 let RosettaConstructorExpression: { $type: "RosettaConstructorExpression"; constructorTypeArgs: "constructorTypeArgs"; implicitEmpty: "implicitEmpty"; typeRef: "typeRef"; values: "values" }
 ```
 
-## `RosettaContainsExpression`
+### `RosettaContainsExpression`
 ```ts
 let RosettaContainsExpression: { $type: "RosettaContainsExpression"; left: "left"; operator: "operator"; right: "right" }
 ```
 
-## `RosettaCorpus`
+### `RosettaCorpus`
 ```ts
 let RosettaCorpus: { $type: "RosettaCorpus"; body: "body"; corpusType: "corpusType"; definition: "definition"; displayName: "displayName"; name: "name" }
 ```
 
-## `RosettaCountOperation`
+### `RosettaCountOperation`
 ```ts
 let RosettaCountOperation: { $type: "RosettaCountOperation"; argument: "argument"; operator: "operator" }
 ```
 
-## `RosettaDataReference`
+### `RosettaDataReference`
 ```ts
 let RosettaDataReference: { $type: "RosettaDataReference"; attribute: "attribute"; data: "data"; receiver: "receiver" }
 ```
 
-## `RosettaDeepFeatureCall`
+### `RosettaDeepFeatureCall`
 ```ts
 let RosettaDeepFeatureCall: { $type: "RosettaDeepFeatureCall"; feature: "feature"; receiver: "receiver" }
 ```
 
-## `RosettaDisjointExpression`
+### `RosettaDisjointExpression`
 ```ts
 let RosettaDisjointExpression: { $type: "RosettaDisjointExpression"; left: "left"; operator: "operator"; right: "right" }
 ```
 
-## `RosettaDocReference`
+### `RosettaDocReference`
 ```ts
 let RosettaDocReference: { $type: "RosettaDocReference"; docReference: "docReference"; name: "name"; path: "path"; provision: "provision"; rationales: "rationales"; reportedField: "reportedField"; structuredProvision: "structuredProvision" }
 ```
 
-## `RosettaEnumeration`
+### `RosettaEnumeration`
 ```ts
 let RosettaEnumeration: { $type: "RosettaEnumeration"; annotations: "annotations"; definition: "definition"; enumValues: "enumValues"; name: "name"; parent: "parent"; references: "references"; synonyms: "synonyms" }
 ```
 
-## `RosettaEnumSynonym`
+### `RosettaEnumSynonym`
 ```ts
 let RosettaEnumSynonym: { $type: "RosettaEnumSynonym"; definition: "definition"; patternMatch: "patternMatch"; patternReplace: "patternReplace"; removeHtml: "removeHtml"; sources: "sources"; synonymValue: "synonymValue" }
 ```
 
-## `RosettaEnumValue`
+### `RosettaEnumValue`
 ```ts
 let RosettaEnumValue: { $type: "RosettaEnumValue"; annotations: "annotations"; definition: "definition"; display: "display"; enumSynonyms: "enumSynonyms"; name: "name"; references: "references" }
 ```
 
-## `RosettaEnumValueReference`
+### `RosettaEnumValueReference`
 ```ts
 let RosettaEnumValueReference: { $type: "RosettaEnumValueReference"; enumeration: "enumeration"; value: "value" }
 ```
 
-## `RosettaExistsExpression`
+### `RosettaExistsExpression`
 ```ts
 let RosettaExistsExpression: { $type: "RosettaExistsExpression"; argument: "argument"; modifier: "modifier"; operator: "operator" }
 ```
 
-## `RosettaExpression`
+### `RosettaExpression`
 ```ts
 let RosettaExpression: { $type: "RosettaExpression" }
 ```
 
-## `RosettaExternalClass`
+### `RosettaExternalClass`
 ```ts
 let RosettaExternalClass: { $type: "RosettaExternalClass"; data: "data"; externalClassSynonyms: "externalClassSynonyms"; regularAttributes: "regularAttributes" }
 ```
 
-## `RosettaExternalClassSynonym`
+### `RosettaExternalClassSynonym`
 ```ts
 let RosettaExternalClassSynonym: { $type: "RosettaExternalClassSynonym"; metaValue: "metaValue"; value: "value" }
 ```
 
-## `RosettaExternalEnum`
+### `RosettaExternalEnum`
 ```ts
 let RosettaExternalEnum: { $type: "RosettaExternalEnum"; enumeration: "enumeration"; regularValues: "regularValues" }
 ```
 
-## `RosettaExternalEnumValue`
+### `RosettaExternalEnumValue`
 ```ts
 let RosettaExternalEnumValue: { $type: "RosettaExternalEnumValue"; enumRef: "enumRef"; externalEnumSynonyms: "externalEnumSynonyms"; operator: "operator" }
 ```
 
-## `RosettaExternalFunction`
+### `RosettaExternalFunction`
 ```ts
 let RosettaExternalFunction: { $type: "RosettaExternalFunction"; definition: "definition"; name: "name"; parameters: "parameters"; typeCall: "typeCall" }
 ```
 
-## `RosettaExternalRegularAttribute`
+### `RosettaExternalRegularAttribute`
 ```ts
 let RosettaExternalRegularAttribute: { $type: "RosettaExternalRegularAttribute"; attributeRef: "attributeRef"; externalRuleReferences: "externalRuleReferences"; externalSynonyms: "externalSynonyms"; operator: "operator" }
 ```
 
-## `RosettaExternalRuleSource`
+### `RosettaExternalRuleSource`
 ```ts
 let RosettaExternalRuleSource: { $type: "RosettaExternalRuleSource"; externalClasses: "externalClasses"; externalEnums: "externalEnums"; name: "name"; superSources: "superSources" }
 ```
 
-## `RosettaExternalSynonym`
+### `RosettaExternalSynonym`
 ```ts
 let RosettaExternalSynonym: { $type: "RosettaExternalSynonym"; body: "body" }
 ```
 
-## `RosettaFeature`
+### `RosettaFeature`
 ```ts
 let RosettaFeature: { $type: "RosettaFeature" }
 ```
 
-## `RosettaFeatureCall`
+### `RosettaFeatureCall`
 ```ts
 let RosettaFeatureCall: { $type: "RosettaFeatureCall"; feature: "feature"; receiver: "receiver" }
 ```
 
-## `RosettaFunction`
+### `RosettaFunction`
 ```ts
 let RosettaFunction: { $type: "RosettaFunction"; annotations: "annotations"; conditions: "conditions"; definition: "definition"; dispatchAttribute: "dispatchAttribute"; dispatchValue: "dispatchValue"; inputs: "inputs"; name: "name"; operations: "operations"; output: "output"; postConditions: "postConditions"; references: "references"; shortcuts: "shortcuts"; superFunction: "superFunction" }
 ```
 
-## `RosettaImplicitVariable`
+### `RosettaImplicitVariable`
 ```ts
 let RosettaImplicitVariable: { $type: "RosettaImplicitVariable"; name: "name" }
 ```
 
-## `RosettaIntLiteral`
+### `RosettaIntLiteral`
 ```ts
 let RosettaIntLiteral: { $type: "RosettaIntLiteral"; value: "value" }
 ```
 
-## `RosettaLiteral`
+### `RosettaLiteral`
 ```ts
 let RosettaLiteral: { $type: "RosettaLiteral" }
 ```
 
-## `RosettaMapPath`
+### `RosettaMapPath`
 ```ts
 let RosettaMapPath: { $type: "RosettaMapPath"; path: "path" }
 ```
 
-## `RosettaMapPathValue`
+### `RosettaMapPathValue`
 ```ts
 let RosettaMapPathValue: { $type: "RosettaMapPathValue"; path: "path" }
 ```
 
-## `RosettaMapping`
+### `RosettaMapping`
 ```ts
 let RosettaMapping: { $type: "RosettaMapping"; instances: "instances" }
 ```
 
-## `RosettaMappingInstance`
+### `RosettaMappingInstance`
 ```ts
 let RosettaMappingInstance: { $type: "RosettaMappingInstance"; default: "default"; set: "set"; when: "when" }
 ```
 
-## `RosettaMappingPathTests`
+### `RosettaMappingPathTests`
 ```ts
 let RosettaMappingPathTests: { $type: "RosettaMappingPathTests"; tests: "tests" }
 ```
 
-## `RosettaMapRosettaPath`
+### `RosettaMapRosettaPath`
 ```ts
 let RosettaMapRosettaPath: { $type: "RosettaMapRosettaPath"; path: "path" }
 ```
 
-## `RosettaMapTest`
+### `RosettaMapTest`
 ```ts
 let RosettaMapTest: { $type: "RosettaMapTest" }
 ```
 
-## `RosettaMapTestAbsentExpression`
+### `RosettaMapTestAbsentExpression`
 ```ts
 let RosettaMapTestAbsentExpression: { $type: "RosettaMapTestAbsentExpression"; argument: "argument" }
 ```
 
-## `RosettaMapTestEqualityOperation`
+### `RosettaMapTestEqualityOperation`
 ```ts
 let RosettaMapTestEqualityOperation: { $type: "RosettaMapTestEqualityOperation"; left: "left"; operator: "operator"; right: "right" }
 ```
 
-## `RosettaMapTestExistsExpression`
+### `RosettaMapTestExistsExpression`
 ```ts
 let RosettaMapTestExistsExpression: { $type: "RosettaMapTestExistsExpression"; argument: "argument" }
 ```
 
-## `RosettaMapTestExpression`
+### `RosettaMapTestExpression`
 ```ts
 let RosettaMapTestExpression: { $type: "RosettaMapTestExpression" }
 ```
 
-## `RosettaMapTestFunc`
+### `RosettaMapTestFunc`
 ```ts
 let RosettaMapTestFunc: { $type: "RosettaMapTestFunc"; func: "func"; predicatePath: "predicatePath" }
 ```
 
-## `RosettaMergeSynonymValue`
+### `RosettaMergeSynonymValue`
 ```ts
 let RosettaMergeSynonymValue: { $type: "RosettaMergeSynonymValue"; excludePath: "excludePath"; name: "name" }
 ```
 
-## `RosettaMetaType`
+### `RosettaMetaType`
 ```ts
 let RosettaMetaType: { $type: "RosettaMetaType"; name: "name"; typeCall: "typeCall" }
 ```
 
-## `RosettaModel`
+### `RosettaModel`
 ```ts
 let RosettaModel: { $type: "RosettaModel"; configurations: "configurations"; definition: "definition"; elements: "elements"; imports: "imports"; name: "name"; overridden: "overridden"; scope: "scope"; version: "version" }
 ```
 
-## `RosettaNumberLiteral`
+### `RosettaNumberLiteral`
 ```ts
 let RosettaNumberLiteral: { $type: "RosettaNumberLiteral"; value: "value" }
 ```
 
-## `RosettaOnlyElement`
+### `RosettaOnlyElement`
 ```ts
 let RosettaOnlyElement: { $type: "RosettaOnlyElement"; argument: "argument"; operator: "operator" }
 ```
 
-## `RosettaOnlyExistsExpression`
+### `RosettaOnlyExistsExpression`
 ```ts
 let RosettaOnlyExistsExpression: { $type: "RosettaOnlyExistsExpression"; args: "args"; argument: "argument"; operator: "operator" }
 ```
 
-## `RosettaParameter`
+### `RosettaParameter`
 ```ts
 let RosettaParameter: { $type: "RosettaParameter"; isArray: "isArray"; name: "name"; typeCall: "typeCall" }
 ```
 
-## `RosettaQualifiableConfiguration`
+### `RosettaQualifiableConfiguration`
 ```ts
 let RosettaQualifiableConfiguration: { $type: "RosettaQualifiableConfiguration"; qType: "qType"; rosettaClass: "rosettaClass" }
 ```
 
-## `RosettaRecordFeature`
+### `RosettaRecordFeature`
 ```ts
 let RosettaRecordFeature: { $type: "RosettaRecordFeature"; name: "name"; typeCall: "typeCall" }
 ```
 
-## `RosettaRecordType`
-```ts
-let RosettaRecordType: { $type: "RosettaRecordType"; definition: "definition"; features: "features"; name: "name" }
-```
-
-## `RosettaReport`
+### `RosettaRecordType`
 ```ts
 
 <!-- truncated -->

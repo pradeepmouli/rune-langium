@@ -1,24 +1,40 @@
 ---
 name: rune-langium-design-system
-description: "Badge — shadcn/ui Badge component with CVA variants. Use when working with cn, Badge, Button, Collapsible, CollapsibleContent. Keywords: rune, rosetta, dsl, langium, cdm, isda, drr, finos, language-server, lsp, visual-editor, reactflow."
+description: "Langium port for Rune DSL tooling Use when working with rune, rosetta, dsl, langium, cdm, isda, drr, finos, language-server, lsp, visual-editor, reactflow."
 license: SEE LICENSE IN LICENSE
 ---
 
 # @rune-langium/design-system
 
-Badge — shadcn/ui Badge component with CVA variants.
+Langium port for Rune DSL tooling
 
 ## When to Use
 
-- Calling `cn()`, `Badge()`, `Button()`, `Collapsible()`, `CollapsibleContent()`, and 50 more
-- Typing with `Colors`, `Fonts`, `PanelImperativeHandle`
-- Using constants/variables `colors`, `fonts`, `radii`, `badgeVariants`, `buttonVariants`
+- Working with rune, rosetta, dsl, langium, cdm, isda, drr, finos, language-server, lsp, visual-editor, reactflow
+- API surface: 55 functions, 3 types, 6 constants
 
 ## Quick Reference
 
-**55 functions** — `cn`, `Badge`, `Button`, `Collapsible`, `CollapsibleContent`, `CollapsibleTrigger`, `Command`, `CommandEmpty`, `CommandGroup`, `CommandInput`, `CommandItem`, `CommandList`, `CommandSeparator`, `Field`, `FieldLabel`, `FieldDescription`, `FieldError`, `FieldGroup`, `FieldLegend`, `FieldSeparator`, `FieldSet`, `FieldContent`, `FieldTitle`, `Input`, `Label`, `Popover`, `PopoverAnchor`, `PopoverContent`, `PopoverTrigger`, `ResizableHandle`, `ResizablePanel`, `ResizablePanelGroup`, `ScrollArea`, `ScrollBar`, `Select`, `SelectContent`, `SelectGroup`, `SelectItem`, `SelectLabel`, `SelectScrollDownButton`, `SelectScrollUpButton`, `SelectSeparator`, `SelectTrigger`, `SelectValue`, `Separator`, `Spinner`, `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`, `Textarea`, `TooltipProvider`, `Tooltip`, `TooltipTrigger`, `TooltipContent`
-**3 types** — `Colors`, `Fonts`, `PanelImperativeHandle`
-**6 variables** — `colors`, `fonts`, `radii`, `badgeVariants`, `buttonVariants`, `Form`
+**utils:** `cn`
+**badge:** `Badge`, `badgeVariants`
+**button:** `Button`, `buttonVariants`
+**collapsible:** `Collapsible`, `CollapsibleContent`, `CollapsibleTrigger`
+**command:** `Command`, `CommandEmpty`, `CommandGroup`, `CommandInput`, `CommandItem`, `CommandList`, `CommandSeparator`
+**field:** `Field`, `FieldLabel`, `FieldDescription`, `FieldError`, `FieldGroup`, `FieldLegend`, `FieldSeparator`, `FieldSet`, `FieldContent`, `FieldTitle`
+**input:** `Input`
+**label:** `Label`
+**popover:** `Popover`, `PopoverAnchor`, `PopoverContent`, `PopoverTrigger`
+**resizable:** `ResizableHandle`, `ResizablePanel`, `ResizablePanelGroup`
+**scroll-area:** `ScrollArea`, `ScrollBar`
+**select:** `Select`, `SelectContent`, `SelectGroup`, `SelectItem`, `SelectLabel`, `SelectScrollDownButton`, `SelectScrollUpButton`, `SelectSeparator`, `SelectTrigger`, `SelectValue`
+**separator:** `Separator`
+**spinner:** `Spinner`
+**tabs:** `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`
+**textarea:** `Textarea`
+**tooltip:** `TooltipProvider`, `Tooltip`, `TooltipTrigger`, `TooltipContent`
+**tokens:** `Colors`, `Fonts`, `colors`, `fonts`, `radii`
+**react-resizable-panels.d:** `PanelImperativeHandle`
+**form:** `Form`
 
 ## Links
 

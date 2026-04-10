@@ -6,7 +6,7 @@
 
 # Interface: RuneTypeGraphCallbacks
 
-Defined in: [packages/visual-editor/src/types.ts:425](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L425)
+Defined in: [packages/visual-editor/src/types.ts:425](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L425)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:425](https://github.com/pradeep
 
 > `optional` **onContextMenu?**: (`position`) => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:431](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L431)
+Defined in: [packages/visual-editor/src/types.ts:431](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L431)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [packages/visual-editor/src/types.ts:431](https://github.com/pradeep
 
 > `optional` **onEdgeSelect?**: (`edgeId`, `data`) => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:429](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L429)
+Defined in: [packages/visual-editor/src/types.ts:429](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L429)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [packages/visual-editor/src/types.ts:429](https://github.com/pradeep
 
 > `optional` **onModelChanged?**: (`serialized`) => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:434](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L434)
+Defined in: [packages/visual-editor/src/types.ts:434](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L434)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [packages/visual-editor/src/types.ts:434](https://github.com/pradeep
 
 > `optional` **onNavigateToType?**: [`NavigateToNodeCallback`](../type-aliases/NavigateToNodeCallback.md)
 
-Defined in: [packages/visual-editor/src/types.ts:428](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L428)
+Defined in: [packages/visual-editor/src/types.ts:428](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L428)
 
 Called when a type reference is clicked within a graph node (e.g., attribute type name).
 
@@ -88,7 +88,7 @@ Called when a type reference is clicked within a graph node (e.g., attribute typ
 
 > `optional` **onNodeDoubleClick?**: (`nodeId`, `data`) => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:426](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L426)
+Defined in: [packages/visual-editor/src/types.ts:426](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L426)
 
 #### Parameters
 
@@ -110,7 +110,7 @@ Defined in: [packages/visual-editor/src/types.ts:426](https://github.com/pradeep
 
 > `optional` **onSelectionClear?**: () => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:430](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L430)
+Defined in: [packages/visual-editor/src/types.ts:430](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L430)
 
 #### Returns
 
@@ -122,7 +122,7 @@ Defined in: [packages/visual-editor/src/types.ts:430](https://github.com/pradeep
 
 > `optional` **onTypeCreated?**: (`nodeId`, `kind`, `name`) => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:432](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L432)
+Defined in: [packages/visual-editor/src/types.ts:432](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L432)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [packages/visual-editor/src/types.ts:432](https://github.com/pradeep
 
 > `optional` **onTypeDeleted?**: (`nodeId`) => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:433](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L433)
+Defined in: [packages/visual-editor/src/types.ts:433](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L433)
 
 #### Parameters
 
@@ -166,7 +166,7 @@ Defined in: [packages/visual-editor/src/types.ts:433](https://github.com/pradeep
 
 > `optional` **onValidationChange?**: (`errors`) => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:435](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L435)
+Defined in: [packages/visual-editor/src/types.ts:435](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L435)
 
 #### Parameters
 

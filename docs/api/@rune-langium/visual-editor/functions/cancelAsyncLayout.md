@@ -8,7 +8,7 @@
 
 > **cancelAsyncLayout**(): `void`
 
-Defined in: [packages/visual-editor/src/layout/layout-worker.ts:162](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/layout/layout-worker.ts#L162)
+Defined in: [packages/visual-editor/src/layout/layout-worker.ts:162](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/layout/layout-worker.ts#L162)
 
 Cancel any in-flight async layout.
 

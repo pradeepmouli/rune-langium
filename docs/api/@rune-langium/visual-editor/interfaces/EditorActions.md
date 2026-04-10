@@ -6,7 +6,7 @@
 
 # Interface: EditorActions
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:70](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L70)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:70](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L70)
 
 ## Methods
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:70](https://github
 
 > **addAnnotation**(`nodeId`, `annotationName`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:177](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L177)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:177](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L177)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:177](https://githu
 
 > **addAttribute**(`nodeId`, `attrName`, `typeName`, `cardinality`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:117](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L117)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:117](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L117)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:117](https://githu
 
 > **addChoiceOption**(`nodeId`, `typeName`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:139](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L139)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:139](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L139)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:139](https://githu
 
 > **addCondition**(`nodeId`, `condition`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:149](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L149)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:149](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L149)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:149](https://githu
 
 > **addEnumValue**(`nodeId`, `valueName`, `displayName?`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:132](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L132)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:132](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L132)
 
 #### Parameters
 
@@ -150,7 +150,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:132](https://githu
 
 > **addInputParam**(`nodeId`, `paramName`, `typeName`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:143](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L143)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:143](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L143)
 
 #### Parameters
 
@@ -176,7 +176,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:143](https://githu
 
 > **addSynonym**(`nodeId`, `synonym`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:173](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L173)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:173](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L173)
 
 #### Parameters
 
@@ -198,7 +198,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:173](https://githu
 
 > **applyReactFlowEdgeChanges**(`changes`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:182](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L182)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:182](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L182)
 
 #### Parameters
 
@@ -216,7 +216,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:182](https://githu
 
 > **applyReactFlowNodeChanges**(`changes`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:181](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L181)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:181](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L181)
 
 #### Parameters
 
@@ -234,7 +234,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:181](https://githu
 
 > **collapseAllNamespaces**(): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:91](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L91)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:91](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L91)
 
 #### Returns
 
@@ -246,7 +246,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:91](https://github
 
 > **createType**(`kind`, `name`, `namespace`): `string`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:114](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L114)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:114](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L114)
 
 #### Parameters
 
@@ -272,7 +272,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:114](https://githu
 
 > **deleteType**(`nodeId`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:115](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L115)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:115](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L115)
 
 #### Parameters
 
@@ -290,7 +290,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:115](https://githu
 
 > **expandAllNamespaces**(): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:90](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L90)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:90](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L90)
 
 #### Returns
 
@@ -302,7 +302,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:90](https://github
 
 > **getEdges**(): [`TypeGraphEdge`](../type-aliases/TypeGraphEdge.md)[]
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:85](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L85)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:85](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L85)
 
 #### Returns
 
@@ -314,7 +314,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:85](https://github
 
 > **getNodes**(): [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:84](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L84)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:84](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L84)
 
 #### Returns
 
@@ -326,7 +326,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:84](https://github
 
 > **getVisibleEdges**(): [`TypeGraphEdge`](../type-aliases/TypeGraphEdge.md)[]
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:95](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L95)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:95](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L95)
 
 #### Returns
 
@@ -338,7 +338,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:95](https://github
 
 > **getVisibleNodes**(): [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:94](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L94)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:94](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L94)
 
 #### Returns
 
@@ -350,7 +350,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:94](https://github
 
 > **isolateNode**(`nodeId`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:105](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L105)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:105](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L105)
 
 Hide all nodes except the given node and its directly connected neighbors.
 
@@ -370,7 +370,7 @@ Hide all nodes except the given node and its directly connected neighbors.
 
 > **loadModels**(`models`, `layoutOpts?`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:72](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L72)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:72](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L72)
 
 #### Parameters
 
@@ -392,7 +392,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:72](https://github
 
 > **relayout**(`options?`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:81](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L81)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:81](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L81)
 
 #### Parameters
 
@@ -410,7 +410,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:81](https://github
 
 > **removeAnnotation**(`nodeId`, `index`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:178](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L178)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:178](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L178)
 
 #### Parameters
 
@@ -432,7 +432,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:178](https://githu
 
 > **removeAttribute**(`nodeId`, `attrName`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:118](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L118)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:118](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L118)
 
 #### Parameters
 
@@ -454,7 +454,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:118](https://githu
 
 > **removeChoiceOption**(`nodeId`, `typeName`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:140](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L140)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:140](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L140)
 
 #### Parameters
 
@@ -476,7 +476,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:140](https://githu
 
 > **removeCondition**(`nodeId`, `index`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:158](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L158)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:158](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L158)
 
 #### Parameters
 
@@ -498,7 +498,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:158](https://githu
 
 > **removeEnumValue**(`nodeId`, `valueName`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:133](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L133)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:133](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L133)
 
 #### Parameters
 
@@ -520,7 +520,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:133](https://githu
 
 > **removeInputParam**(`nodeId`, `paramName`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:144](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L144)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:144](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L144)
 
 #### Parameters
 
@@ -542,7 +542,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:144](https://githu
 
 > **removeSynonym**(`nodeId`, `index`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:174](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L174)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:174](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L174)
 
 #### Parameters
 
@@ -564,7 +564,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:174](https://githu
 
 > **renameType**(`nodeId`, `newName`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:116](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L116)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:116](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L116)
 
 #### Parameters
 
@@ -586,7 +586,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:116](https://githu
 
 > **reorderAttribute**(`nodeId`, `fromIndex`, `toIndex`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:126](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L126)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:126](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L126)
 
 #### Parameters
 
@@ -612,7 +612,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:126](https://githu
 
 > **reorderCondition**(`nodeId`, `fromIndex`, `toIndex`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:168](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L168)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:168](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L168)
 
 #### Parameters
 
@@ -638,7 +638,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:168](https://githu
 
 > **reorderEnumValue**(`nodeId`, `fromIndex`, `toIndex`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:135](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L135)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:135](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L135)
 
 #### Parameters
 
@@ -664,7 +664,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:135](https://githu
 
 > **revealNeighbors**(`nodeId`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:107](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L107)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:107](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L107)
 
 Unhide the direct neighbors of a node (expand their namespaces too).
 
@@ -684,7 +684,7 @@ Unhide the direct neighbors of a node (expand their namespaces too).
 
 > **selectNode**(`nodeId`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:75](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L75)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:75](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L75)
 
 #### Parameters
 
@@ -702,7 +702,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:75](https://github
 
 > **setEnumParent**(`nodeId`, `parentId`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:136](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L136)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:136](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L136)
 
 #### Parameters
 
@@ -724,7 +724,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:136](https://githu
 
 > **setFilters**(`filters`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:77](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L77)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:77](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L77)
 
 #### Parameters
 
@@ -742,7 +742,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:77](https://github
 
 > **setInheritance**(`childId`, `parentId`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:128](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L128)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:128](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L128)
 
 #### Parameters
 
@@ -764,7 +764,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:128](https://githu
 
 > **setInitialVisibility**(`totalNodeCount`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:92](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L92)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:92](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L92)
 
 #### Parameters
 
@@ -782,7 +782,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:92](https://github
 
 > **setSearchQuery**(`query`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:76](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L76)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:76](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L76)
 
 #### Parameters
 
@@ -800,7 +800,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:76](https://github
 
 > **showAllEdgeKinds**(): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:101](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L101)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:101](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L101)
 
 #### Returns
 
@@ -812,7 +812,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:101](https://githu
 
 > **showAllNodeKinds**(): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:100](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L100)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:100](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L100)
 
 #### Returns
 
@@ -824,7 +824,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:100](https://githu
 
 > **showAllNodes**(): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:111](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L111)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:111](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L111)
 
 Unhide all nodes (reset hiddenNodeIds).
 
@@ -838,7 +838,7 @@ Unhide all nodes (reset hiddenNodeIds).
 
 > **showOnly**(`nodeIds`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:109](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L109)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:109](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L109)
 
 Hide all nodes except the given set.
 
@@ -858,7 +858,7 @@ Hide all nodes except the given set.
 
 > **toggleDetailPanel**(): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:78](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L78)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:78](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L78)
 
 #### Returns
 
@@ -870,7 +870,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:78](https://github
 
 > **toggleEdgeKind**(`kind`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:99](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L99)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:99](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L99)
 
 #### Parameters
 
@@ -888,7 +888,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:99](https://github
 
 > **toggleExplorer**(): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:93](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L93)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:93](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L93)
 
 #### Returns
 
@@ -900,7 +900,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:93](https://github
 
 > **toggleNamespace**(`namespace`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:88](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L88)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:88](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L88)
 
 #### Parameters
 
@@ -918,7 +918,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:88](https://github
 
 > **toggleNodeKind**(`kind`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:98](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L98)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:98](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L98)
 
 #### Parameters
 
@@ -936,7 +936,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:98](https://github
 
 > **toggleNodeVisibility**(`nodeId`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:89](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L89)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:89](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L89)
 
 #### Parameters
 
@@ -954,7 +954,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:89](https://github
 
 > **updateAttribute**(`nodeId`, `oldName`, `newName`, `typeName`, `cardinality`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:119](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L119)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:119](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L119)
 
 #### Parameters
 
@@ -988,7 +988,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:119](https://githu
 
 > **updateCardinality**(`nodeId`, `attrName`, `cardinality`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:127](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L127)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:127](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L127)
 
 #### Parameters
 
@@ -1014,7 +1014,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:127](https://githu
 
 > **updateComments**(`nodeId`, `comments`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:172](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L172)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:172](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L172)
 
 #### Parameters
 
@@ -1036,7 +1036,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:172](https://githu
 
 > **updateCondition**(`nodeId`, `index`, `updates`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:159](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L159)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:159](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L159)
 
 #### Parameters
 
@@ -1072,7 +1072,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:159](https://githu
 
 > **updateDefinition**(`nodeId`, `definition`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:171](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L171)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:171](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L171)
 
 #### Parameters
 
@@ -1094,7 +1094,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:171](https://githu
 
 > **updateEnumValue**(`nodeId`, `oldName`, `newName`, `displayName?`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:134](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L134)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:134](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L134)
 
 #### Parameters
 
@@ -1124,7 +1124,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:134](https://githu
 
 > **updateExpression**(`nodeId`, `expressionText`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:146](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L146)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:146](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L146)
 
 #### Parameters
 
@@ -1146,7 +1146,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:146](https://githu
 
 > **updateOutputType**(`nodeId`, `typeName`): `void`
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:145](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L145)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:145](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L145)
 
 #### Parameters
 
@@ -1168,7 +1168,7 @@ Defined in: [packages/visual-editor/src/store/editor-store.ts:145](https://githu
 
 > **validate**(): [`ValidationError`](ValidationError.md)[]
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:129](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L129)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:129](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/store/editor-store.ts#L129)
 
 #### Returns
 

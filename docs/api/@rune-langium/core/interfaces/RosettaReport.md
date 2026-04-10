@@ -6,7 +6,7 @@
 
 # Interface: RosettaReport
 
-Defined in: [packages/core/src/generated/ast.ts:4151](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4151)
+Defined in: [packages/core/src/generated/ast.ts:4151](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4151)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:4151](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaModel`](RosettaModel.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4152](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4152)
+Defined in: [packages/core/src/generated/ast.ts:4152](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4152)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaReport"`
 
-Defined in: [packages/core/src/generated/ast.ts:4153](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4153)
+Defined in: [packages/core/src/generated/ast.ts:4153](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4153)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **eligibilityRules**: `Reference`\<[`RosettaRule`](RosettaRule.md)\>[]
 
-Defined in: [packages/core/src/generated/ast.ts:4154](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4154)
+Defined in: [packages/core/src/generated/ast.ts:4154](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4154)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [packages/core/src/generated/ast.ts:4154](https://github.com/pradeep
 
 > **inputType**: [`TypeCall`](TypeCall.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4155](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4155)
+Defined in: [packages/core/src/generated/ast.ts:4155](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4155)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [packages/core/src/generated/ast.ts:4155](https://github.com/pradeep
 
 > **regulatoryBody**: [`RegulatoryDocumentReference`](RegulatoryDocumentReference.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4156](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4156)
+Defined in: [packages/core/src/generated/ast.ts:4156](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4156)
 
 ***
 
@@ -126,7 +126,7 @@ Defined in: [packages/core/src/generated/ast.ts:4156](https://github.com/pradeep
 
 > `optional` **reportingStandard?**: `Reference`\<[`RosettaCorpus`](RosettaCorpus.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:4157](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4157)
+Defined in: [packages/core/src/generated/ast.ts:4157](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4157)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: [packages/core/src/generated/ast.ts:4157](https://github.com/pradeep
 
 > **reportType**: `Reference`\<[`Data`](Data.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:4158](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4158)
+Defined in: [packages/core/src/generated/ast.ts:4158](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4158)
 
 ***
 
@@ -142,4 +142,4 @@ Defined in: [packages/core/src/generated/ast.ts:4158](https://github.com/pradeep
 
 > `optional` **ruleSource?**: `Reference`\<[`RosettaExternalRuleSource`](RosettaExternalRuleSource.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:4159](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4159)
+Defined in: [packages/core/src/generated/ast.ts:4159](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/core/src/generated/ast.ts#L4159)

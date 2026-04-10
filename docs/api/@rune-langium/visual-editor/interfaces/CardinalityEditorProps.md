@@ -6,7 +6,7 @@
 
 # Interface: CardinalityEditorProps
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:10](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L10)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:10](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L10)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx
 
 > **attrName**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:12](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L12)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:12](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L12)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx
 
 > **currentCardinality**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:13](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L13)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:13](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L13)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:11](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L11)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:11](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L11)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx
 
 > `optional` **onCancel?**: () => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:15](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L15)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:15](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L15)
 
 #### Returns
 
@@ -50,7 +50,7 @@ Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx
 
 > **onUpdateCardinality**: (`nodeId`, `attrName`, `cardinality`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:14](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L14)
+Defined in: [packages/visual-editor/src/components/editors/CardinalityEditor.tsx:14](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/components/editors/CardinalityEditor.tsx#L14)
 
 #### Parameters
 

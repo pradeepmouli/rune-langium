@@ -1,6 +1,6 @@
 # Types & Enums
 
-## Types
+## ast
 
 ### `RuneDslTerminalNames`
 ```ts
@@ -21,10 +21,10 @@ RuneDslTerminalNames | RuneDslKeywordNames
 **Properties:**
 - `$container: RosettaModel` — The container node in the AST; every node except the root node has a container.
 - `$type: "Annotation"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `attributes: Attribute[]` — 
-- `definition: string` (optional) — 
-- `name: string` — 
-- `prefix: string` (optional) — 
+- `attributes: Attribute[]`
+- `definition: string` (optional)
+- `name: string`
+- `prefix: string` (optional)
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -34,9 +34,9 @@ RuneDslTerminalNames | RuneDslKeywordNames
 **Properties:**
 - `$container: AnnotationDeepPath | AnnotationPath | LabelAnnotation | RosettaDocReference | RuleReferenceAnnotation` — The container node in the AST; every node except the root node has a container.
 - `$type: "AnnotationDeepPath"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `attribute: Reference<AttributeOrChoiceOption>` — 
-- `operator: "->>"` — 
-- `receiver: AnnotationPathExpression` — 
+- `attribute: Reference<AttributeOrChoiceOption>`
+- `operator: "->>"`
+- `receiver: AnnotationPathExpression`
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -46,9 +46,9 @@ RuneDslTerminalNames | RuneDslKeywordNames
 **Properties:**
 - `$container: AnnotationDeepPath | AnnotationPath | LabelAnnotation | RosettaDocReference | RuleReferenceAnnotation` — The container node in the AST; every node except the root node has a container.
 - `$type: "AnnotationPath"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `attribute: Reference<AttributeOrChoiceOption>` — 
-- `operator: "->"` — 
-- `receiver: AnnotationPathExpression` — 
+- `attribute: Reference<AttributeOrChoiceOption>`
+- `operator: "->"`
+- `receiver: AnnotationPathExpression`
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -58,7 +58,7 @@ RuneDslTerminalNames | RuneDslKeywordNames
 **Properties:**
 - `$container: AnnotationDeepPath | AnnotationPath | LabelAnnotation | RosettaDocReference | RuleReferenceAnnotation` — The container node in the AST; every node except the root node has a container.
 - `$type: "AnnotationPathAttributeReference"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `attribute: Reference<AttributeOrChoiceOption>` — 
+- `attribute: Reference<AttributeOrChoiceOption>`
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -73,9 +73,9 @@ AnnotationDeepPath | AnnotationPath | AnnotationPathAttributeReference | Rosetta
 **Properties:**
 - `$container: AnnotationRef` — The container node in the AST; every node except the root node has a container.
 - `$type: "AnnotationQualifier"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `qualName: string` — 
-- `qualPath: RosettaAttributeReference` (optional) — 
-- `qualValue: string` (optional) — 
+- `qualName: string`
+- `qualPath: RosettaAttributeReference` (optional)
+- `qualValue: string` (optional)
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -85,9 +85,9 @@ AnnotationDeepPath | AnnotationPath | AnnotationPathAttributeReference | Rosetta
 **Properties:**
 - `$container: Attribute | ChoiceOption | Data | RosettaFunction | Choice | Condition | RosettaEnumValue | RosettaEnumeration` — The container node in the AST; every node except the root node has a container.
 - `$type: "AnnotationRef"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `annotation: Reference<Annotation>` — 
-- `attribute: Reference<Attribute>` (optional) — 
-- `qualifiers: AnnotationQualifier[]` — 
+- `annotation: Reference<Annotation>`
+- `attribute: Reference<Attribute>` (optional)
+- `qualifiers: AnnotationQualifier[]`
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -97,9 +97,9 @@ AnnotationDeepPath | AnnotationPath | AnnotationPathAttributeReference | Rosetta
 **Properties:**
 - `$container: Condition | RosettaRule | ArithmeticOperation | AsKeyOperation | ChoiceOperation | ComparisonOperation | ConstructorKeyValuePair | DefaultOperation | DistinctOperation | EqualityOperation | FilterOperation | FirstOperation | FlattenOperation | InlineFunction | JoinOperation | LastOperation | ListLiteral | LogicalOperation | MapOperation | MaxOperation | MinOperation | OneOfOperation | Operation | ReduceOperation | ReverseOperation | RosettaAbsentExpression | RosettaConditionalExpression | RosettaContainsExpression | RosettaCountOperation | RosettaDeepFeatureCall | RosettaDisjointExpression | RosettaExistsExpression | RosettaFeatureCall | RosettaOnlyElement | RosettaOnlyExistsExpression | RosettaSuperCall | RosettaSymbolReference | ShortcutDeclaration | SortOperation | SumOperation | SwitchCaseOrDefault | SwitchOperation | ThenOperation | ToDateOperation | ToDateTimeOperation | ToEnumOperation | ToIntOperation | ToNumberOperation | ToStringOperation | ToTimeOperation | ToZonedDateTimeOperation | TypeCallArgument | WithMetaEntry | WithMetaOperation` — The container node in the AST; every node except the root node has a container.
 - `$type: "ArithmeticOperation"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `left: RosettaExpression` — 
-- `operator: "*" | "+" | "-" | "/"` — 
-- `right: RosettaExpression` — 
+- `left: RosettaExpression`
+- `operator: "*" | "+" | "-" | "/"`
+- `right: RosettaExpression`
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -109,8 +109,8 @@ AnnotationDeepPath | AnnotationPath | AnnotationPathAttributeReference | Rosetta
 **Properties:**
 - `$container: Condition | RosettaRule | ArithmeticOperation | AsKeyOperation | ChoiceOperation | ComparisonOperation | ConstructorKeyValuePair | DefaultOperation | DistinctOperation | EqualityOperation | FilterOperation | FirstOperation | FlattenOperation | InlineFunction | JoinOperation | LastOperation | ListLiteral | LogicalOperation | MapOperation | MaxOperation | MinOperation | OneOfOperation | Operation | ReduceOperation | ReverseOperation | RosettaAbsentExpression | RosettaConditionalExpression | RosettaContainsExpression | RosettaCountOperation | RosettaDeepFeatureCall | RosettaDisjointExpression | RosettaExistsExpression | RosettaFeatureCall | RosettaOnlyElement | RosettaOnlyExistsExpression | RosettaSuperCall | RosettaSymbolReference | ShortcutDeclaration | SortOperation | SumOperation | SwitchCaseOrDefault | SwitchOperation | ThenOperation | ToDateOperation | ToDateTimeOperation | ToEnumOperation | ToIntOperation | ToNumberOperation | ToStringOperation | ToTimeOperation | ToZonedDateTimeOperation | TypeCallArgument | WithMetaEntry | WithMetaOperation` — The container node in the AST; every node except the root node has a container.
 - `$type: "AsKeyOperation"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `argument: RosettaExpression` — 
-- `operator: "as-key"` — 
+- `argument: RosettaExpression`
+- `operator: "as-key"`
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -125,17 +125,17 @@ Attribute | ShortcutDeclaration
 **Properties:**
 - `$container: Annotation | Data | RosettaFunction` — The container node in the AST; every node except the root node has a container.
 - `$type: "Attribute"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `annotations: AnnotationRef[]` — 
-- `card: RosettaCardinality` — 
-- `definition: string` (optional) — 
-- `labels: LabelAnnotation[]` — 
-- `name: string` — 
-- `override: boolean` — 
-- `references: RosettaDocReference[]` — 
-- `ruleReferences: RuleReferenceAnnotation[]` — 
-- `synonyms: RosettaSynonym[]` — 
-- `typeCall: TypeCall` — 
-- `typeCallArgs: TypeCallArgument[]` — 
+- `annotations: AnnotationRef[]`
+- `card: RosettaCardinality`
+- `definition: string` (optional)
+- `labels: LabelAnnotation[]`
+- `name: string`
+- `override: boolean`
+- `references: RosettaDocReference[]`
+- `ruleReferences: RuleReferenceAnnotation[]`
+- `synonyms: RosettaSynonym[]`
+- `typeCall: TypeCall`
+- `typeCallArgs: TypeCallArgument[]`
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -160,11 +160,11 @@ string
 **Properties:**
 - `$container: RosettaModel` — The container node in the AST; every node except the root node has a container.
 - `$type: "Choice"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `annotations: AnnotationRef[]` — 
-- `attributes: ChoiceOption[]` — 
-- `definition: string` (optional) — 
-- `name: string` — 
-- `synonyms: RosettaClassSynonym[]` — 
+- `annotations: AnnotationRef[]`
+- `attributes: ChoiceOption[]`
+- `definition: string` (optional)
+- `name: string`
+- `synonyms: RosettaClassSynonym[]`
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
 - `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
@@ -174,11 +174,12 @@ string
 **Properties:**
 - `$container: Condition | RosettaRule | ArithmeticOperation | AsKeyOperation | ChoiceOperation | ComparisonOperation | ConstructorKeyValuePair | DefaultOperation | DistinctOperation | EqualityOperation | FilterOperation | FirstOperation | FlattenOperation | InlineFunction | JoinOperation | LastOperation | ListLiteral | LogicalOperation | MapOperation | MaxOperation | MinOperation | OneOfOperation | Operation | ReduceOperation | ReverseOperation | RosettaAbsentExpression | RosettaConditionalExpression | RosettaContainsExpression | RosettaCountOperation | RosettaDeepFeatureCall | RosettaDisjointExpression | RosettaExistsExpression | RosettaFeatureCall | RosettaOnlyElement | RosettaOnlyExistsExpression | RosettaSuperCall | RosettaSymbolReference | ShortcutDeclaration | SortOperation | SumOperation | SwitchCaseOrDefault | SwitchOperation | ThenOperation | ToDateOperation | ToDateTimeOperation | ToEnumOperation | ToIntOperation | ToNumberOperation | ToStringOperation | ToTimeOperation | ToZonedDateTimeOperation | TypeCallArgument | WithMetaEntry | WithMetaOperation` — The container node in the AST; every node except the root node has a container.
 - `$type: "ChoiceOperation"` — Every AST node has a type corresponding to what was specified in the grammar declaration.
-- `argument: RosettaExpression` (optional) — 
-- `attributes: Reference<Attribute>[]` — 
-- `necessity: Necessity` — 
-- `operator: "choice"` — 
+- `argument: RosettaExpression` (optional)
+- `attributes: Reference<Attribute>[]`
+- `necessity: Necessity`
+- `operator: "choice"`
 - `$containerProperty: string` (optional) — The property of the `$container` node that contains this node. This is either a direct reference or an array.
 - `$containerIndex: number` (optional) — In case `$containerProperty` is an array, the array index is stored here.
+- `$cstNode: CstNode` (optional) — The Concrete Syntax Tree (CST) node of the text range from which this node was parsed.
 
 <!-- truncated -->

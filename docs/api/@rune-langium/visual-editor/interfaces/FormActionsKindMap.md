@@ -6,7 +6,7 @@
 
 # Interface: FormActionsKindMap
 
-Defined in: [packages/visual-editor/src/types.ts:331](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L331)
+Defined in: [packages/visual-editor/src/types.ts:331](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L331)
 
 Maps each `TypeKind` to its form actions interface.
 
@@ -16,7 +16,7 @@ Maps each `TypeKind` to its form actions interface.
 
 > **annotation**: [`CommonFormActions`](CommonFormActions.md)
 
-Defined in: [packages/visual-editor/src/types.ts:339](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L339)
+Defined in: [packages/visual-editor/src/types.ts:339](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L339)
 
 ***
 
@@ -24,7 +24,7 @@ Defined in: [packages/visual-editor/src/types.ts:339](https://github.com/pradeep
 
 > **basicType**: [`CommonFormActions`](CommonFormActions.md)
 
-Defined in: [packages/visual-editor/src/types.ts:338](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L338)
+Defined in: [packages/visual-editor/src/types.ts:338](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L338)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/visual-editor/src/types.ts:338](https://github.com/pradeep
 
 > **choice**: [`ChoiceFormActions`](ChoiceFormActions.md)
 
-Defined in: [packages/visual-editor/src/types.ts:334](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L334)
+Defined in: [packages/visual-editor/src/types.ts:334](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L334)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [packages/visual-editor/src/types.ts:334](https://github.com/pradeep
 
 > **data**: [`DataFormActions`](DataFormActions.md)
 
-Defined in: [packages/visual-editor/src/types.ts:332](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L332)
+Defined in: [packages/visual-editor/src/types.ts:332](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L332)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [packages/visual-editor/src/types.ts:332](https://github.com/pradeep
 
 > **enum**: [`EnumFormActions`](EnumFormActions.md)
 
-Defined in: [packages/visual-editor/src/types.ts:333](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L333)
+Defined in: [packages/visual-editor/src/types.ts:333](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L333)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [packages/visual-editor/src/types.ts:333](https://github.com/pradeep
 
 > **func**: [`FuncFormActions`](FuncFormActions.md)
 
-Defined in: [packages/visual-editor/src/types.ts:335](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L335)
+Defined in: [packages/visual-editor/src/types.ts:335](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L335)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [packages/visual-editor/src/types.ts:335](https://github.com/pradeep
 
 > **record**: [`CommonFormActions`](CommonFormActions.md)
 
-Defined in: [packages/visual-editor/src/types.ts:336](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L336)
+Defined in: [packages/visual-editor/src/types.ts:336](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L336)
 
 ***
 
@@ -72,4 +72,4 @@ Defined in: [packages/visual-editor/src/types.ts:336](https://github.com/pradeep
 
 > **typeAlias**: [`CommonFormActions`](CommonFormActions.md)
 
-Defined in: [packages/visual-editor/src/types.ts:337](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L337)
+Defined in: [packages/visual-editor/src/types.ts:337](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L337)

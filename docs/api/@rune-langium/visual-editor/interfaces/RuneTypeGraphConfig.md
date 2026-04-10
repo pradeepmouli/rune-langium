@@ -6,7 +6,7 @@
 
 # Interface: RuneTypeGraphConfig
 
-Defined in: [packages/visual-editor/src/types.ts:408](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L408)
+Defined in: [packages/visual-editor/src/types.ts:408](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L408)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:408](https://github.com/pradeep
 
 > `optional` **edgeStyles?**: [`EdgeStyleConfig`](EdgeStyleConfig.md)
 
-Defined in: [packages/visual-editor/src/types.ts:411](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L411)
+Defined in: [packages/visual-editor/src/types.ts:411](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L411)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/types.ts:411](https://github.com/pradeep
 
 > `optional` **initialFilters?**: [`GraphFilters`](GraphFilters.md)
 
-Defined in: [packages/visual-editor/src/types.ts:412](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L412)
+Defined in: [packages/visual-editor/src/types.ts:412](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L412)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/visual-editor/src/types.ts:412](https://github.com/pradeep
 
 > `optional` **layout?**: [`LayoutOptions`](LayoutOptions.md)
 
-Defined in: [packages/visual-editor/src/types.ts:409](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L409)
+Defined in: [packages/visual-editor/src/types.ts:409](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L409)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [packages/visual-editor/src/types.ts:409](https://github.com/pradeep
 
 > `optional` **nodeStyles?**: [`NodeStyleConfig`](NodeStyleConfig.md)
 
-Defined in: [packages/visual-editor/src/types.ts:410](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L410)
+Defined in: [packages/visual-editor/src/types.ts:410](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L410)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [packages/visual-editor/src/types.ts:410](https://github.com/pradeep
 
 > `optional` **readOnly?**: `boolean`
 
-Defined in: [packages/visual-editor/src/types.ts:415](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L415)
+Defined in: [packages/visual-editor/src/types.ts:415](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L415)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [packages/visual-editor/src/types.ts:415](https://github.com/pradeep
 
 > `optional` **showControls?**: `boolean`
 
-Defined in: [packages/visual-editor/src/types.ts:414](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L414)
+Defined in: [packages/visual-editor/src/types.ts:414](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L414)
 
 ***
 
@@ -62,4 +62,4 @@ Defined in: [packages/visual-editor/src/types.ts:414](https://github.com/pradeep
 
 > `optional` **showMinimap?**: `boolean`
 
-Defined in: [packages/visual-editor/src/types.ts:413](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L413)
+Defined in: [packages/visual-editor/src/types.ts:413](https://github.com/pradeepmouli/rune-langium/blob/24ec03ac24247e5fbbc15c3bf5739ec11cfe98a0/packages/visual-editor/src/types.ts#L413)
