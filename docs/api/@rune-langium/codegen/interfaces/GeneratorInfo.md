@@ -6,7 +6,7 @@
 
 # Interface: GeneratorInfo
 
-Defined in: [types.ts:48](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/types.ts#L48)
+Defined in: [types.ts:51](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/types.ts#L51)
 
 Metadata about a known code generator.
 
@@ -16,7 +16,7 @@ Metadata about a known code generator.
 
 > **id**: `string`
 
-Defined in: [types.ts:50](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/types.ts#L50)
+Defined in: [types.ts:53](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/types.ts#L53)
 
 Generator identifier (e.g., "java", "scala")
 
@@ -26,6 +26,6 @@ Generator identifier (e.g., "java", "scala")
 
 > **label**: `string`
 
-Defined in: [types.ts:52](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/types.ts#L52)
+Defined in: [types.ts:55](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/types.ts#L55)
 
 Human-readable label

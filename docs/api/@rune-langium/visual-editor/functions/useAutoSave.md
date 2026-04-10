@@ -8,7 +8,7 @@
 
 > **useAutoSave**\<`T`\>(`onCommit`, `delay?`): (`value`) => `void`
 
-Defined in: [packages/visual-editor/src/hooks/useAutoSave.ts:28](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/hooks/useAutoSave.ts#L28)
+Defined in: [packages/visual-editor/src/hooks/useAutoSave.ts:31](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/hooks/useAutoSave.ts#L31)
 
 Returns a debounced callback that auto-saves the latest value after
 `delay` milliseconds of inactivity. Flushes on unmount.

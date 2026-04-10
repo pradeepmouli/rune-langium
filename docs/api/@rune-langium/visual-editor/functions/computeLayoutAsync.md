@@ -8,10 +8,12 @@
 
 > **computeLayoutAsync**(`nodes`, `edges`, `options?`): `Promise`\<[`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[] \| `null`\>
 
-Defined in: [packages/visual-editor/src/layout/layout-worker.ts:39](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/layout/layout-worker.ts#L39)
+Defined in: [packages/visual-editor/src/layout/layout-worker.ts:126](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/layout/layout-worker.ts#L126)
 
-Compute layout asynchronously, yielding to the main thread
-between phases to keep the UI responsive.
+Compute layout asynchronously.
+
+Prefers a Web Worker for true off-main-thread execution.
+Falls back to requestIdleCallback-based yielding on the main thread.
 
 Returns null if a newer layout request superseded this one.
 

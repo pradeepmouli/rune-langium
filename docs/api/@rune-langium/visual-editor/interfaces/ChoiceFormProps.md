@@ -6,7 +6,7 @@
 
 # Interface: ChoiceFormProps
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:71](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L71)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:74](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L74)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:71](ht
 
 > **actions**: [`ChoiceFormActions`](ChoiceFormActions.md)
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:79](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L79)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:82](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L82)
 
 Choice-specific editor form action callbacks.
 
@@ -24,7 +24,7 @@ Choice-specific editor form action callbacks.
 
 > `optional` **allNodeIds?**: `string`[]
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:83](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L83)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:86](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L86)
 
 All loaded graph node IDs for resolving type name to node ID.
 
@@ -34,7 +34,7 @@ All loaded graph node IDs for resolving type name to node ID.
 
 > **availableTypes**: [`TypeOption`](TypeOption.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:77](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L77)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:80](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L80)
 
 Available type options for selectors.
 
@@ -44,7 +44,7 @@ Available type options for selectors.
 
 > **data**: [`AnyGraphNode`](../type-aliases/AnyGraphNode.md)
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:75](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L75)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:78](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L78)
 
 Data payload for the selected choice node (AnyGraphNode with $type='Choice').
 
@@ -54,7 +54,7 @@ Data payload for the selected choice node (AnyGraphNode with $type='Choice').
 
 > **nodeId**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:73](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L73)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:76](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L76)
 
 Node ID of the Choice being edited.
 
@@ -64,6 +64,6 @@ Node ID of the Choice being edited.
 
 > `optional` **onNavigateToNode?**: [`NavigateToNodeCallback`](../type-aliases/NavigateToNodeCallback.md)
 
-Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:81](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L81)
+Defined in: [packages/visual-editor/src/components/editors/ChoiceForm.tsx:84](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/ChoiceForm.tsx#L84)
 
 Callback to navigate to a type's graph node.

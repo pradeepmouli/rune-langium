@@ -6,7 +6,7 @@
 
 # Interface: ExpressionValidationResult
 
-Defined in: [packages/visual-editor/src/validation/edit-validator.ts:199](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/validation/edit-validator.ts#L199)
+Defined in: [packages/visual-editor/src/validation/edit-validator.ts:202](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/validation/edit-validator.ts#L202)
 
 Result of validating a Rune DSL expression.
 
@@ -16,7 +16,7 @@ Result of validating a Rune DSL expression.
 
 > `optional` **error?**: `string`
 
-Defined in: [packages/visual-editor/src/validation/edit-validator.ts:201](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/validation/edit-validator.ts#L201)
+Defined in: [packages/visual-editor/src/validation/edit-validator.ts:204](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/validation/edit-validator.ts#L204)
 
 ***
 
@@ -24,4 +24,4 @@ Defined in: [packages/visual-editor/src/validation/edit-validator.ts:201](https:
 
 > **valid**: `boolean`
 
-Defined in: [packages/visual-editor/src/validation/edit-validator.ts:200](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/validation/edit-validator.ts#L200)
+Defined in: [packages/visual-editor/src/validation/edit-validator.ts:203](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/validation/edit-validator.ts#L203)

@@ -8,4 +8,4 @@
 
 > **AnnotationPathExpression** = [`AnnotationDeepPath`](../interfaces/AnnotationDeepPath.md) \| [`AnnotationPath`](../interfaces/AnnotationPath.md) \| [`AnnotationPathAttributeReference`](../interfaces/AnnotationPathAttributeReference.md) \| [`RosettaImplicitVariable`](../interfaces/RosettaImplicitVariable.md)
 
-Defined in: [packages/core/src/generated/ast.ts:271](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L271)
+Defined in: [packages/core/src/generated/ast.ts:271](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L271)

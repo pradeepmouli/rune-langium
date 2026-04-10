@@ -8,7 +8,7 @@
 
 > **createEditorStore**(`overrides?`): `UseBoundStore`\<`Write`\<`StoreApi`\<[`EditorStore`](../type-aliases/EditorStore.md)\>, \{ `temporal`: `StoreApi`; \}\>\>
 
-Defined in: [packages/visual-editor/src/store/editor-store.ts:346](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/store/editor-store.ts#L346)
+Defined in: [packages/visual-editor/src/store/editor-store.ts:352](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/editor-store.ts#L352)
 
 ## Parameters
 

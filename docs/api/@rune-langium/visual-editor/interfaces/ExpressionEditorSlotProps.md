@@ -6,7 +6,7 @@
 
 # Interface: ExpressionEditorSlotProps
 
-Defined in: [packages/visual-editor/src/types.ts:209](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L209)
+Defined in: [packages/visual-editor/src/types.ts:212](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L212)
 
 Props provided to the expression editor render-prop slot.
 
@@ -24,7 +24,7 @@ the actual editor implementation (e.g. CodeMirror, Monaco) via a
 
 > `optional` **error?**: `string` \| `null`
 
-Defined in: [packages/visual-editor/src/types.ts:217](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L217)
+Defined in: [packages/visual-editor/src/types.ts:220](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L220)
 
 Validation error message (null when valid).
 
@@ -34,7 +34,7 @@ Validation error message (null when valid).
 
 > `optional` **expressionAst?**: `unknown`
 
-Defined in: [packages/visual-editor/src/types.ts:221](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L221)
+Defined in: [packages/visual-editor/src/types.ts:224](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L224)
 
 Raw AST expression object — enables direct tree conversion without reparsing text.
 
@@ -44,7 +44,7 @@ Raw AST expression object — enables direct tree conversion without reparsing t
 
 > **onBlur**: () => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:215](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L215)
+Defined in: [packages/visual-editor/src/types.ts:218](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L218)
 
 Called when the editor loses focus — triggers validation & commit.
 
@@ -58,7 +58,7 @@ Called when the editor loses focus — triggers validation & commit.
 
 > **onChange**: (`value`) => `void`
 
-Defined in: [packages/visual-editor/src/types.ts:213](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L213)
+Defined in: [packages/visual-editor/src/types.ts:216](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L216)
 
 Called on every keystroke / change.
 
@@ -78,7 +78,7 @@ Called on every keystroke / change.
 
 > `optional` **placeholder?**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:219](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L219)
+Defined in: [packages/visual-editor/src/types.ts:222](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L222)
 
 Placeholder text shown when the editor is empty.
 
@@ -88,6 +88,6 @@ Placeholder text shown when the editor is empty.
 
 > **value**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:211](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L211)
+Defined in: [packages/visual-editor/src/types.ts:214](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L214)
 
 Current expression text.

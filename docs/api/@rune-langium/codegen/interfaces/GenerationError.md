@@ -6,7 +6,7 @@
 
 # Interface: GenerationError
 
-Defined in: [types.ts:38](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/types.ts#L38)
+Defined in: [types.ts:41](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/types.ts#L41)
 
 Error encountered during code generation for a specific construct.
 
@@ -16,7 +16,7 @@ Error encountered during code generation for a specific construct.
 
 > **construct**: `string`
 
-Defined in: [types.ts:42](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/types.ts#L42)
+Defined in: [types.ts:45](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/types.ts#L45)
 
 DSL construct that failed
 
@@ -26,7 +26,7 @@ DSL construct that failed
 
 > **message**: `string`
 
-Defined in: [types.ts:44](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/types.ts#L44)
+Defined in: [types.ts:47](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/types.ts#L47)
 
 Error description
 
@@ -36,6 +36,6 @@ Error description
 
 > **sourceFile**: `string`
 
-Defined in: [types.ts:40](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/types.ts#L40)
+Defined in: [types.ts:43](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/types.ts#L43)
 
 .rosetta file that caused the error

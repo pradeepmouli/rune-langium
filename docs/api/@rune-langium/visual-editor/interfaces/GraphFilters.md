@@ -6,7 +6,7 @@
 
 # Interface: GraphFilters
 
-Defined in: [packages/visual-editor/src/types.ts:375](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L375)
+Defined in: [packages/visual-editor/src/types.ts:378](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L378)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:375](https://github.com/pradeep
 
 > `optional` **hideOrphans?**: `boolean`
 
-Defined in: [packages/visual-editor/src/types.ts:379](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L379)
+Defined in: [packages/visual-editor/src/types.ts:382](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L382)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/types.ts:379](https://github.com/pradeep
 
 > `optional` **kinds?**: [`TypeKind`](../type-aliases/TypeKind.md)[]
 
-Defined in: [packages/visual-editor/src/types.ts:377](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L377)
+Defined in: [packages/visual-editor/src/types.ts:380](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L380)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [packages/visual-editor/src/types.ts:377](https://github.com/pradeep
 
 > `optional` **namePattern?**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:378](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L378)
+Defined in: [packages/visual-editor/src/types.ts:381](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L381)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [packages/visual-editor/src/types.ts:378](https://github.com/pradeep
 
 > `optional` **namespaces?**: `string`[]
 
-Defined in: [packages/visual-editor/src/types.ts:376](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L376)
+Defined in: [packages/visual-editor/src/types.ts:379](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L379)

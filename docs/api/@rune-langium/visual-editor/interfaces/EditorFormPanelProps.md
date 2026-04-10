@@ -6,7 +6,7 @@
 
 # Interface: EditorFormPanelProps
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:91](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L91)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:94](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L94)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:91
 
 > **actions**: [`AllEditorFormActions`](../type-aliases/AllEditorFormActions.md)
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:101](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L101)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:104](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L104)
 
 All editor form actions.
 
@@ -24,7 +24,7 @@ All editor form actions.
 
 > `optional` **allNodes?**: [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:103](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L103)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:106](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L106)
 
 All graph nodes (for inherited member resolution).
 
@@ -34,7 +34,7 @@ All graph nodes (for inherited member resolution).
 
 > **availableTypes**: [`TypeOption`](TypeOption.md)[]
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:99](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L99)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:102](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L102)
 
 Available type options for type selectors.
 
@@ -44,7 +44,7 @@ Available type options for type selectors.
 
 > `optional` **isReadOnly?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:97](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L97)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:100](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L100)
 
 Whether the node is read-only (from external/locked source).
 
@@ -54,7 +54,7 @@ Whether the node is read-only (from external/locked source).
 
 > **nodeData**: [`AnyGraphNode`](../type-aliases/AnyGraphNode.md) \| `null`
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:93](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L93)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:96](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L96)
 
 The selected node's data, or null if nothing is selected.
 
@@ -64,7 +64,7 @@ The selected node's data, or null if nothing is selected.
 
 > **nodeId**: `string` \| `null`
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:95](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L95)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:98](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L98)
 
 Node ID of the selected node.
 
@@ -74,7 +74,7 @@ Node ID of the selected node.
 
 > `optional` **onClose?**: () => `void`
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:110](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L110)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:113](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L113)
 
 Called when the panel requests to close (e.g., Escape key).
 
@@ -88,7 +88,7 @@ Called when the panel requests to close (e.g., Escape key).
 
 > `optional` **onNavigateToNode?**: (`nodeId`) => `void`
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:112](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L112)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:115](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L115)
 
 Called when a type reference is clicked to navigate to that type's definition.
 
@@ -108,7 +108,7 @@ Called when a type reference is clicked to navigate to that type's definition.
 
 > `optional` **renderExpressionEditor?**: (`props`) => `ReactNode`
 
-Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:108](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L108)
+Defined in: [packages/visual-editor/src/components/panels/EditorFormPanel.tsx:111](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/EditorFormPanel.tsx#L111)
 
 Optional render-prop for a rich expression editor in FunctionForm.
 When omitted, FunctionForm renders a plain `<Textarea>` fallback.

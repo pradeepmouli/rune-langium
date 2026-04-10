@@ -8,7 +8,7 @@
 
 > **detectDuplicateName**(`name`, `namespace`, `nodes`, `nodeId?`): `boolean`
 
-Defined in: [packages/visual-editor/src/validation/edit-validator.ts:66](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/validation/edit-validator.ts#L66)
+Defined in: [packages/visual-editor/src/validation/edit-validator.ts:69](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/validation/edit-validator.ts#L69)
 
 Check if a name already exists in the given namespace.
 

@@ -6,7 +6,7 @@
 
 # Interface: VisibilityState
 
-Defined in: [packages/visual-editor/src/types.ts:484](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L484)
+Defined in: [packages/visual-editor/src/types.ts:487](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L487)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:484](https://github.com/pradeep
 
 > **expandedNamespaces**: `Set`\<`string`\>
 
-Defined in: [packages/visual-editor/src/types.ts:486](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L486)
+Defined in: [packages/visual-editor/src/types.ts:489](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L489)
 
 Namespaces whose types are currently visible on the graph.
 
@@ -24,7 +24,7 @@ Namespaces whose types are currently visible on the graph.
 
 > **explorerOpen**: `boolean`
 
-Defined in: [packages/visual-editor/src/types.ts:490](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L490)
+Defined in: [packages/visual-editor/src/types.ts:493](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L493)
 
 Whether the explorer panel is open.
 
@@ -34,7 +34,7 @@ Whether the explorer panel is open.
 
 > **hiddenNodeIds**: `Set`\<`string`\>
 
-Defined in: [packages/visual-editor/src/types.ts:488](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L488)
+Defined in: [packages/visual-editor/src/types.ts:491](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L491)
 
 Individual nodes hidden within expanded namespaces.
 
@@ -44,7 +44,7 @@ Individual nodes hidden within expanded namespaces.
 
 > **visibleEdgeKinds**: `Set`\<[`EdgeKind`](../type-aliases/EdgeKind.md)\>
 
-Defined in: [packages/visual-editor/src/types.ts:494](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L494)
+Defined in: [packages/visual-editor/src/types.ts:497](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L497)
 
 Which edge kinds are visible (all visible by default).
 
@@ -54,6 +54,6 @@ Which edge kinds are visible (all visible by default).
 
 > **visibleNodeKinds**: `Set`\<[`TypeKind`](../type-aliases/TypeKind.md)\>
 
-Defined in: [packages/visual-editor/src/types.ts:492](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L492)
+Defined in: [packages/visual-editor/src/types.ts:495](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L495)
 
 Which node kinds are visible (all visible by default).

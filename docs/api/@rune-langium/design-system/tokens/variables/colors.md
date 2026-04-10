@@ -8,7 +8,7 @@
 
 > `const` **colors**: `object`
 
-Defined in: [packages/design-system/src/tokens.ts:8](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/design-system/src/tokens.ts#L8)
+Defined in: [packages/design-system/src/tokens.ts:11](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/design-system/src/tokens.ts#L11)
 
 Rune DSL Design System — TypeScript token exports.
 

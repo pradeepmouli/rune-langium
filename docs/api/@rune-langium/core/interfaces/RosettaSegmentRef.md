@@ -6,7 +6,7 @@
 
 # Interface: RosettaSegmentRef
 
-Defined in: [packages/core/src/generated/ast.ts:4262](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L4262)
+Defined in: [packages/core/src/generated/ast.ts:4262](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4262)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:4262](https://github.com/pradeep
 
 > `readonly` **$container**: [`RegulatoryDocumentReference`](RegulatoryDocumentReference.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4263](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L4263)
+Defined in: [packages/core/src/generated/ast.ts:4263](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4263)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaSegmentRef"`
 
-Defined in: [packages/core/src/generated/ast.ts:4264](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L4264)
+Defined in: [packages/core/src/generated/ast.ts:4264](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4264)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **segment**: `Reference`\<[`RosettaSegment`](RosettaSegment.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:4265](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L4265)
+Defined in: [packages/core/src/generated/ast.ts:4265](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4265)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:4265](https://github.com/pradeep
 
 > **segmentRef**: `string`
 
-Defined in: [packages/core/src/generated/ast.ts:4266](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L4266)
+Defined in: [packages/core/src/generated/ast.ts:4266](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4266)

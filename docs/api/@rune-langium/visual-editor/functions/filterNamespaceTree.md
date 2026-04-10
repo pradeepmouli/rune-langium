@@ -8,7 +8,7 @@
 
 > **filterNamespaceTree**(`tree`, `query`): [`NamespaceTreeNode`](../interfaces/NamespaceTreeNode.md)[]
 
-Defined in: [packages/visual-editor/src/utils/namespace-tree.ts:86](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/utils/namespace-tree.ts#L86)
+Defined in: [packages/visual-editor/src/utils/namespace-tree.ts:89](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/utils/namespace-tree.ts#L89)
 
 Filter namespace tree entries by a search query.
 

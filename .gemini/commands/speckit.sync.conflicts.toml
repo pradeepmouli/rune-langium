@@ -1,7 +1,6 @@
 description = "Detect and surface conflicts between specs or between specs and design docs"
 
-# Extension: sync
-# Config: .specify/extensions/sync/
+# Source: sync
 
 prompt = """
 # Spec Sync: Detect Conflicts

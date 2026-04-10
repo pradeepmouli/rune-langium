@@ -6,7 +6,7 @@
 
 # Interface: TypeSelectorProps
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:26](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L26)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L29)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:26](
 
 > `optional` **allowClear?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:38](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L38)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:41](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L41)
 
 Whether to include a "None" / clear option.
 
@@ -24,7 +24,7 @@ Whether to include a "None" / clear option.
 
 > `optional` **disabled?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:36](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L36)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:39](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L39)
 
 Whether the selector is disabled.
 
@@ -34,7 +34,7 @@ Whether the selector is disabled.
 
 > `optional` **filterKinds?**: ([`TypeKind`](../type-aliases/TypeKind.md) \| `"builtin"`)[]
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:40](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L40)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:43](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L43)
 
 Filter options to specific kinds.
 
@@ -44,7 +44,7 @@ Filter options to specific kinds.
 
 > **onSelect**: (`value`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:34](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L34)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:37](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L37)
 
 Called when a type is selected.
 
@@ -64,7 +64,7 @@ Called when a type is selected.
 
 > `optional` **options?**: [`TypeOption`](TypeOption.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:30](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L30)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:33](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L33)
 
 Available types to choose from. May be undefined before types are loaded.
 
@@ -74,7 +74,7 @@ Available types to choose from. May be undefined before types are loaded.
 
 > `optional` **placeholder?**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:32](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L32)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:35](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L35)
 
 Placeholder text.
 
@@ -84,7 +84,7 @@ Placeholder text.
 
 > `optional` **renderPopover?**: (`props`) => `ReactNode`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:44](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L44)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:47](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L47)
 
 Render-prop for the popover content (search + list).
 
@@ -104,7 +104,7 @@ Render-prop for the popover content (search + list).
 
 > `optional` **renderTrigger?**: (`props`) => `ReactNode`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:42](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L42)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:45](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L45)
 
 Render-prop for the trigger (button that opens the popover).
 
@@ -124,6 +124,6 @@ Render-prop for the trigger (button that opens the popover).
 
 > **value**: `string` \| `null`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:28](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L28)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:31](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L31)
 
 Currently selected type value (node ID or built-in type name).

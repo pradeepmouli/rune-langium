@@ -1,7 +1,6 @@
 description = "Convert development phases into individual GitHub issues for better tracking and collaboration."
 
-# Extension: workflows
-# Config: .specify/extensions/workflows/
+# Source: workflows
 
 prompt = """
 ## User Input

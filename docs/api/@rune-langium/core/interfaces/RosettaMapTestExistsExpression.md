@@ -6,7 +6,7 @@
 
 # Interface: RosettaMapTestExistsExpression
 
-Defined in: [packages/core/src/generated/ast.ts:3739](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L3739)
+Defined in: [packages/core/src/generated/ast.ts:3739](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3739)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:3739](https://github.com/pradeep
 
 > `readonly` **$container**: [`RosettaMappingPathTests`](RosettaMappingPathTests.md) \| [`RosettaMappingInstance`](RosettaMappingInstance.md) \| [`RosettaMapTestEqualityOperation`](RosettaMapTestEqualityOperation.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3740](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L3740)
+Defined in: [packages/core/src/generated/ast.ts:3740](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3740)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaMapTestExistsExpression"`
 
-Defined in: [packages/core/src/generated/ast.ts:3744](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L3744)
+Defined in: [packages/core/src/generated/ast.ts:3744](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3744)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,4 +102,4 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **argument**: [`RosettaMapPathValue`](RosettaMapPathValue.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3745](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L3745)
+Defined in: [packages/core/src/generated/ast.ts:3745](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3745)

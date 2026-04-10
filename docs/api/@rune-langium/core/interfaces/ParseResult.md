@@ -6,7 +6,7 @@
 
 # Interface: ParseResult
 
-Defined in: [packages/core/src/api/parse.ts:9](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/api/parse.ts#L9)
+Defined in: [packages/core/src/api/parse.ts:12](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/api/parse.ts#L12)
 
 Result of parsing a Rosetta DSL source string.
 
@@ -16,7 +16,7 @@ Result of parsing a Rosetta DSL source string.
 
 > **hasErrors**: `boolean`
 
-Defined in: [packages/core/src/api/parse.ts:27](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/api/parse.ts#L27)
+Defined in: [packages/core/src/api/parse.ts:30](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/api/parse.ts#L30)
 
 Whether the parse completed without errors.
 
@@ -26,7 +26,7 @@ Whether the parse completed without errors.
 
 > **lexerErrors**: `object`[]
 
-Defined in: [packages/core/src/api/parse.ts:13](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/api/parse.ts#L13)
+Defined in: [packages/core/src/api/parse.ts:16](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/api/parse.ts#L16)
 
 Lexer errors encountered during parsing.
 
@@ -52,7 +52,7 @@ Lexer errors encountered during parsing.
 
 > **parserErrors**: `object`[]
 
-Defined in: [packages/core/src/api/parse.ts:20](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/api/parse.ts#L20)
+Defined in: [packages/core/src/api/parse.ts:23](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/api/parse.ts#L23)
 
 Parser errors encountered during parsing.
 
@@ -78,6 +78,6 @@ Parser errors encountered during parsing.
 
 > **value**: [`RosettaModel`](RosettaModel.md)
 
-Defined in: [packages/core/src/api/parse.ts:11](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/api/parse.ts#L11)
+Defined in: [packages/core/src/api/parse.ts:14](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/api/parse.ts#L14)
 
 The root AST node.

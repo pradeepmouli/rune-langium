@@ -6,7 +6,7 @@
 
 # Interface: AttributeRowProps
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:27](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L27)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:30](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L30)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:27](
 
 > `optional` **allNodeIds?**: `string`[]
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:51](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L51)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:54](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L54)
 
 All loaded graph node IDs for resolving type name to node ID.
 
@@ -24,7 +24,7 @@ All loaded graph node IDs for resolving type name to node ID.
 
 > **availableTypes**: [`TypeOption`](TypeOption.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:33](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L33)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:36](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L36)
 
 Available type options for the TypeSelector.
 
@@ -34,7 +34,7 @@ Available type options for the TypeSelector.
 
 > **committedName**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:31](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L31)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:34](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L34)
 
 Last-committed attribute name (for graph action diffing).
 
@@ -44,7 +44,7 @@ Last-committed attribute name (for graph action diffing).
 
 > `optional` **disabled?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:47](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L47)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:50](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L50)
 
 Whether the form is read-only.
 
@@ -54,7 +54,7 @@ Whether the form is read-only.
 
 > **index**: `number`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:29](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L29)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:32](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L32)
 
 Index position of this member in the useFieldArray.
 
@@ -64,7 +64,7 @@ Index position of this member in the useFieldArray.
 
 > `optional` **isOverride?**: `boolean`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:53](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L53)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:56](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L56)
 
 Whether this attribute overrides an inherited member.
 
@@ -74,7 +74,7 @@ Whether this attribute overrides an inherited member.
 
 > `optional` **onNavigateToNode?**: [`NavigateToNodeCallback`](../type-aliases/NavigateToNodeCallback.md)
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:49](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L49)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:52](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L52)
 
 Callback to navigate to a type's graph node.
 
@@ -84,7 +84,7 @@ Callback to navigate to a type's graph node.
 
 > **onRemove**: (`index`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:43](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L43)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:46](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L46)
 
 Remove this attribute by index.
 
@@ -104,7 +104,7 @@ Remove this attribute by index.
 
 > **onReorder**: (`fromIndex`, `toIndex`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:45](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L45)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:48](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L48)
 
 Reorder (drag) callback; fromIndex → toIndex.
 
@@ -128,7 +128,7 @@ Reorder (drag) callback; fromIndex → toIndex.
 
 > `optional` **onRevert?**: () => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:55](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L55)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:58](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L58)
 
 Callback to revert an override (remove local, restore inherited).
 
@@ -142,7 +142,7 @@ Callback to revert an override (remove local, restore inherited).
 
 > **onUpdate**: (`index`, `oldName`, `newName`, `typeName`, `cardinality`) => `void`
 
-Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:35](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/AttributeRow.tsx#L35)
+Defined in: [packages/visual-editor/src/components/editors/AttributeRow.tsx:38](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/AttributeRow.tsx#L38)
 
 Commit attribute changes to the graph.
 

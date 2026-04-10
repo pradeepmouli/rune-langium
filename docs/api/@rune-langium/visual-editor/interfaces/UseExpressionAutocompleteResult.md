@@ -6,7 +6,7 @@
 
 # Interface: UseExpressionAutocompleteResult
 
-Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:73](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L73)
+Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:76](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L76)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:73](h
 
 > **getCompletions**: (`query`) => [`CompletionItem`](CompletionItem.md)[]
 
-Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:75](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L75)
+Defined in: [packages/visual-editor/src/hooks/useExpressionAutocomplete.ts:78](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/hooks/useExpressionAutocomplete.ts#L78)
 
 Get completions for the given query text.
 

@@ -8,7 +8,7 @@
 
 > **insertImplicitBrackets**(`text`): `string`
 
-Defined in: [packages/core/src/services/rune-dsl-parser.ts:193](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-parser.ts#L193)
+Defined in: [packages/core/src/services/rune-dsl-parser.ts:196](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-parser.ts#L196)
 
 Scans the input text and inserts `[` and `]` around bare expressions
 that follow `extract`, `filter`, or `reduce` operators.

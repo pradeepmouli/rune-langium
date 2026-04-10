@@ -6,7 +6,7 @@
 
 # Interface: EdgeData
 
-Defined in: [packages/visual-editor/src/types.ts:185](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L185)
+Defined in: [packages/visual-editor/src/types.ts:188](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L188)
 
 Data payload for graph edges.
 
@@ -25,7 +25,7 @@ Required for ReactFlow compatibility: Edge<T> requires T extends Record<string, 
 
 > `optional` **cardinality?**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:188](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L188)
+Defined in: [packages/visual-editor/src/types.ts:191](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L191)
 
 ***
 
@@ -33,7 +33,7 @@ Defined in: [packages/visual-editor/src/types.ts:188](https://github.com/pradeep
 
 > **kind**: [`EdgeKind`](../type-aliases/EdgeKind.md)
 
-Defined in: [packages/visual-editor/src/types.ts:186](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L186)
+Defined in: [packages/visual-editor/src/types.ts:189](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L189)
 
 ***
 
@@ -41,4 +41,4 @@ Defined in: [packages/visual-editor/src/types.ts:186](https://github.com/pradeep
 
 > `optional` **label?**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:187](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L187)
+Defined in: [packages/visual-editor/src/types.ts:190](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L190)

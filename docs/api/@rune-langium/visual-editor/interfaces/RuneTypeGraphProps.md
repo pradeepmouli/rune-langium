@@ -6,7 +6,7 @@
 
 # Interface: RuneTypeGraphProps
 
-Defined in: [packages/visual-editor/src/types.ts:439](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L439)
+Defined in: [packages/visual-editor/src/types.ts:442](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L442)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:439](https://github.com/pradeep
 
 > `optional` **callbacks?**: [`RuneTypeGraphCallbacks`](RuneTypeGraphCallbacks.md)
 
-Defined in: [packages/visual-editor/src/types.ts:441](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L441)
+Defined in: [packages/visual-editor/src/types.ts:444](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L444)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/types.ts:441](https://github.com/pradeep
 
 > `optional` **className?**: `string`
 
-Defined in: [packages/visual-editor/src/types.ts:442](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L442)
+Defined in: [packages/visual-editor/src/types.ts:445](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L445)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [packages/visual-editor/src/types.ts:442](https://github.com/pradeep
 
 > `optional` **config?**: [`RuneTypeGraphConfig`](RuneTypeGraphConfig.md)
 
-Defined in: [packages/visual-editor/src/types.ts:440](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L440)
+Defined in: [packages/visual-editor/src/types.ts:443](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L443)

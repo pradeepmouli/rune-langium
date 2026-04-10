@@ -8,7 +8,7 @@
 
 > **getRefText**(`ref`): `string` \| `undefined`
 
-Defined in: [packages/visual-editor/src/adapters/model-helpers.ts:60](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/adapters/model-helpers.ts#L60)
+Defined in: [packages/visual-editor/src/adapters/model-helpers.ts:63](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/adapters/model-helpers.ts#L63)
 
 Get display text from a Reference-like object.
 

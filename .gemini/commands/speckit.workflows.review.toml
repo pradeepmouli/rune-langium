@@ -1,7 +1,6 @@
 description = "Review completed implementation work and update task status."
 
-# Extension: workflows
-# Config: .specify/extensions/workflows/
+# Source: workflows
 
 prompt = """
 The user input to you can be provided directly by the agent or as a command argument - you **MUST** consider it before proceeding with the prompt (if not empty).

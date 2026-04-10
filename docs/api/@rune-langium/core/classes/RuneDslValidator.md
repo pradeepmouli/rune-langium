@@ -6,7 +6,7 @@
 
 # Class: RuneDslValidator
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:66](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L66)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:69](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L69)
 
 Custom validator for the Rune DSL.
 
@@ -35,7 +35,7 @@ Rule categories:
 
 > **checkAttributeCardinality**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:152](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L152)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:155](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L155)
 
 S-04: Attribute cardinality must have lower <= upper.
 
@@ -59,7 +59,7 @@ S-04: Attribute cardinality must have lower <= upper.
 
 > **checkAttributeNaming**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:451](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L451)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:454](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L454)
 
 N-02: Attribute names should start with lowercase.
 Exempt: attributes inside Annotation blocks and ChoiceOptions (matching Xtext behavior).
@@ -84,7 +84,7 @@ Exempt: attributes inside Annotation blocks and ChoiceOptions (matching Xtext be
 
 > **checkAttributeTypeResolved**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:285](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L285)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:288](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L288)
 
 S-17: Attribute type reference must resolve.
 
@@ -112,7 +112,7 @@ duplicate error messages.
 
 > **checkChoiceMinOptions**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:348](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L348)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:351](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L351)
 
 S-21: Choice must have at least two options.
 
@@ -136,7 +136,7 @@ S-21: Choice must have at least two options.
 
 > **checkChoiceNaming**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:489](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L489)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:492](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L492)
 
 N-05: Choice names should start with uppercase.
 
@@ -160,7 +160,7 @@ N-05: Choice names should start with uppercase.
 
 > **checkChoiceNoDuplicateOptions**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:215](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L215)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:218](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L218)
 
 S-11: No duplicate choice option type references.
 
@@ -184,7 +184,7 @@ S-11: No duplicate choice option type references.
 
 > **checkChoiceOptionTypeResolved**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:364](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L364)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:367](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L367)
 
 S-22: ChoiceOption type must resolve.
 
@@ -212,7 +212,7 @@ duplicate error messages.
 
 > **checkConditionHasExpression**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:388](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L388)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:391](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L391)
 
 S-24: Condition must have an expression body.
 
@@ -236,7 +236,7 @@ S-24: Condition must have an expression body.
 
 > **checkConditionNaming**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:501](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L501)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:504](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L504)
 
 N-06: Condition names should start with uppercase.
 
@@ -260,7 +260,7 @@ N-06: Condition names should start with uppercase.
 
 > **checkDataAttributeOverrideValid**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:253](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L253)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:256](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L256)
 
 S-15: Override attribute must exist in the parent type.
 
@@ -284,7 +284,7 @@ S-15: Override attribute must exist in the parent type.
 
 > **checkDataExtendsCycle**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:133](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L133)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:136](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L136)
 
 S-02: Detect circular inheritance in Data extends chain.
 
@@ -308,7 +308,7 @@ S-02: Detect circular inheritance in Data extends chain.
 
 > **checkDataMustHaveAttributesOrSuperType**(`_node`, `_accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:273](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L273)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:276](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L276)
 
 S-16: Data type should have at least one attribute or extend another type.
 
@@ -332,7 +332,7 @@ S-16: Data type should have at least one attribute or extend another type.
 
 > **checkDataNaming**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:438](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L438)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:441](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L441)
 
 N-01: Data type names should start with uppercase.
 
@@ -356,7 +356,7 @@ N-01: Data type names should start with uppercase.
 
 > **checkDataNoDuplicateAttributes**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:117](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L117)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:120](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L120)
 
 S-01: No duplicate attribute names within a Data type.
 
@@ -380,7 +380,7 @@ S-01: No duplicate attribute names within a Data type.
 
 > **checkEnumExtendsCycle**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:329](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L329)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:332](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L332)
 
 S-20: Detect circular inheritance in Enum extends chain.
 
@@ -404,7 +404,7 @@ S-20: Detect circular inheritance in Enum extends chain.
 
 > **checkEnumNaming**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:477](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L477)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:480](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L480)
 
 N-04: Enum names should start with uppercase.
 
@@ -428,7 +428,7 @@ N-04: Enum names should start with uppercase.
 
 > **checkEnumNoDuplicateValues**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:199](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L199)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:202](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L202)
 
 S-09: No duplicate enum value names.
 
@@ -452,7 +452,7 @@ S-09: No duplicate enum value names.
 
 > **checkEnumValueNaming**(`_node`, `_accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:513](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L513)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:516](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L516)
 
 N-07: Enum value names should start with an uppercase letter (convention: PascalCase or UPPER_CASE).
 
@@ -476,7 +476,7 @@ N-07: Enum value names should start with an uppercase letter (convention: Pascal
 
 > **checkEnumValueNamingRule**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:521](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L521)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:524](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L524)
 
 N-08: Standalone enum value naming (used from ChoiceOption context).
 
@@ -500,7 +500,7 @@ N-08: Standalone enum value naming (used from ChoiceOption context).
 
 > **checkExpressionValid**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:565](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L565)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:568](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L568)
 
 Expression validator dispatcher.
 Routes to specific checks based on expression $type.
@@ -525,7 +525,7 @@ Routes to specific checks based on expression $type.
 
 > **checkFunctionNaming**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:465](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L465)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:468](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L468)
 
 N-03: Function names should start with uppercase.
 
@@ -549,7 +549,7 @@ N-03: Function names should start with uppercase.
 
 > **checkFunctionNoDuplicateConditions**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:313](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L313)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:316](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L316)
 
 S-19: No duplicate condition names in a function.
 
@@ -573,7 +573,7 @@ S-19: No duplicate condition names in a function.
 
 > **checkFunctionNoDuplicateInputs**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:170](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L170)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:173](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L173)
 
 S-06: No duplicate function input names.
 
@@ -597,7 +597,7 @@ S-06: No duplicate function input names.
 
 > **checkFunctionNoDuplicateShortcuts**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:297](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L297)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:300](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L300)
 
 S-18: No duplicate shortcut names in a function.
 
@@ -621,7 +621,7 @@ S-18: No duplicate shortcut names in a function.
 
 > **checkFunctionOutputRequired**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:187](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L187)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:190](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L190)
 
 S-07: Functions should have an output.
 Dispatch functions (with dispatchAttribute) are exempt — they inherit output from the parent.
@@ -646,7 +646,7 @@ Dispatch functions (with dispatchAttribute) are exempt — they inherit output f
 
 > **checkImportNotEmpty**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:424](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L424)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:427](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L427)
 
 S-27: Import path must not be empty.
 
@@ -670,7 +670,7 @@ S-27: Import path must not be empty.
 
 > **checkModelNamespaceValid**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:376](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L376)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:379](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L379)
 
 S-23: Namespace must be a valid qualified name.
 
@@ -694,7 +694,7 @@ S-23: Namespace must be a valid qualified name.
 
 > **checkModelNoDuplicateElements**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:233](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L233)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:236](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L236)
 
 S-13: No duplicate top-level element names in the same model.
 Dispatch function overloads share the same name intentionally — skip them.
@@ -719,7 +719,7 @@ Dispatch function overloads share the same name intentionally — skip them.
 
 > **checkOperationHasExpression**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:412](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L412)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:415](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L415)
 
 S-26: Operation must have an expression body.
 
@@ -743,7 +743,7 @@ S-26: Operation must have an expression body.
 
 > **checkRuleHasExpression**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:550](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L550)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:553](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L553)
 
 R-01: Rule must have an expression body.
 
@@ -767,7 +767,7 @@ R-01: Rule must have an expression body.
 
 > **checkRuleNaming**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:536](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L536)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:539](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L539)
 
 N-10: Rule names should start with uppercase.
 
@@ -791,7 +791,7 @@ N-10: Rule names should start with uppercase.
 
 > **checkShortcutHasExpression**(`node`, `accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:400](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L400)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:403](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L403)
 
 S-25: ShortcutDeclaration must have an expression body.
 
@@ -815,7 +815,7 @@ S-25: ShortcutDeclaration must have an expression body.
 
 > **checkShortcutNaming**(`_node`, `_accept`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:528](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L528)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:531](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L531)
 
 N-09: Shortcut names should start with lowercase.
 
@@ -839,7 +839,7 @@ N-09: Shortcut names should start with lowercase.
 
 > **registerChecks**(`services`): `void`
 
-Defined in: [packages/core/src/services/rune-dsl-validator.ts:70](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/services/rune-dsl-validator.ts#L70)
+Defined in: [packages/core/src/services/rune-dsl-validator.ts:73](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/services/rune-dsl-validator.ts#L73)
 
 Register validation checks with the Langium validation registry.
 

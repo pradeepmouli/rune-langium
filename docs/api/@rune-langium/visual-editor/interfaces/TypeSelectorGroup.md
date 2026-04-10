@@ -6,7 +6,7 @@
 
 # Interface: TypeSelectorGroup
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:75](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L75)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:78](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L78)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:75](
 
 > **label**: `string`
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:76](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L76)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:79](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L79)
 
 ***
 
@@ -22,4 +22,4 @@ Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:76](
 
 > **options**: [`TypeOption`](TypeOption.md)[]
 
-Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:77](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/TypeSelector.tsx#L77)
+Defined in: [packages/visual-editor/src/components/editors/TypeSelector.tsx:80](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/TypeSelector.tsx#L80)

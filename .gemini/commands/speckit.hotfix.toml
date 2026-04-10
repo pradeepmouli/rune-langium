@@ -1,7 +1,6 @@
 description = "Create an emergency hotfix workflow with expedited process and mandatory post-mortem."
 
-# Extension: workflows
-# Config: .specify/extensions/workflows/
+# Source: workflows
 
 prompt = """
 The user input to you can be provided directly by the agent or as a command argument - you **MUST** consider it before proceeding with the prompt (if not empty).

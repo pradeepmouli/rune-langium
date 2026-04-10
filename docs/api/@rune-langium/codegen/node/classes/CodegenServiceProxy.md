@@ -6,7 +6,7 @@
 
 # Class: CodegenServiceProxy
 
-Defined in: [codegen-service.ts:26](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/codegen-service.ts#L26)
+Defined in: [codegen-service.ts:29](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/codegen-service.ts#L29)
 
 Proxy that spawns the codegen CLI subprocess for each request.
 The CLI reads JSON from stdin (--json mode) and writes JSON to stdout.
@@ -17,7 +17,7 @@ The CLI reads JSON from stdin (--json mode) and writes JSON to stdout.
 
 > **new CodegenServiceProxy**(`cliPath?`): `CodegenServiceProxy`
 
-Defined in: [codegen-service.ts:29](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/codegen-service.ts#L29)
+Defined in: [codegen-service.ts:32](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/codegen-service.ts#L32)
 
 #### Parameters
 
@@ -35,7 +35,7 @@ Defined in: [codegen-service.ts:29](https://github.com/pradeepmouli/rune-langium
 
 > **generate**(`request`, `signal?`): `Promise`\<[`CodeGenerationResult`](../../interfaces/CodeGenerationResult.md)\>
 
-Defined in: [codegen-service.ts:39](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/codegen-service.ts#L39)
+Defined in: [codegen-service.ts:42](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/codegen-service.ts#L42)
 
 Generate code from .rosetta model files.
 
@@ -59,7 +59,7 @@ Generate code from .rosetta model files.
 
 > **isAvailable**(): `Promise`\<`boolean`\>
 
-Defined in: [codegen-service.ts:63](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/codegen-service.ts#L63)
+Defined in: [codegen-service.ts:66](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/codegen-service.ts#L66)
 
 Check if the codegen CLI is available and runnable.
 
@@ -73,7 +73,7 @@ Check if the codegen CLI is available and runnable.
 
 > **listLanguages**(): `Promise`\<`object`[]\>
 
-Defined in: [codegen-service.ts:55](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/codegen-service.ts#L55)
+Defined in: [codegen-service.ts:58](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/codegen-service.ts#L58)
 
 List available code generators.
 
@@ -87,7 +87,7 @@ List available code generators.
 
 > **serve**(`port?`): `Server`
 
-Defined in: [codegen-service.ts:77](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/codegen/src/codegen-service.ts#L77)
+Defined in: [codegen-service.ts:80](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/codegen/src/codegen-service.ts#L80)
 
 Start an HTTP server that proxies requests to the codegen CLI.
 Exposes: GET /api/health, GET /api/languages, POST /api/generate

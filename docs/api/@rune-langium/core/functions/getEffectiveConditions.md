@@ -8,7 +8,7 @@
 
 > **getEffectiveConditions**(`choice`): [`Condition`](../interfaces/Condition.md)[]
 
-Defined in: [packages/core/src/utils/choice-utils.ts:15](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/utils/choice-utils.ts#L15)
+Defined in: [packages/core/src/utils/choice-utils.ts:18](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/utils/choice-utils.ts#L18)
 
 Get conditions that are defined on the Data types within a Choice's options.
 Since Choice options reference type calls, we return the conditions

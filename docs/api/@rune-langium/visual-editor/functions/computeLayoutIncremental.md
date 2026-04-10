@@ -8,7 +8,7 @@
 
 > **computeLayoutIncremental**(`nodes`, `edges`, `options?`): [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/layout/dagre-layout.ts:150](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/layout/dagre-layout.ts#L150)
+Defined in: [packages/visual-editor/src/layout/dagre-layout.ts:153](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/layout/dagre-layout.ts#L153)
 
 Compute layout with cache-first strategy.
 

@@ -8,7 +8,7 @@
 
 > **DetailPanel**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:69](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/panels/DetailPanel.tsx#L69)
+Defined in: [packages/visual-editor/src/components/panels/DetailPanel.tsx:72](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/panels/DetailPanel.tsx#L72)
 
 ## Parameters
 

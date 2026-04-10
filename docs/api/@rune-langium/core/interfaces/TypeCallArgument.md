@@ -6,7 +6,7 @@
 
 # Interface: TypeCallArgument
 
-Defined in: [packages/core/src/generated/ast.ts:5660](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5660)
+Defined in: [packages/core/src/generated/ast.ts:5660](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5660)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:5660](https://github.com/pradeep
 
 > `readonly` **$container**: [`Attribute`](Attribute.md) \| [`RosettaConstructorExpression`](RosettaConstructorExpression.md) \| [`TypeCall`](TypeCall.md)
 
-Defined in: [packages/core/src/generated/ast.ts:5661](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5661)
+Defined in: [packages/core/src/generated/ast.ts:5661](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5661)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"TypeCallArgument"`
 
-Defined in: [packages/core/src/generated/ast.ts:5662](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5662)
+Defined in: [packages/core/src/generated/ast.ts:5662](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5662)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **parameter**: `Reference`\<[`TypeParameter`](TypeParameter.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:5663](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5663)
+Defined in: [packages/core/src/generated/ast.ts:5663](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5663)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:5663](https://github.com/pradeep
 
 > **value**: [`RosettaExpression`](../type-aliases/RosettaExpression.md)
 
-Defined in: [packages/core/src/generated/ast.ts:5664](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5664)
+Defined in: [packages/core/src/generated/ast.ts:5664](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5664)

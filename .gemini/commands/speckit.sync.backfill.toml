@@ -1,7 +1,6 @@
 description = "Generate a new spec from unspecced code feature (backfill)"
 
-# Extension: sync
-# Config: .specify/extensions/sync/
+# Source: sync
 
 prompt = """
 # Spec Sync: Backfill Spec

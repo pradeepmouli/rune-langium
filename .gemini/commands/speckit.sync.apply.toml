@@ -1,7 +1,6 @@
 description = "Apply approved drift resolutions to specs and/or code"
 
-# Extension: sync
-# Config: .specify/extensions/sync/
+# Source: sync
 
 prompt = """
 # Spec Sync: Apply Resolutions

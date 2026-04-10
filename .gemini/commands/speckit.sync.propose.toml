@@ -1,7 +1,6 @@
 description = "Propose resolutions for detected drift. AI generates spec updates or code changes."
 
-# Extension: sync
-# Config: .specify/extensions/sync/
+# Source: sync
 
 prompt = """
 # Spec Sync: Propose Resolutions

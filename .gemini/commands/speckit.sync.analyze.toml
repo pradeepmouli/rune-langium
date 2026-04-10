@@ -1,7 +1,6 @@
 description = "Analyze drift between specs and implementation. Compares requirements against code to find divergence."
 
-# Extension: sync
-# Config: .specify/extensions/sync/
+# Source: sync
 
 prompt = """
 # Spec Sync: Analyze Drift

@@ -6,7 +6,7 @@
 
 # Interface: WithMetaEntry
 
-Defined in: [packages/core/src/generated/ast.ts:5716](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5716)
+Defined in: [packages/core/src/generated/ast.ts:5716](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5716)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:5716](https://github.com/pradeep
 
 > `readonly` **$container**: [`WithMetaOperation`](WithMetaOperation.md)
 
-Defined in: [packages/core/src/generated/ast.ts:5717](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5717)
+Defined in: [packages/core/src/generated/ast.ts:5717](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5717)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"WithMetaEntry"`
 
-Defined in: [packages/core/src/generated/ast.ts:5718](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5718)
+Defined in: [packages/core/src/generated/ast.ts:5718](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5718)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **key**: `Reference`\<[`RosettaFeature`](../type-aliases/RosettaFeature.md)\>
 
-Defined in: [packages/core/src/generated/ast.ts:5719](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5719)
+Defined in: [packages/core/src/generated/ast.ts:5719](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5719)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [packages/core/src/generated/ast.ts:5719](https://github.com/pradeep
 
 > **value**: [`RosettaExpression`](../type-aliases/RosettaExpression.md)
 
-Defined in: [packages/core/src/generated/ast.ts:5720](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L5720)
+Defined in: [packages/core/src/generated/ast.ts:5720](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L5720)

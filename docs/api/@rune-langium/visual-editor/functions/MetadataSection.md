@@ -8,7 +8,7 @@
 
 > **MetadataSection**(`__namedParameters`): `ReactNode`
 
-Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:45](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/components/editors/MetadataSection.tsx#L45)
+Defined in: [packages/visual-editor/src/components/editors/MetadataSection.tsx:48](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/components/editors/MetadataSection.tsx#L48)
 
 Collapsible metadata section with description, comments, and synonym fields.
 

@@ -1,7 +1,6 @@
 description = "Run a full project health diagnostic — checks structure, agents, features, scripts, extensions, and git status."
 
-# Extension: doctor
-# Config: .specify/extensions/doctor/
+# Source: doctor
 
 prompt = """
 # Project Health Check

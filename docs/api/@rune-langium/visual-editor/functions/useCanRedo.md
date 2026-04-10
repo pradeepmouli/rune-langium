@@ -8,7 +8,7 @@
 
 > **useCanRedo**(): `boolean`
 
-Defined in: [packages/visual-editor/src/store/history.ts:55](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/store/history.ts#L55)
+Defined in: [packages/visual-editor/src/store/history.ts:58](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/history.ts#L58)
 
 Whether there are future states to redo to.
 

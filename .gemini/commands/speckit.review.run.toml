@@ -1,7 +1,6 @@
 description = "Comprehensive code review using specialized agents — orchestrates code, comments, tests, errors, types, and simplify agents sequentially."
 
-# Extension: review
-# Config: .specify/extensions/review/
+# Source: review
 
 prompt = """
 # Comprehensive PR Review

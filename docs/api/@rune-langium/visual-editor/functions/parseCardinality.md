@@ -8,7 +8,7 @@
 
 > **parseCardinality**(`card?`): `CardinalityShape`
 
-Defined in: [packages/visual-editor/src/adapters/model-helpers.ts:31](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/adapters/model-helpers.ts#L31)
+Defined in: [packages/visual-editor/src/adapters/model-helpers.ts:34](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/adapters/model-helpers.ts#L34)
 
 Parse a cardinality display string back to structured form.
 

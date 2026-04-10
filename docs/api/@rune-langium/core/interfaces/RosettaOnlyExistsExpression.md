@@ -6,7 +6,7 @@
 
 # Interface: RosettaOnlyExistsExpression
 
-Defined in: [packages/core/src/generated/ast.ts:3998](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L3998)
+Defined in: [packages/core/src/generated/ast.ts:3998](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3998)
 
 ## Extends
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/generated/ast.ts:3998](https://github.com/pradeep
 
 > `readonly` **$container**: [`Condition`](Condition.md) \| [`RosettaRule`](RosettaRule.md) \| [`ArithmeticOperation`](ArithmeticOperation.md) \| [`AsKeyOperation`](AsKeyOperation.md) \| [`ChoiceOperation`](ChoiceOperation.md) \| [`ComparisonOperation`](ComparisonOperation.md) \| [`ConstructorKeyValuePair`](ConstructorKeyValuePair.md) \| [`DefaultOperation`](DefaultOperation.md) \| [`DistinctOperation`](DistinctOperation.md) \| [`EqualityOperation`](EqualityOperation.md) \| [`FilterOperation`](FilterOperation.md) \| [`FirstOperation`](FirstOperation.md) \| [`FlattenOperation`](FlattenOperation.md) \| [`InlineFunction`](InlineFunction.md) \| [`JoinOperation`](JoinOperation.md) \| [`LastOperation`](LastOperation.md) \| [`ListLiteral`](ListLiteral.md) \| [`LogicalOperation`](LogicalOperation.md) \| [`MapOperation`](MapOperation.md) \| [`MaxOperation`](MaxOperation.md) \| [`MinOperation`](MinOperation.md) \| [`OneOfOperation`](OneOfOperation.md) \| [`Operation`](Operation.md) \| [`ReduceOperation`](ReduceOperation.md) \| [`ReverseOperation`](ReverseOperation.md) \| [`RosettaAbsentExpression`](RosettaAbsentExpression.md) \| [`RosettaConditionalExpression`](RosettaConditionalExpression.md) \| [`RosettaContainsExpression`](RosettaContainsExpression.md) \| [`RosettaCountOperation`](RosettaCountOperation.md) \| [`RosettaDeepFeatureCall`](RosettaDeepFeatureCall.md) \| [`RosettaDisjointExpression`](RosettaDisjointExpression.md) \| [`RosettaExistsExpression`](RosettaExistsExpression.md) \| [`RosettaFeatureCall`](RosettaFeatureCall.md) \| [`RosettaOnlyElement`](RosettaOnlyElement.md) \| `RosettaOnlyExistsExpression` \| [`RosettaSuperCall`](RosettaSuperCall.md) \| [`RosettaSymbolReference`](RosettaSymbolReference.md) \| [`ShortcutDeclaration`](ShortcutDeclaration.md) \| [`SortOperation`](SortOperation.md) \| [`SumOperation`](SumOperation.md) \| [`SwitchCaseOrDefault`](SwitchCaseOrDefault.md) \| [`SwitchOperation`](SwitchOperation.md) \| [`ThenOperation`](ThenOperation.md) \| [`ToDateOperation`](ToDateOperation.md) \| [`ToDateTimeOperation`](ToDateTimeOperation.md) \| [`ToEnumOperation`](ToEnumOperation.md) \| [`ToIntOperation`](ToIntOperation.md) \| [`ToNumberOperation`](ToNumberOperation.md) \| [`ToStringOperation`](ToStringOperation.md) \| [`ToTimeOperation`](ToTimeOperation.md) \| [`ToZonedDateTimeOperation`](ToZonedDateTimeOperation.md) \| [`TypeCallArgument`](TypeCallArgument.md) \| [`WithMetaEntry`](WithMetaEntry.md) \| [`WithMetaOperation`](WithMetaOperation.md)
 
-Defined in: [packages/core/src/generated/ast.ts:3999](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L3999)
+Defined in: [packages/core/src/generated/ast.ts:3999](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L3999)
 
 The container node in the AST; every node except the root node has a container.
 
@@ -88,7 +88,7 @@ The document containing the AST; only the root node has a direct reference to th
 
 > `readonly` **$type**: `"RosettaOnlyExistsExpression"`
 
-Defined in: [packages/core/src/generated/ast.ts:4054](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L4054)
+Defined in: [packages/core/src/generated/ast.ts:4054](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4054)
 
 Every AST node has a type corresponding to what was specified in the grammar declaration.
 
@@ -102,7 +102,7 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 > **args**: [`RosettaExpression`](../type-aliases/RosettaExpression.md)[]
 
-Defined in: [packages/core/src/generated/ast.ts:4055](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L4055)
+Defined in: [packages/core/src/generated/ast.ts:4055](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4055)
 
 ***
 
@@ -110,7 +110,7 @@ Defined in: [packages/core/src/generated/ast.ts:4055](https://github.com/pradeep
 
 > `optional` **argument?**: [`RosettaExpression`](../type-aliases/RosettaExpression.md)
 
-Defined in: [packages/core/src/generated/ast.ts:4056](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L4056)
+Defined in: [packages/core/src/generated/ast.ts:4056](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4056)
 
 ***
 
@@ -118,4 +118,4 @@ Defined in: [packages/core/src/generated/ast.ts:4056](https://github.com/pradeep
 
 > `optional` **operator?**: `"exists"`
 
-Defined in: [packages/core/src/generated/ast.ts:4057](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/core/src/generated/ast.ts#L4057)
+Defined in: [packages/core/src/generated/ast.ts:4057](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/core/src/generated/ast.ts#L4057)

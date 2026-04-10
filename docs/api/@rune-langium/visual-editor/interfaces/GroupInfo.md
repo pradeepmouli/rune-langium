@@ -6,7 +6,7 @@
 
 # Interface: GroupInfo
 
-Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:75](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/layout/grouped-layout.ts#L75)
+Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:76](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/layout/grouped-layout.ts#L76)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:75](https://git
 
 > **edges**: [`TypeGraphEdge`](../type-aliases/TypeGraphEdge.md)[]
 
-Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:81](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/layout/grouped-layout.ts#L81)
+Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:82](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/layout/grouped-layout.ts#L82)
 
 Edges within this group (inheritance + reference).
 
@@ -24,7 +24,7 @@ Edges within this group (inheritance + reference).
 
 > **height**: `number`
 
-Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:84](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/layout/grouped-layout.ts#L84)
+Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:85](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/layout/grouped-layout.ts#L85)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:84](https://git
 
 > **id**: `string`
 
-Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:77](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/layout/grouped-layout.ts#L77)
+Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:78](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/layout/grouped-layout.ts#L78)
 
 Group identifier (root node ID from union-find).
 
@@ -42,7 +42,7 @@ Group identifier (root node ID from union-find).
 
 > **nodes**: [`TypeGraphNode`](../type-aliases/TypeGraphNode.md)[]
 
-Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:79](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/layout/grouped-layout.ts#L79)
+Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:80](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/layout/grouped-layout.ts#L80)
 
 Nodes in this group.
 
@@ -52,6 +52,6 @@ Nodes in this group.
 
 > **width**: `number`
 
-Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:83](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/layout/grouped-layout.ts#L83)
+Defined in: [packages/visual-editor/src/layout/grouped-layout.ts:84](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/layout/grouped-layout.ts#L84)
 
 Bounding box after layout.

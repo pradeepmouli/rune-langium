@@ -8,7 +8,7 @@
 
 > **getTypeRefText**(`typeCall`): `string` \| `undefined`
 
-Defined in: [packages/visual-editor/src/adapters/model-helpers.ts:55](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/adapters/model-helpers.ts#L55)
+Defined in: [packages/visual-editor/src/adapters/model-helpers.ts:58](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/adapters/model-helpers.ts#L58)
 
 Get the display name of a type reference (e.g. from a TypeCall).
 

@@ -6,7 +6,7 @@
 
 # Interface: LayoutOptions
 
-Defined in: [packages/visual-editor/src/types.ts:384](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L384)
+Defined in: [packages/visual-editor/src/types.ts:387](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L387)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/types.ts:384](https://github.com/pradeep
 
 > `optional` **direction?**: [`LayoutDirection`](../type-aliases/LayoutDirection.md)
 
-Defined in: [packages/visual-editor/src/types.ts:385](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L385)
+Defined in: [packages/visual-editor/src/types.ts:388](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L388)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/types.ts:385](https://github.com/pradeep
 
 > `optional` **groupByInheritance?**: `boolean`
 
-Defined in: [packages/visual-editor/src/types.ts:389](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L389)
+Defined in: [packages/visual-editor/src/types.ts:392](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L392)
 
 Group nodes into inheritance trees and lay out each tree independently.
 
@@ -32,7 +32,7 @@ Group nodes into inheritance trees and lay out each tree independently.
 
 > `optional` **nodeSeparation?**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:386](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L386)
+Defined in: [packages/visual-editor/src/types.ts:389](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L389)
 
 ***
 
@@ -40,4 +40,4 @@ Defined in: [packages/visual-editor/src/types.ts:386](https://github.com/pradeep
 
 > `optional` **rankSeparation?**: `number`
 
-Defined in: [packages/visual-editor/src/types.ts:387](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/types.ts#L387)
+Defined in: [packages/visual-editor/src/types.ts:390](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/types.ts#L390)

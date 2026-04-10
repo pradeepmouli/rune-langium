@@ -6,7 +6,7 @@
 
 # Interface: FunctionScopeEntry
 
-Defined in: [packages/visual-editor/src/store/expression-store.ts:18](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/store/expression-store.ts#L18)
+Defined in: [packages/visual-editor/src/store/expression-store.ts:21](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/expression-store.ts#L21)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [packages/visual-editor/src/store/expression-store.ts:18](https://gi
 
 > `optional` **cardinality?**: `string`
 
-Defined in: [packages/visual-editor/src/store/expression-store.ts:21](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/store/expression-store.ts#L21)
+Defined in: [packages/visual-editor/src/store/expression-store.ts:24](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/expression-store.ts#L24)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [packages/visual-editor/src/store/expression-store.ts:21](https://gi
 
 > **name**: `string`
 
-Defined in: [packages/visual-editor/src/store/expression-store.ts:19](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/store/expression-store.ts#L19)
+Defined in: [packages/visual-editor/src/store/expression-store.ts:22](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/expression-store.ts#L22)
 
 ***
 
@@ -30,4 +30,4 @@ Defined in: [packages/visual-editor/src/store/expression-store.ts:19](https://gi
 
 > `optional` **typeName?**: `string`
 
-Defined in: [packages/visual-editor/src/store/expression-store.ts:20](https://github.com/pradeepmouli/rune-langium/blob/53991e70a87b8cc1b1152f71c83d03782501115e/packages/visual-editor/src/store/expression-store.ts#L20)
+Defined in: [packages/visual-editor/src/store/expression-store.ts:23](https://github.com/pradeepmouli/rune-langium/blob/182474bef0c125b974738a6a8e3d66cca3158ee8/packages/visual-editor/src/store/expression-store.ts#L23)

@@ -6,7 +6,7 @@
 
 # Interface: PanelImperativeHandle
 
-Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.2\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:203
+Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.5\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:203
 
 Imperative Panel API
 
@@ -18,7 +18,7 @@ Imperative Panel API
 
 > **collapse**: () => `void`
 
-Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.2\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:209
+Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.5\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:209
 
 Collapse the Panel to it's `collapsedSize`.
 
@@ -34,7 +34,7 @@ Collapse the Panel to it's `collapsedSize`.
 
 > **expand**: () => `void`
 
-Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.2\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:215
+Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.5\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:215
 
 Expand a collapsed Panel to its most recent size.
 
@@ -50,7 +50,7 @@ Expand a collapsed Panel to its most recent size.
 
 > **getSize**: () => `object`
 
-Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.2\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:221
+Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.5\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:221
 
 Get the current size of the Panel in pixels as well as a percentage of the parent group (0..100).
 
@@ -74,7 +74,7 @@ Panel size (in pixels and as a percentage of the parent group)
 
 > **isCollapsed**: () => `boolean`
 
-Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.2\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:228
+Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.5\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:228
 
 The Panel is currently collapsed.
 
@@ -88,7 +88,7 @@ The Panel is currently collapsed.
 
 > **resize**: (`size`) => `void`
 
-Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.2\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:247
+Defined in: node\_modules/.pnpm/react-resizable-panels@4.7.5\_react-dom@19.2.4\_react@19.2.4\_\_react@19.2.4/node\_modules/react-resizable-panels/dist/react-resizable-panels.d.ts:247
 
 Update the Panel's size.
 
