@@ -336,8 +336,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1(ws@8.20.0)
       '@lspeasy/server':
-        specifier: ^4.0.1
-        version: 4.0.1(ws@8.20.0)
+        specifier: ^4.0.2
+        version: 4.0.2(ws@8.20.0)
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../core
@@ -1046,8 +1046,17 @@ packages:
       ws:
         optional: true
 
-  '@lspeasy/server@4.0.1':
-    resolution: {integrity: sha512-BQAUIti0zM6B+GUzg3tBetW4Mh7j4vpJbC8cgb9s+RGiObBCZNDVbxCeRfRtvpHo8+giXRv+ewyHRS5Y/rfV5g==}
+  '@lspeasy/core@2.1.2':
+    resolution: {integrity: sha512-3Hzf4PTN9F10kE4mGxbiwrNuzGX2jWGzFLdAmk/ADueyQXDdSjd0ey1resrgws5r1K0eaatplk5WHPUJnDJFMA==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      ws: ^8.19.0
+    peerDependenciesMeta:
+      ws:
+        optional: true
+
+  '@lspeasy/server@4.0.2':
+    resolution: {integrity: sha512-iE5ooNGFQ943Z97GM8ULvfo3MbgFWWqWrpyeyCHRmi/oO6uv2fbOFIaQglbjnFfgTe4PR+RFKOCkxlBcgiOzqw==}
     engines: {node: '>=20.0.0'}
 
   '@manypkg/find-root@1.1.0':
@@ -5689,9 +5698,14 @@ snapshots:
       ws: 8.20.0
       zod: 4.3.6
 
-  '@lspeasy/server@4.0.1(ws@8.20.0)':
+  '@lspeasy/core@2.1.2(ws@8.20.0)':
+    optionalDependencies:
+      ws: 8.20.0
+      zod: 4.3.6
+
+  '@lspeasy/server@4.0.2(ws@8.20.0)':
     dependencies:
-      '@lspeasy/core': 2.1.1(ws@8.20.0)
+      '@lspeasy/core': 2.1.2(ws@8.20.0)
     optionalDependencies:
       zod: 4.3.6
     transitivePeerDependencies:
