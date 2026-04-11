@@ -46,7 +46,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
-    "@tanstack/react-virtual": "^3.13.6",
+    "@tanstack/react-virtual": "^3.13.23",
     "@xyflow/react": "^12.10.1",
     "@zod-to-form/react": "^0.4.0",
     "lucide-react": "^0.577.0",
