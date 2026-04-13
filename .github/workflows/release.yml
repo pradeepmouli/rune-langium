@@ -80,7 +80,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.changesets.outputs.published == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ fromJson(steps.changesets.outputs.publishedPackages)[0].version }}
           name: v${{ fromJson(steps.changesets.outputs.publishedPackages)[0].version }}
