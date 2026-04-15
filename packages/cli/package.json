@@ -13,7 +13,15 @@
   "bugs": {
     "url": "https://github.com/pradeepmouli/rune-langium/issues"
   },
-  "keywords": ["rune", "rosetta", "dsl", "langium", "cli", "cdm", "parser"],
+  "keywords": [
+    "rune",
+    "rosetta",
+    "dsl",
+    "langium",
+    "cli",
+    "cdm",
+    "parser"
+  ],
   "bin": {
     "rune-dsl": "./dist/index.js"
   },
@@ -43,5 +51,9 @@
   "devDependencies": {
     "@types/node": "^25.4.0",
     "typescript": "^5.9.3"
+  },
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
+  "publishConfig": {
+    "access": "public"
   }
 }

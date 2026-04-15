@@ -12,6 +12,8 @@ Web-native tooling for the [Rune DSL](https://github.com/finos/rune-dsl) — exp
   <img src="site/assets/screenshot-graph.png" alt="Rune Studio — graph view showing CDM type inheritance trees with grouped layout, namespace explorer, and type filtering" width="900">
 </p>
 
+> **⚠️ Pre-1.0 software** — APIs are subject to change between minor versions. Pin to exact versions in production. See the [CHANGELOG](./CHANGELOG.md) for breaking changes between releases.
+
 ## Features
 
 - **Built on Langium** — pure TypeScript language server, runs anywhere JavaScript runs

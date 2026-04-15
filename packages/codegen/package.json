@@ -45,5 +45,16 @@
   "bugs": {
     "url": "https://github.com/pradeepmouli/rune-langium/issues"
   },
-  "keywords": ["rune", "rosetta", "dsl", "codegen", "code-generation", "cdm"]
+  "keywords": [
+    "rune",
+    "rosetta",
+    "dsl",
+    "codegen",
+    "code-generation",
+    "cdm"
+  ],
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
+  "publishConfig": {
+    "access": "public"
+  }
 }

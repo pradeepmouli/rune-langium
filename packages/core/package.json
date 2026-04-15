@@ -60,5 +60,9 @@
     "ast",
     "cdm",
     "isda"
-  ]
+  ],
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
+  "publishConfig": {
+    "access": "public"
+  }
 }

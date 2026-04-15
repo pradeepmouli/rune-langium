@@ -59,5 +59,6 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "license": "FSL-1.1-ALv2"
+  "license": "FSL-1.1-ALv2",
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"
 }

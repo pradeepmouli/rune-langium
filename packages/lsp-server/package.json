@@ -50,10 +50,22 @@
   "bugs": {
     "url": "https://github.com/pradeepmouli/rune-langium/issues"
   },
-  "keywords": ["rune", "rosetta", "dsl", "langium", "lsp", "language-server", "cdm"],
+  "keywords": [
+    "rune",
+    "rosetta",
+    "dsl",
+    "langium",
+    "lsp",
+    "language-server",
+    "cdm"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/pradeepmouli/rune-langium.git",
     "directory": "packages/lsp-server"
+  },
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
+  "publishConfig": {
+    "access": "public"
   }
 }
