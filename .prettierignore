@@ -1,2 +1,45 @@
 package.json
 *.md
+
+# Build outputs / generated
+**/dist/**
+**/build/**
+**/node_modules/**
+**/coverage/**
+**/.turbo/**
+**/.cache/**
+
+# Site and hosted assets
+site/**
+
+# CSS and HTML (oxfmt can't format these cleanly)
+**/*.css
+**/*.html
+
+# ast-grep config
+sgconfig.yml
+
+# Scratch diagnostic scripts
+packages/core/cdm-diag*.mjs
+
+# Prototypes
+prototypes/**
+
+# Docs and specs
+docs/**
+specs/**
+
+# Agent tooling
+.agents/**
+.claude/**
+.codex/**
+.gemini/**
+.specify/**
+.github/agents/**
+.github/skills/**
+.vscode/**
+
+# Lockfiles
+pnpm-lock.yaml
+yarn.lock
+package-lock.json

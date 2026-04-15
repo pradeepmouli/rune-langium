@@ -4,10 +4,10 @@ on:
   push:
     branches: [master]
     paths:
-      - "packages/*/src/**"
-      - "site/**"
-      - "typedoc.json"
-      - "README.md"
+      - 'packages/*/src/**'
+      - 'site/**'
+      - 'typedoc.json'
+      - 'README.md'
 
 permissions:
   contents: read
