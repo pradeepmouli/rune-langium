@@ -28,3 +28,6 @@ playwright-report/
 .playwright-mcp/
 *.png
 docs/html/
+
+# Generated API docs (typedoc)
+docs/api/
