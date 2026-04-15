@@ -1,0 +1,25 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "../../../packages/core/src/index.ts",
+    "../../../packages/cli/src/index.ts",
+    "../../../packages/lsp-server/src/index.ts",
+    "../../../packages/codegen/src/index.ts",
+    "../../../packages/visual-editor/src/index.ts"
+  ],
+  "entryPointStrategy": "resolve",
+  "tsconfig": "./tsconfig.typedoc.json",
+  "out": "../api",
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+  "skipErrorChecking": true,
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "readme": "none",
+  "hideBreadcrumbs": false,
+  "useCodeBlocks": true,
+  "expandObjects": true,
+  "indexFormat": "table",
+  "parametersFormat": "table",
+  "propertiesFormat": "table",
+  "typeDeclarationFormat": "table"
+}

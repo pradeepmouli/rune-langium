@@ -1,0 +1,23 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "incremental": false,
+    "skipLibCheck": true
+  },
+  "include": [
+    "../../../packages/core/src/index.ts",
+    "../../../packages/cli/src/index.ts",
+    "../../../packages/lsp-server/src/index.ts",
+    "../../../packages/codegen/src/index.ts",
+    "../../../packages/visual-editor/src/index.ts"
+  ],
+  "exclude": [
+    "../../../apps/studio/**",
+    "../../../packages/design-system/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ],
+  "references": []
+}

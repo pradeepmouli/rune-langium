@@ -14,6 +14,8 @@ Web-native tooling for the [Rune DSL](https://github.com/finos/rune-dsl) — exp
 
 > **⚠️ Pre-1.0 software** — APIs are subject to change between minor versions. Pin to exact versions in production. See the [CHANGELOG](./CHANGELOG.md) for breaking changes between releases.
 
+📚 **Documentation:** <https://pradeepmouli.github.io/rune-langium/>
+
 ## Features
 
 - **Built on Langium** — pure TypeScript language server, runs anywhere JavaScript runs
