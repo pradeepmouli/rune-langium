@@ -1,7 +1,7 @@
 name: Auto-approve Dependency Updates
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize]
 
 permissions:
@@ -30,7 +30,6 @@ jobs:
             const title = pr.title.toLowerCase();
             const labels = pr.labels.map(l => l.name);
 
-            // Determine if this is a minor/patch update
             const isMinorOrPatch =
               labels.includes('minor') ||
               labels.includes('patch') ||
@@ -38,7 +37,6 @@ jobs:
               title.includes('minor') ||
               (!title.includes('major') && !labels.includes('major'));
 
-            // Check if it's not a major update or security vulnerability
             const isMajorUpdate = labels.includes('major') || title.includes('major');
             const isSecurityUpdate = labels.includes('security');
 
@@ -87,7 +85,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            // Enable auto-merge for this PR
             await github.graphql(`
               mutation($pullRequestId: ID!) {
                 enablePullRequestAutoMerge(input: {
@@ -104,7 +101,6 @@ jobs:
             `, {
               pullRequestId: context.payload.pull_request.node_id
             });
-
             console.log('Auto-merge enabled for this PR');
 
   report:
@@ -119,6 +115,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 2
 
       - name: Setup pnpm
@@ -134,7 +131,6 @@ jobs:
         id: diff
         run: |
           git diff HEAD^1 HEAD -- package.json packages/*/package.json > deps.diff
-
           if [ -s deps.diff ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
@@ -149,18 +145,7 @@ jobs:
           script: |
             const fs = require('fs');
             const diff = fs.readFileSync('deps.diff', 'utf8');
-
-            const comment = `## 📦 Dependency Changes
-
-            <details>
-            <summary>View dependency diff</summary>
-
-            \`\`\`diff
-            ${diff}
-            \`\`\`
-
-            </details>`;
-
+            const comment = `## 📦 Dependency Changes\n\n<details>\n<summary>View dependency diff</summary>\n\n\`\`\`diff\n${diff}\n\`\`\`\n\n</details>`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
