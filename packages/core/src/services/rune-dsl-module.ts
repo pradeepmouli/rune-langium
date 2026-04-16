@@ -22,13 +22,41 @@ import { createRuneDslParser } from './rune-dsl-parser.js';
 
 /**
  * Union type for all services available in the Rune DSL language.
+ *
+ * @remarks
+ * Extends Langium's `LangiumCoreServices` with Rune DSL-specific implementations:
+ * - `RuneDslParser` — text pre-processor for implicit bracket insertion
+ * - `RuneDslScopeProvider` — qualified-name and namespace-aware scoping
+ * - `RuneDslScopeComputation` — index population for cross-file resolution
+ *
+ * @category Core
  */
 export type RuneDslServices = LangiumCoreServices;
 
 /**
- * Dependency injection module for the Rune DSL language.
+ * Dependency-injection module for the Rune DSL language.
  *
- * Override or register custom services here (validators, scoping, etc.).
+ * @config
+ * Registers all Rune DSL-specific service overrides into Langium's DI container:
+ * - `parser.LangiumParser` → `RuneDslParser` (bracket pre-processor)
+ * - `references.ScopeComputation` → `RuneDslScopeComputation`
+ * - `references.ScopeProvider` → `RuneDslScopeProvider`
+ *
+ * @remarks
+ * Pass this module as the last argument to `inject()` to override Langium defaults.
+ * The module is intentionally minimal — the generated module (`RuneDslGeneratedModule`)
+ * handles grammar-derived service wiring; this module only registers hand-written
+ * overrides.
+ *
+ * @useWhen
+ * - Constructing a custom Langium services container in tests or tooling
+ * - Extending Rune DSL services with additional providers (e.g., custom formatters)
+ *
+ * @avoidWhen
+ * - Using `createRuneDslServices()` directly — it already applies this module;
+ *   double-injecting it will cause service registration conflicts.
+ *
+ * @category Core
  */
 export const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServices> = {
   parser: {
@@ -42,6 +70,57 @@ export const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServic
 
 /**
  * Create the full set of services required for the Rune DSL language.
+ *
+ * @remarks
+ * This is the primary entry point for any non-LSP usage (scripts, tests, build tools).
+ * It wires together:
+ * - The generated Langium modules (`RuneDslGeneratedModule`, `RuneDslGeneratedSharedModule`)
+ * - The hand-written overrides in `RuneDslModule`
+ * - `RuneDslValidator` checks registered into the `ValidationRegistry`
+ *
+ * Services are initialized synchronously. The `ConfigurationProvider.initialized({})`
+ * call stubs out LSP configuration so that non-LSP code paths do not hang waiting
+ * for a client `workspace/configuration` response.
+ *
+ * @useWhen
+ * - Building a Node.js script that parses or validates `.rosetta` files
+ * - Writing unit tests for grammar rules or validators
+ * - Constructing a `parseWorkspace()` pipeline outside of the LSP server
+ *
+ * @avoidWhen
+ * - Inside the LSP server — use `createRuneLspServer()` which provides the full
+ *   `LangiumServices` (LSP providers) instead of core-only services.
+ * - When you need to share a service instance across multiple requests in a
+ *   long-running server — the returned instance is not thread-safe for concurrent
+ *   `DocumentBuilder.build()` calls; serialize builds with a queue.
+ *
+ * @pitfalls
+ * - NEVER call `DocumentBuilder.build()` before `createRuneDslServices()` returns —
+ *   the Langium index is not populated until services are fully constructed.
+ * - NEVER reuse the same services instance across unrelated workspace contexts
+ *   (e.g., two different CDM versions) — the index will conflate type names from
+ *   both contexts and produce incorrect cross-reference resolution.
+ * - The returned `shared` and `RuneDsl` services share an internal `ServiceRegistry`;
+ *   do NOT register additional languages into the same `shared` for production use
+ *   unless you understand Langium's multi-language scoping rules.
+ *
+ * @param context - Optional Langium file-system context. Defaults to `EmptyFileSystem`
+ *   (in-memory only). Pass a `NodeFileSystem` context when resolving imports from disk.
+ * @returns An object with `shared` (shared core services) and `RuneDsl` (language-specific services).
+ *
+ * @example
+ * ```ts
+ * import { createRuneDslServices } from '@rune-langium/core';
+ * import { NodeFileSystem } from 'langium/node';
+ *
+ * // In-memory (for tests / scripts):
+ * const { RuneDsl } = createRuneDslServices();
+ *
+ * // Disk-backed (for resolving imports from the file system):
+ * const { RuneDsl: diskServices } = createRuneDslServices(NodeFileSystem);
+ * ```
+ *
+ * @category Core
  */
 export function createRuneDslServices(context: DefaultSharedCoreModuleContext = EmptyFileSystem): {
   shared: LangiumSharedCoreServices;

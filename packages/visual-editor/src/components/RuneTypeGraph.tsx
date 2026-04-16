@@ -2,11 +2,45 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * RuneTypeGraph — Main graph component for visualizing Rune DSL type hierarchies.
+ * `RuneTypeGraph` — Main React graph component for visualizing Rune DSL (CDM/DRR)
+ * type hierarchies using `@xyflow/react`.
  *
- * Subscribes to the zustand editor store for node/edge data and visibility.
- * Local ReactFlow state preserves drag positions; store data is synced in.
- * All domain mutations go through the store — this component is view-only.
+ * @remarks
+ * Subscribes to the zustand `editorStore` for node/edge data and visibility state.
+ * Local ReactFlow state preserves drag positions across renders; store data is
+ * synced in on each store update. All domain mutations (add/remove types,
+ * attribute edits) go through the store — this component is intentionally read-only
+ * from a domain perspective.
+ *
+ * The component renders inside a `ReactFlowProvider` wrapper so it can host its own
+ * ReactFlow instance. The `ref` prop exposes imperative handles for programmatic
+ * control (`fitView`, `navigateToNode`, `getSelection`).
+ *
+ * @useWhen
+ * - Embedding a Rune DSL type hierarchy viewer or editor in a React app
+ * - Visualizing CDM/DRR model graphs alongside a text editor
+ *
+ * @avoidWhen
+ * - Mounting multiple `RuneTypeGraph` instances pointing at the **same** zustand
+ *   store — both will compete for node position state and layout triggers, causing
+ *   visual inconsistencies and duplicate re-renders. Each graph instance should
+ *   own its own store (use `createEditorStore()` to create isolated instances).
+ * - Using in a server-side rendering (SSR) context — `@xyflow/react` is browser-only.
+ *
+ * @pitfalls
+ * - Do NOT mount this component before the Rune DSL workspace has been loaded into
+ *   the store — the graph will render empty and the layout engine will produce
+ *   zero-node output with no visible error.
+ * - Do NOT share a single `editorStore` instance between multiple mounted graphs —
+ *   concurrent Dagre layout computations will overwrite each other's node positions.
+ * - Async layout (`computeLayoutAsync`) uses a Web Worker; if the worker is cancelled
+ *   mid-run (e.g., rapid model updates), the graph may remain in a transitional
+ *   layout state. The next model change triggers a fresh layout.
+ *
+ * @category Visual Editor
+ * @see {@link RuneTypeGraphProps}
+ * @see {@link RuneTypeGraphRef}
+ * @see {@link createEditorStore}
  */
 
 import {

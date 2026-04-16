@@ -242,7 +242,54 @@ function serializeEnumType(enumeration: {
 // ---------------------------------------------------------------------------
 
 /**
- * Serialize a single RosettaModel AST node to `.rosetta` text.
+ * Serialize a single `RosettaModel` AST node back to `.rosetta` source text.
+ *
+ * @remarks
+ * This serializer performs a **lossy** round-trip — it re-formats output with
+ * consistent indentation and does not preserve the original whitespace, comments,
+ * or annotation ordering. It is intended for code-generation and export workflows,
+ * not for preserving user-authored formatting.
+ *
+ * Supported top-level element types:
+ * - `Data` (type definitions)
+ * - `Choice` (choice types)
+ * - `RosettaEnumeration` (enum types)
+ *
+ * Unsupported elements (functions, rules, reporting rules, annotations) are
+ * silently skipped. Condition expression bodies are emitted as `True` placeholders.
+ *
+ * @useWhen
+ * - Exporting a modified AST back to `.rosetta` format after programmatic edits
+ * - Generating a stub `.rosetta` file from a synthesized model object
+ * - Round-trip testing: parse → mutate → serialize → re-parse
+ *
+ * @avoidWhen
+ * - You need to preserve user-authored comments or whitespace — use a
+ *   CST-preserving formatter instead.
+ * - The model contains `RosettaFunction` or `RosettaRule` elements — these are
+ *   silently dropped; use the visual editor serializer for full round-trip fidelity.
+ *
+ * @pitfalls
+ * - Output does NOT include function or rule bodies — function/rule elements are
+ *   skipped entirely. Do not use for models where function definitions are critical.
+ * - `Condition` expression bodies are emitted as `True` placeholder text — they
+ *   are not serialized from the AST expression tree.
+ * - The `model` parameter uses `unknown` typing (duck typing) to avoid coupling to
+ *   generated Langium types. Pass a `RosettaModel` AST node obtained from `parse()`.
+ *
+ * @param model - A `RosettaModel` AST node (or duck-typed equivalent).
+ * @returns Formatted `.rosetta` source text ending with a trailing newline.
+ *
+ * @example
+ * ```ts
+ * import { parse, serializeModel } from '@rune-langium/core';
+ *
+ * const { value } = await parse(source);
+ * const text = serializeModel(value);
+ * // text is valid .rosetta source (minus functions/rules/comments)
+ * ```
+ *
+ * @category Core
  */
 export function serializeModel(model: unknown): string {
   const m = model as {
@@ -289,8 +336,21 @@ export function serializeModel(model: unknown): string {
 }
 
 /**
- * Serialize a single AST element (Data, Choice, or RosettaEnumeration) to text.
- * Useful for generating a snippet for a single type definition.
+ * Serialize a single AST element (`Data`, `Choice`, or `RosettaEnumeration`) to text.
+ *
+ * @remarks
+ * Returns an empty string for unsupported element types (`RosettaFunction`,
+ * `RosettaRule`, etc.) — callers should check the returned string length if
+ * element type membership is uncertain.
+ *
+ * @useWhen
+ * - Generating a snippet for one type definition without a full namespace header
+ * - Preview rendering a single type in editor UI
+ *
+ * @param element - A duck-typed AST element with a `$type` discriminant.
+ * @returns `.rosetta` text for the element, or `""` for unsupported element types.
+ *
+ * @category Core
  */
 export function serializeElement(element: unknown): string {
   if (isDataType(element)) {
@@ -306,7 +366,24 @@ export function serializeElement(element: unknown): string {
 }
 
 /**
- * Serialize multiple models, returning a Map of namespace → source text.
+ * Serialize multiple `RosettaModel` nodes, returning a `Map` of namespace → source text.
+ *
+ * @remarks
+ * If two models share the same namespace string, the later entry overwrites
+ * the earlier one in the result `Map` without warning.
+ *
+ * @useWhen
+ * - Batch-exporting a full CDM/DRR workspace to `.rosetta` files
+ * - Building a zip archive of serialized models keyed by namespace
+ *
+ * @pitfalls
+ * - Duplicate namespaces are silently overwritten — validate namespace uniqueness
+ *   before calling this function.
+ *
+ * @param models - Array of duck-typed `RosettaModel` AST nodes.
+ * @returns `Map<namespace, rosettaSource>` with one entry per unique namespace.
+ *
+ * @category Core
  */
 export function serializeModels(models: unknown[]): Map<string, string> {
   const result = new Map<string, string>();

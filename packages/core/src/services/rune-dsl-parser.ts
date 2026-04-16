@@ -6,23 +6,43 @@ import type { ParseResult, ParserOptions } from 'langium';
 import { LangiumParser, createParser } from 'langium';
 
 /**
- * Custom parser for the Rune DSL that pre-processes input text to insert
+ * Custom Langium parser for the Rune DSL that pre-processes input text to insert
  * implicit `[` and `]` brackets around bare expressions after `extract`,
  * `filter`, and `reduce` operators.
  *
- * ## Background
+ * @remarks
+ * In the original Xtext-based Rune DSL, `extract`/`filter`/`reduce` can accept
+ * both bracket-delimited inline functions (`extract [body]`) and bare expressions
+ * (`extract FuncName(item)`), using the `=>` syntactic predicate to resolve the
+ * ambiguity. Langium's LL(k) parser (Chevrotain) cannot replicate this — adding
+ * both alternatives causes the parser builder to hang indefinitely during
+ * FIRST(k) set computation.
  *
- * In the Xtext-based Rune DSL, `extract`/`filter`/`reduce` can accept both
- * bracket-delimited inline functions (`extract [body]`) and bare expressions
- * (`extract FuncName(item)`), using the `=>` syntactic predicate to resolve
- * the ambiguity. Langium's LL(k) parser (Chevrotain) cannot replicate this —
- * adding both alternatives causes the parser builder to hang indefinitely
- * during FIRST(k) set computation.
+ * This class works around the limitation by transforming the input text before
+ * parsing via {@link insertImplicitBrackets}: bare expressions after
+ * `extract`/`filter`/`reduce` are wrapped in `[` and `]` so the standard
+ * `InlineFunction` grammar rule handles them transparently.
  *
- * This parser works around the limitation by transforming the input text
- * before parsing: bare expressions after `extract`/`filter`/`reduce` are
- * wrapped in `[` and `]` so the standard InlineFunction grammar rule can
- * handle them.
+ * @pitfalls
+ * - The text pre-processor is regex-based and operates on raw source text before
+ *   tokenization. It cannot correctly handle multi-line bare expressions that
+ *   span a block boundary — always use explicit `[` `]` brackets in those cases.
+ * - Do NOT regenerate `ast.ts` while TypeScript is watching the project — the
+ *   generated file will be partially written and TypeScript will pick up an
+ *   inconsistent version, causing spurious type errors. Stop the watcher first,
+ *   regenerate, then restart.
+ *
+ * @useWhen
+ * - This is used automatically by `createRuneDslServices()` — you do not need
+ *   to instantiate it directly.
+ *
+ * @avoidWhen
+ * - Subclassing for grammar experiments — prefer creating a separate grammar
+ *   variant and a new services container instead.
+ *
+ * @category Core
+ * @see {@link createRuneDslParser}
+ * @see {@link insertImplicitBrackets}
  */
 export class RuneDslParser extends LangiumParser {
   constructor(services: LangiumCoreServices) {
@@ -39,8 +59,17 @@ export class RuneDslParser extends LangiumParser {
 }
 
 /**
- * Factory function that creates and initializes a RuneDslParser.
- * Drop-in replacement for `createLangiumParser`.
+ * Factory function that creates and fully initializes a {@link RuneDslParser}.
+ *
+ * @remarks
+ * This is a drop-in replacement for `createLangiumParser`. It constructs the
+ * parser, registers all grammar rules, and calls `finalize()` so the Chevrotain
+ * parser is ready to use. Called automatically by `RuneDslModule`.
+ *
+ * @param services - Langium core services providing the grammar and lexer.
+ * @returns An initialized `RuneDslParser` ready to parse Rune DSL source text.
+ *
+ * @category Core
  */
 export function createRuneDslParser(services: LangiumCoreServices): RuneDslParser {
   const grammar = services.Grammar;
@@ -176,13 +205,18 @@ function isWordChar(ch: string | undefined): boolean {
 }
 
 /**
- * Scans the input text and inserts `[` and `]` around bare expressions
+ * Scans Rune DSL source text and inserts `[` and `]` around bare expressions
  * that follow `extract`, `filter`, or `reduce` operators.
  *
- * The algorithm:
+ * @remarks
+ * This is a pure text transformation applied before Chevrotain tokenization.
+ * It normalizes both forms — `extract [body]` (explicit) and `extract expr`
+ * (bare) — into the `extract [body]` form that the Langium grammar expects.
+ *
+ * Algorithm:
  * 1. Scan character-by-character, skipping strings and comments
  * 2. When a functional operator keyword is found:
- *    a. Check if followed by `[` — if so, skip (already InlineFunction)
+ *    a. Check if followed by `[` — if so, skip (already `InlineFunction`)
  *    b. Check if followed by `ID [` or `ID ,` — if so, skip (closure param form)
  *    c. Otherwise, insert `[` before the bare expression and `]` at its end
  * 3. Expression end is determined by tracking nesting depth and looking
@@ -192,6 +226,18 @@ function isWordChar(ch: string | undefined): boolean {
  * newline + whitespace), we look at the next line. If it starts with an
  * expression token (ID, `(`, `-`, `+`, etc.) and NOT a statement keyword,
  * we treat the next line as the start of a bare expression.
+ *
+ * @pitfalls
+ * - The transformation is regex/character-scan based and cannot handle all
+ *   edge cases in heavily nested multi-line expressions. When in doubt, use
+ *   explicit `[ ]` brackets in your `.rosetta` source.
+ * - Do NOT call this function on arbitrary text — it is designed specifically
+ *   for Rune DSL (Rosetta) source and may corrupt non-Rosetta input.
+ *
+ * @param text - Raw Rune DSL (`.rosetta`) source text.
+ * @returns Transformed text with implicit brackets inserted where needed.
+ *
+ * @category Core
  */
 export function insertImplicitBrackets(text: string): string {
   const insertions: Array<{ pos: number; ch: string }> = [];

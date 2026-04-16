@@ -375,6 +375,17 @@ export type EditorFormActions<K extends TypeKind = TypeKind> = [TypeKind] extend
 // Configuration
 // ---------------------------------------------------------------------------
 
+/**
+ * Visibility filter state for the type graph.
+ *
+ * @config
+ * - `namespaces` — only show types from the listed namespaces (e.g., `["com.isda.cdm.product"]`)
+ * - `kinds` — restrict to specific node types (`"data"`, `"choice"`, `"enum"`, `"function"`)
+ * - `namePattern` — case-insensitive substring or glob match against type names
+ * - `hideOrphans` — remove nodes with no edges (types not referenced by any other type)
+ *
+ * @category Visual Editor
+ */
 export interface GraphFilters {
   namespaces?: string[];
   kinds?: TypeKind[];
@@ -405,6 +416,27 @@ export interface EdgeStyleConfig {
   'enum-extends'?: { color?: string; strokeWidth?: number };
 }
 
+/**
+ * Configuration props for the `RuneTypeGraph` component.
+ *
+ * @config
+ * - `layout` — Dagre layout algorithm options (direction, separation distances,
+ *   inheritance grouping). Changes trigger a full re-layout.
+ * - `nodeStyles` — per-kind header and border color overrides.
+ * - `edgeStyles` — per-edge-kind color, stroke width, and dash style overrides.
+ * - `initialFilters` — filter state applied on first mount. Does NOT update the
+ *   graph if changed after mount — call `ref.setFilters()` imperatively instead.
+ * - `showMinimap` — render a minimap overview (default: `false`).
+ * - `showControls` — render zoom/fit controls (default: `true`).
+ * - `readOnly` — disable edit controls and context menus (default: `true`).
+ *
+ * @pitfalls
+ * - `initialFilters` is only read on mount — passing a new object on re-render
+ *   does NOT update the graph filters. Use the `RuneTypeGraphRef.setFilters()`
+ *   imperative handle for dynamic filter changes.
+ *
+ * @category Visual Editor
+ */
 export interface RuneTypeGraphConfig {
   layout?: LayoutOptions;
   nodeStyles?: NodeStyleConfig;
@@ -422,6 +454,22 @@ export interface RuneTypeGraphConfig {
 /** Callback for navigating to a type definition by node ID (namespace::name). */
 export type NavigateToNodeCallback = (nodeId: string) => void;
 
+/**
+ * Event callbacks for the `RuneTypeGraph` component.
+ *
+ * @remarks
+ * All callbacks are optional. `onModelChanged` fires after every committed edit
+ * with the full serialized model as a `Map<namespace, rosettaSource>`. Use it
+ * to persist model state.
+ *
+ * @pitfalls
+ * - `onModelChanged` may fire frequently during drag operations — debounce it
+ *   before persisting to disk or a backend.
+ * - `onValidationChange` fires synchronously after each model mutation and may
+ *   deliver validation errors before the UI has fully re-rendered.
+ *
+ * @category Visual Editor
+ */
 export interface RuneTypeGraphCallbacks {
   onNodeDoubleClick?: (nodeId: string, data: AnyGraphNode) => void;
   /** Called when a type reference is clicked within a graph node (e.g., attribute type name). */
@@ -439,12 +487,41 @@ export interface RuneTypeGraphCallbacks {
 // Component Props & Ref
 // ---------------------------------------------------------------------------
 
+/**
+ * Props for the `RuneTypeGraph` React component.
+ *
+ * @remarks
+ * `config` and `callbacks` are both optional. When omitted, the graph renders
+ * in read-only mode with default layout and styling.
+ *
+ * @category Visual Editor
+ * @see {@link RuneTypeGraphConfig}
+ * @see {@link RuneTypeGraphCallbacks}
+ * @see {@link RuneTypeGraphRef}
+ */
 export interface RuneTypeGraphProps {
   config?: RuneTypeGraphConfig;
   callbacks?: RuneTypeGraphCallbacks;
   className?: string;
 }
 
+/**
+ * Imperative ref handle for `RuneTypeGraph`.
+ *
+ * @remarks
+ * Obtain via `React.useRef<RuneTypeGraphRef>()` and pass as `ref` to
+ * `<RuneTypeGraph ref={ref} />`. All methods are synchronous except
+ * `exportImage()`.
+ *
+ * @pitfalls
+ * - `relayout()` triggers a full Dagre computation — avoid calling it in rapid
+ *   succession (e.g., in a `useEffect` with frequent deps). Batch layout updates
+ *   with a debounce.
+ * - `exportImage()` renders the current viewport — hidden nodes (filtered out)
+ *   will not appear in the export.
+ *
+ * @category Visual Editor
+ */
 export interface RuneTypeGraphRef {
   fitView(): void;
   focusNode(nodeId: string): void;

@@ -33,6 +33,28 @@ import { createConnectionAdapter } from './connection-adapter.js';
 // Public API
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * A fully-wired Rune DSL LSP server instance.
+ *
+ * @remarks
+ * Returned by {@link createRuneLspServer}. Exposes the underlying
+ * `@lspeasy/server` instance and Langium services for advanced use cases
+ * (testing, custom middleware, capability introspection).
+ *
+ * @pitfalls
+ * - Do NOT call `listen()` before the server is fully initialized — all
+ *   Langium providers are registered during `createRuneLspServer()` synchronously
+ *   via `startLanguageServer(shared)`. The server is ready to accept connections
+ *   as soon as this factory function returns.
+ * - Diagnostics are sent as `textDocument/publishDiagnostics` **notifications**
+ *   (not responses). Clients must register a notification handler; they will not
+ *   appear as request responses.
+ * - Do NOT access `shared` or `services` from a concurrent request handler
+ *   without understanding Langium's document locking model — document builds
+ *   and index updates are not thread-safe.
+ *
+ * @category LSP Server
+ */
 export interface RuneLspServer {
   /** The underlying @lspeasy/server instance. */
   server: LSPServer<ServerCapabilities>;
@@ -45,12 +67,57 @@ export interface RuneLspServer {
 }
 
 /**
- * Create a fully-wired Rune DSL LSP server.
+ * Create a fully-wired Rune DSL LSP server backed by `@lspeasy/server`.
  *
- * All Langium providers (hover, completion, definition, diagnostics, …)
- * are wired automatically via `startLanguageServer`.
+ * @remarks
+ * Initialization order (all synchronous before returning):
+ * 1. `LSPServer` created with broad capability declarations
+ * 2. `createConnectionAdapter()` wraps it to satisfy Langium's `Connection` interface
+ * 3. Langium LSP services constructed (`createDefaultSharedModule` + Rune DSL modules)
+ * 4. `RuneDslValidator` checks registered
+ * 5. `startLanguageServer(shared)` wires all providers to connection handlers
  *
- * Call `result.listen(transport)` to bind to a client transport.
+ * The server responds to `initialize` requests only once per lifecycle — the
+ * connection adapter manages the `Created → Initializing → Initialized` state
+ * machine to avoid duplicate initialization errors.
+ *
+ * @useWhen
+ * - Embedding a Rune DSL language server in a web application via WebSocket
+ * - Running a standalone LSP server process bridging to a VS Code / Theia client
+ * - Integration-testing LSP features (hover, completion, diagnostics)
+ *
+ * @avoidWhen
+ * - Parsing `.rosetta` files in a script — use `createRuneDslServices()` and
+ *   `parse()` / `parseWorkspace()` instead (no LSP overhead).
+ * - Creating multiple servers in the same process — each server maintains its
+ *   own Langium workspace index; sharing a workspace across servers requires
+ *   custom `ServiceRegistry` wiring.
+ *
+ * @pitfalls
+ * - The workspace index is empty until the client sends `textDocument/didOpen`
+ *   or `workspace/didChangeWatchedFiles`. Do NOT respond to semantic requests
+ *   (hover, completion) before at least one `didOpen` has triggered a document
+ *   build — results will be empty or stale.
+ * - Diagnostics are push-only (`textDocument/publishDiagnostics` notifications).
+ *   There is no request-response path for diagnostics — the client must handle
+ *   the notification asynchronously.
+ * - Langium batches diagnostic notifications; a burst of `didChange` events may
+ *   not produce one notification per change. The final stable state is always
+ *   published but intermediate states may be coalesced.
+ *
+ * @returns A {@link RuneLspServer} ready for `listen(transport)`.
+ *
+ * @example
+ * ```ts
+ * import { createRuneLspServer } from '@rune-langium/lsp-server';
+ * import { WebSocketTransport } from '@lspeasy/core';
+ *
+ * const lsp = createRuneLspServer();
+ * const transport = new WebSocketTransport(webSocket);
+ * await lsp.listen(transport);
+ * ```
+ *
+ * @category LSP Server
  */
 export function createRuneLspServer(): RuneLspServer {
   // 1. Create @lspeasy/server with broad capabilities.

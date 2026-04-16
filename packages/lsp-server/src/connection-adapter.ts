@@ -249,12 +249,44 @@ function createClientProxy(server: LSPServer<ServerCapabilities>): any {
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Create a vscode-languageserver-compatible Connection backed by an
- * @lspeasy/server LSPServer.
+ * Create a `vscode-languageserver`-compatible `Connection` backed by an
+ * `@lspeasy/server` `LSPServer`.
  *
- * Pass the returned object as `connection` to Langium's
- * `createDefaultSharedModule({ connection })`, then call
- * `startLanguageServer(shared)` — Langium wires providers automatically.
+ * @remarks
+ * Langium's `startLanguageServer()` expects a `Connection` object from
+ * `vscode-languageserver`. This adapter bridges the gap: it translates Langium's
+ * typed handler registration methods (`onHover`, `onCompletion`, etc.) into
+ * `@lspeasy/server` request/notification registrations via a `Proxy`.
+ *
+ * The `initialize` request receives special composite handling that replicates
+ * `@lspeasy/server`'s internal state transitions
+ * (`Created → Initializing → Initialized`) AND forwards to Langium's handler.
+ * Without this, Langium's `startLanguageServer` would register its own handler
+ * that bypasses the state machine, causing all subsequent non-lifecycle requests
+ * to be rejected with `ServerNotInitialized`.
+ *
+ * @useWhen
+ * - Wiring a custom `@lspeasy/server` instance into Langium in tests or advanced
+ *   embedding scenarios where `createRuneLspServer()` does not fit.
+ *
+ * @avoidWhen
+ * - Normal usage — prefer `createRuneLspServer()` which calls this internally.
+ *
+ * @pitfalls
+ * - The returned object is typed `any` — do not expose it to callers that
+ *   expect `vscode-languageserver.Connection`; the shape matches but TypeScript
+ *   cannot verify structural compatibility without the vscode-languageserver
+ *   package installed.
+ * - Sub-objects (`console`, `window`, `workspace`, `languages`) are stubs or
+ *   delegates. Methods that require two-way communication (e.g.,
+ *   `workspace.getConfiguration`) may return empty results if the underlying
+ *   transport is not yet connected.
+ *
+ * @param server - The `@lspeasy/server` `LSPServer` instance to adapt.
+ * @returns A duck-typed `Connection` object compatible with Langium's
+ *   `createDefaultSharedModule({ connection })`.
+ *
+ * @category LSP Server
  */
 export function createConnectionAdapter(server: LSPServer<ServerCapabilities>): any {
   // Pre-built sub-objects

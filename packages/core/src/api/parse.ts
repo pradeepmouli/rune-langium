@@ -8,6 +8,22 @@ import { createRuneDslServices } from '../services/rune-dsl-module.js';
 
 /**
  * Result of parsing a Rosetta DSL source string.
+ *
+ * @remarks
+ * Even when `hasErrors` is `false`, the returned `value` is always a valid
+ * (possibly partial) `RosettaModel`. Callers should check `hasErrors` before
+ * relying on cross-reference resolution — unresolved references in the AST
+ * will have `ref === undefined`.
+ *
+ * @pitfalls
+ * - Do NOT mutate fields on the returned `value` — Langium's incremental
+ *   reparser tracks AST identity; mutating nodes bypasses indexing and causes
+ *   stale cross-references on the next build.
+ * - `LangiumDocument` objects obtained via lower-level APIs must not be cached
+ *   across workspace changes — cross-references become stale after
+ *   `DocumentBuilder.update()` invalidates the index.
+ *
+ * @category Core
  */
 export interface ParseResult {
   /** The root AST node. */
@@ -42,9 +58,55 @@ function getServices() {
 /**
  * Parse a Rosetta DSL source string into a typed AST.
  *
+ * @remarks
+ * Services are lazily initialized on first call and reused across subsequent
+ * calls. The services singleton is module-level — concurrent calls to `parse()`
+ * in tests that re-import the module may share state unexpectedly. Use
+ * `createRuneDslServices()` directly in long-running servers.
+ *
+ * @useWhen
+ * - Validating a single `.rosetta` file or snippet in memory
+ * - Building a parse pipeline in a Node.js script
+ * - Unit-testing grammar rules in isolation
+ *
+ * @avoidWhen
+ * - Parsing files that have cross-references to other documents — unresolved
+ *   references will have `ref === undefined`. Use `parseWorkspace()` instead.
+ * - Running inside a Langium LSP server — the DocumentBuilder is already
+ *   managed by the server lifecycle; calling `parse()` creates a second
+ *   services instance and wastes memory.
+ *
+ * @pitfalls
+ * - Do NOT call `parse()` on a file whose type references live in other
+ *   `.rosetta` files — cross-file references will be unresolved (undefined).
+ *   Provide all documents to `parseWorkspace()` for resolved cross-references.
+ * - Do NOT mutate nodes in the returned `value` — Langium's index tracks AST
+ *   node identity; mutations bypass incremental reparse and corrupt the scope graph.
+ *
  * @param input - The Rosetta DSL source text.
- * @param uri   - Optional URI for the document (defaults to `inmemory://model.rosetta`).
- * @returns A `ParseResult` with the root `RosettaModel` node and any errors.
+ * @param uri   - Optional URI for the document (defaults to `inmemory:///model.rosetta`).
+ * @returns A {@link ParseResult} with the root `RosettaModel` node and any errors.
+ *
+ * @example
+ * ```ts
+ * import { parse } from '@rune-langium/core';
+ *
+ * const result = await parse(`
+ *   namespace com.example
+ *   version "1.0.0"
+ *
+ *   type Trade:
+ *     quantity number (1..1)
+ * `);
+ *
+ * if (result.hasErrors) {
+ *   console.error(result.lexerErrors, result.parserErrors);
+ * } else {
+ *   console.log(result.value.elements.length, 'elements');
+ * }
+ * ```
+ *
+ * @category Core
  */
 export async function parse(input: string, uri?: string): Promise<ParseResult> {
   const { RuneDsl } = getServices();
@@ -78,10 +140,54 @@ export async function parse(input: string, uri?: string): Promise<ParseResult> {
 
 /**
  * Parse multiple Rosetta DSL source strings as a workspace.
- * Cross-references between documents will be resolved.
+ * Cross-references between documents will be resolved after all documents are built.
+ *
+ * @remarks
+ * `DocumentBuilder.build()` indexes all provided documents together, so
+ * cross-file `type` references (e.g., a `Data` type extending a type defined in
+ * another file) will resolve correctly. Documents not included in `entries` will
+ * produce unresolved references even if they exist on disk.
+ *
+ * @useWhen
+ * - Generating code from a set of related `.rosetta` files
+ * - Validating a full namespace bundle where types reference each other
+ * - Running integration tests that span multiple Rosetta files
+ *
+ * @avoidWhen
+ * - Parsing a single self-contained file — use the simpler `parse()` instead
+ * - Processing very large CDM workspaces incrementally — prefer the LSP server
+ *   for streaming document updates
+ *
+ * @pitfalls
+ * - All documents must be provided in a **single** `parseWorkspace()` call for
+ *   cross-references to resolve. Documents added across separate calls will NOT
+ *   see each other's types.
+ * - Do NOT reuse the `ParseResult.value` nodes after calling `parseWorkspace()`
+ *   again with a different set — the underlying index is rebuilt and prior AST
+ *   node identity becomes invalid.
+ * - Workspace indexing runs synchronously after `build()` completes; very large
+ *   workspaces (e.g., full CDM) may block for several seconds in a single-threaded
+ *   environment.
  *
  * @param entries - Array of `{ uri, content }` objects to parse together.
- * @returns An array of `ParseResult` objects, one per entry.
+ *   Each `uri` must be unique; duplicate URIs cause the later entry to overwrite
+ *   the earlier one silently.
+ * @returns An array of {@link ParseResult} objects in the same order as `entries`.
+ *
+ * @example
+ * ```ts
+ * import { parseWorkspace } from '@rune-langium/core';
+ *
+ * const results = await parseWorkspace([
+ *   { uri: 'file:///models/base.rosetta',  content: baseSource },
+ *   { uri: 'file:///models/trade.rosetta', content: tradeSource },
+ * ]);
+ *
+ * const tradeModel = results[1].value;
+ * // Type references in tradeModel now resolve into baseModel's types
+ * ```
+ *
+ * @category Core
  */
 export async function parseWorkspace(
   entries: Array<{ uri: string; content: string }>

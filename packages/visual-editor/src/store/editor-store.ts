@@ -2,10 +2,27 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Zustand editor store for the visual editor.
+ * Zustand editor store for the Rune DSL visual editor.
  *
- * Manages graph state (nodes, edges), UI state (selection, search, filters),
- * and domain state (parsed AST models).
+ * @remarks
+ * Manages three categories of state:
+ * - **Graph state** — `nodes`, `edges` (typed `@xyflow/react` node/edge objects)
+ * - **UI state** — selection, search query/results, active filters, panel visibility
+ * - **Domain state** — validated `ValidationError[]`, layout options, namespace visibility
+ *
+ * State mutations go through `EditorActions`. The store is wrapped with `zundo`
+ * temporal middleware — undo/redo is tracked via `useTemporalStore`.
+ *
+ * The default export `useEditorStore` is a singleton store.
+ * Use `createEditorStore()` to create an isolated store instance for embedding
+ * multiple independent graph panels.
+ *
+ * @pitfalls
+ * - Do NOT share a single `useEditorStore` instance between two mounted
+ *   `RuneTypeGraph` components — they will fight over layout state and selection.
+ *   Create a separate store per graph using `createEditorStore()`.
+ * - `loadModels()` triggers a full Dagre layout on every call — do not call it
+ *   inside a render function or on every keystroke.
  */
 
 import { create } from 'zustand';
@@ -47,6 +64,15 @@ import type { TrackedState } from './history.js';
 // State shape
 // ---------------------------------------------------------------------------
 
+/**
+ * Snapshot of visual editor state tracked by the zustand store.
+ *
+ * @config
+ * Read-only from outside the store — use `EditorActions` methods to mutate.
+ * Accessible via `useEditorStore(selector)`.
+ *
+ * @category Visual Editor
+ */
 export interface EditorState {
   // --- Graph state ---
   nodes: TypeGraphNode[];
@@ -182,6 +208,15 @@ export interface EditorActions {
   applyReactFlowEdgeChanges(changes: EdgeChange<TypeGraphEdge>[]): void;
 }
 
+/**
+ * Combined zustand store type (state + actions).
+ *
+ * @remarks
+ * Use the `useEditorStore` hook to subscribe to this store in React components,
+ * or `createEditorStore()` to create an isolated instance.
+ *
+ * @category Visual Editor
+ */
 export type EditorStore = EditorState & EditorActions;
 
 // ---------------------------------------------------------------------------
@@ -349,6 +384,35 @@ const initialState: EditorState = {
 // Store creation
 // ---------------------------------------------------------------------------
 
+/**
+ * Create an isolated zustand editor store instance.
+ *
+ * @remarks
+ * Returns a new zustand `useStore` hook bound to a fresh store instance.
+ * Use this when embedding multiple independent `RuneTypeGraph` components
+ * in the same React tree — each graph must own a separate store.
+ *
+ * The store is wrapped with `zundo` temporal middleware for undo/redo support.
+ * Access undo/redo via `useTemporalStore`.
+ *
+ * @useWhen
+ * - Rendering two or more `RuneTypeGraph` components simultaneously (different
+ *   namespaces, split-pane editors, etc.)
+ * - Writing tests that need an isolated store per test case
+ *
+ * @avoidWhen
+ * - You only need a single graph — use the pre-created `useEditorStore` singleton.
+ *
+ * @pitfalls
+ * - Each `createEditorStore()` call allocates a new Zustand store + Zundo temporal
+ *   tracker. Do NOT call this inside a render function — call once at module level
+ *   or in a `useState` initializer.
+ *
+ * @param overrides - Optional partial initial state to override defaults.
+ * @returns A zustand `useStore` hook bound to the new isolated store.
+ *
+ * @category Visual Editor
+ */
 export const createEditorStore = (overrides?: Partial<EditorState>) =>
   create<EditorStore>()(
     temporal(

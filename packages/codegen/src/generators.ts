@@ -7,7 +7,17 @@
 
 import type { GeneratorInfo } from './types.js';
 
-/** Known generators from rosetta-code-generators and rune-dsl. */
+/**
+ * Known generators bundled with `rosetta-code-generators` and `rune-dsl`.
+ *
+ * @remarks
+ * This list is maintained manually and reflects generators known at library
+ * build time. Additional generators may be available in the installed
+ * `rosetta-code-generators` version — use `--list-languages` on the CLI for
+ * the authoritative runtime list.
+ *
+ * @category Codegen
+ */
 export const KNOWN_GENERATORS: readonly GeneratorInfo[] = [
   { id: 'scala', label: 'Scala' },
   { id: 'typescript', label: 'TypeScript' },
@@ -22,14 +32,27 @@ export const KNOWN_GENERATORS: readonly GeneratorInfo[] = [
 ] as const;
 
 /**
- * Check if a language ID corresponds to a known generator.
+ * Check whether a language ID corresponds to a known generator.
+ *
+ * @useWhen Validating user-supplied `--language` input before submitting a
+ *   {@link CodeGenerationRequest}.
+ *
+ * @param language - The generator ID to check (e.g., `"scala"`, `"typescript"`).
+ * @returns `true` if the ID matches a generator in {@link KNOWN_GENERATORS}.
+ *
+ * @category Codegen
  */
 export function isKnownGenerator(language: string): boolean {
   return KNOWN_GENERATORS.some((g) => g.id === language);
 }
 
 /**
- * Get generator info by ID.
+ * Get generator metadata by ID.
+ *
+ * @param language - The generator ID to look up.
+ * @returns The matching {@link GeneratorInfo}, or `undefined` if not found.
+ *
+ * @category Codegen
  */
 export function getGenerator(language: string): GeneratorInfo | undefined {
   return KNOWN_GENERATORS.find((g) => g.id === language);
