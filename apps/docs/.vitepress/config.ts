@@ -41,6 +41,30 @@ export default defineConfig({
   lastUpdated: true,
   cleanUrls: true,
   ignoreDeadLinks: true,
+  head: [
+    ['meta', { property: 'og:title', content: 'Rune Studio' }],
+    [
+      'meta',
+      {
+        property: 'og:description',
+        content: 'Langium-based DSL toolchain for the Rune DSL — CDM & DRR in the browser'
+      }
+    ],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:url', content: 'https://pradeepmouli.github.io/rune-langium/' }],
+    ['meta', { name: 'twitter:card', content: 'summary' }],
+    ['meta', { name: 'twitter:title', content: 'Rune Studio' }],
+    [
+      'meta',
+      {
+        name: 'twitter:description',
+        content: 'Langium-based DSL toolchain for the Rune DSL — CDM & DRR in the browser'
+      }
+    ]
+  ],
+  sitemap: {
+    hostname: 'https://pradeepmouli.github.io/rune-langium'
+  },
   themeConfig: {
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
