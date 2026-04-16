@@ -1,5 +1,5 @@
 ---
-name: speckit-drift
+name: speckit-sync-analyze
 description: Analyze drift between specs and implementation. Compares requirements
   against code to find divergence.
 compatibility: Requires spec-kit project structure with .specify/ directory

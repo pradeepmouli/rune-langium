@@ -1,17 +1,13 @@
 ---
 name: speckit-doctor
-description: "Run a full project health diagnostic \u2014 checks structure, agents,\
-  \ features, scripts, extensions, and git status."
+description: Run a full project health diagnostic — checks structure, agents, features,
+  scripts, extensions, and git status.
 compatibility: Requires spec-kit project structure with .specify/ directory
 metadata:
   author: github-spec-kit
-  source: templates/commands/doctor.md
+  source: doctor:commands/check.md
 ---
 
-# Speckit Doctor Skill
-
-<!-- Extension: doctor -->
-<!-- Config: .specify/extensions/doctor/ -->
 # Project Health Check
 
 Run a diagnostic scan of the current Spec Kit project to identify setup issues, missing artifacts, and configuration problems.
