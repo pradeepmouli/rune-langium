@@ -1,0 +1,4635 @@
+# @rune-langium/docs
+
+> Documentation site for rune-langium
+
+## @rune-langium/core
+
+### isAnnotation
+
+```ts
+isAnnotation(item: unknown): item is Annotation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is Annotation`
+
+### isAnnotationDeepPath
+
+```ts
+isAnnotationDeepPath(item: unknown): item is AnnotationDeepPath
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is AnnotationDeepPath`
+
+### isAnnotationPath
+
+```ts
+isAnnotationPath(item: unknown): item is AnnotationPath
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is AnnotationPath`
+
+### isAnnotationPathAttributeReference
+
+```ts
+isAnnotationPathAttributeReference(item: unknown): item is AnnotationPathAttributeReference
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is AnnotationPathAttributeReference`
+
+### isAnnotationPathExpression
+
+```ts
+isAnnotationPathExpression(item: unknown): item is AnnotationPathExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is AnnotationPathExpression`
+
+### isAnnotationQualifier
+
+```ts
+isAnnotationQualifier(item: unknown): item is AnnotationQualifier
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is AnnotationQualifier`
+
+### isAnnotationRef
+
+```ts
+isAnnotationRef(item: unknown): item is AnnotationRef
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is AnnotationRef`
+
+### isArithmeticOperation
+
+```ts
+isArithmeticOperation(item: unknown): item is ArithmeticOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ArithmeticOperation`
+
+### isAsKeyOperation
+
+```ts
+isAsKeyOperation(item: unknown): item is AsKeyOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is AsKeyOperation`
+
+### isAssignPathRoot
+
+```ts
+isAssignPathRoot(item: unknown): item is AssignPathRoot
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is AssignPathRoot`
+
+### isAttribute
+
+```ts
+isAttribute(item: unknown): item is Attribute
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is Attribute`
+
+### isAttributeOrChoiceOption
+
+```ts
+isAttributeOrChoiceOption(item: unknown): item is AttributeOrChoiceOption
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is AttributeOrChoiceOption`
+
+### isBigDecimal
+
+```ts
+isBigDecimal(item: unknown): item is string
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is string`
+
+### isCardinalityModifier
+
+```ts
+isCardinalityModifier(item: unknown): item is CardinalityModifier
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is CardinalityModifier`
+
+### isChoice
+
+```ts
+isChoice(item: unknown): item is Choice
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is Choice`
+
+### isChoiceOperation
+
+```ts
+isChoiceOperation(item: unknown): item is ChoiceOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ChoiceOperation`
+
+### isChoiceOption
+
+```ts
+isChoiceOption(item: unknown): item is ChoiceOption
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ChoiceOption`
+
+### isClosureParameter
+
+```ts
+isClosureParameter(item: unknown): item is ClosureParameter
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ClosureParameter`
+
+### isComparisonOperation
+
+```ts
+isComparisonOperation(item: unknown): item is ComparisonOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ComparisonOperation`
+
+### isCondition
+
+```ts
+isCondition(item: unknown): item is Condition
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is Condition`
+
+### isConstructorKeyValuePair
+
+```ts
+isConstructorKeyValuePair(item: unknown): item is ConstructorKeyValuePair
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ConstructorKeyValuePair`
+
+### isData
+
+```ts
+isData(item: unknown): item is Data
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is Data`
+
+### isDataOrChoice
+
+```ts
+isDataOrChoice(item: unknown): item is DataOrChoice
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is DataOrChoice`
+
+### isDefaultOperation
+
+```ts
+isDefaultOperation(item: unknown): item is DefaultOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is DefaultOperation`
+
+### isDistinctOperation
+
+```ts
+isDistinctOperation(item: unknown): item is DistinctOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is DistinctOperation`
+
+### isDocumentRationale
+
+```ts
+isDocumentRationale(item: unknown): item is DocumentRationale
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is DocumentRationale`
+
+### isEqualityOperation
+
+```ts
+isEqualityOperation(item: unknown): item is EqualityOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is EqualityOperation`
+
+### isExistsModifier
+
+```ts
+isExistsModifier(item: unknown): item is ExistsModifier
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ExistsModifier`
+
+### isExternalValueOperator
+
+```ts
+isExternalValueOperator(item: unknown): item is ExternalValueOperator
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ExternalValueOperator`
+
+### isFilterOperation
+
+```ts
+isFilterOperation(item: unknown): item is FilterOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is FilterOperation`
+
+### isFirstOperation
+
+```ts
+isFirstOperation(item: unknown): item is FirstOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is FirstOperation`
+
+### isFlattenOperation
+
+```ts
+isFlattenOperation(item: unknown): item is FlattenOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is FlattenOperation`
+
+### isImport
+
+```ts
+isImport(item: unknown): item is Import
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is Import`
+
+### isInlineFunction
+
+```ts
+isInlineFunction(item: unknown): item is InlineFunction
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is InlineFunction`
+
+### isInteger
+
+```ts
+isInteger(item: unknown): item is bigint
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is bigint`
+
+### isJoinOperation
+
+```ts
+isJoinOperation(item: unknown): item is JoinOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is JoinOperation`
+
+### isLabelAnnotation
+
+```ts
+isLabelAnnotation(item: unknown): item is LabelAnnotation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is LabelAnnotation`
+
+### isLastOperation
+
+```ts
+isLastOperation(item: unknown): item is LastOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is LastOperation`
+
+### isListLiteral
+
+```ts
+isListLiteral(item: unknown): item is ListLiteral
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ListLiteral`
+
+### isLogicalOperation
+
+```ts
+isLogicalOperation(item: unknown): item is LogicalOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is LogicalOperation`
+
+### isMapOperation
+
+```ts
+isMapOperation(item: unknown): item is MapOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is MapOperation`
+
+### isMaxOperation
+
+```ts
+isMaxOperation(item: unknown): item is MaxOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is MaxOperation`
+
+### isMinOperation
+
+```ts
+isMinOperation(item: unknown): item is MinOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is MinOperation`
+
+### isNecessity
+
+```ts
+isNecessity(item: unknown): item is Necessity
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is Necessity`
+
+### isOneOfOperation
+
+```ts
+isOneOfOperation(item: unknown): item is OneOfOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is OneOfOperation`
+
+### isOperation
+
+```ts
+isOperation(item: unknown): item is Operation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is Operation`
+
+### isQualifiedName
+
+```ts
+isQualifiedName(item: unknown): item is string
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is string`
+
+### isQualifiedNameWithWildcard
+
+```ts
+isQualifiedNameWithWildcard(item: unknown): item is string
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is string`
+
+### isReduceOperation
+
+```ts
+isReduceOperation(item: unknown): item is ReduceOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ReduceOperation`
+
+### isRegulatoryDocumentReference
+
+```ts
+isRegulatoryDocumentReference(item: unknown): item is RegulatoryDocumentReference
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RegulatoryDocumentReference`
+
+### isReverseOperation
+
+```ts
+isReverseOperation(item: unknown): item is ReverseOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ReverseOperation`
+
+### isRosettaAbsentExpression
+
+```ts
+isRosettaAbsentExpression(item: unknown): item is RosettaAbsentExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaAbsentExpression`
+
+### isRosettaAttributeReference
+
+```ts
+isRosettaAttributeReference(item: unknown): item is RosettaAttributeReference
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaAttributeReference`
+
+### isRosettaBasicType
+
+```ts
+isRosettaBasicType(item: unknown): item is RosettaBasicType
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaBasicType`
+
+### isRosettaBody
+
+```ts
+isRosettaBody(item: unknown): item is RosettaBody
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaBody`
+
+### isRosettaBooleanLiteral
+
+```ts
+isRosettaBooleanLiteral(item: unknown): item is RosettaBooleanLiteral
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaBooleanLiteral`
+
+### isRosettaCallableWithArgs
+
+```ts
+isRosettaCallableWithArgs(item: unknown): item is RosettaCallableWithArgs
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaCallableWithArgs`
+
+### isRosettaCardinality
+
+```ts
+isRosettaCardinality(item: unknown): item is RosettaCardinality
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaCardinality`
+
+### isRosettaClassSynonym
+
+```ts
+isRosettaClassSynonym(item: unknown): item is RosettaClassSynonym
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaClassSynonym`
+
+### isRosettaConditionalExpression
+
+```ts
+isRosettaConditionalExpression(item: unknown): item is RosettaConditionalExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaConditionalExpression`
+
+### isRosettaConstructorExpression
+
+```ts
+isRosettaConstructorExpression(item: unknown): item is RosettaConstructorExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaConstructorExpression`
+
+### isRosettaContainsExpression
+
+```ts
+isRosettaContainsExpression(item: unknown): item is RosettaContainsExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaContainsExpression`
+
+### isRosettaCorpus
+
+```ts
+isRosettaCorpus(item: unknown): item is RosettaCorpus
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaCorpus`
+
+### isRosettaCountOperation
+
+```ts
+isRosettaCountOperation(item: unknown): item is RosettaCountOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaCountOperation`
+
+### isRosettaDataReference
+
+```ts
+isRosettaDataReference(item: unknown): item is RosettaDataReference
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaDataReference`
+
+### isRosettaDeepFeatureCall
+
+```ts
+isRosettaDeepFeatureCall(item: unknown): item is RosettaDeepFeatureCall
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaDeepFeatureCall`
+
+### isRosettaDisjointExpression
+
+```ts
+isRosettaDisjointExpression(item: unknown): item is RosettaDisjointExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaDisjointExpression`
+
+### isRosettaDocReference
+
+```ts
+isRosettaDocReference(item: unknown): item is RosettaDocReference
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaDocReference`
+
+### isRosettaEnumeration
+
+```ts
+isRosettaEnumeration(item: unknown): item is RosettaEnumeration
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaEnumeration`
+
+### isRosettaEnumSynonym
+
+```ts
+isRosettaEnumSynonym(item: unknown): item is RosettaEnumSynonym
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaEnumSynonym`
+
+### isRosettaEnumValue
+
+```ts
+isRosettaEnumValue(item: unknown): item is RosettaEnumValue
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaEnumValue`
+
+### isRosettaEnumValueReference
+
+```ts
+isRosettaEnumValueReference(item: unknown): item is RosettaEnumValueReference
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaEnumValueReference`
+
+### isRosettaExistsExpression
+
+```ts
+isRosettaExistsExpression(item: unknown): item is RosettaExistsExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExistsExpression`
+
+### isRosettaExpression
+
+```ts
+isRosettaExpression(item: unknown): item is RosettaExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExpression`
+
+### isRosettaExternalClass
+
+```ts
+isRosettaExternalClass(item: unknown): item is RosettaExternalClass
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExternalClass`
+
+### isRosettaExternalClassSynonym
+
+```ts
+isRosettaExternalClassSynonym(item: unknown): item is RosettaExternalClassSynonym
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExternalClassSynonym`
+
+### isRosettaExternalEnum
+
+```ts
+isRosettaExternalEnum(item: unknown): item is RosettaExternalEnum
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExternalEnum`
+
+### isRosettaExternalEnumValue
+
+```ts
+isRosettaExternalEnumValue(item: unknown): item is RosettaExternalEnumValue
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExternalEnumValue`
+
+### isRosettaExternalFunction
+
+```ts
+isRosettaExternalFunction(item: unknown): item is RosettaExternalFunction
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExternalFunction`
+
+### isRosettaExternalRegularAttribute
+
+```ts
+isRosettaExternalRegularAttribute(item: unknown): item is RosettaExternalRegularAttribute
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExternalRegularAttribute`
+
+### isRosettaExternalRuleSource
+
+```ts
+isRosettaExternalRuleSource(item: unknown): item is RosettaExternalRuleSource
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExternalRuleSource`
+
+### isRosettaExternalSynonym
+
+```ts
+isRosettaExternalSynonym(item: unknown): item is RosettaExternalSynonym
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaExternalSynonym`
+
+### isRosettaFeature
+
+```ts
+isRosettaFeature(item: unknown): item is RosettaFeature
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaFeature`
+
+### isRosettaFeatureCall
+
+```ts
+isRosettaFeatureCall(item: unknown): item is RosettaFeatureCall
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaFeatureCall`
+
+### isRosettaFunction
+
+```ts
+isRosettaFunction(item: unknown): item is RosettaFunction
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaFunction`
+
+### isRosettaImplicitVariable
+
+```ts
+isRosettaImplicitVariable(item: unknown): item is RosettaImplicitVariable
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaImplicitVariable`
+
+### isRosettaIntLiteral
+
+```ts
+isRosettaIntLiteral(item: unknown): item is RosettaIntLiteral
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaIntLiteral`
+
+### isRosettaLiteral
+
+```ts
+isRosettaLiteral(item: unknown): item is RosettaLiteral
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaLiteral`
+
+### isRosettaMapPath
+
+```ts
+isRosettaMapPath(item: unknown): item is RosettaMapPath
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapPath`
+
+### isRosettaMapPathValue
+
+```ts
+isRosettaMapPathValue(item: unknown): item is RosettaMapPathValue
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapPathValue`
+
+### isRosettaMapping
+
+```ts
+isRosettaMapping(item: unknown): item is RosettaMapping
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapping`
+
+### isRosettaMappingInstance
+
+```ts
+isRosettaMappingInstance(item: unknown): item is RosettaMappingInstance
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMappingInstance`
+
+### isRosettaMappingPathTests
+
+```ts
+isRosettaMappingPathTests(item: unknown): item is RosettaMappingPathTests
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMappingPathTests`
+
+### isRosettaMapRosettaPath
+
+```ts
+isRosettaMapRosettaPath(item: unknown): item is RosettaMapRosettaPath
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapRosettaPath`
+
+### isRosettaMapTest
+
+```ts
+isRosettaMapTest(item: unknown): item is RosettaMapTest
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapTest`
+
+### isRosettaMapTestAbsentExpression
+
+```ts
+isRosettaMapTestAbsentExpression(item: unknown): item is RosettaMapTestAbsentExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapTestAbsentExpression`
+
+### isRosettaMapTestEqualityOperation
+
+```ts
+isRosettaMapTestEqualityOperation(item: unknown): item is RosettaMapTestEqualityOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapTestEqualityOperation`
+
+### isRosettaMapTestExistsExpression
+
+```ts
+isRosettaMapTestExistsExpression(item: unknown): item is RosettaMapTestExistsExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapTestExistsExpression`
+
+### isRosettaMapTestExpression
+
+```ts
+isRosettaMapTestExpression(item: unknown): item is RosettaMapTestExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapTestExpression`
+
+### isRosettaMapTestFunc
+
+```ts
+isRosettaMapTestFunc(item: unknown): item is RosettaMapTestFunc
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMapTestFunc`
+
+### isRosettaMergeSynonymValue
+
+```ts
+isRosettaMergeSynonymValue(item: unknown): item is RosettaMergeSynonymValue
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMergeSynonymValue`
+
+### isRosettaMetaType
+
+```ts
+isRosettaMetaType(item: unknown): item is RosettaMetaType
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaMetaType`
+
+### isRosettaModel
+
+```ts
+isRosettaModel(item: unknown): item is RosettaModel
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaModel`
+
+### isRosettaNumberLiteral
+
+```ts
+isRosettaNumberLiteral(item: unknown): item is RosettaNumberLiteral
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaNumberLiteral`
+
+### isRosettaOnlyElement
+
+```ts
+isRosettaOnlyElement(item: unknown): item is RosettaOnlyElement
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaOnlyElement`
+
+### isRosettaOnlyExistsExpression
+
+```ts
+isRosettaOnlyExistsExpression(item: unknown): item is RosettaOnlyExistsExpression
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaOnlyExistsExpression`
+
+### isRosettaParameter
+
+```ts
+isRosettaParameter(item: unknown): item is RosettaParameter
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaParameter`
+
+### isRosettaQualifiableConfiguration
+
+```ts
+isRosettaQualifiableConfiguration(item: unknown): item is RosettaQualifiableConfiguration
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaQualifiableConfiguration`
+
+### isRosettaQualifiableType
+
+```ts
+isRosettaQualifiableType(item: unknown): item is RosettaQualifiableType
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaQualifiableType`
+
+### isRosettaRecordFeature
+
+```ts
+isRosettaRecordFeature(item: unknown): item is RosettaRecordFeature
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaRecordFeature`
+
+### isRosettaRecordType
+
+```ts
+isRosettaRecordType(item: unknown): item is RosettaRecordType
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaRecordType`
+
+### isRosettaReport
+
+```ts
+isRosettaReport(item: unknown): item is RosettaReport
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaReport`
+
+### isRosettaRootElement
+
+```ts
+isRosettaRootElement(item: unknown): item is RosettaRootElement
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaRootElement`
+
+### isRosettaRule
+
+```ts
+isRosettaRule(item: unknown): item is RosettaRule
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaRule`
+
+### isRosettaScope
+
+```ts
+isRosettaScope(item: unknown): item is RosettaScope
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaScope`
+
+### isRosettaSegment
+
+```ts
+isRosettaSegment(item: unknown): item is RosettaSegment
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSegment`
+
+### isRosettaSegmentRef
+
+```ts
+isRosettaSegmentRef(item: unknown): item is RosettaSegmentRef
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSegmentRef`
+
+### isRosettaStringLiteral
+
+```ts
+isRosettaStringLiteral(item: unknown): item is RosettaStringLiteral
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaStringLiteral`
+
+### isRosettaSuperCall
+
+```ts
+isRosettaSuperCall(item: unknown): item is RosettaSuperCall
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSuperCall`
+
+### isRosettaSymbol
+
+```ts
+isRosettaSymbol(item: unknown): item is RosettaSymbol
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSymbol`
+
+### isRosettaSymbolReference
+
+```ts
+isRosettaSymbolReference(item: unknown): item is RosettaSymbolReference
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSymbolReference`
+
+### isRosettaSynonym
+
+```ts
+isRosettaSynonym(item: unknown): item is RosettaSynonym
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSynonym`
+
+### isRosettaSynonymBody
+
+```ts
+isRosettaSynonymBody(item: unknown): item is RosettaSynonymBody
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSynonymBody`
+
+### isRosettaSynonymRef
+
+```ts
+isRosettaSynonymRef(item: unknown): item is RosettaSynonymRef
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSynonymRef`
+
+### isRosettaSynonymSource
+
+```ts
+isRosettaSynonymSource(item: unknown): item is RosettaSynonymSource
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSynonymSource`
+
+### isRosettaSynonymValueBase
+
+```ts
+isRosettaSynonymValueBase(item: unknown): item is RosettaSynonymValueBase
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaSynonymValueBase`
+
+### isRosettaType
+
+```ts
+isRosettaType(item: unknown): item is RosettaType
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaType`
+
+### isRosettaTypeAlias
+
+```ts
+isRosettaTypeAlias(item: unknown): item is RosettaTypeAlias
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaTypeAlias`
+
+### isRosettaTypedFeature
+
+```ts
+isRosettaTypedFeature(item: unknown): item is RosettaTypedFeature
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RosettaTypedFeature`
+
+### isRuleReferenceAnnotation
+
+```ts
+isRuleReferenceAnnotation(item: unknown): item is RuleReferenceAnnotation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is RuleReferenceAnnotation`
+
+### isSegment
+
+```ts
+isSegment(item: unknown): item is Segment
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is Segment`
+
+### isShortcutDeclaration
+
+```ts
+isShortcutDeclaration(item: unknown): item is ShortcutDeclaration
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ShortcutDeclaration`
+
+### isSortOperation
+
+```ts
+isSortOperation(item: unknown): item is SortOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is SortOperation`
+
+### isSumOperation
+
+```ts
+isSumOperation(item: unknown): item is SumOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is SumOperation`
+
+### isSwitchCaseGuard
+
+```ts
+isSwitchCaseGuard(item: unknown): item is SwitchCaseGuard
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is SwitchCaseGuard`
+
+### isSwitchCaseOrDefault
+
+```ts
+isSwitchCaseOrDefault(item: unknown): item is SwitchCaseOrDefault
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is SwitchCaseOrDefault`
+
+### isSwitchCaseTarget
+
+```ts
+isSwitchCaseTarget(item: unknown): item is SwitchCaseTarget
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is SwitchCaseTarget`
+
+### isSwitchOperation
+
+```ts
+isSwitchOperation(item: unknown): item is SwitchOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is SwitchOperation`
+
+### isThenOperation
+
+```ts
+isThenOperation(item: unknown): item is ThenOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ThenOperation`
+
+### isToDateOperation
+
+```ts
+isToDateOperation(item: unknown): item is ToDateOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ToDateOperation`
+
+### isToDateTimeOperation
+
+```ts
+isToDateTimeOperation(item: unknown): item is ToDateTimeOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ToDateTimeOperation`
+
+### isToEnumOperation
+
+```ts
+isToEnumOperation(item: unknown): item is ToEnumOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ToEnumOperation`
+
+### isToIntOperation
+
+```ts
+isToIntOperation(item: unknown): item is ToIntOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ToIntOperation`
+
+### isToNumberOperation
+
+```ts
+isToNumberOperation(item: unknown): item is ToNumberOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ToNumberOperation`
+
+### isToStringOperation
+
+```ts
+isToStringOperation(item: unknown): item is ToStringOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ToStringOperation`
+
+### isToTimeOperation
+
+```ts
+isToTimeOperation(item: unknown): item is ToTimeOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ToTimeOperation`
+
+### isToZonedDateTimeOperation
+
+```ts
+isToZonedDateTimeOperation(item: unknown): item is ToZonedDateTimeOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is ToZonedDateTimeOperation`
+
+### isTypeCall
+
+```ts
+isTypeCall(item: unknown): item is TypeCall
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is TypeCall`
+
+### isTypeCallArgument
+
+```ts
+isTypeCallArgument(item: unknown): item is TypeCallArgument
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is TypeCallArgument`
+
+### isTypeParameter
+
+```ts
+isTypeParameter(item: unknown): item is TypeParameter
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is TypeParameter`
+
+### isTypeParameterValidID
+
+```ts
+isTypeParameterValidID(item: unknown): item is string
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is string`
+
+### isValidID
+
+```ts
+isValidID(item: unknown): item is string
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is string`
+
+### isWithMetaEntry
+
+```ts
+isWithMetaEntry(item: unknown): item is WithMetaEntry
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is WithMetaEntry`
+
+### isWithMetaOperation
+
+```ts
+isWithMetaOperation(item: unknown): item is WithMetaOperation
+```
+
+**Parameters:**
+- `item: unknown` — 
+
+**Returns:** `item is WithMetaOperation`
+
+### parse
+
+Parse a Rosetta DSL source string into a typed AST.
+
+```ts
+parse(input: string, uri?: string): Promise<ParseResult>
+```
+
+**Parameters:**
+- `input: string` — The Rosetta DSL source text.
+- `uri: string` (optional) — Optional URI for the document (defaults to `inmemory:///model.rosetta`).
+
+**Returns:** `Promise<ParseResult>`
+
+```ts
+import { parse } from '@rune-langium/core';
+
+const result = await parse(`
+  namespace com.example
+  version "1.0.0"
+
+  type Trade:
+    quantity number (1..1)
+`);
+
+if (result.hasErrors) {
+  console.error(result.lexerErrors, result.parserErrors);
+} else {
+  console.log(result.value.elements.length, 'elements');
+}
+```
+
+### parseWorkspace
+
+Parse multiple Rosetta DSL source strings as a workspace.
+Cross-references between documents will be resolved after all documents are built.
+
+```ts
+parseWorkspace(entries: { uri: string; content: string }[]): Promise<ParseResult[]>
+```
+
+**Parameters:**
+- `entries: { uri: string; content: string }[]` — Array of `{ uri, content }` objects to parse together.
+  Each `uri` must be unique; duplicate URIs cause the later entry to overwrite
+  the earlier one silently.
+
+**Returns:** `Promise<ParseResult[]>`
+
+```ts
+import { parseWorkspace } from '@rune-langium/core';
+
+const results = await parseWorkspace([
+  { uri: 'file:///models/base.rosetta',  content: baseSource },
+  { uri: 'file:///models/trade.rosetta', content: tradeSource },
+]);
+
+const tradeModel = results[1].value;
+// Type references in tradeModel now resolve into baseModel's types
+```
+
+### createRuneDslServices
+
+Create the full set of services required for the Rune DSL language.
+
+```ts
+createRuneDslServices(context: DefaultSharedCoreModuleContext): { shared: LangiumSharedCoreServices; RuneDsl: LangiumCoreServices }
+```
+
+**Parameters:**
+- `context: DefaultSharedCoreModuleContext` — Optional Langium file-system context. Defaults to `EmptyFileSystem`
+  (in-memory only). Pass a `NodeFileSystem` context when resolving imports from disk.
+
+**Returns:** `{ shared: LangiumSharedCoreServices; RuneDsl: LangiumCoreServices }`
+
+```ts
+import { createRuneDslServices } from '@rune-langium/core';
+import { NodeFileSystem } from 'langium/node';
+
+// In-memory (for tests / scripts):
+const { RuneDsl } = createRuneDslServices();
+
+// Disk-backed (for resolving imports from the file system):
+const { RuneDsl: diskServices } = createRuneDslServices(NodeFileSystem);
+```
+
+### createRuneDslParser
+
+Factory function that creates and fully initializes a RuneDslParser.
+
+```ts
+createRuneDslParser(services: LangiumCoreServices): RuneDslParser
+```
+
+**Parameters:**
+- `services: LangiumCoreServices` — Langium core services providing the grammar and lexer.
+
+**Returns:** `RuneDslParser`
+
+### insertImplicitBrackets
+
+Scans Rune DSL source text and inserts `[` and `]` around bare expressions
+that follow `extract`, `filter`, or `reduce` operators.
+
+```ts
+insertImplicitBrackets(text: string): string
+```
+
+**Parameters:**
+- `text: string` — Raw Rune DSL (`.rosetta`) source text.
+
+**Returns:** `string`
+
+### serializeModel
+
+Serialize a single `RosettaModel` AST node back to `.rosetta` source text.
+
+```ts
+serializeModel(model: unknown): string
+```
+
+**Parameters:**
+- `model: unknown` — A `RosettaModel` AST node (or duck-typed equivalent).
+
+**Returns:** `string`
+
+```ts
+import { parse, serializeModel } from '@rune-langium/core';
+
+const { value } = await parse(source);
+const text = serializeModel(value);
+// text is valid .rosetta source (minus functions/rules/comments)
+```
+
+### serializeElement
+
+Serialize a single AST element (`Data`, `Choice`, or `RosettaEnumeration`) to text.
+
+```ts
+serializeElement(element: unknown): string
+```
+
+**Parameters:**
+- `element: unknown` — A duck-typed AST element with a `$type` discriminant.
+
+**Returns:** `string`
+
+### serializeModels
+
+Serialize multiple `RosettaModel` nodes, returning a `Map` of namespace → source text.
+
+```ts
+serializeModels(models: unknown[]): Map<string, string>
+```
+
+**Parameters:**
+- `models: unknown[]` — Array of duck-typed `RosettaModel` AST nodes.
+
+**Returns:** `Map<string, string>`
+
+### isOptional
+
+Whether the cardinality allows zero occurrences (inf == 0).
+
+```ts
+isOptional(card: RosettaCardinality): boolean
+```
+
+**Parameters:**
+- `card: RosettaCardinality` — 
+
+**Returns:** `boolean`
+
+### isSingular
+
+Whether the cardinality forces exactly one (inf == 1 && sup == 1).
+
+```ts
+isSingular(card: RosettaCardinality): boolean
+```
+
+**Parameters:**
+- `card: RosettaCardinality` — 
+
+**Returns:** `boolean`
+
+### isPlural
+
+Whether the cardinality allows more than one instance (sup > 1 or unbounded).
+
+```ts
+isPlural(card: RosettaCardinality): boolean
+```
+
+**Parameters:**
+- `card: RosettaCardinality` — 
+
+**Returns:** `boolean`
+
+### isRequired
+
+Whether the cardinality is required (inf >= 1).
+
+```ts
+isRequired(card: RosettaCardinality): boolean
+```
+
+**Parameters:**
+- `card: RosettaCardinality` — 
+
+**Returns:** `boolean`
+
+### toConstraintString
+
+Produce a human-readable constraint string like "(1..1)", "(0..*)", etc.
+
+```ts
+toConstraintString(card: RosettaCardinality): string
+```
+
+**Parameters:**
+- `card: RosettaCardinality` — 
+
+**Returns:** `string`
+
+### getOptions
+
+Get the list of choice options from a Choice type.
+
+```ts
+getOptions(choice: Choice): ChoiceOption[]
+```
+
+**Parameters:**
+- `choice: Choice` — 
+
+**Returns:** `ChoiceOption[]`
+
+### getEffectiveConditions
+
+Get conditions that are defined on the Data types within a Choice's options.
+Since Choice options reference type calls, we return the conditions
+from the parent Choice's enclosing Data types (if any).
+
+```ts
+getEffectiveConditions(choice: Choice): Condition[]
+```
+
+**Parameters:**
+- `choice: Choice` — 
+
+**Returns:** `Condition[]`
+
+### hasGeneratedInput
+
+Check if an expression node has a generated (synthetic) input marker.
+This is used during code generation to track inputs that were
+automatically inferred rather than explicitly declared.
+
+```ts
+hasGeneratedInput(node: RosettaExpression): boolean
+```
+
+**Parameters:**
+- `node: RosettaExpression` — 
+
+**Returns:** `boolean`
+
+### setGeneratedInputIfAbsent
+
+Set the generated input marker on an expression node if not already set.
+Returns `true` if the marker was set, `false` if it was already present.
+
+```ts
+setGeneratedInputIfAbsent(node: RosettaExpression): boolean
+```
+
+**Parameters:**
+- `node: RosettaExpression` — 
+
+**Returns:** `boolean`
+
+### getFunctionInputs
+
+Get all input attributes from a RosettaFunction.
+
+```ts
+getFunctionInputs(func: RosettaFunction): Attribute[]
+```
+
+**Parameters:**
+- `func: RosettaFunction` — 
+
+**Returns:** `Attribute[]`
+
+### getFunctionOutput
+
+Get the output attribute from a RosettaFunction.
+
+```ts
+getFunctionOutput(func: RosettaFunction): Attribute | undefined
+```
+
+**Parameters:**
+- `func: RosettaFunction` — 
+
+**Returns:** `Attribute | undefined`
+
+### RuneDslAstReflection
+
+```ts
+constructor(): RuneDslAstReflection
+```
+
+**Properties:**
+- `types: { Annotation: { name: "Annotation"; properties: { attributes: { name: "attributes"; defaultValue: [] }; definition: { name: "definition" }; name: { name: "name" }; prefix: { name: "prefix" } }; superTypes: ["RosettaRootElement"] }; AnnotationDeepPath: { name: "AnnotationDeepPath"; properties: { attribute: { name: "attribute"; referenceType: "AttributeOrChoiceOption" }; operator: { name: "operator" }; receiver: { name: "receiver" } }; superTypes: ["AnnotationPathExpression"] }; AnnotationPath: { name: "AnnotationPath"; properties: { attribute: { name: "attribute"; referenceType: "AttributeOrChoiceOption" }; operator: { name: "operator" }; receiver: { name: "receiver" } }; superTypes: ["AnnotationPathExpression"] }; AnnotationPathAttributeReference: { name: "AnnotationPathAttributeReference"; properties: { attribute: { name: "attribute"; referenceType: "AttributeOrChoiceOption" } }; superTypes: ["AnnotationPathExpression"] }; AnnotationPathExpression: { name: "AnnotationPathExpression"; properties: {}; superTypes: [] }; AnnotationQualifier: { name: "AnnotationQualifier"; properties: { qualName: { name: "qualName" }; qualPath: { name: "qualPath" }; qualValue: { name: "qualValue" } }; superTypes: [] }; AnnotationRef: { name: "AnnotationRef"; properties: { annotation: { name: "annotation"; referenceType: "Annotation" }; attribute: { name: "attribute"; referenceType: "Attribute" }; qualifiers: { name: "qualifiers"; defaultValue: [] } }; superTypes: [] }; ArithmeticOperation: { name: "ArithmeticOperation"; properties: { left: { name: "left" }; operator: { name: "operator" }; right: { name: "right" } }; superTypes: ["RosettaExpression"] }; AsKeyOperation: { name: "AsKeyOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; AssignPathRoot: { name: "AssignPathRoot"; properties: {}; superTypes: [] }; Attribute: { name: "Attribute"; properties: { annotations: { name: "annotations"; defaultValue: [] }; card: { name: "card" }; definition: { name: "definition" }; labels: { name: "labels"; defaultValue: [] }; name: { name: "name" }; override: { name: "override"; defaultValue: false }; references: { name: "references"; defaultValue: [] }; ruleReferences: { name: "ruleReferences"; defaultValue: [] }; synonyms: { name: "synonyms"; defaultValue: [] }; typeCall: { name: "typeCall" }; typeCallArgs: { name: "typeCallArgs"; defaultValue: [] } }; superTypes: ["AssignPathRoot", "AttributeOrChoiceOption", "RosettaFeature", "RosettaSymbol", "RosettaTypedFeature"] }; AttributeOrChoiceOption: { name: "AttributeOrChoiceOption"; properties: {}; superTypes: [] }; Choice: { name: "Choice"; properties: { annotations: { name: "annotations"; defaultValue: [] }; attributes: { name: "attributes"; defaultValue: [] }; definition: { name: "definition" }; name: { name: "name" }; synonyms: { name: "synonyms"; defaultValue: [] } }; superTypes: ["DataOrChoice", "RosettaRootElement", "RosettaSymbol", "RosettaType", "SwitchCaseTarget"] }; ChoiceOperation: { name: "ChoiceOperation"; properties: { argument: { name: "argument" }; attributes: { name: "attributes"; defaultValue: []; referenceType: "Attribute" }; necessity: { name: "necessity" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ChoiceOption: { name: "ChoiceOption"; properties: { annotations: { name: "annotations"; defaultValue: [] }; definition: { name: "definition" }; labels: { name: "labels"; defaultValue: [] }; references: { name: "references"; defaultValue: [] }; ruleReferences: { name: "ruleReferences"; defaultValue: [] }; synonyms: { name: "synonyms"; defaultValue: [] }; typeCall: { name: "typeCall" } }; superTypes: ["AttributeOrChoiceOption", "RosettaFeature"] }; ClosureParameter: { name: "ClosureParameter"; properties: { name: { name: "name" } }; superTypes: ["RosettaSymbol"] }; ComparisonOperation: { name: "ComparisonOperation"; properties: { cardMod: { name: "cardMod" }; left: { name: "left" }; operator: { name: "operator" }; right: { name: "right" } }; superTypes: ["RosettaExpression"] }; Condition: { name: "Condition"; properties: { annotations: { name: "annotations"; defaultValue: [] }; definition: { name: "definition" }; expression: { name: "expression" }; name: { name: "name" }; postCondition: { name: "postCondition"; defaultValue: false }; references: { name: "references"; defaultValue: [] } }; superTypes: [] }; ConstructorKeyValuePair: { name: "ConstructorKeyValuePair"; properties: { key: { name: "key"; referenceType: "RosettaFeature" }; value: { name: "value" } }; superTypes: [] }; Data: { name: "Data"; properties: { annotations: { name: "annotations"; defaultValue: [] }; attributes: { name: "attributes"; defaultValue: [] }; conditions: { name: "conditions"; defaultValue: [] }; definition: { name: "definition" }; name: { name: "name" }; references: { name: "references"; defaultValue: [] }; superType: { name: "superType"; referenceType: "DataOrChoice" }; synonyms: { name: "synonyms"; defaultValue: [] } }; superTypes: ["DataOrChoice", "RosettaRootElement", "RosettaSymbol", "RosettaType", "SwitchCaseTarget"] }; DataOrChoice: { name: "DataOrChoice"; properties: {}; superTypes: [] }; DefaultOperation: { name: "DefaultOperation"; properties: { left: { name: "left" }; operator: { name: "operator" }; right: { name: "right" } }; superTypes: ["RosettaExpression"] }; DistinctOperation: { name: "DistinctOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; DocumentRationale: { name: "DocumentRationale"; properties: { rationale: { name: "rationale" }; rationaleAuthor: { name: "rationaleAuthor" } }; superTypes: [] }; EqualityOperation: { name: "EqualityOperation"; properties: { cardMod: { name: "cardMod" }; left: { name: "left" }; operator: { name: "operator" }; right: { name: "right" } }; superTypes: ["RosettaExpression"] }; FilterOperation: { name: "FilterOperation"; properties: { argument: { name: "argument" }; function: { name: "function" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; FirstOperation: { name: "FirstOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; FlattenOperation: { name: "FlattenOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; Import: { name: "Import"; properties: { importedNamespace: { name: "importedNamespace" }; namespaceAlias: { name: "namespaceAlias" } }; superTypes: [] }; InlineFunction: { name: "InlineFunction"; properties: { body: { name: "body" }; parameters: { name: "parameters"; defaultValue: [] } }; superTypes: [] }; JoinOperation: { name: "JoinOperation"; properties: { left: { name: "left" }; operator: { name: "operator" }; right: { name: "right" } }; superTypes: ["RosettaExpression"] }; LabelAnnotation: { name: "LabelAnnotation"; properties: { deprecatedAs: { name: "deprecatedAs"; defaultValue: false }; label: { name: "label" }; name: { name: "name" }; path: { name: "path" } }; superTypes: [] }; LastOperation: { name: "LastOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ListLiteral: { name: "ListLiteral"; properties: { elements: { name: "elements"; defaultValue: [] } }; superTypes: ["RosettaExpression"] }; LogicalOperation: { name: "LogicalOperation"; properties: { left: { name: "left" }; operator: { name: "operator" }; right: { name: "right" } }; superTypes: ["RosettaExpression"] }; MapOperation: { name: "MapOperation"; properties: { argument: { name: "argument" }; function: { name: "function" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; MaxOperation: { name: "MaxOperation"; properties: { argument: { name: "argument" }; function: { name: "function" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; MinOperation: { name: "MinOperation"; properties: { argument: { name: "argument" }; function: { name: "function" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; OneOfOperation: { name: "OneOfOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; Operation: { name: "Operation"; properties: { add: { name: "add"; defaultValue: false }; assignRoot: { name: "assignRoot"; referenceType: "AssignPathRoot" }; definition: { name: "definition" }; expression: { name: "expression" }; path: { name: "path" } }; superTypes: [] }; ReduceOperation: { name: "ReduceOperation"; properties: { argument: { name: "argument" }; function: { name: "function" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; RegulatoryDocumentReference: { name: "RegulatoryDocumentReference"; properties: { body: { name: "body"; referenceType: "RosettaBody" }; corpusList: { name: "corpusList"; defaultValue: []; referenceType: "RosettaCorpus" }; segments: { name: "segments"; defaultValue: [] } }; superTypes: [] }; ReverseOperation: { name: "ReverseOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; RosettaAbsentExpression: { name: "RosettaAbsentExpression"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; RosettaAttributeReference: { name: "RosettaAttributeReference"; properties: { attribute: { name: "attribute"; referenceType: "AttributeOrChoiceOption" }; receiver: { name: "receiver" } }; superTypes: [] }; RosettaBasicType: { name: "RosettaBasicType"; properties: { definition: { name: "definition" }; name: { name: "name" }; parameters: { name: "parameters"; defaultValue: [] } }; superTypes: ["RosettaRootElement", "RosettaType"] }; RosettaBody: { name: "RosettaBody"; properties: { bodyType: { name: "bodyType" }; definition: { name: "definition" }; name: { name: "name" } }; superTypes: ["RosettaRootElement"] }; RosettaBooleanLiteral: { name: "RosettaBooleanLiteral"; properties: { value: { name: "value"; defaultValue: false } }; superTypes: ["RosettaLiteral"] }; RosettaCallableWithArgs: { name: "RosettaCallableWithArgs"; properties: {}; superTypes: [] }; RosettaCardinality: { name: "RosettaCardinality"; properties: { inf: { name: "inf" }; sup: { name: "sup" }; unbounded: { name: "unbounded"; defaultValue: false } }; superTypes: [] }; RosettaClassSynonym: { name: "RosettaClassSynonym"; properties: { metaValue: { name: "metaValue" }; sources: { name: "sources"; defaultValue: []; referenceType: "RosettaSynonymSource" }; value: { name: "value" } }; superTypes: [] }; RosettaConditionalExpression: { name: "RosettaConditionalExpression"; properties: { elsethen: { name: "elsethen" }; full: { name: "full"; defaultValue: false }; if: { name: "if" }; ifthen: { name: "ifthen" } }; superTypes: ["RosettaExpression"] }; RosettaConstructorExpression: { name: "RosettaConstructorExpression"; properties: { constructorTypeArgs: { name: "constructorTypeArgs"; defaultValue: [] }; implicitEmpty: { name: "implicitEmpty"; defaultValue: false }; typeRef: { name: "typeRef" }; values: { name: "values"; defaultValue: [] } }; superTypes: ["RosettaExpression"] }; RosettaContainsExpression: { name: "RosettaContainsExpression"; properties: { left: { name: "left" }; operator: { name: "operator" }; right: { name: "right" } }; superTypes: ["RosettaExpression"] }; RosettaCorpus: { name: "RosettaCorpus"; properties: { body: { name: "body"; referenceType: "RosettaBody" }; corpusType: { name: "corpusType" }; definition: { name: "definition" }; displayName: { name: "displayName" }; name: { name: "name" } }; superTypes: ["RosettaRootElement"] }; RosettaCountOperation: { name: "RosettaCountOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; RosettaDataReference: { name: "RosettaDataReference"; properties: { attribute: { name: "attribute"; referenceType: "AttributeOrChoiceOption" }; data: { name: "data"; referenceType: "DataOrChoice" }; receiver: { name: "receiver" } }; superTypes: ["RosettaAttributeReference"] }; RosettaDeepFeatureCall: { name: "RosettaDeepFeatureCall"; properties: { feature: { name: "feature"; referenceType: "Attribute" }; receiver: { name: "receiver" } }; superTypes: ["RosettaExpression"] }; RosettaDisjointExpression: { name: "RosettaDisjointExpression"; properties: { left: { name: "left" }; operator: { name: "operator" }; right: { name: "right" } }; superTypes: ["RosettaExpression"] }; RosettaDocReference: { name: "RosettaDocReference"; properties: { docReference: { name: "docReference" }; name: { name: "name" }; path: { name: "path" }; provision: { name: "provision" }; rationales: { name: "rationales"; defaultValue: [] }; reportedField: { name: "reportedField"; defaultValue: false }; structuredProvision: { name: "structuredProvision" } }; superTypes: [] }; RosettaEnumSynonym: { name: "RosettaEnumSynonym"; properties: { definition: { name: "definition" }; patternMatch: { name: "patternMatch" }; patternReplace: { name: "patternReplace" }; removeHtml: { name: "removeHtml"; defaultValue: false }; sources: { name: "sources"; defaultValue: []; referenceType: "RosettaSynonymSource" }; synonymValue: { name: "synonymValue" } }; superTypes: [] }; RosettaEnumValue: { name: "RosettaEnumValue"; properties: { annotations: { name: "annotations"; defaultValue: [] }; definition: { name: "definition" }; display: { name: "display" }; enumSynonyms: { name: "enumSynonyms"; defaultValue: [] }; name: { name: "name" }; references: { name: "references"; defaultValue: [] } }; superTypes: ["RosettaFeature", "RosettaSymbol", "SwitchCaseTarget"] }; RosettaEnumValueReference: { name: "RosettaEnumValueReference"; properties: { enumeration: { name: "enumeration"; referenceType: "RosettaEnumeration" }; value: { name: "value"; referenceType: "RosettaEnumValue" } }; superTypes: ["RosettaMapTestExpression"] }; RosettaEnumeration: { name: "RosettaEnumeration"; properties: { annotations: { name: "annotations"; defaultValue: [] }; definition: { name: "definition" }; enumValues: { name: "enumValues"; defaultValue: [] }; name: { name: "name" }; parent: { name: "parent"; referenceType: "RosettaEnumeration" }; references: { name: "references"; defaultValue: [] }; synonyms: { name: "synonyms"; defaultValue: [] } }; superTypes: ["RosettaRootElement", "RosettaSymbol", "RosettaType", "SwitchCaseTarget"] }; RosettaExistsExpression: { name: "RosettaExistsExpression"; properties: { argument: { name: "argument" }; modifier: { name: "modifier" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; RosettaExpression: { name: "RosettaExpression"; properties: {}; superTypes: [] }; RosettaExternalClass: { name: "RosettaExternalClass"; properties: { data: { name: "data"; referenceType: "DataOrChoice" }; externalClassSynonyms: { name: "externalClassSynonyms"; defaultValue: [] }; regularAttributes: { name: "regularAttributes"; defaultValue: [] } }; superTypes: [] }; RosettaExternalClassSynonym: { name: "RosettaExternalClassSynonym"; properties: { metaValue: { name: "metaValue" }; value: { name: "value" } }; superTypes: [] }; RosettaExternalEnum: { name: "RosettaExternalEnum"; properties: { enumeration: { name: "enumeration"; referenceType: "RosettaEnumeration" }; regularValues: { name: "regularValues"; defaultValue: [] } }; superTypes: [] }; RosettaExternalEnumValue: { name: "RosettaExternalEnumValue"; properties: { enumRef: { name: "enumRef"; referenceType: "RosettaEnumValue" }; externalEnumSynonyms: { name: "externalEnumSynonyms"; defaultValue: [] }; operator: { name: "operator" } }; superTypes: [] }; RosettaExternalFunction: { name: "RosettaExternalFunction"; properties: { definition: { name: "definition" }; name: { name: "name" }; parameters: { name: "parameters"; defaultValue: [] }; typeCall: { name: "typeCall" } }; superTypes: ["RosettaCallableWithArgs", "RosettaRootElement", "RosettaSymbol"] }; RosettaExternalRegularAttribute: { name: "RosettaExternalRegularAttribute"; properties: { attributeRef: { name: "attributeRef"; referenceType: "RosettaFeature" }; externalRuleReferences: { name: "externalRuleReferences"; defaultValue: [] }; externalSynonyms: { name: "externalSynonyms"; defaultValue: [] }; operator: { name: "operator" } }; superTypes: [] }; RosettaExternalRuleSource: { name: "RosettaExternalRuleSource"; properties: { externalClasses: { name: "externalClasses"; defaultValue: [] }; externalEnums: { name: "externalEnums"; defaultValue: [] }; name: { name: "name" }; superSources: { name: "superSources"; defaultValue: []; referenceType: "RosettaExternalRuleSource" } }; superTypes: ["RosettaRootElement"] }; RosettaExternalSynonym: { name: "RosettaExternalSynonym"; properties: { body: { name: "body" } }; superTypes: [] }; RosettaFeature: { name: "RosettaFeature"; properties: {}; superTypes: [] }; RosettaFeatureCall: { name: "RosettaFeatureCall"; properties: { feature: { name: "feature"; referenceType: "RosettaFeature" }; receiver: { name: "receiver" } }; superTypes: ["RosettaExpression"] }; RosettaFunction: { name: "RosettaFunction"; properties: { annotations: { name: "annotations"; defaultValue: [] }; conditions: { name: "conditions"; defaultValue: [] }; definition: { name: "definition" }; dispatchAttribute: { name: "dispatchAttribute"; referenceType: "Attribute" }; dispatchValue: { name: "dispatchValue" }; inputs: { name: "inputs"; defaultValue: [] }; name: { name: "name" }; operations: { name: "operations"; defaultValue: [] }; output: { name: "output" }; postConditions: { name: "postConditions"; defaultValue: [] }; references: { name: "references"; defaultValue: [] }; shortcuts: { name: "shortcuts"; defaultValue: [] }; superFunction: { name: "superFunction"; referenceType: "RosettaFunction" } }; superTypes: ["RosettaCallableWithArgs", "RosettaRootElement", "RosettaSymbol"] }; RosettaImplicitVariable: { name: "RosettaImplicitVariable"; properties: { name: { name: "name" } }; superTypes: ["AnnotationPathExpression", "RosettaExpression"] }; RosettaIntLiteral: { name: "RosettaIntLiteral"; properties: { value: { name: "value" } }; superTypes: ["RosettaLiteral"] }; RosettaLiteral: { name: "RosettaLiteral"; properties: {}; superTypes: ["RosettaExpression", "RosettaMapTestExpression"] }; RosettaMapPath: { name: "RosettaMapPath"; properties: { path: { name: "path" } }; superTypes: ["RosettaMapTest"] }; RosettaMapPathValue: { name: "RosettaMapPathValue"; properties: { path: { name: "path" } }; superTypes: ["RosettaMapTestExpression"] }; RosettaMapRosettaPath: { name: "RosettaMapRosettaPath"; properties: { path: { name: "path" } }; superTypes: ["RosettaMapTest"] }; RosettaMapTest: { name: "RosettaMapTest"; properties: {}; superTypes: [] }; RosettaMapTestAbsentExpression: { name: "RosettaMapTestAbsentExpression"; properties: { argument: { name: "argument" } }; superTypes: ["RosettaMapTestExpression"] }; RosettaMapTestEqualityOperation: { name: "RosettaMapTestEqualityOperation"; properties: { left: { name: "left" }; operator: { name: "operator" }; right: { name: "right" } }; superTypes: ["RosettaMapTestExpression"] }; RosettaMapTestExistsExpression: { name: "RosettaMapTestExistsExpression"; properties: { argument: { name: "argument" } }; superTypes: ["RosettaMapTestExpression"] }; RosettaMapTestExpression: { name: "RosettaMapTestExpression"; properties: {}; superTypes: ["RosettaMapTest"] }; RosettaMapTestFunc: { name: "RosettaMapTestFunc"; properties: { func: { name: "func"; referenceType: "RosettaCallableWithArgs" }; predicatePath: { name: "predicatePath" } }; superTypes: ["RosettaMapTest"] }; RosettaMapping: { name: "RosettaMapping"; properties: { instances: { name: "instances"; defaultValue: [] } }; superTypes: [] }; RosettaMappingInstance: { name: "RosettaMappingInstance"; properties: { default: { name: "default"; defaultValue: false }; set: { name: "set" }; when: { name: "when" } }; superTypes: [] }; RosettaMappingPathTests: { name: "RosettaMappingPathTests"; properties: { tests: { name: "tests"; defaultValue: [] } }; superTypes: [] }; RosettaMergeSynonymValue: { name: "RosettaMergeSynonymValue"; properties: { excludePath: { name: "excludePath" }; name: { name: "name" } }; superTypes: [] }; RosettaMetaType: { name: "RosettaMetaType"; properties: { name: { name: "name" }; typeCall: { name: "typeCall" } }; superTypes: ["RosettaFeature", "RosettaRootElement", "RosettaSymbol"] }; RosettaModel: { name: "RosettaModel"; properties: { configurations: { name: "configurations"; defaultValue: [] }; definition: { name: "definition" }; elements: { name: "elements"; defaultValue: [] }; imports: { name: "imports"; defaultValue: [] }; name: { name: "name" }; overridden: { name: "overridden"; defaultValue: false }; scope: { name: "scope" }; version: { name: "version" } }; superTypes: [] }; RosettaNumberLiteral: { name: "RosettaNumberLiteral"; properties: { value: { name: "value" } }; superTypes: ["RosettaLiteral"] }; RosettaOnlyElement: { name: "RosettaOnlyElement"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; RosettaOnlyExistsExpression: { name: "RosettaOnlyExistsExpression"; properties: { args: { name: "args"; defaultValue: [] }; argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; RosettaParameter: { name: "RosettaParameter"; properties: { isArray: { name: "isArray"; defaultValue: false }; name: { name: "name" }; typeCall: { name: "typeCall" } }; superTypes: ["RosettaSymbol"] }; RosettaQualifiableConfiguration: { name: "RosettaQualifiableConfiguration"; properties: { qType: { name: "qType" }; rosettaClass: { name: "rosettaClass"; referenceType: "Data" } }; superTypes: [] }; RosettaRecordFeature: { name: "RosettaRecordFeature"; properties: { name: { name: "name" }; typeCall: { name: "typeCall" } }; superTypes: ["RosettaFeature", "RosettaTypedFeature"] }; RosettaRecordType: { name: "RosettaRecordType"; properties: { definition: { name: "definition" }; features: { name: "features"; defaultValue: [] }; name: { name: "name" } }; superTypes: ["RosettaRootElement", "RosettaType"] }; RosettaReport: { name: "RosettaReport"; properties: { eligibilityRules: { name: "eligibilityRules"; defaultValue: []; referenceType: "RosettaRule" }; inputType: { name: "inputType" }; regulatoryBody: { name: "regulatoryBody" }; reportingStandard: { name: "reportingStandard"; referenceType: "RosettaCorpus" }; reportType: { name: "reportType"; referenceType: "Data" }; ruleSource: { name: "ruleSource"; referenceType: "RosettaExternalRuleSource" } }; superTypes: ["RosettaRootElement"] }; RosettaRootElement: { name: "RosettaRootElement"; properties: {}; superTypes: [] }; RosettaRule: { name: "RosettaRule"; properties: { definition: { name: "definition" }; eligibility: { name: "eligibility"; defaultValue: false }; expression: { name: "expression" }; identifier: { name: "identifier" }; input: { name: "input" }; name: { name: "name" }; references: { name: "references"; defaultValue: [] } }; superTypes: ["RosettaCallableWithArgs", "RosettaRootElement", "RosettaSymbol"] }; RosettaScope: { name: "RosettaScope"; properties: { definition: { name: "definition" }; name: { name: "name" } }; superTypes: [] }; RosettaSegment: { name: "RosettaSegment"; properties: { name: { name: "name" } }; superTypes: ["RosettaRootElement"] }; RosettaSegmentRef: { name: "RosettaSegmentRef"; properties: { segment: { name: "segment"; referenceType: "RosettaSegment" }; segmentRef: { name: "segmentRef" } }; superTypes: [] }; RosettaStringLiteral: { name: "RosettaStringLiteral"; properties: { value: { name: "value" } }; superTypes: ["RosettaLiteral"] }; RosettaSuperCall: { name: "RosettaSuperCall"; properties: { explicitArguments: { name: "explicitArguments"; defaultValue: false }; name: { name: "name" }; rawArgs: { name: "rawArgs"; defaultValue: [] } }; superTypes: ["RosettaExpression"] }; RosettaSymbol: { name: "RosettaSymbol"; properties: {}; superTypes: [] }; RosettaSymbolReference: { name: "RosettaSymbolReference"; properties: { explicitArguments: { name: "explicitArguments"; defaultValue: false }; rawArgs: { name: "rawArgs"; defaultValue: [] }; symbol: { name: "symbol"; referenceType: "RosettaSymbol" } }; superTypes: ["RosettaExpression"] }; RosettaSynonym: { name: "RosettaSynonym"; properties: { body: { name: "body" }; sources: { name: "sources"; defaultValue: []; referenceType: "RosettaSynonymSource" } }; superTypes: [] }; RosettaSynonymBody: { name: "RosettaSynonymBody"; properties: { format: { name: "format" }; hints: { name: "hints"; defaultValue: [] }; mapper: { name: "mapper" }; mappingLogic: { name: "mappingLogic" }; merge: { name: "merge" }; metaValues: { name: "metaValues"; defaultValue: [] }; patternMatch: { name: "patternMatch" }; patternReplace: { name: "patternReplace" }; removeHtml: { name: "removeHtml"; defaultValue: false }; values: { name: "values"; defaultValue: [] } }; superTypes: [] }; RosettaSynonymSource: { name: "RosettaSynonymSource"; properties: { externalClasses: { name: "externalClasses"; defaultValue: [] }; externalEnums: { name: "externalEnums"; defaultValue: [] }; name: { name: "name" }; superSources: { name: "superSources"; defaultValue: []; referenceType: "RosettaSynonymSource" } }; superTypes: ["RosettaRootElement"] }; RosettaSynonymValueBase: { name: "RosettaSynonymValueBase"; properties: { maps: { name: "maps" }; name: { name: "name" }; path: { name: "path" }; refType: { name: "refType" }; value: { name: "value" } }; superTypes: [] }; RosettaType: { name: "RosettaType"; properties: {}; superTypes: [] }; RosettaTypeAlias: { name: "RosettaTypeAlias"; properties: { conditions: { name: "conditions"; defaultValue: [] }; definition: { name: "definition" }; name: { name: "name" }; parameters: { name: "parameters"; defaultValue: [] }; typeCall: { name: "typeCall" } }; superTypes: ["RosettaRootElement", "RosettaType"] }; RosettaTypedFeature: { name: "RosettaTypedFeature"; properties: {}; superTypes: [] }; RuleReferenceAnnotation: { name: "RuleReferenceAnnotation"; properties: { empty: { name: "empty"; defaultValue: false }; name: { name: "name" }; path: { name: "path" }; reportingRule: { name: "reportingRule"; referenceType: "RosettaRule" } }; superTypes: [] }; Segment: { name: "Segment"; properties: { feature: { name: "feature"; referenceType: "RosettaTypedFeature" }; next: { name: "next" } }; superTypes: [] }; ShortcutDeclaration: { name: "ShortcutDeclaration"; properties: { definition: { name: "definition" }; expression: { name: "expression" }; name: { name: "name" } }; superTypes: ["AssignPathRoot", "RosettaSymbol"] }; SortOperation: { name: "SortOperation"; properties: { argument: { name: "argument" }; function: { name: "function" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; SumOperation: { name: "SumOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; SwitchCaseGuard: { name: "SwitchCaseGuard"; properties: { literalGuard: { name: "literalGuard" }; referenceGuard: { name: "referenceGuard"; referenceType: "SwitchCaseTarget" } }; superTypes: [] }; SwitchCaseOrDefault: { name: "SwitchCaseOrDefault"; properties: { expression: { name: "expression" }; guard: { name: "guard" } }; superTypes: [] }; SwitchCaseTarget: { name: "SwitchCaseTarget"; properties: {}; superTypes: [] }; SwitchOperation: { name: "SwitchOperation"; properties: { argument: { name: "argument" }; cases: { name: "cases"; defaultValue: [] }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ThenOperation: { name: "ThenOperation"; properties: { argument: { name: "argument" }; function: { name: "function" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ToDateOperation: { name: "ToDateOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ToDateTimeOperation: { name: "ToDateTimeOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ToEnumOperation: { name: "ToEnumOperation"; properties: { argument: { name: "argument" }; enumeration: { name: "enumeration"; referenceType: "RosettaEnumeration" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ToIntOperation: { name: "ToIntOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ToNumberOperation: { name: "ToNumberOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ToStringOperation: { name: "ToStringOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ToTimeOperation: { name: "ToTimeOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; ToZonedDateTimeOperation: { name: "ToZonedDateTimeOperation"; properties: { argument: { name: "argument" }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] }; TypeCall: { name: "TypeCall"; properties: { arguments: { name: "arguments"; defaultValue: [] }; type: { name: "type"; referenceType: "RosettaType" } }; superTypes: [] }; TypeCallArgument: { name: "TypeCallArgument"; properties: { parameter: { name: "parameter"; referenceType: "TypeParameter" }; value: { name: "value" } }; superTypes: [] }; TypeParameter: { name: "TypeParameter"; properties: { definition: { name: "definition" }; name: { name: "name" }; typeCall: { name: "typeCall" } }; superTypes: ["RosettaSymbol"] }; WithMetaEntry: { name: "WithMetaEntry"; properties: { key: { name: "key"; referenceType: "RosettaFeature" }; value: { name: "value" } }; superTypes: [] }; WithMetaOperation: { name: "WithMetaOperation"; properties: { argument: { name: "argument" }; entries: { name: "entries"; defaultValue: [] }; operator: { name: "operator" } }; superTypes: ["RosettaExpression"] } }` — 
+- `subtypes: Record<string, Record<string, boolean | undefined>>` — 
+- `allSubtypes: Record<string, string[] | undefined>` — 
+
+**Methods:**
+- `getAllTypes(): string[]` — 
+- `getReferenceType(refInfo: ReferenceInfo): string` — 
+- `getTypeMetaData(type: string): TypeMetaData` — 
+- `isInstance(node: unknown, type: string): boolean` — 
+- `isSubtype(subtype: string, supertype: string): boolean` — 
+- `getAllSubTypes(type: string): string[]` — 
+
+### RuneDslScopeProvider
+
+Custom scope provider for the Rune DSL.
+
+Handles the 21 cross-reference patterns from the original Xtext implementation:
+- Cases 1-3: Feature calls (-> and ->>)
+- Cases 4-8: Operation assign root, segments, constructor keys
+- Case 9-11: Switch case guards, enum values
+- Case 12: Symbol references (most complex — context-dependent)
+- Cases 13-21: Annotation paths, external refs, etc.
+
+```ts
+constructor(services: LangiumCoreServices): RuneDslScopeProvider
+```
+
+**Properties:**
+- `reflection: AstReflection` — 
+- `nameProvider: NameProvider` — 
+- `descriptions: AstNodeDescriptionProvider` — 
+- `indexManager: IndexManager` — 
+- `globalScopeCache: WorkspaceCache<string, Scope>` — 
+
+**Methods:**
+- `getScope(context: ReferenceInfo): Scope` — 
+- `getGlobalScope(referenceType: string, context: ReferenceInfo): Scope` — Override global scope lookup to support `import ... as <alias>` resolution.
+
+When a file contains `import fpml.consolidated.shared.* as fpml`, references
+written as `fpml.Leg` should resolve to `fpml.consolidated.shared.Leg` in the
+global index.  We do this by building a thin alias-expansion layer on top of
+the regular global scope: for every qualified reference name we try to replace
+a known alias prefix with the full namespace prefix and retry the lookup.
+- `createScope(elements: Iterable<AstNodeDescription>, outerScope?: Scope, options?: ScopeOptions): Scope` — Create a scope for the given collection of AST node descriptions.
+- `createScopeForNodes(elements: Iterable<AstNode>, outerScope?: Scope, options?: ScopeOptions): Scope` — Create a scope for the given collection of AST nodes, which need to be transformed into respective
+descriptions first. This is done using the `NameProvider` and `AstNodeDescriptionProvider` services.
+
+### RuneDslValidator
+
+Custom validator for the Rune DSL.
+
+Implements structural, naming, expression, and reporting validations
+ported from the original Xtext implementation.
+
+Rule categories:
+- S-##: Structural constraints (duplicates, cycles, missing fields)
+- N-##: Naming convention rules
+- E-##: Expression validation rules
+- R-##: Reporting validation rules
+
+```ts
+constructor(): RuneDslValidator
+```
+
+**Methods:**
+- `registerChecks(services: LangiumCoreServices): void` — Register validation checks with the Langium validation registry.
+- `checkDataNoDuplicateAttributes(node: Data, accept: ValidationAcceptor): void` — S-01: No duplicate attribute names within a Data type.
+- `checkDataExtendsCycle(node: Data, accept: ValidationAcceptor): void` — S-02: Detect circular inheritance in Data extends chain.
+- `checkAttributeCardinality(node: Attribute, accept: ValidationAcceptor): void` — S-04: Attribute cardinality must have lower <= upper.
+- `checkFunctionNoDuplicateInputs(node: RosettaFunction, accept: ValidationAcceptor): void` — S-06: No duplicate function input names.
+- `checkFunctionOutputRequired(node: RosettaFunction, accept: ValidationAcceptor): void` — S-07: Functions should have an output.
+Dispatch functions (with dispatchAttribute) are exempt — they inherit output from the parent.
+- `checkEnumNoDuplicateValues(node: RosettaEnumeration, accept: ValidationAcceptor): void` — S-09: No duplicate enum value names.
+- `checkChoiceNoDuplicateOptions(node: Choice, accept: ValidationAcceptor): void` — S-11: No duplicate choice option type references.
+- `checkModelNoDuplicateElements(node: RosettaModel, accept: ValidationAcceptor): void` — S-13: No duplicate top-level element names in the same model.
+Dispatch function overloads share the same name intentionally — skip them.
+- `checkDataAttributeOverrideValid(node: Data, accept: ValidationAcceptor): void` — S-15: Override attribute must exist in the parent type.
+- `checkDataMustHaveAttributesOrSuperType(_node: Data, _accept: ValidationAcceptor): void` — S-16: Data type should have at least one attribute or extend another type.
+- `checkAttributeTypeResolved(node: Attribute, accept: ValidationAcceptor): void` — S-17: Attribute type reference must resolve.
+
+NOTE: Not registered. Langium's built-in linker already emits an error for
+unresolved TypeCall.type references, so registering this check would produce
+duplicate error messages.
+- `checkFunctionNoDuplicateShortcuts(node: RosettaFunction, accept: ValidationAcceptor): void` — S-18: No duplicate shortcut names in a function.
+- `checkFunctionNoDuplicateConditions(node: RosettaFunction, accept: ValidationAcceptor): void` — S-19: No duplicate condition names in a function.
+- `checkEnumExtendsCycle(node: RosettaEnumeration, accept: ValidationAcceptor): void` — S-20: Detect circular inheritance in Enum extends chain.
+- `checkChoiceMinOptions(node: Choice, accept: ValidationAcceptor): void` — S-21: Choice must have at least two options.
+- `checkChoiceOptionTypeResolved(node: ChoiceOption, accept: ValidationAcceptor): void` — S-22: ChoiceOption type must resolve.
+
+NOTE: Not registered. Langium's built-in linker already emits an error for
+unresolved TypeCall.type references, so registering this check would produce
+duplicate error messages.
+- `checkModelNamespaceValid(node: RosettaModel, accept: ValidationAcceptor): void` — S-23: Namespace must be a valid qualified name.
+- `checkConditionHasExpression(node: Condition, accept: ValidationAcceptor): void` — S-24: Condition must have an expression body.
+- `checkShortcutHasExpression(node: ShortcutDeclaration, accept: ValidationAcceptor): void` — S-25: ShortcutDeclaration must have an expression body.
+- `checkOperationHasExpression(node: Operation, accept: ValidationAcceptor): void` — S-26: Operation must have an expression body.
+- `checkImportNotEmpty(node: Import, accept: ValidationAcceptor): void` — S-27: Import path must not be empty.
+- `checkDataNaming(node: Data, accept: ValidationAcceptor): void` — N-01: Data type names should start with uppercase.
+- `checkAttributeNaming(node: Attribute, accept: ValidationAcceptor): void` — N-02: Attribute names should start with lowercase.
+Exempt: attributes inside Annotation blocks and ChoiceOptions (matching Xtext behavior).
+- `checkFunctionNaming(node: RosettaFunction, accept: ValidationAcceptor): void` — N-03: Function names should start with uppercase.
+- `checkEnumNaming(node: RosettaEnumeration, accept: ValidationAcceptor): void` — N-04: Enum names should start with uppercase.
+- `checkChoiceNaming(node: Choice, accept: ValidationAcceptor): void` — N-05: Choice names should start with uppercase.
+- `checkConditionNaming(node: Condition, accept: ValidationAcceptor): void` — N-06: Condition names should start with uppercase.
+- `checkEnumValueNaming(_node: RosettaEnumeration, _accept: ValidationAcceptor): void` — N-07: Enum value names should start with an uppercase letter (convention: PascalCase or UPPER_CASE).
+- `checkEnumValueNamingRule(node: RosettaEnumValue, accept: ValidationAcceptor): void` — N-08: Standalone enum value naming (used from ChoiceOption context).
+- `checkShortcutNaming(_node: ShortcutDeclaration, _accept: ValidationAcceptor): void` — N-09: Shortcut names should start with lowercase.
+- `checkRuleNaming(node: RosettaRule, accept: ValidationAcceptor): void` — N-10: Rule names should start with uppercase.
+- `checkRuleHasExpression(node: RosettaRule, accept: ValidationAcceptor): void` — R-01: Rule must have an expression body.
+- `checkExpressionValid(node: RosettaExpression, accept: ValidationAcceptor): void` — Expression validator dispatcher.
+Routes to specific checks based on expression $type.
+
+### RuneDslParser
+
+Custom Langium parser for the Rune DSL that pre-processes input text to insert
+implicit `[` and `]` brackets around bare expressions after `extract`,
+`filter`, and `reduce` operators.
+
+```ts
+constructor(services: LangiumCoreServices): RuneDslParser
+```
+
+**Properties:**
+- `lexer: Lexer` — 
+- `wrapper: ChevrotainWrapper` — 
+- `_unorderedGroups: Map<string, boolean[]>` — 
+- `allRules: Map<string, RuleResult>` — 
+- `mainRule: RuleResult` — 
+
+**Methods:**
+- `parse<T>(input: string, options?: ParserOptions): ParseResult<T>` — 
+- `rule(rule: InfixRule | ParserRule, impl: RuleImpl): RuleResult` — 
+- `consume(idx: number, tokenType: TokenType, feature: AbstractElement): void` — 
+- `subrule(idx: number, rule: RuleResult, fragment: boolean, feature: AbstractElement, args: Args): void` — 
+- `action($type: string, action: Action): void` — 
+- `alternatives(idx: number, choices: IOrAlt<any>[]): void` — Performs alternatives parsing (the `|` operation in EBNF/Langium)
+- `optional(idx: number, callback: DSLMethodOpts<unknown>): void` — Parses the callback as optional (the `?` operation in EBNF/Langium)
+- `many(idx: number, callback: DSLMethodOpts<unknown>): void` — Parses the callback 0 or more times (the `*` operation in EBNF/Langium)
+- `atLeastOne(idx: number, callback: DSLMethodOpts<unknown>): void` — Parses the callback 1 or more times (the `+` operation in EBNF/Langium)
+- `getRule(name: string): RuleResult | undefined` — Returns the executable rule function for the specified rule name
+- `isRecording(): boolean` — Whether the parser is currently actually in use or in "recording mode".
+Recording mode is activated once when the parser is analyzing itself.
+During this phase, no input exists and therefore no AST should be constructed
+- `getRuleStack(): number[]` — The rule stack indicates the indices of rules that are currently invoked,
+in order of their invocation.
+- `finalize(): void` — 
+
+### RuneDslTerminalNames
+
+```ts
+type RuneDslTerminalNames = keyof typeof RuneDslTerminals
+```
+
+### RuneDslKeywordNames
+
+```ts
+type RuneDslKeywordNames = "(" | ")" | "*" | "+" | "," | "-" | "->" | "->>" | "." | ".." | "..." | "/" | ":" | ";" | "<" | "<=" | "<>" | "=" | ">" | ">=" | "ASATP" | "E" | "False" | "T+1" | "T+2" | "T+3" | "T+4" | "T+5" | "True" | "[" | "]" | "absent" | "add" | "alias" | "all" | "and" | "annotation" | "any" | "as" | "as-key" | "basicType" | "body" | "choice" | "componentID" | "condition" | "condition-func" | "condition-path" | "contains" | "corpus" | "count" | "dateFormat" | "default" | "definition" | "disjoint" | "displayName" | "distinct" | "docReference" | "e" | "eligibility" | "else" | "empty" | "enum" | "enums" | "exists" | "extends" | "extract" | "filter" | "first" | "flatten" | "for" | "from" | "func" | "function" | "hint" | "if" | "import" | "in" | "inputs" | "is" | "isEvent" | "isProduct" | "item" | "join" | "label" | "last" | "library" | "mapper" | "maps" | "max" | "merge" | "meta" | "metaType" | "min" | "multiple" | "namespace" | "one-of" | "only" | "only-element" | "optional" | "or" | "output" | "override" | "path" | "pattern" | "post-condition" | "prefix" | "provision" | "rationale" | "rationale_author" | "real-time" | "recordType" | "reduce" | "regulatoryReference" | "removeHtml" | "report" | "reportedField" | "reporting" | "required" | "reverse" | "root" | "rosettaPath" | "rule" | "ruleReference" | "scope" | "segment" | "set" | "single" | "sort" | "source" | "standard" | "structured_provision" | "sum" | "super" | "switch" | "synonym" | "tag" | "then" | "to" | "to-date" | "to-date-time" | "to-enum" | "to-int" | "to-number" | "to-string" | "to-time" | "to-zoned-date-time" | "type" | "typeAlias" | "using" | "value" | "version" | "when" | "with" | "with-meta" | "{" | "}"
+```
+
+### RuneDslTokenNames
+
+```ts
+type RuneDslTokenNames = RuneDslTerminalNames | RuneDslKeywordNames
+```
+
+### Annotation
+
+### AnnotationDeepPath
+
+### AnnotationPath
+
+### AnnotationPathAttributeReference
+
+### AnnotationPathExpression
+
+```ts
+type AnnotationPathExpression = AnnotationDeepPath | AnnotationPath | AnnotationPathAttributeReference | RosettaImplicitVariable
+```
+
+### AnnotationQualifier
+
+### AnnotationRef
+
+### ArithmeticOperation
+
+### AsKeyOperation
+
+### AssignPathRoot
+
+```ts
+type AssignPathRoot = Attribute | ShortcutDeclaration
+```
+
+### Attribute
+
+### AttributeOrChoiceOption
+
+```ts
+type AttributeOrChoiceOption = Attribute | ChoiceOption
+```
+
+### BigDecimal
+
+```ts
+type BigDecimal = string
+```
+
+### CardinalityModifier
+
+```ts
+type CardinalityModifier = "all" | "any"
+```
+
+### Choice
+
+### ChoiceOperation
+
+### ChoiceOption
+
+### ClosureParameter
+
+### ComparisonOperation
+
+### Condition
+
+### ConstructorKeyValuePair
+
+### Data
+
+### DataOrChoice
+
+```ts
+type DataOrChoice = Choice | Data
+```
+
+### DefaultOperation
+
+### DistinctOperation
+
+### DocumentRationale
+
+### EqualityOperation
+
+### ExistsModifier
+
+```ts
+type ExistsModifier = "multiple" | "single"
+```
+
+### ExternalValueOperator
+
+```ts
+type ExternalValueOperator = "+" | "-"
+```
+
+### FilterOperation
+
+### FirstOperation
+
+### FlattenOperation
+
+### Import
+
+### InlineFunction
+
+### Integer
+
+```ts
+type Integer = bigint
+```
+
+### JoinOperation
+
+### LabelAnnotation
+
+### LastOperation
+
+### ListLiteral
+
+### LogicalOperation
+
+### MapOperation
+
+### MaxOperation
+
+### MinOperation
+
+### Necessity
+
+```ts
+type Necessity = "optional" | "required"
+```
+
+### OneOfOperation
+
+### Operation
+
+### QualifiedName
+
+```ts
+type QualifiedName = string
+```
+
+### QualifiedNameWithWildcard
+
+```ts
+type QualifiedNameWithWildcard = string
+```
+
+### ReduceOperation
+
+### RegulatoryDocumentReference
+
+### ReverseOperation
+
+### RosettaAbsentExpression
+
+### RosettaAttributeReference
+
+### RosettaBasicType
+
+### RosettaBody
+
+### RosettaBooleanLiteral
+
+### RosettaCallableWithArgs
+
+```ts
+type RosettaCallableWithArgs = RosettaExternalFunction | RosettaFunction | RosettaRule
+```
+
+### RosettaCardinality
+
+### RosettaClassSynonym
+
+### RosettaConditionalExpression
+
+### RosettaConstructorExpression
+
+### RosettaContainsExpression
+
+### RosettaCorpus
+
+### RosettaCountOperation
+
+### RosettaDataReference
+
+### RosettaDeepFeatureCall
+
+### RosettaDisjointExpression
+
+### RosettaDocReference
+
+### RosettaEnumeration
+
+### RosettaEnumSynonym
+
+### RosettaEnumValue
+
+### RosettaEnumValueReference
+
+### RosettaExistsExpression
+
+### RosettaExpression
+
+```ts
+type RosettaExpression = ArithmeticOperation | AsKeyOperation | ChoiceOperation | ComparisonOperation | DefaultOperation | DistinctOperation | EqualityOperation | FilterOperation | FirstOperation | FlattenOperation | JoinOperation | LastOperation | ListLiteral | LogicalOperation | MapOperation | MaxOperation | MinOperation | OneOfOperation | ReduceOperation | ReverseOperation | RosettaAbsentExpression | RosettaConditionalExpression | RosettaConstructorExpression | RosettaContainsExpression | RosettaCountOperation | RosettaDeepFeatureCall | RosettaDisjointExpression | RosettaExistsExpression | RosettaFeatureCall | RosettaImplicitVariable | RosettaLiteral | RosettaOnlyElement | RosettaOnlyExistsExpression | RosettaSuperCall | RosettaSymbolReference | SortOperation | SumOperation | SwitchOperation | ThenOperation | ToDateOperation | ToDateTimeOperation | ToEnumOperation | ToIntOperation | ToNumberOperation | ToStringOperation | ToTimeOperation | ToZonedDateTimeOperation | WithMetaOperation
+```
+
+### RosettaExternalClass
+
+### RosettaExternalClassSynonym
+
+### RosettaExternalEnum
+
+### RosettaExternalEnumValue
+
+### RosettaExternalFunction
+
+### RosettaExternalRegularAttribute
+
+### RosettaExternalRuleSource
+
+### RosettaExternalSynonym
+
+### RosettaFeature
+
+```ts
+type RosettaFeature = Attribute | ChoiceOption | RosettaEnumValue | RosettaMetaType | RosettaRecordFeature
+```
+
+### RosettaFeatureCall
+
+### RosettaFunction
+
+### RosettaImplicitVariable
+
+### RosettaIntLiteral
+
+### RosettaLiteral
+
+```ts
+type RosettaLiteral = RosettaBooleanLiteral | RosettaIntLiteral | RosettaNumberLiteral | RosettaStringLiteral
+```
+
+### RosettaMapPath
+
+### RosettaMapPathValue
+
+### RosettaMapping
+
+### RosettaMappingInstance
+
+### RosettaMappingPathTests
+
+### RosettaMapRosettaPath
+
+### RosettaMapTest
+
+```ts
+type RosettaMapTest = RosettaMapPath | RosettaMapRosettaPath | RosettaMapTestExpression | RosettaMapTestFunc
+```
+
+### RosettaMapTestAbsentExpression
+
+### RosettaMapTestEqualityOperation
+
+### RosettaMapTestExistsExpression
+
+### RosettaMapTestExpression
+
+```ts
+type RosettaMapTestExpression = RosettaEnumValueReference | RosettaLiteral | RosettaMapPathValue | RosettaMapTestAbsentExpression | RosettaMapTestEqualityOperation | RosettaMapTestExistsExpression
+```
+
+### RosettaMapTestFunc
+
+### RosettaMergeSynonymValue
+
+### RosettaMetaType
+
+### RosettaModel
+
+### RosettaNumberLiteral
+
+### RosettaOnlyElement
+
+### RosettaOnlyExistsExpression
+
+### RosettaParameter
+
+### RosettaQualifiableConfiguration
+
+### RosettaQualifiableType
+
+```ts
+type RosettaQualifiableType = "isEvent" | "isProduct"
+```
+
+### RosettaRecordFeature
+
+### RosettaRecordType
+
+### RosettaReport
+
+### RosettaRootElement
+
+```ts
+type RosettaRootElement = Annotation | Choice | Data | RosettaBasicType | RosettaBody | RosettaCorpus | RosettaEnumeration | RosettaExternalFunction | RosettaExternalRuleSource | RosettaFunction | RosettaMetaType | RosettaRecordType | RosettaReport | RosettaRule | RosettaSegment | RosettaSynonymSource | RosettaTypeAlias
+```
+
+### RosettaRule
+
+### RosettaScope
+
+### RosettaSegment
+
+### RosettaSegmentRef
+
+### RosettaStringLiteral
+
+### RosettaSuperCall
+
+### RosettaSymbol
+
+```ts
+type RosettaSymbol = Attribute | Choice | ClosureParameter | Data | RosettaEnumValue | RosettaEnumeration | RosettaExternalFunction | RosettaFunction | RosettaMetaType | RosettaParameter | RosettaRule | ShortcutDeclaration | TypeParameter
+```
+
+### RosettaSymbolReference
+
+### RosettaSynonym
+
+### RosettaSynonymBody
+
+### RosettaSynonymRef
+
+```ts
+type RosettaSynonymRef = "componentID" | "tag"
+```
+
+### RosettaSynonymSource
+
+### RosettaSynonymValueBase
+
+### RosettaType
+
+```ts
+type RosettaType = Choice | Data | RosettaBasicType | RosettaEnumeration | RosettaRecordType | RosettaTypeAlias
+```
+
+### RosettaTypeAlias
+
+### RosettaTypedFeature
+
+```ts
+type RosettaTypedFeature = Attribute | RosettaRecordFeature
+```
+
+### RuleReferenceAnnotation
+
+### Segment
+
+### ShortcutDeclaration
+
+### SortOperation
+
+### SumOperation
+
+### SwitchCaseGuard
+
+### SwitchCaseOrDefault
+
+### SwitchCaseTarget
+
+```ts
+type SwitchCaseTarget = Choice | Data | RosettaEnumValue | RosettaEnumeration
+```
+
+### SwitchOperation
+
+### ThenOperation
+
+### ToDateOperation
+
+### ToDateTimeOperation
+
+### ToEnumOperation
+
+### ToIntOperation
+
+### ToNumberOperation
+
+### ToStringOperation
+
+### ToTimeOperation
+
+### ToZonedDateTimeOperation
+
+### TypeCall
+
+### TypeCallArgument
+
+### TypeParameter
+
+### TypeParameterValidID
+
+```ts
+type TypeParameterValidID = "max" | "min" | ValidID
+```
+
+### ValidID
+
+```ts
+type ValidID = "condition" | "pattern" | "scope" | "source" | "value" | "version" | string
+```
+
+### WithMetaEntry
+
+### WithMetaOperation
+
+### RuneDslAstType
+
+### ParseResult
+
+Result of parsing a Rosetta DSL source string.
+
+### RuneDslServices
+
+Union type for all services available in the Rune DSL language.
+
+```ts
+type RuneDslServices = LangiumCoreServices
+```
+
+### RuneDslTerminals
+
+```ts
+const RuneDslTerminals: { ID: RegExp; INT: RegExp; STRING: RegExp; ML_COMMENT: RegExp; SL_COMMENT: RegExp; WS: RegExp }
+```
+
+### Annotation
+
+```ts
+let Annotation: { $type: "Annotation"; attributes: "attributes"; definition: "definition"; name: "name"; prefix: "prefix" }
+```
+
+### AnnotationDeepPath
+
+```ts
+let AnnotationDeepPath: { $type: "AnnotationDeepPath"; attribute: "attribute"; operator: "operator"; receiver: "receiver" }
+```
+
+### AnnotationPath
+
+```ts
+let AnnotationPath: { $type: "AnnotationPath"; attribute: "attribute"; operator: "operator"; receiver: "receiver" }
+```
+
+### AnnotationPathAttributeReference
+
+```ts
+let AnnotationPathAttributeReference: { $type: "AnnotationPathAttributeReference"; attribute: "attribute" }
+```
+
+### AnnotationPathExpression
+
+```ts
+let AnnotationPathExpression: { $type: "AnnotationPathExpression" }
+```
+
+### AnnotationQualifier
+
+```ts
+let AnnotationQualifier: { $type: "AnnotationQualifier"; qualName: "qualName"; qualPath: "qualPath"; qualValue: "qualValue" }
+```
+
+### AnnotationRef
+
+```ts
+let AnnotationRef: { $type: "AnnotationRef"; annotation: "annotation"; attribute: "attribute"; qualifiers: "qualifiers" }
+```
+
+### ArithmeticOperation
+
+```ts
+let ArithmeticOperation: { $type: "ArithmeticOperation"; left: "left"; operator: "operator"; right: "right" }
+```
+
+### AsKeyOperation
+
+```ts
+let AsKeyOperation: { $type: "AsKeyOperation"; argument: "argument"; operator: "operator" }
+```
+
+### AssignPathRoot
+
+```ts
+let AssignPathRoot: { $type: "AssignPathRoot" }
+```
+
+### Attribute
+
+```ts
+let Attribute: { $type: "Attribute"; annotations: "annotations"; card: "card"; definition: "definition"; labels: "labels"; name: "name"; override: "override"; references: "references"; ruleReferences: "ruleReferences"; synonyms: "synonyms"; typeCall: "typeCall"; typeCallArgs: "typeCallArgs" }
+```
+
+### AttributeOrChoiceOption
+
+```ts
+let AttributeOrChoiceOption: { $type: "AttributeOrChoiceOption" }
+```
+
+### Choice
+
+```ts
+let Choice: { $type: "Choice"; annotations: "annotations"; attributes: "attributes"; definition: "definition"; name: "name"; synonyms: "synonyms" }
+```
+
+### ChoiceOperation
+
+```ts
+let ChoiceOperation: { $type: "ChoiceOperation"; argument: "argument"; attributes: "attributes"; necessity: "necessity"; operator: "operator" }
+```
+
+### ChoiceOption
+
+```ts
+let ChoiceOption: { $type: "ChoiceOption"; annotations: "annotations"; definition: "definition"; labels: "labels"; references: "references"; ruleReferences: "ruleReferences"; synonyms: "synonyms"; typeCall: "typeCall" }
+```
+
+### ClosureParameter
+
+```ts
+let ClosureParameter: { $type: "ClosureParameter"; name: "name" }
+```
+
+### ComparisonOperation
+
+```ts
+let ComparisonOperation: { $type: "ComparisonOperation"; cardMod: "cardMod"; left: "left"; operator: "operator"; right: "right" }
+```
+
+### Condition
+
+```ts
+let Condition: { $type: "Condition"; annotations: "annotations"; definition: "definition"; expression: "expression"; name: "name"; postCondition: "postCondition"; references: "references" }
+```
+
+### ConstructorKeyValuePair
+
+```ts
+let ConstructorKeyValuePair: { $type: "ConstructorKeyValuePair"; key: "key"; value: "value" }
+```
+
+### Data
+
+```ts
+let Data: { $type: "Data"; annotations: "annotations"; attributes: "attributes"; conditions: "conditions"; definition: "definition"; name: "name"; references: "references"; superType: "superType"; synonyms: "synonyms" }
+```
+
+### DataOrChoice
+
+```ts
+let DataOrChoice: { $type: "DataOrChoice" }
+```
+
+### DefaultOperation
+
+```ts
+let DefaultOperation: { $type: "DefaultOperation"; left: "left"; operator: "operator"; right: "right" }
+```
+
+### DistinctOperation
+
+```ts
+let DistinctOperation: { $type: "DistinctOperation"; argument: "argument"; operator: "operator" }
+```
+
+### DocumentRationale
+
+```ts
+let DocumentRationale: { $type: "DocumentRationale"; rationale: "rationale"; rationaleAuthor: "rationaleAuthor" }
+```
+
+### EqualityOperation
+
+```ts
+let EqualityOperation: { $type: "EqualityOperation"; cardMod: "cardMod"; left: "left"; operator: "operator"; right: "right" }
+```
+
+### FilterOperation
+
+```ts
+let FilterOperation: { $type: "FilterOperation"; argument: "argument"; function: "function"; operator: "operator" }
+```
+
+### FirstOperation
+
+```ts
+let FirstOperation: { $type: "FirstOperation"; argument: "argument"; operator: "operator" }
+```
+
+### FlattenOperation
+
+```ts
+let FlattenOperation: { $type: "FlattenOperation"; argument: "argument"; operator: "operator" }
+```
+
+### Import
+
+```ts
+let Import: { $type: "Import"; importedNamespace: "importedNamespace"; namespaceAlias: "namespaceAlias" }
+```
+
+### InlineFunction
+
+```ts
+let InlineFunction: { $type: "InlineFunction"; body: "body"; parameters: "parameters" }
+```
+
+### JoinOperation
+
+```ts
+let JoinOperation: { $type: "JoinOperation"; left: "left"; operator: "operator"; right: "right" }
+```
+
+### LabelAnnotation
+
+```ts
+let LabelAnnotation: { $type: "LabelAnnotation"; deprecatedAs: "deprecatedAs"; label: "label"; name: "name"; path: "path" }
+```
+
+### LastOperation
+
+```ts
+let LastOperation: { $type: "LastOperation"; argument: "argument"; operator: "operator" }
+```
+
+### ListLiteral
+
+```ts
+let ListLiteral: { $type: "ListLiteral"; elements: "elements" }
+```
+
+### LogicalOperation
+
+```ts
+let LogicalOperation: { $type: "LogicalOperation"; left: "left"; operator: "operator"; right: "right" }
+```
+
+### MapOperation
+
+```ts
+let MapOperation: { $type: "MapOperation"; argument: "argument"; function: "function"; operator: "operator" }
+```
+
+### MaxOperation
+
+```ts
+let MaxOperation: { $type: "MaxOperation"; argument: "argument"; function: "function"; operator: "operator" }
+```
+
+### MinOperation
+
+```ts
+let MinOperation: { $type: "MinOperation"; argument: "argument"; function: "function"; operator: "operator" }
+```
+
+### OneOfOperation
+
+```ts
+let OneOfOperation: { $type: "OneOfOperation"; argument: "argument"; operator: "operator" }
+```
+
+### Operation
+
+```ts
+let Operation: { $type: "Operation"; add: "add"; assignRoot: "assignRoot"; definition: "definition"; expression: "expression"; path: "path" }
+```
+
+### ReduceOperation
+
+```ts
+let ReduceOperation: { $type: "ReduceOperation"; argument: "argument"; function: "function"; operator: "operator" }
+```
+
+### RegulatoryDocumentReference
+
+```ts
+let RegulatoryDocumentReference: { $type: "RegulatoryDocumentReference"; body: "body"; corpusList: "corpusList"; segments: "segments" }
+```
+
+### ReverseOperation
+
+```ts
+let ReverseOperation: { $type: "ReverseOperation"; argument: "argument"; operator: "operator" }
+```
+
+### RosettaAbsentExpression
+
+```ts
+let RosettaAbsentExpression: { $type: "RosettaAbsentExpression"; argument: "argument"; operator: "operator" }
+```
+
+### RosettaAttributeReference
+
+```ts
+let RosettaAttributeReference: { $type: "RosettaAttributeReference"; attribute: "attribute"; receiver: "receiver" }
+```
+
+### RosettaBasicType
+
+```ts
+let RosettaBasicType: { $type: "RosettaBasicType"; definition: "definition"; name: "name"; parameters: "parameters" }
+```
+
+### RosettaBody
+
+```ts
+let RosettaBody: { $type: "RosettaBody"; bodyType: "bodyType"; definition: "definition"; name: "name" }
+```
+
+### RosettaBooleanLiteral
+
+```ts
+let RosettaBooleanLiteral: { $type: "RosettaBooleanLiteral"; value: "value" }
+```
+
+### RosettaCallableWithArgs
+
+```ts
+let RosettaCallableWithArgs: { $type: "RosettaCallableWithArgs" }
+```
+
+### RosettaCardinality
+
+```ts
+let RosettaCardinality: { $type: "RosettaCardinality"; inf: "inf"; sup: "sup"; unbounded: "unbounded" }
+```
+
+### RosettaClassSynonym
+
+```ts
+let RosettaClassSynonym: { $type: "RosettaClassSynonym"; metaValue: "metaValue"; sources: "sources"; value: "value" }
+```
+
+### RosettaConditionalExpression
+
+```ts
+let RosettaConditionalExpression: { $type: "RosettaConditionalExpression"; elsethen: "elsethen"; full: "full"; if: "if"; ifthen: "ifthen" }
+```
+
+### RosettaConstructorExpression
+
+```ts
+let RosettaConstructorExpression: { $type: "RosettaConstructorExpression"; constructorTypeArgs: "constructorTypeArgs"; implicitEmpty: "implicitEmpty"; typeRef: "typeRef"; values: "values" }
+```
+
+### RosettaContainsExpression
+
+```ts
+let RosettaContainsExpression: { $type: "RosettaContainsExpression"; left: "left"; operator: "operator"; right: "right" }
+```
+
+### RosettaCorpus
+
+```ts
+let RosettaCorpus: { $type: "RosettaCorpus"; body: "body"; corpusType: "corpusType"; definition: "definition"; displayName: "displayName"; name: "name" }
+```
+
+### RosettaCountOperation
+
+```ts
+let RosettaCountOperation: { $type: "RosettaCountOperation"; argument: "argument"; operator: "operator" }
+```
+
+### RosettaDataReference
+
+```ts
+let RosettaDataReference: { $type: "RosettaDataReference"; attribute: "attribute"; data: "data"; receiver: "receiver" }
+```
+
+### RosettaDeepFeatureCall
+
+```ts
+let RosettaDeepFeatureCall: { $type: "RosettaDeepFeatureCall"; feature: "feature"; receiver: "receiver" }
+```
+
+### RosettaDisjointExpression
+
+```ts
+let RosettaDisjointExpression: { $type: "RosettaDisjointExpression"; left: "left"; operator: "operator"; right: "right" }
+```
+
+### RosettaDocReference
+
+```ts
+let RosettaDocReference: { $type: "RosettaDocReference"; docReference: "docReference"; name: "name"; path: "path"; provision: "provision"; rationales: "rationales"; reportedField: "reportedField"; structuredProvision: "structuredProvision" }
+```
+
+### RosettaEnumeration
+
+```ts
+let RosettaEnumeration: { $type: "RosettaEnumeration"; annotations: "annotations"; definition: "definition"; enumValues: "enumValues"; name: "name"; parent: "parent"; references: "references"; synonyms: "synonyms" }
+```
+
+### RosettaEnumSynonym
+
+```ts
+let RosettaEnumSynonym: { $type: "RosettaEnumSynonym"; definition: "definition"; patternMatch: "patternMatch"; patternReplace: "patternReplace"; removeHtml: "removeHtml"; sources: "sources"; synonymValue: "synonymValue" }
+```
+
+### RosettaEnumValue
+
+```ts
+let RosettaEnumValue: { $type: "RosettaEnumValue"; annotations: "annotations"; definition: "definition"; display: "display"; enumSynonyms: "enumSynonyms"; name: "name"; references: "references" }
+```
+
+### RosettaEnumValueReference
+
+```ts
+let RosettaEnumValueReference: { $type: "RosettaEnumValueReference"; enumeration: "enumeration"; value: "value" }
+```
+
+### RosettaExistsExpression
+
+```ts
+let RosettaExistsExpression: { $type: "RosettaExistsExpression"; argument: "argument"; modifier: "modifier"; operator: "operator" }
+```
+
+### RosettaExpression
+
+```ts
+let RosettaExpression: { $type: "RosettaExpression" }
+```
+
+### RosettaExternalClass
+
+```ts
+let RosettaExternalClass: { $type: "RosettaExternalClass"; data: "data"; externalClassSynonyms: "externalClassSynonyms"; regularAttributes: "regularAttributes" }
+```
+
+### RosettaExternalClassSynonym
+
+```ts
+let RosettaExternalClassSynonym: { $type: "RosettaExternalClassSynonym"; metaValue: "metaValue"; value: "value" }
+```
+
+### RosettaExternalEnum
+
+```ts
+let RosettaExternalEnum: { $type: "RosettaExternalEnum"; enumeration: "enumeration"; regularValues: "regularValues" }
+```
+
+### RosettaExternalEnumValue
+
+```ts
+let RosettaExternalEnumValue: { $type: "RosettaExternalEnumValue"; enumRef: "enumRef"; externalEnumSynonyms: "externalEnumSynonyms"; operator: "operator" }
+```
+
+### RosettaExternalFunction
+
+```ts
+let RosettaExternalFunction: { $type: "RosettaExternalFunction"; definition: "definition"; name: "name"; parameters: "parameters"; typeCall: "typeCall" }
+```
+
+### RosettaExternalRegularAttribute
+
+```ts
+let RosettaExternalRegularAttribute: { $type: "RosettaExternalRegularAttribute"; attributeRef: "attributeRef"; externalRuleReferences: "externalRuleReferences"; externalSynonyms: "externalSynonyms"; operator: "operator" }
+```
+
+### RosettaExternalRuleSource
+
+```ts
+let RosettaExternalRuleSource: { $type: "RosettaExternalRuleSource"; externalClasses: "externalClasses"; externalEnums: "externalEnums"; name: "name"; superSources: "superSources" }
+```
+
+### RosettaExternalSynonym
+
+```ts
+let RosettaExternalSynonym: { $type: "RosettaExternalSynonym"; body: "body" }
+```
+
+### RosettaFeature
+
+```ts
+let RosettaFeature: { $type: "RosettaFeature" }
+```
+
+### RosettaFeatureCall
+
+```ts
+let RosettaFeatureCall: { $type: "RosettaFeatureCall"; feature: "feature"; receiver: "receiver" }
+```
+
+### RosettaFunction
+
+```ts
+let RosettaFunction: { $type: "RosettaFunction"; annotations: "annotations"; conditions: "conditions"; definition: "definition"; dispatchAttribute: "dispatchAttribute"; dispatchValue: "dispatchValue"; inputs: "inputs"; name: "name"; operations: "operations"; output: "output"; postConditions: "postConditions"; references: "references"; shortcuts: "shortcuts"; superFunction: "superFunction" }
+```
+
+### RosettaImplicitVariable
+
+```ts
+let RosettaImplicitVariable: { $type: "RosettaImplicitVariable"; name: "name" }
+```
+
+### RosettaIntLiteral
+
+```ts
+let RosettaIntLiteral: { $type: "RosettaIntLiteral"; value: "value" }
+```
+
+### RosettaLiteral
+
+```ts
+let RosettaLiteral: { $type: "RosettaLiteral" }
+```
+
+### RosettaMapPath
+
+```ts
+let RosettaMapPath: { $type: "RosettaMapPath"; path: "path" }
+```
+
+### RosettaMapPathValue
+
+```ts
+let RosettaMapPathValue: { $type: "RosettaMapPathValue"; path: "path" }
+```
+
+### RosettaMapping
+
+```ts
+let RosettaMapping: { $type: "RosettaMapping"; instances: "instances" }
+```
+
+### RosettaMappingInstance
+
+```ts
+let RosettaMappingInstance: { $type: "RosettaMappingInstance"; default: "default"; set: "set"; when: "when" }
+```
+
+### RosettaMappingPathTests
+
+```ts
+let RosettaMappingPathTests: { $type: "RosettaMappingPathTests"; tests: "tests" }
+```
+
+### RosettaMapRosettaPath
+
+```ts
+let RosettaMapRosettaPath: { $type: "RosettaMapRosettaPath"; path: "path" }
+```
+
+### RosettaMapTest
+
+```ts
+let RosettaMapTest: { $type: "RosettaMapTest" }
+```
+
+### RosettaMapTestAbsentExpression
+
+```ts
+let RosettaMapTestAbsentExpression: { $type: "RosettaMapTestAbsentExpression"; argument: "argument" }
+```
+
+### RosettaMapTestEqualityOperation
+
+```ts
+let RosettaMapTestEqualityOperation: { $type: "RosettaMapTestEqualityOperation"; left: "left"; operator: "operator"; right: "right" }
+```
+
+### RosettaMapTestExistsExpression
+
+```ts
+let RosettaMapTestExistsExpression: { $type: "RosettaMapTestExistsExpression"; argument: "argument" }
+```
+
+### RosettaMapTestExpression
+
+```ts
+let RosettaMapTestExpression: { $type: "RosettaMapTestExpression" }
+```
+
+### RosettaMapTestFunc
+
+```ts
+let RosettaMapTestFunc: { $type: "RosettaMapTestFunc"; func: "func"; predicatePath: "predicatePath" }
+```
+
+### RosettaMergeSynonymValue
+
+```ts
+let RosettaMergeSynonymValue: { $type: "RosettaMergeSynonymValue"; excludePath: "excludePath"; name: "name" }
+```
+
+### RosettaMetaType
+
+```ts
+let RosettaMetaType: { $type: "RosettaMetaType"; name: "name"; typeCall: "typeCall" }
+```
+
+### RosettaModel
+
+```ts
+let RosettaModel: { $type: "RosettaModel"; configurations: "configurations"; definition: "definition"; elements: "elements"; imports: "imports"; name: "name"; overridden: "overridden"; scope: "scope"; version: "version" }
+```
+
+### RosettaNumberLiteral
+
+```ts
+let RosettaNumberLiteral: { $type: "RosettaNumberLiteral"; value: "value" }
+```
+
+### RosettaOnlyElement
+
+```ts
+let RosettaOnlyElement: { $type: "RosettaOnlyElement"; argument: "argument"; operator: "operator" }
+```
+
+### RosettaOnlyExistsExpression
+
+```ts
+let RosettaOnlyExistsExpression: { $type: "RosettaOnlyExistsExpression"; args: "args"; argument: "argument"; operator: "operator" }
+```
+
+### RosettaParameter
+
+```ts
+let RosettaParameter: { $type: "RosettaParameter"; isArray: "isArray"; name: "name"; typeCall: "typeCall" }
+```
+
+### RosettaQualifiableConfiguration
+
+```ts
+let RosettaQualifiableConfiguration: { $type: "RosettaQualifiableConfiguration"; qType: "qType"; rosettaClass: "rosettaClass" }
+```
+
+### RosettaRecordFeature
+
+```ts
+let RosettaRecordFeature: { $type: "RosettaRecordFeature"; name: "name"; typeCall: "typeCall" }
+```
+
+### RosettaRecordType
+
+```ts
+let RosettaRecordType: { $type: "RosettaRecordType"; definition: "definition"; features: "features"; name: "name" }
+```
+
+### RosettaReport
+
+```ts
+let RosettaReport: { $type: "RosettaReport"; eligibilityRules: "eligibilityRules"; inputType: "inputType"; regulatoryBody: "regulatoryBody"; reportingStandard: "reportingStandard"; reportType: "reportType"; ruleSource: "ruleSource" }
+```
+
+### RosettaRootElement
+
+```ts
+let RosettaRootElement: { $type: "RosettaRootElement" }
+```
+
+### RosettaRule
+
+```ts
+let RosettaRule: { $type: "RosettaRule"; definition: "definition"; eligibility: "eligibility"; expression: "expression"; identifier: "identifier"; input: "input"; name: "name"; references: "references" }
+```
+
+### RosettaScope
+
+```ts
+let RosettaScope: { $type: "RosettaScope"; definition: "definition"; name: "name" }
+```
+
+### RosettaSegment
+
+```ts
+let RosettaSegment: { $type: "RosettaSegment"; name: "name" }
+```
+
+### RosettaSegmentRef
+
+```ts
+let RosettaSegmentRef: { $type: "RosettaSegmentRef"; segment: "segment"; segmentRef: "segmentRef" }
+```
+
+### RosettaStringLiteral
+
+```ts
+let RosettaStringLiteral: { $type: "RosettaStringLiteral"; value: "value" }
+```
+
+### RosettaSuperCall
+
+```ts
+let RosettaSuperCall: { $type: "RosettaSuperCall"; explicitArguments: "explicitArguments"; name: "name"; rawArgs: "rawArgs" }
+```
+
+### RosettaSymbol
+
+```ts
+let RosettaSymbol: { $type: "RosettaSymbol" }
+```
+
+### RosettaSymbolReference
+
+```ts
+let RosettaSymbolReference: { $type: "RosettaSymbolReference"; explicitArguments: "explicitArguments"; rawArgs: "rawArgs"; symbol: "symbol" }
+```
+
+### RosettaSynonym
+
+```ts
+let RosettaSynonym: { $type: "RosettaSynonym"; body: "body"; sources: "sources" }
+```
+
+### RosettaSynonymBody
+
+```ts
+let RosettaSynonymBody: { $type: "RosettaSynonymBody"; format: "format"; hints: "hints"; mapper: "mapper"; mappingLogic: "mappingLogic"; merge: "merge"; metaValues: "metaValues"; patternMatch: "patternMatch"; patternReplace: "patternReplace"; removeHtml: "removeHtml"; values: "values" }
+```
+
+### RosettaSynonymSource
+
+```ts
+let RosettaSynonymSource: { $type: "RosettaSynonymSource"; externalClasses: "externalClasses"; externalEnums: "externalEnums"; name: "name"; superSources: "superSources" }
+```
+
+### RosettaSynonymValueBase
+
+```ts
+let RosettaSynonymValueBase: { $type: "RosettaSynonymValueBase"; maps: "maps"; name: "name"; path: "path"; refType: "refType"; value: "value" }
+```
+
+### RosettaType
+
+```ts
+let RosettaType: { $type: "RosettaType" }
+```
+
+### RosettaTypeAlias
+
+```ts
+let RosettaTypeAlias: { $type: "RosettaTypeAlias"; conditions: "conditions"; definition: "definition"; name: "name"; parameters: "parameters"; typeCall: "typeCall" }
+```
+
+### RosettaTypedFeature
+
+```ts
+let RosettaTypedFeature: { $type: "RosettaTypedFeature" }
+```
+
+### RuleReferenceAnnotation
+
+```ts
+let RuleReferenceAnnotation: { $type: "RuleReferenceAnnotation"; empty: "empty"; name: "name"; path: "path"; reportingRule: "reportingRule" }
+```
+
+### Segment
+
+```ts
+let Segment: { $type: "Segment"; feature: "feature"; next: "next" }
+```
+
+### ShortcutDeclaration
+
+```ts
+let ShortcutDeclaration: { $type: "ShortcutDeclaration"; definition: "definition"; expression: "expression"; name: "name" }
+```
+
+### SortOperation
+
+```ts
+let SortOperation: { $type: "SortOperation"; argument: "argument"; function: "function"; operator: "operator" }
+```
+
+### SumOperation
+
+```ts
+let SumOperation: { $type: "SumOperation"; argument: "argument"; operator: "operator" }
+```
+
+### SwitchCaseGuard
+
+```ts
+let SwitchCaseGuard: { $type: "SwitchCaseGuard"; literalGuard: "literalGuard"; referenceGuard: "referenceGuard" }
+```
+
+### SwitchCaseOrDefault
+
+```ts
+let SwitchCaseOrDefault: { $type: "SwitchCaseOrDefault"; expression: "expression"; guard: "guard" }
+```
+
+### SwitchCaseTarget
+
+```ts
+let SwitchCaseTarget: { $type: "SwitchCaseTarget" }
+```
+
+### SwitchOperation
+
+```ts
+let SwitchOperation: { $type: "SwitchOperation"; argument: "argument"; cases: "cases"; operator: "operator" }
+```
+
+### ThenOperation
+
+```ts
+let ThenOperation: { $type: "ThenOperation"; argument: "argument"; function: "function"; operator: "operator" }
+```
+
+### ToDateOperation
+
+```ts
+let ToDateOperation: { $type: "ToDateOperation"; argument: "argument"; operator: "operator" }
+```
+
+### ToDateTimeOperation
+
+```ts
+let ToDateTimeOperation: { $type: "ToDateTimeOperation"; argument: "argument"; operator: "operator" }
+```
+
+### ToEnumOperation
+
+```ts
+let ToEnumOperation: { $type: "ToEnumOperation"; argument: "argument"; enumeration: "enumeration"; operator: "operator" }
+```
+
+### ToIntOperation
+
+```ts
+let ToIntOperation: { $type: "ToIntOperation"; argument: "argument"; operator: "operator" }
+```
+
+### ToNumberOperation
+
+```ts
+let ToNumberOperation: { $type: "ToNumberOperation"; argument: "argument"; operator: "operator" }
+```
+
+### ToStringOperation
+
+```ts
+let ToStringOperation: { $type: "ToStringOperation"; argument: "argument"; operator: "operator" }
+```
+
+### ToTimeOperation
+
+```ts
+let ToTimeOperation: { $type: "ToTimeOperation"; argument: "argument"; operator: "operator" }
+```
+
+### ToZonedDateTimeOperation
+
+```ts
+let ToZonedDateTimeOperation: { $type: "ToZonedDateTimeOperation"; argument: "argument"; operator: "operator" }
+```
+
+### TypeCall
+
+```ts
+let TypeCall: { $type: "TypeCall"; arguments: "arguments"; type: "type" }
+```
+
+### TypeCallArgument
+
+```ts
+let TypeCallArgument: { $type: "TypeCallArgument"; parameter: "parameter"; value: "value" }
+```
+
+### TypeParameter
+
+```ts
+let TypeParameter: { $type: "TypeParameter"; definition: "definition"; name: "name"; typeCall: "typeCall" }
+```
+
+### WithMetaEntry
+
+```ts
+let WithMetaEntry: { $type: "WithMetaEntry"; key: "key"; value: "value" }
+```
+
+### WithMetaOperation
+
+```ts
+let WithMetaOperation: { $type: "WithMetaOperation"; argument: "argument"; entries: "entries"; operator: "operator" }
+```
+
+### reflection
+
+```ts
+const reflection: RuneDslAstReflection
+```
+
+### RuneDslModule
+
+Dependency-injection module for the Rune DSL language.
+
+```ts
+const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServices>
+```
+
+### RuneDslLanguageMetaData
+
+```ts
+const RuneDslLanguageMetaData: { languageId: "rune-dsl"; fileExtensions: readonly [".rosetta"]; caseInsensitive: false; mode: "development" }
+```
+
+### RuneDslGeneratedModule
+
+```ts
+const RuneDslGeneratedModule: Module<LangiumCoreServices, LangiumGeneratedCoreServices>
+```
+
+### RuneDslGeneratedSharedModule
+
+```ts
+const RuneDslGeneratedSharedModule: Module<LangiumSharedCoreServices, LangiumGeneratedSharedCoreServices>
+```
+
+---
+
+## @rune-langium/cli
+
+---
+
+## @rune-langium/lsp-server
+
+### createRuneLspServer
+
+Create a fully-wired Rune DSL LSP server backed by `@lspeasy/server`.
+
+```ts
+createRuneLspServer(): RuneLspServer
+```
+
+**Returns:** `RuneLspServer`
+
+```ts
+import { createRuneLspServer } from '@rune-langium/lsp-server';
+import { WebSocketTransport } from '@lspeasy/core';
+
+const lsp = createRuneLspServer();
+const transport = new WebSocketTransport(webSocket);
+await lsp.listen(transport);
+```
+
+### createConnectionAdapter
+
+Create a `vscode-languageserver`-compatible `Connection` backed by an
+`@lspeasy/server` `LSPServer`.
+
+```ts
+createConnectionAdapter(server: LSPServer<ServerCapabilities<any>>): any
+```
+
+**Parameters:**
+- `server: LSPServer<ServerCapabilities<any>>` — The `@lspeasy/server` `LSPServer` instance to adapt.
+
+**Returns:** `any`
+
+### RuneLspServer
+
+A fully-wired Rune DSL LSP server instance.
+
+---
+
+## @rune-langium/codegen
+
+### isKnownGenerator
+
+Check whether a language ID corresponds to a known generator.
+
+```ts
+isKnownGenerator(language: string): boolean
+```
+
+**Parameters:**
+- `language: string` — The generator ID to check (e.g., `"scala"`, `"typescript"`).
+
+**Returns:** `boolean`
+
+### getGenerator
+
+Get generator metadata by ID.
+
+```ts
+getGenerator(language: string): GeneratorInfo | undefined
+```
+
+**Parameters:**
+- `language: string` — The generator ID to look up.
+
+**Returns:** `GeneratorInfo | undefined`
+
+### CodeGenerationRequest
+
+Request to generate code from one or more Rune DSL model files.
+
+### CodeGenerationResult
+
+Result of a code generation run.
+
+### GeneratedFile
+
+A single generated output file.
+
+### GenerationError
+
+An error encountered during code generation for a specific DSL construct.
+
+### GeneratorInfo
+
+Metadata about a known code generator.
+
+### KNOWN_GENERATORS
+
+Known generators bundled with `rosetta-code-generators` and `rune-dsl`.
+
+```ts
+const KNOWN_GENERATORS: readonly GeneratorInfo[]
+```
+
+---
+
+## @rune-langium/visual-editor
+
+### DetailPanel
+
+```ts
+DetailPanel(__namedParameters: DetailPanelProps): Element | null
+```
+
+**Parameters:**
+- `__namedParameters: DetailPanelProps` — 
+
+**Returns:** `Element | null`
+
+### TypeSelector
+
+Searchable type selector with kind-colored badges.
+
+When `renderTrigger` and `renderPopover` are provided, uses composition
+to inject host app UI primitives (e.g., shadcn Popover + Command).
+Otherwise falls back to a shadcn Select.
+
+```ts
+TypeSelector(__namedParameters: TypeSelectorProps): ReactNode
+```
+
+**Parameters:**
+- `__namedParameters: TypeSelectorProps` — 
+
+**Returns:** `ReactNode`
+
+### getKindBadgeClasses
+
+Returns badge CSS classes for a given type kind.
+
+```ts
+getKindBadgeClasses(kind: TypeKind | "builtin"): string
+```
+
+**Parameters:**
+- `kind: TypeKind | "builtin"` — 
+
+**Returns:** `string`
+
+### getKindLabel
+
+Returns a human-readable label for a type kind.
+
+```ts
+getKindLabel(kind: TypeKind | "builtin"): string
+```
+
+**Parameters:**
+- `kind: TypeKind | "builtin"` — 
+
+**Returns:** `string`
+
+### CardinalityPicker
+
+Cardinality picker as a compact dropdown with 4 presets and a custom option.
+
+Preset selection commits immediately. Choosing "Custom…" shows an inline
+input that validates with `validateCardinality()` on blur or Enter.
+
+```ts
+CardinalityPicker(__namedParameters: CardinalityPickerProps): ReactNode
+```
+
+**Parameters:**
+- `__namedParameters: CardinalityPickerProps` — 
+
+**Returns:** `ReactNode`
+
+### MetadataSection
+
+Collapsible metadata section with description, comments, and synonym fields.
+
+Reads field values from the parent `FormProvider` context. Auto-resize
+textareas for description and comments, tag-list with inline add for synonyms.
+
+```ts
+MetadataSection(__namedParameters: MetadataSectionProps): ReactNode
+```
+
+**Parameters:**
+- `__namedParameters: MetadataSectionProps` — 
+
+**Returns:** `ReactNode`
+
+### AttributeRow
+
+```ts
+AttributeRow(__namedParameters: AttributeRowProps): Element
+```
+
+**Parameters:**
+- `__namedParameters: AttributeRowProps` — 
+
+**Returns:** `Element`
+
+### DataTypeForm
+
+```ts
+DataTypeForm(__namedParameters: DataTypeFormProps): Element
+```
+
+**Parameters:**
+- `__namedParameters: DataTypeFormProps` — 
+
+**Returns:** `Element`
+
+### EnumValueRow
+
+```ts
+EnumValueRow(__namedParameters: EnumValueRowProps): Element
+```
+
+**Parameters:**
+- `__namedParameters: EnumValueRowProps` — 
+
+**Returns:** `Element`
+
+### EnumForm
+
+```ts
+EnumForm(__namedParameters: EnumFormProps): Element
+```
+
+**Parameters:**
+- `__namedParameters: EnumFormProps` — 
+
+**Returns:** `Element`
+
+### ChoiceOptionRow
+
+```ts
+ChoiceOptionRow(__namedParameters: ChoiceOptionRowProps): Element
+```
+
+**Parameters:**
+- `__namedParameters: ChoiceOptionRowProps` — 
+
+**Returns:** `Element`
+
+### ChoiceForm
+
+```ts
+ChoiceForm(__namedParameters: ChoiceFormProps): Element
+```
+
+**Parameters:**
+- `__namedParameters: ChoiceFormProps` — 
+
+**Returns:** `Element`
+
+### FunctionForm
+
+```ts
+FunctionForm(__namedParameters: FunctionFormProps): Element
+```
+
+**Parameters:**
+- `__namedParameters: FunctionFormProps` — 
+
+**Returns:** `Element`
+
+### astToModel
+
+Convert RosettaModel AST roots into ReactFlow nodes and edges.
+
+Each graph node's `data` IS the AstNodeModel (AST fields spread)
+plus GraphMetadata (namespace, position, errors, etc.).
+
+```ts
+astToModel(models: unknown, options?: AstToModelOptions): AstToModelResult
+```
+
+**Parameters:**
+- `models: unknown` — 
+- `options: AstToModelOptions` (optional) — 
+
+**Returns:** `AstToModelResult`
+
+### modelsToAst
+
+Convert graph nodes and edges to serializer-compatible model objects.
+Groups nodes by namespace and produces one model per namespace.
+
+```ts
+modelsToAst(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): ModelOutput[]
+```
+
+**Parameters:**
+- `nodes: TypeGraphNode[]` — 
+- `edges: TypeGraphEdge[]` — 
+
+**Returns:** `ModelOutput[]`
+
+### formatCardinality
+
+Format a RosettaCardinality model as a display string, e.g. `(1..*)`.
+
+```ts
+formatCardinality(card: CardinalityShape | undefined): string
+```
+
+**Parameters:**
+- `card: CardinalityShape | undefined` — 
+
+**Returns:** `string`
+
+### parseCardinality
+
+Parse a cardinality display string back to structured form.
+
+```ts
+parseCardinality(card?: string): CardinalityShape
+```
+
+**Parameters:**
+- `card: string` (optional) — 
+
+**Returns:** `CardinalityShape`
+
+### getTypeRefText
+
+Get the display name of a type reference (e.g. from a TypeCall).
+
+```ts
+getTypeRefText(typeCall: TypeCallShape | undefined): string | undefined
+```
+
+**Parameters:**
+- `typeCall: TypeCallShape | undefined` — 
+
+**Returns:** `string | undefined`
+
+### getRefText
+
+Get display text from a Reference-like object.
+
+```ts
+getRefText(ref: ReferenceShape | undefined): string | undefined
+```
+
+**Parameters:**
+- `ref: ReferenceShape | undefined` — 
+
+**Returns:** `string | undefined`
+
+### annotationsToDisplay
+
+Convert AstNodeModel<AnnotationRef>[] to display-friendly objects.
+
+```ts
+annotationsToDisplay(annotations: AnnotationRefShape[] | undefined): AnnotationDisplayInfo[]
+```
+
+**Parameters:**
+- `annotations: AnnotationRefShape[] | undefined` — 
+
+**Returns:** `AnnotationDisplayInfo[]`
+
+### conditionsToDisplay
+
+Convert condition models to display-friendly objects.
+
+```ts
+conditionsToDisplay(conditions: ConditionShape[] | undefined, postConditions?: ConditionShape[]): ConditionDisplayInfo[]
+```
+
+**Parameters:**
+- `conditions: ConditionShape[] | undefined` — 
+- `postConditions: ConditionShape[]` (optional) — 
+
+**Returns:** `ConditionDisplayInfo[]`
+
+### classExprSynonymsToStrings
+
+Extract display strings from Data/Choice class synonyms.
+
+```ts
+classExprSynonymsToStrings(synonyms: ClassSynonymShape[] | undefined): string[]
+```
+
+**Parameters:**
+- `synonyms: ClassSynonymShape[] | undefined` — 
+
+**Returns:** `string[]`
+
+### enumSynonymsToStrings
+
+Extract display strings from Enum synonyms.
+
+```ts
+enumSynonymsToStrings(synonyms: EnumSynonymShape[] | undefined): string[]
+```
+
+**Parameters:**
+- `synonyms: EnumSynonymShape[] | undefined` — 
+
+**Returns:** `string[]`
+
+### computeLayout
+
+Compute layout positions for ReactFlow nodes using dagre.
+
+Returns a new array of nodes with updated positions.
+Does not mutate the input.
+
+```ts
+computeLayout(nodes: TypeGraphNode[], edges: TypeGraphEdge[], options?: LayoutOptions): TypeGraphNode[]
+```
+
+**Parameters:**
+- `nodes: TypeGraphNode[]` — 
+- `edges: TypeGraphEdge[]` — 
+- `options: LayoutOptions` (optional) — 
+
+**Returns:** `TypeGraphNode[]`
+
+### computeLayoutIncremental
+
+Compute layout with cache-first strategy.
+
+For incremental visibility changes (toggling a single namespace),
+nodes with cached positions reuse them. Only nodes without cached
+positions trigger a full dagre run.
+
+When the ratio of uncached nodes is small (<30%), we place cached
+nodes at their old positions and only run dagre for the new ones,
+offsetting them near related cached nodes.
+
+When the ratio is large (>=30%), we run a full dagre layout and
+update the cache.
+
+```ts
+computeLayoutIncremental(nodes: TypeGraphNode[], edges: TypeGraphEdge[], options?: LayoutOptions): TypeGraphNode[]
+```
+
+**Parameters:**
+- `nodes: TypeGraphNode[]` — 
+- `edges: TypeGraphEdge[]` — 
+- `options: LayoutOptions` (optional) — 
+
+**Returns:** `TypeGraphNode[]`
+
+### clearLayoutCache
+
+Clear the entire position cache (call on model reload).
+
+```ts
+clearLayoutCache(): void
+```
+
+### computeLayoutAsync
+
+Compute layout asynchronously.
+
+Prefers a Web Worker for true off-main-thread execution.
+Falls back to requestIdleCallback-based yielding on the main thread.
+
+Returns null if a newer layout request superseded this one.
+
+```ts
+computeLayoutAsync(nodes: TypeGraphNode[], edges: TypeGraphEdge[], options?: LayoutOptions): Promise<TypeGraphNode[] | null>
+```
+
+**Parameters:**
+- `nodes: TypeGraphNode[]` — 
+- `edges: TypeGraphEdge[]` — 
+- `options: LayoutOptions` (optional) — 
+
+**Returns:** `Promise<TypeGraphNode[] | null>`
+
+### cancelAsyncLayout
+
+Cancel any in-flight async layout.
+
+```ts
+cancelAsyncLayout(): void
+```
+
+### computeGroupedLayout
+
+Layout each group independently with dagre, then arrange
+groups in a grid pattern.
+
+```ts
+computeGroupedLayout(nodes: TypeGraphNode[], edges: TypeGraphEdge[], options?: LayoutOptions): TypeGraphNode[]
+```
+
+**Parameters:**
+- `nodes: TypeGraphNode[]` — 
+- `edges: TypeGraphEdge[]` — 
+- `options: LayoutOptions` (optional) — 
+
+**Returns:** `TypeGraphNode[]`
+
+### findInheritanceGroups
+
+Find inheritance-connected groups among the given nodes.
+
+```ts
+findInheritanceGroups(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): GroupInfo[]
+```
+
+**Parameters:**
+- `nodes: TypeGraphNode[]` — 
+- `edges: TypeGraphEdge[]` — 
+
+**Returns:** `GroupInfo[]`
+
+### buildNamespaceTree
+
+Build a sorted list of namespace tree entries from graph nodes.
+
+Groups nodes by `namespace`, counts per kind, and sorts
+both namespaces and their child types alphabetically.
+
+```ts
+buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[]
+```
+
+**Parameters:**
+- `nodes: TypeGraphNode[]` — 
+
+**Returns:** `NamespaceTreeNode[]`
+
+### filterNamespaceTree
+
+Filter namespace tree entries by a search query.
+
+Matches against both namespace name and type names.
+Returns tree entries with only matching types (or the full
+namespace if the namespace name itself matches).
+
+```ts
+filterNamespaceTree(tree: NamespaceTreeNode[], query: string): NamespaceTreeNode[]
+```
+
+**Parameters:**
+- `tree: NamespaceTreeNode[]` — 
+- `query: string` — 
+
+**Returns:** `NamespaceTreeNode[]`
+
+### createEditorStore
+
+Create an isolated zustand editor store instance.
+
+```ts
+createEditorStore(overrides?: Partial<EditorState>): UseBoundStore<Write<StoreApi<EditorStore>, { temporal: StoreApi }>>
+```
+
+**Parameters:**
+- `overrides: Partial<EditorState>` (optional) — Optional partial initial state to override defaults.
+
+**Returns:** `UseBoundStore<Write<StoreApi<EditorStore>, { temporal: StoreApi }>>`
+
+### useTemporalStore
+
+Access the temporal (undo/redo) store attached to the editor store.
+
+```ts
+useTemporalStore<T>(selector: (state: TemporalState<TrackedState>) => T): T
+```
+
+**Parameters:**
+- `selector: (state: TemporalState<TrackedState>) => T` — Selector function to pick values from the temporal state.
+
+**Returns:** `T`
+
+### useCanUndo
+
+Whether there are past states to undo to.
+
+```ts
+useCanUndo(): boolean
+```
+
+**Returns:** `boolean`
+
+### useCanRedo
+
+Whether there are future states to redo to.
+
+```ts
+useCanRedo(): boolean
+```
+
+**Returns:** `boolean`
+
+### useUndo
+
+Returns the undo function from the temporal store.
+
+```ts
+useUndo(): () => void
+```
+
+**Returns:** `() => void`
+
+### useRedo
+
+Returns the redo function from the temporal store.
+
+```ts
+useRedo(): () => void
+```
+
+**Returns:** `() => void`
+
+### ExpressionBuilder
+
+```ts
+ExpressionBuilder(__namedParameters: ExpressionBuilderProps): Element
+```
+
+**Parameters:**
+- `__namedParameters: ExpressionBuilderProps` — 
+
+**Returns:** `Element`
+
+### useAutoSave
+
+Returns a debounced callback that auto-saves the latest value after
+`delay` milliseconds of inactivity. Flushes on unmount.
+
+```ts
+useAutoSave<T>(onCommit: (value: T) => void, delay: number): (value: T) => void
+```
+
+**Parameters:**
+- `onCommit: (value: T) => void` — Callback invoked with the latest value on commit.
+- `delay: number` — Debounce delay in milliseconds (default 500).
+
+**Returns:** `(value: T) => void`
+
+### useExpressionAutocomplete
+
+```ts
+useExpressionAutocomplete(availableTypes: TypeOption[], inputParams?: { name: string; typeName?: string }[]): UseExpressionAutocompleteResult
+```
+
+**Parameters:**
+- `availableTypes: TypeOption[]` — 
+- `inputParams: { name: string; typeName?: string }[]` (optional) — 
+
+**Returns:** `UseExpressionAutocompleteResult`
+
+### detectCircularInheritance
+
+Detect whether setting `childId extends parentId` would create a cycle.
+
+Walks the inheritance chain from parentId upward; if it reaches childId,
+a cycle exists.
+
+```ts
+detectCircularInheritance(childId: string, parentId: string, edges: TypeGraphEdge[]): boolean
+```
+
+**Parameters:**
+- `childId: string` — 
+- `parentId: string` — 
+- `edges: TypeGraphEdge[]` — 
+
+**Returns:** `boolean`
+
+### detectDuplicateName
+
+Check if a name already exists in the given namespace.
+
+When `nodeId` is provided, checks for duplicate attribute names within
+that node instead of type names.
+
+```ts
+detectDuplicateName(name: string, namespace: string, nodes: TypeGraphNode[], nodeId?: string): boolean
+```
+
+**Parameters:**
+- `name: string` — 
+- `namespace: string` — 
+- `nodes: TypeGraphNode[]` — 
+- `nodeId: string` (optional) — 
+
+**Returns:** `boolean`
+
+### validateCardinality
+
+Validate a cardinality string.
+
+Returns null if valid, or an error message string if invalid.
+Accepts formats: "inf..sup", "(inf..sup)", "inf..*", "(inf..*)"
+
+```ts
+validateCardinality(input: string): string | null
+```
+
+**Parameters:**
+- `input: string` — 
+
+**Returns:** `string | null`
+
+### detectDuplicateEnumValue
+
+Check if an enum value name already exists within the specified enum node.
+
+```ts
+detectDuplicateEnumValue(valueName: string, nodeId: string, nodes: TypeGraphNode[]): boolean
+```
+
+**Parameters:**
+- `valueName: string` — 
+- `nodeId: string` — 
+- `nodes: TypeGraphNode[]` — 
+
+**Returns:** `boolean`
+
+### validateNotEmpty
+
+Validate that a name is non-empty after trimming whitespace.
+
+Returns null if valid, or an error message string if invalid.
+
+```ts
+validateNotEmpty(name: string, context: string): string | null
+```
+
+**Parameters:**
+- `name: string` — 
+- `context: string` — 
+
+**Returns:** `string | null`
+
+### validateIdentifier
+
+Validate that a name conforms to Rune DSL identifier rules.
+
+Returns null if valid, or an error message string if invalid.
+
+```ts
+validateIdentifier(name: string): string | null
+```
+
+**Parameters:**
+- `name: string` — 
+
+**Returns:** `string | null`
+
+### validateExpression
+
+Validate an expression string.
+
+This is a lightweight client-side check. Full parsing validation
+runs in the web worker parse pipeline. This function performs basic
+structural checks (balanced parentheses, non-empty).
+
+```ts
+validateExpression(expression: string): ExpressionValidationResult
+```
+
+**Parameters:**
+- `expression: string` — The expression text to validate.
+
+**Returns:** `ExpressionValidationResult`
+
+### validateGraph
+
+Run all validations on the current graph state and return errors.
+
+```ts
+validateGraph(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): ValidationError[]
+```
+
+**Parameters:**
+- `nodes: TypeGraphNode[]` — 
+- `edges: TypeGraphEdge[]` — 
+
+**Returns:** `ValidationError[]`
+
+### DetailPanelProps
+
+### EditorFormPanelProps
+
+### NamespaceExplorerPanelProps
+
+### TypeCreatorProps
+
+### AttributeEditorProps
+
+### CardinalityEditorProps
+
+### TypeSelectorProps
+
+### TypeSelectorTriggerProps
+
+### TypeSelectorPopoverProps
+
+### TypeSelectorGroup
+
+### CardinalityPickerProps
+
+### MetadataSectionProps
+
+### AttributeRowProps
+
+### DataTypeFormProps
+
+### EnumValueRowProps
+
+### EnumFormProps
+
+### ChoiceOptionRowProps
+
+### ChoiceFormProps
+
+### FunctionFormProps
+
+### AstNodeModel
+
+Mapped type that plucks and recursively serializes fields from any
+Langium AST node type.
+
+`$type` is preserved as a readonly literal (derived from the generic parameter)
+for runtime discrimination. All other fields are made mutable for editing.
+
+```ts
+type AstNodeModel = { $type: T["$type"] } & { -readonly [K in Exclude<keyof T, ExcludedFields | "$type">]: SerializeField<T[K]> }
+```
+
+### AstNodeShape
+
+Structural constraint matching Langium's AstNode interface.
+Used instead of importing langium directly (it's not a visual-editor dependency).
+
+### GraphNode
+
+Top-level graph node data: AstNodeModel with graph/editor metadata.
+Used for elements rendered by ReactFlow (Data, Choice, Enum, Function, etc.).
+
+```ts
+type GraphNode = AstNodeModel<T> & GraphMetadata
+```
+
+### AnyGraphNode
+
+Union of all GraphNode variants for top-level elements.
+
+```ts
+type AnyGraphNode = GraphNode<Data> | GraphNode<Choice> | GraphNode<RosettaEnumeration> | GraphNode<RosettaFunction> | GraphNode<RosettaRecordType> | GraphNode<RosettaTypeAlias> | GraphNode<RosettaBasicType> | GraphNode<Annotation>
+```
+
+### GraphMetadata
+
+### RootAstElement
+
+Union of all top-level AST element types that appear as graph nodes.
+
+```ts
+type RootAstElement = Data | Choice | RosettaEnumeration | RosettaFunction | RosettaRecordType | RosettaTypeAlias | RosettaBasicType | Annotation
+```
+
+### TypeKind
+
+Short kind strings used for UI dispatch, badge rendering, and form actions.
+
+```ts
+type TypeKind = "data" | "choice" | "enum" | "func" | "record" | "typeAlias" | "basicType" | "annotation"
+```
+
+### EdgeKind
+
+```ts
+type EdgeKind = "extends" | "attribute-ref" | "choice-option" | "enum-extends" | "type-alias-ref"
+```
+
+### EdgeData
+
+Data payload for graph edges.
+
+The index signature is required for compatibility with ReactFlow's
+`Edge<T extends Record<string, unknown>>` constraint.
+
+### ValidationError
+
+### ExpressionEditorSlotProps
+
+Props provided to the expression editor render-prop slot.
+
+`packages/visual-editor` is editor-agnostic — the host app provides
+the actual editor implementation (e.g. CodeMirror, Monaco) via a
+`renderExpressionEditor` prop on `FunctionForm`.
+
+### TypeOption
+
+A type option for searchable type selectors.
+
+### CommonFormActions
+
+Actions shared by all type kinds.
+
+### DataFormActions
+
+Data type–specific editor actions.
+
+### EnumFormActions
+
+Enum-specific editor actions.
+
+### ChoiceFormActions
+
+Choice-specific editor actions.
+
+### FuncFormActions
+
+Function-specific editor actions.
+
+### FormActionsKindMap
+
+Maps each `TypeKind` to its form actions interface.
+
+### AllEditorFormActions
+
+Intersection of all kind-specific actions (every method available).
+
+```ts
+type AllEditorFormActions = DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions
+```
+
+### EditorFormActions
+
+Kind-aware editor form actions.
+
+When parameterized with a specific kind (e.g. `EditorFormActions<'data'>`),
+only that kind's actions + common actions are available.
+
+When unparameterized (`EditorFormActions`), resolves to the full intersection
+of all kind-specific actions for backward compatibility.
+
+```ts
+type EditorFormActions = [TypeKind] extends [K] ? AllEditorFormActions : FormActionsKindMap[K]
+```
+
+### GraphFilters
+
+Visibility filter state for the type graph.
+
+### LayoutDirection
+
+```ts
+type LayoutDirection = "TB" | "LR" | "BT" | "RL"
+```
+
+### LayoutOptions
+
+### NodeStyleConfig
+
+### EdgeStyleConfig
+
+### RuneTypeGraphConfig
+
+Configuration props for the `RuneTypeGraph` component.
+
+### RuneTypeGraphCallbacks
+
+Event callbacks for the `RuneTypeGraph` component.
+
+### RuneTypeGraphProps
+
+Props for the `RuneTypeGraph` React component.
+
+### RuneTypeGraphRef
+
+Imperative ref handle for `RuneTypeGraph`.
+
+### TypeGraphNode
+
+```ts
+type TypeGraphNode = Node<AnyGraphNode>
+```
+
+### TypeGraphEdge
+
+```ts
+type TypeGraphEdge = Edge<EdgeData>
+```
+
+### NamespaceTreeNode
+
+### NamespaceTypeEntry
+
+### VisibilityState
+
+### NavigateToNodeCallback
+
+Callback for navigating to a type definition by node ID (namespace::name).
+
+```ts
+type NavigateToNodeCallback = (nodeId: string) => void
+```
+
+### ModelOutput
+
+A serializer-compatible model object.
+Same shape as the legacy SyntheticModel but typed against AstNodeModel.
+
+### SyntheticModel
+
+```ts
+type SyntheticModel = ModelOutput
+```
+
+### SyntheticElement
+
+```ts
+type SyntheticElement = unknown
+```
+
+### GroupInfo
+
+### EditorStore
+
+Combined zustand store type (state + actions).
+
+```ts
+type EditorStore = EditorState & EditorActions
+```
+
+### EditorState
+
+Snapshot of visual editor state tracked by the zustand store.
+
+### EditorActions
+
+### TrackedState
+
+Fields tracked by undo/redo.
+UI state (selection, viewport) is NOT tracked.
+
+```ts
+type TrackedState = Pick<EditorState, "nodes" | "edges">
+```
+
+### ExpressionBuilderProps
+
+Props provided to the expression editor render-prop slot.
+
+`packages/visual-editor` is editor-agnostic — the host app provides
+the actual editor implementation (e.g. CodeMirror, Monaco) via a
+`renderExpressionEditor` prop on `FunctionForm`.
+
+### FunctionScope
+
+### FunctionScopeEntry
+
+### CompletionItem
+
+### UseExpressionAutocompleteResult
+
+### ExpressionValidationResult
+
+Result of validating a Rune DSL expression.
+
+### RuneTypeGraph
+
+```ts
+const RuneTypeGraph: ForwardRefExoticComponent<RuneTypeGraphProps & RefAttributes<RuneTypeGraphRef>>
+```
+
+### EditorFormPanel
+
+```ts
+const EditorFormPanel: NamedExoticComponent<EditorFormPanelProps>
+```
+
+### NamespaceExplorerPanel
+
+```ts
+const NamespaceExplorerPanel: NamedExoticComponent<NamespaceExplorerPanelProps>
+```
+
+### TypeCreator
+
+```ts
+const TypeCreator: NamedExoticComponent<TypeCreatorProps>
+```
+
+### AttributeEditor
+
+```ts
+const AttributeEditor: NamedExoticComponent<AttributeEditorProps>
+```
+
+### CardinalityEditor
+
+```ts
+const CardinalityEditor: NamedExoticComponent<CardinalityEditorProps>
+```
+
+### BUILTIN_TYPES
+
+Built-in primitive types available in the Rune DSL.
+
+```ts
+const BUILTIN_TYPES: readonly ["string", "int", "number", "boolean", "date", "time", "dateTime", "zonedDateTime"]
+```
+
+### AST_TYPE_TO_NODE_TYPE
+
+Kind-to-ReactFlow-type mapping. Used to set `Node.type` for
+component selection, and for display badges.
+
+```ts
+const AST_TYPE_TO_NODE_TYPE: Record<string, string>
+```
+
+### NODE_TYPE_TO_AST_TYPE
+
+```ts
+const NODE_TYPE_TO_AST_TYPE: Record<string, string>
+```
+
+### useEditorStore
+
+Default store instance for use with RuneTypeGraph.
+
+```ts
+const useEditorStore: UseBoundStore<Write<StoreApi<EditorStore>, { temporal: StoreApi }>>
+```
+
+---
