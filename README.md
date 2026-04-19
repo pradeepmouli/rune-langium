@@ -153,6 +153,18 @@ bash scripts/update-fixtures.sh --cdm-tag 7.0.0-dev.83 --rune-tag 9.76.2 --fpml-
 
 See [docs/WORKSPACE.md](docs/WORKSPACE.md), [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), and [docs/TESTING.md](docs/TESTING.md) for more.
 
+## Ecosystem
+
+rune-langium builds on these libraries from the same author:
+
+| Library | Purpose | npm |
+|---|---|---|
+| [langium-zod](https://github.com/pradeepmouli/langium-zod) | Generate Zod schemas from Langium grammars | [![npm](https://img.shields.io/npm/v/langium-zod?style=flat-square)](https://www.npmjs.com/package/langium-zod) |
+| [zod-to-form](https://github.com/pradeepmouli/zod-to-form) | Generate React forms from Zod schemas — runtime or CLI codegen | [![npm](https://img.shields.io/npm/v/@zod-to-form/core?style=flat-square)](https://www.npmjs.com/package/@zod-to-form/core) |
+| [x-to-zod](https://github.com/pradeepmouli/x-to-zod) | Convert JSON Schema to Zod schemas | [![npm](https://img.shields.io/npm/v/x-to-zod?style=flat-square)](https://www.npmjs.com/package/x-to-zod) |
+
+Together these form a pipeline: **Grammar → Zod schemas → React forms**, with JSON Schema as an alternative input path via x-to-zod.
+
 ## License
 
 This repository uses a split licensing model:
