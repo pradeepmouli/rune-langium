@@ -10,7 +10,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20.x, 24.x]
+        node-version: [22.x, 24.x]
 
     steps:
       - uses: actions/checkout@v6
@@ -73,11 +73,11 @@ jobs:
 
       - name: Test Coverage
         run: pnpm run test:coverage
-        if: matrix.node-version == '20.x'
+        if: matrix.node-version == '22.x'
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6
-        if: matrix.node-version == '20.x'
+        if: matrix.node-version == '22.x'
         with:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
@@ -88,7 +88,7 @@ jobs:
 
       - name: Check Bundle Size
         run: pnpm dlx size-limit
-        if: matrix.node-version == '20.x'
+        if: matrix.node-version == '22.x'
         continue-on-error: true
 
   # ---------------------------------------------------------------------------
@@ -113,10 +113,10 @@ jobs:
         with:
           version: 10.32.0
 
-      - name: Use Node.js 20.x
+      - name: Use Node.js 22.x
         uses: actions/setup-node@v6
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: 'pnpm'
 
       - name: Install dependencies
