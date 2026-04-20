@@ -32,7 +32,7 @@
     "@lspeasy/core": "^2.1.1",
     "@lspeasy/server": "^4.0.2",
     "@rune-langium/core": "workspace:*",
-    "langium": "^4.2.1",
+    "langium": "^4.2.2",
     "vscode-languageserver": "~9.0.1",
     "ws": "^8.20.0"
   },
