@@ -159,11 +159,12 @@ rune-langium builds on these libraries from the same author:
 
 | Library | Purpose | npm |
 |---|---|---|
+| [lspeasy](https://github.com/pradeepmouli/lspeasy) | LSP framework powering rune-langium's language server | [![npm](https://img.shields.io/npm/v/@lspeasy/server?style=flat-square)](https://www.npmjs.com/package/@lspeasy/server) |
 | [langium-zod](https://github.com/pradeepmouli/langium-zod) | Generate Zod schemas from Langium grammars | [![npm](https://img.shields.io/npm/v/langium-zod?style=flat-square)](https://www.npmjs.com/package/langium-zod) |
 | [zod-to-form](https://github.com/pradeepmouli/zod-to-form) | Generate React forms from Zod schemas — runtime or CLI codegen | [![npm](https://img.shields.io/npm/v/@zod-to-form/core?style=flat-square)](https://www.npmjs.com/package/@zod-to-form/core) |
 | [x-to-zod](https://github.com/pradeepmouli/x-to-zod) | Convert JSON Schema to Zod schemas | [![npm](https://img.shields.io/npm/v/x-to-zod?style=flat-square)](https://www.npmjs.com/package/x-to-zod) |
 
-Together these form a pipeline: **Grammar → Zod schemas → React forms**, with JSON Schema as an alternative input path via x-to-zod.
+Together these form a pipeline: **Grammar → Zod schemas → React forms**, with [lspeasy](https://github.com/pradeepmouli/lspeasy) providing the LSP layer and JSON Schema as an alternative input path via x-to-zod.
 
 ## License
 
