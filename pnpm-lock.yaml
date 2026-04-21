@@ -16,8 +16,8 @@ importers:
   .:
     dependencies:
       '@lspeasy/client':
-        specifier: ^3.0.1
-        version: 3.0.1(ws@8.20.0)
+        specifier: ^3.0.2
+        version: 3.0.2(ws@8.20.0)
       '@lspeasy/core':
         specifier: ^2.1.1
         version: 2.1.1(ws@8.20.0)
@@ -379,8 +379,8 @@ importers:
         version: 8.20.0
     devDependencies:
       '@lspeasy/client':
-        specifier: ^3.0.1
-        version: 3.0.1(ws@8.20.0)
+        specifier: ^3.0.2
+        version: 3.0.2(ws@8.20.0)
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -1089,8 +1089,8 @@ packages:
   '@lezer/lr@1.4.8':
     resolution: {integrity: sha512-bPWa0Pgx69ylNlMlPvBPryqeLYQjyJjqPx+Aupm5zydLIF3NE+6MMLT8Yi23Bd9cif9VS00aUebn+6fDIGBcDA==}
 
-  '@lspeasy/client@3.0.1':
-    resolution: {integrity: sha512-Tlb5K52CscboCTGSknyykXS4wyFIBFum9ennwf522Q9JfN5dygiwXvsUc1HBE2jKpMQRDb4V0c5BzKVH7Kti9Q==}
+  '@lspeasy/client@3.0.2':
+    resolution: {integrity: sha512-gPifremGhApDHjHYAGcRxd0VqWpdnUdFikODvqc1aq3gJ8hNDe1upzBaZchm+PUqq2egoSBmgE8t60OcTVbKoQ==}
     engines: {node: '>=20.0.0'}
 
   '@lspeasy/core@2.1.1':
@@ -6312,9 +6312,9 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.1
 
-  '@lspeasy/client@3.0.1(ws@8.20.0)':
+  '@lspeasy/client@3.0.2(ws@8.20.0)':
     dependencies:
-      '@lspeasy/core': 2.1.1(ws@8.20.0)
+      '@lspeasy/core': 2.1.2(ws@8.20.0)
     optionalDependencies:
       zod: 4.3.6
     transitivePeerDependencies:
