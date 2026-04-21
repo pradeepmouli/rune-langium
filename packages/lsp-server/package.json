@@ -29,7 +29,7 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
-    "@lspeasy/core": "^2.1.1",
+    "@lspeasy/core": "^2.1.2",
     "@lspeasy/server": "^4.0.2",
     "@rune-langium/core": "workspace:*",
     "langium": "^4.2.2",

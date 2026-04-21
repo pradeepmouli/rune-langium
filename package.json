@@ -90,7 +90,7 @@
   "packageManager": "pnpm@10.32.0",
   "dependencies": {
     "@lspeasy/client": "^3.0.2",
-    "@lspeasy/core": "^2.1.1",
+    "@lspeasy/core": "^2.1.2",
     "@zod-to-form/cli": "^0.4.0",
     "camelcase": "^9.0.0"
   },

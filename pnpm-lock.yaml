@@ -19,8 +19,8 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2(ws@8.20.0)
       '@lspeasy/core':
-        specifier: ^2.1.1
-        version: 2.1.1(ws@8.20.0)
+        specifier: ^2.1.2
+        version: 2.1.2(ws@8.20.0)
       '@zod-to-form/cli':
         specifier: ^0.4.0
         version: 0.4.0(zod@4.3.6)
@@ -128,8 +128,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3
       '@lspeasy/core':
-        specifier: ^2.1.1
-        version: 2.1.1(ws@8.20.0)
+        specifier: ^2.1.2
+        version: 2.1.2(ws@8.20.0)
       '@rune-langium/codegen':
         specifier: workspace:*
         version: link:../../packages/codegen
@@ -360,8 +360,8 @@ importers:
   packages/lsp-server:
     dependencies:
       '@lspeasy/core':
-        specifier: ^2.1.1
-        version: 2.1.1(ws@8.20.0)
+        specifier: ^2.1.2
+        version: 2.1.2(ws@8.20.0)
       '@lspeasy/server':
         specifier: ^4.0.2
         version: 4.0.2(ws@8.20.0)
@@ -1092,15 +1092,6 @@ packages:
   '@lspeasy/client@3.0.2':
     resolution: {integrity: sha512-gPifremGhApDHjHYAGcRxd0VqWpdnUdFikODvqc1aq3gJ8hNDe1upzBaZchm+PUqq2egoSBmgE8t60OcTVbKoQ==}
     engines: {node: '>=20.0.0'}
-
-  '@lspeasy/core@2.1.1':
-    resolution: {integrity: sha512-KRkSndxacGyI+X12aPPqck14aYeVO13pjoR8xiiB3k8I+5sMsWfs8kjPaQVeB5Yuv6KzBu4c27afWGV8cAWecA==}
-    engines: {node: '>=20.0.0'}
-    peerDependencies:
-      ws: ^8.19.0
-    peerDependenciesMeta:
-      ws:
-        optional: true
 
   '@lspeasy/core@2.1.2':
     resolution: {integrity: sha512-3Hzf4PTN9F10kE4mGxbiwrNuzGX2jWGzFLdAmk/ADueyQXDdSjd0ey1resrgws5r1K0eaatplk5WHPUJnDJFMA==}
@@ -6319,11 +6310,6 @@ snapshots:
       zod: 4.3.6
     transitivePeerDependencies:
       - ws
-
-  '@lspeasy/core@2.1.1(ws@8.20.0)':
-    optionalDependencies:
-      ws: 8.20.0
-      zod: 4.3.6
 
   '@lspeasy/core@2.1.2(ws@8.20.0)':
     optionalDependencies:
