@@ -29,7 +29,7 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
-    "@lspeasy/core": "^2.1.2",
+    "@lspeasy/core": "^2.1.1",
     "@lspeasy/server": "^4.0.2",
     "@rune-langium/core": "workspace:*",
     "langium": "^4.2.2",
@@ -39,8 +39,8 @@
   "devDependencies": {
     "@lspeasy/client": "^3.0.2",
     "@types/ws": "^8.18.1",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.4"
   },
   "engines": {
     "node": ">=20.0.0"

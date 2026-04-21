@@ -40,7 +40,7 @@
     "langium-cli": "^4.2.0",
     "langium-zod": "^0.5.3",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.3"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=20.0.0"

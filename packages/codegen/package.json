@@ -30,9 +30,10 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "type-check": "tsgo --noEmit"
   },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "typescript": "^6.0.3"
+    "typescript": "^5.9.3"
   },
   "license": "MIT",
   "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen",
