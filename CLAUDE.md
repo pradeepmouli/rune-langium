@@ -27,3 +27,8 @@ This repo uses split licensing:
 
 When creating new source files, always include the correct SPDX header for the directory.
 Never refer to the studio as "open source" — it is "source-available."
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
