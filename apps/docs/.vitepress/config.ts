@@ -1,6 +1,22 @@
 import { defineConfig } from 'vitepress';
 import typedocSidebar from '../api/typedoc-sidebar.json' with { type: 'json' };
 
+const isCloudflarePages = process.env.CF_PAGES === '1';
+const docsBase =
+  process.env.DOCS_BASE || (isCloudflarePages ? '/rune-studio/docs/' : '/rune-langium/');
+const siteUrl =
+  process.env.DOCS_SITE_URL ||
+  (isCloudflarePages
+    ? 'https://www.daikonic.dev/rune-studio/docs/'
+    : 'https://pradeepmouli.github.io/rune-langium/');
+const githubUrl = process.env.DOCS_GITHUB_URL || 'https://github.com/pradeepmouli/rune-langium';
+// VitePress prepends `base` to any nav/href starting with `/`, which would
+// double-prefix the studio link (/rune-studio/docs/rune-studio/studio/). Use
+// the full URL on CF so it's treated as external and rendered verbatim.
+const studioUrl =
+  process.env.DOCS_STUDIO_URL ||
+  (isCloudflarePages ? 'https://www.daikonic.dev/rune-studio/studio/' : '/studio/');
+
 // Escape angle-bracket patterns in typedoc-generated markdown that Vue's
 // SFC parser would otherwise choke on (e.g. generic types like `Node<T>`
 // or placeholder tokens like `<cursor>` that appear in LSP comments).
@@ -35,41 +51,46 @@ export default defineConfig({
   vite: {
     plugins: [escapeAngleBracketsInMd]
   },
-  title: 'Rune Studio',
-  description: 'Langium-based DSL toolchain for the Rune DSL — CDM & DRR in the browser',
-  base: '/rune-langium/',
+  title: 'Rune Langium',
+  description: 'Langium-based TypeScript toolchain and Studio for the Rune DSL',
+  base: docsBase,
   lastUpdated: true,
   cleanUrls: true,
   ignoreDeadLinks: true,
   head: [
-    ['meta', { property: 'og:title', content: 'Rune Studio' }],
+    ['meta', { property: 'og:title', content: 'Rune Langium Docs' }],
     [
       'meta',
       {
         property: 'og:description',
-        content: 'Langium-based DSL toolchain for the Rune DSL — CDM & DRR in the browser'
+        content: 'Langium-based TypeScript toolchain and Studio for the Rune DSL'
       }
     ],
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:url', content: 'https://pradeepmouli.github.io/rune-langium/' }],
+    ['meta', { property: 'og:url', content: siteUrl }],
     ['meta', { name: 'twitter:card', content: 'summary' }],
-    ['meta', { name: 'twitter:title', content: 'Rune Studio' }],
+    ['meta', { name: 'twitter:title', content: 'Rune Langium Docs' }],
     [
       'meta',
       {
         name: 'twitter:description',
-        content: 'Langium-based DSL toolchain for the Rune DSL — CDM & DRR in the browser'
+        content: 'Langium-based TypeScript toolchain and Studio for the Rune DSL'
       }
     ]
   ],
   sitemap: {
-    hostname: 'https://pradeepmouli.github.io/rune-langium'
+    // VitePress resolves each page via `new URL(pagePath, hostname)`, which
+    // requires a trailing slash on hostname for the base path to be preserved
+    // (otherwise URL() treats the last segment as a file and strips it).
+    hostname: siteUrl.endsWith('/') ? siteUrl : siteUrl + '/'
   },
   themeConfig: {
     nav: [
+      { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/getting-started' },
+      { text: 'Studio', link: studioUrl },
       { text: 'API', link: '/api/' },
-      { text: 'GitHub', link: 'https://github.com/pradeepmouli/rune-langium' }
+      { text: 'GitHub', link: githubUrl }
     ],
     sidebar: {
       '/guide/': [
@@ -84,7 +105,7 @@ export default defineConfig({
       ],
       '/api/': [{ text: 'Packages', items: typedocSidebar }]
     },
-    socialLinks: [{ icon: 'github', link: 'https://github.com/pradeepmouli/rune-langium' }],
+    socialLinks: [{ icon: 'github', link: githubUrl }],
     footer: {
       message: 'Core packages released under MIT. Studio app released under FSL-1.1-ALv2.',
       copyright: 'Copyright © 2026 Pradeep Mouli'

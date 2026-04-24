@@ -1,26 +1,39 @@
-name: Deploy Docs
+name: Verify Cloudflare Pages Build
 
 on:
   push:
     branches: [master]
     paths:
+      - "site/**"
       - "apps/docs/**"
+      - "apps/studio/**"
       - "packages/**/src/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - "apps/docs/**"
+      - "apps/studio/**"
+      - "packages/**/src/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: cloudflare-pages-build
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CF_PAGES: '1'
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -31,19 +44,7 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - name: Build docs
-        run: pnpm --filter @rune-langium/docs build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: apps/docs/.vitepress/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Build workspace packages
+        run: pnpm run build
+      - name: Build combined Cloudflare Pages artifact
+        run: pnpm --filter @rune-langium/docs run build:combined

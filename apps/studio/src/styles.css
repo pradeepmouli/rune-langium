@@ -347,6 +347,22 @@
   padding: var(--space-10);
 }
 
+.studio-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.studio-links a {
+  color: var(--muted-foreground);
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+
+.studio-links a:hover {
+  color: var(--foreground);
+}
+
 /* ---------- CodeMirror Editor (T043) — dark theme ---------- */
 .studio-editor-page__source .cm-editor {
   height: 100%;
@@ -445,6 +461,12 @@
 .ns-row__visibility:focus:not(:focus-visible),
 .ns-type__visibility:focus:not(:focus-visible) {
   outline: none;
+}
+
+.studio-links a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* Dark-theme overrides for visual-editor graph nodes:
