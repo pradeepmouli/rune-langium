@@ -1,7 +1,8 @@
 /**
  * Rune Langium theme — mirrors the site/ landing palette and typography.
- * Dark-first; the light override at the bottom keeps VitePress's two-mode
- * toggle functional for readers who prefer it.
+ * Dark-only; VitePress is configured with `appearance: 'force-dark'`, so
+ * this stylesheet intentionally defines a single dark theme (no light
+ * override, no mode toggle).
  */
 
 :root {
