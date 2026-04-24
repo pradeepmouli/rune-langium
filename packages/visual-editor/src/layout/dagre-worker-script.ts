@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * Web Worker entry point for dagre layout computation.
  *

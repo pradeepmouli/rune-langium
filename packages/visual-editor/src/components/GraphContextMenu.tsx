@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 /**
  * GraphContextMenu — Right-click context menu for graph nodes.
  *
