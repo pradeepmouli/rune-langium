@@ -13,6 +13,9 @@
     "test": "vitest run",
     "type-check": "tsgo --noEmit"
   },
+  "dependencies": {
+    "@rune-langium/codegen": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^25.6.0",
     "vitest": "^4.1.4",
