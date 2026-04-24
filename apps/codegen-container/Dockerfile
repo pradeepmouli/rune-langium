@@ -55,15 +55,39 @@ CLASSPATH=$(mvn dependency:build-classpath -pl default-cdm-generators -q \
             -Dmdep.outputFile=/dev/stdout 2>/dev/null)
 CDM_JAR="/build/rosetta-code-generators/default-cdm-generators/target/default-cdm-generators-0.0.0.main-SNAPSHOT.jar"
 CLASSPATH="${CDM_JAR}:${CLASSPATH}"
+
+# Compile CodegenCli.java against the full classpath.
 mkdir -p /build/codegen-src/target/classes
-javac -cp "$CLASSPATH" \
+javac -cp "${CLASSPATH}" \
       -d /build/codegen-src/target/classes \
       --add-exports jdk.httpserver/com.sun.net.httpserver=ALL-UNNAMED \
       /build/codegen-src/src/org/isda/cdm/generators/CodegenCli.java
-cat > /build/codegen-src/target/codegen-cli.sh <<LAUNCHER
+
+# Collect every JAR in the classpath into a single flat lib/ dir. The
+# original classpath entries point at Maven's ~/.m2/repository tree
+# which doesn't exist in the Stage-2 runtime image, so we relocate
+# everything to a stable path that Stage 2 can copy.
+# POSIX-safe: debian slim's /bin/sh is dash, so no bash-isms (no `<<<`,
+# no `read -ra`). A tr + while-read pipeline works in both shells.
+mkdir -p /build/codegen-src/lib
+# Classpath → flat lib/. Shell vars go unescaped — BuildKit's RUN heredoc
+# expands Dockerfile ARGs (ROSETTA_COMMIT etc.) not shell vars, so plain
+# ${CLASSPATH} reaches the shell intact.
+echo "${CLASSPATH}" | tr ':' '\n' | while IFS= read -r jar; do
+  if [ -n "$jar" ] && [ -f "$jar" ]; then
+    cp "$jar" /build/codegen-src/lib/
+  fi
+done
+# Sanity: we should have copied > 50 JARs (the full generator classpath).
+ls /build/codegen-src/lib | wc -l
+
+# Launcher uses lib/ glob so the classpath survives dependency churn.
+# Quoted delimiter (<<'EOF') — NO expansion in the heredoc body, so the
+# emitted file keeps literal $@ for bash to expand at run time.
+cat > /build/codegen-src/target/codegen-cli.sh <<'LAUNCHER'
 #!/usr/bin/env bash
-exec java -cp "/app/codegen-cli/classes:${CLASSPATH}" \
-     org.isda.cdm.generators.CodegenCli "\$@"
+exec java -cp "/app/codegen-cli/classes:/app/codegen-cli/lib/*" \
+     org.isda.cdm.generators.CodegenCli "$@"
 LAUNCHER
 chmod +x /build/codegen-src/target/codegen-cli.sh
 STAGE1_SH
@@ -86,7 +110,7 @@ WORKDIR /app
 # absolute classpath entries that point into those JARs.
 COPY --from=builder /build/codegen-src/target/codegen-cli.sh /app/codegen-cli/codegen-cli.sh
 COPY --from=builder /build/codegen-src/target/classes        /app/codegen-cli/classes
-COPY --from=builder /build/rosetta-code-generators           /build/rosetta-code-generators
+COPY --from=builder /build/codegen-src/lib                   /app/codegen-cli/lib
 
 # Copy the pre-compiled Node HTTP wrapper (produced by `pnpm --filter @rune-langium/codegen-container build:ts`).
 # Expected at dist/server.js with any helper modules it imports.

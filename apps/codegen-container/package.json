@@ -7,8 +7,9 @@
   "main": "dist/server.js",
   "scripts": {
     "build:ts": "tsgo -b",
+    "build:bundle": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/server.js --banner:js='import{createRequire}from\"module\";const require=createRequire(import.meta.url);'",
     "build:docker": "docker build -t rune-codegen .",
-    "build": "pnpm run build:ts && pnpm run build:docker",
+    "build": "pnpm run build:bundle && pnpm run build:docker",
     "publish": "wrangler containers push rune-codegen:latest",
     "test": "vitest run",
     "type-check": "tsgo --noEmit"
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "esbuild": "^0.24.0",
     "pino-pretty": "^11.2.2",
     "vitest": "^4.1.4",
     "wrangler": "^4.0.0"
