@@ -19,7 +19,10 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', '@xyflow/react']
   },
   server: {
-    port: 5000,
+    // Default 5173 (Vite convention, uncontested on macOS where AirPlay owns
+    // :5000). `scripts/check-env.mjs` can pick a free fallback and export
+    // STUDIO_DEV_PORT for both this config and playwright.config.ts.
+    port: Number(process.env.STUDIO_DEV_PORT) || 5173,
     host: '0.0.0.0',
     allowedHosts: true
   },

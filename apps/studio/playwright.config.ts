@@ -12,16 +12,20 @@ export default defineConfig({
   reporter: process.env.CI ? 'list' : 'html',
   timeout: 30000,
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173',
+    baseURL:
+      process.env.PLAYWRIGHT_BASE_URL ||
+      `http://localhost:${Number(process.env.STUDIO_DEV_PORT) || 5173}`,
     trace: 'on-first-retry'
   },
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
+        // Must match apps/studio/vite.config.ts server.port. Both default to
+        // 5173 and honour STUDIO_DEV_PORT when set by scripts/check-env.mjs.
         command: 'pnpm run dev',
-        port: 5173,
+        port: Number(process.env.STUDIO_DEV_PORT) || 5173,
         reuseExistingServer: true,
-        timeout: 30000
+        timeout: 60000
       },
   projects: [
     {
