@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "check-env": "node scripts/check-env.mjs",
     "clean": "rm -rf dist",
     "dev": "vite",
     "lint": "oxlint .",

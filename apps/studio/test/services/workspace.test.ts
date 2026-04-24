@@ -11,6 +11,7 @@ import {
   parseWorkspaceFiles,
   updateFileContent,
   createWorkspaceFile,
+  createBlankWorkspaceFile,
   readFileList
 } from '../../src/services/workspace.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
@@ -125,6 +126,59 @@ describe('createWorkspaceFile', () => {
     expect(file.name).toBe('test.rosetta');
     expect(file.content).toBe('namespace test');
     expect(file.dirty).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createBlankWorkspaceFile (enhance/012 — New start-page option)
+// ---------------------------------------------------------------------------
+describe('createBlankWorkspaceFile', () => {
+  it('returns an untitled.rosetta file on an empty workspace', () => {
+    const file = createBlankWorkspaceFile([]);
+    expect(file.name).toBe('untitled.rosetta');
+    expect(file.path).toBe('untitled.rosetta');
+    expect(file.dirty).toBe(true);
+    expect(file.readOnly).toBeFalsy();
+  });
+
+  it('includes a non-empty starter template with a namespace line', () => {
+    const file = createBlankWorkspaceFile([]);
+    expect(file.content.length).toBeGreaterThan(0);
+    expect(file.content).toMatch(/^namespace\s+\w+/m);
+  });
+
+  it('uses untitled-2.rosetta when untitled.rosetta already exists', () => {
+    const existing: WorkspaceFile[] = [
+      { name: 'untitled.rosetta', path: 'untitled.rosetta', content: '', dirty: true }
+    ];
+    const file = createBlankWorkspaceFile(existing);
+    expect(file.path).toBe('untitled-2.rosetta');
+    expect(file.name).toBe('untitled-2.rosetta');
+  });
+
+  it('finds the next gap when untitled and untitled-2 both exist', () => {
+    const existing: WorkspaceFile[] = [
+      { name: 'untitled.rosetta', path: 'untitled.rosetta', content: '', dirty: true },
+      { name: 'untitled-2.rosetta', path: 'untitled-2.rosetta', content: '', dirty: true }
+    ];
+    const file = createBlankWorkspaceFile(existing);
+    expect(file.path).toBe('untitled-3.rosetta');
+  });
+
+  it('ignores read-only model files when computing uniqueness', () => {
+    // A bundled model that happens to contain untitled.rosetta shouldn't block
+    // the user's first New.
+    const existing: WorkspaceFile[] = [
+      {
+        name: 'untitled.rosetta',
+        path: '[model-id]/untitled.rosetta',
+        content: '',
+        dirty: false,
+        readOnly: true
+      }
+    ];
+    const file = createBlankWorkspaceFile(existing);
+    expect(file.path).toBe('untitled.rosetta');
   });
 });
 
