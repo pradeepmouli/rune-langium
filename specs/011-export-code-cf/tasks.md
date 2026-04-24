@@ -72,9 +72,9 @@ Studio edits land in existing `apps/studio/src/**` paths; build-time env wiring 
 - [X] T017 [P] [US1] Session-cookie unit tests in `apps/codegen-worker/test/session.test.ts` — valid cookie verifies; expired, wrong-signature, and rotated-IP cases all fail.
 - [X] T018 [US1] Worker orchestration in `apps/codegen-worker/src/index.ts` for `POST /api/generate` — order: (1) parse body, (2) check session cookie OR verify Turnstile token, (3) DO rate-limit check, (4) Container dispatch, (5) return response + `Set-Cookie` on first-gen. Depends on T012/T014/T016.
 - [X] T019 [P] [US1] Worker integration test `apps/codegen-worker/test/proxy.test.ts` — Miniflare end-to-end: Turnstile dummy key, DO, stubbed Container binding returning canned response. Assert happy-path 200 + `Set-Cookie`.
-- [ ] T020 [US1] Studio: add Turnstile widget to `apps/studio/src/components/ExportDialog.tsx` — render `<Turnstile>` from `@marsidev/react-turnstile` only when `import.meta.env.VITE_TURNSTILE_SITE_KEY` is set AND the configured codegen URL is a relative/cross-origin hosted URL (not `localhost:*`). Stash the token in local component state; include as `X-Turnstile-Token` header on the first generation request.
-- [ ] T021 [US1] Studio: extend `BrowserCodegenProxy` in `apps/studio/src/services/codegen-service.ts` to forward the Turnstile token header on first request and omit it on subsequent requests in the same session.
-- [ ] T022 [US1] Build-time env wiring in `apps/docs/scripts/build-combined.mjs` — inject `VITE_CODEGEN_URL=/rune-studio/api/generate` and `VITE_TURNSTILE_SITE_KEY=${process.env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}` into the studio sub-build. Local dev unchanged (no script wrapper → default env).
+- [X] T020 [US1] Studio: add Turnstile widget to `apps/studio/src/components/ExportDialog.tsx` — render `<Turnstile>` from `@marsidev/react-turnstile` only when `import.meta.env.VITE_TURNSTILE_SITE_KEY` is set AND the configured codegen URL is a relative/cross-origin hosted URL (not `localhost:*`). Stash the token in local component state; include as `X-Turnstile-Token` header on the first generation request.
+- [X] T021 [US1] Studio: extend `BrowserCodegenProxy` in `apps/studio/src/services/codegen-service.ts` to forward the Turnstile token header on first request and omit it on subsequent requests in the same session.
+- [X] T022 [US1] Build-time env wiring in `apps/docs/scripts/build-combined.mjs` — inject `VITE_CODEGEN_URL=/rune-studio/api/generate` and `VITE_TURNSTILE_SITE_KEY=${process.env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}` into the studio sub-build. Local dev unchanged (no script wrapper → default env).
 - [ ] T023 [US1] E2E test `apps/studio/test/e2e/export-code-cf.spec.ts` — Playwright against local Miniflare+studio stack with Turnstile dummy keys. Asserts click → challenge passes invisibly → files render → download button works. Uses the port helper from `apps/studio/scripts/check-env.mjs`.
 
 **Checkpoint**: Clicking Export Code on the deployed Studio produces a downloadable file for every language in `codegen-cli --list-languages`. SC-001, SC-003, SC-004, SC-007 verifiable.
@@ -87,13 +87,13 @@ Studio edits land in existing `apps/studio/src/**` paths; build-time env wiring 
 
 **Independent Test**: Force each degraded mode (kill container, exceed rate limit, disconnect Worker) and verify the dialog shows the correct copy + retry behavior.
 
-- [ ] T024 [US2] Worker `GET /api/generate/health` handler in `apps/codegen-worker/src/index.ts` — probes the container binding; on success returns `{status, cold_start_likely, languages}`. Caches the `languages` list in KV (`LANG_CACHE`) with 1-hour TTL. On container unreachable within 3s, returns cached languages with `cold_start_likely: true`.
-- [ ] T025 [P] [US2] Worker 429 response envelope — `apps/codegen-worker/src/index.ts` returns `{error: "rate_limited", scope, limit, remaining_hour, remaining_day, retry_after_s, message}` with `Retry-After` header, per `contracts/http-generate.md`.
-- [ ] T026 [P] [US2] Worker upstream-failure response — retries container dispatch once with exponential backoff; on persistent failure returns `{error: "upstream_failure", message, retryable: true}` with HTTP 502.
-- [ ] T027 [P] [US2] Worker integration tests in `apps/codegen-worker/test/error-cases.test.ts` — assert 429 shape, `Retry-After`, cached-language fallback on cold health, and 502 retry behavior.
-- [ ] T028 [US2] Studio ExportDialog degraded-state UX in `apps/studio/src/components/ExportDialog.tsx` — add three new states: `warmingUp` (shows elapsed-time counter next to spinner when container is cold), `rateLimited` (renders the `Retry-After` message with the "run Studio locally" fallback hint), `upstreamFailure` (renders the specific error + status-check link).
+- [X] T024 [US2] Worker `GET /api/generate/health` handler in `apps/codegen-worker/src/index.ts` — probes the container binding; on success returns `{status, cold_start_likely, languages}`. Caches the `languages` list in KV (`LANG_CACHE`) with 1-hour TTL. On container unreachable within 3s, returns cached languages with `cold_start_likely: true`.
+- [X] T025 [P] [US2] Worker 429 response envelope — `apps/codegen-worker/src/index.ts` returns `{error: "rate_limited", scope, limit, remaining_hour, remaining_day, retry_after_s, message}` with `Retry-After` header, per `contracts/http-generate.md`.
+- [X] T026 [P] [US2] Worker upstream-failure response — retries container dispatch once with exponential backoff; on persistent failure returns `{error: "upstream_failure", message, retryable: true}` with HTTP 502.
+- [X] T027 [P] [US2] Worker integration tests in `apps/codegen-worker/test/error-cases.test.ts` — assert 429 shape, `Retry-After`, cached-language fallback on cold health, and 502 retry behavior.
+- [X] T028 [US2] Studio ExportDialog degraded-state UX in `apps/studio/src/components/ExportDialog.tsx` — add three new states: `warmingUp` (shows elapsed-time counter next to spinner when container is cold), `rateLimited` (renders the `Retry-After` message with the "run Studio locally" fallback hint), `upstreamFailure` (renders the specific error + status-check link).
 - [ ] T029 [P] [US2] Studio e2e extension in `apps/studio/test/e2e/export-code-cf.spec.ts` — add test cases for each degraded state, driving the Worker into the failure mode via a debug endpoint and asserting dialog copy.
-- [ ] T030 [US2] Update `apps/studio/src/components/ExportDialog.tsx` copy for the "no languages available at all" case (FR-011, US2 acceptance 2) — suggests local-dev fallback.
+- [X] T030 [US2] Update `apps/studio/src/components/ExportDialog.tsx` copy for the "no languages available at all" case (FR-011, US2 acceptance 2) — suggests local-dev fallback.
 
 **Checkpoint**: SC-002 (warm/cold latency surfaced in UX), SC-005 (rate-limit observable by users) verifiable. No generic error messages remain in the dialog's failure paths.
 
@@ -105,7 +105,7 @@ Studio edits land in existing `apps/studio/src/**` paths; build-time env wiring 
 
 **Independent Test**: Start `pnpm codegen:start` + `pnpm --filter @rune-langium/studio dev`; run Export Code across every language; confirm no Turnstile appears, no rate-limit error occurs, and output matches pre-feature baseline.
 
-- [ ] T031 [US3] Guard Turnstile render in `apps/studio/src/components/ExportDialog.tsx` — only instantiate the widget when `VITE_CODEGEN_URL` starts with `/` or a non-localhost host. Add a unit test asserting the widget is absent when `VITE_CODEGEN_URL=http://localhost:8377`.
+- [X] T031 [US3] Guard Turnstile render in `apps/studio/src/components/ExportDialog.tsx` — only instantiate the widget when `VITE_CODEGEN_URL` starts with `/` or a non-localhost host. Add a unit test asserting the widget is absent when `VITE_CODEGEN_URL=http://localhost:8377`.
 - [ ] T032 [US3] Regression e2e test `apps/studio/test/e2e/export-code-local-regression.spec.ts` — runs against local `pnpm codegen:start` harness; asserts (a) no Turnstile DOM node rendered, (b) rate-limit 429 never returned, (c) generated output for a canned fixture matches the pre-feature snapshot byte-for-byte.
 - [ ] T033 [US3] Update `README.md` and `apps/studio/README.md` with a "local vs hosted codegen" callout explaining the two paths and when each applies.
 
@@ -117,10 +117,10 @@ Studio edits land in existing `apps/studio/src/**` paths; build-time env wiring 
 
 **Purpose**: Observability, ops, docs, and the one-time CF infra pieces that don't belong to a single user story.
 
-- [ ] T034 [P] Worker structured logging to CF Tail — add a log-emit helper in `apps/codegen-worker/src/log.ts` writing `WorkerLogEntry` per `data-model.md`. Explicitly excludes `request.files` and `response.files` content from every log line.
-- [ ] T035 [P] Log-sanitization test `apps/codegen-worker/test/log-redaction.test.ts` — asserts that a request containing a known sensitive string (e.g. `namespace secret; type Password`) produces zero log lines containing that string. Satisfies SC-008.
+- [X] T034 [P] Worker structured logging to CF Tail — add a log-emit helper in `apps/codegen-worker/src/log.ts` writing `WorkerLogEntry` per `data-model.md`. Explicitly excludes `request.files` and `response.files` content from every log line.
+- [X] T035 [P] Log-sanitization test `apps/codegen-worker/test/log-redaction.test.ts` — asserts that a request containing a known sensitive string (e.g. `namespace secret; type Password`) produces zero log lines containing that string. Satisfies SC-008.
 - [ ] T036 [P] Container-side log sanitization — the HTTP wrapper in `apps/codegen-container/src/server.ts` MUST NOT `console.log` request or response bodies; only status + duration. Test in `apps/codegen-container/test/log-redaction.test.ts`.
-- [ ] T037 [P] Update `apps/studio/README.md` with an "Export Code" user-facing section — screenshot of the Turnstile challenge, description of rate-limits, link to run Studio locally for heavy use.
+- [X] T037 [P] Update `apps/studio/README.md` with an "Export Code" user-facing section — screenshot of the Turnstile challenge, description of rate-limits, link to run Studio locally for heavy use.
 - [ ] T038 Finalize `specs/011-export-code-cf/quickstart.md` deploy steps — verify `wrangler deploy` + container push commands against a live dry-run, capture the actual image-tag format, and update the doc with any corrections.
 - [ ] T039 One-time CF dashboard action (manual, documented in quickstart.md §6) — create the $25/month billing notification alert on the Pmouli@mac.com account. Not automatable; note alert ID in an ops doc outside VCS.
 - [ ] T040 Rollback rehearsal — run `wrangler rollback` on the Worker in a preview environment to confirm the published rollback plan in `quickstart.md` actually works. Document any surprises.

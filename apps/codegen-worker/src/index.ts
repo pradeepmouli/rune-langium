@@ -19,6 +19,7 @@
 import type { WorkerEnv } from './types.js';
 import { RateLimiter } from './rate-limit.js';
 import { verifyTurnstile } from './turnstile.js';
+import { logRequest } from './log.js';
 import {
   buildSessionCookie,
   computeIpHash,
@@ -66,17 +67,50 @@ export async function handleRequest(req: Request, env: WorkerEnv): Promise<Respo
   return json(404, { error: 'not_found' });
 }
 
+const COLD_START_THRESHOLD_MS = 3000;
+const LANG_CACHE_TTL_SECONDS = 3600;
+const LANG_CACHE_KEY = 'languages';
+
 async function handleHealth(env: WorkerEnv): Promise<Response> {
+  const start = Date.now();
   try {
     const upstream = await env.CODEGEN.fetch(
       new Request('http://codegen/api/generate/health', { method: 'GET' })
     );
-    if (!upstream.ok) {
-      return json(503, { status: 'unavailable', message: 'upstream health failed' });
+    const elapsedMs = Date.now() - start;
+    if (!upstream.ok) throw new Error(`upstream_http_${upstream.status}`);
+
+    const payload = (await upstream.json()) as {
+      status?: string;
+      languages?: string[];
+      cold_start_likely?: boolean;
+    };
+    const languages = payload.languages ?? [];
+
+    // Cache the language list for fallback on future cold starts.
+    // Fire-and-forget: cache write failure MUST NOT fail the health probe.
+    if (languages.length > 0) {
+      env.LANG_CACHE.put(LANG_CACHE_KEY, JSON.stringify(languages), {
+        expirationTtl: LANG_CACHE_TTL_SECONDS
+      }).catch(() => void 0);
     }
-    const body = await upstream.text();
-    return new Response(body, { status: 200, headers: JSON_HEADERS });
+
+    return json(200, {
+      status: 'ok',
+      cold_start_likely: payload.cold_start_likely ?? elapsedMs >= COLD_START_THRESHOLD_MS,
+      languages
+    });
   } catch (_err) {
+    // Container failed. Try to serve cached languages so the Studio picker
+    // isn't empty; if cache is also empty, surface 503.
+    const cached = await readCachedLanguages(env);
+    if (cached && cached.length > 0) {
+      return json(200, {
+        status: 'ok',
+        cold_start_likely: true,
+        languages: cached
+      });
+    }
     return json(503, {
       status: 'unavailable',
       message: 'The code generation service is temporarily unavailable.'
@@ -84,7 +118,19 @@ async function handleHealth(env: WorkerEnv): Promise<Response> {
   }
 }
 
+async function readCachedLanguages(env: WorkerEnv): Promise<string[] | null> {
+  try {
+    const raw = await env.LANG_CACHE.get(LANG_CACHE_KEY, 'json');
+    if (Array.isArray(raw)) return raw as string[];
+    if (typeof raw === 'string') return JSON.parse(raw) as string[];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function handleGenerate(req: Request, env: WorkerEnv): Promise<Response> {
+  const requestStartMs = Date.now();
   // Accept cf-connecting-ip (real CF), fall back to an RFC-5737 TEST-NET-3 address
   // when the header isn't present (test/dev). Never 0.0.0.0 — that's special.
   const remoteIp = req.headers.get('cf-connecting-ip') ?? '203.0.113.1';
@@ -189,17 +235,9 @@ async function handleGenerate(req: Request, env: WorkerEnv): Promise<Response> {
     return json(400, { error: 'bad_json' });
   }
 
-  // --- Step 4: container dispatch ---
-  let upstream: Response;
-  try {
-    upstream = await env.CODEGEN.fetch(
-      new Request('http://codegen/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: rawBody
-      })
-    );
-  } catch (_err) {
+  // --- Step 4: container dispatch, with one retry on transient failure ---
+  const upstream = await dispatchWithRetry(env, rawBody);
+  if (!upstream) {
     return json(
       502,
       {
@@ -214,10 +252,82 @@ async function handleGenerate(req: Request, env: WorkerEnv): Promise<Response> {
   const upstreamBody = await upstream.text();
   const extraHeaders: Record<string, string> = {};
   if (issuedCookie) extraHeaders['Set-Cookie'] = issuedCookie;
+
+  // Emit a single structured log line per request. Never includes
+  // the request or response body — only dimensions.
+  try {
+    const requestLanguage = extractLanguage(rawBody);
+    logRequest({
+      ipHash,
+      language: requestLanguage,
+      bytesOut: upstreamBody.length,
+      durationMs: Date.now() - requestStartMs,
+      status: upstream.status,
+      coldStart: false
+    });
+  } catch {
+    // Logging must never break the response path.
+  }
+
   return new Response(upstreamBody, {
     status: upstream.status,
     headers: { ...JSON_HEADERS, ...extraHeaders }
   });
+}
+
+/** Safely extract request.language for logging without echoing the body. */
+function extractLanguage(rawBody: string): string {
+  try {
+    const parsed = JSON.parse(rawBody) as { language?: unknown };
+    return typeof parsed.language === 'string' ? parsed.language : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * Attempt the container fetch up to twice. Retries on thrown errors and on
+ * 5xx responses. 2xx and 4xx (including 422 parse errors) pass through
+ * unchanged on the first call — those are not transient. Returns null when
+ * both attempts fail so the caller can surface 502 upstream_failure.
+ */
+async function dispatchWithRetry(env: WorkerEnv, rawBody: string): Promise<Response | null> {
+  const BASE_DELAY_MS = 200;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const upstream = await env.CODEGEN.fetch(
+        new Request('http://codegen/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: rawBody
+        })
+      );
+      if (upstream.status >= 500) {
+        lastError = new Error(`container_${upstream.status}`);
+        if (attempt === 0) {
+          await sleep(BASE_DELAY_MS);
+          continue;
+        }
+        return null;
+      }
+      return upstream;
+    } catch (err) {
+      lastError = err;
+      if (attempt === 0) {
+        await sleep(BASE_DELAY_MS);
+        continue;
+      }
+      return null;
+    }
+  }
+  void lastError;
+  return null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function readBounded(req: Request): Promise<string> {

@@ -3,9 +3,18 @@
 
 /**
  * Code generation service integration for Studio.
- * In the browser, code generation is done via HTTP POST to a local codegen server.
- * The server can be started via: pnpm codegen:start (which runs CodegenCli in server mode).
- * @see specs/008-core-editor-features/contracts/codegen-api.md
+ *
+ * Two deployment modes:
+ *  - **Local**: baseUrl points at `http://localhost:8377`; Studio talks to the
+ *    existing codegen server started by `pnpm codegen:start`. Endpoints used:
+ *    /api/health, /api/languages, /api/generate.
+ *  - **Hosted** (feature 011-export-code-cf): baseUrl is relative (`/rune-studio`)
+ *    or a non-localhost absolute URL. Studio talks to the CF Worker which
+ *    exposes the new `/api/generate/health` + `/api/generate` contract,
+ *    gated by CF Turnstile + Durable Object rate-limiting.
+ *
+ * @see specs/008-core-editor-features/contracts/codegen-api.md (local)
+ * @see specs/011-export-code-cf/contracts/http-generate.md (hosted)
  */
 
 import { KNOWN_GENERATORS } from '@rune-langium/codegen';
@@ -21,6 +30,15 @@ export { KNOWN_GENERATORS };
 
 /** Default codegen service URL. Override via VITE_CODEGEN_URL env var. */
 const DEFAULT_CODEGEN_URL = 'http://localhost:8377';
+
+export interface GenerateOptions {
+  /**
+   * Turnstile token from the widget. Required for the first generation per
+   * hosted session; subsequent generations omit this and rely on the
+   * hcsession cookie. Ignored in local mode.
+   */
+  turnstileToken?: string;
+}
 
 /**
  * Browser-compatible proxy that calls the codegen HTTP API.
@@ -39,15 +57,42 @@ export class BrowserCodegenProxy {
     this.baseUrl = baseUrl ?? envUrl ?? DEFAULT_CODEGEN_URL;
   }
 
+  /**
+   * True when this proxy targets the hosted Worker (relative URL or
+   * non-localhost absolute URL). Callers use this to decide whether to
+   * render the Turnstile widget and which endpoints to hit.
+   */
+  isHostedService(): boolean {
+    const base = this.baseUrl;
+    if (base.startsWith('/')) return true;
+    try {
+      const { hostname } = new URL(base);
+      return hostname !== 'localhost' && hostname !== '127.0.0.1' && hostname !== '0.0.0.0';
+    } catch {
+      // Non-absolute, non-root-relative URL — treat as hosted (safer default).
+      return true;
+    }
+  }
+
   async generate(
     request: CodeGenerationRequest,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: GenerateOptions
   ): Promise<CodeGenerationResult> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (options?.turnstileToken) {
+      headers['X-Turnstile-Token'] = options.turnstileToken;
+    }
+
     const response = await fetch(`${this.baseUrl}/api/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(request),
-      signal
+      signal,
+      // Needed so the hcsession cookie the Worker sets on first generation
+      // rides along with subsequent requests. Ignored in local mode where
+      // no cookies are ever issued.
+      credentials: 'include'
     });
 
     if (!response.ok) {
@@ -62,7 +107,16 @@ export class BrowserCodegenProxy {
           warnings: []
         };
       }
-      throw new Error(`Code generation failed (HTTP ${response.status})`);
+      // Let callers distinguish by status via the thrown message; dialog-side
+      // UX maps 401/429/5xx to specific messages (see ExportDialog T028).
+      const err = new Error(`Code generation failed (HTTP ${response.status})`);
+      (err as Error & { status?: number }).status = response.status;
+      try {
+        (err as Error & { body?: unknown }).body = await response.json();
+      } catch {
+        /* non-JSON body; ignore */
+      }
+      throw err;
     }
 
     const result = (await response.json()) as Omit<CodeGenerationResult, 'language'>;
@@ -70,14 +124,21 @@ export class BrowserCodegenProxy {
   }
 
   async listLanguages(): Promise<Array<{ id: string; class: string }>> {
+    if (this.isHostedService()) {
+      // New contract returns languages inside the health envelope.
+      const response = await fetch(`${this.baseUrl}/api/generate/health`);
+      const data = (await response.json()) as { languages?: string[] };
+      return (data.languages ?? []).map((id) => ({ id, class: '' }));
+    }
     const response = await fetch(`${this.baseUrl}/api/languages`);
     const data = (await response.json()) as { languages: Array<{ id: string; class: string }> };
     return data.languages;
   }
 
   async isAvailable(): Promise<boolean> {
+    const path = this.isHostedService() ? '/api/generate/health' : '/api/health';
     try {
-      const response = await fetch(`${this.baseUrl}/api/health`, {
+      const response = await fetch(`${this.baseUrl}${path}`, {
         signal: AbortSignal.timeout(3000)
       });
       return response.ok;

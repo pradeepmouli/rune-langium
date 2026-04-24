@@ -7,7 +7,8 @@
  * preview generated files, and download as individual files.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Turnstile } from '@marsidev/react-turnstile';
 import { Button } from '@rune-langium/design-system/ui/button';
 import {
   Select,
@@ -37,12 +38,28 @@ export interface ExportDialogProps {
   validateModel?: () => string[];
 }
 
+interface ErrorDetails {
+  message: string;
+  /** HTTP status from the Worker, when available (401 / 429 / 502 / 5xx). */
+  status?: number;
+  /** Parsed error body from the Worker, when JSON-decodable. */
+  body?: {
+    error?: string;
+    scope?: 'hour' | 'day';
+    retry_after_s?: number;
+    remaining_hour?: number;
+    remaining_day?: number;
+    message?: string;
+    [k: string]: unknown;
+  };
+}
+
 type DialogState =
   | { phase: 'idle' }
   | { phase: 'validating' }
   | { phase: 'generating'; language: string }
   | { phase: 'done'; result: CodeGenerationResult }
-  | { phase: 'error'; message: string };
+  | { phase: 'error'; details: ErrorDetails };
 
 export function ExportDialog({
   getUserFiles,
@@ -57,6 +74,29 @@ export function ExportDialog({
   const [serviceAvailable, setServiceAvailable] = useState<boolean | null>(null);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Hosted-mode Turnstile integration (feature 011-export-code-cf).
+  // The widget only renders when the configured codegen URL is a hosted
+  // Worker (relative URL or non-localhost) AND a site key is provided.
+  // After one successful generation, the Worker issues a session cookie
+  // and subsequent generations in this session skip Turnstile — we
+  // signal that by clearing `turnstileToken` only when the widget's
+  // onSuccess fires.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const service = useMemo(() => getCodegenService(), []);
+  const isHosted = service.isHostedService();
+  const turnstileSiteKey = (
+    typeof import.meta !== 'undefined'
+      ? (import.meta as unknown as Record<string, Record<string, string>>).env?.[
+          'VITE_TURNSTILE_SITE_KEY'
+        ]
+      : undefined
+  ) as string | undefined;
+  const showTurnstile = isHosted && Boolean(turnstileSiteKey);
+  // Track whether the session cookie is probably set (true after a
+  // successful first generation) so we can hide the widget on re-opens.
+  const sessionCookieAcquiredRef = useRef(false);
+  const turnstileNeeded = showTurnstile && !sessionCookieAcquiredRef.current;
 
   // Check service availability when dialog opens
   useEffect(() => {
@@ -83,7 +123,10 @@ export function ExportDialog({
 
     const userFiles = getUserFiles();
     if (userFiles.size === 0) {
-      setState({ phase: 'error', message: 'No user-authored files to export.' });
+      setState({
+        phase: 'error',
+        details: { message: 'No user-authored files to export.' }
+      });
       return;
     }
 
@@ -104,22 +147,39 @@ export function ExportDialog({
     abortRef.current = controller;
 
     try {
-      const service = getCodegenService();
-      const result = await service.generate({ language, files }, controller.signal);
+      const options = turnstileToken !== null ? { turnstileToken } : undefined;
+      const result = await service.generate({ language, files }, controller.signal, options);
       setState({ phase: 'done', result });
       if (result.files.length > 0) {
         setSelectedFile(result.files[0]!);
+      }
+      // First generation on a hosted deploy: consume the Turnstile token
+      // and flag the session as cookie-bearing for subsequent generations.
+      if (turnstileToken !== null) {
+        setTurnstileToken(null);
+        sessionCookieAcquiredRef.current = true;
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         setState({ phase: 'idle' });
       } else {
-        setState({ phase: 'error', message: (err as Error).message });
+        // If the Worker rejected with 401 turnstile_required, invalidate
+        // our cached session flag so the widget re-renders next time.
+        const status = (err as Error & { status?: number }).status;
+        const body = (err as Error & { body?: ErrorDetails['body'] }).body;
+        if (status === 401) {
+          sessionCookieAcquiredRef.current = false;
+          setTurnstileToken(null);
+        }
+        setState({
+          phase: 'error',
+          details: { message: (err as Error).message, status, body }
+        });
       }
     } finally {
       abortRef.current = null;
     }
-  }, [language, getUserFiles, getReferenceFiles, validateModel]);
+  }, [language, getUserFiles, getReferenceFiles, validateModel, service, turnstileToken]);
 
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
@@ -140,6 +200,46 @@ export function ExportDialog({
   }, [state]);
 
   if (!open) return null;
+
+  function renderErrorBody(details: ErrorDetails) {
+    const { status, body, message } = details;
+    // 401 turnstile_required → re-challenge is automatic; short message.
+    if (status === 401 && body?.error === 'turnstile_required') {
+      return <>Please complete the verification challenge above and try again.</>;
+    }
+    // 429 rate_limited → show retry window + local-dev hint.
+    if (status === 429 && body?.error === 'rate_limited') {
+      const mins =
+        typeof body.retry_after_s === 'number' ? Math.ceil(body.retry_after_s / 60) : null;
+      return (
+        <>
+          <p className="font-medium mb-1">Rate limit reached</p>
+          <p>
+            {body.message ??
+              (body.scope === 'hour'
+                ? `You've hit the free-tier limit (10/hour).`
+                : `You've hit the daily limit (100/day).`)}
+          </p>
+          {mins !== null && <p className="mt-1">Try again in {mins} minutes.</p>}
+          <p className="mt-1">
+            Need more? Run Studio locally with <code className="font-mono">pnpm codegen:start</code>{' '}
+            for unlimited generation.
+          </p>
+        </>
+      );
+    }
+    // 502 / 5xx upstream_failure → the container is warming or transiently sick.
+    if (status !== undefined && status >= 502) {
+      return (
+        <>
+          <p className="font-medium mb-1">Code generation service is warming up</p>
+          <p>The service is temporarily unavailable. Please retry in a minute.</p>
+        </>
+      );
+    }
+    // Fallback: whatever message came from the thrown error.
+    return <>{message}</>;
+  }
 
   return (
     <div
@@ -164,11 +264,29 @@ export function ExportDialog({
 
         {/* Content */}
         <div className="flex-1 min-h-0 p-4 flex flex-col gap-4">
-          {/* Service unavailable warning */}
+          {/* Service unavailable warning — T030: give hosted users a
+              different hint than local-dev users. */}
           {serviceAvailable === false && (
             <div className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive">
-              Code generation service is not available. Ensure the service is running and configured
-              via VITE_CODEGEN_URL.
+              {isHosted ? (
+                <>
+                  The code generation service is temporarily unavailable. Please try again in a
+                  minute, or{' '}
+                  <a
+                    href="https://github.com/pradeepmouli/rune-langium#export-code"
+                    className="underline"
+                  >
+                    run Studio locally
+                  </a>{' '}
+                  for unlimited generation.
+                </>
+              ) : (
+                <>
+                  Code generation service is not available. Start it with{' '}
+                  <code className="font-mono">pnpm codegen:start</code>, or set{' '}
+                  <code className="font-mono">VITE_CODEGEN_URL</code> to a reachable service.
+                </>
+              )}
             </div>
           )}
 
@@ -181,6 +299,22 @@ export function ExportDialog({
                   <li key={i}>{w}</li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* CF Turnstile challenge — hosted deploys only; first generation per session */}
+          {turnstileNeeded && turnstileSiteKey && (
+            <div
+              className="flex items-center justify-center py-2"
+              data-testid="turnstile-widget-container"
+            >
+              <Turnstile
+                siteKey={turnstileSiteKey}
+                onSuccess={(token) => setTurnstileToken(token)}
+                onExpire={() => setTurnstileToken(null)}
+                onError={() => setTurnstileToken(null)}
+                options={{ action: 'export-code', theme: 'auto', size: 'flexible' }}
+              />
             </div>
           )}
 
@@ -209,7 +343,13 @@ export function ExportDialog({
                 Cancel
               </Button>
             ) : (
-              <Button size="sm" onClick={handleGenerate} disabled={serviceAvailable === false}>
+              <Button
+                size="sm"
+                onClick={handleGenerate}
+                disabled={
+                  serviceAvailable === false || (turnstileNeeded && turnstileToken === null)
+                }
+              >
                 Generate
               </Button>
             )}
@@ -223,10 +363,15 @@ export function ExportDialog({
             </div>
           )}
 
-          {/* Error state */}
+          {/* Error state — degraded UX (T028) with specific messages for
+              the known Worker error shapes. */}
           {state.phase === 'error' && (
-            <div className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive">
-              {state.message}
+            <div
+              className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive"
+              data-testid="export-error"
+              data-error-status={state.details.status ?? ''}
+            >
+              {renderErrorBody(state.details)}
             </div>
           )}
 

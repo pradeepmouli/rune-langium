@@ -72,6 +72,36 @@ pnpm --filter @rune-langium/studio dev
 
 The studio will connect to `ws://localhost:3001` automatically. If no server is running, it falls back to the embedded worker.
 
+## Export Code
+
+The **Export Code** toolbar button generates source code in a selected target language (Java, TypeScript, JSON Schema, Zod, Python, …) from the currently loaded Rune model. It has two deployment modes — local development and the hosted CF deploy at `www.daikonic.dev/rune-studio/studio/` — with different backends:
+
+### Local development
+
+Run the Java-backed codegen server alongside the studio:
+
+```bash
+# Terminal 3 (in addition to LSP + studio dev):
+pnpm codegen:start   # serves http://localhost:8377
+```
+
+With this running, Export Code supports the **full** generator matrix (whatever `codegen-cli --list-languages` returns locally, including JVM-only targets like Java and CDM-specific generators). No Turnstile challenge, no rate-limit — local dev is friction-free.
+
+### Hosted deployment (`www.daikonic.dev/rune-studio/`)
+
+Same features, but behind a Cloudflare Worker that enforces light abuse protection:
+
+- **CF Turnstile** — a one-off invisible challenge on the first generation per browser session. Subsequent generations in the session use an `HttpOnly` cookie and skip the widget.
+- **Per-IP rate limits** — 10 generations per hour, 100 per day. Errors surface a clear "Try again in N minutes" message and point heavy users to local dev for unlimited use.
+- **Transient failures** — if the container is cold or briefly unhealthy, the dialog shows a "warming up" message with auto-retry. The response time SLA is ≤5s warm / ≤15s cold.
+
+Under the hood, Studio reads two build-time env vars:
+
+- `VITE_CODEGEN_URL` — base URL for the codegen service. Default: `http://localhost:8377`. The CF build sets it to `/rune-studio` so Export Code calls `/rune-studio/api/generate` (same-origin, no CORS).
+- `VITE_TURNSTILE_SITE_KEY` — Turnstile public site key. Defaults to Turnstile's "always-pass" dummy key for preview builds; set explicitly for the production deploy.
+
+See [`specs/011-export-code-cf/`](../../specs/011-export-code-cf/) for the full design. The Worker + container live under [`apps/codegen-worker/`](../codegen-worker/) and [`apps/codegen-container/`](../codegen-container/).
+
 ## Key Files
 
 | File | Purpose |
