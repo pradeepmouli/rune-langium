@@ -45,24 +45,28 @@ COPY packages/codegen/server/src /build/codegen-src/src
 
 # Resolve Maven classpath and compile CodegenCli.java against it.
 # Writes target/classes and target/codegen-cli.sh launcher that uses in-container paths.
-RUN set -eux; \
-    cd rosetta-code-generators; \
-    CLASSPATH=$(mvn dependency:build-classpath -pl default-cdm-generators -q \
-                -DincludeScope=compile \
-                -Dmdep.outputFile=/dev/stdout 2>/dev/null); \
-    CDM_JAR="/build/rosetta-code-generators/default-cdm-generators/target/default-cdm-generators-0.0.0.main-SNAPSHOT.jar"; \
-    CLASSPATH="$CDM_JAR:$CLASSPATH"; \
-    mkdir -p /build/codegen-src/target/classes; \
-    javac -cp "$CLASSPATH" \
-          -d /build/codegen-src/target/classes \
-          --add-exports jdk.httpserver/com.sun.net.httpserver=ALL-UNNAMED \
-          /build/codegen-src/src/org/isda/cdm/generators/CodegenCli.java; \
-    cat > /build/codegen-src/target/codegen-cli.sh <<LAUNCHER
+# BuildKit heredoc form (`RUN <<EOF`) is used so the inner shell heredoc for
+# the launcher script nests cleanly without Dockerfile-parser confusion.
+RUN <<STAGE1_SH
+set -eux
+cd rosetta-code-generators
+CLASSPATH=$(mvn dependency:build-classpath -pl default-cdm-generators -q \
+            -DincludeScope=compile \
+            -Dmdep.outputFile=/dev/stdout 2>/dev/null)
+CDM_JAR="/build/rosetta-code-generators/default-cdm-generators/target/default-cdm-generators-0.0.0.main-SNAPSHOT.jar"
+CLASSPATH="${CDM_JAR}:${CLASSPATH}"
+mkdir -p /build/codegen-src/target/classes
+javac -cp "$CLASSPATH" \
+      -d /build/codegen-src/target/classes \
+      --add-exports jdk.httpserver/com.sun.net.httpserver=ALL-UNNAMED \
+      /build/codegen-src/src/org/isda/cdm/generators/CodegenCli.java
+cat > /build/codegen-src/target/codegen-cli.sh <<LAUNCHER
 #!/usr/bin/env bash
-exec java -cp "/app/codegen-cli/classes:$CLASSPATH" \
+exec java -cp "/app/codegen-cli/classes:${CLASSPATH}" \
      org.isda.cdm.generators.CodegenCli "\$@"
 LAUNCHER
-    chmod +x /build/codegen-src/target/codegen-cli.sh
+chmod +x /build/codegen-src/target/codegen-cli.sh
+STAGE1_SH
 
 # ---------- Stage 2: runtime ----------
 FROM eclipse-temurin:21-jre-jammy AS runtime
