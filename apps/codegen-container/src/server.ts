@@ -18,6 +18,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { CodeGenerationRequest, CodeGenerationResult } from '@rune-langium/codegen';
 import { CodegenServiceProxy } from '@rune-langium/codegen/node';
+import type { Logger } from 'pino';
+import { logger as defaultLogger } from './logger.js';
 
 interface CodegenProxyLike {
   listLanguages(): Promise<Array<{ id: string; class: string }>>;
@@ -30,6 +32,8 @@ export interface ContainerServerOptions {
   proxy?: CodegenProxyLike;
   /** Path to codegen-cli.sh when defaulting to CodegenServiceProxy; read from env by default. */
   cliPath?: string;
+  /** Injected logger for tests; production uses the pino default from ./logger. */
+  logger?: Logger;
 }
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024; // 4 MB — generous for model uploads, hard cap for abuse.
@@ -71,9 +75,30 @@ function writeJson(res: ServerResponse, status: number, body: unknown): void {
 
 export function createContainerServer(options: ContainerServerOptions = {}): Server {
   const proxy = options.proxy ?? defaultProxy(options.cliPath);
+  const log = options.logger ?? defaultLogger;
 
   return createServer(async (req, res) => {
     const { method, url } = req;
+    const startMs = Date.now();
+    // Request-scoped child logger. pino's redact config applies globally;
+    // requestId is for correlating /health, /generate lines from the same client.
+    const requestLog = log.child({
+      requestId: randomRequestId(),
+      method: method ?? 'UNKNOWN',
+      url: url ?? ''
+    });
+
+    // Observe response finish to emit one structured log line per request.
+    res.on('finish', () => {
+      requestLog.info(
+        {
+          status: res.statusCode,
+          duration_ms: Date.now() - startMs,
+          bytes_out: Number(res.getHeader('content-length') ?? 0) || undefined
+        },
+        'codegen.request'
+      );
+    });
 
     // Routing table — strict, small, and deliberately no CORS headers
     // because this container is only reached by the Worker via a typed
@@ -90,11 +115,19 @@ export function createContainerServer(options: ContainerServerOptions = {}): Ser
         return;
       }
       writeJson(res, 404, { error: 'not_found' });
-    } catch (err) {
-      // Last-resort catch — writeJson-level errors only. Never log bodies.
+    } catch (_err) {
+      // Last-resort catch. The thrown error may contain fragments of the
+      // user's source, so we log only a stable code — pino's redact would
+      // also catch {err} shapes but keeping the payload minimal is safer.
+      requestLog.error({ errCode: 'unhandled' }, 'codegen.error');
       writeJson(res, 500, { error: 'internal_error' });
     }
   });
+}
+
+function randomRequestId(): string {
+  // 8-char random ID — plenty for log correlation without a UUID dep.
+  return Math.random().toString(36).slice(2, 10);
 }
 
 async function handleHealth(proxy: CodegenProxyLike, res: ServerResponse): Promise<void> {
@@ -143,8 +176,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const port = Number(process.env['PORT']) || 8080;
   const server = createContainerServer();
   server.listen(port, () => {
-    // Minimal startup log — no bodies, no config secrets.
-    // eslint-disable-next-line no-console
-    console.log(`codegen-container listening on :${port}`);
+    defaultLogger.info({ port }, 'codegen-container.listening');
   });
 }

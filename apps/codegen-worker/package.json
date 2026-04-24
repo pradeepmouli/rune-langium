@@ -12,6 +12,9 @@
     "test:watch": "vitest",
     "type-check": "tsgo --noEmit"
   },
+  "dependencies": {
+    "pino": "^9.5.0"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250108.0",
     "miniflare": "^3.20250108.0",
