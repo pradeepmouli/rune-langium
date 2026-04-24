@@ -16,7 +16,7 @@
   <img src="site/assets/screenshot-graph.png" alt="Rune Studio — graph view showing CDM type inheritance trees with grouped layout, namespace explorer, and type filtering" width="900">
 </p>
 
-📚 **Documentation:** <https://pradeepmouli.github.io/rune-langium/>
+🌐 **Deployment surfaces:** landing at [www.daikonic.dev/rune-studio/](https://www.daikonic.dev/rune-studio/), docs at [www.daikonic.dev/rune-studio/docs/](https://www.daikonic.dev/rune-studio/docs/), studio at [www.daikonic.dev/rune-studio/studio/](https://www.daikonic.dev/rune-studio/studio/)
 
 ## Overview
 
@@ -25,6 +25,31 @@ The [Rune DSL](https://github.com/finos/rune-dsl) is the language behind ISDA's 
 `rune-langium` is a from-scratch reimplementation of the Rune language in pure TypeScript on top of [Langium](https://langium.org/). Grammar, AST, scope provider, validator, serializer, LSP server, code generators, and visual editor all run as ESM modules in Node, in a web worker, or bundled into an SPA — so you can `pnpm add @rune-langium/core` and load a `.rosetta` file in the same process that renders your UI.
 
 Use `rune-langium` if you are building a browser-based model explorer, a VS Code / Monaco integration for CDM, a CI validator for Rune files, a codegen pipeline targeting TypeScript / JSON Schema / Zod, or a form-driven editor that reads and writes Rune models. Use the [Rune Studio](apps/studio) application if you want the batteries-included three-panel IDE (graph + form + code) ready to run.
+
+## Deployment
+
+The repository ships a unified Cloudflare Pages deployment at `www.daikonic.dev/rune-studio/`, built from three sources into one static tree:
+
+- `/rune-studio/` — static landing page from `site/`
+- `/rune-studio/docs/` — VitePress documentation (`apps/docs/`)
+- `/rune-studio/studio/` — Rune Studio SPA (`apps/studio/`)
+
+Build the combined artifact locally with:
+
+```bash
+pnpm run build:cloudflare
+```
+
+(Equivalent to `pnpm --filter @rune-langium/docs run build:combined`.) The output tree lands at `apps/docs/.vitepress/dist/`.
+
+Cloudflare Pages project settings (`daikonic-dev`):
+
+- Build command: `pnpm install --frozen-lockfile && pnpm run build && pnpm --filter @rune-langium/docs run build:combined`
+- Build output directory: `apps/docs/.vitepress/dist`
+- Production branch: `master`
+- Environment: `CF_PAGES=1` is set automatically by Cloudflare Pages; it switches VitePress and Vite to their subpath-baked bases.
+
+GitHub Actions in this repo verify that the combined build succeeds on push and pull request. Production deployment is driven by Cloudflare Pages' git integration, not the workflow.
 
 ## Features
 

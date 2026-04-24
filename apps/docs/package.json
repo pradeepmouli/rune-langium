@@ -7,6 +7,7 @@
     "docs:api": "typedoc --options .vitepress/typedoc.json",
     "dev": "pnpm run docs:api && vitepress dev",
     "build": "pnpm run docs:api && vitepress build",
+    "build:combined": "node scripts/build-combined.mjs",
     "preview": "vitepress preview"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://pradeepmouli.github.io/rune-langium/sitemap.xml
+Sitemap: https://www.daikonic.dev/rune-studio/sitemap.xml

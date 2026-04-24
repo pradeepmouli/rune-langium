@@ -23,6 +23,7 @@ import { useModelStore } from './store/model-store.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
+import { studioConfig } from './config.js';
 
 export function App() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
@@ -139,27 +140,34 @@ export function App() {
           <div className="studio-brand__mark">R</div>
           <span className="studio-brand__name">Rune Studio</span>
         </div>
-        {files.length > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <FileText className="w-3.5 h-3.5" />
-              {userFiles.length} file(s)
-            </span>
-            {hasErrors && (
-              <span
-                className="flex items-center gap-1.5 text-sm text-destructive"
-                title="Parse errors detected"
-              >
-                <AlertTriangle className="w-3.5 h-3.5" />
-                {errors.size} with errors
+        <div className="flex items-center gap-4">
+          <nav className="studio-links" aria-label="Studio links">
+            <a href={studioConfig.homeUrl}>Home</a>
+            <a href={studioConfig.docsUrl}>Docs</a>
+            <a href={studioConfig.githubUrl}>GitHub</a>
+          </nav>
+          {files.length > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <FileText className="w-3.5 h-3.5" />
+                {userFiles.length} file(s)
               </span>
-            )}
-            <Button variant="secondary" size="sm" onClick={handleReset} title="Close all files">
-              <XCircle className="w-3.5 h-3.5 mr-1" />
-              Close
-            </Button>
-          </div>
-        )}
+              {hasErrors && (
+                <span
+                  className="flex items-center gap-1.5 text-sm text-destructive"
+                  title="Parse errors detected"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {errors.size} with errors
+                </span>
+              )}
+              <Button variant="secondary" size="sm" onClick={handleReset} title="Close all files">
+                <XCircle className="w-3.5 h-3.5 mr-1" />
+                Close
+              </Button>
+            </div>
+          )}
+        </div>
       </header>
 
       <main className="flex-1 overflow-hidden relative">

@@ -1,20 +1,22 @@
 ---
 layout: home
 hero:
-  name: Rune Studio
+  name: Rune Langium
   text: Web-native tooling for the Rune DSL
-  tagline: Explore, edit, and validate CDM models and DRR reporting logic right in your browser. No Eclipse. No Java. No setup.
+  tagline: Deployable TypeScript tooling for parsing, validating, editing, and documenting Rune models in the browser.
   actions:
     - theme: brand
       text: Get Started
       link: /guide/getting-started
     - theme: alt
+      text: Open Studio
+      link: https://www.daikonic.dev/rune-studio/studio/
+    - theme: alt
       text: API Reference
       link: /api/
-    - theme: alt
-      text: View on GitHub
-      link: https://github.com/pradeepmouli/rune-langium
 features:
+  - title: Cloudflare-ready
+    details: Landing page, Studio, and docs can now ship together from a single static deployment.
   - title: Built on Langium
     details: Pure TypeScript language server. Runs anywhere JavaScript runs.
   - title: Full LSP Support

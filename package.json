@@ -6,7 +6,7 @@
   "type": "module",
   "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
   "license": "SEE LICENSE IN LICENSE",
-  "homepage": "https://pradeepmouli.github.io/rune-langium/",
+  "homepage": "https://www.daikonic.dev/rune-studio/",
   "repository": {
     "type": "git",
     "url": "https://github.com/pradeepmouli/rune-langium.git"
@@ -37,6 +37,7 @@
     "build:core": "pnpm --filter @rune-langium/core build",
     "build:visual-editor": "pnpm --filter @rune-langium/visual-editor build",
     "build:studio": "pnpm --filter @rune-langium/studio build",
+    "build:cloudflare": "pnpm --filter @rune-langium/docs run build:combined",
     "clean": "pnpm -r run clean && rm -rf node_modules/.cache",
     "clean:all": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
     "dev": "pnpm -r --parallel run dev",

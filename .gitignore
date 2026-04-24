@@ -31,3 +31,10 @@ docs/html/
 
 # Generated API docs (typedoc)
 docs/api/
+
+# Generated llms.txt / llms-full.txt — emitted by typedoc-plugin-to-skills
+# at repo root on every docs build.
+/public/
+
+# CF Pages deploy staging — moved WIP from the pre-CF-Pages unified build
+.attic/
