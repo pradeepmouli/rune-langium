@@ -234,6 +234,39 @@ export function createWorkspaceFile(name: string, content: string): WorkspaceFil
   };
 }
 
+/**
+ * Default starter template for a blank Rune file — a minimal `namespace`
+ * declaration plus a commented stub so the editor/graph has something to
+ * render without being completely empty.
+ */
+const BLANK_TEMPLATE = `namespace example
+
+// Start typing — autocomplete, validation, and the graph update as you go.
+//
+// type Party:
+//   name string (1..1)
+`;
+
+/**
+ * Create a blank untitled workspace file for the "New" start-page option.
+ *
+ * Picks the next available `untitled[-N].rosetta` name that doesn't collide
+ * with an existing user file. Read-only model files are ignored since they
+ * live under a `[model-id]/` prefix and never shadow user-editable paths.
+ */
+export function createBlankWorkspaceFile(
+  existingFiles: ReadonlyArray<WorkspaceFile>
+): WorkspaceFile {
+  const userPaths = new Set(existingFiles.filter((f) => !f.readOnly).map((f) => f.path));
+  let candidate = 'untitled.rosetta';
+  let n = 2;
+  while (userPaths.has(candidate)) {
+    candidate = `untitled-${n}.rosetta`;
+    n += 1;
+  }
+  return createWorkspaceFile(candidate, BLANK_TEMPLATE);
+}
+
 // ---------------------------------------------------------------------------
 // Model file merging (T008) — integrate loaded reference models
 // ---------------------------------------------------------------------------
