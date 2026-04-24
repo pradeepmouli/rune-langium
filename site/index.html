@@ -48,6 +48,7 @@ nav .container{display:flex;align-items:center;justify-content:space-between}
 .btn-primary:hover{background:#4AEACC;transform:translateY(-1px)}
 .btn-secondary{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;background:transparent;color:var(--text-primary);font-family:var(--font-display);font-size:14px;font-weight:500;border:1px solid var(--border-accent);border-radius:8px;cursor:pointer;text-decoration:none;transition:all 0.2s}
 .btn-secondary:hover{border-color:var(--text-secondary);background:rgba(255,255,255,0.03)}
+.btn-tag{font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:rgba(12,12,20,0.25);color:inherit;line-height:1}
 .section-label{font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--text-tertiary);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:16px}
 .section-title{font-size:36px;font-weight:600;letter-spacing:-0.02em;margin-bottom:16px;line-height:1.2}
 .section-desc{font-size:16px;color:var(--text-secondary);max-width:540px;line-height:1.7}
@@ -132,6 +133,7 @@ footer .container{display:flex;flex-direction:column;align-items:center;gap:20px
       <li><a href="#capabilities">Capabilities</a></li>
       <li><a href="#audiences">Use cases</a></li>
       <li><a href="#preview">Preview</a></li>
+      <li><a href="studio/">Studio</a></li>
       <li><a href="https://github.com/pradeepmouli/rune-langium">GitHub</a></li>
     </ul>
   </div>
@@ -143,11 +145,15 @@ footer .container{display:flex;flex-direction:column;align-items:center;gap:20px
     <h1>Model, validate, and <span>explore</span> regulatory logic</h1>
     <p class="hero-sub">Open a CDM or DRR model in your browser and start working in seconds. Navigate types visually, edit with full autocomplete, and catch validation errors before they reach production.</p>
     <div class="hero-actions">
-      <a href="https://github.com/pradeepmouli/rune-langium" class="btn-primary">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
-        Get started
+      <a href="studio/" class="btn-primary">
+        Open Studio
+        <span class="btn-tag">demo</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
       </a>
-      <a href="#screenshot" class="btn-secondary">See it in action</a>
+      <a href="https://github.com/pradeepmouli/rune-langium" class="btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        View on GitHub
+      </a>
     </div>
   </div>
 </section>
