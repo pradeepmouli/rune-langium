@@ -1,0 +1,317 @@
+/**
+ * Rune Langium theme — mirrors the site/ landing palette and typography.
+ * Dark-first; the light override at the bottom keeps VitePress's two-mode
+ * toggle functional for readers who prefer it.
+ */
+
+:root {
+  /* Brand colors from site/index.html */
+  --rune-teal: #00D4AA;
+  --rune-teal-dim: rgba(0, 212, 170, 0.12);
+  --rune-teal-glow: rgba(0, 212, 170, 0.06);
+  --rune-amber: #E8913A;
+  --rune-amber-dim: rgba(232, 145, 58, 0.12);
+
+  /* Dark surfaces */
+  --rune-bg-primary: #0C0C14;
+  --rune-bg-secondary: #12121C;
+  --rune-bg-card: #181824;
+  --rune-bg-card-hover: #1E1E2C;
+
+  /* Text on dark */
+  --rune-text-primary: #E8E6E1;
+  --rune-text-secondary: #8A8A96;
+  --rune-text-tertiary: #5C5C6A;
+
+  --rune-border: rgba(255, 255, 255, 0.06);
+  --rune-border-accent: rgba(255, 255, 255, 0.1);
+
+  --rune-font-display: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --rune-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ---------- VitePress variable overrides ---------- */
+/* Config sets appearance: 'force-dark' so we only need one scope. Applying
+   these at :root ensures values land on initial SSR before hydration too,
+   preventing a flash of default light chrome (e.g. the alt button pills
+   rendering unreadable until the .dark class is added). */
+
+:root,
+.dark,
+html.dark {
+  --vp-c-bg: var(--rune-bg-primary);
+  --vp-c-bg-alt: var(--rune-bg-secondary);
+  --vp-c-bg-elv: var(--rune-bg-card);
+  --vp-c-bg-soft: var(--rune-bg-card);
+
+  --vp-c-text-1: var(--rune-text-primary);
+  --vp-c-text-2: var(--rune-text-secondary);
+  --vp-c-text-3: var(--rune-text-tertiary);
+
+  --vp-c-divider: var(--rune-border);
+  --vp-c-gutter: var(--rune-border);
+
+  --vp-c-brand-1: var(--rune-teal);
+  --vp-c-brand-2: #27ddb6;
+  --vp-c-brand-3: #00b890;
+  --vp-c-brand-soft: var(--rune-teal-dim);
+  --vp-c-brand-softer: var(--rune-teal-glow);
+
+  /* VitePress uses --vp-c-gray-* for code blocks and tag chrome */
+  --vp-c-gray-1: var(--rune-bg-card-hover);
+  --vp-c-gray-2: var(--rune-bg-card);
+  --vp-c-gray-3: var(--rune-bg-secondary);
+  --vp-c-gray-soft: rgba(255, 255, 255, 0.04);
+
+  /* Button chrome */
+  --vp-button-brand-bg: var(--rune-teal);
+  --vp-button-brand-text: var(--rune-bg-primary);
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-hover-bg: #27ddb6;
+  --vp-button-brand-hover-text: var(--rune-bg-primary);
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-active-bg: #00b890;
+
+  --vp-button-alt-bg: transparent;
+  --vp-button-alt-text: var(--rune-text-primary);
+  --vp-button-alt-border: var(--rune-border-accent);
+  --vp-button-alt-hover-bg: rgba(255, 255, 255, 0.04);
+  --vp-button-alt-hover-text: var(--rune-text-primary);
+  --vp-button-alt-hover-border: var(--rune-teal);
+
+  /* Code blocks — subtle teal accent on highlighted tokens */
+  --vp-code-line-highlight-color: var(--rune-teal-dim);
+  --vp-code-block-bg: var(--rune-bg-secondary);
+  --vp-code-copy-code-bg: var(--rune-bg-card);
+  --vp-code-copy-code-hover-bg: var(--rune-bg-card-hover);
+
+  /* Home hero */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(
+    120deg,
+    var(--rune-text-primary) 0%,
+    var(--rune-teal) 100%
+  );
+  --vp-home-hero-tagline-color: var(--rune-text-secondary);
+  --vp-home-hero-image-background-image: radial-gradient(
+    circle at center,
+    var(--rune-teal-glow) 0%,
+    transparent 70%
+  );
+  --vp-home-hero-image-filter: blur(60px);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+/* ---------- Typography ---------- */
+
+:root {
+  --vp-font-family-base: var(--rune-font-display);
+  --vp-font-family-mono: var(--rune-font-mono);
+}
+
+body {
+  font-feature-settings: 'ss01', 'cv11';
+  letter-spacing: -0.005em;
+}
+
+.VPHero .name,
+.VPHero .text {
+  font-family: var(--rune-font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.VPHero .tagline {
+  font-family: var(--rune-font-display);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1.6;
+  max-width: 620px;
+}
+
+/* ---------- Custom hero chrome ---------- */
+
+.rune-hero-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  font-family: var(--rune-font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rune-teal);
+}
+
+.rune-hero-label__line {
+  width: 24px;
+  height: 1px;
+  background: var(--rune-teal);
+}
+
+.rune-hero-visual {
+  position: relative;
+  width: min(380px, 80vw);
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rune-hero-visual__glow {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle, var(--rune-teal-glow) 0%, transparent 65%);
+  pointer-events: none;
+}
+
+.rune-hero-visual__grid {
+  position: absolute;
+  inset: 8%;
+  border: 1px solid var(--rune-border);
+  border-radius: 20px;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.rune-hero-visual__mark {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border: 2px solid var(--rune-teal);
+  border-radius: 24px;
+  background: var(--rune-teal-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 60px var(--rune-teal-glow);
+}
+
+.rune-hero-visual__mark-letter {
+  font-family: var(--rune-font-mono);
+  font-size: 56px;
+  font-weight: 600;
+  color: var(--rune-teal);
+  line-height: 1;
+}
+
+/* ---------- Ambient grid background on home ---------- */
+
+.VPHome::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 80px 80px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.VPHome > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Nav refinements ---------- */
+
+.VPNavBar {
+  background: rgba(12, 12, 20, 0.8) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.VPNavBar:not(.has-sidebar):not(.home) {
+  background: rgba(12, 12, 20, 0.9) !important;
+}
+
+.VPNavBarMenuLink {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2) !important;
+}
+
+.VPNavBarMenuLink:hover,
+.VPNavBarMenuLink.active {
+  color: var(--vp-c-text-1) !important;
+}
+
+/* ---------- Buttons refinements ---------- */
+
+.VPButton.brand {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.VPButton.alt {
+  font-weight: 500;
+}
+
+/* ---------- Feature cards ---------- */
+
+.VPFeature {
+  background: var(--rune-bg-card) !important;
+  border: 1px solid var(--rune-border) !important;
+  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.VPFeature:hover {
+  background: var(--rune-bg-card-hover) !important;
+  border-color: var(--rune-border-accent) !important;
+  transform: translateY(-2px);
+}
+
+.VPFeature .title {
+  font-family: var(--rune-font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.VPFeature .details {
+  color: var(--rune-text-secondary);
+}
+
+/* ---------- Sidebar + content polish ---------- */
+
+.VPSidebarItem.level-0 > .item > .text {
+  font-family: var(--rune-font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rune-text-tertiary);
+}
+
+.VPDoc h1,
+.VPDoc h2,
+.VPDoc h3 {
+  font-family: var(--rune-font-display);
+  letter-spacing: -0.015em;
+}
+
+.VPDoc code {
+  font-family: var(--rune-font-mono);
+}
+
+/* ---------- Footer ---------- */
+
+.VPFooter {
+  background: var(--rune-bg-secondary);
+  border-top: 1px solid var(--rune-border);
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+  color: var(--rune-text-tertiary);
+  font-size: 13px;
+}
