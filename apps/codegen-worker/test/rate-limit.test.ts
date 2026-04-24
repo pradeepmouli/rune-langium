@@ -39,13 +39,13 @@ function createMockStorage(): DurableObjectStorage {
         for (const [k, v] of Object.entries(keyOrEntries)) store.set(k, v);
       }
     },
-    async delete(key: string | string[]): Promise<boolean | number> {
+    async delete(key: string | string[]): Promise<boolean & number> {
       if (Array.isArray(key)) {
         let n = 0;
         for (const k of key) if (store.delete(k)) n++;
-        return n;
+        return n as boolean & number;
       }
-      return store.delete(key);
+      return store.delete(key) as boolean & number;
     },
     async list<T = unknown>(): Promise<Map<string, T>> {
       return new Map(store as Map<string, T>);

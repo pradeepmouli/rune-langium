@@ -78,7 +78,7 @@ function decodeJson<T>(segment: string): T | null {
   }
 }
 
-async function importHmacKey(key: string, usage: KeyUsage[]): Promise<CryptoKey> {
+async function importHmacKey(key: string, usage: ('sign' | 'verify')[]): Promise<CryptoKey> {
   return await crypto.subtle.importKey(
     'raw',
     encoder.encode(key),
