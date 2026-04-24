@@ -180,7 +180,7 @@ export function App() {
 
         {!loading && userFiles.length === 0 && (
           <div className="flex flex-col h-full">
-            <FileLoader onFilesLoaded={handleFilesLoaded} />
+            <FileLoader onFilesLoaded={handleFilesLoaded} existingFiles={files} />
             <div className="border-t px-8 py-6">
               <ModelLoader />
             </div>

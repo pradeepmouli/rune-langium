@@ -9,15 +9,20 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type { WorkspaceFile, WorkspaceLoadProgress } from '../services/workspace.js';
-import { readFileList } from '../services/workspace.js';
+import { createBlankWorkspaceFile, readFileList } from '../services/workspace.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { cn } from '@rune-langium/design-system/utils';
 
 export interface FileLoaderProps {
   onFilesLoaded: (files: WorkspaceFile[]) => void;
+  /**
+   * Current workspace files — used to compute a unique name for the "New"
+   * action (`untitled.rosetta`, `untitled-2.rosetta`, …). Defaults to empty.
+   */
+  existingFiles?: ReadonlyArray<WorkspaceFile>;
 }
 
-export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
+export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [loadProgress, setLoadProgress] = useState<WorkspaceLoadProgress | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +72,11 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
     [handleFiles]
   );
 
+  const handleNew = useCallback(() => {
+    const file = createBlankWorkspaceFile(existingFiles);
+    onFilesLoaded([file]);
+  }, [existingFiles, onFilesLoaded]);
+
   return (
     <section
       className={cn(
@@ -82,7 +92,7 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
       <div className="text-center max-w-[480px]">
         <p className="text-2xl font-semibold text-foreground mb-2">Load Rune DSL Models</p>
         <p className="text-md text-muted-foreground mb-6">
-          Drag and drop .rosetta files here, or use the buttons below
+          Start a new file, or drag and drop existing .rosetta files here
         </p>
 
         {loadProgress ? (
@@ -107,8 +117,11 @@ export function FileLoader({ onFilesLoaded }: FileLoaderProps) {
           </div>
         ) : (
           <>
-            <div className="flex gap-3 justify-center">
-              <Button size="lg" onClick={() => fileInputRef.current?.click()}>
+            <div className="flex gap-3 justify-center flex-wrap">
+              <Button size="lg" onClick={handleNew}>
+                New
+              </Button>
+              <Button variant="secondary" size="lg" onClick={() => fileInputRef.current?.click()}>
                 Select Files
               </Button>
               <Button variant="secondary" size="lg" onClick={() => dirInputRef.current?.click()}>
