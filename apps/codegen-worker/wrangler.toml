@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: FSL-1.1-ALv2
+# Copyright (c) 2026 Pradeep Mouli
+#
+# Cloudflare Worker config for the hosted codegen service (feature 011-export-code-cf).
+# Deploys to the same account that hosts the `daikonic-dev` Pages project.
+
+name = "rune-codegen-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-24"
+compatibility_flags = ["nodejs_compat"]
+account_id = "8327a4da4660eab7d78695268282da09"
+workers_dev = false
+
+# Production route — same-origin with the deployed Studio at /rune-studio/.
+[[routes]]
+pattern = "www.daikonic.dev/rune-studio/api/generate/*"
+zone_name = "daikonic.dev"
+
+# Public site key mirrored to the Studio build (NOT secret).
+# TURNSTILE_SECRET and SESSION_SIGNING_KEY are injected via `wrangler secret put`.
+[vars]
+TURNSTILE_SITE_KEY = "0x4AAAAAAAReplaceBeforeFirstDeploy"
+
+# KV namespace used to cache the upstream container's /api/generate/health
+# language list + short-lived Turnstile verification responses.
+# Namespace was created via the CF API on 2026-04-24; id is stable.
+[[kv_namespaces]]
+binding = "LANG_CACHE"
+id = "a3007b9cfdd8415384fef5397890e19f"
+
+# Durable Object class for per-IP rate-limiting.
+# The class itself is implemented in T012 (apps/codegen-worker/src/rate-limit.ts).
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+# Initial migration must declare the class so wrangler provisions storage.
+[[migrations]]
+tag = "v1"
+new_classes = ["RateLimiter"]
+
+# Hosted codegen container binding. The image is built + pushed from
+# apps/codegen-container/ (see that package's README.md).
+# NOTE: CF Containers is in beta; the exact binding syntax may evolve —
+# if wrangler complains at deploy time, consult the current docs and
+# update this block. The semantics we rely on are "env.CODEGEN.fetch(req)".
+# Binding name must match env.CODEGEN used in src/index.ts (uppercase).
+[[containers]]
+name = "CODEGEN"
+image = "rune-codegen:latest"
+instance_type = "standard"
+instances = 1
+
+# Observability — structured logs via Tail without Logpush.
+[observability]
+enabled = true
+
+# Limit generation-worker runtime to keep cold JVM calls from running away.
+[limits]
+cpu_ms = 30000

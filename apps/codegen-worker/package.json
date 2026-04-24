@@ -1,0 +1,29 @@
+{
+  "name": "@rune-langium/codegen-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker that fronts the hosted codegen container for the Studio deployment (feature 011-export-code-cf)",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250108.0",
+    "miniflare": "^3.20250108.0",
+    "vitest": "^4.1.4",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "FSL-1.1-ALv2",
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"
+}

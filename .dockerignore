@@ -1,4 +1,5 @@
 node_modules/
+**/node_modules/
 dist/
 build/
 coverage/
@@ -15,6 +16,7 @@ docker-compose*
 .resources/
 test-results/
 playwright-report/
+.playwright-mcp/
 *.tsbuildinfo
 .pnpm-debug.log*
 README.md
@@ -27,3 +29,26 @@ specs/
 .agents/
 .github/
 .specify/
+.claude/
+.vscode/
+.wrangler/
+.attic/
+
+# Apps not consumed by the codegen-container image.
+apps/studio/
+apps/docs/
+apps/site/
+apps/codegen-worker/
+
+# Sibling packages the container doesn't need either (the container only
+# needs packages/codegen/server/src/**/*.java for stage-1 javac).
+packages/core/
+packages/cli/
+packages/design-system/
+packages/lsp-server/
+packages/visual-editor/
+
+# Re-include the compiled HTTP wrapper that stage 2 COPYs in — the global
+# `dist/` rule above would otherwise exclude it.
+!apps/codegen-container/dist/
+!apps/codegen-container/dist/**

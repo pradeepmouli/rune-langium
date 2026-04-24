@@ -51,6 +51,23 @@ Cloudflare Pages project settings (`daikonic-dev`):
 
 GitHub Actions in this repo verify that the combined build succeeds on push and pull request. Production deployment is driven by Cloudflare Pages' git integration, not the workflow.
 
+### Codegen service: local vs hosted
+
+Studio's **Export Code** button has two deployment paths with intentionally different trade-offs:
+
+| | Local development | Hosted (`www.daikonic.dev/rune-studio/`) |
+|---|---|---|
+| **Backend** | `pnpm codegen:start` — Node server spawning `codegen-cli.sh` (Java 21 + `rosetta-code-generators`) | Cloudflare Container running the same Java stack, fronted by a CF Worker |
+| **Target languages** | Full matrix — whatever `codegen-cli --list-languages` returns | Same matrix, parity with local |
+| **Auth** | None — localhost is trusted | CF Turnstile challenge on first generation per session; session cookie afterwards |
+| **Rate limits** | None | 10 generations / hour / IP, 100 / day / IP |
+| **Cost** | Free (your machine) | Free CF tier at demo scale; $25/month alert as safety net |
+| **Studio env var** | `VITE_CODEGEN_URL=http://localhost:8377` (default) | `VITE_CODEGEN_URL=/rune-studio` (set by `build-combined.mjs` when `CF_PAGES=1`) |
+
+The hosted path lives under [`apps/codegen-worker/`](apps/codegen-worker/) (Worker + Durable Object rate limiter) and [`apps/codegen-container/`](apps/codegen-container/) (container image + HTTP wrapper). Feature design: [`specs/011-export-code-cf/`](specs/011-export-code-cf/).
+
+**Heavy users should run Studio locally.** The rate limits exist to protect the free-tier CF budget, not to push anyone away — the local path has no limits and stays in lock-step with upstream `rosetta-code-generators`.
+
 ## Features
 
 - **Pure TypeScript, browser-ready** — the parser, language server, and every downstream tool run anywhere JavaScript runs; no JVM, no Eclipse headless, no Docker.

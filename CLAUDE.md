@@ -15,6 +15,8 @@ This ensures skills are discoverable from both `.agents/skills/` and `.github/sk
 - N/A (browser-only, File System Access API) (refactor/001-optimize-ui-performance)
 - TypeScript 5.9+ (strict mode, ESM) + React 19, @xyflow/react 12, zustand 5, zundo 2, langium 4.2.1, zod 4.3.6, @zod-to-form/cli 0.2.7, langium-zod 0.5.3, isomorphic-git (new), idb (new), commander 14 (008-core-editor-features)
 - IndexedDB (via idb) for model caching; in-memory for workspace state (008-core-editor-features)
+- TypeScript 5.9+ (studio, worker, container HTTP wrapper) / Java 21 (codegen CLI, already in use via `rosetta-code-generators`) + `@rune-langium/codegen` (existing), Cloudflare Workers, Cloudflare Containers (beta), `@cloudflare/workers-types`, `wrangler` 4, CF Turnstile (`@marsidev/react-turnstile` or equivalent), CF Durable Objects, `rosetta-code-generators` (existing Maven build) (011-export-code-cf)
+- CF Durable Object for per-IP rate-limit counters (hour + day buckets); container is stateless (no disk writes beyond `/tmp`) (011-export-code-cf)
 
 ## Recent Changes
 - 002-reactflow-visual-editor: Added TypeScript 5.9+ (strict mode, ESM)

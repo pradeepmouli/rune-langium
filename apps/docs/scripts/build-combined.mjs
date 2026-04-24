@@ -36,7 +36,18 @@ const env = {
   // regardless of window.location.origin.
   VITE_HOME_URL: '/rune-studio/',
   VITE_DOCS_URL: '/rune-studio/docs/',
-  VITE_GITHUB_URL: 'https://github.com/pradeepmouli/rune-langium'
+  VITE_GITHUB_URL: 'https://github.com/pradeepmouli/rune-langium',
+  // Hosted codegen service (feature 011-export-code-cf). Base URL is
+  // same-origin so the browser never makes cross-origin calls during
+  // Export Code. The Turnstile site key can be provided via env at build
+  // time; falls back to Turnstile's documented "always-pass" dummy key
+  // so preview builds never break for lack of a real key. Production
+  // deploys MUST set TURNSTILE_SITE_KEY in the CF Pages build env.
+  VITE_CODEGEN_URL: process.env.VITE_CODEGEN_URL ?? '/rune-studio',
+  VITE_TURNSTILE_SITE_KEY:
+    process.env.VITE_TURNSTILE_SITE_KEY ??
+    process.env.TURNSTILE_SITE_KEY ??
+    '1x00000000000000000000AA'
 };
 
 function run(label, command, cwd) {
