@@ -57,7 +57,19 @@ export default defineConfig({
   lastUpdated: true,
   cleanUrls: true,
   ignoreDeadLinks: true,
+  // Match the landing page's dark-only palette. Toggle is hidden by default
+  // theme when force-dark is set, which keeps the look consistent with site/.
+  appearance: 'force-dark',
   head: [
+    ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
+    ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
+    [
+      'link',
+      {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap'
+      }
+    ],
     ['meta', { property: 'og:title', content: 'Rune Langium Docs' }],
     [
       'meta',
