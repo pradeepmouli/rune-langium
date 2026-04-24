@@ -107,7 +107,7 @@ Studio edits land in existing `apps/studio/src/**` paths; build-time env wiring 
 
 - [X] T031 [US3] Guard Turnstile render in `apps/studio/src/components/ExportDialog.tsx` — only instantiate the widget when `VITE_CODEGEN_URL` starts with `/` or a non-localhost host. Add a unit test asserting the widget is absent when `VITE_CODEGEN_URL=http://localhost:8377`.
 - [ ] T032 [US3] Regression e2e test `apps/studio/test/e2e/export-code-local-regression.spec.ts` — runs against local `pnpm codegen:start` harness; asserts (a) no Turnstile DOM node rendered, (b) rate-limit 429 never returned, (c) generated output for a canned fixture matches the pre-feature snapshot byte-for-byte.
-- [ ] T033 [US3] Update `README.md` and `apps/studio/README.md` with a "local vs hosted codegen" callout explaining the two paths and when each applies.
+- [X] T033 [US3] Update `README.md` and `apps/studio/README.md` with a "local vs hosted codegen" callout explaining the two paths and when each applies.
 
 **Checkpoint**: SC-007 (local-dev parity) verified. Developers can ignore everything about Turnstile + Worker + Container while working locally.
 
@@ -119,7 +119,7 @@ Studio edits land in existing `apps/studio/src/**` paths; build-time env wiring 
 
 - [X] T034 [P] Worker structured logging to CF Tail — add a log-emit helper in `apps/codegen-worker/src/log.ts` writing `WorkerLogEntry` per `data-model.md`. Explicitly excludes `request.files` and `response.files` content from every log line.
 - [X] T035 [P] Log-sanitization test `apps/codegen-worker/test/log-redaction.test.ts` — asserts that a request containing a known sensitive string (e.g. `namespace secret; type Password`) produces zero log lines containing that string. Satisfies SC-008.
-- [ ] T036 [P] Container-side log sanitization — the HTTP wrapper in `apps/codegen-container/src/server.ts` MUST NOT `console.log` request or response bodies; only status + duration. Test in `apps/codegen-container/test/log-redaction.test.ts`.
+- [X] T036 [P] Container-side log sanitization — the HTTP wrapper in `apps/codegen-container/src/server.ts` MUST NOT `console.log` request or response bodies; only status + duration. Test in `apps/codegen-container/test/log-redaction.test.ts`.
 - [X] T037 [P] Update `apps/studio/README.md` with an "Export Code" user-facing section — screenshot of the Turnstile challenge, description of rate-limits, link to run Studio locally for heavy use.
 - [ ] T038 Finalize `specs/011-export-code-cf/quickstart.md` deploy steps — verify `wrangler deploy` + container push commands against a live dry-run, capture the actual image-tag format, and update the doc with any corrections.
 - [ ] T039 One-time CF dashboard action (manual, documented in quickstart.md §6) — create the $25/month billing notification alert on the Pmouli@mac.com account. Not automatable; note alert ID in an ops doc outside VCS.
