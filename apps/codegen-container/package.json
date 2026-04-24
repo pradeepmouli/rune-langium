@@ -1,0 +1,26 @@
+{
+  "name": "@rune-langium/codegen-container",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Container image: Java 21 + rosetta-code-generators + Node HTTP wrapper. Hosts the codegen CLI behind the same JSON contract as the local codegen server (feature 011-export-code-cf)",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build:ts": "tsgo -b",
+    "build:docker": "docker build -t rune-codegen .",
+    "build": "pnpm run build:ts && pnpm run build:docker",
+    "publish": "wrangler containers push rune-codegen:latest",
+    "test": "vitest run",
+    "type-check": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "vitest": "^4.1.4",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "FSL-1.1-ALv2",
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"
+}

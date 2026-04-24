@@ -33,10 +33,10 @@ Studio edits land in existing `apps/studio/src/**` paths; build-time env wiring 
 
 **Purpose**: Create the two new workspace packages, wire them into pnpm, install shared dev tooling.
 
-- [ ] T001 Create `apps/codegen-worker/` scaffolding with `package.json` (name `@rune-langium/codegen-worker`, scripts: `dev`, `deploy`, `test`, `type-check`), `tsconfig.json` extending `../../tsconfig.json`, `.gitignore`, and SPDX FSL-1.1-ALv2 header on all new files (per `CLAUDE.md` licensing boundary).
-- [ ] T002 Create `apps/codegen-container/` scaffolding with `package.json` (name `@rune-langium/codegen-container`, scripts: `build`, `publish`, `test`), `tsconfig.json`, `.gitignore`, and SPDX FSL-1.1-ALv2 header on TypeScript sources.
-- [ ] T003 [P] Add root-level dev dependencies: `wrangler@^4`, `@cloudflare/workers-types@latest`, `miniflare@latest` to `apps/codegen-worker/package.json`. Add `@marsidev/react-turnstile@latest` to `apps/studio/package.json`.
-- [ ] T004 [P] Add a `build:worker` and `deploy:worker` script to root `package.json` that forwards to `pnpm --filter @rune-langium/codegen-worker ...`, mirroring the existing `build:studio` / `docs:build` pattern.
+- [X] T001 Create `apps/codegen-worker/` scaffolding with `package.json` (name `@rune-langium/codegen-worker`, scripts: `dev`, `deploy`, `test`, `type-check`), `tsconfig.json` extending `../../tsconfig.json`, `.gitignore`, and SPDX FSL-1.1-ALv2 header on all new files (per `CLAUDE.md` licensing boundary).
+- [X] T002 Create `apps/codegen-container/` scaffolding with `package.json` (name `@rune-langium/codegen-container`, scripts: `build`, `publish`, `test`), `tsconfig.json`, `.gitignore`, and SPDX FSL-1.1-ALv2 header on TypeScript sources.
+- [X] T003 [P] Add root-level dev dependencies: `wrangler@^4`, `@cloudflare/workers-types@latest`, `miniflare@latest` to `apps/codegen-worker/package.json`. Add `@marsidev/react-turnstile@latest` to `apps/studio/package.json`.
+- [X] T004 [P] Add a `build:worker` and `deploy:worker` script to root `package.json` that forwards to `pnpm --filter @rune-langium/codegen-worker ...`, mirroring the existing `build:studio` / `docs:build` pattern.
 
 ---
 
