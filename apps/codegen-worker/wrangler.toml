@@ -44,8 +44,9 @@ new_classes = ["RateLimiter"]
 # NOTE: CF Containers is in beta; the exact binding syntax may evolve —
 # if wrangler complains at deploy time, consult the current docs and
 # update this block. The semantics we rely on are "env.CODEGEN.fetch(req)".
+# Binding name must match env.CODEGEN used in src/index.ts (uppercase).
 [[containers]]
-name = "codegen"
+name = "CODEGEN"
 image = "rune-codegen:latest"
 instance_type = "standard"
 instances = 1

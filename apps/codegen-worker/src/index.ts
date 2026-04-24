@@ -56,7 +56,7 @@ export async function handleRequest(req: Request, env: WorkerEnv): Promise<Respo
 
   if (path === '/api/generate/health') {
     if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' });
-    return handleHealth(env);
+    return handleHealth(req, env);
   }
 
   if (path === '/api/generate') {
@@ -68,14 +68,40 @@ export async function handleRequest(req: Request, env: WorkerEnv): Promise<Respo
 }
 
 const COLD_START_THRESHOLD_MS = 3000;
+const HEALTH_TIMEOUT_MS = 2000;
 const LANG_CACHE_TTL_SECONDS = 3600;
 const LANG_CACHE_KEY = 'languages';
 
-async function handleHealth(env: WorkerEnv): Promise<Response> {
+async function handleHealth(req: Request, env: WorkerEnv): Promise<Response> {
+  // FR-002 rate-limit: /api/generate/health has its own 60/hr bucket per IP
+  // (contracts/rate-limit.md). Fail-open on DO errors so health probes
+  // from monitoring still succeed when the rate-limiter itself is broken.
+  const remoteIp = req.headers.get('cf-connecting-ip') ?? '203.0.113.1';
+  try {
+    const doStub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(remoteIp));
+    const rlRes = await doStub.fetch(new Request('http://do/check-health', { method: 'POST' }));
+    const rl = (await rlRes.json()) as { allowed: boolean; retry_after_s: number };
+    if (!rl.allowed) {
+      return json(
+        429,
+        { error: 'rate_limited', scope: 'hour', retry_after_s: rl.retry_after_s },
+        { 'Retry-After': String(rl.retry_after_s) }
+      );
+    }
+  } catch {
+    // DO unavailable — don't fail the health probe, just skip the budget check.
+  }
+
   const start = Date.now();
   try {
+    // Bound the upstream wait — FR-002 requires the Studio's health probe to
+    // return quickly even when the container is cold. On timeout we fall
+    // through to the cached-languages path below.
     const upstream = await env.CODEGEN.fetch(
-      new Request('http://codegen/api/generate/health', { method: 'GET' })
+      new Request('http://codegen/api/generate/health', {
+        method: 'GET',
+        signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS)
+      })
     );
     const elapsedMs = Date.now() - start;
     if (!upstream.ok) throw new Error(`upstream_http_${upstream.status}`);
@@ -101,8 +127,8 @@ async function handleHealth(env: WorkerEnv): Promise<Response> {
       languages
     });
   } catch (_err) {
-    // Container failed. Try to serve cached languages so the Studio picker
-    // isn't empty; if cache is also empty, surface 503.
+    // Container failed or timed out. Serve cached languages so the Studio
+    // picker isn't empty; if cache is also empty, surface 503.
     const cached = await readCachedLanguages(env);
     if (cached && cached.length > 0) {
       return json(200, {
@@ -238,20 +264,22 @@ async function handleGenerate(req: Request, env: WorkerEnv): Promise<Response> {
   // --- Step 4: container dispatch, with one retry on transient failure ---
   const upstream = await dispatchWithRetry(env, rawBody);
   if (!upstream) {
-    return json(
-      502,
-      {
-        error: 'upstream_failure',
-        message: 'The codegen service is temporarily unavailable.',
-        retryable: true
-      },
-      issuedCookie ? { 'Set-Cookie': issuedCookie } : undefined
-    );
+    // contracts/http-generate.md: Set-Cookie MUST only be issued on 200
+    // responses that actually consumed an X-Turnstile-Token. A 5xx must
+    // NOT mark the session as verified.
+    return json(502, {
+      error: 'upstream_failure',
+      message: 'The codegen service is temporarily unavailable.',
+      retryable: true
+    });
   }
 
   const upstreamBody = await upstream.text();
   const extraHeaders: Record<string, string> = {};
-  if (issuedCookie) extraHeaders['Set-Cookie'] = issuedCookie;
+  // Only promote the session on a successful generation.
+  if (issuedCookie && upstream.status === 200) {
+    extraHeaders['Set-Cookie'] = issuedCookie;
+  }
 
   // Emit a single structured log line per request. Never includes
   // the request or response body — only dimensions.

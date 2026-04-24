@@ -15,14 +15,12 @@ describe('BrowserCodegenProxy.generate — turnstile token forwarding (T021)', (
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        new Response(JSON.stringify({ files: [{ path: 'F.ts', content: '// ok' }], errors: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-      );
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ files: [{ path: 'F.ts', content: '// ok' }], errors: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    );
   });
 
   afterEach(() => {
@@ -56,11 +54,18 @@ describe('BrowserCodegenProxy.generate — turnstile token forwarding (T021)', (
     expect(fetchSpy.mock.calls[0]![0]).toBe('/rune-studio/api/generate');
   });
 
-  it('sends `credentials: include` so session cookies ride along', async () => {
+  it('sends `credentials: include` on hosted so session cookies ride along', async () => {
     const proxy = new BrowserCodegenProxy('/rune-studio');
     await proxy.generate({ language: 'typescript', files: [] }, undefined, { turnstileToken: 't' });
     const init = fetchSpy.mock.calls[0]![1] as RequestInit;
     expect(init.credentials).toBe('include');
+  });
+
+  it('sends `credentials: omit` on local so CORS wildcard origin works', async () => {
+    const proxy = new BrowserCodegenProxy('http://localhost:8377');
+    await proxy.generate({ language: 'typescript', files: [] });
+    const init = fetchSpy.mock.calls[0]![1] as RequestInit;
+    expect(init.credentials).toBe('omit');
   });
 });
 

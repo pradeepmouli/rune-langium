@@ -89,10 +89,11 @@ export class BrowserCodegenProxy {
       headers,
       body: JSON.stringify(request),
       signal,
-      // Needed so the hcsession cookie the Worker sets on first generation
-      // rides along with subsequent requests. Ignored in local mode where
-      // no cookies are ever issued.
-      credentials: 'include'
+      // Hosted only: the hcsession cookie the Worker sets on first generation
+      // must ride along on subsequent requests. In local mode we use `omit`
+      // because the local codegen server sends Access-Control-Allow-Origin:*
+      // and browsers reject credentialed CORS against a wildcard origin.
+      credentials: this.isHostedService() ? 'include' : 'omit'
     });
 
     if (!response.ok) {

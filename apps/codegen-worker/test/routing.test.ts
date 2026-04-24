@@ -2,11 +2,14 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Worker routing skeleton (T009).
+ * Worker routing coverage.
  *
  * These tests verify the router dispatches to the correct handler for each
- * declared route + method combination. Handlers themselves are stubs at this
- * phase — real Turnstile / rate-limit / container orchestration lands in T018.
+ * declared route + method combination and preserves the expected top-level
+ * HTTP behavior. The Worker now contains the real Turnstile, rate-limit, and
+ * container orchestration logic; deeper behavior is covered by more focused
+ * tests (proxy, rate-limit, session, retry), while this file stays centered
+ * on routing semantics.
  */
 
 import { describe, it, expect } from 'vitest';

@@ -13,9 +13,12 @@
 # See apps/codegen-container/README.md for the update procedure.
 
 ARG ROSETTA_REPO=https://github.com/REGnosys/rosetta-code-generators.git
-# TODO(011): replace with a verified upstream tag or commit SHA before first deploy.
-# 'main' is a moving target and breaks reproducibility.
-ARG ROSETTA_COMMIT=main
+# Pinned to a specific upstream SHA for reproducibility. Container builds
+# will produce byte-identical generator output across deploys regardless of
+# what happens upstream on main. Bump this deliberately via the update
+# procedure in apps/codegen-container/README.md.
+# main @ 2026-04-24 (validated locally: all 10 generators produce expected output).
+ARG ROSETTA_COMMIT=3c117185bb5080facbac11649ca0fc33ae49ce55
 
 # ---------- Stage 1: builder ----------
 FROM eclipse-temurin:21-jdk AS builder

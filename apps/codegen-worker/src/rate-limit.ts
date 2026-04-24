@@ -11,8 +11,10 @@
  *  - Atomic counter writes; denied requests do NOT increment.
  *  - retry_after_s = seconds until the tripped window boundary.
  *
- * The DO class is single-threaded per instance (CF guarantee), so read-modify-
- * write against its own storage is race-free without explicit locking.
+ * Read-modify-write against storage is wrapped in `blockConcurrencyWhile`
+ * so that even if input gates are bypassed (or a future CF change alters
+ * default serialization), concurrent reads can't both observe the same
+ * counter and double-increment past the cap.
  */
 
 import type { DurableObjectState } from '@cloudflare/workers-types';
@@ -77,45 +79,53 @@ export class RateLimiter {
     const hourKey = `${bucket.prefix}:h:${hourBucket}`;
     const dayKey = `${bucket.prefix}:d:${dayBucket}`;
 
-    const storage = this.state.storage;
-    const [hourCount, dayCount] = await Promise.all([
-      storage.get<number>(hourKey).then((v) => v ?? 0),
-      bucket.dayCap !== undefined
-        ? storage.get<number>(dayKey).then((v) => v ?? 0)
-        : Promise.resolve(0)
-    ]);
+    // blockConcurrencyWhile serializes the read-then-write against this DO
+    // instance. Concurrent fetch() invocations (one per request) queue behind
+    // the running block so they can't both observe the same counter and
+    // double-increment past the cap.
+    return this.state.blockConcurrencyWhile(async () => {
+      const storage = this.state.storage;
+      const [hourCount, dayCount] = await Promise.all([
+        storage.get<number>(hourKey).then((v) => v ?? 0),
+        bucket.dayCap !== undefined
+          ? storage.get<number>(dayKey).then((v) => v ?? 0)
+          : Promise.resolve(0)
+      ]);
 
-    const hourExceeded = hourCount >= bucket.hourCap;
-    const dayExceeded = bucket.dayCap !== undefined && dayCount >= bucket.dayCap;
+      const hourExceeded = hourCount >= bucket.hourCap;
+      const dayExceeded = bucket.dayCap !== undefined && dayCount >= bucket.dayCap;
 
-    if (hourExceeded || dayExceeded) {
-      // Prefer the smaller retry — whichever window resets sooner.
-      const hourRetry = hourExceeded ? secsUntilBoundary(nowMs, HOUR_MS) : Number.POSITIVE_INFINITY;
-      const dayRetry = dayExceeded ? secsUntilBoundary(nowMs, DAY_MS) : Number.POSITIVE_INFINITY;
-      const retry_after_s = Math.min(hourRetry, dayRetry);
-      const scope_tripped: ScopeTripped = hourRetry <= dayRetry ? 'hour' : 'day';
+      if (hourExceeded || dayExceeded) {
+        // Prefer the smaller retry — whichever window resets sooner.
+        const hourRetry = hourExceeded
+          ? secsUntilBoundary(nowMs, HOUR_MS)
+          : Number.POSITIVE_INFINITY;
+        const dayRetry = dayExceeded ? secsUntilBoundary(nowMs, DAY_MS) : Number.POSITIVE_INFINITY;
+        const retry_after_s = Math.min(hourRetry, dayRetry);
+        const scope_tripped: ScopeTripped = hourRetry <= dayRetry ? 'hour' : 'day';
+
+        return {
+          allowed: false,
+          remaining_hour: Math.max(0, bucket.hourCap - hourCount),
+          remaining_day: bucket.dayCap !== undefined ? Math.max(0, bucket.dayCap - dayCount) : 0,
+          retry_after_s,
+          scope_tripped
+        };
+      }
+
+      // Allowed — increment both counters in a single put().
+      const updates: Record<string, number> = { [hourKey]: hourCount + 1 };
+      if (bucket.dayCap !== undefined) updates[dayKey] = dayCount + 1;
+      await storage.put(updates);
 
       return {
-        allowed: false,
-        remaining_hour: Math.max(0, bucket.hourCap - hourCount),
-        remaining_day: bucket.dayCap !== undefined ? Math.max(0, bucket.dayCap - dayCount) : 0,
-        retry_after_s,
-        scope_tripped
+        allowed: true,
+        remaining_hour: bucket.hourCap - (hourCount + 1),
+        remaining_day: bucket.dayCap !== undefined ? bucket.dayCap - (dayCount + 1) : 0,
+        retry_after_s: 0,
+        scope_tripped: null
       };
-    }
-
-    // Allowed — increment both counters atomically.
-    const updates: Record<string, number> = { [hourKey]: hourCount + 1 };
-    if (bucket.dayCap !== undefined) updates[dayKey] = dayCount + 1;
-    await storage.put(updates);
-
-    return {
-      allowed: true,
-      remaining_hour: bucket.hourCap - (hourCount + 1),
-      remaining_day: bucket.dayCap !== undefined ? bucket.dayCap - (dayCount + 1) : 0,
-      retry_after_s: 0,
-      scope_tripped: null
-    };
+    });
   }
 }
 

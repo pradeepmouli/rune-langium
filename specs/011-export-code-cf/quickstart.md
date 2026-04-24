@@ -103,7 +103,8 @@ pnpm --filter @rune-langium/codegen-worker deploy
 On the next push to `master` that touches `apps/studio/` or `apps/docs/scripts/build-combined.mjs`, CF Pages will rebuild the `daikonic-dev` project with:
 
 ```bash
-VITE_CODEGEN_URL=/rune-studio/api/generate
+# BrowserCodegenProxy appends '/api/generate' itself, so set the BASE URL only:
+VITE_CODEGEN_URL=/rune-studio
 VITE_TURNSTILE_SITE_KEY=<same as Worker wrangler.toml>
 ```
 
