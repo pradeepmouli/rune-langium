@@ -49,7 +49,10 @@ function copyDir(from, to, label) {
   if (!existsSync(from)) {
     throw new Error(`[build-combined] missing source: ${from}`);
   }
-  mkdirSync(to, { recursive: true });
+  // Ensure only the parent of `to` exists; cpSync creates `to` itself and
+  // copies `from`'s contents into it. Pre-creating `to` can cause some Node
+  // versions to nest the source under `to/<basename(from)>`.
+  mkdirSync(dirname(to), { recursive: true });
   cpSync(from, to, { recursive: true });
   console.log(`[build-combined] copied ${label}: ${from} → ${to}`);
 }
@@ -60,7 +63,7 @@ rmSync(docsRawDist, { recursive: true, force: true });
 run('Generating typedoc API markdown', 'pnpm run docs:api', docsRoot);
 run(
   'Building VitePress docs (base=/rune-studio/docs/)',
-  'npx vitepress build --outDir ./.vitepress/dist-docs-raw',
+  'pnpm exec vitepress build --outDir ./.vitepress/dist-docs-raw',
   docsRoot
 );
 
@@ -70,7 +73,7 @@ run(
   repoRoot
 );
 
-mkdirSync(subpathDist, { recursive: true });
+// `copyDir` creates `subpathDist` itself (so its contents are not nested).
 copyDir(siteRoot, subpathDist, 'site → /rune-studio/');
 copyDir(docsRawDist, join(subpathDist, 'docs'), 'vitepress → /rune-studio/docs/');
 copyDir(studioDist, join(subpathDist, 'studio'), 'studio → /rune-studio/studio/');
