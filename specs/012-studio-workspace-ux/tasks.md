@@ -41,27 +41,27 @@ Phase 3 (US1).
 
 ### 2a. OPFS adapter + workspace primitives
 
-- [ ] T010 Write failing test `apps/studio/tests/opfs/opfs-fs.test.ts` asserting the `isomorphic-git`-shaped FS contract: `readFile`, `writeFile`, `mkdir -p`, `unlink`, `rmdir`, `stat`, `lstat`, `readdir`, `readlink` (throws ENOENT), `symlink` (no-op), `chmod` (no-op)
-- [ ] T011 Implement `apps/studio/src/opfs/opfs-fs.ts` passing T010 — adapter over `FileSystemDirectoryHandle` rooted at a constructor-supplied path prefix
-- [ ] T012 [P] Write failing test `apps/studio/tests/opfs/tar-untar.test.ts` against a vendored fixture `apps/studio/tests/fixtures/curated/tiny.tar.gz` (3 files, 2 directories); assert all files written to a provided OPFS root with correct bytes
-- [ ] T013 [P] Implement `apps/studio/src/opfs/tar-untar.ts` (pako + small tar parser, runs inside a Web Worker) passing T012. Bundle-size budget: ≤ 40KB gzipped
-- [ ] T014 Write failing test `apps/studio/tests/workspace/persistence.test.ts` covering `WorkspaceRecord` roundtrip through IndexedDB (`workspaces`, `recents`, `settings`, `handles` stores per data-model §1)
-- [ ] T015 Implement `apps/studio/src/workspace/persistence.ts` using `idb` to satisfy T014; expose typed `saveWorkspace`, `loadWorkspace`, `listRecents`, `deleteWorkspace`
-- [ ] T016 [P] Write failing test `apps/studio/tests/workspace/multi-tab-broadcast.test.ts` verifying BroadcastChannel ownership: first tab claims, second tab sees claim and flips to read-only, takeover flushes
-- [ ] T017 [P] Implement `apps/studio/src/services/multi-tab-broadcast.ts` satisfying T016
-- [ ] T018 Write failing test `apps/studio/tests/workspace/workspace-manager.test.ts` covering create / open / close / delete lifecycle and the cross-tab ownership contract from T016
-- [ ] T019 Implement `apps/studio/src/workspace/workspace-manager.ts` wiring persistence (T015) + opfs-fs (T011) + multi-tab (T017). Zustand store in `workspace-store.ts` surfaces the active workspace + recents to React.
+- [X] T010 Write failing test `apps/studio/tests/opfs/opfs-fs.test.ts` asserting the `isomorphic-git`-shaped FS contract: `readFile`, `writeFile`, `mkdir -p`, `unlink`, `rmdir`, `stat`, `lstat`, `readdir`, `readlink` (throws ENOENT), `symlink` (no-op), `chmod` (no-op)
+- [X] T011 Implement `apps/studio/src/opfs/opfs-fs.ts` passing T010 — adapter over `FileSystemDirectoryHandle` rooted at a constructor-supplied path prefix
+- [X] T012 [P] Write failing test `apps/studio/tests/opfs/tar-untar.test.ts` against a vendored fixture `apps/studio/tests/fixtures/curated/tiny.tar.gz` (3 files, 2 directories); assert all files written to a provided OPFS root with correct bytes
+- [X] T013 [P] Implement `apps/studio/src/opfs/tar-untar.ts` (pako + small tar parser, runs inside a Web Worker) passing T012. Bundle-size budget: ≤ 40KB gzipped
+- [X] T014 Write failing test `apps/studio/tests/workspace/persistence.test.ts` covering `WorkspaceRecord` roundtrip through IndexedDB (`workspaces`, `recents`, `settings`, `handles` stores per data-model §1)
+- [X] T015 Implement `apps/studio/src/workspace/persistence.ts` using `idb` to satisfy T014; expose typed `saveWorkspace`, `loadWorkspace`, `listRecents`, `deleteWorkspace`
+- [X] T016 [P] Write failing test `apps/studio/tests/workspace/multi-tab-broadcast.test.ts` verifying BroadcastChannel ownership: first tab claims, second tab sees claim and flips to read-only, takeover flushes
+- [X] T017 [P] Implement `apps/studio/src/services/multi-tab-broadcast.ts` satisfying T016
+- [X] T018 Write failing test `apps/studio/tests/workspace/workspace-manager.test.ts` covering create / open / close / delete lifecycle and the cross-tab ownership contract from T016
+- [X] T019 Implement `apps/studio/src/workspace/workspace-manager.ts` wiring persistence (T015) + opfs-fs (T011) + multi-tab (T017). Zustand store in `workspace-store.ts` surfaces the active workspace + recents to React.
 
 ### 2b. Telemetry client (no-op stub; worker ingest lands in Polish)
 
-- [ ] T020 [P] Write failing test `apps/studio/tests/services/telemetry.test.ts`: payload matches `contracts/telemetry-event.md` schema, `localhost` is a no-op, `telemetry-enabled=false` is a no-op, each event type emits correctly
-- [ ] T021 Implement `apps/studio/src/services/telemetry.ts` passing T020; the endpoint URL is env-driven (`VITE_TELEMETRY_URL`) and defaults to off in dev
+- [X] T020 [P] Write failing test `apps/studio/tests/services/telemetry.test.ts`: payload matches `contracts/telemetry-event.md` schema, `localhost` is a no-op, `telemetry-enabled=false` is a no-op, each event type emits correctly
+- [X] T021 Implement `apps/studio/src/services/telemetry.ts` passing T020; the endpoint URL is env-driven (`VITE_TELEMETRY_URL`) and defaults to off in dev
 
 ### 2c. Design tokens baseline
 
-- [ ] T022 [P] Populate `packages/design-tokens/src/tokens.json` with the namespaces locked in data-model §5 (color, font, spacing, radius, shadow, motion, z-index) at the **values Studio currently uses** — this is a migration into tokens, not a redesign
-- [ ] T023 Implement `packages/design-tokens/src/build.ts` — emits `dist/tokens.css` (`:root{...}` + `[data-theme=dark]{...}`) and `dist/tokens.ts` (typed `as const`)
-- [ ] T024 [P] Write snapshot test `packages/design-tokens/tests/build.test.ts` asserting the emitted CSS contains every required variable name
+- [X] T022 [P] Populate `packages/design-tokens/src/tokens.json` with the namespaces locked in data-model §5 (color, font, spacing, radius, shadow, motion, z-index) at the **values Studio currently uses** — this is a migration into tokens, not a redesign
+- [X] T023 Implement `packages/design-tokens/src/build.ts` — emits `dist/tokens.css` (`:root{...}` + `[data-theme=dark]{...}`) and `dist/tokens.ts` (typed `as const`)
+- [X] T024 [P] Write snapshot test `packages/design-tokens/tests/build.test.ts` asserting the emitted CSS contains every required variable name
 
 **Checkpoint**: `pnpm -r test` passes for `@rune-langium/design-tokens` and for `apps/studio` OPFS + workspace + telemetry units. No user-story code yet.
 
