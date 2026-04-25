@@ -1,12 +1,39 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+/**
+ * Typed configuration for `@zod-to-form` against the visual-editor's
+ * form-surface schemas.
+ *
+ * Per FR-008 and research R1 of `specs/013-z2f-editor-migration`, the
+ * canonical schemas referenced here MUST be the *projection* schemas
+ * defined in `src/schemas/form-schemas.ts` — not the langium-generated
+ * AST schemas in `src/generated/zod-schemas.ts`. AST schemas remain a
+ * separate validation surface used by tests and conformance checks; no
+ * form consumes them directly.
+ *
+ * The mapping is:
+ *   DataSchema (AST)              → dataTypeFormSchema (projection)
+ *   ChoiceSchema (AST)            → choiceFormSchema (projection)
+ *   RosettaEnumerationSchema (AST)→ enumFormSchema (projection)
+ *   RosettaFunctionSchema (AST)   → functionFormSchema (projection)
+ *   RosettaTypeAliasSchema (AST)  → typeAliasFormSchema (projection)
+ *
+ * Field-path mapping (post-projection):
+ *   attributes[].typeCall.type    → members[].typeName
+ *   attributes[].card             → members[].cardinality
+ *   attributes[].name             → members[].name
+ *   inputs[].typeCall.type        → members[].typeName  (Function inputs reuse memberSchema)
+ *   inputs[].card                 → members[].cardinality
+ *   output.typeCall.type          → outputType  (flat string in functionFormSchema)
+ */
+
 import { defineConfig } from '@zod-to-form/core';
 
 import type * as Components from './src/components/zod-form-components.js';
-import type * as ZodSchemas from './src/generated/zod-schemas.js';
+import type * as FormSchemas from './src/schemas/form-schemas.js';
 
-export default defineConfig<typeof Components, typeof ZodSchemas>({
+export default defineConfig<typeof Components, typeof FormSchemas>({
   components: '@/components/zod-form-components',
   formPrimitives: {
     field: 'Field',
@@ -20,11 +47,11 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     serverAction: false
   },
   include: [
-    'DataSchema',
-    'RosettaEnumerationSchema',
-    'ChoiceSchema',
-    'RosettaFunctionSchema',
-    'RosettaTypeAliasSchema'
+    'dataTypeFormSchema',
+    'choiceFormSchema',
+    'enumFormSchema',
+    'functionFormSchema',
+    'typeAliasFormSchema'
   ],
   exclude: [],
   fieldTypes: {
@@ -35,116 +62,80 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     TypeSelector: { component: 'TypeSelector', controlled: true }
   },
   fields: {
-    // --- Global field mappings (apply across all schemas) ---
+    // --- Global field mappings (apply across all form-surface schemas) ---
 
-    // Cross-reference fields → TypeSelector
-    parent: { component: 'TypeSelector' },
-    superType: { component: 'TypeSelector' },
-    'attributes[].typeCall.type': { component: 'TypeSelector' },
-    'typeCall.type': { component: 'TypeSelector' },
-    'inputs[].typeCall.type': { component: 'TypeSelector' },
-    'output.typeCall.type': { component: 'TypeSelector' },
+    // Cross-reference / inheritance
+    parentName: { component: 'TypeSelector' },
+    'members[].typeName': { component: 'TypeSelector' },
+    outputType: { component: 'TypeSelector' },
 
-    // Cardinality fields → CardinalitySelector
-    'attributes[].card': { component: 'CardinalitySelector' },
-    'inputs[].card': { component: 'CardinalitySelector' },
-    'output.card': { component: 'CardinalitySelector' },
+    // Cardinality
+    'members[].cardinality': { component: 'CardinalitySelector' },
 
-    // Definition fields → Textarea
+    // Definition / metadata fields are rendered by sections (see schemas.{X})
     definition: { component: 'Textarea', props: { rows: 3 } },
+    comments: { component: 'Textarea', props: { rows: 2 } },
 
-    // --- Hidden fields (handled by custom section components) ---
-
-    // $type discriminators — internal, never user-editable
-    $type: { hidden: true },
-    'attributes[].$type': { hidden: true },
-    'attributes[].typeCall.$type': { hidden: true },
-    'attributes[].typeCall.arguments': { hidden: true },
-    'enumValues[].$type': { hidden: true },
-    'inputs[].$type': { hidden: true },
-    'inputs[].typeCall.$type': { hidden: true },
-    'inputs[].typeCall.arguments': { hidden: true },
-    'typeCall.$type': { hidden: true },
-    'output.$type': { hidden: true },
-
-    // Annotations — rendered by AnnotationSection
-    annotations: { hidden: true },
-    'attributes[].annotations': { hidden: true },
-    'enumValues[].annotations': { hidden: true },
-
-    // Conditions — rendered by ConditionSection
-    conditions: { hidden: true },
-    postConditions: { hidden: true },
-
-    // Synonyms — rendered by MetadataSection
-    synonyms: { hidden: true },
-    'attributes[].synonyms': { hidden: true },
-    'enumValues[].enumSynonyms': { hidden: true },
-
-    // References — not user-editable in forms
-    references: { hidden: true },
-    'attributes[].references': { hidden: true },
-    'enumValues[].references': { hidden: true },
-
-    // Labels & rule references — not user-editable in forms
-    'attributes[].labels': { hidden: true },
-    'attributes[].ruleReferences': { hidden: true },
-
-    // Comments — rendered by MetadataSection
-    comments: { hidden: true }
+    // Synonyms — rendered by MetadataSection (kept hidden so the default
+    // walker doesn't try to render the array directly)
+    synonyms: { hidden: true }
   },
   schemas: {
     // --- Per-schema field overrides ---
 
-    DataSchema: {
+    dataTypeFormSchema: {
       fields: {
         // Attributes list: member rows with name, type, cardinality
-        'attributes[].name': { component: 'Input', order: 1 },
-        'attributes[].typeCall.type': { component: 'TypeSelector', order: 2 },
-        'attributes[].card': { component: 'CardinalitySelector', order: 3 },
-        'attributes[].override': { hidden: true },
-        'attributes[].definition': { component: 'Textarea', props: { rows: 2 }, order: 4 }
+        'members[].name': { component: 'Input', order: 1 },
+        'members[].typeName': { component: 'TypeSelector', order: 2 },
+        'members[].cardinality': { component: 'CardinalitySelector', order: 3 },
+        'members[].isOverride': { hidden: true },
+        'members[].displayName': { hidden: true }
       }
     },
 
-    ChoiceSchema: {
+    choiceFormSchema: {
       fields: {
-        // Choice options: name + type reference
-        'attributes[].name': { hidden: true },
-        'attributes[].typeCall.type': { component: 'TypeSelector', order: 1 },
-        'attributes[].definition': { component: 'Textarea', props: { rows: 2 }, order: 2 }
+        // Choice options: type reference is the primary affordance; name is
+        // hidden because choice options are name-less in the surface UX.
+        'members[].name': { hidden: true },
+        'members[].typeName': { component: 'TypeSelector', order: 1 },
+        'members[].cardinality': { hidden: true },
+        'members[].isOverride': { hidden: true },
+        'members[].displayName': { hidden: true }
       }
     },
 
-    RosettaEnumerationSchema: {
+    enumFormSchema: {
       fields: {
         // Enum values: name + display name
-        'enumValues[].name': { component: 'Input', order: 1 },
-        'enumValues[].display': { component: 'Input', order: 2 },
-        'enumValues[].definition': { component: 'Textarea', props: { rows: 2 }, order: 3 }
+        'members[].name': { component: 'Input', order: 1 },
+        'members[].displayName': { component: 'Input', order: 2 },
+        'members[].typeName': { hidden: true },
+        'members[].cardinality': { hidden: true },
+        'members[].isOverride': { hidden: true }
       }
     },
 
-    RosettaFunctionSchema: {
+    functionFormSchema: {
       fields: {
-        // Input params: name + type + cardinality
-        'inputs[].name': { component: 'Input', order: 1 },
-        'inputs[].typeCall.type': { component: 'TypeSelector', order: 2 },
-        'inputs[].card': { component: 'CardinalitySelector', order: 3 },
-        // Output: type + cardinality
-        'output.name': { hidden: true },
-        'output.typeCall': { component: 'TypeSelector', order: 1 },
-        'output.card': { component: 'CardinalitySelector', order: 2 },
-        // Shortcuts — not user-editable in generated form
-        shortcuts: { hidden: true }
+        // Input params reuse memberSchema (name + type + cardinality)
+        'members[].name': { component: 'Input', order: 1 },
+        'members[].typeName': { component: 'TypeSelector', order: 2 },
+        'members[].cardinality': { component: 'CardinalitySelector', order: 3 },
+        'members[].isOverride': { hidden: true },
+        'members[].displayName': { hidden: true },
+        // Function-specific output / expression
+        outputType: { component: 'TypeSelector', order: 4 },
+        expressionText: { component: 'Textarea', props: { rows: 4 }, order: 5 }
       }
     },
 
-    RosettaTypeAliasSchema: {
+    typeAliasFormSchema: {
       fields: {
-        // TypeAlias: wrapped type reference
-        'typeCall.type': { component: 'TypeSelector', order: 1 },
-        'typeCall.arguments': { hidden: true }
+        // TypeAlias projection currently exposes only name + metadata; the
+        // wrapped type reference lives outside the projection (handled by the
+        // editor host directly until the projection is extended).
       }
     }
   }
