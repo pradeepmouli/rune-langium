@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Publisher — runs on the Cron schedule. Feature 012, T026.
+ * Publisher — runs on the Cron schedule.
  *
  * For each curated source:
  *   1. fetch codeload.github.com/{owner}/{repo}/tar.gz/refs/heads/{ref}
@@ -18,15 +18,17 @@
  */
 
 import { buildManifest, sha256Hex, type CuratedManifest } from './manifest.js';
+import { logger, logPublish } from './log.js';
+import type { CuratedModelId } from '@rune-langium/curated-schema';
 
 export interface CuratedSource {
-  id: string;
+  id: CuratedModelId;
   owner: string;
   repo: string;
   ref: string;
 }
 
-interface MinimalR2Bucket {
+export interface MinimalR2Bucket {
   get(
     key: string
   ): Promise<{ arrayBuffer: () => Promise<ArrayBuffer>; text: () => Promise<string> } | null>;
@@ -36,12 +38,12 @@ interface MinimalR2Bucket {
     options?: { httpMetadata?: { contentType?: string } }
   ): Promise<unknown>;
   delete(key: string | string[]): Promise<unknown>;
-  list?(opts?: { prefix?: string }): Promise<{ objects: Array<{ key: string }> }>;
+  list(opts?: { prefix?: string }): Promise<{ objects: Array<{ key: string }> }>;
 }
 
 export interface PublishOptions {
   sources: CuratedSource[];
-  bucket: MinimalR2Bucket | ({ list?(prefix?: string): string[] } & MinimalR2Bucket);
+  bucket: MinimalR2Bucket;
   /** Max archives kept per modelId. Older ones pruned. */
   retention: number;
   /** Override "today" — used by tests to make assertions deterministic. */
@@ -60,28 +62,14 @@ function todayStr(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
 
-async function listArchives(bucket: PublishOptions['bucket'], modelId: string): Promise<string[]> {
+async function listArchives(bucket: MinimalR2Bucket, modelId: string): Promise<string[]> {
   const prefix = `curated/${modelId}/archives/`;
-  // Real R2 has list(); the mock has a sync list(). Support both.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const b = bucket as any;
-  if (typeof b.list === 'function') {
-    const result = b.list.length === 0 ? b.list() : await b.list({ prefix });
-    if (Array.isArray(result)) {
-      return result
-        .filter((k: string) => k.startsWith(prefix))
-        .map((k: string) => k.slice(prefix.length).replace(/\.tar\.gz$/, ''))
-        .sort();
-    }
-    if (result && Array.isArray(result.objects)) {
-      return (result.objects as Array<{ key: string }>)
-        .map((o) => o.key)
-        .filter((k) => k.startsWith(prefix))
-        .map((k) => k.slice(prefix.length).replace(/\.tar\.gz$/, ''))
-        .sort();
-    }
-  }
-  return [];
+  const result = await bucket.list({ prefix });
+  return result.objects
+    .map((o) => o.key)
+    .filter((k) => k.startsWith(prefix))
+    .map((k) => k.slice(prefix.length).replace(/\.tar\.gz$/, ''))
+    .sort();
 }
 
 export async function publishCuratedMirrors(options: PublishOptions): Promise<PublishResult> {
@@ -91,6 +79,7 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
   const result: PublishResult = { published: [], failed: [], manifests: {} };
 
   for (const source of sources) {
+    const startedAt = Date.now();
     try {
       const url = `${ARCHIVE_BASE}/${source.owner}/${source.repo}/tar.gz/refs/heads/${source.ref}`;
       const res = await fetch(url);
@@ -134,8 +123,32 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
 
       result.published.push(source.id);
       result.manifests[source.id] = manifest;
-    } catch (_err) {
+      logPublish({
+        modelId: source.id,
+        status: 'published',
+        durationMs: Date.now() - startedAt,
+        sizeBytes: buf.byteLength,
+        archivesPruned: toPrune.length
+      });
+    } catch (err) {
+      // Log the cause — a bare `result.failed.push` makes a publisher bug
+      // (TypeError, R2 5xx, sha256 failure) operationally indistinguishable
+      // from "GitHub was down."
+      logger.error(
+        {
+          model_id: source.id,
+          err:
+            err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err
+        },
+        'curated-mirror.publish.failed'
+      );
       result.failed.push(source.id);
+      logPublish({
+        modelId: source.id,
+        status: 'failed',
+        durationMs: Date.now() - startedAt,
+        errorCategory: err instanceof Error ? err.name : 'unknown'
+      });
     }
   }
 

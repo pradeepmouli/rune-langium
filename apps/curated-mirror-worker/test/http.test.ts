@@ -20,6 +20,7 @@ beforeEach(async () => {
   env = {
     rune_curated_mirror: bucket as unknown as R2Bucket,
     CURATED_SOURCES: '[]',
+    ALLOWED_ORIGIN: 'https://www.daikonic.dev',
     RETENTION: { ARCHIVES_PER_MODEL: '14' }
   };
 });

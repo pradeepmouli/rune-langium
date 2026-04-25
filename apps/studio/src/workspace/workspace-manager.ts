@@ -2,18 +2,16 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * WorkspaceManager — high-level lifecycle API. Feature 012, T019.
+ * WorkspaceManager — high-level lifecycle API.
  *
  * Wires three primitives:
- *  - persistence (T015): IndexedDB metadata
- *  - OpfsFs (T011): file content
- *  - WorkspaceOwnership (T017): cross-tab single-writer
+ *  - persistence: IndexedDB metadata
+ *  - OpfsFs: file content
+ *  - WorkspaceOwnership: cross-tab single-writer coordination
  *
- * Out of scope for T019 (handled by later tasks):
- *  - Folder-backed handle binding (T050)
- *  - Git-backed init / pull / push (T056)
- *  - Tab restore + dirty buffers (T046, T048)
- *  - Curated-model loader binding (T031)
+ * Currently exposes create / open / close / delete / listRecents.
+ * Folder-backed handle binding, git-backed init/push, tab restore, and
+ * dirty-buffer recovery land in subsequent commits.
  */
 
 import { OpfsFs } from '../opfs/opfs-fs.js';
@@ -105,11 +103,16 @@ export class WorkspaceManager {
     this.ownership.release(id);
     this.readonlyState.delete(id);
     await removeWorkspace(id);
-    // OPFS removeEntry is on the parent — use the root handle directly.
     try {
       await this.opts.opfsRoot.removeEntry(id, { recursive: true });
-    } catch {
-      // If the dir doesn't exist, deleting the metadata is enough.
+    } catch (err) {
+      // NotFoundError is expected when no OPFS dir exists for this id
+      // (e.g., create() partially failed). Anything else (NotAllowedError,
+      // InvalidStateError) means we have orphan data — surface it.
+      if (err instanceof Error && err.name !== 'NotFoundError') {
+        // eslint-disable-next-line no-console
+        console.error(`[workspace-manager] delete: OPFS removeEntry(${id}) failed:`, err);
+      }
     }
   }
 

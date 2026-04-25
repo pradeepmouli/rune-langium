@@ -2,9 +2,9 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Structured logging for the curated-mirror Worker (T029).
- * Same redact set as apps/codegen-worker/src/log.ts so log shape is
- * uniform across all rune-langium Workers.
+ * Structured logging for the curated-mirror Worker. Same redact set as
+ * apps/codegen-worker/src/log.ts so log shape is uniform across all
+ * rune-langium Workers.
  */
 
 import pino from 'pino/browser';

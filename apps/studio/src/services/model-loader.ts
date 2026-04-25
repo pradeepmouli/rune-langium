@@ -199,15 +199,10 @@ export async function loadModel(
         `Repository or ref not found: ${source.repoUrl}@${source.ref}`
       );
     }
-    if (
-      msg.includes('fetch') ||
-      msg.includes('network') ||
-      msg.includes('CORS') ||
-      msg.includes('Failed')
-    ) {
-      throw new ModelLoadError('NETWORK', `Network error loading ${source.name}: ${msg}`);
-    }
-
+    // Anything else maps to NETWORK — we can't reliably distinguish
+    // network errors from programming bugs by string-matching the message,
+    // so prefer the user-actionable category and let the underlying msg
+    // through for diagnostics.
     throw new ModelLoadError('NETWORK', `Failed to load ${source.name}: ${msg}`);
   }
 }

@@ -25,19 +25,33 @@ function fixtureBytes(): Uint8Array {
 const ARCHIVE_URL = 'https://www.daikonic.dev/curated/cdm/latest.tar.gz';
 const MANIFEST_URL = 'https://www.daikonic.dev/curated/cdm/manifest.json';
 
-function makeManifest(version = '2026-04-25'): unknown {
-  return {
+// Hoist sha256 of the fixture once. Cheap; avoids async handlers below.
+const FIXTURE_SHA: string = await (async () => {
+  const bytes = fixtureBytes();
+  const buf = await crypto.subtle.digest(
+    'SHA-256',
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+  );
+  let hex = '';
+  for (const b of new Uint8Array(buf)) hex += b.toString(16).padStart(2, '0');
+  return hex;
+})();
+
+function makeManifest(version = '2026-04-25', overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
     schemaVersion: 1,
     modelId: 'cdm',
     version,
-    sha256: 'a'.repeat(64),
+    sha256: FIXTURE_SHA,
     sizeBytes: 702,
     generatedAt: '2026-04-25T03:00:00Z',
     upstreamCommit: '',
     upstreamRef: 'master',
+    // NB: the loader IGNORES this URL — see C1 in the security review.
     archiveUrl: ARCHIVE_URL,
-    history: []
-  };
+    history: [],
+    ...overrides
+  });
 }
 
 let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -65,7 +79,7 @@ describe('loadCuratedModel — happy path (T030)', () => {
   it('fetches manifest, fetches archive, unpacks into OPFS', async () => {
     const archive = fixtureBytes();
     mockNetwork((url) => {
-      if (url === MANIFEST_URL) return new Response(JSON.stringify(makeManifest()));
+      if (url === MANIFEST_URL) return new Response(makeManifest());
       if (url === ARCHIVE_URL) return new Response(archive);
       return new Response('nope', { status: 404 });
     });
@@ -86,7 +100,7 @@ describe('loadCuratedModel — happy path (T030)', () => {
 
   it('emits curated_load_attempt then curated_load_success', async () => {
     mockNetwork((url) => {
-      if (url === MANIFEST_URL) return new Response(JSON.stringify(makeManifest()));
+      if (url === MANIFEST_URL) return new Response(makeManifest());
       return new Response(fixtureBytes());
     });
     const { fs } = newFs();
@@ -131,7 +145,7 @@ describe('loadCuratedModel — failure mapping (FR-002)', () => {
 
   it('archive 404 (manifest 200) → archive_not_found', async () => {
     await runAndExpectError((u) => {
-      if (u === MANIFEST_URL) return new Response(JSON.stringify(makeManifest()));
+      if (u === MANIFEST_URL) return new Response(makeManifest());
       return new Response('', { status: 404 });
     }, 'archive_not_found');
   });
@@ -142,9 +156,75 @@ describe('loadCuratedModel — failure mapping (FR-002)', () => {
 
   it('corrupt archive bytes → archive_decode', async () => {
     await runAndExpectError((u) => {
-      if (u === MANIFEST_URL) return new Response(JSON.stringify(makeManifest()));
+      if (u === MANIFEST_URL) return new Response(makeManifest());
       return new Response(new Uint8Array([0, 1, 2, 3]));
     }, 'archive_decode');
+  });
+
+  it('OPFS NotAllowedError → permission_denied', async () => {
+    mockNetwork((u) => {
+      if (u === MANIFEST_URL) return new Response(makeManifest());
+      return new Response(fixtureBytes());
+    });
+    // Sabotage the FS so the first write throws NotAllowedError.
+    const root = createOpfsRoot();
+    const fs = new OpfsFs(root as unknown as FileSystemDirectoryHandle);
+    const original = fs.writeFile.bind(fs);
+    let firstCall = true;
+    fs.writeFile = async (...args: Parameters<typeof original>) => {
+      if (firstCall) {
+        firstCall = false;
+        const err = new Error('denied');
+        err.name = 'NotAllowedError';
+        throw err;
+      }
+      return original(...args);
+    };
+    await expect(
+      loadCuratedModel({
+        modelId: 'cdm',
+        mirrorBase: 'https://www.daikonic.dev/curated',
+        fs,
+        writeRoot: '/cdm',
+        telemetry: { emit: telemetryEmit }
+      })
+    ).rejects.toMatchObject({ category: 'permission_denied' });
+  });
+
+  it('sha256 mismatch between manifest and bytes → archive_decode', async () => {
+    await runAndExpectError((u) => {
+      if (u === MANIFEST_URL) {
+        return new Response(makeManifest('2026-04-25', { sha256: 'b'.repeat(64) }));
+      }
+      return new Response(fixtureBytes());
+    }, 'archive_decode');
+  });
+});
+
+describe('loadCuratedModel — security: ignores manifest archiveUrl (C1)', () => {
+  it('always fetches from `${mirrorBase}/${modelId}/latest.tar.gz` regardless of manifest', async () => {
+    const fetched: string[] = [];
+    mockNetwork((url) => {
+      fetched.push(url);
+      if (url === MANIFEST_URL) {
+        return new Response(
+          makeManifest('2026-04-25', { archiveUrl: 'https://attacker.example/payload.tar.gz' })
+        );
+      }
+      if (url === ARCHIVE_URL) return new Response(fixtureBytes());
+      return new Response('nope', { status: 404 });
+    });
+    const { fs } = newFs();
+    await loadCuratedModel({
+      modelId: 'cdm',
+      mirrorBase: 'https://www.daikonic.dev/curated',
+      fs,
+      writeRoot: '/cdm',
+      telemetry: { emit: telemetryEmit }
+    });
+    // The attacker URL should never have been fetched.
+    expect(fetched).not.toContain('https://attacker.example/payload.tar.gz');
+    expect(fetched).toContain(ARCHIVE_URL);
   });
 });
 
@@ -163,7 +243,7 @@ describe('loadCuratedModel — cancellation', () => {
         telemetry: { emit: telemetryEmit },
         signal: ctl.signal
       })
-    ).rejects.toMatchObject({ category: 'unknown' });
+    ).rejects.toMatchObject({ category: 'cancelled' });
     // No writes should have landed.
     const r = root as unknown as { entries(): AsyncIterableIterator<[string, unknown]> };
     const names: string[] = [];

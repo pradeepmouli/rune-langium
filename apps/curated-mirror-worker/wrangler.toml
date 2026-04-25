@@ -46,6 +46,10 @@ CURATED_SOURCES = """[
   { "id": "rune-dsl", "owner": "REGnosys", "repo": "rosetta-dsl", "ref": "master" }
 ]"""
 
+# Same-origin allowlist for read responses. Override per environment via
+# `wrangler dev --var ALLOWED_ORIGIN=...`.
+ALLOWED_ORIGIN = "https://www.daikonic.dev"
+
 # Keep the latest 14 archives per modelId. Older are pruned by the same job.
 [vars.RETENTION]
 ARCHIVES_PER_MODEL = "14"

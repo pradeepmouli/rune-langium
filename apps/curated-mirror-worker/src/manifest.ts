@@ -2,40 +2,24 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Curated-mirror manifest builder. Feature 012, T026.
- * Schema source of truth: data-model.md §3 + contracts/curated-mirror-http.md.
+ * Curated-mirror manifest builder. Schema is the single source of truth in
+ * `@rune-langium/curated-schema`; this module builds and writes records that
+ * conform to it.
  */
 
-export interface CuratedManifest {
-  schemaVersion: 1;
-  modelId: string;
-  /** yyyy-mm-dd, monotonically increasing. */
-  version: string;
-  /** SHA-256 of latest.tar.gz, hex. */
-  sha256: string;
-  /** Size of latest.tar.gz in bytes. */
-  sizeBytes: number;
-  /** ISO-8601 UTC. */
-  generatedAt: string;
-  /** Upstream commit SHA (best-effort; falsy when unavailable). */
-  upstreamCommit: string;
-  /** Upstream branch / tag. */
-  upstreamRef: string;
-  /** Public archive URL. */
-  archiveUrl: string;
-  /** Most recent date-stamped archive URLs, oldest-first, capped at retention. */
-  history: Array<{ version: string; archiveUrl: string }>;
-}
+import type { CuratedManifest, CuratedModelId } from '@rune-langium/curated-schema';
+
+export type { CuratedManifest };
 
 export interface BuildManifestInput {
-  modelId: string;
+  modelId: CuratedModelId;
   version: string;
   sha256: string;
   sizeBytes: number;
   generatedAt: string;
   upstreamCommit: string;
   upstreamRef: string;
-  /** Existing archive versions in R2 for this modelId, oldest-first (≥ retention windows are pruned by the publisher before this is called). */
+  /** Existing archive versions in R2 for this modelId, oldest-first. */
   historyVersions: string[];
 }
 

@@ -2,39 +2,34 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Curated-model loader. Feature 012, T031.
+ * Curated-model loader.
  *
  * Pipeline:
- *  1. GET manifest.json  → know the freshest version + sha256
- *  2. GET latest.tar.gz  → bytes
- *  3. extractTarGz       → write under <writeRoot> in OPFS
+ *  1. GET manifest.json  → schema-validated; `sha256` and `version` extracted.
+ *  2. GET latest.tar.gz  → bytes (URL is always derived from `mirrorBase`;
+ *     the manifest's own `archiveUrl` is informational, not trusted).
+ *  3. SHA-256 verification — bytes MUST match `manifest.sha256` before
+ *     extraction starts.
+ *  4. extractTarGz       → write under `<writeRoot>` in OPFS.
  *
- * Failure modes map to FR-002's `ErrorCategory`:
- *   network            — offline, DNS, TLS, 5xx
- *   archive_not_found  — manifest 404, latest 404, mirror inconsistency
- *   archive_decode     — gunzip / tar parse / sha mismatch
- *   storage_quota      — OPFS write throws QuotaExceededError
- *   unknown            — anything else (including AbortError)
- *
- * Every load emits exactly two telemetry events:
- *   - curated_load_attempt before the manifest fetch
- *   - curated_load_success or curated_load_failure on terminal state
+ * Failure modes map 1:1 to `ErrorCategory` in @rune-langium/curated-schema.
+ * Every load emits `curated_load_attempt` on entry plus exactly one of
+ * `curated_load_success` / `curated_load_failure` on terminal state. The
+ * telemetry path is fire-and-forget — telemetry MUST NEVER block the load.
  */
 
 import type { OpfsFs } from '../opfs/opfs-fs.js';
 import { extractTarGz } from '../opfs/tar-untar.js';
 import type { TelemetryClient, TelemetryEvent } from './telemetry.js';
+import {
+  CURATED_MODEL_IDS,
+  parseManifest,
+  type CuratedManifest,
+  type CuratedModelId,
+  type ErrorCategory
+} from '@rune-langium/curated-schema';
 
-export type CuratedModelId = 'cdm' | 'fpml' | 'rune-dsl';
-
-export type ErrorCategory =
-  | 'network'
-  | 'archive_not_found'
-  | 'archive_decode'
-  | 'parse'
-  | 'storage_quota'
-  | 'permission_denied'
-  | 'unknown';
+export type { CuratedModelId, CuratedManifest, ErrorCategory };
 
 export class CuratedLoadError extends Error {
   constructor(
@@ -44,19 +39,6 @@ export class CuratedLoadError extends Error {
     super(message);
     this.name = 'CuratedLoadError';
   }
-}
-
-export interface CuratedManifest {
-  schemaVersion: number;
-  modelId: string;
-  version: string;
-  sha256: string;
-  sizeBytes: number;
-  generatedAt: string;
-  upstreamCommit: string;
-  upstreamRef: string;
-  archiveUrl: string;
-  history: Array<{ version: string; archiveUrl: string }>;
 }
 
 export interface LoadCuratedInput {
@@ -77,11 +59,29 @@ export interface LoadCuratedResult {
   bytesUnpacked: number;
 }
 
-const VALID_MODEL_IDS: ReadonlyArray<CuratedModelId> = ['cdm', 'fpml', 'rune-dsl'];
+const VALID_MODEL_IDS = new Set<string>(CURATED_MODEL_IDS);
 
 function emit(telemetry: Pick<TelemetryClient, 'emit'>, event: TelemetryEvent): void {
   // Telemetry MUST NEVER block or fail the load — fire-and-forget.
   void telemetry.emit(event).catch(() => undefined);
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const buf = await crypto.subtle.digest(
+    'SHA-256',
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+  );
+  let hex = '';
+  for (const b of new Uint8Array(buf)) hex += b.toString(16).padStart(2, '0');
+  return hex;
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError';
+}
+
+function isQuotaExceeded(err: unknown): boolean {
+  return err instanceof Error && err.name === 'QuotaExceededError';
 }
 
 async function fetchOk(url: string, signal?: AbortSignal): Promise<Response> {
@@ -89,9 +89,7 @@ async function fetchOk(url: string, signal?: AbortSignal): Promise<Response> {
   try {
     res = await fetch(url, { signal, cache: 'no-cache' });
   } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new CuratedLoadError('unknown', 'cancelled');
-    }
+    if (isAbortError(err)) throw new CuratedLoadError('cancelled', 'load cancelled');
     throw new CuratedLoadError('network', `fetch ${url} failed`);
   }
   if (res.status === 404) throw new CuratedLoadError('archive_not_found', `${url} → 404`);
@@ -102,7 +100,7 @@ async function fetchOk(url: string, signal?: AbortSignal): Promise<Response> {
 export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCuratedResult> {
   const { modelId, mirrorBase, fs, writeRoot, telemetry, signal, onProgress } = input;
 
-  if (!VALID_MODEL_IDS.includes(modelId)) {
+  if (!VALID_MODEL_IDS.has(modelId)) {
     throw new CuratedLoadError('archive_not_found', `unknown modelId ${modelId}`);
   }
 
@@ -110,33 +108,50 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
   const startedAt = Date.now();
 
   if (signal?.aborted) {
-    emit(telemetry, { event: 'curated_load_failure', modelId, errorCategory: 'unknown' });
-    throw new CuratedLoadError('unknown', 'cancelled before start');
+    emit(telemetry, { event: 'curated_load_failure', modelId, errorCategory: 'cancelled' });
+    throw new CuratedLoadError('cancelled', 'cancelled before start');
   }
 
   try {
     // 1. Manifest.
     const manifestUrl = `${mirrorBase}/${modelId}/manifest.json`;
     const manifestRes = await fetchOk(manifestUrl, signal);
-    let manifest: CuratedManifest;
+    let rawJson: unknown;
     try {
-      manifest = (await manifestRes.json()) as CuratedManifest;
+      rawJson = await manifestRes.json();
     } catch {
       throw new CuratedLoadError('archive_decode', 'manifest.json was not valid JSON');
     }
+    const parsed = parseManifest(rawJson);
+    if (!parsed.ok) {
+      throw new CuratedLoadError('archive_decode', `manifest schema violation: ${parsed.reason}`);
+    }
+    const manifest = parsed.manifest;
 
-    // 2. Archive.
-    const archiveUrl = manifest.archiveUrl ?? `${mirrorBase}/${modelId}/latest.tar.gz`;
+    // 2. Archive — always derive the URL from mirrorBase. The manifest's
+    // own `archiveUrl` field is informational only; trusting it would let a
+    // tampered manifest redirect us to fetch attacker bytes.
+    const archiveUrl = `${mirrorBase}/${modelId}/latest.tar.gz`;
     const archiveRes = await fetchOk(archiveUrl, signal);
     const bytes = new Uint8Array(await archiveRes.arrayBuffer());
+
+    // Verify the bytes match the manifest's claimed sha256 BEFORE feeding
+    // them to the tar parser. The schema already enforces the regex shape.
+    const observed = await sha256Hex(bytes);
+    if (observed.toLowerCase() !== manifest.sha256.toLowerCase()) {
+      throw new CuratedLoadError(
+        'archive_decode',
+        `sha256 mismatch (manifest=${manifest.sha256.slice(0, 8)}…, observed=${observed.slice(0, 8)}…)`
+      );
+    }
 
     // 3. Extract into OPFS at the requested root.
     let written = 0;
     let unpacked = 0;
     try {
-      // Pre-create the write root so the parent exists before files arrive.
       await fs.mkdir(writeRoot);
-      await extractTarGz(bytes, scopedFs(fs, writeRoot), {
+      await extractTarGz(bytes, fs, {
+        pathPrefix: writeRoot,
         onEntry: (path, size) => {
           written++;
           unpacked += size;
@@ -144,8 +159,11 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
         }
       });
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+      if (isQuotaExceeded(err)) {
         throw new CuratedLoadError('storage_quota', 'OPFS storage quota exceeded');
+      }
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        throw new CuratedLoadError('permission_denied', 'OPFS permission denied');
       }
       throw new CuratedLoadError('archive_decode', `extract failed: ${(err as Error).message}`);
     }
@@ -163,40 +181,12 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
     });
     return result;
   } catch (err) {
-    const category = err instanceof CuratedLoadError ? err.category : 'unknown';
-    emit(telemetry, {
-      event: 'curated_load_failure',
-      modelId,
-      errorCategory: category as Exclude<ErrorCategory, 'parse'>
-    });
-    throw err instanceof CuratedLoadError ? err : new CuratedLoadError('unknown', String(err));
+    const category: ErrorCategory = err instanceof CuratedLoadError ? err.category : 'unknown';
+    emit(telemetry, { event: 'curated_load_failure', modelId, errorCategory: category });
+    if (err instanceof CuratedLoadError) throw err;
+    const message = err instanceof Error ? err.message : JSON.stringify(err);
+    throw new CuratedLoadError('unknown', message);
   }
-}
-
-/**
- * Wrap an OpfsFs so all relative writes land under `root`. The tar parser
- * passes paths like 'foo/a.txt' and we want them at '<writeRoot>/foo/a.txt'.
- */
-function scopedFs(fs: OpfsFs, root: string): OpfsFs {
-  const trim = (p: string): string => (p.startsWith('/') ? p.slice(1) : p);
-  const join = (rel: string): string => `${root}/${trim(rel)}`.replace(/\/{2,}/g, '/');
-  return {
-    readFile: (p: string, opts?: unknown) =>
-      (fs.readFile as (path: string, options?: unknown) => Promise<string | Uint8Array>)(
-        join(p),
-        opts
-      ),
-    writeFile: (p: string, data: Parameters<OpfsFs['writeFile']>[1]) => fs.writeFile(join(p), data),
-    unlink: (p: string) => fs.unlink(join(p)),
-    mkdir: (p: string) => fs.mkdir(join(p)),
-    rmdir: (p: string) => fs.rmdir(join(p)),
-    stat: (p: string) => fs.stat(join(p)),
-    lstat: (p: string) => fs.lstat(join(p)),
-    readdir: (p: string) => fs.readdir(join(p)),
-    readlink: (p: string) => fs.readlink(join(p)),
-    symlink: (t: string, p: string) => fs.symlink(t, join(p)),
-    chmod: (p: string, m: number) => fs.chmod(join(p), m)
-  } as unknown as OpfsFs;
 }
 
 /**

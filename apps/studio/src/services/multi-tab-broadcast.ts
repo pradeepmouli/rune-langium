@@ -2,43 +2,48 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * WorkspaceOwnership — first-writer-wins multi-tab coordination over
- * BroadcastChannel. Feature 012-studio-workspace-ux, T017.
+ * Multi-tab single-writer coordination over BroadcastChannel.
  *
- * Protocol (small + symmetric so it doesn't need a server):
- *   { type: 'claim',       wsId, tabId }
- *   { type: 'claim-deny',  wsId, ownerTabId }
- *   { type: 'takeover',    wsId, tabId }
- *   { type: 'release',     wsId, tabId }
+ * Protocol (versioned so future schema changes can coexist or be rejected):
+ *   { proto: 1, type: 'claim',       wsId, tabId }
+ *   { proto: 1, type: 'claim-deny',  wsId, ownerTabId }
+ *   { proto: 1, type: 'takeover',    wsId, tabId }
+ *   { proto: 1, type: 'release',     wsId, tabId }
  *
- * `claim` is broadcast when a tab opens a workspace. Existing owners reply
- * with `claim-deny`. If no deny lands within `timeoutMs`, the claim wins.
+ * On `claim`: an existing owner replies with `claim-deny`. If two tabs
+ * claim simultaneously (no current owner), they each see the other's
+ * claim and apply a deterministic tiebreak — lexicographically smaller
+ * `tabId` wins. Both tabs reach the same conclusion without a round trip,
+ * so at most one returns `true` from `claim()`.
  *
- * `takeover` is the explicit user action; a tab that receives a takeover
- * for a workspace it currently owns must flush dirty buffers and yield.
+ * `takeover` is fire-and-forget by design: the previous owner is notified
+ * via `onOwnershipLost` and is responsible for flushing dirty buffers in
+ * its own callback. Adding an ack would require two-phase coordination
+ * that the v1 product doesn't need.
  */
 
 const CHANNEL_NAME = 'rune-studio:workspace-ownership';
+const PROTO_VERSION = 1;
 const DEFAULT_CLAIM_TIMEOUT_MS = 250;
 
-interface ClaimMsg {
-  type: 'claim';
+interface BaseMsg {
+  proto: number;
   wsId: string;
+}
+interface ClaimMsg extends BaseMsg {
+  type: 'claim';
   tabId: string;
 }
-interface ClaimDenyMsg {
+interface ClaimDenyMsg extends BaseMsg {
   type: 'claim-deny';
-  wsId: string;
   ownerTabId: string;
 }
-interface TakeoverMsg {
+interface TakeoverMsg extends BaseMsg {
   type: 'takeover';
-  wsId: string;
   tabId: string;
 }
-interface ReleaseMsg {
+interface ReleaseMsg extends BaseMsg {
   type: 'release';
-  wsId: string;
   tabId: string;
 }
 type AnyMsg = ClaimMsg | ClaimDenyMsg | TakeoverMsg | ReleaseMsg;
@@ -56,8 +61,10 @@ export class WorkspaceOwnership {
   private peers = new Map<string, string>();
   /** ws-id → callback fired when this tab loses ownership. */
   private lossListeners = new Map<string, () => void>();
-  /** ws-id → resolver for an in-flight claim() awaiting deny. */
+  /** ws-id → resolver for an in-flight claim() awaiting deny / tiebreak. */
   private pendingClaims = new Map<string, (deniedBy: string | null) => void>();
+  /** Workspaces this tab is itself currently trying to claim. */
+  private claiming = new Set<string>();
 
   constructor(private readonly tabId: string) {
     this.channel = new BroadcastChannel(CHANNEL_NAME);
@@ -70,7 +77,8 @@ export class WorkspaceOwnership {
    */
   async claim(wsId: string, options: ClaimOptions = {}): Promise<boolean> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_CLAIM_TIMEOUT_MS;
-    this.send({ type: 'claim', wsId, tabId: this.tabId });
+    this.claiming.add(wsId);
+    this.send({ proto: PROTO_VERSION, type: 'claim', wsId, tabId: this.tabId });
 
     const deniedBy = await new Promise<string | null>((resolve) => {
       const timer = setTimeout(() => {
@@ -84,6 +92,7 @@ export class WorkspaceOwnership {
       });
     });
 
+    this.claiming.delete(wsId);
     if (deniedBy) {
       this.peers.set(wsId, deniedBy);
       return false;
@@ -98,7 +107,7 @@ export class WorkspaceOwnership {
    * notification.
    */
   async takeover(wsId: string): Promise<void> {
-    this.send({ type: 'takeover', wsId, tabId: this.tabId });
+    this.send({ proto: PROTO_VERSION, type: 'takeover', wsId, tabId: this.tabId });
     this.owned.add(wsId);
     this.peers.delete(wsId);
   }
@@ -107,7 +116,7 @@ export class WorkspaceOwnership {
   release(wsId: string): void {
     if (!this.owned.has(wsId)) return;
     this.owned.delete(wsId);
-    this.send({ type: 'release', wsId, tabId: this.tabId });
+    this.send({ proto: PROTO_VERSION, type: 'release', wsId, tabId: this.tabId });
   }
 
   /** True iff this tab currently owns wsId. */
@@ -137,28 +146,65 @@ export class WorkspaceOwnership {
   }
 
   private onMessage = (ev: MessageEvent): void => {
-    const msg = ev.data as AnyMsg;
+    const msg = ev.data as AnyMsg | undefined;
     if (!msg || typeof msg !== 'object') return;
+    // Drop messages from a future protocol version we don't understand.
+    if (msg.proto !== PROTO_VERSION) return;
 
     switch (msg.type) {
       case 'claim': {
-        // If we own it, deny the claim.
+        if (msg.tabId === this.tabId) return;
         if (this.owned.has(msg.wsId)) {
-          this.send({ type: 'claim-deny', wsId: msg.wsId, ownerTabId: this.tabId });
+          // We're already the owner — deny.
+          this.send({
+            proto: PROTO_VERSION,
+            type: 'claim-deny',
+            wsId: msg.wsId,
+            ownerTabId: this.tabId
+          });
+          return;
+        }
+        if (this.claiming.has(msg.wsId)) {
+          // Both tabs are claiming with no current owner — deterministic
+          // tiebreak: lexicographically smaller `tabId` wins. Both peers
+          // reach the same conclusion without a round trip.
+          if (this.tabId < msg.tabId) {
+            this.send({
+              proto: PROTO_VERSION,
+              type: 'claim-deny',
+              wsId: msg.wsId,
+              ownerTabId: this.tabId
+            });
+          } else {
+            // We lose the tiebreak — abandon our own pending claim.
+            this.pendingClaims.get(msg.wsId)?.(msg.tabId);
+          }
         }
         return;
       }
       case 'claim-deny': {
-        const pending = this.pendingClaims.get(msg.wsId);
-        if (pending) pending(msg.ownerTabId);
+        this.pendingClaims.get(msg.wsId)?.(msg.ownerTabId);
         return;
       }
       case 'takeover': {
         if (this.owned.has(msg.wsId) && msg.tabId !== this.tabId) {
           this.owned.delete(msg.wsId);
           this.peers.set(msg.wsId, msg.tabId);
-          this.lossListeners.get(msg.wsId)?.();
+          // Callback exceptions MUST NOT escape — EventTarget would
+          // silently drop them and leave callers thinking ownership-loss
+          // has been handled.
+          const cb = this.lossListeners.get(msg.wsId);
+          if (cb) {
+            try {
+              cb();
+            } catch (err) {
+              // eslint-disable-next-line no-console
+              console.error('[multi-tab-broadcast] ownership-lost callback threw:', err);
+            }
+          }
         }
+        // If we were trying to claim this ws, that claim now loses.
+        this.pendingClaims.get(msg.wsId)?.(msg.tabId);
         return;
       }
       case 'release': {

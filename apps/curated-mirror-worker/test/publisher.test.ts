@@ -88,10 +88,15 @@ describe('publishCuratedMirrors (T025)', () => {
       await bucket.put(`curated/cdm/archives/${day}.tar.gz`, new Uint8Array([i]));
     }
     await publishCuratedMirrors({ sources: [SOURCES[0]!], bucket, retention: 14 });
-    // After publish there should be at most 14 archives left.
-    const remaining = bucket.list('curated/cdm/archives/');
-    expect(Array.isArray(remaining)).toBe(true);
-    expect((remaining as string[]).length).toBeLessThanOrEqual(14);
+    // After publish there should be exactly 14 archives left (today + 13 most recent).
+    const remaining = bucket.keys('curated/cdm/archives/');
+    expect(remaining.length).toBe(14);
+    // Verify the kept set is the chronological tail, not a random selection.
+    const kept = remaining
+      .map((k) => k.replace('curated/cdm/archives/', '').replace('.tar.gz', ''))
+      .sort();
+    expect(kept[0]).toBe('2026-04-04'); // 13 most-recent of seeded `01..16` is `04..16`
+    expect(kept).toContain(new Date().toISOString().slice(0, 10));
   });
 
   it('continues when one source fails — publishes the others', async () => {

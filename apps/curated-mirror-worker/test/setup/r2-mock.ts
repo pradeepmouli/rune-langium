@@ -25,13 +25,10 @@ export interface MockR2Bucket {
   ): Promise<void>;
   delete(key: string | string[]): Promise<void>;
   head(key: string): Promise<R2ObjectLike | null>;
-  /**
-   * Real-R2-shape async list. Returns `{ objects: [{ key }] }`.
-   * For test-only debugging the synchronous `_keys` getter is also exposed.
-   */
+  /** Real-R2-shape async list. */
   list(opts?: { prefix?: string }): Promise<{ objects: Array<{ key: string }> }>;
-  /** Test-only convenience — returns all keys (or those with prefix). */
-  list(prefix?: string): string[];
+  /** Test-only sync convenience: returns the keys directly. */
+  keys(prefix?: string): string[];
   has(key: string): boolean;
   getText(key: string): Promise<string>;
 }
@@ -98,18 +95,15 @@ export function createMockR2Bucket(): MockR2Bucket {
       const obj = store.get(key);
       return obj ? makeObj(key, obj) : null;
     },
-    // Overload: either real-R2 async `{ objects }` shape (when called with
-    // `{ prefix }` or no args) OR the synchronous test-only string array
-    // (when called with a string prefix).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    list(arg?: any): any {
+    async list(opts?: { prefix?: string }) {
       const all = Array.from(store.keys()).sort();
-      if (typeof arg === 'string') {
-        return all.filter((k) => k.startsWith(arg));
-      }
-      const prefix: string | undefined = arg?.prefix;
+      const prefix = opts?.prefix;
       const filtered = prefix ? all.filter((k) => k.startsWith(prefix)) : all;
-      return Promise.resolve({ objects: filtered.map((key) => ({ key })) });
+      return { objects: filtered.map((key) => ({ key })) };
+    },
+    keys(prefix?: string) {
+      const all = Array.from(store.keys()).sort();
+      return prefix ? all.filter((k) => k.startsWith(prefix)) : all;
     },
     has(key) {
       return store.has(key);

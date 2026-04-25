@@ -48,20 +48,28 @@ export interface GitBackingRecord {
   lastSyncedSha: string | null;
 }
 
-export interface WorkspaceRecord {
+interface BaseWorkspaceFields {
   id: string;
   name: string;
   createdAt: string;
   lastOpenedAt: string;
-  kind: WorkspaceKind;
   layout: PanelLayoutRecord;
   tabs: TabRecord[];
   activeTabPath: string | null;
   curatedModels: CuratedModelBinding[];
-  folderHandle?: string;
-  gitBacking?: GitBackingRecord;
   schemaVersion: number;
 }
+
+/**
+ * Discriminated union on `kind`. Folder-backed and git-backed records
+ * carry their backing-specific fields; browser-only carries neither.
+ * This makes it impossible to construct a `kind: 'git-backed'` record
+ * without `gitBacking`, etc.
+ */
+export type WorkspaceRecord =
+  | (BaseWorkspaceFields & { kind: 'browser-only' })
+  | (BaseWorkspaceFields & { kind: 'folder-backed'; folderHandle: string })
+  | (BaseWorkspaceFields & { kind: 'git-backed'; gitBacking: GitBackingRecord });
 
 export interface RecentWorkspaceRecord {
   id: string;
@@ -98,8 +106,14 @@ const DB_NAME = 'rune-studio';
 const DB_VERSION = 1;
 
 let dbPromise: Promise<IDBPDatabase<RuneStudioDB>> | undefined;
+let closeInFlight: Promise<void> | undefined;
 
 function getDb(): Promise<IDBPDatabase<RuneStudioDB>> {
+  if (closeInFlight) {
+    // Wait for any pending close before opening a new connection — otherwise
+    // a test that didn't await `_resetForTests` would race two open() calls.
+    return closeInFlight.then(() => getDb());
+  }
   if (!dbPromise) {
     dbPromise = openDB<RuneStudioDB>(DB_NAME, DB_VERSION, {
       upgrade(db) {
@@ -124,15 +138,23 @@ function getDb(): Promise<IDBPDatabase<RuneStudioDB>> {
 
 /** Reset the cached connection — used by tests between cases. */
 export async function _resetForTests(): Promise<void> {
-  if (dbPromise) {
+  const prev = dbPromise;
+  dbPromise = undefined;
+  if (prev) {
+    closeInFlight = (async () => {
+      try {
+        const db = await prev;
+        db.close();
+      } catch {
+        /* nothing to close */
+      }
+    })();
     try {
-      const db = await dbPromise;
-      db.close();
-    } catch {
-      /* nothing to close */
+      await closeInFlight;
+    } finally {
+      closeInFlight = undefined;
     }
   }
-  dbPromise = undefined;
 }
 
 // ---------- workspaces ----------

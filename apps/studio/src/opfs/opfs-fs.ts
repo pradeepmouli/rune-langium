@@ -119,18 +119,25 @@ export class OpfsFs {
 
   async writeFile(path: string, data: WriteFileData): Promise<void> {
     const fh = await this.getFile(path, true);
-    const w = await fh.createWritable();
-    // The DOM types insist FileSystemWritableFileStream.write() takes a
-    // Uint8Array<ArrayBuffer> specifically, but Uint8Array can be backed
-    // by SharedArrayBuffer. Wrapping in a Blob normalises that and also
-    // handles ArrayBuffer / string uniformly without us reasoning about
-    // the type hierarchy.
-    if (typeof data === 'string') {
-      await w.write(data);
-    } else {
-      await w.write(new Blob([data as BlobPart]));
+    let w: FileSystemWritableFileStream;
+    try {
+      w = await fh.createWritable();
+    } catch (err) {
+      throw translateWriteError(err, path);
     }
-    await w.close();
+    try {
+      // Wrapping in a Blob normalises string / Uint8Array / ArrayBuffer /
+      // ArrayBufferView and avoids the SharedArrayBuffer type-narrowing
+      // problem on FileSystemWritableFileStream.write().
+      if (typeof data === 'string') {
+        await w.write(data);
+      } else {
+        await w.write(new Blob([data as BlobPart]));
+      }
+      await w.close();
+    } catch (err) {
+      throw translateWriteError(err, path);
+    }
   }
 
   async unlink(path: string): Promise<void> {
@@ -216,6 +223,16 @@ export class OpfsFs {
   async chmod(_path: string, _mode: number): Promise<void> {
     // No-op: OPFS has no POSIX permission bits.
   }
+}
+
+function translateWriteError(err: unknown, path: string): Error {
+  if (err instanceof Error) {
+    if (err.name === 'QuotaExceededError') return err; // bubble through; loader maps to storage_quota
+    if (err.name === 'NotAllowedError') return err; // bubble through; loader maps to permission_denied
+    if (isDomError(err, 'NotFoundError')) return new FsError('ENOENT', path);
+    if (isDomError(err, 'TypeMismatchError')) return new FsError('EISDIR', path);
+  }
+  return err instanceof Error ? err : new Error(String(err));
 }
 
 function makeStat(type: 'file' | 'dir', size: number, mtimeMs: number): FsStat {

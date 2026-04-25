@@ -24,9 +24,9 @@ describe('CuratedLoadErrorPanel (T037)', () => {
     ['network', /network|connection|offline/i],
     ['archive_not_found', /not (yet )?available|archive/i],
     ['archive_decode', /corrupt|decode|invalid/i],
-    ['parse', /parse/i],
     ['storage_quota', /storage|quota|space/i],
-    ['permission_denied', /permission/i]
+    ['permission_denied', /permission/i],
+    ['cancelled', /cancel/i]
   ] as Array<[ErrorCategory, RegExp]>)(
     'renders a category-specific message for %s',
     (category, pattern) => {

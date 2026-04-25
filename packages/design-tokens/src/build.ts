@@ -2,13 +2,18 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Builds dist/tokens.css and dist/tokens.ts from src/tokens.json.
- * T023 expands this with proper light/dark theme generation, snapshot tests,
- * and CSS-variable naming locked to the data-model §5 namespace.
+ * Builds dist/tokens.css and dist/tokens.js from src/tokens.json.
  *
- * Today this is intentionally a thin scaffold so:
- *   pnpm --filter @rune-langium/design-tokens build
- * produces emittable output and downstream packages can depend on it.
+ * Emits two outputs:
+ *  - dist/tokens.css — `:root { --foo: ... }` plus a `[data-theme="dark"]`
+ *    block that overrides only `--color-*` variables.
+ *  - dist/tokens.js  — typed `as const` object for React consumers that
+ *    need raw values (rare; primitives should consume CSS variables).
+ *
+ * CSS-variable naming is locked: changes to the namespace tree in
+ * `tokens.json` ripple through every consumer (landing site, docs theme,
+ * Studio's Tailwind config). The snapshot test in
+ * `packages/design-tokens/tests/build.test.ts` enforces stability.
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';

@@ -8,7 +8,7 @@
  * so we use a small in-memory polyfill that round-trips messages).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WorkspaceOwnership } from '../../src/services/multi-tab-broadcast.js';
 
 class FakeBroadcastChannel extends EventTarget {
@@ -99,5 +99,69 @@ describe('WorkspaceOwnership — claim, observe, takeover (T016)', () => {
 
     expect(await tabB.claim('ws-1')).toBe(true);
     expect(tabB.isOwner('ws-1')).toBe(true);
+  });
+
+  it('two simultaneous claimers — exactly one wins via deterministic tiebreak', async () => {
+    const tabA = new WorkspaceOwnership('tab-a');
+    const tabB = new WorkspaceOwnership('tab-b');
+    // Fire both claims without awaiting in between — the textbook race.
+    const [a, b] = await Promise.all([tabA.claim('ws-x'), tabB.claim('ws-x')]);
+    expect([a, b].filter(Boolean).length).toBe(1);
+    // Smaller tabId ('tab-a' < 'tab-b') wins.
+    expect(a).toBe(true);
+    expect(b).toBe(false);
+    expect(tabA.isOwner('ws-x')).toBe(true);
+    expect(tabB.isOwner('ws-x')).toBe(false);
+  });
+
+  it('a takeover during a peer claim resolves that claim as denied', async () => {
+    const tabA = new WorkspaceOwnership('tab-a');
+    const tabB = new WorkspaceOwnership('tab-b');
+    // tabB starts a claim and tabA fires takeover before B's window expires.
+    const claimPromise = tabB.claim('ws-y', { timeoutMs: 1000 });
+    await flushMicrotasks();
+    await tabA.takeover('ws-y');
+    const result = await claimPromise;
+    expect(result).toBe(false);
+    expect(tabB.peerOwner('ws-y')).toBe('tab-a');
+  });
+
+  it('callback exceptions in onOwnershipLost are isolated, not silently swallowed', async () => {
+    const tabA = new WorkspaceOwnership('tab-a');
+    const tabB = new WorkspaceOwnership('tab-b');
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await tabA.claim('ws-z')).toBe(true);
+    tabA.onOwnershipLost('ws-z', () => {
+      throw new Error('boom from app code');
+    });
+    await tabB.takeover('ws-z');
+    await flushMicrotasks();
+    // Tab A still flipped to non-owner state…
+    expect(tabA.isOwner('ws-z')).toBe(false);
+    // …and the throwing callback was logged, not silently dropped.
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it('drops messages from a future protocol version', async () => {
+    const tabA = new WorkspaceOwnership('tab-a');
+    expect(await tabA.claim('ws-fp')).toBe(true);
+    // Inject a foreign-protocol claim — should be ignored, ownership unchanged.
+    const channels = (
+      globalThis as unknown as {
+        BroadcastChannel: { channels: Map<string, Set<EventTarget>> };
+      }
+    ).BroadcastChannel.channels;
+    const peers = channels.get('rune-studio:workspace-ownership');
+    expect(peers).toBeDefined();
+    for (const peer of peers!) {
+      peer.dispatchEvent(
+        new MessageEvent('message', {
+          data: { proto: 99, type: 'takeover', wsId: 'ws-fp', tabId: 'malicious' }
+        })
+      );
+    }
+    await flushMicrotasks();
+    expect(tabA.isOwner('ws-fp')).toBe(true);
   });
 });

@@ -31,10 +31,6 @@ const COPY: Record<ErrorCategory, ErrorCopy> = {
     title: 'The downloaded archive is corrupt',
     body: 'The archive failed to decode (invalid gzip or tar entries). The mirror likely has a partial upload; please retry.'
   },
-  parse: {
-    title: 'A file in the archive failed to parse',
-    body: 'One or more .rosetta files in the archive could not be parsed. This usually means the upstream model has a syntax issue. Please retry; if it persists, file an issue.'
-  },
   storage_quota: {
     title: 'Browser storage is full',
     body: 'Your browser denied additional storage for Studio. Free up some space — try removing other workspaces or clearing site data — and retry.',
@@ -43,6 +39,10 @@ const COPY: Record<ErrorCategory, ErrorCopy> = {
   permission_denied: {
     title: 'Storage permission was denied',
     body: 'The browser refused permission to write to the workspace area. Please allow storage access in your browser’s site settings and retry.'
+  },
+  cancelled: {
+    title: 'Load cancelled',
+    body: 'You cancelled the load before it finished. No partial files were kept. You can start it again whenever you’re ready.'
   },
   unknown: {
     title: 'An unexpected condition stopped the load',

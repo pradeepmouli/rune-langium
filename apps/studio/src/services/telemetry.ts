@@ -14,37 +14,27 @@
  */
 
 import { z } from 'zod';
-
-const ErrorCategoryEnum = z.enum([
-  'network',
-  'archive_not_found',
-  'archive_decode',
-  'parse',
-  'storage_quota',
-  'permission_denied',
-  'unknown'
-]);
-const ModelIdEnum = z.enum(['cdm', 'fpml', 'rune-dsl']);
+import { CuratedModelIdSchema, ErrorCategorySchema } from '@rune-langium/curated-schema';
 
 const TelemetryEventSchema = z.discriminatedUnion('event', [
   z
     .object({
       event: z.literal('curated_load_attempt'),
-      modelId: ModelIdEnum
+      modelId: CuratedModelIdSchema
     })
     .strict(),
   z
     .object({
       event: z.literal('curated_load_success'),
-      modelId: ModelIdEnum,
+      modelId: CuratedModelIdSchema,
       durationMs: z.number().int().nonnegative().max(600_000)
     })
     .strict(),
   z
     .object({
       event: z.literal('curated_load_failure'),
-      modelId: ModelIdEnum,
-      errorCategory: ErrorCategoryEnum
+      modelId: CuratedModelIdSchema,
+      errorCategory: ErrorCategorySchema
     })
     .strict(),
   z

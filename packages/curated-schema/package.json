@@ -1,0 +1,36 @@
+{
+  "name": "@rune-langium/curated-schema",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Single source of truth for curated-mirror types: CuratedManifest, CuratedModelId, ErrorCategory. Consumed by both apps/curated-mirror-worker (publisher) and apps/studio (loader).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsgo -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run",
+    "type-check": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"
+}

@@ -3,28 +3,23 @@
 
 /**
  * extractTarGz — gunzip + ustar parse + write into OPFS.
- * Feature 012-studio-workspace-ux, T013.
  *
  * Why not `tar-stream`: the curated mirrors are < 5MB compressed and we
  * already pay the bundle cost of `pako`. A purpose-built ustar parser
- * is ~120 lines and ships at ~1KB gzipped vs ~30KB for tar-stream.
+ * is small and ships at ~1KB gzipped vs ~30KB for tar-stream.
  *
- * What we support:
- *  - regular files (typeflag '0' or '\0')
- *  - directories (typeflag '5')
- *  - paths up to 100 bytes (no PAX / GNU long-name extensions yet — every
- *    curated source we mirror today fits comfortably)
+ * Supported entry kinds: regular files (typeflag '0' or NUL) and directories
+ * (typeflag '5'). Paths are bounded by ustar's 100-byte name + 155-byte
+ * prefix.
  *
- * What we drop:
- *  - global PAX headers (typeflag 'g'): silently skipped
- *  - extended PAX headers (typeflag 'x'): silently skipped (the next entry's
- *    name is read from the ustar header, which is enough for our archives)
- *  - hard / symbolic links: rejected with a clear error
- *  - device / fifo / character-special entries: rejected with a clear error
+ * Rejected (throws): hard links (typeflag '1'), symbolic links ('2'), and
+ * any entry whose path contains a traversal segment, an empty segment,
+ * `.` / `..`, a backslash, a leading `/`, or a NUL.
  *
- * If a future curated source uses long names or PAX, this module needs to
- * grow — in that case T012's fixture should be expanded to include such
- * entries first, the test should fail, then we add the support.
+ * Skipped (silently): PAX global headers ('g') and PAX extended headers
+ * ('x') — for our curated sources the next ustar header is sufficient. Any
+ * other unknown typeflag is rejected to fail loudly rather than silently
+ * truncate to "we ignore the data."
  */
 
 import { inflate } from 'pako';
@@ -38,6 +33,13 @@ export interface ExtractOptions {
    * Useful for narrowing a curated archive to a specific subdirectory.
    */
   shouldExtract?: (path: string) => boolean;
+  /**
+   * Optional prefix prepended to every entry path before it's written to
+   * the FS. e.g. with `pathPrefix: '/cdm-ws'` an entry `foo/a.txt` lands at
+   * `/cdm-ws/foo/a.txt`. Lets callers scope an archive to a workspace
+   * subdirectory without wrapping the whole `OpfsFs` interface.
+   */
+  pathPrefix?: string;
 }
 
 const BLOCK = 512;
@@ -74,27 +76,25 @@ export async function extractTarGz(
     const dataBlocks = Math.ceil(header.size / BLOCK);
     const dataEnd = offset + header.size;
 
+    const prefix = options.pathPrefix ? options.pathPrefix.replace(/\/$/, '') : '';
     if (header.typeflag === '5') {
-      // Directory entry. Pre-create so empty dirs get materialised even
-      // without a child file landing in them.
       const cleaned = cleanPath(header.name);
       if (cleaned && (!options.shouldExtract || options.shouldExtract(cleaned + '/'))) {
-        await fs.mkdir('/' + cleaned);
+        await fs.mkdir(`${prefix}/${cleaned}`);
       }
     } else if (header.typeflag === '0' || header.typeflag === '\0' || header.typeflag === '') {
       const cleaned = cleanPath(header.name);
       if (cleaned && (!options.shouldExtract || options.shouldExtract(cleaned))) {
         const data = tar.subarray(offset, dataEnd);
-        await fs.writeFile('/' + cleaned, data);
+        await fs.writeFile(`${prefix}/${cleaned}`, data);
         options.onEntry?.(cleaned, header.size);
       }
     } else if (header.typeflag === 'g' || header.typeflag === 'x') {
-      // PAX headers — skip the data blocks; rely on the next ustar header.
+      // PAX headers — next ustar header carries the canonical name.
     } else if (header.typeflag === '1' || header.typeflag === '2') {
       throw new Error(`tar: links not supported (path=${header.name})`);
     } else {
-      // Ignore unknown typeflags but advance past their data so the parser
-      // doesn't get out of sync.
+      throw new Error(`tar: unsupported typeflag '${header.typeflag}' (path=${header.name})`);
     }
 
     offset += dataBlocks * BLOCK;
@@ -123,15 +123,22 @@ function parseUstarHeader(block: Uint8Array): UstarHeader {
 
 function cleanPath(raw: string): string {
   let p = raw;
-  // Drop leading './' which `tar -C dir .` likes to emit.
   if (p.startsWith('./')) p = p.slice(2);
-  // Drop trailing slash on directory entries.
   if (p.endsWith('/')) p = p.slice(0, -1);
-  // Reject path-traversal — should never appear in curated mirrors but the
-  // cost of checking is trivial and the upside is "we never write outside
-  // the workspace's OPFS root".
-  if (p.includes('..')) {
-    throw new Error(`tar: rejected path-traversal entry (${raw})`);
+  if (p.length === 0) return '';
+
+  // Reject absolute paths, NUL bytes, and Windows separators outright.
+  if (p.startsWith('/') || p.includes('\\') || p.includes('\0')) {
+    throw new Error(`tar: rejected unsafe path (${raw})`);
+  }
+
+  // Walk segments and reject any that would escape the root or are empty.
+  // This catches '..' as a whole segment without rejecting legitimate
+  // names like 'a..b.txt'.
+  for (const seg of p.split('/')) {
+    if (seg === '' || seg === '.' || seg === '..') {
+      throw new Error(`tar: rejected path-traversal entry (${raw})`);
+    }
   }
   return p;
 }
