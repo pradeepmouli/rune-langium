@@ -95,17 +95,17 @@ function emitDts(tokens: Tokens): string {
 }
 
 function emitDtsShape(value: unknown, depth: number): string {
+  if (typeof value === 'string') return 'string';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (Array.isArray(value)) return `${valueLeafType(value[0])}[]`;
+  if (value === null || typeof value !== 'object') return 'unknown';
+
   const indent = '  '.repeat(depth);
   const inner = '  '.repeat(depth + 1);
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    if (typeof value === 'string') return 'string';
-    if (typeof value === 'number') return 'number';
-    if (typeof value === 'boolean') return 'boolean';
-    if (Array.isArray(value)) return `${valueLeafType(value[0])}[]`;
-    return 'unknown';
-  }
-  const obj = value as Record<string, unknown>;
-  const entries = Object.entries(obj).filter(([k]) => !k.startsWith('_') && !k.startsWith('$'));
+  const entries = Object.entries(value as Record<string, unknown>).filter(
+    ([k]) => !k.startsWith('_') && !k.startsWith('$')
+  );
   if (entries.length === 0) return '{}';
   const body = entries
     .map(([k, v]) => {

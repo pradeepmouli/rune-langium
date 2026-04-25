@@ -63,6 +63,12 @@ export async function handleCuratedRead(req: Request, env: Env): Promise<Respons
     return done(json(404, { error: 'archive_not_found', modelId, key: rest }, allowedOrigin));
   }
 
+  const isManifest = rest.endsWith('manifest.json');
+  const isArchive = rest.endsWith('.tar.gz');
+  let cacheControl: string | null = null;
+  if (isManifest) cacheControl = 'public, max-age=300';
+  else if (isArchive) cacheControl = 'public, max-age=86400, immutable';
+
   // Conditional GET — return 304 with no body if If-None-Match matches.
   // Manifest probes from the studio's stale-while-revalidate path are
   // hot; 304s drop the response body cost to near-zero.
@@ -72,11 +78,7 @@ export async function handleCuratedRead(req: Request, env: Env): Promise<Respons
     headers.set('Access-Control-Allow-Origin', allowedOrigin);
     headers.set('Vary', 'Origin');
     headers.set('ETag', obj.httpEtag);
-    if (rest.endsWith('manifest.json')) {
-      headers.set('Cache-Control', 'public, max-age=300');
-    } else if (rest.endsWith('.tar.gz')) {
-      headers.set('Cache-Control', 'public, max-age=86400, immutable');
-    }
+    if (cacheControl) headers.set('Cache-Control', cacheControl);
     return done(new Response(null, { status: 304, headers }), true);
   }
 
@@ -84,13 +86,9 @@ export async function handleCuratedRead(req: Request, env: Env): Promise<Respons
   obj.writeHttpMetadata(headers);
   headers.set('Access-Control-Allow-Origin', allowedOrigin);
   headers.set('Vary', 'Origin');
-  if (rest.endsWith('manifest.json')) {
-    headers.set('Cache-Control', 'public, max-age=300');
-    headers.set('Content-Type', 'application/json; charset=utf-8');
-  } else if (rest.endsWith('.tar.gz')) {
-    headers.set('Cache-Control', 'public, max-age=86400, immutable');
-    headers.set('Content-Type', 'application/gzip');
-  }
+  if (cacheControl) headers.set('Cache-Control', cacheControl);
+  if (isManifest) headers.set('Content-Type', 'application/json; charset=utf-8');
+  else if (isArchive) headers.set('Content-Type', 'application/gzip');
   headers.set('ETag', obj.httpEtag);
 
   return done(new Response(method === 'HEAD' ? null : obj.body, { status: 200, headers }), false);

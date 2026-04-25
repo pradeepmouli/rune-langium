@@ -56,13 +56,7 @@ export function isFactoryShape(payload: DockviewPayload | null): payload is {
 export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
   const payload = layout.dockview;
   if (!payload) {
-    applyFactoryShape(
-      api,
-      buildDefaultLayout({
-        studioVersion: layout.writtenBy || '0.0.0',
-        viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1920
-      }).dockview as FactoryShape
-    );
+    applyFactoryShape(api, defaultFactoryShape(layout));
     return;
   }
   if (payload.shape === 'factory') {
@@ -82,12 +76,15 @@ export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
       err: errMessage(err),
       jsonPreview: previewJson(payload.json)
     });
-    const fallback = buildDefaultLayout({
-      studioVersion: layout.writtenBy || '0.0.0',
-      viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1920
-    });
-    applyFactoryShape(api, fallback.dockview as FactoryShape);
+    applyFactoryShape(api, defaultFactoryShape(layout));
   }
+}
+
+function defaultFactoryShape(layout: PanelLayoutRecord): FactoryShape {
+  return buildDefaultLayout({
+    studioVersion: layout.writtenBy || '0.0.0',
+    viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1920
+  }).dockview as FactoryShape;
 }
 
 function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {

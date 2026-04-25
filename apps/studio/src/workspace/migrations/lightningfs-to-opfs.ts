@@ -158,32 +158,26 @@ export async function migrateLightningFsToOpfs(input: MigrationInput): Promise<M
 function openExistingDb(name: string): Promise<IDBDatabase | null> {
   return new Promise<IDBDatabase | null>((resolve) => {
     const req = indexedDB.open(name);
-    let aborted = false;
     req.onupgradeneeded = () => {
       // We weren't supposed to create it — abort the upgrade transaction.
       // The browser will not persist the new DB; onerror fires below.
-      aborted = true;
       req.transaction?.abort();
     };
     req.onsuccess = () => {
       const db = req.result;
       if (db.objectStoreNames.length === 0) {
-        // We DID open an empty DB but never received `onupgradeneeded`
-        // (some browsers silently emit `onsuccess` directly). Don't
-        // delete it — it's not ours.
+        // Empty DB with no upgrade event (some browsers emit `onsuccess`
+        // directly). Don't delete it — it's not ours.
         db.close();
         resolve(null);
         return;
       }
       resolve(db);
     };
-    req.onerror = () => {
-      // If the open errored *because* we aborted an upgrade, the DB was
-      // never created — return null without deleting. Otherwise treat
-      // unreadable as absent (we can't migrate from a DB we can't open).
-      void aborted;
-      resolve(null);
-    };
+    // onerror fires both when our aborted upgrade rejects the open AND
+    // when the DB is genuinely unreadable; both map to "absent" because
+    // we can't migrate from a DB we can't open.
+    req.onerror = () => resolve(null);
     req.onblocked = () => resolve(null);
   });
 }

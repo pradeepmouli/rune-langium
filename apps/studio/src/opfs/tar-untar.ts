@@ -62,6 +62,8 @@ export async function extractTarGz(
   // the caller can surface 'archive_decode' per FR-002.
   const tar = inflate(gzBytes);
 
+  const prefix = options.pathPrefix ? options.pathPrefix.replace(/\/$/, '') : '';
+
   // Step 2: walk 512-byte blocks.
   let offset = 0;
   while (offset + BLOCK <= tar.byteLength) {
@@ -75,8 +77,6 @@ export async function extractTarGz(
 
     const dataBlocks = Math.ceil(header.size / BLOCK);
     const dataEnd = offset + header.size;
-
-    const prefix = options.pathPrefix ? options.pathPrefix.replace(/\/$/, '') : '';
     if (header.typeflag === '5') {
       const cleaned = cleanPath(header.name);
       if (cleaned && (!options.shouldExtract || options.shouldExtract(cleaned + '/'))) {

@@ -118,8 +118,7 @@ export async function detectSyncState(fs: OpfsFs, workspaceId: string): Promise<
   const dirty = matrix.some(
     ([_path, head, workdir, stage]) => head !== workdir || workdir !== stage
   );
-  if (dirty) return 'ahead';
-  return 'clean';
+  return dirty ? 'ahead' : 'clean';
 }
 
 export interface PushOptions {

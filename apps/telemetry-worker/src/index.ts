@@ -122,11 +122,9 @@ function checkRateLimit(ip: string, now: number): { allowed: boolean; retryAfter
 }
 
 function evictExpired(now: number): void {
-  if (ipWindows.size < MAX_TRACKED_IPS) {
-    // Cheap path: only sweep when we get close to the cap. The Map is
-    // bounded by traffic in the current 60s window in practice.
-    if (ipWindows.size < 1024) return;
-  }
+  // Cheap path: only sweep when the Map is large. In normal traffic it's
+  // bounded by 60s of unique IPs and never reaches the sweep threshold.
+  if (ipWindows.size < 1024) return;
   for (const [ip, w] of ipWindows) {
     if (now - w.windowStart >= WINDOW_MS) ipWindows.delete(ip);
   }
@@ -160,8 +158,7 @@ async function getDailySalt(env: Env, now: Date): Promise<string> {
     // DO unreachable — fall back to a per-isolate salt for this request.
     // The privacy invariant (no raw IP logged) still holds; only cross-
     // isolate dedup is lost for this one request.
-    const fallback = randomSaltHex();
-    return fallback;
+    return randomSaltHex();
   }
   const body = (await res.json()) as { salt: string };
   cachedSalt = { day, salt: body.salt };
@@ -228,8 +225,7 @@ function emptyResponse(status: number, extraHeaders: Record<string, string> = {}
 }
 
 function getErrorCategory(event: TelemetryEvent): string | null {
-  if (event.event === 'curated_load_failure') return event.errorCategory;
-  return null;
+  return event.event === 'curated_load_failure' ? event.errorCategory : null;
 }
 
 function doIdName(event: TelemetryEvent, day: string): string {
