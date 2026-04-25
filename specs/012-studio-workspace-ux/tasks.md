@@ -155,38 +155,38 @@ Phase 3 (US1).
 
 ### 5a. Layout scaffolding
 
-- [ ] T061 [US3] Write failing test `apps/studio/tests/shell/layout-factory.test.ts`: the factory produces a `PanelLayoutRecord` with the six named components (`workspace.fileTree`, `.editor`, `.inspector`, `.problems`, `.output`, `.visualPreview`), default sizes honour the small-viewport rules in FR-024, `version === 1`
-- [ ] T062 [US3] Implement `apps/studio/src/shell/layout-factory.ts` satisfying T061
-- [ ] T063 [US3] [P] Write failing test `apps/studio/tests/shell/layout-migrations.test.ts`: a legacy layout with an unknown `componentName` is sanitised (unknown dropped, defaults filled), bumped-version layouts run the right transformer
-- [ ] T064 [US3] Implement `apps/studio/src/shell/layout-migrations.ts` satisfying T063
-- [ ] T065 [US3] Implement `apps/studio/src/shell/DockShell.tsx` — mounts `dockview-react`, wires layout load/save to `workspace-manager`, applies the six-panel defaults from T062. Layout JSON persisted via `api.toJSON()` / `api.fromJSON()` on every change (debounced)
+- [X] T061 [US3] Write failing test `apps/studio/tests/shell/layout-factory.test.ts`: the factory produces a `PanelLayoutRecord` with the six named components (`workspace.fileTree`, `.editor`, `.inspector`, `.problems`, `.output`, `.visualPreview`), default sizes honour the small-viewport rules in FR-024, `version === 1`
+- [X] T062 [US3] Implement `apps/studio/src/shell/layout-factory.ts` satisfying T061
+- [X] T063 [US3] [P] Write failing test `apps/studio/tests/shell/layout-migrations.test.ts`: a legacy layout with an unknown `componentName` is sanitised (unknown dropped, defaults filled), bumped-version layouts run the right transformer
+- [X] T064 [US3] Implement `apps/studio/src/shell/layout-migrations.ts` satisfying T063
+- [X] T065 [US3] Implement `apps/studio/src/shell/DockShell.tsx` — mounts `dockview-react`, wires layout load/save to `workspace-manager`, applies the six-panel defaults from T062. Layout JSON persisted via `api.toJSON()` / `api.fromJSON()` on every change (debounced)
 
 ### 5b. Individual panels
 
-- [ ] T066 [US3] [P] Implement `apps/studio/src/shell/panels/FileTreePanel.tsx` with a virtualised tree over the active workspace; keyboard-operable per FR-A02
-- [ ] T067 [US3] [P] Implement `apps/studio/src/shell/panels/EditorPanel.tsx` — Monaco host with tabbed document group, drag-to-reorder, close on middle-click, dirty indicator distinct from close affordance (FR-026)
-- [ ] T068 [US3] [P] Implement `apps/studio/src/shell/panels/InspectorPanel.tsx` — empty shell at this point; forms plug in during Phase 7 (US5)
-- [ ] T069 [US3] [P] Implement `apps/studio/src/shell/panels/ProblemsPanel.tsx` surfacing `WorkspaceState.errors`
-- [ ] T070 [US3] [P] Implement `apps/studio/src/shell/panels/OutputPanel.tsx` — shows codegen / LSP output
-- [ ] T071 [US3] [P] Implement `apps/studio/src/shell/panels/VisualPreviewPanel.tsx` wrapping the existing visual editor entry component
+- [X] T066 [US3] [P] Implement `apps/studio/src/shell/panels/FileTreePanel.tsx` with a virtualised tree over the active workspace; keyboard-operable per FR-A02
+- [X] T067 [US3] [P] Implement `apps/studio/src/shell/panels/EditorPanel.tsx` — Monaco host with tabbed document group, drag-to-reorder, close on middle-click, dirty indicator distinct from close affordance (FR-026)
+- [X] T068 [US3] [P] Implement `apps/studio/src/shell/panels/InspectorPanel.tsx` — empty shell at this point; forms plug in during Phase 7 (US5)
+- [X] T069 [US3] [P] Implement `apps/studio/src/shell/panels/ProblemsPanel.tsx` surfacing `WorkspaceState.errors`
+- [X] T070 [US3] [P] Implement `apps/studio/src/shell/panels/OutputPanel.tsx` — shows codegen / LSP output
+- [X] T071 [US3] [P] Implement `apps/studio/src/shell/panels/VisualPreviewPanel.tsx` wrapping the existing visual editor entry component
 
 ### 5c. Chrome and keyboard
 
-- [ ] T072 [US3] Implement `apps/studio/src/shell/ActivityBar.tsx` — hosts workspace switcher (T060), model registry entry point, settings. Always visible, outside dockview
-- [ ] T073 [US3] Implement `apps/studio/src/shell/StatusBar.tsx` — workspace name, git status (for git-backed), LSP status, telemetry toggle shortcut
-- [ ] T074 [US3] Write failing test `apps/studio/tests/shell/keyboard.test.ts` asserting every shortcut in `contracts/dockview-panel-registry.md`'s keyboard contract
-- [ ] T075 [US3] Implement `apps/studio/src/shell/keyboard.ts` using a single hotkey layer that dispatches against the dockview API; register shortcuts in `DockShell`
-- [ ] T076 [US3] [P] Wire the ARIA roles from `contracts/dockview-panel-registry.md` §Accessibility roles into each panel + splitter + tablist; assert via `axe-core` in T088
-- [ ] T077 [US3] Replace `apps/studio/src/pages/EditorPage.tsx` to mount `DockShell` instead of the current fixed two-panel layout. Delete the obsolete layout code paths in the same commit
+- [X] T072 [US3] Implement `apps/studio/src/shell/ActivityBar.tsx` — hosts workspace switcher (T060), model registry entry point, settings. Always visible, outside dockview
+- [X] T073 [US3] Implement `apps/studio/src/shell/StatusBar.tsx` — workspace name, git status (for git-backed), LSP status, telemetry toggle shortcut
+- [X] T074 [US3] Write failing test `apps/studio/tests/shell/keyboard.test.ts` asserting every shortcut in `contracts/dockview-panel-registry.md`'s keyboard contract
+- [X] T075 [US3] Implement `apps/studio/src/shell/keyboard.ts` using a single hotkey layer that dispatches against the dockview API; register shortcuts in `DockShell`
+- [X] T076 [US3] [P] Wire the ARIA roles from `contracts/dockview-panel-registry.md` §Accessibility roles into each panel + splitter + tablist; assert via `axe-core` in T088
+- [ ] T077 [US3] Replace `apps/studio/src/pages/EditorPage.tsx` to mount `DockShell` instead of the current fixed two-panel layout. Delete the obsolete layout code paths in the same commit. **DEFERRED** — landing the dock shell primitives + panels first; the full EditorPage swap unwinds RuneTypeGraph + LSP + expression builder mountpoints and warrants its own focused PR.
 
 ### 5d. Reset-layout + small viewport
 
-- [ ] T078 [US3] [P] Write failing test `apps/studio/tests/shell/reset-layout.test.ts`: "Reset layout" replaces `WorkspaceRecord.layout` with the factory default without touching `files`, `tabs`, or `curatedModels`
-- [ ] T079 [US3] Implement the reset-layout action in `DockShell`'s command palette
-- [ ] T080 [US3] [P] Write failing test `apps/studio/tests/shell/small-viewport.test.ts` at 1280×800: editor area ≥70% of horizontal space, inspector and bottom panel collapsed by default
-- [ ] T081 [US3] Confirm T080 passes given T062's factory defaults; adjust factory if needed
-- [ ] T082 [US3] [P] Write failing test `apps/studio/tests/shell/mobile-portrait.test.ts`: at <768px viewport width, `<UnsupportedViewport />` renders instead of `DockShell`
-- [ ] T083 [US3] Implement `apps/studio/src/components/UnsupportedViewport.tsx` and gate `DockShell` on a `useViewport()` hook
+- [X] T078 [US3] [P] Write failing test `apps/studio/tests/shell/reset-layout.test.ts`: "Reset layout" replaces `WorkspaceRecord.layout` with the factory default without touching `files`, `tabs`, or `curatedModels`
+- [X] T079 [US3] Implement the reset-layout action in `DockShell`'s command palette
+- [X] T080 [US3] [P] Write failing test `apps/studio/tests/shell/small-viewport.test.ts` at 1280×800: editor area ≥70% of horizontal space, inspector and bottom panel collapsed by default
+- [X] T081 [US3] Confirm T080 passes given T062's factory defaults; adjust factory if needed
+- [X] T082 [US3] [P] Write failing test `apps/studio/tests/shell/mobile-portrait.test.ts`: at <768px viewport width, `<UnsupportedViewport />` renders instead of `DockShell`
+- [X] T083 [US3] Implement `apps/studio/src/components/UnsupportedViewport.tsx` and gate `DockShell` on a `useViewport()` hook
 
 **Checkpoint (US3)**: the dockable shell is mounted, six panels are functional, layout persists, keyboard-only walkthrough passes, `axe-core` has no serious/critical violations on the shell.
 
