@@ -4,7 +4,7 @@
 /**
  * component-config.ts — Compile-time validation of z2f component registration.
  *
- * Ensures that every fieldType referenced in z2f.config.ts has a matching export
+ * Ensures that every component referenced in z2f.config.ts has a matching export
  * from zod-form-components.tsx with the correct controlled/uncontrolled contract.
  * A TypeScript error here means z2f.config.ts references a component that does
  * not exist or has the wrong signature.
@@ -33,7 +33,7 @@ interface ControlledComponentProps {
 }
 
 // ---------------------------------------------------------------------------
-// Component registry — mirrors z2f.config.ts fieldTypes
+// Component registry — mirrors z2f.config.ts component names
 // ---------------------------------------------------------------------------
 
 /**
@@ -50,7 +50,7 @@ export const FIELD_TYPE_COMPONENTS = {
 } as const;
 
 /**
- * Union of all valid fieldType strings. Use this to type-check fieldType
+ * Union of all valid component strings. Use this to type-check component
  * assignments in form metadata and z2f configuration.
  */
 export type FieldTypeName = keyof typeof FIELD_TYPE_COMPONENTS;
@@ -69,7 +69,7 @@ export const FORM_PRIMITIVES = {
 // Compile-time assertions
 // ---------------------------------------------------------------------------
 
-// Verify all z2f.config.ts fieldTypes are present in our registry.
+// Verify all z2f.config.ts component names are present in our registry.
 // These lines produce a type error if the component export is missing or
 // does not satisfy ComponentType.
 type AssertComponent<T extends ComponentType<any>> = T;

@@ -1,0 +1,11 @@
+# Build output
+dist/
+*.tsbuildinfo
+
+# Generated forms — emitted by @zod-to-form/vite at dev/build time.
+# Per FR-Z02 (012-studio-workspace-ux) these are NEVER committed.
+**/forms/generated/
+
+# Editor / OS noise
+.DS_Store
+*.log

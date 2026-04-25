@@ -222,27 +222,27 @@ Phase 3 (US1).
 
 ### 7a. Upstream audit (FR-Z06)
 
-- [ ] T095 [US5] Conduct the FR-Z06 audit: read `/Users/pmouli/GitHub.nosync/active/ts/zod-to-form/packages/{core,react,vite}/README.md`, `packages/*/examples/`, and `specs/007-vite-codegen-plugin/` in the upstream repo; enumerate every divergence in current rune-langium consumption and record in `specs/012-studio-workspace-ux/z2f-audit.md`. Flag each divergence as `workaround-to-remove` or `deliberate-keep-with-rationale`
+- [X] T095 [US5] Conduct the FR-Z06 audit: read `/Users/pmouli/GitHub.nosync/active/ts/zod-to-form/packages/{core,react,vite}/README.md`, `packages/*/examples/`, and `specs/007-vite-codegen-plugin/` in the upstream repo; enumerate every divergence in current rune-langium consumption and record in `specs/012-studio-workspace-ux/z2f-audit.md`. Flag each divergence as `workaround-to-remove` or `deliberate-keep-with-rationale`
 
 ### 7b. Breaking-change remediation
 
-- [ ] T096 [US5] [P] Rewrite `packages/visual-editor/src/components/forms/MapFormRegistry.ts` to import `ZodFormRegistry` directly from `@zod-to-form/core` (0.7.x exports it cleanly) and drop the local `ZodFormRegistryLike` shim
-- [ ] T097 [US5] [P] Rename every `fieldType` reference to `component` across `packages/visual-editor/src/` (0.6.0 breaking change). Search-all-replace: `fieldType:` → `component:`, `fieldType"` → `component"`, etc. Validate with a grep that no `fieldType` remains
-- [ ] T098 [US5] Update `packages/visual-editor/z2f.config.ts` to the 0.7.x schema (verify against upstream's canonical example identified in T095)
+- [X] T096 [US5] [P] Rewrite `packages/visual-editor/src/components/forms/MapFormRegistry.ts` to import `ZodFormRegistry` directly from `@zod-to-form/core` (0.7.x exports it cleanly) and drop the local `ZodFormRegistryLike` shim
+- [X] T097 [US5] [P] Rename every `fieldType` reference to `component` across `packages/visual-editor/src/` (0.6.0 breaking change). Search-all-replace: `fieldType:` → `component:`, `fieldType"` → `component"`, etc. Validate with a grep that no `fieldType` remains
+- [X] T098 [US5] Update `packages/visual-editor/z2f.config.ts` to the 0.7.x schema (verify against upstream's canonical example identified in T095)
 
 ### 7c. Vite plugin wiring
 
-- [ ] T099 [US5] Add `@zod-to-form/vite` plugin to `apps/studio/vite.config.ts` (position BEFORE `react()` per upstream quickstart §2)
-- [ ] T100 [US5] Add `@zod-to-form/vite/client` to the `types` array in `apps/studio/tsconfig.json` so `?z2f` imports are typed
-- [ ] T101 [US5] [P] Add the same plugin + type wiring to `packages/visual-editor/vitest.config.ts` so unit tests of forms keep working
+- [X] T099 [US5] Add `@zod-to-form/vite` plugin to `apps/studio/vite.config.ts` (position BEFORE `react()` per upstream quickstart §2)
+- [X] T100 [US5] Add `@zod-to-form/vite/client` to the `types` array in `apps/studio/tsconfig.json` so `?z2f` imports are typed
+- [X] T101 [US5] [P] Add the same plugin + type wiring to `packages/visual-editor/vitest.config.ts` so unit tests of forms keep working
 
 ### 7d. Call-site migration + delete committed output
 
 - [ ] T102 [US5] Write failing test `packages/visual-editor/tests/forms/dataform-roundtrip.test.tsx` that imports `schemas/data.schema.ts?z2f` and asserts the rendered form has the same fields + behaviours as the pre-migration `DataForm` baseline
-- [ ] T103 [US5] Migrate every call site of the five committed forms (`DataForm`, `ChoiceForm`, `RosettaEnumerationForm`, `RosettaFunctionForm`, `RosettaTypeAliasForm`) to `?z2f` imports in the files under `packages/visual-editor/src/components/editors/`; update default-import style per upstream quickstart
-- [ ] T104 [US5] **Delete** `packages/visual-editor/src/components/forms/generated/` directory entirely in the same commit as T103. Add a `.gitignore` rule for `**/forms/generated/` to prevent accidental future regeneration being committed
-- [ ] T105 [US5] Remove the five `scaffold:*Form` scripts and the umbrella `scaffold:forms` script from `packages/visual-editor/package.json`. Remove `@zod-to-form/cli` from `devDependencies`; run `pnpm install`
-- [ ] T106 [US5] Wire the migrated forms into `InspectorPanel` (from T068): the inspector reads the active node's schema from the workspace model and renders the corresponding `?z2f` form
+- [X] T103 [US5] Migrate every call site of the five committed forms (`DataForm`, `ChoiceForm`, `RosettaEnumerationForm`, `RosettaFunctionForm`, `RosettaTypeAliasForm`) to `?z2f` imports in the files under `packages/visual-editor/src/components/editors/`; update default-import style per upstream quickstart
+- [X] T104 [US5] **Delete** `packages/visual-editor/src/components/forms/generated/` directory entirely in the same commit as T103. Add a `.gitignore` rule for `**/forms/generated/` to prevent accidental future regeneration being committed
+- [X] T105 [US5] Remove the five `scaffold:*Form` scripts and the umbrella `scaffold:forms` script from `packages/visual-editor/package.json`. Remove `@zod-to-form/cli` from `devDependencies`; run `pnpm install`
+- [X] T106 [US5] Wire the migrated forms into `InspectorPanel` (from T068): the inspector reads the active node's schema from the workspace model and renders the corresponding `?z2f` form
 
 ### 7e. HMR + CI verification
 

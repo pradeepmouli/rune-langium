@@ -4,11 +4,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import z2fVite from '@zod-to-form/vite';
 import { fileURLToPath } from 'url';
 
 export default defineConfig({
   base: process.env.VITE_BASE_URL || (process.env.CF_PAGES === '1' ? '/rune-studio/studio/' : '/'),
-  plugins: [tailwindcss(), react()],
+  // Plugin order: z2fVite BEFORE react() per upstream's quickstart, so the
+  // generated TSX flows through React's JSX transform normally.
+  plugins: [z2fVite(), tailwindcss(), react()],
   optimizeDeps: {
     include: ['buffer']
   },

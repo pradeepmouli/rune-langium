@@ -16,6 +16,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "noUncheckedIndexedAccess": true,
+    "types": ["@zod-to-form/vite/client"],
     "jsx": "react-jsx",
     "composite": true,
     "declarationMap": false,
