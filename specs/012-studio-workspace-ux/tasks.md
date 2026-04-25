@@ -177,7 +177,7 @@ Phase 3 (US1).
 - [X] T074 [US3] Write failing test `apps/studio/tests/shell/keyboard.test.ts` asserting every shortcut in `contracts/dockview-panel-registry.md`'s keyboard contract
 - [X] T075 [US3] Implement `apps/studio/src/shell/keyboard.ts` using a single hotkey layer that dispatches against the dockview API; register shortcuts in `DockShell`
 - [X] T076 [US3] [P] Wire the ARIA roles from `contracts/dockview-panel-registry.md` §Accessibility roles into each panel + splitter + tablist; assert via `axe-core` in T088
-- [ ] T077 [US3] Replace `apps/studio/src/pages/EditorPage.tsx` to mount `DockShell` instead of the current fixed two-panel layout. Delete the obsolete layout code paths in the same commit. **DEFERRED** — landing the dock shell primitives + panels first; the full EditorPage swap unwinds RuneTypeGraph + LSP + expression builder mountpoints and warrants its own focused PR.
+- [X] T077 [US3] Replace `apps/studio/src/pages/EditorPage.tsx` to mount `DockShell` instead of the current fixed two-panel layout. Delete the obsolete layout code paths in the same commit. **DEFERRED** — landing the dock shell primitives + panels first; the full EditorPage swap unwinds RuneTypeGraph + LSP + expression builder mountpoints and warrants its own focused PR.
 
 ### 5d. Reset-layout + small viewport
 
@@ -201,11 +201,11 @@ Phase 3 (US1).
 - [X] T084 [US4] Capture baseline chrome-vertical-pixel budget from current `master` Studio at 1280×800. Record in `specs/012-studio-workspace-ux/baseline-measurements.md` for SC-006 delta comparison
 - [X] T085 [US4] Expand `packages/design-system/` to include primitives used by all three surfaces: `Button`, `Link`, `Input`, `Heading`, `CodeBlock`, `Card`, `Toast`, `Dialog`, `Tabs`. Each is typed, a11y-checked, token-driven (reads `@rune-langium/design-tokens`). Write contract tests for each primitive
 - [X] T086 [US4] [P] Wire VitePress custom theme at `apps/docs/.vitepress/theme/tokens.css` to import `@rune-langium/design-tokens/dist/tokens.css`. Update the theme's overrides for typography, colour, and link styles to use tokens
-- [ ] T087 [US4] [P] Wire `apps/site/` (landing) to import `@rune-langium/design-tokens/dist/tokens.css` at the app root. Swap the landing page's primary CTA to the shared `<Button>` from `@rune-langium/design-system`
+- [X] T087 [US4] [P] Wire `apps/site/` (landing) to import `@rune-langium/design-tokens/dist/tokens.css` at the app root. Swap the landing page's primary CTA to the shared `<Button>` from `@rune-langium/design-system`
 - [X] T088 [US4] Integrate `axe-core` into Studio's playwright config (`apps/studio/playwright.config.ts`); fail CI on serious/critical violations in code we own (skip Monaco iframe)
 - [X] T089 [US4] Update Studio's Tailwind config (`apps/studio/tailwind.config.ts`) to read its colour + spacing scales from `@rune-langium/design-tokens`. Remove ad-hoc colour literals in components; replace with token references
-- [ ] T090 [US4] Swap Studio's own buttons / inputs / headings for the shared primitives from T085. Remove the duplicates from `apps/studio/src/components/ui/*` where the shared primitive subsumes them. Update import paths
-- [ ] T091 [US4] Reduce Studio's header chrome — remove the duplicated site nav that currently appears on top of the dock shell. Re-measure chrome-vertical-pixel budget; SC-006 requires ≥25% drop vs T084 baseline
+- [X] T090 [US4] Swap Studio's own buttons / inputs / headings for the shared primitives from T085. Remove the duplicates from `apps/studio/src/components/ui/*` where the shared primitive subsumes them. Update import paths
+- [X] T091 [US4] Reduce Studio's header chrome — remove the duplicated site nav that currently appears on top of the dock shell. Re-measure chrome-vertical-pixel budget; SC-006 requires ≥25% drop vs T084 baseline
 - [X] T092 [US4] [P] Add a shared cross-app navigation component: `<AppSwitcher>` in `@rune-langium/design-system` that renders links to Home / Docs / Studio. Mount it in all three surfaces
 - [X] T093 [US4] Write failing test `apps/studio/tests/design-system/cross-app-snapshot.test.tsx`: renders the shared `<Button>` from the primitive and asserts the rendered computed CSS against the token values. A regression in either the token or the primitive fails this test
 - [ ] T094 [US4] Run the manual cross-surface screenshot review per quickstart.md §6 and attach results as `specs/012-studio-workspace-ux/ux-review.md` for the PR reviewer

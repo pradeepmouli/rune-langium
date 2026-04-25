@@ -2,14 +2,26 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * EditorPage — Main editor layout embedding RuneTypeGraph (T088, T027).
+ * EditorPage — top-level studio surface, hosted by `DockShell` (T077).
  *
- * Uses the zustand editor store as source of truth for graph state.
- * Forms call store mutations directly — no roundtrip through the graph.
+ * Owns editor state (selected node, opened files, navigation history,
+ * store wiring) and provides custom dockview panels that render the
+ * existing studio components:
+ *
+ *   workspace.fileTree     ← NamespaceExplorerPanel
+ *   workspace.editor       ← SourceEditor
+ *   workspace.inspector    ← EditorFormPanel + ExpressionBuilder
+ *   workspace.problems     ← DiagnosticsPanel
+ *   workspace.output       ← (default stub for now; output stream wires later)
+ *   workspace.visualPreview ← RuneTypeGraph
+ *
+ * Replaces the previous fixed two-panel resizable layout. The persistent
+ * top toolbar shrinks to graph-only controls (panel toggles disappear —
+ * users hide panels via dockview). The diagnostics drawer + explorer
+ * sidebar merge into the dockable shell, reducing chrome (T091).
  */
 
 import { useRef, useCallback, useState, useMemo, useEffect, type KeyboardEvent } from 'react';
-import type { PanelImperativeHandle } from '@rune-langium/design-system/ui/resizable';
 import {
   RuneTypeGraph,
   NamespaceExplorerPanel,
@@ -35,27 +47,10 @@ import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle
-} from '@rune-langium/design-system/ui/resizable';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import {
-  PanelLeft,
-  Maximize2,
-  LayoutGrid,
-  FormInput,
-  FileCode2,
-  AlertCircle,
-  Download,
-  Code2,
-  FileText,
-  Edit3,
-  Activity,
-  Network
-} from 'lucide-react';
+import { Maximize2, LayoutGrid, Code2, Network } from 'lucide-react';
 import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
+import { DockShell } from '../shell/DockShell.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
@@ -69,6 +64,10 @@ export interface EditorPageProps {
   lspClient?: LspClientService;
   transportState?: TransportState;
   onReconnect?: () => void;
+  /** Workspace id used for layout persistence keying. */
+  workspaceId?: string;
+  /** Studio build version threaded into layout migrations. */
+  studioVersion?: string;
 }
 
 export function EditorPage({
@@ -77,112 +76,68 @@ export function EditorPage({
   onFilesChange,
   lspClient,
   transportState,
-  onReconnect
+  onReconnect,
+  workspaceId = 'default',
+  studioVersion = '0.1.0'
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
-  const sourcePanelRef = useRef<PanelImperativeHandle>(null);
-  const editorPanelRef = useRef<PanelImperativeHandle>(null);
-  const [showSource, setShowSource] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [showEditor, setShowEditor] = useState(true);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [groupedLayout, setGroupedLayout] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
-  /** Tracks file paths explicitly opened in the source editor (by node navigation). */
   const [openedFilePaths, setOpenedFilePaths] = useState<Set<string>>(new Set<string>());
-  /** Pending reveal to fire after source files update. */
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
-  /** Navigation history stack for back-navigation (Task 8). */
   const navigationHistoryRef = useRef<string[]>([]);
-  /** Pending displayFile resolve callbacks for cross-file go-to-definition. */
   const pendingDisplayFileRef = useRef<
     Map<string, (view: import('@codemirror/view').EditorView | null) => void>
   >(new Map());
 
-  // --- Store subscriptions ---
   const storeNodes = useEditorStore((s) => s.nodes);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const visibility = useEditorStore((s) => s.visibility);
-  const explorerOpen = visibility.explorerOpen;
   const expandedNamespaces = visibility.expandedNamespaces;
   const hiddenNodeIds = visibility.hiddenNodeIds;
 
-  // Store actions (stable references)
   const storeSelectNode = useEditorStore((s) => s.selectNode);
   const storeToggleNamespace = useEditorStore((s) => s.toggleNamespace);
   const storeToggleNodeVisibility = useEditorStore((s) => s.toggleNodeVisibility);
   const storeExpandAllNamespaces = useEditorStore((s) => s.expandAllNamespaces);
   const storeCollapseAllNamespaces = useEditorStore((s) => s.collapseAllNamespaces);
-  const storeToggleExplorer = useEditorStore((s) => s.toggleExplorer);
 
-  // --- Load models into store when prop changes ---
   useEffect(() => {
     if (models.length > 0) {
       useEditorStore.getState().loadModels(models as unknown[]);
     }
   }, [models]);
 
-  // Derive selectedNodeData from store
   const selectedNodeData: AnyGraphNode | null = useMemo(() => {
     if (!selectedNodeId) return null;
     const node = storeNodes.find((n) => n.id === selectedNodeId);
     return (node?.data as unknown as AnyGraphNode) ?? null;
   }, [selectedNodeId, storeNodes]);
 
-  // React to selection changes for panel expansion + source navigation
+  // Navigate the source editor when a graph node is selected.
   const prevSelectedRef = useRef<string | null>(null);
   useEffect(() => {
     if (selectedNodeId === prevSelectedRef.current) return;
     prevSelectedRef.current = selectedNodeId;
-
     if (!selectedNodeId || !selectedNodeData) return;
 
-    expandEditor();
-
-    // Resolve the node's source file and open it in the source tabs
     const filePath = resolveNodeFile(selectedNodeData);
     if (filePath) openFileInSource(filePath);
 
-    // Navigate source editor to the AST node's definition line
-    // $cstNode lives directly on the node data (spread from the AST element)
     const nodeData = selectedNodeData as unknown as Record<string, unknown>;
     const cstNode = nodeData['$cstNode'] as
       | { range?: { start?: { line?: number } }; _rangeCache?: { start?: { line?: number } } }
       | undefined;
     const range = cstNode?._rangeCache ?? cstNode?.range;
-    if (range?.start?.line !== undefined) {
-      const line = range.start.line + 1;
-      if (filePath) {
-        pendingRevealRef.current = { line, filePath };
-        expandSource();
-      }
+    if (range?.start?.line !== undefined && filePath) {
+      pendingRevealRef.current = { line: range.start.line + 1, filePath };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);
 
-  // --- Collapsible panel expand helpers (needed by navigation handlers) ---
-  const expandSource = useCallback(() => {
-    if (sourcePanelRef.current?.isCollapsed()) {
-      sourcePanelRef.current.resize('35%');
-      setShowSource(true);
-    }
-  }, []);
-
-  const expandEditor = useCallback(() => {
-    if (editorPanelRef.current?.isCollapsed()) {
-      editorPanelRef.current.expand();
-      setShowEditor(true);
-    }
-  }, []);
-
-  const collapseEditor = useCallback(() => {
-    editorPanelRef.current?.collapse();
-    setShowEditor(false);
-  }, []);
-
-  // Derive FunctionScope from the selected function's data for ExpressionBuilder
   const functionScope: FunctionScope = useMemo(() => {
     const d = selectedNodeData as any;
     if (!d || d.$type !== 'RosettaFunction') {
@@ -211,17 +166,14 @@ export function EditorPage({
     [functionScope]
   );
 
-  // --- Stable ref for files (prevents stale closure in handleSourceChange) ---
   const filesRef = useRef(files);
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
 
-  // --- Source → Graph: wire onContentChange ---
   const handleSourceChange = useCallback(
     (path: string, content: string) => {
-      const currentFiles = filesRef.current;
-      const updatedFiles = currentFiles.map((f) =>
+      const updatedFiles = filesRef.current.map((f) =>
         f.path === path ? { ...f, content, dirty: true } : f
       );
       onFilesChange?.(updatedFiles);
@@ -229,26 +181,20 @@ export function EditorPage({
     [onFilesChange]
   );
 
-  // --- Graph → Source: wire onModelChanged ---
-  // Build namespace → file path mapping for reverse sync (handleModelChanged)
   const namespaceToFile = useMemo(() => {
     const map = new Map<string, string>();
     for (let i = 0; i < models.length; i++) {
       const model = models[i] as { name?: string | { segments?: string[] } };
       let ns = 'unknown';
-      if (typeof model.name === 'string') {
-        ns = model.name;
-      } else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
+      if (typeof model.name === 'string') ns = model.name;
+      else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
         ns = (model.name as { segments: string[] }).segments.join('.');
       }
-      if (i < files.length) {
-        map.set(ns, files[i]!.path);
-      }
+      if (i < files.length) map.set(ns, files[i]!.path);
     }
     return map;
   }, [models, files]);
 
-  // Build nodeId → file path mapping for precise node→file resolution.
   const nodeIdToFilePath = useMemo(() => {
     const map = new Map<string, string>();
     for (let i = 0; i < models.length && i < files.length; i++) {
@@ -257,51 +203,40 @@ export function EditorPage({
         elements?: Array<{ name?: string }>;
       };
       let ns = 'unknown';
-      if (typeof model.name === 'string') {
-        ns = model.name;
-      } else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
+      if (typeof model.name === 'string') ns = model.name;
+      else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
         ns = (model.name as { segments: string[] }).segments.join('.');
       }
       for (const element of model.elements ?? []) {
         const name = element.name ?? 'unknown';
         const nodeId = `${ns}::${name}`;
-        if (!map.has(nodeId)) {
-          map.set(nodeId, files[i]!.path);
-        }
+        if (!map.has(nodeId)) map.set(nodeId, files[i]!.path);
       }
     }
     return map;
   }, [models, files]);
 
-  /** Resolve which workspace file contains a given node. */
   const resolveNodeFile = useCallback(
     (nodeData: AnyGraphNode): string | undefined => {
       const d = nodeData as any;
-
-      // Primary: use the Langium document URI from the AST container
       const docPath = d.$container?.$document?.uri?.path as string | undefined;
       if (docPath) {
-        // docPath is like "/base-math-type.rosetta" — match against file paths
         const match = files.find(
           (f) => f.path === docPath || f.path.endsWith(docPath) || docPath.endsWith(f.path)
         );
         if (match) return match.path;
-        // Try matching just the filename
         const fileName = docPath.split('/').pop();
         if (fileName) {
           const byName = files.find((f) => f.path.endsWith(fileName) || f.name === fileName);
           if (byName) return byName.path;
         }
       }
-
-      // Fallback: index-based mapping
       const nodeId = `${d.namespace}::${d.name}`;
       return nodeIdToFilePath.get(nodeId);
     },
     [files, nodeIdToFilePath]
   );
 
-  /** Open a file in the source editor tabs (adds to openedFilePaths). */
   const openFileInSource = useCallback((filePath: string) => {
     setOpenedFilePaths((prev) => {
       if (prev.has(filePath)) return prev;
@@ -320,7 +255,6 @@ export function EditorPage({
     [storeSelectNode]
   );
 
-  // --- Task 2: navigateToNode callback ---
   const navigateToNode = useCallback(
     (nodeId: string) => {
       const exists = storeNodes.some((n) => n.id === nodeId);
@@ -329,13 +263,10 @@ export function EditorPage({
         setToastMessage(`Type "${shortName}" not loaded — load the file containing this type`);
         return;
       }
-      // Task 8: push current selection onto history before navigating (capped at 100)
       const current = useEditorStore.getState().selectedNodeId;
       if (current) {
         navigationHistoryRef.current.push(current);
-        if (navigationHistoryRef.current.length > 100) {
-          navigationHistoryRef.current.shift();
-        }
+        if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
       }
       graphRef.current?.focusNode(nodeId);
       storeSelectNode(nodeId);
@@ -343,11 +274,9 @@ export function EditorPage({
     [storeNodes, storeSelectNode]
   );
 
-  // --- Task 8: navigateBack callback ---
   const navigateBack = useCallback(() => {
     const prev = navigationHistoryRef.current.pop();
     if (!prev) return;
-    // Validate the node still exists (may have been removed by graph reload)
     const exists = storeNodes.some((n) => n.id === prev);
     if (!exists) {
       setToastMessage(`Previous node "${prev}" is no longer in the graph`);
@@ -357,17 +286,14 @@ export function EditorPage({
     storeSelectNode(prev);
   }, [storeSelectNode, storeNodes]);
 
-  // Auto-clear toast after 3 seconds
   useEffect(() => {
     if (!toastMessage) return;
     const timer = setTimeout(() => setToastMessage(null), 3000);
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  // Task 8: keyboard shortcut for back-navigation
   const handleEditorPageKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
-      // Alt+ArrowLeft (all platforms) or Meta+[ (Mac)
       if ((e.altKey && e.key === 'ArrowLeft') || (e.metaKey && e.key === '[')) {
         e.preventDefault();
         navigateBack();
@@ -378,12 +304,9 @@ export function EditorPage({
 
   const handleModelChanged = useCallback(
     (serialized: Map<string, string>) => {
-      const currentFiles = filesRef.current;
-      const updatedFiles = currentFiles.map((f) => {
+      const updatedFiles = filesRef.current.map((f) => {
         for (const [ns, text] of serialized) {
-          if (namespaceToFile.get(ns) === f.path) {
-            return { ...f, content: text, dirty: true };
-          }
+          if (namespaceToFile.get(ns) === f.path) return { ...f, content: text, dirty: true };
         }
         return f;
       });
@@ -392,17 +315,12 @@ export function EditorPage({
     [namespaceToFile, onFilesChange]
   );
 
-  // T036: Wire LSP diagnostics to store
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics, totalErrors, totalWarnings } = useDiagnosticsStore();
 
-  // Register displayFile handler for cross-file go-to-definition.
-  // When the LSP returns a definition in a file not yet open in a tab,
-  // this opens the tab and returns the new EditorView.
   useEffect(() => {
     if (!lspClient) return;
     const unsub = lspClient.onDisplayFile(async (uri: string) => {
-      // Parse URI properly to handle encoding (e.g., %20 for spaces)
       let path: string;
       try {
         const parsed = new URL(uri);
@@ -415,26 +333,21 @@ export function EditorPage({
         (f) => f.path === path || f.path.endsWith(fileName) || path.endsWith(f.path)
       );
       if (!file) {
+        // eslint-disable-next-line no-console
         console.warn(
           `[displayFile] No workspace file found matching URI: ${uri} (fileName: ${fileName})`
         );
         return null;
       }
-
-      // Open the file tab
       openFileInSource(file.path);
-      expandSource();
-
-      // Return a promise that resolves when the EditorView is created
       return new Promise<import('@codemirror/view').EditorView | null>((resolve) => {
-        // Resolve any stale pending promise for the same file before replacing
         const existing = pendingDisplayFileRef.current.get(file.path);
         if (existing) existing(null);
-
         pendingDisplayFileRef.current.set(file.path, resolve);
         setTimeout(() => {
           if (pendingDisplayFileRef.current.has(file.path)) {
             pendingDisplayFileRef.current.delete(file.path);
+            // eslint-disable-next-line no-console
             console.warn(`[displayFile] Timed out waiting for EditorView: "${file.path}"`);
             resolve(null);
           }
@@ -442,9 +355,8 @@ export function EditorPage({
       });
     });
     return unsub;
-  }, [lspClient, files, openFileInSource, expandSource]);
+  }, [lspClient, files, openFileInSource]);
 
-  /** Resolve pending displayFile promise when a new EditorView is created. */
   const handleEditorViewCreated = useCallback(
     (filePath: string, view: import('@codemirror/view').EditorView) => {
       const resolve = pendingDisplayFileRef.current.get(filePath);
@@ -456,18 +368,15 @@ export function EditorPage({
     []
   );
 
-  /** Only pass files that the user has explicitly opened (via node selection). */
   const sourceEditorFiles = useMemo(
     () => files.filter((f) => openedFilePaths.has(f.path)),
     [files, openedFilePaths]
   );
 
-  // Fire pending reveal after sourceEditorFiles updates with the target file
   useEffect(() => {
     const pending = pendingRevealRef.current;
     if (!pending) return;
-    const exists = sourceEditorFiles.some((f) => f.path === pending.filePath);
-    if (exists) {
+    if (sourceEditorFiles.some((f) => f.path === pending.filePath)) {
       pendingRevealRef.current = null;
       requestAnimationFrame(() => {
         sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
@@ -475,7 +384,6 @@ export function EditorPage({
     }
   }, [sourceEditorFiles]);
 
-  /** Close a file tab (remove from openedFilePaths). */
   const closeFileInSource = useCallback(
     (filePath: string) => {
       setOpenedFilePaths((prev) => {
@@ -491,38 +399,6 @@ export function EditorPage({
     [files, openedFilePaths, activeEditorFile]
   );
 
-  // --- Collapsible panel toggle helpers ---
-  const toggleSource = useCallback(() => {
-    const panel = sourcePanelRef.current;
-    if (!panel) return;
-    if (panel.isCollapsed()) {
-      panel.resize('35%');
-      setShowSource(true);
-    } else {
-      panel.collapse();
-      setShowSource(false);
-    }
-  }, []);
-
-  const toggleEditor = useCallback(() => {
-    const panel = editorPanelRef.current;
-    if (!panel) return;
-    if (panel.isCollapsed()) {
-      panel.resize('30%');
-      setShowEditor(true);
-    } else {
-      panel.collapse();
-      setShowEditor(false);
-    }
-  }, []);
-
-  const handleNodeDoubleClick = useCallback(
-    (_nodeId: string) => {
-      expandSource();
-    },
-    [expandSource]
-  );
-
   const getSerializedFiles = useCallback((): Map<string, string> => {
     const rosettaText = graphRef.current?.exportRosetta?.();
     if (!rosettaText || rosettaText.size === 0) return new Map();
@@ -535,23 +411,16 @@ export function EditorPage({
 
   const validateModelForExport = useCallback((): string[] => {
     const warnings: string[] = [];
-    const { totalErrors, totalWarnings } = useDiagnosticsStore.getState();
-    if (totalErrors > 0) {
-      warnings.push(
-        `Model has ${totalErrors} error(s) that may affect code generation output quality.`
-      );
+    const { totalErrors: terr, totalWarnings: twarn } = useDiagnosticsStore.getState();
+    if (terr > 0) {
+      warnings.push(`Model has ${terr} error(s) that may affect code generation output quality.`);
     }
-    if (totalWarnings > 0) {
-      warnings.push(`Model has ${totalWarnings} warning(s).`);
-    }
+    if (twarn > 0) warnings.push(`Model has ${twarn} warning(s).`);
     const serialized = getSerializedFiles();
-    if (serialized.size === 0) {
-      warnings.push('No user-authored files found to export.');
-    }
+    if (serialized.size === 0) warnings.push('No user-authored files found to export.');
     return warnings;
   }, [getSerializedFiles]);
 
-  // --- Available types for editor form TypeSelector ---
   const availableTypes: TypeOption[] = useMemo(() => {
     const builtinOptions: TypeOption[] = BUILTIN_TYPES.map((t) => ({
       value: `builtin::${t}`,
@@ -567,7 +436,6 @@ export function EditorPage({
     return [...builtinOptions, ...graphOptions];
   }, [storeNodes]);
 
-  // --- Editor form actions wired to store ---
   const editorActions: EditorFormActions = useMemo(() => {
     const s = useEditorStore.getState;
     return {
@@ -608,21 +476,137 @@ export function EditorPage({
   const handleFitView = useCallback(() => {
     graphRef.current?.fitView();
   }, []);
-
   const handleRelayout = useCallback(() => {
     graphRef.current?.relayout({ groupByInheritance: groupedLayout });
   }, [groupedLayout]);
-
   const handleToggleGroupedLayout = useCallback(() => {
     setGroupedLayout((prev) => {
       const next = !prev;
-      // Trigger relayout with the new setting after state updates
       setTimeout(() => {
         graphRef.current?.relayout({ groupByInheritance: next });
       }, 0);
       return next;
     });
   }, []);
+
+  // ---------- panel components rendered inside dockview ----------
+
+  const FileTreePanelMounted = useCallback(
+    () => (
+      <ScrollArea className="h-full">
+        <NamespaceExplorerPanel
+          nodes={storeNodes}
+          expandedNamespaces={expandedNamespaces}
+          hiddenNodeIds={hiddenNodeIds}
+          selectedNodeId={selectedNodeId}
+          onToggleNamespace={storeToggleNamespace}
+          onToggleNode={storeToggleNodeVisibility}
+          onExpandAll={storeExpandAllNamespaces}
+          onCollapseAll={storeCollapseAllNamespaces}
+          onSelectNode={handleExplorerSelectNode}
+        />
+      </ScrollArea>
+    ),
+    [
+      storeNodes,
+      expandedNamespaces,
+      hiddenNodeIds,
+      selectedNodeId,
+      storeToggleNamespace,
+      storeToggleNodeVisibility,
+      storeExpandAllNamespaces,
+      storeCollapseAllNamespaces,
+      handleExplorerSelectNode
+    ]
+  );
+
+  const SourceEditorPanelMounted = useCallback(
+    () => (
+      <SourceEditor
+        ref={sourceEditorRef}
+        files={sourceEditorFiles}
+        activeFile={activeEditorFile}
+        lspClient={lspClient}
+        onFileSelect={(path) => setActiveEditorFile(path)}
+        onFileClose={closeFileInSource}
+        onContentChange={handleSourceChange}
+        onNavigateToNode={navigateToNode}
+        onEditorViewCreated={handleEditorViewCreated}
+      />
+    ),
+    [
+      sourceEditorFiles,
+      activeEditorFile,
+      lspClient,
+      closeFileInSource,
+      handleSourceChange,
+      navigateToNode,
+      handleEditorViewCreated
+    ]
+  );
+
+  const InspectorPanelMounted = useCallback(
+    () => (
+      <EditorFormPanel
+        nodeData={selectedNodeData}
+        nodeId={selectedNodeId}
+        availableTypes={availableTypes}
+        actions={editorActions}
+        allNodes={storeNodes}
+        renderExpressionEditor={renderExpressionEditor}
+        onClose={() => {
+          /* dock collapse handled by dockview */
+        }}
+        onNavigateToNode={navigateToNode}
+      />
+    ),
+    [
+      selectedNodeData,
+      selectedNodeId,
+      availableTypes,
+      editorActions,
+      storeNodes,
+      renderExpressionEditor,
+      navigateToNode
+    ]
+  );
+
+  const ProblemsPanelMounted = useCallback(
+    () => (
+      <DiagnosticsPanel
+        fileDiagnostics={fileDiagnostics}
+        onNavigate={(uri) => {
+          const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
+          const fileName = normPath.split('/').pop() ?? normPath;
+          const file = files.find(
+            (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
+          );
+          if (file) openFileInSource(file.path ?? file.name);
+        }}
+      />
+    ),
+    [fileDiagnostics, files, openFileInSource]
+  );
+
+  const VisualPreviewPanelMounted = useCallback(
+    () => (
+      <RuneTypeGraph
+        ref={graphRef}
+        config={{
+          layout: { direction: 'TB', groupByInheritance: groupedLayout },
+          showControls: true,
+          showMinimap: true,
+          readOnly: false
+        }}
+        callbacks={{
+          onNodeDoubleClick: () => {},
+          onModelChanged: handleModelChanged,
+          onNavigateToType: navigateToNode
+        }}
+      />
+    ),
+    [groupedLayout, handleModelChanged, navigateToNode]
+  );
 
   return (
     <div
@@ -631,21 +615,13 @@ export function EditorPage({
       onKeyDown={handleEditorPageKeyDown}
       tabIndex={-1}
     >
-      {/* Toolbar */}
+      {/* Toolbar — graph-only controls. Panel toggles are gone; users
+       * collapse / rearrange via dockview. (T091 chrome reduction.) */}
       <nav
         className="glass-toolbar flex items-center justify-between px-3 py-1.5 gap-2 border-b border-border"
         aria-label="Editor toolbar"
       >
         <div className="flex items-center gap-1.5">
-          <Button
-            variant={explorerOpen ? 'default' : 'secondary'}
-            size="sm"
-            onClick={storeToggleExplorer}
-            title="Toggle namespace explorer"
-          >
-            <PanelLeft className="w-3.5 h-3.5 mr-1" />
-            Explorer
-          </Button>
           <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
             <Maximize2 className="w-3.5 h-3.5 mr-1" />
             Fit View
@@ -664,33 +640,6 @@ export function EditorPage({
             Grouped
           </Button>
           <GraphFilterMenu />
-          <Button
-            variant={showEditor ? 'default' : 'secondary'}
-            size="sm"
-            onClick={toggleEditor}
-            title="Toggle editor form panel"
-          >
-            <FormInput className="w-3.5 h-3.5 mr-1" />
-            Editor
-          </Button>
-          <Button
-            variant={showSource ? 'default' : 'secondary'}
-            size="sm"
-            onClick={toggleSource}
-            title="Toggle source view"
-          >
-            <FileCode2 className="w-3.5 h-3.5 mr-1" />
-            Source
-          </Button>
-          <Button
-            variant={showDiagnostics ? 'default' : 'secondary'}
-            size="sm"
-            onClick={() => setShowDiagnostics(!showDiagnostics)}
-            title="Toggle diagnostics panel"
-          >
-            <AlertCircle className="w-3.5 h-3.5 mr-1" />
-            Problems{totalErrors + totalWarnings > 0 ? ` (${totalErrors + totalWarnings})` : ''}
-          </Button>
         </div>
         <div className="flex items-center gap-1.5">
           <ExportMenu
@@ -711,7 +660,6 @@ export function EditorPage({
         </div>
       </nav>
 
-      {/* Toast message (Task 2) */}
       {toastMessage && (
         <div
           className="flex items-center justify-between px-3 py-1.5 bg-destructive/10 text-destructive text-sm border-b border-destructive/20"
@@ -723,145 +671,39 @@ export function EditorPage({
             onClick={() => setToastMessage(null)}
             aria-label="Dismiss"
           >
-            &times;
+            ×
           </button>
         </div>
       )}
 
-      {/* Main content — explorer sidebar + resizable graph/source */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Namespace Explorer — fixed sidebar */}
-        {explorerOpen && (
-          <aside
-            className="w-(--sidebar-width) min-w-(--sidebar-min-width) max-w-(--sidebar-max-width) h-full overflow-hidden flex flex-col bg-card border-r border-border"
-            aria-label="Namespace explorer"
-          >
-            <ScrollArea className="flex-1">
-              <NamespaceExplorerPanel
-                nodes={storeNodes}
-                expandedNamespaces={expandedNamespaces}
-                hiddenNodeIds={hiddenNodeIds}
-                selectedNodeId={selectedNodeId}
-                onToggleNamespace={storeToggleNamespace}
-                onToggleNode={storeToggleNodeVisibility}
-                onExpandAll={storeExpandAllNamespaces}
-                onCollapseAll={storeCollapseAllNamespaces}
-                onSelectNode={handleExplorerSelectNode}
-              />
-            </ScrollArea>
-          </aside>
-        )}
-
-        {/* Graph + Source — resizable split */}
-        <ResizablePanelGroup orientation="horizontal" className="flex-1 min-w-0">
-          <ResizablePanel id="graph" defaultSize={70}>
-            <RuneTypeGraph
-              ref={graphRef}
-              config={{
-                layout: { direction: 'TB', groupByInheritance: groupedLayout },
-                showControls: true,
-                showMinimap: true,
-                readOnly: false
-              }}
-              callbacks={{
-                onNodeDoubleClick: handleNodeDoubleClick,
-                onModelChanged: handleModelChanged,
-                onNavigateToType: navigateToNode
-              }}
-            />
-          </ResizablePanel>
-
-          {/* Source panel — always mounted, collapsible via panelRef */}
-          <ResizableHandle withHandle />
-          <ResizablePanel
-            id="source"
-            collapsible
-            collapsedSize={0}
-            defaultSize={0}
-            minSize={15}
-            panelRef={sourcePanelRef}
-          >
-            <aside
-              className="studio-editor-page__source h-full overflow-auto"
-              aria-label="Source editor"
-            >
-              <SourceEditor
-                ref={sourceEditorRef}
-                files={sourceEditorFiles}
-                activeFile={activeEditorFile}
-                lspClient={lspClient}
-                onFileSelect={(path) => setActiveEditorFile(path)}
-                onFileClose={closeFileInSource}
-                onContentChange={handleSourceChange}
-                onNavigateToNode={navigateToNode}
-                onEditorViewCreated={handleEditorViewCreated}
-              />
-            </aside>
-          </ResizablePanel>
-
-          {/* Editor form panel — always mounted, collapsible via panelRef */}
-          <ResizableHandle withHandle />
-          <ResizablePanel
-            id="editor-form"
-            collapsible
-            collapsedSize={0}
-            defaultSize={30}
-            minSize={15}
-            panelRef={editorPanelRef}
-          >
-            <EditorFormPanel
-              nodeData={selectedNodeData}
-              nodeId={selectedNodeId}
-              availableTypes={availableTypes}
-              actions={editorActions}
-              allNodes={storeNodes}
-              renderExpressionEditor={renderExpressionEditor}
-              onClose={collapseEditor}
-              onNavigateToNode={navigateToNode}
-            />
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </div>
-
-      {/* Diagnostics panel (toggleable) */}
-      {showDiagnostics && (
-        <DiagnosticsPanel
-          fileDiagnostics={fileDiagnostics}
-          onNavigate={(uri, _line, _char) => {
-            const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
-            const fileName = normPath.split('/').pop() ?? normPath;
-            const file = files.find(
-              (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
-            );
-            if (file) {
-              const path = file.path ?? file.name;
-              openFileInSource(path);
-              expandSource();
-            }
+      <div className="flex-1 min-h-0">
+        <DockShell
+          studioVersion={studioVersion}
+          workspaceId={workspaceId}
+          panelComponents={{
+            'workspace.fileTree': FileTreePanelMounted,
+            'workspace.editor': SourceEditorPanelMounted,
+            'workspace.inspector': InspectorPanelMounted,
+            'workspace.problems': ProblemsPanelMounted,
+            'workspace.visualPreview': VisualPreviewPanelMounted
           }}
         />
-      )}
+      </div>
 
-      {/* Status bar */}
-      <footer className="glass-statusbar flex items-center gap-4 px-3 py-1 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <FileText className="w-3 h-3" />
-          {models.length} model(s)
+      <footer className="glass-statusbar flex items-center gap-4 px-3 py-1 text-xs text-muted-foreground border-t border-border">
+        <span>
+          {models.length} model{models.length === 1 ? '' : 's'}
         </span>
-        <span className="flex items-center gap-1.5">
-          <Edit3 className="w-3 h-3" />
-          {files.filter((f) => f.dirty).length} modified
-        </span>
-        {selectedNodeId && (
-          <span className="flex items-center gap-1.5">
-            <Activity className="w-3 h-3" />
-            {selectedNodeId}
+        <span>{files.filter((f) => f.dirty).length} modified</span>
+        {selectedNodeId && <span>{selectedNodeId}</span>}
+        {(totalErrors > 0 || totalWarnings > 0) && (
+          <span>
+            {totalErrors} err / {totalWarnings} warn
           </span>
         )}
         {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
       </footer>
 
-      {/* Code Generation Export Dialog */}
       <ExportDialog
         open={showExportDialog}
         onClose={() => setShowExportDialog(false)}

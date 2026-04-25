@@ -38,10 +38,27 @@ import { applyLayout, serializeLayout } from './dockview-bridge.js';
 import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 
+type PanelOverrides = Partial<{
+  'workspace.fileTree': React.FC;
+  'workspace.editor': React.FC;
+  'workspace.inspector': React.FC;
+  'workspace.problems': React.FC;
+  'workspace.output': React.FC;
+  'workspace.visualPreview': React.FC;
+}>;
+
 interface DockShellProps {
   studioVersion: string;
   workspaceId: string;
   initialLayout?: PanelLayoutRecord | null;
+  /**
+   * Override one or more panels with real content. Components are
+   * rendered as the body of their named dockview panel. Tests omit this
+   * (the default stub panels are reachable via test-id); the live app
+   * supplies real components from EditorPage so the dock shell hosts
+   * the working studio surface.
+   */
+  panelComponents?: PanelOverrides;
   onLayoutChange?: (layout: PanelLayoutRecord) => void;
   onAction?: (action: ShellAction) => void;
 }
@@ -54,7 +71,19 @@ function wrapForDockview<P extends object>(Component: React.FC<P>): React.FC<IDo
   };
 }
 
-const DOCKVIEW_COMPONENTS = {
+function mergeComponents(
+  defaults: Record<string, React.FC<IDockviewPanelProps>>,
+  overrides: PanelOverrides | undefined
+): Record<string, React.FC<IDockviewPanelProps>> {
+  if (!overrides) return defaults;
+  const out: Record<string, React.FC<IDockviewPanelProps>> = { ...defaults };
+  for (const [name, Component] of Object.entries(overrides)) {
+    if (Component) out[name] = wrapForDockview(Component);
+  }
+  return out;
+}
+
+const DEFAULT_DOCKVIEW_COMPONENTS = {
   'workspace.fileTree': wrapForDockview(FileTreePanel),
   'workspace.editor': wrapForDockview(EditorPanel),
   'workspace.inspector': wrapForDockview(InspectorPanel),
@@ -67,6 +96,7 @@ export function DockShell({
   studioVersion,
   workspaceId,
   initialLayout,
+  panelComponents,
   onLayoutChange,
   onAction
 }: DockShellProps): React.ReactElement {
@@ -125,7 +155,7 @@ export function DockShell({
       data-workspace-id={workspaceId}
     >
       <DockviewReact
-        components={DOCKVIEW_COMPONENTS}
+        components={mergeComponents(DEFAULT_DOCKVIEW_COMPONENTS, panelComponents)}
         onReady={onReady}
         className="dockview-theme-light"
       />
