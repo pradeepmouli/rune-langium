@@ -135,7 +135,10 @@ jobs:
         run: pnpm --filter '@rune-langium/studio...' run build
 
       - name: Run axe-core a11y gate
-        run: pnpm --filter @rune-langium/studio run test:e2e -- --grep "Studio a11y"
+        # Invoke playwright directly via `exec` so the --grep flag isn't
+        # routed through the pnpm-script `--` boundary (which made
+        # playwright interpret "--grep" as a test-file path).
+        run: pnpm --filter @rune-langium/studio exec playwright test --grep "Studio a11y"
 
   # ---------------------------------------------------------------------------
   # check-generated: Verify generated schema files don't drift from source (T039, FR-018, SC-008)
