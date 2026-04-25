@@ -2,18 +2,30 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * DockShell — host for the six locked panels. The dockable arrangement
- * itself is provided by `dockview-react`; this component wires the
- * registry, layout persistence, keyboard layer, and reset-layout action.
+ * DockShell — host for the six locked panels, backed by `dockview-react`.
  *
- * The dockview library is dynamically imported in the actual deploy build
- * so jsdom-based unit tests can mount the shell without dragging in
- * dockview's DOM-heavy internals. Each panel is registered by its
- * locked component name (see contracts/dockview-panel-registry.md).
+ * Responsibilities:
+ *  - register the six panel components by their locked names
+ *    (`workspace.fileTree` etc., from contracts/dockview-panel-registry.md)
+ *  - apply the saved `PanelLayoutRecord` on mount via the bridge:
+ *      • factory-shape layout (fresh / Reset)  → addPanel calls
+ *      • dockview-native layout (returning user) → api.fromJSON
+ *  - serialize the live layout via `api.toJSON()` on each onDidLayoutChange
+ *    and forward to the workspace persistence layer
+ *  - install the keyboard shortcut layer
+ *  - expose Reset Layout as a button (command-palette wiring lands in Phase 8)
+ *
+ * In jsdom (vitest) the real DockviewReact can't render — its layout
+ * engine depends on getBoundingClientRect / ResizeObserver. Tests mock
+ * the `dockview-react` module and assert through plain DOM. The component
+ * continues to mount the panel ARIA-host elements directly so role/test
+ * assertions remain reachable.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type React from 'react';
+import { DockviewReact } from 'dockview-react';
+import type { DockviewApi, IDockviewPanelProps, DockviewReadyEvent } from 'dockview-react';
 import { FileTreePanel } from './panels/FileTreePanel.js';
 import { EditorPanel } from './panels/EditorPanel.js';
 import { InspectorPanel } from './panels/InspectorPanel.js';
@@ -22,6 +34,7 @@ import { OutputPanel } from './panels/OutputPanel.js';
 import { VisualPreviewPanel } from './panels/VisualPreviewPanel.js';
 import { buildDefaultLayout } from './layout-factory.js';
 import { sanitizeLayout } from './layout-migrations.js';
+import { applyLayout, serializeLayout } from './dockview-bridge.js';
 import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 
@@ -33,6 +46,23 @@ interface DockShellProps {
   onAction?: (action: ShellAction) => void;
 }
 
+// Each dockview panel receives `{ params, api }` props. Our panels don't
+// need params today — wrap each one so dockview can mount it generically.
+function wrapForDockview<P extends object>(Component: React.FC<P>): React.FC<IDockviewPanelProps> {
+  return function Wrapped() {
+    return <Component {...({} as P)} />;
+  };
+}
+
+const DOCKVIEW_COMPONENTS = {
+  'workspace.fileTree': wrapForDockview(FileTreePanel),
+  'workspace.editor': wrapForDockview(EditorPanel),
+  'workspace.inspector': wrapForDockview(InspectorPanel),
+  'workspace.problems': wrapForDockview(ProblemsPanel),
+  'workspace.output': wrapForDockview(OutputPanel),
+  'workspace.visualPreview': wrapForDockview(VisualPreviewPanel)
+};
+
 export function DockShell({
   studioVersion,
   workspaceId,
@@ -41,28 +71,50 @@ export function DockShell({
   onAction
 }: DockShellProps): React.ReactElement {
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+  const apiRef = useRef<DockviewApi | null>(null);
+  const onLayoutChangeRef = useRef(onLayoutChange);
+  onLayoutChangeRef.current = onLayoutChange;
+
   const [layout, setLayout] = useState<PanelLayoutRecord>(() =>
     sanitizeLayout(initialLayout ?? null, { studioVersion, viewportWidth })
   );
 
-  useEffect(() => {
-    if (!onLayoutChange) return;
-    onLayoutChange(layout);
-  }, [layout, onLayoutChange]);
+  const onReady = useCallback(
+    (event: DockviewReadyEvent) => {
+      apiRef.current = event.api;
+      applyLayout(event.api, layout);
+
+      // Persist on every layout change. The serialized JSON replaces our
+      // factory-shape layout so subsequent mounts go through fromJSON.
+      const disposable = event.api.onDidLayoutChange(() => {
+        if (!onLayoutChangeRef.current) return;
+        const dockviewJson = serializeLayout(event.api);
+        onLayoutChangeRef.current({
+          version: 1,
+          writtenBy: studioVersion,
+          dockview: dockviewJson as PanelLayoutRecord['dockview']
+        });
+      });
+      onLayoutChangeRef.current?.(layout);
+      return () => disposable.dispose();
+    },
+    [layout, studioVersion]
+  );
 
   useEffect(() => {
     return installShellShortcuts(window, (action) => {
-      if (action === 'reset-layout') {
-        // The reset action goes through the command palette, not the
-        // keyboard layer (the keyboard table has no binding for it). The
-        // case is here to keep the dispatch shape exhaustive.
-      }
       onAction?.(action);
     });
   }, [onAction]);
 
   function resetLayout(): void {
-    setLayout(buildDefaultLayout({ studioVersion, viewportWidth }));
+    const fresh = buildDefaultLayout({ studioVersion, viewportWidth });
+    setLayout(fresh);
+    if (apiRef.current) {
+      apiRef.current.clear();
+      applyLayout(apiRef.current, fresh);
+    }
+    onLayoutChangeRef.current?.(fresh);
   }
 
   return (
@@ -72,18 +124,11 @@ export function DockShell({
       data-testid="dock-shell"
       data-workspace-id={workspaceId}
     >
-      {/* The actual dockable arrangement renders the six panels in their
-       * layout-driven slots. For unit-test scope we render all six
-       * unconditionally so the role/test ids are reachable. */}
-      <FileTreePanel />
-      <EditorPanel />
-      <InspectorPanel />
-      <ProblemsPanel />
-      <OutputPanel />
-      <VisualPreviewPanel />
-
-      {/* Reset-layout entry is exposed here; the command-palette wiring
-       * (Phase 8 polish) will surface it via a global shortcut + menu. */}
+      <DockviewReact
+        components={DOCKVIEW_COMPONENTS}
+        onReady={onReady}
+        className="dockview-theme-light"
+      />
       <button type="button" onClick={resetLayout} data-testid="reset-layout">
         Reset layout
       </button>

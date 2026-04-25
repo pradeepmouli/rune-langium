@@ -2,6 +2,12 @@ import { h } from 'vue';
 import type { Theme } from 'vitepress';
 import DefaultTheme from 'vitepress/theme';
 import RuneHome from './components/RuneHome.vue';
+// Shared design tokens — emitted from packages/design-tokens. Loading
+// these BEFORE custom.css means the brand-specific overrides win where
+// defined, while every token-driven utility (--spacing-*, --radius-*,
+// --font-family-*) cascades into the doc theme uniformly with the
+// landing surface + Studio.
+import '@rune-langium/design-tokens/tokens.css';
 import './custom.css';
 
 export default {
