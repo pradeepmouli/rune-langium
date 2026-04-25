@@ -124,6 +124,25 @@ importers:
         specifier: ^4.0.0
         version: 4.85.0(@cloudflare/workers-types@4.20260424.1)
 
+  apps/curated-mirror-worker:
+    dependencies:
+      pino:
+        specifier: ^9.5.0
+        version: 9.14.0
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250108.0
+        version: 4.20260424.1
+      miniflare:
+        specifier: ^3.20250108.0
+        version: 3.20250718.3
+      vitest:
+        specifier: ^4.1.4
+        version: 4.1.4(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(@vitest/ui@4.1.4)(jsdom@28.1.0(@noble/hashes@1.8.0))(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.85.0(@cloudflare/workers-types@4.20260424.1)
+
   apps/docs:
     devDependencies:
       typedoc:
@@ -144,6 +163,25 @@ importers:
       vue:
         specifier: ^3.5.0
         version: 3.5.32(typescript@5.9.3)
+
+  apps/github-auth-worker:
+    dependencies:
+      pino:
+        specifier: ^9.5.0
+        version: 9.14.0
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250108.0
+        version: 4.20260424.1
+      miniflare:
+        specifier: ^3.20250108.0
+        version: 3.20250718.3
+      vitest:
+        specifier: ^4.1.4
+        version: 4.1.4(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(@vitest/ui@4.1.4)(jsdom@28.1.0(@noble/hashes@1.8.0))(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.85.0(@cloudflare/workers-types@4.20260424.1)
 
   apps/studio:
     dependencies:
@@ -186,6 +224,9 @@ importers:
       '@rune-langium/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
+      '@rune-langium/design-tokens':
+        specifier: workspace:*
+        version: link:../../packages/design-tokens
       '@rune-langium/lsp-server':
         specifier: workspace:*
         version: link:../../packages/lsp-server
@@ -204,6 +245,9 @@ importers:
       codemirror:
         specifier: 6.0.2
         version: 6.0.2
+      dockview-react:
+        specifier: ^4.6.0
+        version: 4.13.1(react@19.2.4)
       idb:
         specifier: ^8.0.3
         version: 8.0.3
@@ -213,6 +257,9 @@ importers:
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.4)
+      pako:
+        specifier: ^2.1.0
+        version: 2.1.0
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -235,6 +282,9 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.2
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@types/pako':
+        specifier: ^2.0.3
+        version: 2.0.4
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
@@ -244,6 +294,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^5.1.4
         version: 5.1.4(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      '@zod-to-form/vite':
+        specifier: ^0.2.1
+        version: 0.2.1(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))(zod@4.3.6)
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0(@noble/hashes@1.8.0)
@@ -262,6 +315,28 @@ importers:
       vitest:
         specifier: ^4.1.4
         version: 4.1.4(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(@vitest/ui@4.1.4)(jsdom@28.1.0(@noble/hashes@1.8.0))(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+
+  apps/telemetry-worker:
+    dependencies:
+      pino:
+        specifier: ^9.5.0
+        version: 9.14.0
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250108.0
+        version: 4.20260424.1
+      miniflare:
+        specifier: ^3.20250108.0
+        version: 3.20250718.3
+      vitest:
+        specifier: ^4.1.4
+        version: 4.1.4(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(@vitest/ui@4.1.4)(jsdom@28.1.0(@noble/hashes@1.8.0))(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.85.0(@cloudflare/workers-types@4.20260424.1)
 
   packages/cli:
     dependencies:
@@ -404,6 +479,15 @@ importers:
         specifier: ^8.0.8
         version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)
 
+  packages/design-tokens:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
+      vitest:
+        specifier: ^4.1.4
+        version: 4.1.4(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(@vitest/ui@4.1.4)(jsdom@28.1.0(@noble/hashes@1.8.0))(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+
   packages/lsp-server:
     dependencies:
       '@lspeasy/core':
@@ -495,6 +579,9 @@ importers:
       '@zod-to-form/core':
         specifier: ^0.4.0
         version: 0.4.0(zod@4.3.6)
+      '@zod-to-form/vite':
+        specifier: ^0.2.1
+        version: 0.2.1(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))(zod@4.3.6)
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0(@noble/hashes@1.8.0)
@@ -3133,6 +3220,9 @@ packages:
   '@types/node@25.6.0':
     resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
 
+  '@types/pako@2.0.4':
+    resolution: {integrity: sha512-VWDCbrLeVXJM9fihYodcLiIv0ku+AlOa/TQ1SvYOaBuyrSKgEcro95LJyIsJ4vSo6BXIxOKxiJAat04CmST9Fw==}
+
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
     peerDependencies:
@@ -3360,6 +3450,9 @@ packages:
     resolution: {integrity: sha512-pfFsD6lYJwuxENJejroc5zolgfbpRCZiaPuMwKOfF2HfTbcu7aiUrJvhotE7ilAl5kh8jlBGw1c7li3DXj4Icg==}
     hasBin: true
 
+  '@zod-to-form/codegen@0.7.1':
+    resolution: {integrity: sha512-UBjXCHiD8WyhLXI0nDtjcuHC0ghSyvO7aCNXohFgxQldggEqKkbM1lRdcTmLjh6L2Y3MtSEPqdrgo1IMdZQEbg==}
+
   '@zod-to-form/core@0.4.0':
     resolution: {integrity: sha512-BZ0KRq08IS70ji/0Q3zf+vobN8XJedQs/mn6AYnuXxvDw6oc6GUze+RrigVOoP9To4gZmh5icCcAcs5pYROCgg==}
     peerDependencies:
@@ -3372,6 +3465,11 @@ packages:
       react: ^18.0.0 || ^19.0.0
       react-hook-form: ^7.0.0
       zod: ^4.0.0
+
+  '@zod-to-form/vite@0.2.1':
+    resolution: {integrity: sha512-EDHx4JRiN3AsIpCZmMYEyQekwcdCZJemRy8GN0+zOZ3hd6HDwiofaBrHoPZjDSnTOLT2beToOWLaiRlaH8wabA==}
+    peerDependencies:
+      vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -3866,6 +3964,17 @@ packages:
   dir-glob@3.0.1:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
+
+  dockview-core@4.13.1:
+    resolution: {integrity: sha512-+7vR0ZEoL8CNck6NqDVUMqBT22niwBu5CMMI137dZ3c8NDc7c5Si+3dGEqQgM4lNtHBLAtvypo1C4p21J2wkiQ==}
+
+  dockview-react@4.13.1:
+    resolution: {integrity: sha512-xnK0mUq+gzME/QyzM5nn+SsQO26AA2qZlCuqi1KX7wux52KIUSMraQHN5AY9Qm2qCVb/NHhCZoZNSysb/GS79A==}
+
+  dockview@4.13.1:
+    resolution: {integrity: sha512-K8xnYt3Rvkx8MYKHaEsb8aFaPyQclKRRkXS9JcpQPZUgqxumTLnSidgdd6uIfzEps6yJsXoZGQGJ9PtcaKyDcQ==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   dom-accessibility-api@0.5.16:
     resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}
@@ -5024,6 +5133,9 @@ packages:
 
   pako@1.0.11:
     resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
+
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
 
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
@@ -8619,6 +8731,8 @@ snapshots:
     dependencies:
       undici-types: 7.19.2
 
+  '@types/pako@2.0.4': {}
+
   '@types/react-dom@19.2.3(@types/react@19.2.14)':
     dependencies:
       '@types/react': 19.2.14
@@ -8886,6 +9000,12 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
+  '@zod-to-form/codegen@0.7.1(zod@4.3.6)':
+    dependencies:
+      '@zod-to-form/core': 0.4.0(zod@4.3.6)
+    transitivePeerDependencies:
+      - zod
+
   '@zod-to-form/core@0.4.0(zod@4.3.6)':
     dependencies:
       zod: 4.3.6
@@ -8897,6 +9017,20 @@ snapshots:
       react: 19.2.4
       react-hook-form: 7.71.2(react@19.2.4)
       zod: 4.3.6
+
+  '@zod-to-form/vite@0.2.1(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))(zod@4.3.6)':
+    dependencies:
+      '@babel/parser': 7.29.2
+      '@babel/traverse': 7.29.0
+      '@babel/types': 7.29.0
+      '@zod-to-form/codegen': 0.7.1(zod@4.3.6)
+      '@zod-to-form/core': 0.4.0(zod@4.3.6)
+      magic-string: 0.30.21
+      pathe: 2.0.3
+      vite: 8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)
+    transitivePeerDependencies:
+      - supports-color
+      - zod
 
   abort-controller@3.0.0:
     dependencies:
@@ -9327,6 +9461,19 @@ snapshots:
   dir-glob@3.0.1:
     dependencies:
       path-type: 4.0.0
+
+  dockview-core@4.13.1: {}
+
+  dockview-react@4.13.1(react@19.2.4):
+    dependencies:
+      dockview: 4.13.1(react@19.2.4)
+    transitivePeerDependencies:
+      - react
+
+  dockview@4.13.1(react@19.2.4):
+    dependencies:
+      dockview-core: 4.13.1
+      react: 19.2.4
 
   dom-accessibility-api@0.5.16: {}
 
@@ -10519,6 +10666,8 @@ snapshots:
   package-manager-detector@1.6.0: {}
 
   pako@1.0.11: {}
+
+  pako@2.1.0: {}
 
   parent-module@1.0.1:
     dependencies:

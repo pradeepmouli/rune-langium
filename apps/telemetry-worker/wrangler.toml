@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: FSL-1.1-ALv2
+# Copyright (c) 2026 Pradeep Mouli
+#
+# Cloudflare Worker config for the Studio anonymised telemetry ingester
+# (feature 012-studio-workspace-ux). Opt-out, no PII, schema-validated,
+# DO-per-day counters.
+
+name = "rune-telemetry-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-24"
+compatibility_flags = ["nodejs_compat"]
+account_id = "8327a4da4660eab7d78695268282da09"
+workers_dev = false
+
+[[routes]]
+pattern = "www.daikonic.dev/rune-studio/api/telemetry/*"
+zone_name = "daikonic.dev"
+
+# DO class for per-day counters. Implemented in T110 (src/counters.ts).
+# Binding name MUST match env.TELEMETRY in src/.
+[[durable_objects.bindings]]
+name = "TELEMETRY"
+class_name = "TelemetryAggregator"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["TelemetryAggregator"]
+
+[observability]
+enabled = true
+
+[vars]
+ALLOWED_ORIGIN = "https://www.daikonic.dev"
+
+[limits]
+cpu_ms = 5000

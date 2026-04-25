@@ -17,6 +17,8 @@ This ensures skills are discoverable from both `.agents/skills/` and `.github/sk
 - IndexedDB (via idb) for model caching; in-memory for workspace state (008-core-editor-features)
 - TypeScript 5.9+ (studio, worker, container HTTP wrapper) / Java 21 (codegen CLI, already in use via `rosetta-code-generators`) + `@rune-langium/codegen` (existing), Cloudflare Workers, Cloudflare Containers (beta), `@cloudflare/workers-types`, `wrangler` 4, CF Turnstile (`@marsidev/react-turnstile` or equivalent), CF Durable Objects, `rosetta-code-generators` (existing Maven build) (011-export-code-cf)
 - CF Durable Object for per-IP rate-limit counters (hour + day buckets); container is stateless (no disk writes beyond `/tmp`) (011-export-code-cf)
+- TypeScript 5.9 (strict mode, ESM) for all browser + Worker code; Java 21 unchanged for the existing codegen container (untouched by this feature). + React 19, `dockview-react` (new), `@zod-to-form/{core,react,vite}` 0.7.x / 0.2.x (upgrade), `isomorphic-git` 1.37 (existing, retained for arbitrary-URL + git-backed workspaces), `pako` (new — gzip), small custom tar parser or `tar-stream` (new), `idb` (existing), Tailwind CSS 4 (existing), VitePress (existing for docs), Cloudflare Workers + R2 + Durable Objects + Cron Triggers. (012-studio-workspace-ux)
+- OPFS (Origin Private File System) for workspace files + git object stores; IndexedDB for workspace metadata, recent-workspaces, settings, and serialised FSA folder handles. R2 for the curated-mirror archives. Durable Object storage for telemetry counters (per-day instances). No D1, no KV. (012-studio-workspace-ux)
 
 ## Recent Changes
 - 002-reactflow-visual-editor: Added TypeScript 5.9+ (strict mode, ESM)
