@@ -302,3 +302,41 @@ priorities (US1/US2/US3/US4 → P1; US5/US6 → P2; US7 → P3, achieved by Phas
 - *Section refactor first, then forms*: Possible, but the Data form is the
   template the other four copy; deferring it loses the template-first benefit
   of finding API issues once instead of five times.
+
+---
+
+## R11 — Editors consume the AST node directly (no projection layer)
+
+**Decision**: Drop the `toFormValues(node): DataTypeFormValues`-style
+projection helpers entirely. Editors pass the graph node straight into
+`useZodForm(DataSchema, { defaultValues: node })`. The graph node IS
+the AST shape — Langium emits it that way — so any field z2f's walker
+needs is already on the node, and any field the UX doesn't want is
+handled by `hidden: true` in `z2f.config.ts` (R1). Adopt the upstream
+`useExternalSync(form, node, identityProjection)` with
+`identityProjection = (n) => n` (or just omit if upstream allows
+`toValues` to be optional and default to identity).
+
+**Rationale**: Once R1 lands, projection schemas exist only because
+projection helpers exist. Removing both in the same migration is
+strictly DRY: one schema, one shape, one source of truth, one fewer
+file to keep in sync with the grammar. The `defaultValues` typing is
+satisfied because `output<DataSchema>` IS the AST shape that
+`langium-zod` already produces; the graph node (whose runtime shape is
+emitted by the same Langium pipeline) matches it structurally.
+
+**Implementation notes**:
+- Editor hosts read fields via `useFormContext().getValues('attributes.0.typeCall.type')` etc., or via `useWatch({ name: 'attributes' })` for the array — exactly the AST paths the typed config already references.
+- `<Controller name="attributes.0.name">` inside the bespoke `AttributeRow` works without translation.
+- For nodes that have *extra* graph-only fields not in the AST schema (e.g. layout coords, selection state), z2f silently ignores them — the walker only emits FormFields for keys it sees on the schema. No `hidden:` rule needed for graph-only fields.
+
+**Alternatives considered**:
+- *Keep `toFormValues` as a one-line passthrough wrapper*: Adds a layer
+  for no benefit; the wrapper has nothing to do.
+- *Define a narrower runtime type per editor (e.g. `Pick<output<DataSchema>, 'name' | 'attributes' | …>`)*: Same drift problem as the projection schemas — the narrowing is hand-authored and needs maintenance whenever the AST grows a field the UX wants to expose.
+
+**Cascade into tasks**:
+- Phase 3+ tasks that say "use `useZodForm(dataTypeFormSchema, …)`" should be
+  read as "use `useZodForm(DataSchema, …)`" with `defaultValues: node`.
+- T076 (Phase 10 cleanup) deletes `form-schemas.ts` AND the
+  `toFormValues` helpers in the same task — they go together.
