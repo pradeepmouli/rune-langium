@@ -11,34 +11,50 @@ the only externally-gated items.
 
 ---
 
-## R1 — Single canonical form-surface schema source
+## R1 — Canonical schema source for the typed config
 
-**Decision**: Adopt `packages/visual-editor/src/schemas/form-schemas.ts` as the
-single canonical source of form-surface Zod schemas. The typed config
-(`z2f.config.ts`) is updated to reference these schemas. The
-langium-zod-generated AST schemas in `src/generated/zod-schemas.ts`
-(`DataSchema`, `ChoiceSchema`, `RosettaEnumerationSchema`,
-`RosettaFunctionSchema`, `RosettaTypeAliasSchema`, …) remain a separate
-post-form validation surface used by tests/conformance only — they are not
-consumed by any form.
+**Decision**: The langium-generated AST schemas in
+`src/generated/zod-schemas.ts` (`DataSchema`, `ChoiceSchema`,
+`RosettaEnumerationSchema`, `RosettaFunctionSchema`,
+`RosettaTypeAliasSchema`) are the canonical schemas referenced by the
+typed config (`z2f.config.ts`). AST-only fields (`$type` discriminators,
+container metadata, references, labels, ruleReferences, postConditions,
+enumSynonyms, etc.) are marked `hidden: true` in the config. The
+`@zod-to-form` L1/L2 optimisers strip hidden fields from the schema-lite
+produced at validation time, so RHF's resolver never sees them — they
+remain in the AST schema's static shape but cost nothing at runtime.
 
-**Rationale**: The forms today already validate against the projection schemas
-in `form-schemas.ts` (e.g. `dataTypeFormSchema`, `enumFormSchema`,
-`memberSchema`); the projections are what UX is tied to (`name`, `parentName`,
-`members[]`, `definition`, `comments`, `synonyms`). The AST schemas describe a
-strict-shape Langium serialization that includes `$type` discriminators,
-container metadata, and full reference shapes — the wrong surface to drive a UI
-against. Referencing both surfaces in the typed config is the exact divergence
-FR-008 is closing.
+The hand-authored projection schemas in
+`src/schemas/form-schemas.ts` (`dataTypeFormSchema`, `enumFormSchema`,
+`memberSchema`, etc.) are **slated for removal** as part of this
+migration. They duplicate the AST shape, drift on grammar changes, and
+exist only because the editors today use `useZodForm` as a zodResolver
+shortcut. After Phase 3–7 lands, every editor calls
+`useZodForm(DataSchema, …)` (etc.) against the AST schema directly;
+`toFormValues(node)` becomes a thin pass-through (the graph node is
+already AST-shaped). Deleting `form-schemas.ts` is the final
+DRY-cleanup task in Phase 10 (`T076` below).
+
+**Rationale**: The AST schemas regenerate from the Langium grammar in
+CI (single source of truth — feature 012 Phase 7 wired this). Referencing
+them directly means a grammar change propagates to the forms with one
+schema regeneration step, no hand-edit. The original concern that AST
+schemas "would require widespread `hidden: true` overrides" is real but
+borne by the typed config, not by every editor — and the L1/L2 optimisers
+ensure those hidden rules are runtime-free.
 
 **Alternatives considered**:
-- *Drive forms from the AST schemas directly*: Would require widespread
-  `hidden: true` overrides, every reference field would need a custom adapter,
-  and the form-surface error messages would lose their human-friendly wording
-  (e.g. "Type name is required" vs the AST's structural errors).
-- *Generate form-surface schemas from the AST schemas*: Adds a code-gen layer
-  for what is already five small hand-curated schemas. Defers the work and
-  doesn't actually resolve the FR-008 mismatch.
+- *Adopt `form-schemas.ts` as canonical and keep both*: Initial Phase 0
+  plan. Rejected: duplicates the AST shape with hand-authored
+  projections that drift on grammar changes, and L1/L2 optimisation
+  makes the "AST schemas are too verbose at runtime" objection moot.
+- *Adopt AST as canonical but keep projections as a transport layer*:
+  Considered. Rejected on DRY grounds — once L1/L2 strips hidden fields
+  at validation time, the only remaining role for projections is
+  transporting graph→form values, and that's a one-line passthrough
+  (the graph node is already AST-shaped) not a separate schema.
+- *Generate form-surface schemas from the AST schemas*: Adds a code-gen
+  layer that L1/L2 already does at validation time. Redundant.
 
 ---
 

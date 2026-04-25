@@ -147,7 +147,7 @@ A developer reading the typed config can trust that every schema referenced ther
 - **FR-005**: Annotations, conditions, and metadata sections MUST render in the same place in each form, but be declared via configuration rather than spliced into each form's body.
 - **FR-006**: Each inline row component (attribute, choice option, enum value, function input) MUST be registered once as a custom renderer against its item schema, and MUST keep all current per-row affordances.
 - **FR-007**: When the user switches between graph nodes, the form MUST repopulate with the new node's values without manual reset wiring in the form bodies.
-- **FR-008**: There MUST be exactly one canonical set of form-surface Zod schemas; the typed config and all forms MUST reference them.
+- **FR-008**: There MUST be exactly one set of form-driving Zod schemas — the langium-generated AST schemas in `src/generated/zod-schemas.ts`. The hand-authored projection schemas in `src/schemas/form-schemas.ts` MUST be deleted by the end of the migration. AST-only fields are marked `hidden: true` in the typed config; the L1/L2 optimisers strip them from the validation surface at runtime.
 - **FR-009**: After the migration, no editor form file MUST contain hand-written `<Controller>` calls for fields that the form host can render (the bespoke fields list is documented per form).
 - **FR-010**: All bespoke editor UX features that exist today (type-link navigation, type-creator dropdown, cardinality picker, expression-builder slot) MUST continue to work without regression.
 - **FR-011**: Total lines of code in the editor forms folder MUST decrease by at least 25% after the migration completes.
@@ -194,16 +194,14 @@ from feature 012 Phase 7 belong here, not there:
   that editing a Zod schema field updates the live editor via Vite
   HMR within 2s, with no full reload (SC-011 from feature 012).
 
-The deferred doc proposed using the langium-zod-generated AST schemas
-(`packages/visual-editor/src/generated/zod-schemas.ts`) as the form
-source of truth driven by the build-time `?z2f` pipeline. After this
-spec's Phase 0 research (R1), that path was rejected in favour of the
-projection schemas in `src/schemas/form-schemas.ts`: the AST schemas
-encode container metadata (`$type` discriminators, full reference
-shapes) the UI never exposes, and the projections already encode the
-exact fields each form binds. The `?z2f` pipeline that Phase 7 wired
-remains useful for *new* schemas added later; it is not retired by
-this spec.
+The deferred doc's core proposal — drive forms from the langium-
+generated AST schemas via the `?z2f` pipeline, with hand-author
+overrides only where the AST is too generic — is **adopted** by this
+spec. R1 elects the AST schemas as canonical; the L1/L2 optimisers
+strip hidden fields from the validation surface at runtime, neutralising
+the "AST schemas are too verbose for forms" concern that initially
+favoured projection schemas. The hand-authored projections in
+`src/schemas/form-schemas.ts` are scheduled for deletion (T076).
 
 ## Dependencies
 
