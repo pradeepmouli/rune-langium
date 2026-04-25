@@ -75,27 +75,27 @@ Phase 3 (US1).
 
 ### 3a. Curated-mirror Worker (server side)
 
-- [ ] T025 [US1] Write failing contract test `apps/curated-mirror-worker/test/publisher.test.ts` using a mocked `fetch` + mocked R2 client: asserts the publisher downloads from `codeload.github.com/{owner}/{repo}/tar.gz/refs/heads/{ref}`, uploads to `archives/<yyyy-mm-dd>.tar.gz` and `latest.tar.gz`, writes `manifest.json` conforming to `contracts/curated-mirror-http.md`, and prunes to the most recent 14
-- [ ] T026 [US1] Implement `apps/curated-mirror-worker/src/publisher.ts` + `src/manifest.ts` + `src/index.ts` (scheduled handler that iterates the curated registry) passing T025
-- [ ] T027 [US1] Write failing contract test `apps/curated-mirror-worker/test/http.test.ts` covering the route worker added in T008: `GET /curated/<id>/manifest.json` returns 200 with ETag, 304 on `If-None-Match` match, 404 on unknown id; `GET /curated/<id>/latest.tar.gz` streams bytes with `Content-Length`; 404 on missing archive
-- [ ] T028 [US1] Implement the HTTP handler added in T008 satisfying T027. Apply `Cache-Control: public, max-age=300` on manifest and `public, max-age=86400, immutable` on archives; set `Access-Control-Allow-Origin: https://www.daikonic.dev` on every response
-- [ ] T029 [US1] [P] Add structured-log rules (pino with redact set matching `apps/codegen-worker`) in `apps/curated-mirror-worker/src/log.ts`
+- [X] T025 [US1] Write failing contract test `apps/curated-mirror-worker/test/publisher.test.ts` using a mocked `fetch` + mocked R2 client: asserts the publisher downloads from `codeload.github.com/{owner}/{repo}/tar.gz/refs/heads/{ref}`, uploads to `archives/<yyyy-mm-dd>.tar.gz` and `latest.tar.gz`, writes `manifest.json` conforming to `contracts/curated-mirror-http.md`, and prunes to the most recent 14
+- [X] T026 [US1] Implement `apps/curated-mirror-worker/src/publisher.ts` + `src/manifest.ts` + `src/index.ts` (scheduled handler that iterates the curated registry) passing T025
+- [X] T027 [US1] Write failing contract test `apps/curated-mirror-worker/test/http.test.ts` covering the route worker added in T008: `GET /curated/<id>/manifest.json` returns 200 with ETag, 304 on `If-None-Match` match, 404 on unknown id; `GET /curated/<id>/latest.tar.gz` streams bytes with `Content-Length`; 404 on missing archive
+- [X] T028 [US1] Implement the HTTP handler added in T008 satisfying T027. Apply `Cache-Control: public, max-age=300` on manifest and `public, max-age=86400, immutable` on archives; set `Access-Control-Allow-Origin: https://www.daikonic.dev` on every response
+- [X] T029 [US1] [P] Add structured-log rules (pino with redact set matching `apps/codegen-worker`) in `apps/curated-mirror-worker/src/log.ts`
 
 ### 3b. Curated loader (client side)
 
-- [ ] T030 [US1] [P] Write failing test `apps/studio/tests/services/curated-loader.test.ts` that uses the T012 fixture archive + the T020 telemetry spy; asserts: (a) manifest HEAD-style freshness check fires, (b) archive fetch streams into untar + OPFS writes, (c) success emits `curated_load_success` with `durationMs`, (d) each failure mode in `contracts/curated-mirror-http.md` surfaces the right `ErrorCategory`, (e) cancellation aborts and leaves no half-written files
-- [ ] T031 [US1] Implement `apps/studio/src/services/curated-loader.ts` passing T030. Uses `opfs-fs` (T011), `tar-untar` (T013), `telemetry` (T021). Exposes a `loadCurated(modelId, { signal, onProgress })` function that returns `Promise<WorkspaceFile[]>`
-- [ ] T032 [US1] [P] Write failing test `apps/studio/tests/services/model-registry.test.ts` asserting the curated registry still exposes CDM/FpML/rune-dsl as three entries but now with `archiveUrl` derived from the mirror manifest instead of `repoUrl`/`ref`
-- [ ] T033 [US1] Refactor `apps/studio/src/services/model-registry.ts` to match T032. `repoUrl` / `ref` fields remain on the type for the custom-URL flow (FR-007) but the curated entries no longer use them at load time
-- [ ] T034 [US1] Rewrite `apps/studio/src/services/model-loader.ts` as a thin façade: curated IDs route to `curated-loader`, arbitrary URLs continue to route to the existing `isomorphic-git` path. Keep the existing progress / cancellation API surface intact — callers don't change
-- [ ] T035 [US1] [P] Write failing test `apps/studio/tests/services/stale-while-revalidate.test.ts` asserting FR-005a: cached copy opens immediately, background freshness check fires, a newer manifest surfaces an `updateAvailable: true` without touching local edits
-- [ ] T036 [US1] Implement the stale-while-revalidate behaviour in `curated-loader` per T035. Exposes `checkFreshness(modelId): Promise<{ updateAvailable: boolean; remoteVersion: string }>`
+- [X] T030 [US1] [P] Write failing test `apps/studio/tests/services/curated-loader.test.ts` that uses the T012 fixture archive + the T020 telemetry spy; asserts: (a) manifest HEAD-style freshness check fires, (b) archive fetch streams into untar + OPFS writes, (c) success emits `curated_load_success` with `durationMs`, (d) each failure mode in `contracts/curated-mirror-http.md` surfaces the right `ErrorCategory`, (e) cancellation aborts and leaves no half-written files
+- [X] T031 [US1] Implement `apps/studio/src/services/curated-loader.ts` passing T030. Uses `opfs-fs` (T011), `tar-untar` (T013), `telemetry` (T021). Exposes a `loadCurated(modelId, { signal, onProgress })` function that returns `Promise<WorkspaceFile[]>`
+- [X] T032 [US1] [P] Write failing test `apps/studio/tests/services/model-registry.test.ts` asserting the curated registry still exposes CDM/FpML/rune-dsl as three entries but now with `archiveUrl` derived from the mirror manifest instead of `repoUrl`/`ref`
+- [X] T033 [US1] Refactor `apps/studio/src/services/model-registry.ts` to match T032. `repoUrl` / `ref` fields remain on the type for the custom-URL flow (FR-007) but the curated entries no longer use them at load time
+- [X] T034 [US1] Rewrite `apps/studio/src/services/model-loader.ts` as a thin façade: curated IDs route to `curated-loader`, arbitrary URLs continue to route to the existing `isomorphic-git` path. Keep the existing progress / cancellation API surface intact — callers don't change
+- [X] T035 [US1] [P] Write failing test `apps/studio/tests/services/stale-while-revalidate.test.ts` asserting FR-005a: cached copy opens immediately, background freshness check fires, a newer manifest surfaces an `updateAvailable: true` without touching local edits
+- [X] T036 [US1] Implement the stale-while-revalidate behaviour in `curated-loader` per T035. Exposes `checkFreshness(modelId): Promise<{ updateAvailable: boolean; remoteVersion: string }>`
 
 ### 3c. Error UX
 
-- [ ] T037 [US1] [P] Write failing integration test `apps/studio/tests/components/CuratedLoadErrorPanel.test.tsx` — renders the mapped message for each `ErrorCategory`, includes a retry button, never shows a generic "unknown error" string
-- [ ] T038 [US1] Implement `apps/studio/src/components/CuratedLoadErrorPanel.tsx` satisfying T037
-- [ ] T039 [US1] Wire `CuratedLoadErrorPanel` into the existing `ModelLoader` component so FR-002 failure modes render with specific, actionable copy
+- [X] T037 [US1] [P] Write failing integration test `apps/studio/tests/components/CuratedLoadErrorPanel.test.tsx` — renders the mapped message for each `ErrorCategory`, includes a retry button, never shows a generic "unknown error" string
+- [X] T038 [US1] Implement `apps/studio/src/components/CuratedLoadErrorPanel.tsx` satisfying T037
+- [X] T039 [US1] Wire `CuratedLoadErrorPanel` into the existing `ModelLoader` component so FR-002 failure modes render with specific, actionable copy
 
 **Checkpoint (US1 MVP)**: end-to-end smoke via `pnpm --filter @rune-langium/studio test:e2e -- curated-load` hits a mocked R2 fixture, loads all three curated models, and asserts workspace populates. This alone is a shippable bug-fix of the user's main complaint.
 

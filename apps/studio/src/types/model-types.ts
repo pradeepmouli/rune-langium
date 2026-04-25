@@ -12,12 +12,18 @@ export interface ModelSource {
   id: string;
   /** Display name (e.g., "CDM", "FpML") */
   name: string;
-  /** Public git repository URL (HTTPS) */
+  /** Public git repository URL (HTTPS). Used by the custom-URL flow (FR-007). */
   repoUrl: string;
-  /** Git tag, branch, or commit ref */
+  /** Git tag, branch, or commit ref. Used by the custom-URL flow (FR-007). */
   ref: string;
   /** Glob patterns for .rosetta file discovery */
   paths: string[];
+  /**
+   * Optional CF R2 mirror archive URL (set on curated entries).
+   * When present, the curated-loader path uses this instead of the git
+   * clone path — feature 012-studio-workspace-ux, FR-006.
+   */
+  archiveUrl?: string;
 }
 
 /** A locally cached model with version tracking. */

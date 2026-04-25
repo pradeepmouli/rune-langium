@@ -12,7 +12,44 @@ import { Input } from '@rune-langium/design-system/ui/input';
 import { cn } from '@rune-langium/design-system/utils';
 import { getModelRegistry, createCustomModelSource } from '../services/model-registry.js';
 import { useModelStore } from '../store/model-store.js';
-import type { ModelSource, LoadProgress } from '../types/model-types.js';
+import type { ModelSource, LoadProgress, ModelLoadErrorCode } from '../types/model-types.js';
+import { CuratedLoadErrorPanel } from './CuratedLoadErrorPanel.js';
+import type { ErrorCategory } from '../services/curated-loader.js';
+
+/**
+ * Map the legacy `ModelLoadErrorCode` (git-clone path) to the FR-002
+ * `ErrorCategory` set so the curated error panel can render a specific
+ * message regardless of which loader path threw.
+ */
+function mapToCategory(code: ModelLoadErrorCode | string | undefined): ErrorCategory {
+  switch (code) {
+    case 'NETWORK':
+      return 'network';
+    case 'NOT_FOUND':
+      return 'archive_not_found';
+    case 'NO_FILES':
+      return 'archive_decode';
+    case 'CANCELLED':
+      return 'unknown';
+    default:
+      // CuratedLoadError already exposes `.category` directly; the store
+      // stuffs it into `code` so this branch only fires for ad-hoc errors.
+      if (typeof code === 'string' && code in (ALL_CATEGORIES as Record<string, true>)) {
+        return code as ErrorCategory;
+      }
+      return 'unknown';
+  }
+}
+
+const ALL_CATEGORIES = {
+  network: true,
+  archive_not_found: true,
+  archive_decode: true,
+  parse: true,
+  storage_quota: true,
+  permission_denied: true,
+  unknown: true
+} as const;
 
 function ProgressBar({ progress, sourceId }: { progress: LoadProgress; sourceId: string }) {
   const cancel = useModelStore((s) => s.cancel);
@@ -126,18 +163,23 @@ export function ModelLoader() {
         )
       )}
 
-      {/* Errors */}
-      {Array.from(errors.entries()).map(([id, err]) => (
-        <div
-          key={id}
-          className="flex items-start gap-2 p-3 bg-destructive/10 text-destructive rounded-md text-sm"
-        >
-          <span className="flex-1">{err.message}</span>
-          <Button variant="ghost" size="sm" onClick={() => dismissError(id)}>
-            Dismiss
-          </Button>
-        </div>
-      ))}
+      {/* Errors — FR-002 distinct, actionable copy per failure category. */}
+      {Array.from(errors.entries()).map(([id, err]) => {
+        const source = registry.find((s) => s.id === id);
+        const modelName = source?.name ?? id;
+        return (
+          <div key={id} className="p-3 bg-destructive/10 text-destructive rounded-md text-sm">
+            <CuratedLoadErrorPanel
+              category={mapToCategory(err.code)}
+              modelName={modelName}
+              onRetry={() => {
+                dismissError(id);
+                if (source) handleLoadCurated(source);
+              }}
+            />
+          </div>
+        );
+      })}
 
       {/* Curated model buttons */}
       <div className="space-y-2">
