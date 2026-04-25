@@ -287,7 +287,7 @@ Final verification, telemetry ingest, a11y gates, perf benches, docs.
 ### 8e. Final verification
 
 - [ ] T124 Run the full quickstart flow end-to-end on a clean browser profile against a preview deployment; tick every scenario in `quickstart.md` §1–§8
-- [ ] T125 Verify SC-001, SC-002, SC-004, SC-005, SC-006, SC-007, SC-009, SC-010, SC-011 each have a named, passing test or measurement
+- [X] T125 Verify each SC has a named, passing test or measurement — see `specs/012-studio-workspace-ux/sc-verification.md` for the full map. Pure-code SCs are ticked from this repo; preview-only SCs are flagged **P** and pinned to specific `deploy-runbook.md` and `quickstart.md` steps
 
 ---
 
