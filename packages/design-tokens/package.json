@@ -19,17 +19,18 @@
     "src/tokens.json"
   ],
   "scripts": {
-    "build": "tsgo --noEmit && node --experimental-strip-types src/build.ts",
+    "build": "tsgo --noEmit && tsx src/build.ts",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run",
     "type-check": "tsgo --noEmit"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
     "vitest": "^4.1.4"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=20.0.0"
   },
   "license": "MIT",
   "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"

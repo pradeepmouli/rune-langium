@@ -127,8 +127,12 @@ jobs:
       - name: Install Playwright browsers (chromium only)
         run: pnpm --filter @rune-langium/studio exec playwright install --with-deps chromium
 
-      - name: Build studio
-        run: pnpm --filter @rune-langium/studio run build
+      - name: Build studio + workspace dependencies
+        # `...` suffix builds the studio's workspace deps first (design-tokens
+        # emits dist/tokens.css, core emits the AST types). Without it, the
+        # studio build can't resolve @rune-langium/design-tokens/tokens.css
+        # or @rune-langium/core from the parser worker.
+        run: pnpm --filter '@rune-langium/studio...' run build
 
       - name: Run axe-core a11y gate
         run: pnpm --filter @rune-langium/studio run test:e2e -- --grep "Studio a11y"

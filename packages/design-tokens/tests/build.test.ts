@@ -21,7 +21,7 @@ const DTS_OUT = resolve(ROOT, 'dist/tokens.d.ts');
 
 describe('@rune-langium/design-tokens build (T024)', () => {
   beforeAll(() => {
-    execSync('node --experimental-strip-types src/build.ts', { cwd: ROOT, stdio: 'inherit' });
+    execSync('npx --no-install tsx src/build.ts', { cwd: ROOT, stdio: 'inherit' });
   });
 
   it('emits dist/tokens.css containing each locked variable family', () => {
