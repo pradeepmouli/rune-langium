@@ -247,7 +247,7 @@ Phase 3 (US1).
 ### 7e. HMR + CI verification
 
 - [ ] T107 [US5] [P] Write failing e2e test `apps/studio/tests/e2e/z2f-hmr.spec.ts` (Playwright): start dev server, open a schema file, add a field, assert the inspector updates within 2s (SC-011)
-- [ ] T108 [US5] Update `.github/workflows/ci.yml` (or wherever the Studio build runs) to confirm no standalone codegen step; the build is pure `pnpm build`
+- [X] T108 [US5] Update `.github/workflows/ci.yml` to confirm no standalone codegen step. The pre-existing `check-generated` job is for Langium AST schemas only; the stale `scaffold:forms` TODO comment was rewritten to note that form scaffolding is now Vite-build-time via `?z2f` virtual modules — `pnpm run build` is sufficient
 
 **Checkpoint (US5)**: `git status` clean on a fresh checkout shows no `forms/generated/*`; HMR works; CI builds with no separate codegen phase.
 
@@ -259,30 +259,30 @@ Final verification, telemetry ingest, a11y gates, perf benches, docs.
 
 ### 8a. Telemetry Worker (server side)
 
-- [ ] T109 Write failing contract test `apps/telemetry-worker/test/ingest.test.ts` against `contracts/telemetry-event.md`: 204 on valid body, 400 on schema violation, 400 on extra field, 429 after 10/min/IP, daily-rotating IP hash never logged raw
-- [ ] T110 Implement `apps/telemetry-worker/src/index.ts` + `src/counters.ts` (Durable Object `TelemetryAggregator` keyed on `<event-name>:<UTC-day>`) satisfying T109
-- [ ] T111 [P] Add structured-log rules in `apps/telemetry-worker/src/log.ts` matching the `apps/codegen-worker` redact set
-- [ ] T112 Expose `GET /v1/stats` behind CF Access (admin allowlist). Not user-accessible
-- [ ] T113 Update `apps/studio/src/services/telemetry.ts` to point at the deployed worker URL; keep the `localhost` no-op check
+- [X] T109 Write failing contract test `apps/telemetry-worker/test/ingest.test.ts` against `contracts/telemetry-event.md`: 204 on valid body, 400 on schema violation, 400 on extra field, 429 after 10/min/IP, daily-rotating IP hash never logged raw
+- [X] T110 Implement `apps/telemetry-worker/src/index.ts` + `src/counters.ts` (Durable Object `TelemetryAggregator` keyed on `<event-name>:<UTC-day>`) satisfying T109
+- [X] T111 [P] Add structured-log rules in `apps/telemetry-worker/src/log.ts` matching the `apps/codegen-worker` redact set
+- [X] T112 Expose `GET /v1/stats` behind CF Access (admin allowlist). Not user-accessible — Worker proxies `/v1/stats?event=…&date=…` to the addressed DO; Access policy lives in `deploy-runbook.md` Step 3 (dashboard-only configuration)
+- [X] T113 Update `apps/studio/src/services/telemetry.ts` to point at the deployed worker URL; keep the `localhost` no-op check (added `resolveTelemetryEndpoint` + `TELEMETRY_ENDPOINT_PROD`)
 
 ### 8b. Accessibility gates
 
-- [ ] T114 Document the manual keyboard-only walkthrough checklist in `specs/012-studio-workspace-ux/a11y-walkthrough.md` — one check per panel, per FR-A02–A05
-- [ ] T115 [P] Run `axe-core` in CI against all new routes (Studio home, workspace open, settings, dialogs). Fail on serious/critical. Record any Monaco-owned violations as known caveats, not gates
-- [ ] T116 Execute the manual walkthrough from T114 and attach results to the PR
+- [X] T114 Document the manual keyboard-only walkthrough checklist in `specs/012-studio-workspace-ux/a11y-walkthrough.md` — one check per panel, per FR-A02–A05
+- [X] T115 [P] Run `axe-core` in CI against all new routes (Studio home, workspace open, settings, dialogs). Fail on serious/critical. Record any Monaco-owned violations as known caveats, not gates (new `studio-a11y` job in `.github/workflows/ci.yml`; spec at `apps/studio/test/e2e/a11y.spec.ts`)
+- [ ] T116 Execute the manual walkthrough from T114 and attach results to the PR — human-only; checklist ready
 
 ### 8c. Performance benchmarks
 
-- [ ] T117 [P] Add bench `packages/core/benchmarks/opfs-write.bench.ts` measuring OPFS write throughput for a fixture 500-file tree; record the baseline. Must complete within Principle IV latency budgets
-- [ ] T118 [P] Add bench `apps/studio/tests/bench/curated-load.bench.ts` simulating a cold load from a mocked R2 fixture end-to-end; record cold + warm times against SC-001 / SC-002 targets
-- [ ] T119 [P] Add bench `apps/studio/tests/bench/workspace-restore.bench.ts` for the multi-file + multi-tab restore path; verify ≤5s at SC-002 target
+- [X] T117 [P] Add OPFS write-throughput bench. Filed at `apps/studio/test/bench/opfs-write.bench.ts` (deviation from plan's `packages/core/benchmarks/...` path — OPFS lives in studio, not core; the bench needs the `OpfsFs` adapter to import). Measures sequential + concurrent + read-after-write paths for a 500-file tree
+- [X] T118 [P] Add bench `apps/studio/test/bench/curated-load.bench.ts` simulating a cold load from a mocked R2 fixture end-to-end; records cold + warm times against SC-001 / SC-002 targets
+- [X] T119 [P] Add bench `apps/studio/test/bench/workspace-restore.bench.ts` for the multi-file + multi-tab restore path; verifies persistence-layer overhead at SC-002 target
 
 ### 8d. Docs + runbook
 
-- [ ] T120 Add `specs/012-studio-workspace-ux/deploy-runbook.md` following the pattern of `specs/011-export-code-cf/deploy-runbook.md`: manual steps for wrangler login, first R2 upload, telemetry Worker secrets, GitHub App creation for device flow, smoke-test commands
-- [ ] T121 [P] Update `apps/studio/README.md` with workspace + GitHub-backing + telemetry settings sections
-- [ ] T122 [P] Update root `README.md` "Active Technologies" list to reflect OPFS, dockview, design-tokens, three new Workers
-- [ ] T123 [P] Update the landing site (`apps/site/`) Feature pane to mention the new "Open a GitHub repo as a workspace" capability
+- [X] T120 Add `specs/012-studio-workspace-ux/deploy-runbook.md` following the pattern of `specs/011-export-code-cf/deploy-runbook.md`: prerequisites, R2 bucket creation, GitHub App setup, three-worker deploy order, first cron run, smoke tests, rollback notes (incl. DO-migration caveat)
+- [X] T121 [P] Update `apps/studio/README.md` with workspace + GitHub-backing + telemetry sections
+- [X] T122 [P] Update root `README.md` to reflect OPFS, dockview, GitHub-backed workspaces, curated mirrors, design-tokens, opt-out telemetry (the previous "Three-Panel IDE" bullet was stale)
+- [X] T123 [P] Update the landing site (`apps/docs/index.md` — there is no `apps/site/` in this monorepo; the VitePress home is the landing) Feature pane to mention "Open a GitHub repo as a workspace"
 
 ### 8e. Final verification
 

@@ -8,7 +8,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createTelemetryClient, type TelemetryEvent } from '../../src/services/telemetry.js';
+import {
+  createTelemetryClient,
+  resolveTelemetryEndpoint,
+  TELEMETRY_ENDPOINT_PROD,
+  type TelemetryEvent
+} from '../../src/services/telemetry.js';
 
 const ENDPOINT = 'https://example.test/api/telemetry/v1/event';
 
@@ -101,5 +106,24 @@ describe('telemetry client (T020)', () => {
     await expect(
       t.emit({ event: 'workspace_restore_failure' } satisfies TelemetryEvent)
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('resolveTelemetryEndpoint (T113)', () => {
+  it('returns the production worker URL for the daikonic.dev origin', () => {
+    expect(resolveTelemetryEndpoint('https://www.daikonic.dev')).toBe(TELEMETRY_ENDPOINT_PROD);
+  });
+
+  it('returns a localhost URL when origin is dev/localhost (no-op path)', () => {
+    expect(resolveTelemetryEndpoint('http://localhost:5173')).toBe(
+      'http://localhost:5173/rune-studio/api/telemetry/v1/event'
+    );
+    expect(resolveTelemetryEndpoint('http://127.0.0.1:5173')).toBe(
+      'http://127.0.0.1:5173/rune-studio/api/telemetry/v1/event'
+    );
+  });
+
+  it('falls back to production for an unparseable origin', () => {
+    expect(resolveTelemetryEndpoint('not a url')).toBe(TELEMETRY_ENDPOINT_PROD);
   });
 });

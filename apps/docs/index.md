@@ -23,8 +23,8 @@ features:
     details: Autocomplete, validation, go-to-definition, hover, and diagnostics.
   - title: CDM & DRR Out of the Box
     details: Load and explore ISDA Common Domain Model and Digital Regulatory Reporting models.
-  - title: Three-Panel IDE
-    details: Visual graph navigation, structured form editing, and full code editor — all synchronized.
+  - title: IDE-style Workspaces
+    details: Open a local folder or a GitHub repo as a workspace — dockable panels with persistent layouts, offline-capable curated CDM/FpML models, and graph + form + code views fully synchronized.
   - title: Embeddable
     details: Monaco editor + web worker language server = drop-in component for any web app.
   - title: Modular Packages

@@ -107,3 +107,31 @@ export function createTelemetryClient(options: TelemetryClientOptions): Telemetr
     }
   };
 }
+
+/**
+ * Production endpoint for the telemetry Worker (T113). Routed at the edge
+ * by `apps/telemetry-worker/wrangler.toml` to
+ * `www.daikonic.dev/rune-studio/api/telemetry/v1/event`. Studio is hosted
+ * under `www.daikonic.dev` so a same-origin POST does not require a CORS
+ * preflight.
+ */
+export const TELEMETRY_ENDPOINT_PROD =
+  'https://www.daikonic.dev/rune-studio/api/telemetry/v1/event';
+
+/**
+ * Resolve the right endpoint for the current host. In development (vite
+ * dev server, e2e fixtures, file://) this returns `localhost`, which the
+ * client treats as a no-op so dev runs never hit the production worker.
+ */
+export function resolveTelemetryEndpoint(origin?: string): string {
+  const o = origin ?? (typeof location !== 'undefined' ? location.origin : '');
+  try {
+    const u = new URL(o);
+    if (LOCALHOST_HOSTS.has(u.hostname) || u.protocol === 'file:') {
+      return `${u.origin}/rune-studio/api/telemetry/v1/event`;
+    }
+  } catch {
+    // fall through to prod
+  }
+  return TELEMETRY_ENDPOINT_PROD;
+}

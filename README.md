@@ -78,7 +78,7 @@ The hosted path lives under [`apps/codegen-worker/`](apps/codegen-worker/) (Work
 - **Codegen pipeline** — `@rune-langium/codegen` targets TypeScript types, JSON Schema, Zod schemas, and form descriptors derived from Rune model structure; scriptable from CI.
 - **CLI for scripting** — `@rune-langium/cli` exposes parse, validate, serialize, and codegen as a commander-based CLI for build pipelines.
 - **Design system** — `@rune-langium/design-system` ships the theme, tokens, and UI primitives used by Studio so downstream apps inherit the same look.
-- **Studio IDE** — a three-panel web app (graph + form + code) with undo/redo (zundo), IndexedDB caching (idb), File System Access API integration, and no backend required.
+- **Studio IDE** — IDE-style dockable panels (`dockview-react`) with persistent layouts; OPFS-backed workspaces (browser-only / local-folder / GitHub-backed via Device Flow); curated CDM/FpML/rune-dsl mirrors served from R2 nightly; cross-app design tokens shared with the docs site; opt-out anonymous telemetry.
 - **Langium-native extensibility** — because everything is Langium services, you can subclass `RuneDslValidator`, `RuneDslScopeProvider`, or the parser and plug your extension into the same DI container.
 
 ## Install
