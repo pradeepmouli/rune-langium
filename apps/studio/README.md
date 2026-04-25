@@ -118,10 +118,11 @@ Studio's start page exposes **Open a folder…**, **New blank workspace**, and *
 | folder-backed | OPFS mirrored to a chosen local directory via FSA | manual save / load handle |
 | git-backed | OPFS + isomorphic-git over OPFS | clone / fetch / push / status |
 
-Auth for git-backed uses **GitHub Device Flow** mediated by `apps/github-auth-worker`. Tokens never reach the Worker — the user enters the code in their browser, GitHub returns the token to the Studio page directly, and Studio stashes it in `IndexedDB` (via `idb`) under origin-bound storage. The Worker only mints the `device_code` / polls `access_token`.
+Auth for git-backed uses **GitHub Device Flow** mediated by `apps/github-auth-worker`. Tokens never reach the Worker — the user enters the code in their browser, GitHub returns the token to the Studio page directly, and Studio stores it in the workspace's OPFS data at `<workspace-id>/.studio/token`. The Worker only brokers the Device Flow handshake (`device_code`) and token polling; it does not receive or persist the resulting access token.
 
 State on disk:
 - File contents → OPFS
+- GitHub access token for git-backed workspaces → OPFS (`<workspace-id>/.studio/token`)
 - Workspace metadata, tabs, recent list, settings → IndexedDB
 - Serialised FSA folder handles → IndexedDB (`handles` store)
 

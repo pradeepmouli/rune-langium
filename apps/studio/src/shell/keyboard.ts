@@ -55,10 +55,11 @@ const BINDINGS: Record<ShellAction, KeyBinding[]> = {
   ],
   'reorder-tab-left': [{ key: 'ArrowLeft', altKey: true, shiftKey: true }],
   'reorder-tab-right': [{ key: 'ArrowRight', altKey: true, shiftKey: true }],
-  // close-tab uses Alt+W rather than Cmd/Ctrl+W to avoid colliding with
-  // the browser's "close tab" shortcut. The browser binding wins
-  // whenever the dock doesn't have focus, which would unexpectedly
-  // close the entire Studio tab and discard any dirty buffers.
+  // close-tab uses Ctrl/Cmd + Alt + W rather than the bare Cmd/Ctrl+W to
+  // avoid colliding with the browser's "close tab" shortcut. The browser
+  // binding wins whenever the dock doesn't have focus, which would
+  // unexpectedly close the entire Studio tab and discard any dirty buffers;
+  // adding Alt is enough to dodge the browser default on every major OS.
   'close-tab': [
     { key: 'w', ctrlKey: true, altKey: true },
     { key: 'w', metaKey: true, altKey: true }

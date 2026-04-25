@@ -56,14 +56,15 @@ export async function listFolderFiles(
   prefix = ''
 ): Promise<string[]> {
   const out: string[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const dir = root as any;
-  for await (const [name, handle] of dir.entries() as AsyncIterable<[string, FileSystemHandle]>) {
+  // `FileSystemDirectoryHandle.entries()` is declared in
+  // lib.dom.asynciterable.d.ts as `[string, FileSystemHandle]`; the union is
+  // narrowed below by `handle.kind`, no `any` cast needed.
+  for await (const [name, handle] of root.entries()) {
     const path = prefix ? `${prefix}/${name}` : name;
     if (handle.kind === 'file') {
       out.push(path);
     } else if (handle.kind === 'directory') {
-      out.push(...(await listFolderFiles(handle as FileSystemDirectoryHandle, path)));
+      out.push(...(await listFolderFiles(handle, path)));
     }
   }
   return out;
