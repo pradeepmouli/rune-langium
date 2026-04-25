@@ -131,12 +131,15 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
           </>
         )}
 
-        {/* Visually hidden — NOT display:none, Chrome blocks .click() on those */}
+        {/* Visually hidden — NOT display:none, Chrome blocks .click() on those.
+            aria-label is required even on hidden inputs: axe-core flags an
+            unlabeled file input as a critical violation regardless of CSS. */}
         <input
           ref={fileInputRef}
           type="file"
           accept=".rosetta"
           multiple
+          aria-label="Choose .rosetta files"
           onChange={handleFileInput}
           style={{ position: 'absolute', width: 0, height: 0, opacity: 0, overflow: 'hidden' }}
         />
@@ -145,6 +148,7 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
           type="file"
           // @ts-expect-error webkitdirectory is not in the type defs
           webkitdirectory=""
+          aria-label="Choose a folder of .rosetta files"
           onChange={handleFileInput}
           style={{ position: 'absolute', width: 0, height: 0, opacity: 0, overflow: 'hidden' }}
         />
