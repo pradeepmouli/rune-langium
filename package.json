@@ -102,7 +102,7 @@
       "x-to-zod": "^0.8.0",
       "@zod-to-form/core": "^0.7.1",
       "@zod-to-form/react": "^0.7.1",
-      "@zod-to-form/vite": "link:../zod-to-form/packages/vite",
+      "@zod-to-form/vite": "^0.2.2",
       "codemirror": "6.0.2"
     }
   },
