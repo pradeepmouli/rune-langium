@@ -340,3 +340,47 @@ emitted by the same Langium pipeline) matches it structurally.
   read as "use `useZodForm(DataSchema, …)`" with `defaultValues: node`.
 - T076 (Phase 10 cleanup) deletes `form-schemas.ts` AND the
   `toFormValues` helpers in the same task — they go together.
+
+---
+
+## R12 — Design-tokens consumption (no hardcoded colours/spacing)
+
+**Decision**: Every migrated editor MUST style itself through
+`@rune-langium/design-system` primitives, which in turn consume the CSS
+variables emitted by `@rune-langium/design-tokens` (e.g.
+`--color-foreground-primary`, `--color-border-subtle`,
+`--font-size-base`). Hardcoded Tailwind colour utilities
+(`text-slate-900`, `bg-blue-500`) are **not** allowed in editor
+component output; they bypass the token layer and break theming.
+
+**Rationale**: The design-tokens package is the single source for
+theme variables — light/dark mode, contrast levels, brand customization
+all flow through it. Tailwind utilities that map to raw colour values
+sidestep the contract. Editor migration is a natural moment to clean
+up any pre-existing offenders since each form is touched.
+
+**Implementation notes**:
+- The `components: '@/components/zod-form-components'` reference in
+  `z2f.config.ts` already resolves to a barrel that re-exports
+  design-system primitives (Input, Textarea, Field*, Select,
+  TypeSelector, CardinalitySelector). z2f's componentMap inherits
+  token-based styling automatically.
+- Bespoke editor markup (the parts not covered by z2f's component
+  resolution — drag handles, inherited-row affordances, override
+  buttons) MUST use design-system primitives where they exist
+  (`Button` from `@rune-langium/design-system/ui/button`, etc.) and
+  CSS variables (`var(--color-…)`) for any one-off styling.
+- Lint rule (recommended Phase 10 task): grep for
+  `className=".*text-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d+"`
+  inside `packages/visual-editor/src/components/editors/` and fail
+  if any matches survive the migration. Scoped to the editors
+  directory so unrelated UI is unaffected.
+
+**Cascade into tasks**:
+- Phase 3+ acceptance criteria reuse the existing visual-snapshot
+  oracle (T003–T005); a token-bypass would show up as a colour
+  mismatch under light or dark theme. No new test infrastructure
+  needed.
+- New T077 in Phase 10: lint sweep for hardcoded Tailwind colour
+  classes inside the editors folder; document any survivors with
+  rationale.
