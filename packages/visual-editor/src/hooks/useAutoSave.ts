@@ -50,6 +50,15 @@ export function useAutoSave<T>(onCommit: (value: T) => void, delay = 500): (valu
         if (pendingRef.current) {
           commitRef.current(latestRef.current as T);
           pendingRef.current = false;
+          // Test instrumentation: emit a window event so perf specs can
+          // measure (input → commit) latency without polling.
+          if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('__z2fAutoSaveCommit__', {
+                detail: { timestamp: performance.now() }
+              })
+            );
+          }
         }
         timerRef.current = null;
       }, delay);

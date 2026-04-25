@@ -4,7 +4,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './test/e2e',
+  // Covers test/e2e (existing), test/visual (013-z2f-editor-migration T003),
+  // and test/perf (013-z2f-editor-migration T006). Subdirs are scoped via
+  // glob-based test paths in the CLI when a single suite is wanted.
+  testDir: './test',
+  testMatch: ['e2e/**/*.spec.ts', 'visual/**/*.spec.ts', 'perf/**/*.spec.ts'],
   fullyParallel: true,
   forbidOnly: false,
   retries: 1,
