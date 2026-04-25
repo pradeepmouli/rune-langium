@@ -9,7 +9,7 @@
 
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
-import LightningFS from '@isomorphic-git/lightning-fs';
+import { InMemoryFs } from './in-memory-fs.js';
 import type {
   ModelSource,
   CachedModel,
@@ -97,8 +97,9 @@ export async function loadModel(
     );
   }
 
-  // Create an in-memory filesystem for this clone
-  const fs = new LightningFS(`model-${source.id}`, { wipe: true });
+  // Throwaway in-memory FS — the clone exists only long enough to walk
+  // the tree for .rosetta files; persistence happens in CachedModel below.
+  const fs = new InMemoryFs();
 
   const dir = `/${source.id}`;
 
@@ -212,7 +213,7 @@ export async function loadModel(
  * Supports simple glob patterns with ** and *.
  */
 async function discoverRosettaFiles(
-  fs: LightningFS,
+  fs: InMemoryFs,
   baseDir: string,
   patterns: string[]
 ): Promise<string[]> {
@@ -230,7 +231,7 @@ async function discoverRosettaFiles(
 
 /** Recursively walk a directory tree and collect all file paths. */
 async function walkDirectory(
-  fs: LightningFS,
+  fs: InMemoryFs,
   baseDir: string,
   relativePath: string
 ): Promise<string[]> {

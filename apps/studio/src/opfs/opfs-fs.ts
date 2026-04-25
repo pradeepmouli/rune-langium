@@ -53,7 +53,9 @@ class FsError extends Error {
 function splitPath(path: string): string[] {
   const norm = path.replace(/^\/+/, '').replace(/\/+$/, '');
   if (norm.length === 0) return [];
-  return norm.split(POSIX_SEP);
+  // Filter out '.' segments — isomorphic-git produces paths like
+  // '/<dir>/.' when walking, and POSIX treats '.' as the current dir.
+  return norm.split(POSIX_SEP).filter((s) => s !== '.' && s !== '');
 }
 
 function joinPath(parts: string[]): string {

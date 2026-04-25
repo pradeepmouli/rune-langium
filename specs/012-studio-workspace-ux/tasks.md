@@ -109,39 +109,39 @@ Phase 3 (US1).
 
 ### 4a. LightningFS cut-clean migration (FR-017, one-shot)
 
-- [ ] T040 [US2] Write failing test `apps/studio/tests/workspace/lightningfs-migration.test.ts` with a seeded legacy `fs` IndexedDB DB — asserts: all files move to OPFS under a generated default workspace, `CuratedModelBinding`s are populated where the legacy cache had known curated paths, and both legacy IndexedDB DBs (`fs`, `lightning-fs-cache`) are deleted in the same pass
-- [ ] T041 [US2] Implement `apps/studio/src/workspace/migrations/lightningfs-to-opfs.ts` passing T040. Runs on first boot if `settings.design-system-version` is missing or older than this feature's version
-- [ ] T042 [US2] [P] Write failing test covering the migration's failure path: IndexedDB walk throws partway — `"Export legacy data"` zip is produced and the legacy DB is kept until the user confirms discard
-- [ ] T043 [US2] Implement the export-legacy-data affordance in `apps/studio/src/components/LegacyExportDialog.tsx` + wire to the migration from T041
-- [ ] T044 [US2] Remove `@isomorphic-git/lightning-fs` from `apps/studio/package.json` dependencies; run `pnpm install`; ensure `pnpm why @isomorphic-git/lightning-fs` returns nothing. Remove the old `LightningFS` imports in `apps/studio/src/services/model-loader.ts`
+- [X] T040 [US2] Write failing test `apps/studio/tests/workspace/lightningfs-migration.test.ts` with a seeded legacy `fs` IndexedDB DB — asserts: all files move to OPFS under a generated default workspace, `CuratedModelBinding`s are populated where the legacy cache had known curated paths, and both legacy IndexedDB DBs (`fs`, `lightning-fs-cache`) are deleted in the same pass
+- [X] T041 [US2] Implement `apps/studio/src/workspace/migrations/lightningfs-to-opfs.ts` passing T040. Runs on first boot if `settings.design-system-version` is missing or older than this feature's version
+- [X] T042 [US2] [P] Write failing test covering the migration's failure path: IndexedDB walk throws partway — `"Export legacy data"` zip is produced and the legacy DB is kept until the user confirms discard
+- [X] T043 [US2] Implement the export-legacy-data affordance in `apps/studio/src/components/LegacyExportDialog.tsx` + wire to the migration from T041
+- [X] T044 [US2] Remove `@isomorphic-git/lightning-fs` from `apps/studio/package.json` dependencies; run `pnpm install`; ensure `pnpm why @isomorphic-git/lightning-fs` returns nothing. Remove the old `LightningFS` imports in `apps/studio/src/services/model-loader.ts`
 
 ### 4b. Multi-file + tab restore (FR-010–015)
 
-- [ ] T045 [US2] Write failing test `apps/studio/tests/workspace/tab-restore.test.ts`: multiple files opened as tabs, active tab, per-tab scroll/cursor — all round-trip through `WorkspaceRecord.tabs` + `/.studio/scratch.json`
-- [ ] T046 [US2] Implement tab state persistence in `apps/studio/src/workspace/tab-state.ts` satisfying T045; hook the editor component's `onDidChangeCursorPosition` / `onDidScrollChange` with a debounced writer
-- [ ] T047 [US2] [P] Write failing test `apps/studio/tests/workspace/crash-recovery.test.ts`: dirty buffer written to `/.studio/dirty/<encoded-path>` during edit, simulated kill, next open restores the dirty content
-- [ ] T048 [US2] Implement the dirty-buffer shadow writer in `apps/studio/src/workspace/dirty-buffer.ts` satisfying T047. Cleared on save/discard
+- [X] T045 [US2] Write failing test `apps/studio/tests/workspace/tab-restore.test.ts`: multiple files opened as tabs, active tab, per-tab scroll/cursor — all round-trip through `WorkspaceRecord.tabs` + `/.studio/scratch.json`
+- [X] T046 [US2] Implement tab state persistence in `apps/studio/src/workspace/tab-state.ts` satisfying T045; hook the editor component's `onDidChangeCursorPosition` / `onDidScrollChange` with a debounced writer
+- [X] T047 [US2] [P] Write failing test `apps/studio/tests/workspace/crash-recovery.test.ts`: dirty buffer written to `/.studio/dirty/<encoded-path>` during edit, simulated kill, next open restores the dirty content
+- [X] T048 [US2] Implement the dirty-buffer shadow writer in `apps/studio/src/workspace/dirty-buffer.ts` satisfying T047. Cleared on save/discard
 
 ### 4c. Folder-backed workspaces (FSA)
 
-- [ ] T049 [US2] [P] Write failing test `apps/studio/tests/workspace/folder-backed.test.ts` using the FSA mock in `apps/studio/tests/setup/fsa-mock.ts`: creating a workspace from a folder handle stores the handle via `handles` IndexedDB store (data-model §1.4), edits round-trip to the real directory, permission revocation switches to read-only
-- [ ] T050 [US2] Implement `apps/studio/src/workspace/folder-backing.ts` satisfying T049. Wire the "New from folder" UI flow
+- [X] T049 [US2] [P] Write failing test `apps/studio/tests/workspace/folder-backed.test.ts` using the FSA mock in `apps/studio/tests/setup/fsa-mock.ts`: creating a workspace from a folder handle stores the handle via `handles` IndexedDB store (data-model §1.4), edits round-trip to the real directory, permission revocation switches to read-only
+- [X] T050 [US2] Implement `apps/studio/src/workspace/folder-backing.ts` satisfying T049. Wire the "New from folder" UI flow
 
 ### 4d. GitHub-backed workspaces (FR-008, R6, device flow)
 
-- [ ] T051 [US2] Write failing contract test `apps/github-auth-worker/test/device-flow.test.ts` against a mocked GitHub API: `POST /device-init` forwards to `/login/device/code`, `POST /device-poll` forwards to `/login/oauth/access_token` and maps the three documented states (pending → 202, success → 200, expired → 410)
-- [ ] T052 [US2] Implement `apps/github-auth-worker/src/index.ts` + `src/log.ts` satisfying T051. Origin allowlist `https://www.daikonic.dev` enforced; 403 anything else
-- [ ] T053 [US2] [P] Write failing test `apps/studio/tests/services/github-auth.test.ts`: the client hits `device-init`, renders the user code, polls with backoff respecting the `interval` field, writes the final token to `<workspace-id>/.studio/token` in OPFS
-- [ ] T054 [US2] Implement `apps/studio/src/services/github-auth.ts` satisfying T053
-- [ ] T055 [US2] Write failing test `apps/studio/tests/services/git-backing.test.ts` using `isomorphic-git` against OPFS: clone a small fixture repo, edit a file, commit, push (mocked HTTP), status-bar state machine `clean → ahead → clean`
-- [ ] T056 [US2] Implement `apps/studio/src/services/git-backing.ts` satisfying T055. Uses OPFS-shaped FS from T011 as the isomorphic-git `fs`
-- [ ] T057 [US2] [P] Write failing test `apps/studio/tests/components/GitHubConnectDialog.test.tsx` for the device-flow UI component
-- [ ] T058 [US2] Implement `apps/studio/src/components/GitHubConnectDialog.tsx` + "Commit & push" modal satisfying T057
+- [X] T051 [US2] Write failing contract test `apps/github-auth-worker/test/device-flow.test.ts` against a mocked GitHub API: `POST /device-init` forwards to `/login/device/code`, `POST /device-poll` forwards to `/login/oauth/access_token` and maps the three documented states (pending → 202, success → 200, expired → 410)
+- [X] T052 [US2] Implement `apps/github-auth-worker/src/index.ts` + `src/log.ts` satisfying T051. Origin allowlist `https://www.daikonic.dev` enforced; 403 anything else
+- [X] T053 [US2] [P] Write failing test `apps/studio/tests/services/github-auth.test.ts`: the client hits `device-init`, renders the user code, polls with backoff respecting the `interval` field, writes the final token to `<workspace-id>/.studio/token` in OPFS
+- [X] T054 [US2] Implement `apps/studio/src/services/github-auth.ts` satisfying T053
+- [X] T055 [US2] Write failing test `apps/studio/tests/services/git-backing.test.ts` using `isomorphic-git` against OPFS: clone a small fixture repo, edit a file, commit, push (mocked HTTP), status-bar state machine `clean → ahead → clean`
+- [X] T056 [US2] Implement `apps/studio/src/services/git-backing.ts` satisfying T055. Uses OPFS-shaped FS from T011 as the isomorphic-git `fs`
+- [X] T057 [US2] [P] Write failing test `apps/studio/tests/components/GitHubConnectDialog.test.tsx` for the device-flow UI component
+- [X] T058 [US2] Implement `apps/studio/src/components/GitHubConnectDialog.tsx` + "Commit & push" modal satisfying T057
 
 ### 4e. Workspace list + switcher UI
 
-- [ ] T059 [US2] [P] Write failing test `apps/studio/tests/components/WorkspaceSwitcher.test.tsx`: renders from the `recents` IndexedDB store sorted by `lastOpenedAt` desc, supports create / open / rename / delete, distinguishes the three `kind`s visually
-- [ ] T060 [US2] Implement `apps/studio/src/components/WorkspaceSwitcher.tsx` satisfying T059; mount it into the activity bar slot (placeholder until US3 lands the real activity bar)
+- [X] T059 [US2] [P] Write failing test `apps/studio/tests/components/WorkspaceSwitcher.test.tsx`: renders from the `recents` IndexedDB store sorted by `lastOpenedAt` desc, supports create / open / rename / delete, distinguishes the three `kind`s visually
+- [X] T060 [US2] Implement `apps/studio/src/components/WorkspaceSwitcher.tsx` satisfying T059; mount it into the activity bar slot (placeholder until US3 lands the real activity bar)
 
 **Checkpoint (US2)**: workspace state survives browser restart; folder-backed workspaces round-trip; GitHub-backed workspaces clone, commit, push; legacy `LightningFS` dep is gone.
 
