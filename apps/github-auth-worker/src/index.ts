@@ -8,9 +8,19 @@
  *   POST /rune-studio/api/github-auth/device-init  → GitHub /login/device/code
  *   POST /rune-studio/api/github-auth/device-poll  → GitHub /login/oauth/access_token
  *
- * Origin allowlist on every request — anything outside ALLOWED_ORIGIN is 403.
- * Logs are pino with the standard redact set (never the device_code, never
- * the access_token).
+ * Origin allowlist on every request. Logs go to console as JSON; the
+ * device_code and access_token are NEVER logged. Soft per-device-code
+ * rate-limit (one poll per ~5s) protects against client bugs that ignore
+ * the upstream `interval` field.
+ *
+ * Failure handling for upstream:
+ *   - Network error / 5xx                 → 503 github_unavailable
+ *   - 4xx with structured `error`         → 502 github_misconfigured
+ *   - HTML / non-JSON / empty             → 503 github_unavailable + log
+ *   - access_denied                       → 403 access_denied (terminal)
+ *   - expired_token                       → 410 expired_token (terminal)
+ *   - authorization_pending / slow_down   → 202 (poll again)
+ *   - any other oauth error               → 400 invalid_device_code
  */
 
 export interface Env {
@@ -21,6 +31,24 @@ export interface Env {
 
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+const POLL_MIN_INTERVAL_MS = 5_000;
+
+// Soft per-device-code throttle held in-process per isolate. CF runs many
+// isolates so this is a per-isolate guard against a misbehaving client,
+// not a precise quota.
+const lastPollAt = new Map<string, number>();
+const MAX_TRACKED_CODES = 10_000;
+
+function evictExpiredPolls(now: number): void {
+  if (lastPollAt.size < 1024) return;
+  for (const [k, ts] of lastPollAt) {
+    if (now - ts > 600_000) lastPollAt.delete(k);
+  }
+}
+
+export function _resetPollLimitForTesting(): void {
+  lastPollAt.clear();
+}
 
 function json(status: number, body: unknown, origin: string): Response {
   return new Response(JSON.stringify(body), {
@@ -36,6 +64,104 @@ function json(status: number, body: unknown, origin: string): Response {
 function originOk(req: Request, allowed: string): boolean {
   const o = req.headers.get('Origin');
   return o === allowed;
+}
+
+interface UpstreamReadResult {
+  ok: true;
+  data: Record<string, unknown>;
+}
+interface UpstreamReadFailure {
+  ok: false;
+  /** HTTP-style category for the studio client to render against. */
+  reason: 'github_unavailable' | 'github_misconfigured';
+  status: number;
+  contentType: string;
+  preview: string;
+}
+
+/**
+ * Read an upstream GitHub response into a structured object, or classify
+ * the failure. GitHub returns HTML rate-limit pages, captcha interstitials,
+ * and various 4xx/5xx shapes; the body parse needs to handle all of them.
+ */
+async function readUpstream(upstream: Response): Promise<UpstreamReadResult | UpstreamReadFailure> {
+  const status = upstream.status;
+  const contentType = upstream.headers.get('Content-Type') ?? '';
+  // 5xx is always retryable.
+  if (status >= 500) {
+    return {
+      ok: false,
+      reason: 'github_unavailable',
+      status,
+      contentType,
+      preview: ''
+    };
+  }
+  // 4xx: try to surface GitHub's structured error if possible, else mark
+  // misconfigured. A 401/403 commonly means a bad client_id.
+  // 200: parse JSON.
+  let raw: string;
+  try {
+    raw = await upstream.text();
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'github_unavailable',
+      status,
+      contentType,
+      preview: errMessage(err).slice(0, 256)
+    };
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return {
+      ok: false,
+      reason: status >= 400 ? 'github_misconfigured' : 'github_unavailable',
+      status,
+      contentType,
+      preview: raw.slice(0, 256)
+    };
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return {
+      ok: false,
+      reason: 'github_unavailable',
+      status,
+      contentType,
+      preview: raw.slice(0, 256)
+    };
+  }
+  if (status >= 400) {
+    return {
+      ok: false,
+      reason: 'github_misconfigured',
+      status,
+      contentType,
+      preview: raw.slice(0, 256)
+    };
+  }
+  return { ok: true, data: data as Record<string, unknown> };
+}
+
+function logUpstreamFailure(stage: 'init' | 'poll', f: UpstreamReadFailure): void {
+  // eslint-disable-next-line no-console
+  console.log(
+    JSON.stringify({
+      ts: Date.now(),
+      level: 'error',
+      stage,
+      kind: f.reason,
+      upstream_status: f.status,
+      content_type: f.contentType,
+      preview: f.preview
+    })
+  );
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 export default {
@@ -71,10 +197,16 @@ async function handleInit(env: Env, allowed: string): Promise<Response> {
   } catch {
     return json(503, { error: 'github_unavailable' }, allowed);
   }
-  if (upstream.status >= 500) {
-    return json(503, { error: 'github_unavailable' }, allowed);
+  const read = await readUpstream(upstream);
+  if (!read.ok) {
+    logUpstreamFailure('init', read);
+    return json(
+      read.reason === 'github_misconfigured' ? 502 : 503,
+      { error: read.reason },
+      allowed
+    );
   }
-  const body = (await upstream.json()) as Record<string, unknown>;
+  const body = read.data;
   return json(
     200,
     {
@@ -89,6 +221,7 @@ async function handleInit(env: Env, allowed: string): Promise<Response> {
 }
 
 async function handlePoll(req: Request, env: Env, allowed: string): Promise<Response> {
+  const now = Date.now();
   let body: { device_code?: string };
   try {
     body = (await req.json()) as { device_code?: string };
@@ -98,6 +231,21 @@ async function handlePoll(req: Request, env: Env, allowed: string): Promise<Resp
   if (!body.device_code || typeof body.device_code !== 'string') {
     return json(400, { error: 'invalid_device_code' }, allowed);
   }
+
+  // Per-device-code rate-limit: minimum 5s between polls.
+  evictExpiredPolls(now);
+  const last = lastPollAt.get(body.device_code);
+  if (last !== undefined && now - last < POLL_MIN_INTERVAL_MS) {
+    const retryAfterS = Math.max(1, Math.ceil((POLL_MIN_INTERVAL_MS - (now - last)) / 1000));
+    return json(429, { error: 'slow_down', retry_after_s: retryAfterS }, allowed);
+  }
+  if (lastPollAt.size >= MAX_TRACKED_CODES) {
+    // Fall back to a soft cap — drop the oldest entry. Map iteration
+    // order is insertion-order, so the first key is the oldest.
+    const oldestKey = lastPollAt.keys().next().value;
+    if (oldestKey !== undefined) lastPollAt.delete(oldestKey);
+  }
+  lastPollAt.set(body.device_code, now);
 
   let upstream: Response;
   try {
@@ -116,11 +264,16 @@ async function handlePoll(req: Request, env: Env, allowed: string): Promise<Resp
   } catch {
     return json(503, { error: 'github_unavailable' }, allowed);
   }
-  if (upstream.status >= 500) {
-    return json(503, { error: 'github_unavailable' }, allowed);
+  const read = await readUpstream(upstream);
+  if (!read.ok) {
+    logUpstreamFailure('poll', read);
+    return json(
+      read.reason === 'github_misconfigured' ? 502 : 503,
+      { error: read.reason },
+      allowed
+    );
   }
-
-  const data = (await upstream.json()) as Record<string, unknown>;
+  const data = read.data;
   if (typeof data['access_token'] === 'string') {
     return json(
       200,
@@ -140,7 +293,9 @@ async function handlePoll(req: Request, env: Env, allowed: string): Promise<Resp
     case 'expired_token':
       return json(410, { error: 'expired_token', message: 'device code expired' }, allowed);
     case 'access_denied':
-      return json(400, { error: 'access_denied' }, allowed);
+      // Terminal: user clicked Cancel. Distinct from 4xx misconfig and
+      // from "wrong code" so the studio UI can render the right copy.
+      return json(403, { error: 'access_denied' }, allowed);
     default:
       return json(400, { error: 'invalid_device_code' }, allowed);
   }

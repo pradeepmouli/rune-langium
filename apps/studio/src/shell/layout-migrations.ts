@@ -13,7 +13,7 @@
  *  1. If the input doesn't parse as the current shape OR the version is
  *     newer than current → rebuild from `buildDefaultLayout`. The user
  *     loses customisations from the unknown version but never sees an
- *     empty / broken layout (FR-025).
+ *     empty / broken layout.
  *  2. If the input is otherwise valid: walk every node and drop entries
  *     whose `component` isn't in the locked registry, with a console
  *     warning so a regression in the registry shows up in dev.

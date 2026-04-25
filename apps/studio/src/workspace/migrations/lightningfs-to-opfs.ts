@@ -3,8 +3,9 @@
 
 /**
  * One-shot, cut-clean migration from the legacy LightningFS-backed
- * IndexedDB stores to OPFS. Per FR-017:
+ * IndexedDB stores to OPFS.
  *
+ * Behaviour:
  *  - On success: legacy file content is copied into a fresh "Migrated
  *    workspace" under OPFS and the legacy IDB DBs are deleted in the same
  *    pass. `@isomorphic-git/lightning-fs` is removed from the runtime
@@ -13,16 +14,20 @@
  *    produced (a JSON dump of every key + base64 bytes). The user can
  *    save the blob and rerun migration in a fresh tab.
  *
- * The walk is intentionally lenient: LightningFS's exact internal shape
- * is not part of this contract. Anything not parseable as `(path, bytes)`
- * is recorded in the export bundle and skipped from the OPFS write.
+ * Crash-safety invariant: legacy DBs are NEVER deleted unless every
+ * step of the OPFS write AND every IDB read succeeded. Any read error,
+ * cursor error, blocked deletion, or partial OPFS write returns
+ * `kind: 'failed'` with the export blob; legacy data stays intact.
+ *
+ * The walk is intentionally lenient about value shape: anything not
+ * parseable as `(path, bytes)` is recorded in the export bundle and
+ * skipped from the OPFS write.
  */
 
 import { OpfsFs } from '../../opfs/opfs-fs.js';
 import { saveSetting, saveWorkspace, type WorkspaceRecord } from '../persistence.js';
 
 export const LEGACY_DB_NAMES = ['fs', 'lightning-fs-cache'] as const;
-const LEGACY_STORE_NAMES = ['!root', 'files'];
 
 export type MigrationResult =
   | { kind: 'no-op' }
@@ -40,6 +45,12 @@ interface LegacyEntry {
   raw: unknown;
 }
 
+interface ReadResult {
+  ok: boolean;
+  entries: LegacyEntry[];
+  reason?: string;
+}
+
 export async function migrateLightningFsToOpfs(input: MigrationInput): Promise<MigrationResult> {
   const collected: LegacyEntry[] = [];
   let foundAny = false;
@@ -48,12 +59,22 @@ export async function migrateLightningFsToOpfs(input: MigrationInput): Promise<M
     const present = await openExistingDb(dbName);
     if (!present) continue;
     foundAny = true;
+    let read: ReadResult;
     try {
-      const entries = await readAllEntries(present);
-      collected.push(...entries);
+      read = await readAllEntries(present);
     } finally {
       present.close();
     }
+    if (!read.ok) {
+      // Legacy DB read failed mid-walk; preserve everything, surface
+      // partial export so the user can rescue what we did read.
+      return {
+        kind: 'failed',
+        reason: read.reason ?? 'idb_read_failed',
+        exportBlob: buildExportBlob([...collected, ...read.entries])
+      };
+    }
+    collected.push(...read.entries);
   }
 
   if (!foundAny) return { kind: 'no-op' };
@@ -66,11 +87,11 @@ export async function migrateLightningFsToOpfs(input: MigrationInput): Promise<M
   // remain intact and we surface the export.
   const id = generateUlid();
   const fs = new OpfsFs(input.opfsRoot);
+  let fileCount = 0;
   try {
     await fs.mkdir(`/${id}`);
     await fs.mkdir(`/${id}/files`);
     await fs.mkdir(`/${id}/.studio`);
-    let fileCount = 0;
     for (const e of collected) {
       if (!e.bytes) continue;
       const safe = e.path.replace(/^\/+/, '');
@@ -97,12 +118,6 @@ export async function migrateLightningFsToOpfs(input: MigrationInput): Promise<M
     };
     await saveWorkspace(ws);
     await saveSetting('design-system-version', input.studioVersion);
-
-    // Cut-clean: drop the legacy DBs in the same pass.
-    for (const dbName of LEGACY_DB_NAMES) {
-      await deleteDb(dbName);
-    }
-    return { kind: 'migrated', workspaceId: id, fileCount };
   } catch (err) {
     return {
       kind: 'failed',
@@ -110,74 +125,144 @@ export async function migrateLightningFsToOpfs(input: MigrationInput): Promise<M
       exportBlob
     };
   }
+
+  // Cut-clean: drop the legacy DBs. If ANY deletion is blocked or errors
+  // out, the migration is incomplete — keep the legacy DBs and report
+  // failure rather than re-running on the next launch over a working
+  // OPFS workspace (which would create a second "Migrated workspace").
+  for (const dbName of LEGACY_DB_NAMES) {
+    const r = await deleteDb(dbName);
+    if (r !== 'deleted' && r !== 'not_present') {
+      return {
+        kind: 'failed',
+        reason: `legacy_db_${r}: ${dbName}`,
+        exportBlob
+      };
+    }
+  }
+  return { kind: 'migrated', workspaceId: id, fileCount };
 }
 
 // ---------- IndexedDB walk helpers ----------
 
+/**
+ * Open `name` only if it already exists. `indexedDB.open(name)` without
+ * a version is the only documented "is this DB present?" probe in the
+ * IDB API, so we open, inspect `objectStoreNames`, and close.
+ *
+ * If the open creates a *new* v1 DB (because the name was never used),
+ * we abort the upgrade transaction so the DB is never persisted in the
+ * first place — this avoids deleting "empty" DBs the platform may
+ * legitimately use for unrelated reasons.
+ */
 function openExistingDb(name: string): Promise<IDBDatabase | null> {
   return new Promise<IDBDatabase | null>((resolve) => {
     const req = indexedDB.open(name);
+    let aborted = false;
     req.onupgradeneeded = () => {
-      // We weren't supposed to create it — abort the upgrade transaction
-      // so onsuccess sees an empty store list and we treat it as absent.
+      // We weren't supposed to create it — abort the upgrade transaction.
+      // The browser will not persist the new DB; onerror fires below.
+      aborted = true;
       req.transaction?.abort();
     };
     req.onsuccess = () => {
       const db = req.result;
-      // Heuristic: if the DB has no object stores, it didn't really exist.
-      // (`open(name)` without a version creates a v1 DB on first call.)
       if (db.objectStoreNames.length === 0) {
+        // We DID open an empty DB but never received `onupgradeneeded`
+        // (some browsers silently emit `onsuccess` directly). Don't
+        // delete it — it's not ours.
         db.close();
-        indexedDB.deleteDatabase(name);
         resolve(null);
         return;
       }
       resolve(db);
     };
-    req.onerror = () => resolve(null);
+    req.onerror = () => {
+      // If the open errored *because* we aborted an upgrade, the DB was
+      // never created — return null without deleting. Otherwise treat
+      // unreadable as absent (we can't migrate from a DB we can't open).
+      void aborted;
+      resolve(null);
+    };
     req.onblocked = () => resolve(null);
   });
 }
 
-async function readAllEntries(db: IDBDatabase): Promise<LegacyEntry[]> {
+async function readAllEntries(db: IDBDatabase): Promise<ReadResult> {
   const out: LegacyEntry[] = [];
-  // We don't know the legacy store name a priori — LightningFS@4 uses
-  // `!root` but variations may exist. Walk every object store the DB
-  // actually has rather than guessing.
   const names = Array.from(db.objectStoreNames);
   for (const storeName of names) {
-    await new Promise<void>((resolve) => {
-      const tx = db.transaction([storeName], 'readonly');
-      const store = tx.objectStore(storeName);
-      const cursorReq = store.openCursor();
-      cursorReq.onsuccess = () => {
-        const cursor = cursorReq.result;
-        if (!cursor) return;
-        const path = String(cursor.key);
-        const value = cursor.value;
-        out.push({
-          path,
-          bytes: coerceBytes(value),
-          raw: value
-        });
-        cursor.continue();
-      };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    });
+    const r = await readStore(db, storeName);
+    out.push(...r.entries);
+    if (!r.ok) {
+      return { ok: false, entries: out, reason: r.reason };
+    }
   }
-  return out;
+  return { ok: true, entries: out };
+}
+
+function readStore(db: IDBDatabase, storeName: string): Promise<ReadResult> {
+  return new Promise<ReadResult>((resolve) => {
+    let resolved = false;
+    const settle = (r: ReadResult): void => {
+      if (resolved) return;
+      resolved = true;
+      resolve(r);
+    };
+    let tx: IDBTransaction;
+    try {
+      tx = db.transaction([storeName], 'readonly');
+    } catch (err) {
+      settle({ ok: false, entries: [], reason: errMessage(err) });
+      return;
+    }
+    const store = tx.objectStore(storeName);
+    const cursorReq = store.openCursor();
+    const collected: LegacyEntry[] = [];
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result;
+      if (!cursor) return;
+      const path = String(cursor.key);
+      const value = cursor.value;
+      collected.push({ path, bytes: coerceBytes(value), raw: value });
+      try {
+        cursor.continue();
+      } catch (err) {
+        settle({ ok: false, entries: collected, reason: errMessage(err) });
+      }
+    };
+    cursorReq.onerror = () => {
+      settle({
+        ok: false,
+        entries: collected,
+        reason: errMessage(cursorReq.error) || 'cursor_error'
+      });
+    };
+    tx.oncomplete = () => settle({ ok: true, entries: collected });
+    tx.onerror = () => {
+      settle({
+        ok: false,
+        entries: collected,
+        reason: errMessage(tx.error) || 'tx_error'
+      });
+    };
+    tx.onabort = () => {
+      settle({
+        ok: false,
+        entries: collected,
+        reason: errMessage(tx.error) || 'tx_abort'
+      });
+    };
+  });
 }
 
 function coerceBytes(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) return value;
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
-  // Node Buffer — IndexedDB shims sometimes preserve Buffer through clone.
   if (typeof value === 'object' && value !== null && 'byteLength' in value && 'buffer' in value) {
     const v = value as { buffer: ArrayBufferLike; byteOffset?: number; byteLength: number };
     return new Uint8Array(v.buffer, v.byteOffset ?? 0, v.byteLength);
   }
-  // Plain numeric array shape (rare; some shims store `Array<number>`).
   if (Array.isArray(value) && value.every((b) => typeof b === 'number')) {
     return new Uint8Array(value as number[]);
   }
@@ -185,10 +270,26 @@ function coerceBytes(value: unknown): Uint8Array | null {
   return null;
 }
 
-function deleteDb(name: string): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const req = indexedDB.deleteDatabase(name);
-    req.onsuccess = req.onerror = req.onblocked = () => resolve();
+type DeleteOutcome = 'deleted' | 'not_present' | 'blocked' | 'errored';
+
+function deleteDb(name: string): Promise<DeleteOutcome> {
+  return new Promise<DeleteOutcome>((resolve) => {
+    let resolved = false;
+    const settle = (o: DeleteOutcome): void => {
+      if (resolved) return;
+      resolved = true;
+      resolve(o);
+    };
+    let req: IDBOpenDBRequest;
+    try {
+      req = indexedDB.deleteDatabase(name);
+    } catch {
+      settle('errored');
+      return;
+    }
+    req.onsuccess = () => settle('deleted');
+    req.onerror = () => settle('errored');
+    req.onblocked = () => settle('blocked');
   });
 }
 
@@ -203,7 +304,19 @@ function buildExportBlob(entries: LegacyEntry[]): Blob {
   });
 }
 
-// ---------- ULID (duplicated from workspace-manager to avoid a circular import) ----------
+function errMessage(err: unknown): string {
+  if (!err) return '';
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+// ---------- ULID ----------
+//
+// Duplicated rather than imported from workspace-manager because this
+// migration runs before workspace-manager is initialised. Single-tab
+// one-shot migration — collision risk on the millisecond-prefix is
+// effectively zero. Do not lift this to a hot path without adding the
+// 80-bit monotonic counter ULIDs normally carry.
 
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 

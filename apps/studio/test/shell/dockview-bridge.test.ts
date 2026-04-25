@@ -8,7 +8,7 @@
  * group inheritance, and active-panel selection.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { applyLayout, isFactoryShape, serializeLayout } from '../../src/shell/dockview-bridge.js';
 import { buildDefaultLayout } from '../../src/shell/layout-factory.js';
 
@@ -66,16 +66,15 @@ class FakeDockviewApi {
 describe('isFactoryShape', () => {
   it('returns true for a freshly built layout', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
-    expect(isFactoryShape(layout)).toBe(true);
+    expect(isFactoryShape(layout.dockview)).toBe(true);
   });
 
-  it('returns false for a dockview-native serialized layout', () => {
-    const layout = {
-      version: 1,
-      writtenBy: '0.1.0',
-      dockview: { panels: ['workspace.editor'] } // dockview-native shape
-    } as const;
-    expect(isFactoryShape(layout as never)).toBe(false);
+  it('returns false for a native serialized layout', () => {
+    expect(isFactoryShape({ shape: 'native', json: { panels: ['workspace.editor'] } })).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isFactoryShape(null)).toBe(false);
   });
 });
 
@@ -137,25 +136,49 @@ describe('applyLayout — factory shape', () => {
   });
 });
 
-describe('applyLayout — dockview-native shape', () => {
+describe('applyLayout — native shape', () => {
   it('routes through api.fromJSON', () => {
     const native = {
       version: 1,
       writtenBy: '0.1.0',
-      dockview: { panels: ['workspace.editor'] }
-    } as const;
+      dockview: { shape: 'native' as const, json: { panels: ['workspace.editor'] } }
+    };
     const api = new FakeDockviewApi();
-    applyLayout(api as never, native as never);
+    applyLayout(api as never, native);
     expect(api.fromJSONCalls).toBe(1);
     expect(api.calls).toHaveLength(0);
+  });
+
+  it('logs and falls back to factory layout when api.fromJSON throws', () => {
+    const native = {
+      version: 1,
+      writtenBy: '0.1.0',
+      dockview: { shape: 'native' as const, json: { broken: true } }
+    };
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const api = new FakeDockviewApi();
+    api.fromJSON = () => {
+      throw new Error('incompatible_layout_v3');
+    };
+    applyLayout(api as never, native);
+    // Error was surfaced
+    expect(errSpy).toHaveBeenCalledOnce();
+    const arg0 = errSpy.mock.calls[0]?.[0];
+    expect(String(arg0)).toContain('api.fromJSON rejected');
+    // Fallback factory layout was applied (3 columns + 3 bottom tabs).
+    expect(api.calls.length).toBeGreaterThanOrEqual(6);
+    errSpy.mockRestore();
   });
 });
 
 describe('serializeLayout', () => {
-  it('round-trips through api.toJSON()', () => {
+  it('returns a tagged native payload', () => {
     const api = new FakeDockviewApi();
     api.addPanel({ id: 'workspace.editor', component: 'workspace.editor' });
-    const out = serializeLayout(api as never) as { panels: string[] };
-    expect(out.panels).toEqual(['workspace.editor']);
+    const out = serializeLayout(api as never);
+    expect(out.shape).toBe('native');
+    if (out.shape === 'native') {
+      expect((out.json as { panels: string[] }).panels).toEqual(['workspace.editor']);
+    }
   });
 });

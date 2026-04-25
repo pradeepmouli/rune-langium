@@ -11,9 +11,9 @@ import type { ModelSource } from '../types/model-types.js';
 const MIRROR_BASE = 'https://www.daikonic.dev/curated';
 
 /**
- * Built-in curated model sources. The `archiveUrl` is the preferred load path
- * (CF R2 mirror — FR-006); `repoUrl`/`ref` are kept for the custom-URL flow
- * (FR-007) and as a documentation pointer to upstream.
+ * Built-in curated model sources. The `archiveUrl` is the preferred load
+ * path (CF R2 mirror); `repoUrl`/`ref` are kept for the custom-URL flow
+ * and as a documentation pointer to upstream.
  */
 const CURATED_MODELS: readonly ModelSource[] = [
   {

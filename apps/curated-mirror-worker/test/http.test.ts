@@ -111,3 +111,59 @@ describe('handleCuratedRead — historical archives + method enforcement', () =>
     expect(res.status).toBe(404);
   });
 });
+
+describe('CORS headers on every response', () => {
+  it('attaches Access-Control-Allow-Origin to 404 archive_not_found', async () => {
+    const res = await get('/curated/cdm/manifest.json');
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://www.daikonic.dev');
+    expect(res.headers.get('Vary')).toBe('Origin');
+  });
+
+  it('attaches Access-Control-Allow-Origin to 405 method_not_allowed', async () => {
+    const res = await handleCuratedRead(
+      new Request('https://www.daikonic.dev/curated/cdm/manifest.json', { method: 'POST' }),
+      env
+    );
+    expect(res.status).toBe(405);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://www.daikonic.dev');
+  });
+
+  it('attaches Access-Control-Allow-Origin to 404 unknown_model_id', async () => {
+    const res = await get('/curated/notreal/manifest.json');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://www.daikonic.dev');
+  });
+});
+
+describe('Conditional GET — If-None-Match → 304', () => {
+  it('returns 304 with no body when the etag matches', async () => {
+    await bucket.put(
+      'curated/cdm/manifest.json',
+      JSON.stringify({ schemaVersion: 1, modelId: 'cdm' })
+    );
+    const first = await get('/curated/cdm/manifest.json');
+    const etag = first.headers.get('ETag');
+    expect(etag).toBeTruthy();
+
+    const second = await get('/curated/cdm/manifest.json', { 'If-None-Match': etag! });
+    expect(second.status).toBe(304);
+    expect(second.headers.get('ETag')).toBe(etag);
+    // 304 must include the Cache-Control header so caches can refresh staleness.
+    expect(second.headers.get('Cache-Control')).toMatch(/max-age=300/);
+    // No body on 304.
+    const body = await second.arrayBuffer();
+    expect(body.byteLength).toBe(0);
+  });
+
+  it('returns 200 with body when the If-None-Match etag differs', async () => {
+    await bucket.put('curated/cdm/manifest.json', '{}');
+    const res = await get('/curated/cdm/manifest.json', { 'If-None-Match': '"some-other-etag"' });
+    expect(res.status).toBe(200);
+  });
+
+  it('respects If-None-Match: * as a wildcard', async () => {
+    await bucket.put('curated/cdm/manifest.json', '{}');
+    const res = await get('/curated/cdm/manifest.json', { 'If-None-Match': '*' });
+    expect(res.status).toBe(304);
+  });
+});

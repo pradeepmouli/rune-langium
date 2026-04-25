@@ -80,13 +80,23 @@ export async function extractTarGz(
     if (header.typeflag === '5') {
       const cleaned = cleanPath(header.name);
       if (cleaned && (!options.shouldExtract || options.shouldExtract(cleaned + '/'))) {
-        await fs.mkdir(`${prefix}/${cleaned}`);
+        try {
+          await fs.mkdir(`${prefix}/${cleaned}`);
+        } catch (err) {
+          // Re-throw with the offending path so the curated-loader's
+          // FR-002 mapper has somewhere to point the user.
+          throw withCause(new Error(`tar: mkdir ${cleaned}/ failed: ${errMessage(err)}`), err);
+        }
       }
     } else if (header.typeflag === '0' || header.typeflag === '\0' || header.typeflag === '') {
       const cleaned = cleanPath(header.name);
       if (cleaned && (!options.shouldExtract || options.shouldExtract(cleaned))) {
         const data = tar.subarray(offset, dataEnd);
-        await fs.writeFile(`${prefix}/${cleaned}`, data);
+        try {
+          await fs.writeFile(`${prefix}/${cleaned}`, data);
+        } catch (err) {
+          throw withCause(new Error(`tar: writeFile ${cleaned} failed: ${errMessage(err)}`), err);
+        }
         options.onEntry?.(cleaned, header.size);
       }
     } else if (header.typeflag === 'g' || header.typeflag === 'x') {
@@ -141,6 +151,17 @@ function cleanPath(raw: string): string {
     }
   }
   return p;
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function withCause(err: Error, cause: unknown): Error {
+  // Manual cause attachment — `new Error(msg, { cause })` is ES2022;
+  // the studio targets ES2020 to keep the bundle lean.
+  (err as Error & { cause?: unknown }).cause = cause;
+  return err;
 }
 
 function isAllZero(block: Uint8Array): boolean {

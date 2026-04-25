@@ -8,107 +8,130 @@
  * persisted in IndexedDB and migrated by `layout-migrations.ts`. Dockview
  * has its own JSON serialization (`api.toJSON()`) that's richer but
  * tied to its internal coordinate space. The bridge is one-directional:
- *  - on mount: translate `PanelLayoutRecord.dockview` into a sequence of
- *    `api.addPanel(...)` calls (with sizes + groups).
- *  - on serialize: persist the complete dockview JSON as opaque-to-us
- *    inside the same `dockview` field; the next mount feeds it straight
- *    back to `api.fromJSON(...)`.
+ *   - on mount: translate `PanelLayoutRecord.dockview` into a sequence of
+ *     `api.addPanel(...)` calls (factory shape) OR feed the raw
+ *     dockview JSON to `api.fromJSON(...)` (native shape).
+ *   - on serialize: persist the `api.toJSON()` snapshot under the
+ *     `{ shape: 'native', json }` discriminator.
  *
- * The first form (defaults) is what fresh workspaces and Reset Layout
- * produce. The second (full dockview JSON) is what subsequent sessions
- * see. `isFactoryShape()` discriminates.
+ * The `shape` field of `DockviewPayload` makes the dispatch explicit,
+ * eliminating the structural `isFactoryShape()` guess.
+ *
+ * If `api.fromJSON` rejects (saved layout incompatible with the current
+ * dockview version), we log the cause AND fall back to a fresh factory
+ * layout. The user sees their carefully-arranged panels reset, so
+ * silent failure here is the wrong default — `console.error` makes the
+ * cause discoverable.
  */
 
 import type { DockviewApi, AddPanelOptions } from 'dockview-react';
-import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import { buildDefaultLayout, type PanelComponentName } from './layout-factory.js';
+import type {
+  PanelLayoutRecord,
+  DockviewPayload,
+  LayoutNode,
+  BottomGroup
+} from '../workspace/persistence.js';
+import { buildDefaultLayout, type FactoryShape } from './layout-factory.js';
 
-interface FactoryShape {
-  columns: Array<{
-    component: PanelComponentName;
-    size?: number;
-    weight?: number;
-    collapsed?: boolean;
-  }>;
-  bottomGroup: {
-    active: PanelComponentName;
-    collapsed: boolean;
-    tabs: Array<{ component: PanelComponentName; collapsed?: boolean }>;
-  };
-}
+/** Re-export for callers that previously imported from this module. */
+export type { FactoryShape } from './layout-factory.js';
 
 /**
- * Distinguish a factory-shape layout (our schema, fresh workspace or
- * Reset Layout output) from a dockview-native layout (round-tripped
- * through api.toJSON). Factory shape has the discriminator field
- * `columns` at the top of `dockview`.
+ * Distinguish a factory-shape layout from a native (round-tripped)
+ * layout. Kept as a typed predicate so call sites can narrow.
  */
-export function isFactoryShape(layout: PanelLayoutRecord): boolean {
-  const dv = layout.dockview as unknown;
-  return (
-    !!dv && typeof dv === 'object' && 'columns' in (dv as object) && 'bottomGroup' in (dv as object)
-  );
+export function isFactoryShape(payload: DockviewPayload | null): payload is {
+  shape: 'factory';
+  columns: [LayoutNode, LayoutNode, LayoutNode];
+  bottomGroup: BottomGroup;
+} {
+  return !!payload && payload.shape === 'factory';
 }
 
 /**
- * Apply a layout to a freshly-mounted dockview. If the layout is in our
- * factory shape, build it via `addPanel` calls. Otherwise treat it as a
- * dockview-native JSON blob and call `fromJSON`.
+ * Apply a layout to a freshly-mounted dockview. Factory shape goes
+ * through `addPanel` calls; native shape goes through `fromJSON`. A
+ * `null` payload (fresh workspace, unmigrated record) builds a default.
  */
 export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
-  if (isFactoryShape(layout)) {
-    applyFactoryShape(api, layout.dockview as unknown as FactoryShape);
-  } else {
-    try {
-      api.fromJSON(layout.dockview as Parameters<DockviewApi['fromJSON']>[0]);
-    } catch {
-      // Saved layout is incompatible with current dockview version — fall
-      // through to a default. The layout-migrations sanitiser already ran;
-      // this catch is defence-in-depth for shape changes within a major.
-      const fallback = buildDefaultLayout({
-        studioVersion: '0.0.0',
+  const payload = layout.dockview;
+  if (!payload) {
+    applyFactoryShape(
+      api,
+      buildDefaultLayout({
+        studioVersion: layout.writtenBy || '0.0.0',
         viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1920
-      });
-      applyFactoryShape(api, fallback.dockview as unknown as FactoryShape);
-    }
+      }).dockview as FactoryShape
+    );
+    return;
+  }
+  if (payload.shape === 'factory') {
+    applyFactoryShape(api, payload as FactoryShape);
+    return;
+  }
+  // shape === 'native'
+  try {
+    api.fromJSON(payload.json as Parameters<DockviewApi['fromJSON']>[0]);
+  } catch (err) {
+    // The user just lost their saved layout. Don't be silent — log the
+    // cause + a sample of the JSON so the bug is filable. layout-migrations
+    // already ran the sanitiser, so reaching this catch implies a shape
+    // change inside dockview itself.
+    // eslint-disable-next-line no-console
+    console.error('[dockview-bridge] api.fromJSON rejected, falling back to default layout', {
+      err: errMessage(err),
+      jsonPreview: previewJson(payload.json)
+    });
+    const fallback = buildDefaultLayout({
+      studioVersion: layout.writtenBy || '0.0.0',
+      viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1920
+    });
+    applyFactoryShape(api, fallback.dockview as FactoryShape);
   }
 }
 
 function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
-  // Defensive: a degenerate factory shape with no columns has nothing to
-  // mount. Bail rather than crash — the layout-migrations sanitiser feeds
-  // a fresh factory shape on the next render.
-  if (!shape.columns?.[0] || !shape.columns[1] || !shape.columns[2]) return;
+  // The 3-tuple `columns` type guarantees three entries at compile time;
+  // the runtime guard is for records that round-tripped through `unknown`
+  // (older persistence schemas) and ended up shorter.
+  const c0 = shape.columns[0];
+  const c1 = shape.columns[1];
+  const c2 = shape.columns[2];
+  if (!c0 || !c1 || !c2) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[dockview-bridge] factory shape has fewer than 3 columns, falling back to default'
+    );
+    return;
+  }
 
   const left = api.addPanel({
-    id: shape.columns[0].component,
-    component: shape.columns[0].component,
-    initialWidth: shape.columns[0].size ?? 240
+    id: c0.component,
+    component: c0.component,
+    initialWidth: c0.size ?? 240
   } satisfies AddPanelOptions);
 
   api.addPanel({
-    id: shape.columns[1].component,
-    component: shape.columns[1].component,
+    id: c1.component,
+    component: c1.component,
     position: { referencePanel: left.id, direction: 'right' }
   });
 
   const inspector = api.addPanel({
-    id: shape.columns[2].component,
-    component: shape.columns[2].component,
-    initialWidth: shape.columns[2].size ?? 320,
-    position: { referencePanel: shape.columns[1].component, direction: 'right' }
+    id: c2.component,
+    component: c2.component,
+    initialWidth: c2.size ?? 320,
+    position: { referencePanel: c1.component, direction: 'right' }
   });
-  if (shape.columns[2].collapsed) {
-    inspector.group.api.setSize({ width: 0 });
-  }
+  if (c2.collapsed) inspector.group.api.setSize({ width: 0 });
 
-  // Bottom group: stack the three tabs in a single group below the editor.
+  // Bottom group: stack tabs in a single group below the editor.
   const firstTab = shape.bottomGroup.tabs[0];
   if (!firstTab) return;
   const firstBottom = api.addPanel({
     id: firstTab.component,
     component: firstTab.component,
-    position: { referencePanel: shape.columns[1].component, direction: 'below' }
+    position: { referencePanel: c1.component, direction: 'below' }
   });
   for (let i = 1; i < shape.bottomGroup.tabs.length; i++) {
     const tab = shape.bottomGroup.tabs[i];
@@ -119,18 +142,29 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
       position: { referenceGroup: firstBottom.group, direction: 'within' }
     });
   }
-  // Activate the requested default bottom tab.
   const active = api.getPanel(shape.bottomGroup.active);
   if (active) active.api.setActive();
-  if (shape.bottomGroup.collapsed) {
-    firstBottom.group.api.setSize({ height: 0 });
-  }
+  if (shape.bottomGroup.collapsed) firstBottom.group.api.setSize({ height: 0 });
 }
 
 /**
  * Snapshot the current layout for persistence. The returned shape is
- * stored as `PanelLayoutRecord.dockview` directly.
+ * stored as `PanelLayoutRecord.dockview` directly; the next mount will
+ * route it through `api.fromJSON()`.
  */
-export function serializeLayout(api: DockviewApi): unknown {
-  return api.toJSON();
+export function serializeLayout(api: DockviewApi): DockviewPayload {
+  return { shape: 'native', json: api.toJSON() };
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function previewJson(json: unknown): string {
+  try {
+    const s = JSON.stringify(json);
+    return s.slice(0, 256);
+  } catch {
+    return '[unserialisable]';
+  }
 }

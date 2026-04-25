@@ -29,10 +29,10 @@ interface LoadOptions {
   /**
    * When `source.archiveUrl` is set (curated entries on the deployed CF
    * site), the caller can supply a curated-archive loader to short-circuit
-   * the slow git-clone path. Feature 012 (FR-006). The loader is dependency-
-   * injected so this module stays decoupled from OPFS imports — the actual
-   * implementation lives in `./curated-loader.ts` and is wired by the
-   * component layer (ModelLoader.tsx).
+   * the slow git-clone path. Dependency-injected so this module stays
+   * decoupled from OPFS imports — the actual implementation lives in
+   * `./curated-loader.ts` and is wired by the component layer
+   * (ModelLoader.tsx).
    */
   archiveLoader?: (
     source: ModelSource,
@@ -45,9 +45,9 @@ interface LoadOptions {
  *
  * - If `source.archiveUrl` is set AND `options.archiveLoader` is supplied,
  *   route to the curated-archive (CF R2) path. This is the fast, reliable
- *   path for deployed Studio (feature 012, FR-006).
+ *   path for deployed Studio.
  * - Otherwise fall through to the git-clone path (existing behaviour;
- *   covers user-supplied custom URLs per FR-007).
+ *   covers user-supplied custom URLs).
  *
  * The progress + cancellation surface is identical across both paths.
  */

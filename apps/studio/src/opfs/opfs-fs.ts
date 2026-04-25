@@ -3,7 +3,7 @@
 
 /**
  * OpfsFs — `isomorphic-git`-shaped filesystem adapter over OPFS
- * (Origin Private File System). Feature 012-studio-workspace-ux, T011.
+ * (Origin Private File System).
  *
  * Implements the subset of `node:fs/promises` that `isomorphic-git`
  * documents at https://isomorphic-git.org/docs/en/fs:
@@ -180,7 +180,10 @@ export class OpfsFs {
     const parts = splitPath(path);
     if (parts.length === 0) {
       // root is a directory
-      return makeStat('dir', 0, Date.now());
+      // OPFS doesn't expose dir mtimes; emit a stable zero so
+      // isomorphic-git's index cache stays valid across calls.
+      // (A `Date.now()` mtime invalidates every dir on every walk.)
+      return makeStat('dir', 0, 0);
     }
     const last = parts[parts.length - 1]!;
     const parent = await this.getDir(parts.slice(0, -1));
@@ -195,7 +198,10 @@ export class OpfsFs {
     // Then directory.
     try {
       await parent.getDirectoryHandle(last);
-      return makeStat('dir', 0, Date.now());
+      // OPFS doesn't expose dir mtimes; emit a stable zero so
+      // isomorphic-git's index cache stays valid across calls.
+      // (A `Date.now()` mtime invalidates every dir on every walk.)
+      return makeStat('dir', 0, 0);
     } catch (err) {
       if (isDomError(err, 'NotFoundError')) throw new FsError('ENOENT', path);
       throw err;

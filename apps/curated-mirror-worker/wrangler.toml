@@ -50,6 +50,9 @@ CURATED_SOURCES = """[
 # `wrangler dev --var ALLOWED_ORIGIN=...`.
 ALLOWED_ORIGIN = "https://www.daikonic.dev"
 
-# Keep the latest 14 archives per modelId. Older are pruned by the same job.
-[vars.RETENTION]
-ARCHIVES_PER_MODEL = "14"
+# Keep the latest 14 archives per modelId. Older are pruned by the same
+# job. Flat var name — wrangler does not preserve `[vars.RETENTION]`
+# nested-table shape at runtime, and would otherwise render this as
+# `undefined`. The Worker tries the flat form first and falls back to
+# the nested shape only if a future wrangler change re-enables it.
+RETENTION_ARCHIVES_PER_MODEL = "14"

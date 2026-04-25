@@ -17,13 +17,40 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
 export type WorkspaceKind = 'browser-only' | 'folder-backed' | 'git-backed';
 
+/**
+ * Persisted layout shape. The `dockview` payload is a tagged union
+ * discriminated by `shape`:
+ *   - `factory`: emitted by `layout-factory.ts`, fixed-arity columns
+ *   - `native`:  round-tripped `api.toJSON()`; opaque to this module
+ *
+ * Older records (pre-tagged-union) had a bare `unknown` here; the
+ * `layout-migrations` sanitiser upgrades them to factory shape on
+ * read, so consumers only ever see one of the two tagged variants
+ * (or `null` for fresh workspaces).
+ */
 export interface PanelLayoutRecord {
   /** Bumped on any breaking change to the dockview JSON shape. */
   version: number;
   /** Studio version that wrote this layout (display only). */
   writtenBy: string;
-  /** dockview `api.toJSON()` output. Opaque to this module. */
-  dockview: unknown;
+  dockview: DockviewPayload | null;
+}
+
+export type DockviewPayload =
+  | { shape: 'factory'; columns: [LayoutNode, LayoutNode, LayoutNode]; bottomGroup: BottomGroup }
+  | { shape: 'native'; json: unknown };
+
+export interface LayoutNode {
+  component: string;
+  collapsed?: boolean;
+  size?: number;
+  weight?: number;
+}
+
+export interface BottomGroup {
+  active: string;
+  collapsed: boolean;
+  tabs: LayoutNode[];
 }
 
 export interface TabRecord {

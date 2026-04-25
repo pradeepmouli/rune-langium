@@ -142,7 +142,16 @@ export class WorkspaceOwnership {
   }
 
   private send(msg: AnyMsg): void {
-    this.channel.postMessage(msg);
+    // postMessage can throw DataCloneError on shape changes the channel
+    // can't structured-clone, and synchronously throws if `close()` has
+    // already been called. Either is recoverable for telemetry — silent
+    // drop is the wrong default; log so the cause is filable.
+    try {
+      this.channel.postMessage(msg);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[multi-tab-broadcast] postMessage failed:', err);
+    }
   }
 
   private onMessage = (ev: MessageEvent): void => {

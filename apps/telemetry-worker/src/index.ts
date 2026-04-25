@@ -2,32 +2,30 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Telemetry ingest Worker (T110).
+ * Telemetry ingest Worker.
  *
  * Surface (per `contracts/telemetry-event.md`):
- *   POST /rune-studio/api/telemetry/v1/event
- *   GET  /rune-studio/api/telemetry/v1/stats   (CF Access gated; T112)
+ *   POST    /rune-studio/api/telemetry/v1/event
+ *   OPTIONS /rune-studio/api/telemetry/v1/event   (CORS preflight)
+ *   GET     /rune-studio/api/telemetry/v1/stats   (CF Access enforces admin)
  *
  * Pipeline:
- *   1. Method/route guard (only POST event, GET stats).
- *   2. Origin allowlist (CORS preflight + actual request).
- *   3. Per-IP rate-limit: 10 events/minute, scoped to a 60s window.
- *      The window is held in-process; CF runs many instances so this
- *      is a soft throttle, not a precise quota. The DO-backed quota
- *      lives in codegen-worker and is intentionally NOT replicated
- *      here — telemetry is opt-out, low-frequency, and a misbehaving
- *      client is harmless beyond a single isolate.
- *   4. JSON parse → Zod schema (closed: `.strict()`) → reject 400 on
- *      schema_violation.
- *   5. Hash the IP with a daily-rotating salt and forward to the DO.
- *   6. Log a structured line (no raw IP, no body).
- *
- * The DO id is `<event-name>:<UTC-day>` so each day is a fresh counter
- * surface and each event-class is isolated.
+ *   1. Method/route guard.
+ *   2. Origin allowlist + CORS preflight against env.ALLOWED_ORIGIN.
+ *   3. Per-IP rate-limit: 10 events/minute, scoped to a 60s window. Held
+ *      in-process per isolate. CF runs many isolates so this is a soft
+ *      throttle, not a precise quota — that's fine for opt-out telemetry.
+ *      The map is bounded: stale windows are evicted on every check.
+ *   4. JSON parse → Zod schema (.strict()) → reject 400 on schema violation.
+ *   5. Hash the IP with a daily salt fetched from a Durable Object (single
+ *      salt across all isolates per UTC day, so analytics dedupe works).
+ *   6. Forward to the per-event/per-day counter DO; check the response.
+ *   7. Log a structured line (no raw IP, no body).
  */
 
 import { z } from 'zod';
 import type { DurableObjectNamespace } from '@cloudflare/workers-types';
+import { CuratedModelIdSchema, ErrorCategorySchema } from '@rune-langium/curated-schema';
 import { TelemetryAggregator } from './counters.js';
 import { logRequest } from './log.js';
 
@@ -35,21 +33,18 @@ export { TelemetryAggregator };
 
 export interface Env {
   TELEMETRY: DurableObjectNamespace;
+  /**
+   * Comma-separated allowlist of origins permitted to POST events.
+   * Wildcard `*` means any origin (only sensible in local dev).
+   */
   ALLOWED_ORIGIN: string;
 }
 
 // ---------- Schema ----------
 
-const ModelId = z.enum(['cdm', 'fpml', 'rune-dsl']);
-const ErrorCategory = z.enum([
-  'network',
-  'archive_not_found',
-  'archive_decode',
-  'parse',
-  'storage_quota',
-  'permission_denied',
-  'unknown'
-]);
+// Use the canonical enums from @rune-langium/curated-schema rather than
+// redeclaring — drift here would silently 400 legitimate Studio events
+// (e.g. `errorCategory: 'cancelled'`).
 const StudioVersion = z.string().max(32);
 const UaClass = z.string().max(64);
 
@@ -57,7 +52,7 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
   z
     .object({
       event: z.literal('curated_load_attempt'),
-      modelId: ModelId,
+      modelId: CuratedModelIdSchema,
       studio_version: StudioVersion,
       ua_class: UaClass
     })
@@ -65,7 +60,7 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
   z
     .object({
       event: z.literal('curated_load_success'),
-      modelId: ModelId,
+      modelId: CuratedModelIdSchema,
       durationMs: z.number().int().nonnegative().max(600_000),
       studio_version: StudioVersion,
       ua_class: UaClass
@@ -74,8 +69,8 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
   z
     .object({
       event: z.literal('curated_load_failure'),
-      modelId: ModelId,
-      errorCategory: ErrorCategory,
+      modelId: CuratedModelIdSchema,
+      errorCategory: ErrorCategorySchema,
       studio_version: StudioVersion,
       ua_class: UaClass
     })
@@ -96,19 +91,23 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
 
 type TelemetryEvent = z.infer<typeof TelemetryEventBody>;
 
-// ---------- In-memory per-IP rate limit (10/min) ----------
+// ---------- In-memory per-IP rate limit (10/min, with eviction) ----------
 
 const RATE_LIMIT = 10;
 const WINDOW_MS = 60_000;
+const MAX_TRACKED_IPS = 50_000;
 
-interface Window {
+interface RateWindow {
   windowStart: number;
   count: number;
 }
 
-const ipWindows = new Map<string, Window>();
+// Module-level so it survives within an isolate; CF runs many isolates so
+// this is intentionally a soft per-isolate throttle, not a global quota.
+const ipWindows = new Map<string, RateWindow>();
 
 function checkRateLimit(ip: string, now: number): { allowed: boolean; retryAfterS: number } {
+  evictExpired(now);
   const w = ipWindows.get(ip);
   if (!w || now - w.windowStart >= WINDOW_MS) {
     ipWindows.set(ip, { windowStart: now, count: 1 });
@@ -122,35 +121,59 @@ function checkRateLimit(ip: string, now: number): { allowed: boolean; retryAfter
   return { allowed: true, retryAfterS: 0 };
 }
 
-// Exposed for tests that span multiple `it()` blocks within the same
-// vitest worker — keeps each test starting from a clean per-IP state.
+function evictExpired(now: number): void {
+  if (ipWindows.size < MAX_TRACKED_IPS) {
+    // Cheap path: only sweep when we get close to the cap. The Map is
+    // bounded by traffic in the current 60s window in practice.
+    if (ipWindows.size < 1024) return;
+  }
+  for (const [ip, w] of ipWindows) {
+    if (now - w.windowStart >= WINDOW_MS) ipWindows.delete(ip);
+  }
+}
+
 export function _resetRateLimitForTesting(): void {
   ipWindows.clear();
 }
 
-// ---------- IP hashing (daily rotating salt) ----------
+// ---------- IP hashing (daily-rotating salt held in a DO) ----------
+//
+// The salt rotates per UTC day and is shared across isolates by storing
+// it in the same TelemetryAggregator DO that holds the counters, under
+// id-name `salt:<UTC-day>`. Each isolate caches the salt locally for
+// the day to avoid round-tripping the DO on every request.
 
-let dailySalt: { day: string; salt: string } | null = null;
+let cachedSalt: { day: string; salt: string } | null = null;
 
 function utcDay(now = new Date()): string {
-  return now.toISOString().slice(0, 10); // YYYY-MM-DD
+  return now.toISOString().slice(0, 10);
 }
 
-function getDailySalt(now: Date): string {
+async function getDailySalt(env: Env, now: Date): Promise<string> {
   const day = utcDay(now);
-  if (!dailySalt || dailySalt.day !== day) {
-    // 16-byte random salt per UTC day. Using crypto.getRandomValues so
-    // this works in both the Workers runtime and vitest (Node 20+).
-    const buf = new Uint8Array(16);
-    crypto.getRandomValues(buf);
-    dailySalt = {
-      day,
-      salt: Array.from(buf)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('')
-    };
+  if (cachedSalt && cachedSalt.day === day) return cachedSalt.salt;
+
+  const id = env.TELEMETRY.idFromName(`salt:${day}`);
+  const stub = env.TELEMETRY.get(id);
+  const res = await stub.fetch(new Request('https://do/salt'));
+  if (!res.ok) {
+    // DO unreachable — fall back to a per-isolate salt for this request.
+    // The privacy invariant (no raw IP logged) still holds; only cross-
+    // isolate dedup is lost for this one request.
+    const fallback = randomSaltHex();
+    return fallback;
   }
-  return dailySalt.salt;
+  const body = (await res.json()) as { salt: string };
+  cachedSalt = { day, salt: body.salt };
+  return body.salt;
+}
+
+function randomSaltHex(): string {
+  const buf = new Uint8Array(16);
+  crypto.getRandomValues(buf);
+  return Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 async function hashIp(ip: string, salt: string): Promise<string> {
@@ -161,17 +184,47 @@ async function hashIp(ip: string, salt: string): Promise<string> {
     .join('');
 }
 
+export function _resetSaltCacheForTesting(): void {
+  cachedSalt = null;
+}
+
+// ---------- CORS ----------
+
+function isOriginAllowed(origin: string | null, allowed: string): boolean {
+  if (!origin) return false;
+  if (allowed === '*') return true;
+  return allowed
+    .split(',')
+    .map((s) => s.trim())
+    .includes(origin);
+}
+
+function corsHeaders(origin: string | null, allowed: string): Record<string, string> {
+  if (!origin || !isOriginAllowed(origin, allowed)) return {};
+  return {
+    'Access-Control-Allow-Origin': origin,
+    Vary: 'Origin',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '600'
+  };
+}
+
 // ---------- Helpers ----------
 
-function jsonResponse(status: number, body: unknown): Response {
+function jsonResponse(
+  status: number,
+  body: unknown,
+  extraHeaders: Record<string, string> = {}
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', ...extraHeaders }
   });
 }
 
-function emptyResponse(status: number): Response {
-  return new Response(null, { status });
+function emptyResponse(status: number, extraHeaders: Record<string, string> = {}): Response {
+  return new Response(null, { status, headers: extraHeaders });
 }
 
 function getErrorCategory(event: TelemetryEvent): string | null {
@@ -190,17 +243,33 @@ export default {
     const url = new URL(req.url);
     const startedAt = Date.now();
     const ip = req.headers.get('cf-connecting-ip') ?? '0.0.0.0';
+    const origin = req.headers.get('Origin');
 
-    // Route: POST /rune-studio/api/telemetry/v1/event
+    // CORS preflight
+    if (req.method === 'OPTIONS' && url.pathname.endsWith('/v1/event')) {
+      const headers = corsHeaders(origin, env.ALLOWED_ORIGIN);
+      // Empty headers => origin not allowed; still return 204 so the
+      // browser logs a clear CORS rejection rather than a network error.
+      return emptyResponse(204, headers);
+    }
+
+    // POST /v1/event
     if (url.pathname.endsWith('/v1/event')) {
-      if (req.method !== 'POST') {
-        return jsonResponse(405, { error: 'method_not_allowed' });
+      if (req.method !== 'POST') return jsonResponse(405, { error: 'method_not_allowed' });
+
+      const cors = corsHeaders(origin, env.ALLOWED_ORIGIN);
+      // For cross-origin requests from a non-allowlisted origin, fail
+      // fast — the browser will block the response read regardless, but
+      // returning 403 makes the rejection explicit in server logs.
+      if (origin && !isOriginAllowed(origin, env.ALLOWED_ORIGIN)) {
+        return jsonResponse(403, { error: 'origin_not_allowed' });
       }
 
       // Rate-limit
       const rl = checkRateLimit(ip, startedAt);
       if (!rl.allowed) {
-        const ipHash = await hashIp(ip, getDailySalt(new Date(startedAt)));
+        const salt = await getDailySalt(env, new Date(startedAt));
+        const ipHash = await hashIp(ip, salt);
         logRequest({
           ipHash,
           event: 'rate_limited',
@@ -208,44 +277,66 @@ export default {
           durationMs: Date.now() - startedAt,
           outcome: 'rate_limited'
         });
-        return jsonResponse(429, {
-          error: 'rate_limited',
-          retry_after_s: rl.retryAfterS
-        });
+        return jsonResponse(429, { error: 'rate_limited', retry_after_s: rl.retryAfterS }, cors);
       }
 
-      // Parse JSON
+      // Parse + validate
       let raw: unknown;
       try {
         raw = await req.json();
       } catch {
-        return jsonResponse(400, { error: 'schema_violation', details: 'malformed_json' });
+        return jsonResponse(400, { error: 'schema_violation', details: 'malformed_json' }, cors);
       }
-
-      // Validate
       const parsed = TelemetryEventBody.safeParse(raw);
       if (!parsed.success) {
-        return jsonResponse(400, {
-          error: 'schema_violation',
-          details: parsed.error.issues
-        });
+        return jsonResponse(400, { error: 'schema_violation', details: parsed.error.issues }, cors);
       }
       const event = parsed.data;
 
-      // Forward to the DO for this <event>:<day>
+      // Forward to the per-event/per-day counter DO. Failures here MUST
+      // NOT silently 204 — SC-009 is computed off these counters; a DO
+      // outage masquerading as success would make the metric useless.
       const day = utcDay(new Date(startedAt));
-      const id = env.TELEMETRY.idFromName(doIdName(event, day));
-      const stub = env.TELEMETRY.get(id);
+      const counterId = env.TELEMETRY.idFromName(doIdName(event, day));
+      const stub = env.TELEMETRY.get(counterId);
       const errorCategory = getErrorCategory(event);
-      await stub.fetch(
-        new Request('https://do/inc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ errorCategory })
-        })
-      );
+      let stubRes: Response;
+      try {
+        stubRes = await stub.fetch(
+          new Request('https://do/inc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ errorCategory })
+          })
+        );
+      } catch (err) {
+        const salt = await getDailySalt(env, new Date(startedAt));
+        const ipHash = await hashIp(ip, salt);
+        logRequest({
+          ipHash,
+          event: event.event,
+          status: 500,
+          durationMs: Date.now() - startedAt,
+          outcome: 'do_failure',
+          err: errMessage(err)
+        });
+        return jsonResponse(500, { error: 'aggregator_failure' }, cors);
+      }
+      if (!stubRes.ok) {
+        const salt = await getDailySalt(env, new Date(startedAt));
+        const ipHash = await hashIp(ip, salt);
+        logRequest({
+          ipHash,
+          event: event.event,
+          status: stubRes.status,
+          durationMs: Date.now() - startedAt,
+          outcome: 'do_failure'
+        });
+        return jsonResponse(500, { error: 'aggregator_failure' }, cors);
+      }
 
-      const ipHash = await hashIp(ip, getDailySalt(new Date(startedAt)));
+      const salt = await getDailySalt(env, new Date(startedAt));
+      const ipHash = await hashIp(ip, salt);
       logRequest({
         ipHash,
         event: event.event,
@@ -253,23 +344,44 @@ export default {
         durationMs: Date.now() - startedAt,
         outcome: 'accepted'
       });
-
-      return emptyResponse(204);
+      return emptyResponse(204, cors);
     }
 
-    // Route: GET /rune-studio/api/telemetry/v1/stats?event=...&date=YYYY-MM-DD
-    // CF Access enforces the admin allowlist at the edge; the Worker just
-    // proxies to the addressed DO. T112 wires the actual Access policy.
+    // GET /v1/stats — CF Access enforces the admin allowlist at the route.
+    // The Worker just proxies. Errors here surface to the admin caller as
+    // 500 with a structured body so dashboards can branch on them.
     if (url.pathname.endsWith('/v1/stats')) {
       if (req.method !== 'GET') return jsonResponse(405, { error: 'method_not_allowed' });
       const eventName = url.searchParams.get('event');
       const date = url.searchParams.get('date') ?? utcDay(new Date(startedAt));
       if (!eventName) return jsonResponse(400, { error: 'missing_event_query' });
-      const id = env.TELEMETRY.idFromName(`${eventName}:${date}`);
-      const stub = env.TELEMETRY.get(id);
-      return stub.fetch(new Request('https://do/stats'));
+      try {
+        const id = env.TELEMETRY.idFromName(`${eventName}:${date}`);
+        const stub = env.TELEMETRY.get(id);
+        const res = await stub.fetch(new Request('https://do/stats'));
+        if (!res.ok) {
+          return jsonResponse(500, {
+            error: 'aggregator_failure',
+            event: eventName,
+            date,
+            do_status: res.status
+          });
+        }
+        return res;
+      } catch (err) {
+        return jsonResponse(500, {
+          error: 'aggregator_failure',
+          event: eventName,
+          date,
+          reason: errMessage(err)
+        });
+      }
     }
 
     return jsonResponse(404, { error: 'not_found' });
   }
 };
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}

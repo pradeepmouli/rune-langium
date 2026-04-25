@@ -337,6 +337,9 @@ importers:
 
   apps/telemetry-worker:
     dependencies:
+      '@rune-langium/curated-schema':
+        specifier: workspace:*
+        version: link:../../packages/curated-schema
       pino:
         specifier: ^9.5.0
         version: 9.14.0

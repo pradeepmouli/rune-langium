@@ -2,8 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Anonymised telemetry client. Feature 012-studio-workspace-ux, T021.
- * Wire format: contracts/telemetry-event.md.
+ * Anonymised telemetry client. Wire format: contracts/telemetry-event.md.
  *
  * Privacy invariants enforced here:
  *  - Disabled when running against localhost (dev or e2e).
@@ -102,18 +101,16 @@ export function createTelemetryClient(options: TelemetryClientOptions): Telemetr
           keepalive: true
         });
       } catch {
-        // Fail silent. Telemetry MUST NOT block the user (FR-T03 spirit).
+        // Fail silent. Telemetry MUST NEVER block or fail the host action.
       }
     }
   };
 }
 
 /**
- * Production endpoint for the telemetry Worker (T113). Routed at the edge
- * by `apps/telemetry-worker/wrangler.toml` to
- * `www.daikonic.dev/rune-studio/api/telemetry/v1/event`. Studio is hosted
- * under `www.daikonic.dev` so a same-origin POST does not require a CORS
- * preflight.
+ * Production endpoint for the telemetry Worker. Routed at the edge by
+ * `apps/telemetry-worker/wrangler.toml` to the same-origin path under
+ * www.daikonic.dev, so a same-origin POST does not require a preflight.
  */
 export const TELEMETRY_ENDPOINT_PROD =
   'https://www.daikonic.dev/rune-studio/api/telemetry/v1/event';

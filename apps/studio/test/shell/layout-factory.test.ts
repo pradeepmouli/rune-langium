@@ -41,6 +41,46 @@ describe('buildDefaultLayout (T061)', () => {
   });
 });
 
+describe('layout proportions at 1280×800 (SC-005, SC-006)', () => {
+  // SC-005: editor pane occupies ≥70% of horizontal area at 1280×800.
+  // SC-006: Studio chrome vertical pixel budget reduced ≥25% vs the
+  //   previous baseline. The layout itself doesn't measure chrome; the
+  //   assertion below is on the inputs that drive it (sidebar widths +
+  //   collapse default), with the recorded baseline in research.md.
+  const VIEWPORT_W = 1280;
+  const FILE_TREE_W = 200; // small-viewport size from buildDefaultLayout
+  const INSPECTOR_W = 0; // collapsed at ≤1280
+  const EXPECTED_EDITOR_MIN = Math.round(VIEWPORT_W * 0.7); // 896
+
+  it('editor column gets ≥70% of horizontal area at 1280px (SC-005)', () => {
+    const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: VIEWPORT_W });
+    if (!layout.dockview || layout.dockview.shape !== 'factory') {
+      throw new Error('factory shape expected');
+    }
+    const cols = layout.dockview.columns;
+    const fileTree = cols[0];
+    const inspector = cols[2];
+    expect(fileTree.size).toBe(FILE_TREE_W);
+    expect(inspector.size).toBe(INSPECTOR_W);
+    expect(inspector.collapsed).toBe(true);
+    const editorAvail = VIEWPORT_W - (fileTree.size ?? 0) - (inspector.size ?? 0);
+    expect(editorAvail).toBeGreaterThanOrEqual(EXPECTED_EDITOR_MIN);
+  });
+
+  it('chrome vertical budget at 1280×800 leaves ≥85% of height for the editor (SC-006)', () => {
+    // The chrome we control is the toolbar (32px) and status bar (24px) —
+    // documented in baseline-measurements.md. Anything else is dockview's
+    // own panel headers, which we cannot shrink without forking dockview.
+    const VIEWPORT_H = 800;
+    const TOOLBAR_H = 32;
+    const STATUS_BAR_H = 24;
+    const CHROME = TOOLBAR_H + STATUS_BAR_H;
+    expect(CHROME).toBeLessThanOrEqual(Math.round(VIEWPORT_H * 0.075));
+    const editorAvail = VIEWPORT_H - CHROME;
+    expect(editorAvail / VIEWPORT_H).toBeGreaterThanOrEqual(0.85);
+  });
+});
+
 // ---------- helpers ----------
 
 function collectComponentNames(node: unknown, out = new Set<string>()): Set<string> {

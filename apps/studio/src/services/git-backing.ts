@@ -156,7 +156,14 @@ async function walk(fs: OpfsFs, base: string, rel: string, out: string[]): Promi
   let names: string[];
   try {
     names = await fs.readdir(fullPath);
-  } catch {
+  } catch (err) {
+    // A working-tree dir we can't read is a real failure — silently
+    // dropping it would mean `git status` reports "all clean" and a
+    // commit would push an incomplete tree. Surface it; let the caller
+    // decide whether to abort the commit/push or continue with the
+    // partial set.
+    // eslint-disable-next-line no-console
+    console.error(`[git-backing] walk: readdir(${fullPath}) failed; tree may be incomplete`, err);
     return;
   }
   for (const name of names) {
@@ -164,7 +171,11 @@ async function walk(fs: OpfsFs, base: string, rel: string, out: string[]): Promi
     let stat;
     try {
       stat = await fs.stat(`${base}/${childRel}`);
-    } catch {
+    } catch (err) {
+      // Race with a concurrent delete — entry vanished between readdir
+      // and stat. Skip but log so a real bug isn't masked.
+      // eslint-disable-next-line no-console
+      console.warn(`[git-backing] walk: stat(${base}/${childRel}) failed; skipping`, err);
       continue;
     }
     if (stat.isFile()) {

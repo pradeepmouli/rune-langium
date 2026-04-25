@@ -5,10 +5,17 @@
  * Layout factory — produces the default `PanelLayoutRecord` for a fresh
  * workspace and for the "Reset layout" command.
  *
- * The dockview JSON shape is opaque to the rest of Studio; this module
- * is the only place that knows the panel topology. The six component
- * names locked in `contracts/dockview-panel-registry.md` are exported
- * here so consumers reference one source of truth.
+ * Two shapes flow through `PanelLayoutRecord.dockview`:
+ *
+ *   - **factory** (`{ shape: 'factory', columns, bottomGroup }`) — what
+ *     this module emits and what the layout-migrations sanitiser
+ *     produces. Tightly typed, fixed-arity columns.
+ *   - **native**  (`{ shape: 'native',  json }`) — a round-tripped
+ *     `api.toJSON()` snapshot. Opaque to us; we only feed it back into
+ *     `api.fromJSON()`.
+ *
+ * The discriminator (`shape`) makes the bridge's translation explicit
+ * instead of structural-guessing.
  */
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
@@ -31,25 +38,47 @@ export interface BuildLayoutInput {
   viewportWidth: number;
 }
 
-interface LayoutNode {
+export interface LayoutNode {
   component: PanelComponentName;
   collapsed?: boolean;
+  /** Pixel width hint. */
   size?: number;
-  /** Editor area takes a larger relative size by default. */
+  /** Relative weight when no explicit size is given. */
   weight?: number;
 }
 
-interface DockviewLayoutShape {
-  /** Left-to-right column groups: file tree → editor → inspector. */
-  columns: LayoutNode[];
-  /** Bottom panel — tabbed group hosting problems/output/visualPreview. */
-  bottomGroup: { active: PanelComponentName; tabs: LayoutNode[]; collapsed: boolean };
+export interface BottomGroup {
+  active: PanelComponentName;
+  collapsed: boolean;
+  tabs: LayoutNode[];
 }
+
+/**
+ * Factory shape — what `buildDefaultLayout` emits and what the bridge
+ * translates into `addPanel(...)` calls. Three columns, fixed-arity.
+ */
+export interface FactoryShape {
+  shape: 'factory';
+  columns: [LayoutNode, LayoutNode, LayoutNode];
+  bottomGroup: BottomGroup;
+}
+
+/**
+ * Native shape — `api.toJSON()` output. Opaque; the bridge feeds it
+ * straight back to `api.fromJSON()`.
+ */
+export interface NativeShape {
+  shape: 'native';
+  json: unknown;
+}
+
+export type DockviewPayload = FactoryShape | NativeShape;
 
 export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
   const small = input.viewportWidth <= SMALL_VIEWPORT_BREAKPOINT_PX;
 
-  const dockview: DockviewLayoutShape = {
+  const dockview: FactoryShape = {
+    shape: 'factory',
     columns: [
       { component: 'workspace.fileTree', size: small ? 200 : 240 },
       { component: 'workspace.editor', weight: 3 },
@@ -73,6 +102,6 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
   return {
     version: 1,
     writtenBy: input.studioVersion,
-    dockview: dockview as unknown as PanelLayoutRecord['dockview']
+    dockview
   };
 }

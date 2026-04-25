@@ -146,4 +146,32 @@ describe('migrateLightningFsToOpfs — failure path (T042)', () => {
     // CRITICAL: legacy DB MUST still exist after a failed migration.
     expect(await dbExists('fs')).toBe(true);
   });
+
+  it('keeps legacy DB intact and reports failed when deleteDatabase is blocked by another tab', async () => {
+    await seedLegacyFs({ '/x.rosetta': new TextEncoder().encode('x') });
+
+    // Hold an open connection to `fs` so the migration's delete pass
+    // sees `onblocked`. Without distinguishing blocked from success,
+    // the migration would silently mark itself complete and run again
+    // next launch, producing duplicate "Migrated workspace" entries.
+    const holder = await new Promise<IDBDatabase>((resolve) => {
+      const req = indexedDB.open('fs');
+      req.onsuccess = () => resolve(req.result);
+    });
+
+    try {
+      const result = await migrateLightningFsToOpfs({
+        opfsRoot: opfs as unknown as FileSystemDirectoryHandle,
+        studioVersion: '0.1.0'
+      });
+      // The OPFS half succeeded but the legacy-delete pass is blocked.
+      // Migration MUST report failure so it doesn't run again next launch.
+      expect(result.kind).toBe('failed');
+      if (result.kind === 'failed') {
+        expect(result.reason).toMatch(/legacy_db_blocked/);
+      }
+    } finally {
+      holder.close();
+    }
+  });
 });

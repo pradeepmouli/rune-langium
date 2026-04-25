@@ -17,6 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const CSS_OUT = resolve(ROOT, 'dist/tokens.css');
 const JS_OUT = resolve(ROOT, 'dist/tokens.js');
+const DTS_OUT = resolve(ROOT, 'dist/tokens.d.ts');
 
 describe('@rune-langium/design-tokens build (T024)', () => {
   beforeAll(() => {
@@ -67,5 +68,18 @@ describe('@rune-langium/design-tokens build (T024)', () => {
     const js = readFileSync(JS_OUT, 'utf8');
     expect(js).toMatch(/export const tokens =/);
     expect(js).toMatch(/as const/);
+  });
+
+  it('emits dist/tokens.d.ts with a fully-typed Tokens interface (not Record<string, unknown>)', () => {
+    const dts = readFileSync(DTS_OUT, 'utf8');
+    // The interface must declare specific known token paths, not be a generic record.
+    expect(dts).toMatch(/export interface Tokens \{/);
+    expect(dts).toMatch(/readonly color:/);
+    expect(dts).not.toMatch(/Record<string, unknown>/);
+    // A misspelled-token regression would surface as a missing property.
+    // Spot-check a few well-known nested paths exist as readonly properties.
+    expect(dts).toMatch(/readonly surface:/);
+    expect(dts).toMatch(/readonly spacing:/);
+    expect(dts).toMatch(/readonly motion:/);
   });
 });

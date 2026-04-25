@@ -2,18 +2,31 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * T035 — stale-while-revalidate freshness check (FR-005a / FR-005b).
+ * Stale-while-revalidate freshness check.
  *
  * The client-side check MUST:
  *  - return immediately with no archive download
- *  - report whether a newer manifest exists at the mirror
- *  - never throw on transient network errors (returns null instead)
+ *  - distinguish three observable mirror states (ok / unreachable /
+ *    malformed) so callers drive different stale-while-revalidate UX
+ *  - never throw on transient network errors
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readMirrorVersion } from '../../src/services/curated-loader.js';
 
 const MANIFEST_URL = 'https://www.daikonic.dev/curated/cdm/manifest.json';
+const VALID_MANIFEST = {
+  schemaVersion: 1,
+  modelId: 'cdm',
+  version: '2026-04-25',
+  sha256: 'a'.repeat(64),
+  sizeBytes: 100,
+  generatedAt: '2026-04-25T03:00:00Z',
+  upstreamCommit: '',
+  upstreamRef: 'master',
+  archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+  history: []
+};
 
 let fetchSpy: ReturnType<typeof vi.spyOn>;
 
@@ -22,52 +35,50 @@ beforeEach(() => {
 });
 afterEach(() => fetchSpy.mockRestore());
 
-describe('readMirrorVersion (T035, FR-005b)', () => {
-  it('returns the manifest version on success', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ schemaVersion: 1, modelId: 'cdm', version: '2026-04-25' }))
-    );
-    const v = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
-    expect(v).toBe('2026-04-25');
+describe('readMirrorVersion', () => {
+  it('returns kind:ok with version on a valid manifest response', async () => {
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify(VALID_MANIFEST)));
+    const r = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
+    expect(r).toEqual({ kind: 'ok', version: '2026-04-25' });
     // Sanity: it does NOT fetch the archive (no second call).
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(String(fetchSpy.mock.calls[0]![0])).toBe(MANIFEST_URL);
   });
 
-  it('returns null on a 5xx', async () => {
+  it('returns kind:unreachable on a 5xx', async () => {
     fetchSpy.mockResolvedValueOnce(new Response('boom', { status: 503 }));
-    const v = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
-    expect(v).toBeNull();
+    const r = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
+    expect(r).toEqual({ kind: 'unreachable' });
   });
 
-  it('returns null when fetch throws (offline)', async () => {
+  it('returns kind:unreachable when fetch throws (offline)', async () => {
     fetchSpy.mockRejectedValueOnce(new Error('network'));
-    const v = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
-    expect(v).toBeNull();
+    const r = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
+    expect(r).toEqual({ kind: 'unreachable' });
   });
 
-  it('returns null on malformed JSON', async () => {
+  it('returns kind:malformed on invalid JSON', async () => {
     fetchSpy.mockResolvedValueOnce(new Response('not json'));
-    const v = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
-    expect(v).toBeNull();
+    const r = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
+    expect(r).toEqual({ kind: 'malformed' });
   });
 
-  it('returns null when version field is missing', async () => {
+  it('returns kind:malformed when the manifest fails schema validation', async () => {
     fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ schemaVersion: 1 })));
-    const v = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
-    expect(v).toBeNull();
+    const r = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm');
+    expect(r).toEqual({ kind: 'malformed' });
   });
 
-  it('respects an aborted signal', async () => {
+  it('returns kind:unreachable on an aborted signal', async () => {
     const ctl = new AbortController();
     fetchSpy.mockImplementation(async (_url, init) => {
       if ((init as RequestInit | undefined)?.signal?.aborted) {
         throw new DOMException('aborted', 'AbortError');
       }
-      return new Response(JSON.stringify({ version: '2026-04-25' }));
+      return new Response(JSON.stringify(VALID_MANIFEST));
     });
     ctl.abort();
-    const v = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm', ctl.signal);
-    expect(v).toBeNull();
+    const r = await readMirrorVersion('https://www.daikonic.dev/curated', 'cdm', ctl.signal);
+    expect(r).toEqual({ kind: 'unreachable' });
   });
 });

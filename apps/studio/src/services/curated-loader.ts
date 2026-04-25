@@ -77,11 +77,25 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 function isAbortError(err: unknown): boolean {
-  return err instanceof Error && err.name === 'AbortError';
+  return hasErrorName(err, 'AbortError');
 }
 
 function isQuotaExceeded(err: unknown): boolean {
-  return err instanceof Error && err.name === 'QuotaExceededError';
+  return hasErrorName(err, 'QuotaExceededError');
+}
+
+/**
+ * Walk the Error.cause chain looking for an entry whose `.name` matches.
+ * The tar parser re-throws with extra path attribution but preserves
+ * the original DOMException as `cause`, so we must inspect both.
+ */
+function hasErrorName(err: unknown, name: string): boolean {
+  let cur: unknown = err;
+  for (let depth = 0; depth < 8 && cur; depth++) {
+    if (cur instanceof Error && cur.name === name) return true;
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 async function fetchOk(url: string, signal?: AbortSignal): Promise<Response> {
@@ -133,10 +147,23 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
     // tampered manifest redirect us to fetch attacker bytes.
     const archiveUrl = `${mirrorBase}/${modelId}/latest.tar.gz`;
     const archiveRes = await fetchOk(archiveUrl, signal);
-    const bytes = new Uint8Array(await archiveRes.arrayBuffer());
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(await archiveRes.arrayBuffer());
+    } catch (err) {
+      // arrayBuffer() failures (mid-download network drop, browser
+      // decompression failure, length mismatch) are network problems,
+      // not archive problems. fetchOk() only catches the initial fetch.
+      if (isAbortError(err)) {
+        throw new CuratedLoadError('cancelled', 'load cancelled');
+      }
+      throw new CuratedLoadError('network', `download ${archiveUrl} interrupted`);
+    }
 
-    // Verify the bytes match the manifest's claimed sha256 BEFORE feeding
-    // them to the tar parser. The schema already enforces the regex shape.
+    // SECURITY INVARIANT: bytes are NEVER passed to extractTarGz unless
+    // the SHA matches the manifest. The tar parser is hardened, but
+    // treating the archive as untrusted input until the digest matches
+    // is the actual mitigation here.
     const observed = await sha256Hex(bytes);
     if (observed.toLowerCase() !== manifest.sha256.toLowerCase()) {
       throw new CuratedLoadError(
@@ -159,13 +186,22 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
         }
       });
     } catch (err) {
+      // FR-002 categories must distinguish user-actionable cases. Quota
+      // and permission are explicit; anything else here we cannot map to
+      // a specific category from the path traversed (we already passed
+      // SHA verification, so the bytes are not a decode failure). Bucket
+      // it as `unknown` — the user will see "Something went wrong" and
+      // the telemetry counter will reflect the rare path correctly.
+      if (isAbortError(err)) {
+        throw new CuratedLoadError('cancelled', 'load cancelled');
+      }
       if (isQuotaExceeded(err)) {
         throw new CuratedLoadError('storage_quota', 'OPFS storage quota exceeded');
       }
-      if (err instanceof Error && err.name === 'NotAllowedError') {
+      if (hasErrorName(err, 'NotAllowedError')) {
         throw new CuratedLoadError('permission_denied', 'OPFS permission denied');
       }
-      throw new CuratedLoadError('archive_decode', `extract failed: ${(err as Error).message}`);
+      throw new CuratedLoadError('unknown', `extract failed: ${errMessage(err)}`);
     }
 
     const result: LoadCuratedResult = {
@@ -191,23 +227,50 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
 
 /**
  * Cheap freshness check: returns the manifest's version string without
- * re-downloading the archive. Satisfies FR-005b. Returns null on any error
- * (caller is expected to fall back to using the cached copy).
+ * re-downloading the archive.
+ *
+ * The result is a discriminated union so callers can distinguish the
+ * three observable states — they drive different stale-while-revalidate
+ * behaviour:
+ *   - `ok`           → mirror is reachable; serve fresh / refresh cache
+ *   - `unreachable`  → mirror or network is down; keep cached copy silently
+ *   - `malformed`    → mirror responded but the manifest is broken; surface
+ *                      an "update prompt failed" toast so the user knows
+ *                      the cache may now be stale relative to upstream
  */
+export type ReadMirrorVersionResult =
+  | { kind: 'ok'; version: string }
+  | { kind: 'unreachable' }
+  | { kind: 'malformed' };
+
 export async function readMirrorVersion(
   mirrorBase: string,
   modelId: CuratedModelId,
   signal?: AbortSignal
-): Promise<string | null> {
+): Promise<ReadMirrorVersionResult> {
+  let res: Response;
   try {
-    const res = await fetch(`${mirrorBase}/${modelId}/manifest.json`, {
+    res = await fetch(`${mirrorBase}/${modelId}/manifest.json`, {
       signal,
       cache: 'no-cache'
     });
-    if (!res.ok) return null;
-    const m = (await res.json()) as CuratedManifest;
-    return typeof m.version === 'string' ? m.version : null;
   } catch {
-    return null;
+    return { kind: 'unreachable' };
   }
+  if (!res.ok) return { kind: 'unreachable' };
+  let raw: unknown;
+  try {
+    raw = await res.json();
+  } catch {
+    return { kind: 'malformed' };
+  }
+  // Use the canonical schema: a malformed manifest is observably distinct
+  // from "we couldn't reach the mirror" and must drive different UX.
+  const parsed = parseManifest(raw);
+  if (!parsed.ok) return { kind: 'malformed' };
+  return { kind: 'ok', version: parsed.manifest.version };
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

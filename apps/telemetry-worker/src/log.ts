@@ -2,13 +2,13 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Structured request logging for the telemetry Worker (T111).
+ * Structured request logging for the telemetry Worker.
  *
  * Mirrors `apps/codegen-worker/src/log.ts` so both Workers share the
- * same redact rules. The privacy contract for telemetry (FR-T02) is
- * stricter than for codegen — we never persist a raw IP, never log
- * file paths, and never log request bodies. Pino's `redact` config
- * enforces this at the framework level.
+ * same redact rules. The privacy contract for telemetry is stricter
+ * than for codegen — we never persist a raw IP, never log file paths,
+ * and never log request bodies. Pino's `redact` config enforces this
+ * at the framework level.
  */
 
 import pino from 'pino/browser';
@@ -19,7 +19,9 @@ export interface TelemetryLogEntry {
   event: string;
   status: number;
   durationMs: number;
-  outcome: 'accepted' | 'rejected' | 'rate_limited';
+  outcome: 'accepted' | 'rejected' | 'rate_limited' | 'do_failure';
+  /** Free-form cause, only populated for `do_failure`. Never includes raw IP. */
+  err?: string;
 }
 
 const REDACT_PATHS = [
@@ -61,7 +63,8 @@ export function logRequest(entry: TelemetryLogEntry): void {
       event: entry.event,
       status: entry.status,
       duration_ms: entry.durationMs,
-      outcome: entry.outcome
+      outcome: entry.outcome,
+      ...(entry.err ? { err: entry.err } : {})
     },
     'telemetry.request'
   );
