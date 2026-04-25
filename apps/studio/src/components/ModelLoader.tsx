@@ -153,7 +153,10 @@ export function ModelLoader() {
 
       {/* Errors — FR-002 distinct, actionable copy per failure category. */}
       {Array.from(errors.entries()).map(([id, err]) => {
-        const source = registry.find((s) => s.id === id);
+        // Prefer the source captured at error time so Retry works for both
+        // curated (in-registry) and custom-URL loads. Fall back to the
+        // registry as a defensive lookup if we ever lose the entry.source.
+        const source = err.source ?? registry.find((s) => s.id === id);
         const modelName = source?.name ?? id;
         return (
           <div key={id} className="p-3 bg-destructive/10 text-destructive rounded-md text-sm">

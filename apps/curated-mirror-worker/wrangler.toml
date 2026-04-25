@@ -6,7 +6,8 @@
 #
 # Runs nightly via Cron Trigger; downloads CDM / FpML / rune-dsl archives
 # from codeload.github.com and uploads to R2. Studio reads from
-# www.daikonic.dev/curated/* (route handler in apps/codegen-worker, T008).
+# www.daikonic.dev/curated/* (route handler in this Worker:
+# apps/curated-mirror-worker/src/index.ts -> handleCuratedRead).
 
 name = "rune-curated-mirror-worker"
 main = "src/index.ts"

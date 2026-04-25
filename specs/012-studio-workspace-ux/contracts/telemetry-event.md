@@ -34,7 +34,7 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
     modelId: z.enum(['cdm', 'fpml', 'rune-dsl']),
     errorCategory: z.enum([
       'network', 'archive_not_found', 'archive_decode',
-      'parse', 'storage_quota', 'permission_denied', 'unknown'
+      'storage_quota', 'permission_denied', 'cancelled', 'unknown'
     ]),
     studio_version: z.string().max(32),
     ua_class: z.string().max(64)
@@ -66,7 +66,10 @@ never persisted in raw form.
 | `429` | `{ error: 'rate_limited', retry_after_s }` | Per-IP throttle (10 events / minute, ample for any honest client). |
 
 Clients MUST NOT block the user on a telemetry response. A `429` or `5xx`
-is dropped silently after one retry.
+is dropped silently — the Studio client (`apps/studio/src/services/telemetry.ts`)
+posts once with `keepalive: true` and swallows any failure. Servers MUST
+tolerate occasional missed events; the budget for SC-009 (≥95% reported
+success rate) accounts for this best-effort delivery.
 
 ---
 

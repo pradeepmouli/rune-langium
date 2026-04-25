@@ -46,7 +46,8 @@ describe('layout proportions at 1280×800 (SC-005, SC-006)', () => {
   // SC-006: Studio chrome vertical pixel budget reduced ≥25% vs the
   //   previous baseline. The layout itself doesn't measure chrome; the
   //   assertion below is on the inputs that drive it (sidebar widths +
-  //   collapse default), with the recorded baseline in research.md.
+  //   collapse default), with the recorded baseline in
+  //   specs/012-studio-workspace-ux/baseline-measurements.md.
   const VIEWPORT_W = 1280;
   const FILE_TREE_W = 200; // small-viewport size from buildDefaultLayout
   const INSPECTOR_W = 0; // collapsed at ≤1280
