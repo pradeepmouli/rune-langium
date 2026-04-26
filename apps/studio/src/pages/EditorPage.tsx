@@ -47,6 +47,7 @@ import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportMenu } from '../components/ExportMenu.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Maximize2, LayoutGrid, Code2, Network } from 'lucide-react';
 import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
@@ -616,12 +617,16 @@ export function EditorPage({
       tabIndex={-1}
     >
       {/* Toolbar — graph-only controls. Panel toggles are gone; users
-       * collapse / rearrange via dockview. (T091 chrome reduction.) */}
+       * collapse / rearrange via dockview. (T091 chrome reduction.)
+       * T059 (014/FR-027) — buttons grouped by category with vertical
+       * separators; toggle-style buttons (Grouped) carry aria-pressed
+       * matching their data-variant for SR users + automated audits. */}
       <nav
         className="glass-toolbar flex items-center justify-between px-3 py-1.5 gap-2 border-b border-border"
         aria-label="Editor toolbar"
       >
         <div className="flex items-center gap-1.5">
+          {/* Layout actions */}
           <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
             <Maximize2 className="w-3.5 h-3.5 mr-1" />
             Fit View
@@ -630,8 +635,12 @@ export function EditorPage({
             <LayoutGrid className="w-3.5 h-3.5 mr-1" />
             Re-layout
           </Button>
+          <Separator orientation="vertical" className="mx-1 h-5" />
+          {/* Toggle controls (panel-toggle semantics: aria-pressed) */}
           <Button
             variant={groupedLayout ? 'default' : 'secondary'}
+            data-variant={groupedLayout ? 'default' : 'secondary'}
+            aria-pressed={groupedLayout}
             size="sm"
             onClick={handleToggleGroupedLayout}
             title="Group by inheritance trees"
@@ -639,6 +648,8 @@ export function EditorPage({
             <Network className="w-3.5 h-3.5 mr-1" />
             Grouped
           </Button>
+          <Separator orientation="vertical" className="mx-1 h-5" />
+          {/* Filter controls */}
           <GraphFilterMenu />
         </div>
         <div className="flex items-center gap-1.5">
@@ -647,6 +658,7 @@ export function EditorPage({
             exportImage={handleExportImage}
             hasModels={models.length > 0}
           />
+          <Separator orientation="vertical" className="mx-1 h-5" />
           <Button
             variant="secondary"
             size="sm"

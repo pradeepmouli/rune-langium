@@ -121,6 +121,59 @@ export async function detectSyncState(fs: OpfsFs, workspaceId: string): Promise<
   return dirty ? 'ahead' : 'clean';
 }
 
+export interface CloneOptions {
+  /** Public or private GitHub repo URL (e.g. `https://github.com/owner/repo.git`). */
+  remoteUrl: string;
+  /** Branch / ref to check out. Defaults to `main` when not supplied. */
+  ref?: string;
+  /** Personal access token from the device-flow exchange; sent as the password. */
+  token: string;
+  /** Account name for the auth header; can be anything for token auth. */
+  user: string;
+  /** Optional progress hook — `phase` enumerates fetch / index / done. */
+  onProgress?: (evt: { phase: string; loaded?: number; total?: number }) => void;
+}
+
+/**
+ * Clone a GitHub repository into a fresh git-backed workspace under OPFS.
+ *
+ * Layout: `<workspaceId>/files/...` (working tree) + `<workspaceId>/.git/...`
+ * (object store). The same shape the existing `initRepo` + `pushBranch`
+ * functions assume.
+ *
+ * Routes through the studio's CORS proxy (currently
+ * `cors.isomorphic-git.org`); per FR-019 the legacy clone path is gated
+ * on `config.legacyGitPathEnabled`, but this function is the
+ * github-backed-workspace path and runs unconditionally — the FR-019
+ * gate applies only to the curated-archive fallback in `model-loader.ts`.
+ */
+export async function cloneRepository(
+  fs: OpfsFs,
+  workspaceId: string,
+  options: CloneOptions
+): Promise<void> {
+  const dir = repoDir(workspaceId);
+  await git.clone({
+    fs: gitFs(fs) as unknown as Parameters<typeof git.clone>[0]['fs'],
+    http,
+    dir,
+    url: options.remoteUrl,
+    ref: options.ref ?? 'main',
+    singleBranch: true,
+    depth: 1,
+    corsProxy: CORS_PROXY,
+    onAuth: () => ({ username: options.user, password: options.token }),
+    onProgress: options.onProgress
+      ? (evt) =>
+          options.onProgress!({
+            phase: evt.phase,
+            loaded: evt.loaded,
+            total: evt.total
+          })
+      : undefined
+  });
+}
+
 export interface PushOptions {
   remoteUrl: string;
   ref: string;

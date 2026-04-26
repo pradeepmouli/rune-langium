@@ -9,6 +9,19 @@
 
 import type { OpfsFs } from '../opfs/opfs-fs.js';
 
+/**
+ * Categorised init/poll error reasons. The github-auth Worker classifies
+ * upstream failures into structured categories
+ * (`contracts/github-auth-worker.md`); we surface those so the dialog
+ * can render distinct user-facing copy (FR-006 / EC-6) instead of a
+ * raw "HTTP 502" string.
+ */
+export type GitHubAuthErrorCategory =
+  | 'misconfigured' // 502: GitHub App client_id is the placeholder, not deployed yet
+  | 'unavailable' // 503 / network: GitHub upstream unhealthy
+  | 'origin_blocked' // 403: Origin not in the Worker's allowlist
+  | 'unknown';
+
 export type InitResult =
   | {
       kind: 'ok';
@@ -18,14 +31,22 @@ export type InitResult =
       intervalSec: number;
       expiresInSec: number;
     }
-  | { kind: 'error'; reason: string };
+  | { kind: 'error'; reason: string; category: GitHubAuthErrorCategory };
 
 export type PollResult =
   | { kind: 'ok'; accessToken: string; scope: string }
   | { kind: 'pending' }
   | { kind: 'slow_down' }
   | { kind: 'expired' }
-  | { kind: 'error'; reason: string };
+  | { kind: 'access_denied' }
+  | { kind: 'error'; reason: string; category: GitHubAuthErrorCategory };
+
+function categoriseStatus(status: number): GitHubAuthErrorCategory {
+  if (status === 502) return 'misconfigured';
+  if (status === 503) return 'unavailable';
+  if (status === 403) return 'origin_blocked';
+  return 'unknown';
+}
 
 export async function initDeviceFlow(authBase: string): Promise<InitResult> {
   let res: Response;
@@ -35,9 +56,15 @@ export async function initDeviceFlow(authBase: string): Promise<InitResult> {
       credentials: 'include'
     });
   } catch (err) {
-    return { kind: 'error', reason: (err as Error).message };
+    return { kind: 'error', reason: (err as Error).message, category: 'unavailable' };
   }
-  if (!res.ok) return { kind: 'error', reason: `HTTP ${res.status}` };
+  if (!res.ok) {
+    return {
+      kind: 'error',
+      reason: `HTTP ${res.status}`,
+      category: categoriseStatus(res.status)
+    };
+  }
   const body = (await res.json()) as {
     device_code: string;
     user_code: string;
@@ -65,7 +92,7 @@ export async function pollDeviceFlow(authBase: string, deviceCode: string): Prom
       body: JSON.stringify({ device_code: deviceCode })
     });
   } catch (err) {
-    return { kind: 'error', reason: (err as Error).message };
+    return { kind: 'error', reason: (err as Error).message, category: 'unavailable' };
   }
   if (res.status === 200) {
     const body = (await res.json()) as { access_token: string; scope?: string };
@@ -76,7 +103,18 @@ export async function pollDeviceFlow(authBase: string, deviceCode: string): Prom
     return body.status === 'slow_down' ? { kind: 'slow_down' } : { kind: 'pending' };
   }
   if (res.status === 410) return { kind: 'expired' };
-  return { kind: 'error', reason: `HTTP ${res.status}` };
+  // The Worker returns 403 access_denied (terminal — user clicked Cancel)
+  // distinct from the catch-all error path. Mirror that semantic so the
+  // dialog can render distinct copy.
+  if (res.status === 403) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (body.error === 'access_denied') return { kind: 'access_denied' };
+  }
+  return {
+    kind: 'error',
+    reason: `HTTP ${res.status}`,
+    category: categoriseStatus(res.status)
+  };
 }
 
 // ---------- token storage (per workspace, OPFS only) ----------

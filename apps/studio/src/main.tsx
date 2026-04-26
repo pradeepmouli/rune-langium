@@ -8,6 +8,9 @@ import { Buffer } from 'buffer';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
+// Dockview chrome (tab strips, sash handles, abyss theme palette).
+// Loaded before app styles so any local overrides win.
+import 'dockview-react/dist/styles/dockview.css';
 import './styles.css';
 
 const root = document.getElementById('root');

@@ -12,6 +12,7 @@ import type { WorkspaceFile, WorkspaceLoadProgress } from '../services/workspace
 import { createBlankWorkspaceFile, readFileList } from '../services/workspace.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { cn } from '@rune-langium/design-system/utils';
+import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
 
 export interface FileLoaderProps {
   onFilesLoaded: (files: WorkspaceFile[]) => void;
@@ -20,13 +21,50 @@ export interface FileLoaderProps {
    * action (`untitled.rosetta`, `untitled-2.rosetta`, …). Defaults to empty.
    */
   existingFiles?: ReadonlyArray<WorkspaceFile>;
+  /**
+   * Override the github-auth base URL (T031 / FR-012). Defaults to the
+   * production same-origin path; tests inject their own.
+   */
+  githubAuthBase?: string;
+  /**
+   * Inject a workspace-creation function for the GitHub flow (T032e).
+   * Production callers pass a thin wrapper around
+   * `WorkspaceManager.createGitBacked`. Tests can stub this to avoid
+   * mounting a real OPFS root. When omitted, the GitHub flow stops at
+   * the auth step (FileLoader's own tests cover that legacy shape).
+   */
+  createGitBackedWorkspace?: (input: {
+    name: string;
+    repoUrl: string;
+    branch: string;
+    user: string;
+    token: string;
+  }) => Promise<{ id: string }>;
+  /**
+   * Notified when the GitHub flow successfully creates a workspace.
+   * App.tsx swaps to that workspace via WorkspaceManager.open(id).
+   */
+  onGitHubWorkspaceCreated?: (workspaceId: string) => void;
 }
 
-export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProps) {
+function defaultGithubAuthBase(): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/rune-studio/api/github-auth`;
+}
+
+export function FileLoader({
+  onFilesLoaded,
+  existingFiles = [],
+  githubAuthBase,
+  createGitBackedWorkspace,
+  onGitHubWorkspaceCreated
+}: FileLoaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [loadProgress, setLoadProgress] = useState<WorkspaceLoadProgress | null>(null);
+  const [isGitHubOpen, setIsGitHubOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
+  const authBase = githubAuthBase ?? defaultGithubAuthBase();
 
   const handleFiles = useCallback(
     async (fileList: FileList) => {
@@ -80,7 +118,10 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
   return (
     <section
       className={cn(
-        'flex items-center justify-center h-full p-8 transition-colors',
+        // T057 — sized to the start-page column rather than to the
+        // entire viewport; the parent container handles vertical
+        // centring. Drag-target affordance still flashes on dragenter.
+        'flex items-center justify-center w-full transition-colors rounded-lg',
         isDragging && 'bg-primary/15'
       )}
       onDrop={handleDrop}
@@ -89,9 +130,20 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
       data-testid="file-loader"
       aria-label="File loader"
     >
-      <div className="text-center max-w-[480px]">
-        <p className="text-2xl font-semibold text-foreground mb-2">Load Rune DSL Models</p>
-        <p className="text-md text-muted-foreground mb-6">
+      {/* T057 (014/FR-028) — empty-state hierarchy:
+       *   1. Heading (text-3xl font-semibold tracking-tight, body
+       *      already maps to font-display via T053)
+       *   2. ONE primary CTA ("New blank workspace")
+       *   3. Equal-weight transparent secondaries (Select Files /
+       *      Select Folder). "Open from GitHub" is wired in Phase 6.
+       *   4. ModelLoader (curated reference models) renders below as
+       *      a discoverable but visually subordinate row — no
+       *      `border-t` divider, just `mt-8`. */}
+      <div className="text-center max-w-[560px]">
+        <h2 className="text-3xl font-semibold tracking-tight text-foreground mb-3">
+          Load Rune DSL Models
+        </h2>
+        <p className="text-md text-text-secondary mb-8">
           Start a new file, or drag and drop existing .rosetta files here
         </p>
 
@@ -116,19 +168,51 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
             </p>
           </div>
         ) : (
-          <>
+          <div className="flex flex-col items-stretch gap-4">
+            <Button size="lg" onClick={handleNew}>
+              New blank workspace
+            </Button>
             <div className="flex gap-3 justify-center flex-wrap">
-              <Button size="lg" onClick={handleNew}>
-                New
-              </Button>
               <Button variant="secondary" size="lg" onClick={() => fileInputRef.current?.click()}>
                 Select Files
               </Button>
               <Button variant="secondary" size="lg" onClick={() => dirInputRef.current?.click()}>
                 Select Folder
               </Button>
+              {createGitBackedWorkspace && (
+                <Button variant="secondary" size="lg" onClick={() => setIsGitHubOpen(true)}>
+                  Open from GitHub repository…
+                </Button>
+              )}
             </div>
-          </>
+          </div>
+        )}
+
+        {isGitHubOpen && createGitBackedWorkspace && (
+          // T031 visible affordance + T032e end-to-end clone wiring.
+          // The CTA only renders when `createGitBackedWorkspace` is wired,
+          // so reaching here means the full flow is available. App.tsx
+          // hasn't threaded the prop in yet → the CTA stays hidden and
+          // the legacy "auth-only" stub no longer ships in production.
+          <div
+            role="presentation"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsGitHubOpen(false);
+            }}
+          >
+            <div className="bg-popover border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+              <GitHubWorkspaceFlow
+                authBase={authBase}
+                createWorkspace={createGitBackedWorkspace}
+                onCreated={(id) => {
+                  setIsGitHubOpen(false);
+                  onGitHubWorkspaceCreated?.(id);
+                }}
+                onCancel={() => setIsGitHubOpen(false)}
+              />
+            </div>
+          </div>
         )}
 
         {/* Visually hidden — NOT display:none, Chrome blocks .click() on those.

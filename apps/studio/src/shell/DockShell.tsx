@@ -157,7 +157,7 @@ export function DockShell({
       <DockviewReact
         components={mergeComponents(DEFAULT_DOCKVIEW_COMPONENTS, panelComponents)}
         onReady={onReady}
-        className="dockview-theme-light"
+        className="dockview-theme-abyss"
       />
       <button type="button" onClick={resetLayout} data-testid="reset-layout">
         Reset layout

@@ -2,7 +2,13 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Unit tests for transport provider / failover logic (T007).
+ * Unit tests for transport provider / failover logic (T011 + T044).
+ *
+ * Step 1 = direct dev WebSocket (legacy ws://localhost:3001 path).
+ * Step 3 = CF Worker LSP — POST /api/lsp/session for a token, then open
+ *          WebSocket(${cfWsBase}/ws/${token}). On 401 from the mint we
+ *          retry once; on 429 / 5xx we surface "language services
+ *          unavailable" with the dev-mode-gated copy from FR-014.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -22,6 +28,45 @@ function makeFakeTransport() {
     send: vi.fn(),
     subscribe: vi.fn(),
     unsubscribe: vi.fn()
+  };
+}
+
+const VALID_ULID = '01J7M8AAAAAAAAAAAAAAAAAAAA';
+const SESSION_URL = 'https://example.test/api/lsp/session';
+const CF_WS_BASE = 'wss://example.test/api/lsp';
+
+/**
+ * Mint-endpoint mock — installs a vi.spyOn(globalThis, 'fetch') and
+ * sequences the responses the test sets via `next()`. Each call shifts
+ * the queue; if empty, the request rejects.
+ */
+function installMintMock(): {
+  next: (init: { status: number; body?: unknown }) => void;
+  fetchSpy: ReturnType<typeof vi.spyOn>;
+  callCount: () => number;
+} {
+  const queue: Array<{ status: number; body?: unknown }> = [];
+  let calls = 0;
+  const fetchSpy = vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation(async (input: RequestInfo | URL): Promise<Response> => {
+      calls += 1;
+      const url = typeof input === 'string' ? input : ((input as Request).url ?? String(input));
+      if (!url.includes('/api/lsp/session')) {
+        throw new Error(`unexpected fetch URL: ${url}`);
+      }
+      const next = queue.shift();
+      if (!next) throw new Error('mint mock queue empty');
+      const body = next.body ?? { token: 't0k3n', expiresAt: Date.now() + 60_000 };
+      return new Response(JSON.stringify(body), {
+        status: next.status,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    });
+  return {
+    next: (init) => queue.push(init),
+    fetchSpy,
+    callCount: () => calls
   };
 }
 
@@ -64,24 +109,123 @@ describe('createTransportProvider', () => {
     provider.dispose();
   });
 
-  it('falls back to no-op transport when WebSocket fails (embedded server unavailable)', async () => {
+  it('falls back to CF Worker (Step 3) when dev WS fails — happy path', async () => {
+    const cfTransport = makeFakeTransport();
+    // Step 1: dev WS rejects
     mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
+    // Step 3: CF Worker WS resolves after the mint
+    mockWsTransport.mockResolvedValueOnce(cfTransport);
+
+    const mint = installMintMock();
+    mint.next({ status: 200, body: { token: 'cf-token', expiresAt: Date.now() + 60_000 } });
 
     const provider = createTransportProvider({
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
-      maxReconnectAttempts: 0
+      maxReconnectAttempts: 0,
+      sessionUrl: SESSION_URL,
+      cfWsBase: CF_WS_BASE,
+      workspaceId: VALID_ULID
     });
     const transport = await provider.getTransport();
 
-    // Returns a no-op transport with send/subscribe/unsubscribe
+    expect(transport).toBe(cfTransport);
+    expect(provider.getState().mode).toBe('cf-worker');
+    expect(provider.getState().status).toBe('connected');
+
+    // The CF WS URL must have the token appended.
+    expect(mockWsTransport).toHaveBeenLastCalledWith(`${CF_WS_BASE}/ws/cf-token`, 100);
+    provider.dispose();
+  });
+
+  it('retries the mint once on 401 from the session endpoint', async () => {
+    const cfTransport = makeFakeTransport();
+    mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
+    mockWsTransport.mockResolvedValueOnce(cfTransport);
+
+    const mint = installMintMock();
+    mint.next({ status: 401, body: { error: 'invalid_session' } });
+    mint.next({ status: 200, body: { token: 'fresh', expiresAt: Date.now() + 60_000 } });
+
+    const provider = createTransportProvider({
+      wsUri: 'ws://localhost:3001',
+      connectionTimeout: 100,
+      maxReconnectAttempts: 0,
+      sessionUrl: SESSION_URL,
+      cfWsBase: CF_WS_BASE
+    });
+    const transport = await provider.getTransport();
+
+    expect(transport).toBe(cfTransport);
+    expect(provider.getState().mode).toBe('cf-worker');
+    expect(mint.callCount()).toBe(2);
+    provider.dispose();
+  });
+
+  it('surfaces "language services unavailable" on 429 from the session endpoint', async () => {
+    mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
+
+    const mint = installMintMock();
+    mint.next({ status: 429, body: { error: 'rate_limited', retry_after_s: 60 } });
+
+    const provider = createTransportProvider({
+      wsUri: 'ws://localhost:3001',
+      connectionTimeout: 100,
+      maxReconnectAttempts: 0,
+      sessionUrl: SESSION_URL,
+      cfWsBase: CF_WS_BASE
+    });
+    const transport = await provider.getTransport();
+
+    // No-op transport so callers don't crash.
     expect(typeof transport.send).toBe('function');
-    expect(typeof transport.subscribe).toBe('function');
-    expect(typeof transport.unsubscribe).toBe('function');
-    // State reflects that embedded is unavailable
     expect(provider.getState().mode).toBe('disconnected');
     expect(provider.getState().status).toBe('error');
+    provider.dispose();
+  });
 
+  it('surfaces "language services unavailable" on 5xx from the session endpoint', async () => {
+    mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
+
+    const mint = installMintMock();
+    mint.next({ status: 500, body: { error: 'internal_error' } });
+
+    const provider = createTransportProvider({
+      wsUri: 'ws://localhost:3001',
+      connectionTimeout: 100,
+      maxReconnectAttempts: 0,
+      sessionUrl: SESSION_URL,
+      cfWsBase: CF_WS_BASE
+    });
+    const transport = await provider.getTransport();
+    expect(typeof transport.send).toBe('function');
+    expect(provider.getState().mode).toBe('disconnected');
+    expect(provider.getState().status).toBe('error');
+    provider.dispose();
+  });
+
+  it('retries the mint when the WS connect itself returns 401-equivalent', async () => {
+    const cfTransport = makeFakeTransport();
+    mockWsTransport.mockRejectedValueOnce(new Error('Connection refused')); // dev WS fails
+    mockWsTransport.mockRejectedValueOnce(new Error('WebSocket closed: 1008 invalid_session')); // first CF WS open fails
+    mockWsTransport.mockResolvedValueOnce(cfTransport); // retry CF WS open succeeds
+
+    const mint = installMintMock();
+    mint.next({ status: 200, body: { token: 'first', expiresAt: Date.now() + 60_000 } });
+    mint.next({ status: 200, body: { token: 'second', expiresAt: Date.now() + 60_000 } });
+
+    const provider = createTransportProvider({
+      wsUri: 'ws://localhost:3001',
+      connectionTimeout: 100,
+      maxReconnectAttempts: 0,
+      sessionUrl: SESSION_URL,
+      cfWsBase: CF_WS_BASE
+    });
+    const transport = await provider.getTransport();
+
+    expect(transport).toBe(cfTransport);
+    expect(provider.getState().mode).toBe('cf-worker');
+    expect(mint.callCount()).toBe(2);
     provider.dispose();
   });
 
@@ -126,10 +270,16 @@ describe('createTransportProvider', () => {
     const wsTransport = makeFakeTransport();
     mockWsTransport.mockRejectedValueOnce(new Error('fail'));
 
+    const mint = installMintMock();
+    // Fallback path also fails so the provider lands on disconnected.
+    mint.next({ status: 500, body: { error: 'internal_error' } });
+
     const provider = createTransportProvider({
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
-      maxReconnectAttempts: 0
+      maxReconnectAttempts: 0,
+      sessionUrl: SESSION_URL,
+      cfWsBase: CF_WS_BASE
     });
     await provider.getTransport();
     expect(provider.getState().mode).toBe('disconnected');
