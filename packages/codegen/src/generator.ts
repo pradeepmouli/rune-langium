@@ -6,7 +6,8 @@ import { isRosettaModel } from '@rune-langium/core';
 import type { GeneratorOutput, GeneratorOptions } from './types.js';
 import { GeneratorError } from './types.js';
 import { createDiagnostic, hasFatalDiagnostics } from './diagnostics.js';
-import { emitNamespace } from './emit/zod-emitter.js';
+import { emitNamespace as emitZodNamespace } from './emit/zod-emitter.js';
+import { emitNamespace as emitJsonSchemaNamespace } from './emit/json-schema-emitter.js';
 import { emitNamespace as emitTsNamespace } from './emit/ts-emitter.js';
 
 /**
@@ -69,17 +70,24 @@ export function runGenerate(docs: LangiumDocument[], options: GeneratorOptions):
     let output: GeneratorOutput;
 
     if (target === 'zod') {
-      output = emitNamespace(namespaceDocs, namespace, options);
+      output = emitZodNamespace(namespaceDocs, namespace, options);
+    } else if (target === 'json-schema') {
+      output = emitJsonSchemaNamespace(namespaceDocs, namespace, options);
     } else if (target === 'typescript') {
       output = emitTsNamespace(namespaceDocs, namespace, options);
     } else {
-      // json-schema target: handled by Phase 7
+      // Unknown target — should be unreachable given the Target union, but
+      // emit a structured diagnostic rather than crashing.
       output = {
-        relativePath: namespace.replace(/\./g, '/') + '.schema.json',
+        relativePath: namespace.replace(/\./g, '/') + '.unknown',
         content: '',
         sourceMap: [],
         diagnostics: [
-          createDiagnostic('error', 'not-implemented', `Target '${target}' is not yet implemented.`)
+          createDiagnostic(
+            'error',
+            'not-implemented',
+            `Target '${target}' is not implemented. Use 'zod', 'json-schema', or 'typescript'.`
+          )
         ],
         funcs: []
       };

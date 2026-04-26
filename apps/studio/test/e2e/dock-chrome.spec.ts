@@ -34,7 +34,9 @@ async function assertDockChrome(page: Page): Promise<void> {
   // dv-tab elements are emitted by dockview-react once its stylesheet
   // is loaded AND a panel group exists. The shell creates 6 panels;
   // each panel renders at least one tab element in the strip.
-  await expect.poll(async () => page.locator('.dv-tab').count(), { timeout: 10_000 }).toBeGreaterThan(0);
+  await expect
+    .poll(async () => page.locator('.dv-tab').count(), { timeout: 10_000 })
+    .toBeGreaterThan(0);
 
   const tabCount = await page.locator('.dv-tab').count();
   expect(tabCount).toBeGreaterThan(0);

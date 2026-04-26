@@ -213,8 +213,58 @@ describe('cdm-smoke: Zod target', () => {
 });
 
 describe('cdm-smoke: json-schema target', () => {
+  /**
+   * T098: Activate the JSON Schema smoke sub-test.
+   *
+   * Generates JSON Schema for US1 fixture documents, validates every emitted
+   * .schema.json against the JSON Schema 2020-12 meta-schema using ajv.
+   * tsc --noEmit is N/A for JSON output; ajv meta-validation is used instead.
+   *
+   * FR-019: JSON Schema 2020-12 conformance.
+   */
+  it('generates JSON Schema for US1 fixture documents and validates against 2020-12 meta-schema (FR-019)', async () => {
+    // Inline import so the test file doesn't require ajv at the top level
+    // (avoids impacting tests that don't need it)
+    const { default: Ajv } = await import('ajv/dist/2020.js');
+
+    const fixtureNames = [
+      'basic-types',
+      'cardinality',
+      'enums',
+      'inheritance',
+      'circular',
+      'reserved-words'
+    ];
+
+    const services = createRuneDslServices();
+    const docs = await Promise.all(fixtureNames.map((name) => parseFixture(name, services)));
+
+    const outputs = generate(docs, { target: 'json-schema' });
+    expect(outputs.length).toBeGreaterThan(0);
+
+    const ajv = new Ajv({ strict: false });
+
+    // Validate every emitted .schema.json against the 2020-12 meta-schema
+    for (const output of outputs) {
+      expect(output.relativePath.endsWith('.schema.json')).toBe(true);
+
+      const schema = JSON.parse(output.content) as Record<string, unknown>;
+
+      // The schema must declare the 2020-12 $schema URI
+      expect(schema['$schema']).toBe('https://json-schema.org/draft/2020-12/schema');
+
+      // Validate via ajv's validateSchema (meta-validation)
+      const isValid = ajv.validateSchema(schema);
+      if (!isValid) {
+        throw new Error(
+          `JSON Schema meta-validation failed for ${output.relativePath}:\n${JSON.stringify(ajv.errors, null, 2)}`
+        );
+      }
+      expect(isValid).toBe(true);
+    }
+  }, 30_000);
+
   it.todo('generates JSON Schema for the full CDM curated schema');
-  it.todo('generated JSON Schema is valid draft 2020-12');
   it.todo('generated JSON Schema accepts valid CDM JSON payloads (ajv)');
   it.todo('generated JSON Schema rejects invalid CDM JSON payloads (ajv)');
 });

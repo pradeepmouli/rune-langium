@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "test/cardinality.schema.json",
+  "title": "test.cardinality",
+  "$defs": {
+    "CardTest": {
+      "type": "object",
+      "properties": {
+        "scalarAttr": {
+          "type": "string"
+        },
+        "optionalAttr": {
+          "type": "string"
+        },
+        "zeroOrMore": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "oneOrMore": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "bounded": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "maxItems": 5
+        },
+        "exact": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "additionalProperties": false,
+      "required": ["scalarAttr"]
+    }
+  }
+}
