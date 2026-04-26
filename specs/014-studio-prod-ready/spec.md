@@ -53,6 +53,7 @@ A visitor with a model loaded types in the editor. As they type, syntax errors a
 2. **Given** a syntactically valid model, **When** the visitor hovers over a known type name, **Then** a tooltip shows the type's namespace and source location within 1 second.
 3. **Given** the visitor positions the cursor where a type name is expected, **When** they trigger autocomplete (Ctrl-Space or auto-trigger), **Then** the available type names appear in a list within 1 second and selecting one inserts it.
 4. **Given** the editor's language service is temporarily unavailable, **When** the visitor types, **Then** the editor remains usable as a syntax-highlighted text area, the status bar shows a clear "language services offline" message (NOT a developer instruction referencing localhost), and a retry control is offered.
+5. **Given** the LSP-host architecture decision is pending (server-hosted on Cloudflare vs. accept read-only Studio), **When** the team evaluates the language-services path, **Then** a time-boxed (≤1 working day) feasibility spike MUST run BEFORE planning commits to a single architecture; the spike's pass/fail outcome is a load-bearing input that determines whether US3 ships with live diagnostics or with read-only fallback copy + a documentation rewrite.
 
 ---
 
@@ -157,6 +158,12 @@ An operator (the developer running deploys, or anyone with shell access) can run
 
 - **FR-017**: The telemetry surface MUST continue to enforce its closed schema, daily-rotating salted IP-hash, no-PII, opt-out posture; nothing in this feature relaxes those guarantees.
 - **FR-018**: The github-auth Worker MUST remain stateless; it MUST NOT persist tokens, MUST NOT log device codes or access tokens, and MUST refuse cross-origin requests outside its allowlist.
+
+#### Legacy paths + test coverage + dev ergonomics
+
+- **FR-019**: The legacy isomorphic-git clone path through `cors.isomorphic-git.org` MUST be either retired entirely (preferred) or explicitly opted-into via a developer-mode toggle; it MUST NOT remain as an unconditional fallback that public visitors can reach. The decision (retire vs. dev-only) is a clarify-time decision, but doing nothing is not in scope.
+- **FR-020**: The curated-load happy path MUST be covered by an automated end-to-end test that fails CI on regression. SC-001's latency budget cannot rely on manual verification once the curated path lands.
+- **FR-021**: The local-development LSP host MUST be configurable via an environment variable (e.g. `VITE_LSP_WS_URL`) with a sensible default. Hard-coding `ws://localhost:3001` blocks contributors who run a remote LSP host or use a different port.
 
 ### Key Entities
 
