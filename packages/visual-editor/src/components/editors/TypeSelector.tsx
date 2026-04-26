@@ -12,6 +12,7 @@
 
 import { useState, useMemo } from 'react';
 import type { TypeOption, TypeKind } from '../../types.js';
+import { badgeVariants } from '@rune-langium/design-system/ui/badge';
 import {
   Select,
   SelectContent,
@@ -82,38 +83,62 @@ export interface TypeSelectorGroup {
 
 // ---------------------------------------------------------------------------
 // Kind badge color mapping
+//
+// Per R12 (specs/013-z2f-editor-migration/research.md), editor components
+// must consume colors via design-system primitives or `var(--color-*)`
+// tokens, never hardcoded Tailwind palette utilities (the kind matched by
+// the no-hardcoded-colours CI guard at packages/visual-editor/test/quality).
+// We delegate to `badgeVariants` from `@rune-langium/design-system/ui/badge`
+// (which owns the kind-specific palette) and to design-tokens CSS variables
+// for the inline dot indicators.
 // ---------------------------------------------------------------------------
 
-const KIND_BADGE_COLORS: Record<TypeKind | 'builtin', string> = {
-  data: 'bg-blue-500/20 text-blue-400',
-  choice: 'bg-amber-500/20 text-amber-400',
-  enum: 'bg-green-500/20 text-green-400',
-  func: 'bg-purple-500/20 text-purple-400',
-  record: 'bg-teal-500/20 text-teal-400',
-  typeAlias: 'bg-slate-500/20 text-slate-400',
-  basicType: 'bg-gray-500/20 text-gray-400',
-  annotation: 'bg-rose-500/20 text-rose-400',
-  builtin: 'bg-gray-500/20 text-gray-400'
-};
+/**
+ * Map a TypeKind to the design-system Badge variant key. The Badge component
+ * already exposes `data | enum | choice | func | record | typeAlias |
+ * basicType | annotation` variants. `builtin` falls through to `basicType`
+ * (gray) — visually unchanged from the previous local mapping.
+ */
+type BadgeKindVariant =
+  | 'data'
+  | 'enum'
+  | 'choice'
+  | 'func'
+  | 'record'
+  | 'typeAlias'
+  | 'basicType'
+  | 'annotation';
 
-/** Solid dot colors for inline type indicators. */
-const KIND_DOT_COLORS: Record<TypeKind | 'builtin', string> = {
-  data: 'bg-blue-400',
-  choice: 'bg-amber-400',
-  enum: 'bg-green-400',
-  func: 'bg-purple-400',
-  record: 'bg-teal-400',
-  typeAlias: 'bg-slate-400',
-  basicType: 'bg-gray-400',
-  annotation: 'bg-rose-400',
-  builtin: 'bg-gray-400'
+function kindToBadgeVariant(kind: TypeKind | 'builtin'): BadgeKindVariant {
+  return kind === 'builtin' ? 'basicType' : kind;
+}
+
+/**
+ * Solid dot colors for inline type indicators. Token-backed for the four
+ * kinds with dedicated `--color-{kind}` vars in theme.css; the remaining
+ * kinds reuse the muted-foreground token. This is a deliberate, minor
+ * visual shift documented in T077 — the previous mapping used per-kind
+ * Tailwind palette colors that bypassed the design-tokens layer.
+ */
+const KIND_DOT_TOKEN_CLASS: Record<TypeKind | 'builtin', string> = {
+  data: 'bg-data',
+  choice: 'bg-choice',
+  enum: 'bg-enum',
+  func: 'bg-func',
+  record: 'bg-data',
+  typeAlias: 'bg-muted-foreground',
+  basicType: 'bg-muted-foreground',
+  annotation: 'bg-choice',
+  builtin: 'bg-muted-foreground'
 };
 
 /**
- * Returns badge CSS classes for a given type kind.
+ * Returns badge CSS classes for a given type kind. Wraps the design-system
+ * `badgeVariants` so callers (e.g. `ChoiceOptionRow`, `TypeLink`) get
+ * token-backed colors automatically.
  */
 export function getKindBadgeClasses(kind: TypeKind | 'builtin'): string {
-  return KIND_BADGE_COLORS[kind] ?? KIND_BADGE_COLORS.builtin;
+  return badgeVariants({ variant: kindToBadgeVariant(kind) });
 }
 
 /**
@@ -261,7 +286,7 @@ export function TypeSelector({
               <SelectItem key={opt.value} value={opt.value}>
                 <span className="inline-flex items-center gap-1.5">
                   <span
-                    className={`inline-block size-2 rounded-full shrink-0 ${KIND_DOT_COLORS[opt.kind] ?? KIND_DOT_COLORS.builtin}`}
+                    className={`inline-block size-2 rounded-full shrink-0 ${KIND_DOT_TOKEN_CLASS[opt.kind] ?? KIND_DOT_TOKEN_CLASS.builtin}`}
                     aria-hidden="true"
                   />
                   {opt.label}

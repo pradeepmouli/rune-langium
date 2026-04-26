@@ -460,7 +460,7 @@ function FunctionForm({
                       }}
                       onBlur={handleExpressionBlur}
                       rows={2}
-                      className={`text-sm font-mono resize-y ${i === 0 && expressionError ? 'border-red-500' : ''}`}
+                      className={`text-sm font-mono resize-y ${i === 0 && expressionError ? 'border-destructive' : ''}`}
                       placeholder="Enter expression..."
                     />
                   )}
@@ -505,12 +505,12 @@ function FunctionForm({
                           if (expressionError) setExpressionError(null);
                         }}
                         rows={4}
-                        className={`text-sm font-mono resize-y ${expressionError ? 'border-red-500' : ''}`}
+                        className={`text-sm font-mono resize-y ${expressionError ? 'border-destructive' : ''}`}
                         placeholder="Enter function expression..."
                       />
                     )}
                     {expressionError && (
-                      <p data-slot="expression-error" className="text-xs text-red-500 mt-0.5">
+                      <p data-slot="expression-error" className="text-xs text-destructive mt-0.5">
                         {expressionError}
                       </p>
                     )}

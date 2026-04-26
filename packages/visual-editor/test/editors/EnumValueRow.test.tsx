@@ -140,11 +140,12 @@ describe('EnumValueRow', () => {
     expect(handle?.textContent).toBe('⠿');
   });
 
-  it('shows red border for empty name', () => {
+  it('shows destructive border for empty name', () => {
     renderRow(baseProps({ name: '' }));
 
     const nameInput = screen.getByLabelText(/value name/i);
-    expect(nameInput.className).toContain('border-red');
+    // Token-backed border per R12 (was `border-red-500` before T077).
+    expect(nameInput.className).toContain('border-destructive');
   });
 
   it('disables inputs when disabled prop is true', () => {
