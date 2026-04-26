@@ -268,17 +268,30 @@ function emitClass(data: Data, ctx: EmissionContext): string {
     lines.push(`  ${fieldDecl};`);
   }
 
-  // Constructor
-  lines.push('');
-  lines.push(`  constructor(data: ${interfaceName}) {`);
+  // Constructor body lines
+  const ctorBodyLines: string[] = [];
   if (parentName) {
-    lines.push(`    super(data);`);
+    ctorBodyLines.push(`    super(data);`);
   }
-  // Assign own fields
   for (const attr of data.attributes) {
-    lines.push(`    this.${attr.name} = data.${attr.name} as typeof this.${attr.name};`);
+    ctorBodyLines.push(`    this.${attr.name} = data.${attr.name} as typeof this.${attr.name};`);
   }
-  lines.push('  }');
+
+  // Emit compact `constructor(...) {}` when body is empty (oxfmt style).
+  // Only add a blank line separator if there are own fields above.
+  const hasOwnFields = data.attributes.length > 0;
+  if (hasOwnFields) {
+    lines.push('');
+  }
+  if (ctorBodyLines.length === 0) {
+    lines.push(`  constructor(data: ${interfaceName}) {}`);
+  } else {
+    lines.push(`  constructor(data: ${interfaceName}) {`);
+    for (const bodyLine of ctorBodyLines) {
+      lines.push(bodyLine);
+    }
+    lines.push('  }');
+  }
 
   // static from factory (T107)
   lines.push('');
