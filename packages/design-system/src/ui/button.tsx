@@ -17,7 +17,12 @@ const buttonVariants = cva(
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
           'border bg-background shadow-xs hover:bg-accent hover:text-primary-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        // T054 (014/FR-023, R8) — was `bg-secondary text-secondary-foreground
+        // hover:bg-secondary/80` (solid amber), which made empty-state
+        // CTAs visually outrank the actual primary button. Now matches
+        // landing's `.btn-secondary` + docs' `.VPButton.alt`: transparent
+        // surface with a visible border.
+        secondary: 'bg-transparent border border-input/70 hover:bg-muted text-foreground',
         ghost: 'hover:bg-accent hover:text-primary-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline'
       },
