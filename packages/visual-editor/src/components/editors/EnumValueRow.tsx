@@ -7,16 +7,19 @@
  * Reads/writes form state via `useFormContext` (provided by the parent
  * FormProvider in EnumForm). The committed `name`/`displayName` props act
  * as diff anchors for callbacks; the live form values come from the form
- * context at `members[index].name` and `members[index].displayName`.
+ * context at `enumValues[index].name` and `enumValues[index].display`
+ * (AST-canonical paths per R11 of `specs/013-z2f-editor-migration`).
  *
  * Renders: drag handle (⠿) | value name input | display name input | remove button.
- * Name/displayName changes are debounced (500 ms). Empty names show a red border.
+ * Name/displayName changes are debounced (500 ms). Empty names show a
+ * destructive border (token-backed per R12).
  *
  * @module
  */
 
 import { useCallback } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
+import { Badge } from '@rune-langium/design-system/ui/badge';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 
 // ---------------------------------------------------------------------------
@@ -63,13 +66,16 @@ function EnumValueRow({
   onRevert
 }: EnumValueRowProps) {
   const { control, getValues } = useFormContext();
-  const prefix = `members.${index}`;
+  // AST-canonical paths (R11): `enumValues[].name` and `enumValues[].display`.
+  // Pre-migration this row read `members.${index}.{name,displayName}` from a
+  // hand-authored projection schema; the projection layer is gone now.
+  const prefix = `enumValues.${index}`;
 
   // ---- Name auto-save (debounced) ------------------------------------------
 
   const commitNameChange = useCallback(
     (newName: string) => {
-      const currentDisplayName: string = getValues(`${prefix}.displayName`) ?? displayName;
+      const currentDisplayName: string = getValues(`${prefix}.display`) ?? displayName;
       onUpdate(nodeId, name, newName, currentDisplayName || undefined);
     },
     [nodeId, name, displayName, prefix, getValues, onUpdate]
@@ -150,7 +156,7 @@ function EnumValueRow({
               placeholder="Value name"
               className={`flex-1 min-w-0 px-2 py-1 text-sm rounded
               bg-transparent border
-              ${isEmpty ? 'border-red-500' : 'border-border'}
+              ${isEmpty ? 'border-destructive' : 'border-border'}
               focus:outline-none focus:ring-1 focus:ring-ring`}
             />
           );
@@ -160,7 +166,7 @@ function EnumValueRow({
       {/* Display name via Controller */}
       <Controller
         control={control}
-        name={`${prefix}.displayName`}
+        name={`${prefix}.display`}
         render={({ field }) => (
           <input
             type="text"
@@ -181,13 +187,9 @@ function EnumValueRow({
 
       {/* Override badge */}
       {isOverride && (
-        <span
-          data-slot="override-badge"
-          className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded
-            bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-        >
+        <Badge data-slot="override-badge" variant="warning" className="shrink-0 text-[10px]">
           override
-        </span>
+        </Badge>
       )}
 
       {/* Revert button (for overrides) or Remove button */}

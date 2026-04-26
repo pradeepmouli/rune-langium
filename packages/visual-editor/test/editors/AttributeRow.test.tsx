@@ -10,6 +10,11 @@
  * - Remove callback
  * - Drag reorder callback
  * - Override badge display
+ *
+ * AST-shape note (013/follow-up): the row reads canonical AST paths
+ * (`attributes.${i}.{name, typeCall.type.$refText, card, override}`) per R11
+ * of `specs/013-z2f-editor-migration/research.md`. The fixtures below seed
+ * that shape directly — there is no projection layer.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -17,7 +22,6 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { AttributeRow } from '../../src/components/editors/AttributeRow.js';
 import type { TypeOption } from '../../src/types.js';
-import type { MemberValues } from '../../src/schemas/form-schemas.js';
 
 const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' },
@@ -25,45 +29,38 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::date', label: 'date', kind: 'builtin' }
 ];
 
-/** A simple member data shape for test fixtures. */
-interface TestMember {
+/**
+ * AST-shaped Attribute item that `<AttributeRow>` consumes via
+ * `useFormContext` at `attributes.${index}.{name, typeCall.type.$refText, card, override}`.
+ */
+interface TestAttribute {
+  $type: 'Attribute';
   name: string;
-  typeName: string;
-  cardinality: string;
-  isOverride: boolean;
-  displayName?: string;
+  typeCall: { $type: 'TypeCall'; type: { $refText: string } };
+  card: { inf: number; sup?: number; unbounded?: boolean };
+  override: boolean;
 }
 
-function baseMember(overrides: Partial<TestMember> = {}): TestMember {
+function baseAttribute(overrides: Partial<TestAttribute> = {}): TestAttribute {
   return {
+    $type: 'Attribute',
     name: 'tradeDate',
-    typeName: 'date',
-    cardinality: '(1..1)',
-    isOverride: false,
+    typeCall: { $type: 'TypeCall', type: { $refText: 'date' } },
+    card: { inf: 1, sup: 1, unbounded: false },
+    override: false,
     ...overrides
-  };
-}
-
-/** Convert TestMember to MemberValues for the form. */
-function toMemberValues(m: TestMember): MemberValues {
-  return {
-    name: m.name,
-    typeName: m.typeName ?? 'string',
-    cardinality: m.cardinality ?? '(1..1)',
-    isOverride: m.isOverride,
-    displayName: m.displayName
   };
 }
 
 /** Wrapper that provides FormProvider context required by AttributeRow. */
 function FormWrapper({
-  members,
+  attributes,
   children
 }: {
-  members: MemberValues[];
+  attributes: TestAttribute[];
   children: React.ReactNode;
 }) {
-  const methods = useForm({ defaultValues: { members } });
+  const methods = useForm({ defaultValues: { attributes } });
   return <FormProvider {...methods}>{children}</FormProvider>;
 }
 
@@ -80,13 +77,13 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
-    const member = baseMember();
+    const attr = baseAttribute();
 
     render(
-      <FormWrapper members={[toMemberValues(member)]}>
+      <FormWrapper attributes={[attr]}>
         <AttributeRow
           index={0}
-          committedName={member.name}
+          committedName={attr.name}
           availableTypes={AVAILABLE_TYPES}
           onUpdate={onUpdate}
           onRemove={onRemove}
@@ -104,13 +101,13 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
-    const member = baseMember();
+    const attr = baseAttribute();
 
     render(
-      <FormWrapper members={[toMemberValues(member)]}>
+      <FormWrapper attributes={[attr]}>
         <AttributeRow
           index={0}
-          committedName={member.name}
+          committedName={attr.name}
           availableTypes={AVAILABLE_TYPES}
           onUpdate={onUpdate}
           onRemove={onRemove}
@@ -137,13 +134,13 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
-    const member = baseMember();
+    const attr = baseAttribute();
 
     render(
-      <FormWrapper members={[toMemberValues(member)]}>
+      <FormWrapper attributes={[attr]}>
         <AttributeRow
           index={0}
-          committedName={member.name}
+          committedName={attr.name}
           availableTypes={AVAILABLE_TYPES}
           onUpdate={onUpdate}
           onRemove={onRemove}
@@ -162,13 +159,13 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
-    const member = baseMember({ isOverride: true });
+    const attr = baseAttribute({ override: true });
 
     render(
-      <FormWrapper members={[toMemberValues(member)]}>
+      <FormWrapper attributes={[attr]}>
         <AttributeRow
           index={0}
-          committedName={member.name}
+          committedName={attr.name}
           availableTypes={AVAILABLE_TYPES}
           onUpdate={onUpdate}
           onRemove={onRemove}
@@ -185,13 +182,13 @@ describe('AttributeRow', () => {
     const onRemove = vi.fn();
     const onReorder = vi.fn();
     const onRevert = vi.fn();
-    const member = baseMember({ isOverride: true });
+    const attr = baseAttribute({ override: true });
 
     const { container } = render(
-      <FormWrapper members={[toMemberValues(member)]}>
+      <FormWrapper attributes={[attr]}>
         <AttributeRow
           index={0}
-          committedName={member.name}
+          committedName={attr.name}
           availableTypes={AVAILABLE_TYPES}
           onUpdate={onUpdate}
           onRemove={onRemove}
@@ -213,13 +210,13 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
-    const member = baseMember();
+    const attr = baseAttribute();
 
     const { container } = render(
-      <FormWrapper members={[toMemberValues(member)]}>
+      <FormWrapper attributes={[attr]}>
         <AttributeRow
           index={0}
-          committedName={member.name}
+          committedName={attr.name}
           availableTypes={AVAILABLE_TYPES}
           onUpdate={onUpdate}
           onRemove={onRemove}
@@ -237,13 +234,13 @@ describe('AttributeRow', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
     const onReorder = vi.fn();
-    const member = baseMember();
+    const attr = baseAttribute();
 
     render(
-      <FormWrapper members={[toMemberValues(member)]}>
+      <FormWrapper attributes={[attr]}>
         <AttributeRow
           index={0}
-          committedName={member.name}
+          committedName={attr.name}
           availableTypes={AVAILABLE_TYPES}
           onUpdate={onUpdate}
           onRemove={onRemove}

@@ -126,4 +126,12 @@ describe('resolveTelemetryEndpoint (T113)', () => {
   it('falls back to production for an unparseable origin', () => {
     expect(resolveTelemetryEndpoint('not a url')).toBe(TELEMETRY_ENDPOINT_PROD);
   });
+
+  it('maps file: URLs to a known-localhost URL (file: origin is the string "null")', () => {
+    // `new URL('file:///x/index.html').origin === 'null'` — naïve template
+    // interpolation produced the malformed `null/rune-studio/...`.
+    const result = resolveTelemetryEndpoint('file:///Users/me/index.html');
+    expect(result).not.toMatch(/^null\//);
+    expect(result).toBe('http://localhost/rune-studio/api/telemetry/v1/event');
+  });
 });

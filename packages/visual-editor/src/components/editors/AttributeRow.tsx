@@ -5,8 +5,20 @@
  * AttributeRow — inline editable row for a single Data type attribute.
  *
  * Reads/writes form state via `useFormContext` (provided by the parent
- * FormProvider). Eliminates local `useState` so there are no stale-
- * closure issues when the parent form resets.
+ * FormProvider) at the **canonical AST paths** for an `Attribute`:
+ *
+ *   attributes.${index}.name                    → string
+ *   attributes.${index}.typeCall.type.$refText  → string (display name)
+ *   attributes.${index}.card                    → RosettaCardinality { inf, sup?, unbounded? }
+ *   attributes.${index}.override                → boolean
+ *
+ * Per R11 of `specs/013-z2f-editor-migration/research.md`, the editor
+ * consumes the AST graph node directly — no projection layer. The bespoke
+ * `<CardinalityPicker>` is part of the public component surface and is
+ * shared with z2f's componentMap (`zod-form-components.tsx`), so its
+ * string-based API is preserved; this row translates between the AST
+ * `RosettaCardinality` shape and the picker's `(inf..sup)` string at the
+ * boundary via `formatCardinality` / `parseCardinality`.
  *
  * Renders: drag handle (⠿) | name input | TypeSelector | CardinalityPicker | remove button.
  * Name changes are debounced (500 ms). Type and cardinality are immediate.
@@ -21,6 +33,7 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { TypeSelector } from './TypeSelector.js';
 import { TypeLink } from './TypeLink.js';
 import { CardinalityPicker } from './CardinalityPicker.js';
+import { formatCardinality, parseCardinality } from '../../adapters/model-helpers.js';
 import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
 
 // ---------------------------------------------------------------------------
@@ -76,24 +89,44 @@ function AttributeRow({
   onRevert
 }: AttributeRowProps) {
   const { control, getValues, setValue, watch } = useFormContext();
-  const prefix = `members.${index}`;
+  const prefix = `attributes.${index}`;
 
-  const isOverrideForm: boolean = watch(`${prefix}.isOverride`);
+  // AST-canonical reads (R11 / row-renderer contract §2). The picker still
+  // talks in `(inf..sup)` strings, so we adapt at the row boundary rather
+  // than mutating its public API (it ships in `components.ts` and is wired
+  // into z2f's `componentMap` via `zod-form-components.tsx`).
+  //
+  // `RosettaCardinality` from the AST schema has `unbounded` as optional,
+  // but `formatCardinality` expects `unbounded: boolean`. Normalise on read.
+  const normaliseCard = (
+    raw: { inf: number; sup?: number; unbounded?: boolean } | undefined
+  ): { inf: number; sup?: number; unbounded: boolean } | undefined =>
+    raw ? { ...raw, unbounded: raw.unbounded ?? false } : undefined;
+
+  const isOverrideForm: boolean = watch(`${prefix}.override`);
   const isOverride = isOverrideProp ?? isOverrideForm;
-  const typeName: string = watch(`${prefix}.typeName`);
-  const cardinality: string = watch(`${prefix}.cardinality`);
+  const typeName: string | undefined = watch(`${prefix}.typeCall.type.$refText`);
+  const cardObj = normaliseCard(
+    watch(`${prefix}.card`) as { inf: number; sup?: number; unbounded?: boolean } | undefined
+  );
+  const cardinalityString = formatCardinality(cardObj) || '(1..1)';
 
   // ---- Name auto-save (debounced) ------------------------------------------
 
   const commitName = useCallback(
     (newName: string) => {
-      const values = getValues(prefix);
+      const currentType: string = getValues(`${prefix}.typeCall.type.$refText`) ?? 'string';
+      const currentCard = normaliseCard(
+        getValues(`${prefix}.card`) as
+          | { inf: number; sup?: number; unbounded?: boolean }
+          | undefined
+      );
       onUpdate(
         index,
         committedName,
         newName,
-        values.typeName ?? 'string',
-        values.cardinality ?? '(1..1)'
+        currentType,
+        formatCardinality(currentCard) || '(1..1)'
       );
     },
     [index, committedName, prefix, getValues, onUpdate]
@@ -108,25 +141,41 @@ function AttributeRow({
       if (!value) return;
       const option = availableTypes.find((o) => o.value === value);
       const newTypeName = option?.label ?? value;
-      setValue(`${prefix}.typeName`, newTypeName, { shouldDirty: true });
+      setValue(`${prefix}.typeCall.type.$refText`, newTypeName, { shouldDirty: true });
       const name: string = getValues(`${prefix}.name`);
-      onUpdate(index, committedName, name, newTypeName, cardinality ?? '(1..1)');
+      onUpdate(index, committedName, name, newTypeName, cardinalityString);
     },
-    [index, committedName, prefix, availableTypes, getValues, setValue, cardinality, onUpdate]
+    [index, committedName, prefix, availableTypes, getValues, setValue, cardinalityString, onUpdate]
   );
 
   // ---- Cardinality (immediate from picker) ---------------------------------
 
   const handleCardinalityChange = useCallback(
     (card: string) => {
-      setValue(`${prefix}.cardinality`, card, { shouldDirty: true });
+      // Translate the picker's `(inf..sup)` string back to RosettaCardinality
+      // for the AST-shaped form state, then forward the original string to
+      // the action callback (EditorFormActions still take `cardinality: string`
+      // — FR-002).
+      setValue(`${prefix}.card`, parseCardinality(card), { shouldDirty: true });
       const name: string = getValues(`${prefix}.name`);
       onUpdate(index, committedName, name, typeName ?? 'string', card);
     },
     [index, committedName, prefix, typeName, getValues, setValue, onUpdate]
   );
 
-  // ---- Drag reorder (simplified up/down for now) ---------------------------
+  // ---- Drag reorder ---------------------------------------------------------
+  //
+  // Per R5 of `specs/013-z2f-editor-migration/research.md` (Pattern B): this
+  // row owns the gesture surface (native HTML5 DnD via `dataTransfer`) and
+  // delegates the actual reorder to the parent's `onReorder(from, to)`
+  // callback. The parent (`DataTypeForm.handleReorderAttribute`) calls
+  // `useFieldArray.move(from, to)` to update form state, then fires
+  // `actions.reorderAttribute(nodeId, from, to)` so the graph store mirrors
+  // the change. The upstream `arrayConfig.reorder: true` flag declared in
+  // `z2f.config.ts` is the declarative scaffolding for Phase 8 (US6) when
+  // the array is promoted to z2f-driven rendering — at which point the
+  // upstream `<ArrayReorderHandle>` mounts alongside (or replaces) this
+  // gesture surface but the `onReorder` route is unchanged.
 
   function handleDragStart(e: React.DragEvent) {
     e.dataTransfer.setData('text/plain', String(index));
@@ -205,7 +254,7 @@ function AttributeRow({
       {/* Type selector + navigation link */}
       <div data-slot="attribute-type" className="w-32 shrink-0 flex items-center gap-1">
         <TypeLink
-          typeName={typeName}
+          typeName={typeName ?? ''}
           onNavigateToNode={onNavigateToNode}
           allNodeIds={allNodeIds}
           className="text-xs font-mono truncate"
@@ -222,7 +271,7 @@ function AttributeRow({
       {/* Cardinality */}
       <div data-slot="attribute-cardinality" className="shrink-0">
         <CardinalityPicker
-          value={cardinality ?? '(1..1)'}
+          value={cardinalityString}
           onChange={handleCardinalityChange}
           disabled={disabled}
         />

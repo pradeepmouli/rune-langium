@@ -12,11 +12,22 @@
  *
  * Used by DataTypeForm, FunctionForm, and TypeAliasForm.
  *
+ * Two call paths are supported (Phase 7 / US5):
+ *
+ * 1. **Imperative**: the host passes `conditions`, `postConditions`,
+ *    `onAdd`, `onRemove`, `onUpdate`, `onReorder` directly as props.
+ * 2. **Declarative**: the section is resolved by name from z2f's
+ *    `componentModule` and only receives `fields: string[]`. The
+ *    component reads `conditions` / `postConditions` from
+ *    `useFormContext()` and falls back to `useEditorActionsContext()`
+ *    for the callbacks.
+ *
  * @module
  */
 
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useFormContext } from 'react-hook-form';
 import { Plus, X, ChevronUp, ChevronDown } from 'lucide-react';
 import type { ExpressionEditorSlotProps } from '../../types.js';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -24,6 +35,7 @@ import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { conditionsToDisplay, type ConditionDisplayInfo } from '../../adapters/model-helpers.js';
+import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,10 +50,17 @@ export interface ConditionSectionProps {
   /**
    * Raw AST conditions from the graph node.
    * Internally converted to display-friendly objects via conditionsToDisplay().
+   * Optional in the declarative path — read from form context when omitted.
    */
-  conditions: unknown[] | undefined;
+  conditions?: unknown[] | undefined;
   /** Raw AST post-conditions (functions only). */
   postConditions?: unknown[] | undefined;
+  /**
+   * z2f-host-supplied list of field paths this section groups (declarative
+   * path). Optional and intentionally unused at render time per
+   * `section-component.md` §3 — the section knows its field set.
+   */
+  fields?: string[];
   /** Whether to allow editing. */
   readOnly?: boolean;
   /** Called when a condition is added. */
@@ -310,7 +329,7 @@ export function ConditionSection({
   label = 'Conditions',
   conditions: rawConditions,
   postConditions: rawPostConditions,
-  readOnly = false,
+  readOnly,
   onAdd,
   onRemove,
   onUpdate,
@@ -320,9 +339,69 @@ export function ConditionSection({
 }: ConditionSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
 
+  // ------ Declarative-path fallbacks (Phase 7 / US5) ----------------------
+  //
+  // When `conditions`/`postConditions` are not passed, we are in the
+  // declarative path and read them from form state. Callbacks similarly
+  // fall back to the editor-actions context. Either path is no-op safe.
+  const ctx = useEditorActionsContext();
+  const formCtx = useFormContext();
+
+  const conditionsFromForm =
+    rawConditions === undefined
+      ? (formCtx?.watch?.('conditions') as unknown[] | undefined)
+      : undefined;
+  const postConditionsFromForm =
+    rawPostConditions === undefined
+      ? (formCtx?.watch?.('postConditions') as unknown[] | undefined)
+      : undefined;
+  const effectiveRawConditions = rawConditions ?? conditionsFromForm;
+  const effectiveRawPostConditions = rawPostConditions ?? postConditionsFromForm;
+  const effectiveReadOnly = readOnly ?? ctx?.readOnly ?? false;
+
+  const effectiveOnAdd = useCallback(
+    (condition: {
+      name?: string;
+      definition?: string;
+      expressionText: string;
+      isPostCondition?: boolean;
+    }) => {
+      if (onAdd) return onAdd(condition);
+      if (ctx) ctx.actions.addCondition(ctx.nodeId, condition);
+    },
+    [onAdd, ctx]
+  );
+  const effectiveOnRemove = useCallback(
+    (index: number) => {
+      if (onRemove) return onRemove(index);
+      if (ctx) ctx.actions.removeCondition(ctx.nodeId, index);
+    },
+    [onRemove, ctx]
+  );
+  const effectiveOnUpdate = useCallback(
+    (index: number, updates: Partial<ConditionDisplayInfo>) => {
+      if (onUpdate) return onUpdate(index, updates);
+      if (ctx) {
+        ctx.actions.updateCondition(ctx.nodeId, index, {
+          name: updates.name,
+          definition: updates.definition,
+          expressionText: updates.expressionText
+        });
+      }
+    },
+    [onUpdate, ctx]
+  );
+  const effectiveOnReorder = useCallback(
+    (from: number, to: number) => {
+      if (onReorder) return onReorder(from, to);
+      if (ctx) ctx.actions.reorderCondition(ctx.nodeId, from, to);
+    },
+    [onReorder, ctx]
+  );
+
   const conditions: ConditionDisplayInfo[] = useMemo(
-    () => conditionsToDisplay(rawConditions as any, rawPostConditions as any),
-    [rawConditions, rawPostConditions]
+    () => conditionsToDisplay(effectiveRawConditions as any, effectiveRawPostConditions as any),
+    [effectiveRawConditions, effectiveRawPostConditions]
   );
 
   const handleAdd = useCallback(
@@ -332,16 +411,16 @@ export function ConditionSection({
       expressionText: string;
       isPostCondition?: boolean;
     }) => {
-      onAdd?.(condition);
+      effectiveOnAdd(condition);
       setShowAddForm(false);
     },
-    [onAdd]
+    [effectiveOnAdd]
   );
 
-  if (conditions.length === 0 && readOnly) return null;
+  if (conditions.length === 0 && effectiveReadOnly) return null;
 
   return (
-    <FieldSet className="gap-1">
+    <FieldSet data-slot="condition-section" className="gap-1">
       <FieldLegend
         variant="label"
         className="mb-0 text-muted-foreground flex items-center justify-between"
@@ -349,7 +428,7 @@ export function ConditionSection({
         <span>
           {label} ({conditions.length})
         </span>
-        {!readOnly && onAdd && (
+        {!effectiveReadOnly && (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -369,10 +448,10 @@ export function ConditionSection({
             condition={condition}
             index={i}
             total={conditions.length}
-            readOnly={readOnly}
-            onUpdate={onUpdate}
-            onRemove={onRemove}
-            onReorder={onReorder}
+            readOnly={effectiveReadOnly}
+            onUpdate={effectiveOnUpdate}
+            onRemove={effectiveOnRemove}
+            onReorder={effectiveOnReorder}
             renderExpressionEditor={renderExpressionEditor}
           />
         ))}

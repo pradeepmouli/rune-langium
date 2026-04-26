@@ -44,6 +44,14 @@ import { TypeSelector as RawTypeSelector } from './editors/TypeSelector.js';
 import { CardinalityPicker } from './editors/CardinalityPicker.js';
 
 // ---------------------------------------------------------------------------
+// Section components (Phase 7 / US5) — resolved by name via z2f's
+// `componentModule` lookup from `section:` declarations in z2f.config.ts.
+// See `specs/013-z2f-editor-migration/contracts/section-component.md`.
+// ---------------------------------------------------------------------------
+
+export { AnnotationSection, ConditionSection, MetadataSection } from './forms/sections/index.js';
+
+// ---------------------------------------------------------------------------
 // Native-compatible re-exports (register() works directly)
 // ---------------------------------------------------------------------------
 

@@ -18,8 +18,9 @@
  * @module
  */
 
-import { useCallback, useRef } from 'react';
-import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
+import { useCallback, useMemo, useRef } from 'react';
+import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
+import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
 import {
   Field,
   FieldError,
@@ -37,16 +38,15 @@ import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import {
-  formatCardinality,
-  getTypeRefText,
   getRefText,
-  classExprSynonymsToStrings,
+  parseCardinality,
   type ConditionDisplayInfo
 } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useZodForm } from '@zod-to-form/react';
-import { ExternalDataSync } from '../forms/ExternalDataSync.js';
-import { dataTypeFormSchema, type DataTypeFormValues } from '../../schemas/form-schemas.js';
+import { useZodForm, useExternalSync } from '@zod-to-form/react';
+import { DataSchema } from '../../generated/zod-schemas.js';
+import { formRegistry } from '../forms/rows/index.js';
+import { identityProjection } from './identity-projection.js';
 import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
@@ -57,29 +57,6 @@ import type {
   NavigateToNodeCallback
 } from '../../types.js';
 import type { ReactNode } from 'react';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Convert AnyGraphNode to form-managed values. */
-function toFormValues(data: AnyGraphNode): DataTypeFormValues {
-  const d = data as any;
-  return {
-    name: d.name ?? '',
-    parentName: getRefText(d.superType) ?? '',
-    members: (d.attributes ?? []).map((a: any) => ({
-      name: a.name ?? '',
-      typeName: getTypeRefText(a.typeCall) ?? 'string',
-      cardinality: formatCardinality(a.card) || '(1..1)',
-      isOverride: a.override ?? false,
-      displayName: a.name ?? ''
-    })),
-    definition: d.definition ?? '',
-    comments: d.comments ?? '',
-    synonyms: classExprSynonymsToStrings(d.synonyms)
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -118,16 +95,38 @@ function DataTypeForm({
   onNavigateToNode,
   allNodeIds
 }: DataTypeFormProps) {
-  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
+  // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
+  // Drive validation off the canonical AST schema. Per R11 the editor
+  // consumes the AST node directly — `<AttributeRow>` now reads AST paths
+  // (`attributes.${i}.{name,typeCall.type.$refText,card,override}`), so
+  // there is no projection layer and no reshape bridge.
 
-  const { form } = useZodForm(dataTypeFormSchema, {
-    defaultValues: toFormValues(data),
-    mode: 'onChange'
+  const { form } = useZodForm(DataSchema, {
+    defaultValues: identityProjection<typeof DataSchema>(data),
+    mode: 'onChange',
+    formRegistry
   });
 
+  // Re-bind pristine field state when the caller swaps to a different node
+  // (object identity is the contract). `keepDirty: true` preserves the
+  // pre-migration `keepDirtyValues: true` semantics so in-flight user edits
+  // are not stomped by a graph push.
+  useExternalSync(form, data, identityProjection<typeof DataSchema>, { keepDirty: true });
+
+  // `DataSchema` is a `z.looseObject`; the inferred `output<>` does not
+  // expose `attributes` as a structured array path RHF's overloaded
+  // `useFieldArray` can latch onto. Widen the control type so the AST array
+  // key (`attributes`) is accepted — runtime behaviour is unchanged.
+  type AttributeFieldShape = {
+    $type: 'Attribute';
+    name: string;
+    typeCall: { $type: 'TypeCall'; type: { $refText: string } };
+    card: { inf: number; sup?: number; unbounded?: boolean };
+    override?: boolean;
+  };
   const { fields, append, remove, move } = useFieldArray({
-    control: form.control,
-    name: 'members'
+    control: form.control as unknown as Control<{ attributes: AttributeFieldShape[] }>,
+    name: 'attributes'
   });
 
   // Track the committed (graph-confirmed) data for diffing
@@ -152,7 +151,11 @@ function DataTypeForm({
   const handleParentSelect = useCallback(
     (value: string | null) => {
       const label = value ? (availableTypes.find((o) => o.value === value)?.label ?? '') : '';
-      form.setValue('parentName', label, { shouldDirty: true });
+      // Mirror the selection into AST-canonical `superType.$refText` so the
+      // form stays consistent until the external graph push round-trips back
+      // through `useExternalSync`. The visible parent label below reads off
+      // `data.superType` (the committed graph value) for the same reason.
+      form.setValue('superType.$refText', label, { shouldDirty: true });
       actions.setInheritance(nodeId, value);
     },
     [nodeId, actions, availableTypes, form]
@@ -160,22 +163,33 @@ function DataTypeForm({
 
   // ---- Attribute actions ---------------------------------------------------
 
+  // Build an AST-shaped Attribute literal for `useFieldArray.append`. The
+  // bespoke <AttributeRow> reads `attributes.${i}.{name,typeCall.type.$refText,card,override}`
+  // (R11), so the appended item must be in that shape — no projection.
+  const makeAttributeAstItem = useCallback(
+    (name: string, typeName: string, cardinality: string, override = false) => ({
+      $type: 'Attribute' as const,
+      name,
+      typeCall: { $type: 'TypeCall' as const, type: { $refText: typeName } },
+      card: parseCardinality(cardinality),
+      override
+    }),
+    []
+  );
+
   const handleOverrideInherited = useCallback(
     (attr: { name: string; typeName: string; cardinality: string }) => {
-      append({
-        name: attr.name,
-        typeName: attr.typeName,
-        cardinality: attr.cardinality,
-        isOverride: false
-      });
+      append(makeAttributeAstItem(attr.name, attr.typeName, attr.cardinality));
       actions.addAttribute(nodeId, attr.name, attr.typeName, attr.cardinality);
     },
-    [nodeId, actions, append]
+    [nodeId, actions, append, makeAttributeAstItem]
   );
 
   const handleRevertOverride = useCallback(
     (attrName: string) => {
-      const fieldIdx = fields.findIndex((f) => f.name === attrName);
+      // `useFieldArray` field items carry the AST `name` field directly
+      // (the array `name: 'attributes'` binds to AST `Attribute` items).
+      const fieldIdx = fields.findIndex((f) => (f as { name?: string }).name === attrName);
       if (fieldIdx >= 0) {
         remove(fieldIdx);
         actions.removeAttribute(nodeId, attrName);
@@ -185,9 +199,9 @@ function DataTypeForm({
   );
 
   const handleAddAttribute = useCallback(() => {
-    append({ name: '', typeName: 'string', cardinality: '(1..1)', isOverride: false });
+    append(makeAttributeAstItem('', 'string', '(1..1)'));
     actions.addAttribute(nodeId, '', 'string', '(1..1)');
-  }, [nodeId, actions, append]);
+  }, [nodeId, actions, append, makeAttributeAstItem]);
 
   const handleRemoveAttribute = useCallback(
     (index: number) => {
@@ -302,7 +316,52 @@ function DataTypeForm({
   // ---- Effective members (local + inherited) via hook ----------------------
 
   const { effective: effectiveAttributes } = useEffectiveMembers(data, allNodes, fields);
-  const inheritedCount = effectiveAttributes.filter((e) => e.source === 'inherited').length;
+
+  // Local-side metadata derived from the effective list — `isOverride` tells
+  // <AttributeRow> when to render the "revert" affordance (shadowing an
+  // inherited row with the same name).
+  const localMeta = useMemo(() => {
+    const meta: Record<number, { isOverride: boolean; name: string }> = {};
+    for (const entry of effectiveAttributes) {
+      if (entry.source === 'local' && entry.fieldIndex !== undefined) {
+        meta[entry.fieldIndex] = { isOverride: entry.isOverride, name: entry.name };
+      }
+    }
+    return meta;
+  }, [effectiveAttributes]);
+
+  // ---- Inherited rows as ghost-row primitives (US4 / R6) -------------------
+  // Per upstream `arrayConfig.before` (zod-to-form/core: `GhostRow[]`), build
+  // one self-contained renderable per inherited entry. Ghost rows do not
+  // participate in form state, validation, or submission. The render function
+  // receives `{ isFirst, isLast }` positional context and returns the existing
+  // <InheritedAttributeRow> JSX with the override affordance preserved.
+  const ghostRowsBefore = useMemo<GhostRow[]>(() => {
+    return effectiveAttributes
+      .filter((entry) => entry.source === 'inherited')
+      .map<GhostRow>((entry) => ({
+        id: entry.id,
+        render: (_ctx: GhostRowContext) => (
+          <InheritedAttributeRow
+            name={entry.name}
+            typeName={entry.typeName ?? 'string'}
+            cardinality={entry.cardinality ?? '(1..1)'}
+            ancestorName={entry.ancestorName ?? ''}
+            onOverride={() =>
+              handleOverrideInherited({
+                name: entry.name,
+                typeName: entry.typeName ?? 'string',
+                cardinality: entry.cardinality ?? '(1..1)'
+              })
+            }
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
+          />
+        )
+      }));
+  }, [effectiveAttributes, handleOverrideInherited, onNavigateToNode, allNodeIds]);
+
+  const inheritedCount = ghostRowsBefore.length;
 
   const d = data as any;
   const parentName = getRefText(d.superType);
@@ -319,7 +378,6 @@ function DataTypeForm({
 
   return (
     <FormProvider {...form}>
-      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="data-type-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">
@@ -392,13 +450,31 @@ function DataTypeForm({
           </FieldLegend>
 
           <FieldGroup className="gap-1">
-            {effectiveAttributes.map((entry) =>
-              entry.source === 'local' ? (
+            {/* Inherited rows via z2f's `arrayConfig.before` ghost-row primitive
+                (R6 / US4). Rendered above local rows; do not participate in
+                form state, validation, or submission. */}
+            {ghostRowsBefore.map((row, i) => (
+              <div key={`ghost-before-${row.id}`}>
+                {
+                  row.render({
+                    isFirst: i === 0,
+                    isLast: i === ghostRowsBefore.length - 1
+                  }) as ReactNode
+                }
+              </div>
+            ))}
+
+            {/* Local rows from RHF's useFieldArray — the form-state surface. */}
+            {fields.map((field, index) => {
+              const meta = localMeta[index];
+              const isOverride = meta?.isOverride ?? false;
+              const localName = meta?.name ?? '';
+              return (
                 <AttributeRow
-                  key={entry.id}
-                  index={entry.fieldIndex!}
+                  key={field.id}
+                  index={index}
                   committedName={
-                    ((committedRef.current as any).attributes ?? [])[entry.fieldIndex!]?.name ?? ''
+                    ((committedRef.current as any).attributes ?? [])[index]?.name ?? ''
                   }
                   availableTypes={availableTypes}
                   onUpdate={handleUpdateAttribute}
@@ -406,30 +482,13 @@ function DataTypeForm({
                   onReorder={handleReorderAttribute}
                   onNavigateToNode={onNavigateToNode}
                   allNodeIds={allNodeIds}
-                  isOverride={entry.isOverride}
-                  onRevert={entry.isOverride ? () => handleRevertOverride(entry.name) : undefined}
+                  isOverride={isOverride}
+                  onRevert={isOverride ? () => handleRevertOverride(localName) : undefined}
                 />
-              ) : (
-                <InheritedAttributeRow
-                  key={entry.id}
-                  name={entry.name}
-                  typeName={entry.typeName ?? 'string'}
-                  cardinality={entry.cardinality ?? '(1..1)'}
-                  ancestorName={entry.ancestorName ?? ''}
-                  onOverride={() =>
-                    handleOverrideInherited({
-                      name: entry.name,
-                      typeName: entry.typeName ?? 'string',
-                      cardinality: entry.cardinality ?? '(1..1)'
-                    })
-                  }
-                  onNavigateToNode={onNavigateToNode}
-                  allNodeIds={allNodeIds}
-                />
-              )
-            )}
+              );
+            })}
 
-            {effectiveAttributes.length === 0 && (
+            {fields.length === 0 && ghostRowsBefore.length === 0 && (
               <p className="text-xs text-muted-foreground italic py-2 text-center">
                 No attributes defined. Click &quot;+ Add Attribute&quot; to create one.
               </p>

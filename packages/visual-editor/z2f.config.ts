@@ -1,6 +1,25 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+/**
+ * Typed configuration for `@zod-to-form` against the langium-generated
+ * AST schemas in `src/generated/zod-schemas.ts`.
+ *
+ * Per the corrected R1 (`specs/013-z2f-editor-migration/research.md`),
+ * the AST schemas are the canonical source of truth for form validation.
+ * AST-only fields ($type discriminators, container metadata, references,
+ * labels, ruleReferences, postConditions, enumSynonyms, etc.) are marked
+ * `hidden: true`. The `@zod-to-form` L1/L2 optimisers strip hidden fields
+ * from the schema-lite produced at validation time, so RHF's resolver
+ * never sees them — they remain in the AST schema's static shape but
+ * cost nothing at runtime.
+ *
+ * Per R11, editors consume the AST graph node directly — there is no
+ * projection layer. `useZodForm(Schema, { defaultValues: node })` accepts
+ * the graph node unchanged because every form-driving AST schema is a
+ * `z.looseObject`.
+ */
+
 import { defineConfig } from '@zod-to-form/core';
 
 import type * as Components from './src/components/zod-form-components.js';
@@ -50,10 +69,12 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     'inputs[].card': { component: 'CardinalitySelector' },
     'output.card': { component: 'CardinalitySelector' },
 
-    // Definition fields → Textarea
-    definition: { component: 'Textarea', props: { rows: 3 } },
+    // Note: top-level `definition` is rendered via MetadataSection (declared
+    // below). Per-row definition (`attributes[].definition`,
+    // `enumValues[].definition`, etc.) is mapped to Textarea via the
+    // per-schema overrides further down.
 
-    // --- Hidden fields (handled by custom section components) ---
+    // --- Hidden fields (AST-only; L1/L2 strips from schema-lite) -------
 
     // $type discriminators — internal, never user-editable
     $type: { hidden: true },
@@ -67,17 +88,30 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     'typeCall.$type': { hidden: true },
     'output.$type': { hidden: true },
 
-    // Annotations — rendered by AnnotationSection
-    annotations: { hidden: true },
+    // Annotations — rendered by AnnotationSection (Phase 7 / US5)
+    annotations: { section: 'AnnotationSection' },
+    // Nested annotations stay hidden — owned by their parent row, not the
+    // top-level section.
     'attributes[].annotations': { hidden: true },
     'enumValues[].annotations': { hidden: true },
 
-    // Conditions — rendered by ConditionSection
-    conditions: { hidden: true },
-    postConditions: { hidden: true },
+    // Conditions — rendered by ConditionSection (Phase 7 / US5)
+    conditions: { section: 'ConditionSection' },
+    postConditions: { section: 'ConditionSection' },
 
-    // Synonyms — rendered by MetadataSection
-    synonyms: { hidden: true },
+    // Description (definition) — rendered by MetadataSection (Phase 7 / US5)
+    // Note: this overrides the global Textarea mapping above for the
+    // top-level `definition` field; per-row `definition` (e.g.
+    // `attributes[].definition`) is still rendered as a Textarea via the
+    // schema-scoped overrides further down.
+    definition: { section: 'MetadataSection' },
+
+    // Comments — rendered by MetadataSection (Phase 7 / US5)
+    comments: { section: 'MetadataSection' },
+
+    // Synonyms — rendered by MetadataSection (Phase 7 / US5)
+    synonyms: { section: 'MetadataSection' },
+    // Nested synonyms stay hidden — owned by their parent row.
     'attributes[].synonyms': { hidden: true },
     'enumValues[].enumSynonyms': { hidden: true },
 
@@ -88,10 +122,7 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
 
     // Labels & rule references — not user-editable in forms
     'attributes[].labels': { hidden: true },
-    'attributes[].ruleReferences': { hidden: true },
-
-    // Comments — rendered by MetadataSection
-    comments: { hidden: true }
+    'attributes[].ruleReferences': { hidden: true }
   },
   schemas: {
     // --- Per-schema field overrides ---
@@ -99,6 +130,14 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     DataSchema: {
       fields: {
         // Attributes list: member rows with name, type, cardinality
+        // Per R5: declarative reorder ON. The native-DnD gesture surface in
+        // `AttributeRow.tsx` remains the gesture provider (drag handle, drop
+        // handlers); when Phase 8 (US6) promotes the array to z2f-driven
+        // rendering, this flag mounts the upstream `<ArrayReorderHandle>`
+        // and routes form-state mutations through `useFieldArray.move`.
+        // No `onReorder` callback at config time — Pattern B per R5: the
+        // row's `handleDrop` continues to fire `actions.reorderAttribute`.
+        attributes: { arrayConfig: { reorder: true } },
         'attributes[].name': { component: 'Input', order: 1 },
         'attributes[].typeCall.type': { component: 'TypeSelector', order: 2 },
         'attributes[].card': { component: 'CardinalitySelector', order: 3 },
