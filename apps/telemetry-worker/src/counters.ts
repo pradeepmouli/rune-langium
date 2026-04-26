@@ -34,8 +34,27 @@ export class TelemetryAggregator {
   async fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
     if (req.method === 'POST' && url.pathname === '/inc') {
-      const body = (await req.json()) as IncomingEvent;
-      await this.increment(body.errorCategory ?? null);
+      // Defensive: malformed JSON, an empty body, or a non-object body must
+      // surface as a structured 400 — bubbling the json() throw produces a
+      // generic 500 that makes the real client error invisible.
+      let raw: unknown;
+      try {
+        raw = await req.json();
+      } catch {
+        return jsonError(400, 'invalid_json');
+      }
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return jsonError(400, 'invalid_body');
+      }
+      const errorCategory = (raw as { errorCategory?: unknown }).errorCategory;
+      if (
+        errorCategory !== null &&
+        typeof errorCategory !== 'undefined' &&
+        typeof errorCategory !== 'string'
+      ) {
+        return jsonError(400, 'invalid_errorCategory');
+      }
+      await this.increment(errorCategory ?? null);
       return new Response(null, { status: 204 });
     }
     if (req.method === 'GET' && url.pathname === '/stats') {
@@ -94,4 +113,11 @@ export class TelemetryAggregator {
       return fresh;
     });
   }
+}
+
+function jsonError(status: number, code: string): Response {
+  return new Response(JSON.stringify({ error: code }), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
 }
