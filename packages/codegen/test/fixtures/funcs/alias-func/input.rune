@@ -1,0 +1,14 @@
+namespace "test.funcs.alias"
+version "1"
+
+func AliasFunc:
+    inputs:
+        value int (1..1)
+    output:
+        r int (1..1)
+
+    alias x:
+        value
+
+    set r:
+        x

@@ -1,0 +1,20 @@
+namespace "test.funcs.recursive"
+version "1"
+
+func Double:
+    inputs:
+        n int (1..1)
+    output:
+        r int (1..1)
+
+    set r:
+        n + n
+
+func Triple:
+    inputs:
+        n int (1..1)
+    output:
+        r int (1..1)
+
+    set r:
+        n + n + n

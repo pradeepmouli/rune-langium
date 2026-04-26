@@ -115,6 +115,13 @@ export interface ExpressionTranspilerContext {
    * Accumulated diagnostics (mutated by the transpiler).
    */
   diagnostics: GeneratorDiagnostic[];
+  /**
+   * Optional map of local variable bindings (e.g., alias name → emitted TS variable name).
+   * When a RosettaSymbolReference or other name lookup finds a key in this map,
+   * the emitted name is the mapped value rather than `${selfName}.${name}`.
+   * Used by Phase 8b func body emission to resolve alias references correctly.
+   */
+  localBindings?: Map<string, string>;
 }
 
 /**
@@ -979,6 +986,10 @@ export function transpileExpression(
   // Symbol reference — attribute or lambda parameter (T068 / T075)
   if (isRosettaSymbolReference(expr)) {
     const name = expr.symbol?.$refText ?? expr.symbol?.ref?.name ?? '?';
+    // Check localBindings first (alias refs in func bodies — Phase 8b)
+    if (ctx.localBindings?.has(name)) {
+      return ctx.localBindings.get(name)!;
+    }
     return `${ctx.selfName}.${name}`;
   }
 
