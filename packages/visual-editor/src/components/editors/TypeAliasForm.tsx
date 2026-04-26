@@ -5,7 +5,8 @@
  * TypeAliasForm — structured editor form for a TypeAlias node.
  *
  * Uses react-hook-form `FormProvider` with `useZodForm` for validation.
- * `ExternalDataSync` keeps form in sync with external data changes.
+ * `useExternalSync` (upstream `@zod-to-form/react`) keeps form in sync with
+ * external data changes when the caller swaps to a different node.
  *
  * Sections:
  * 1. Header: editable name + "TypeAlias" badge
@@ -27,8 +28,7 @@ import {
   type ConditionDisplayInfo
 } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useZodForm } from '@zod-to-form/react';
-import { ExternalDataSync } from '../forms/ExternalDataSync.js';
+import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { typeAliasFormSchema, type TypeAliasFormValues } from '../../schemas/form-schemas.js';
 import type { AnyGraphNode, EditorFormActions, ExpressionEditorSlotProps } from '../../types.js';
 import type { ReactNode } from 'react';
@@ -69,12 +69,15 @@ export interface TypeAliasFormProps {
 
 function TypeAliasForm({ nodeId, data, actions, renderExpressionEditor }: TypeAliasFormProps) {
   const d = data as any;
-  // ---- Form setup (useZodForm + ExternalDataSync) --------------------------
+  // ---- Form setup (useZodForm + upstream useExternalSync, R4) -------------
 
   const { form } = useZodForm(typeAliasFormSchema, {
     defaultValues: toFormValues(data),
     mode: 'onChange'
   });
+
+  // Re-bind pristine field state when the caller swaps to a different node.
+  useExternalSync(form, data, toFormValues, { keepDirty: true });
 
   // Track the committed data for diffing
   const committedRef = useRef(data);
@@ -178,7 +181,6 @@ function TypeAliasForm({ nodeId, data, actions, renderExpressionEditor }: TypeAl
 
   return (
     <FormProvider {...form}>
-      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">

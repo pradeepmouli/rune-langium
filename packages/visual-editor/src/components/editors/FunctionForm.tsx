@@ -44,8 +44,7 @@ import {
   type ConditionDisplayInfo
 } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useZodForm } from '@zod-to-form/react';
-import { ExternalDataSync } from '../forms/ExternalDataSync.js';
+import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
 import { validateExpression } from '../../validation/edit-validator.js';
 import { functionFormSchema, type FunctionFormValues } from '../../schemas/form-schemas.js';
@@ -238,12 +237,15 @@ function FunctionForm({
 }: FunctionFormProps) {
   const d = data as any;
 
-  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
+  // ---- Form setup (useZodForm + upstream useExternalSync, R4) -------------
 
   const { form } = useZodForm(functionFormSchema, {
     defaultValues: toFormValues(data),
     mode: 'onChange'
   });
+
+  // Re-bind pristine field state when the caller swaps to a different node.
+  useExternalSync(form, data, toFormValues, { keepDirty: true });
 
   const { fields: _fields } = useFieldArray({
     control: form.control,
@@ -421,7 +423,6 @@ function FunctionForm({
 
   return (
     <FormProvider {...form}>
-      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="function-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">

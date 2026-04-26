@@ -36,8 +36,7 @@ import { MetadataSection } from './MetadataSection.js';
 import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useZodForm } from '@zod-to-form/react';
-import { ExternalDataSync } from '../forms/ExternalDataSync.js';
+import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { enumFormSchema, type EnumFormValues } from '../../schemas/form-schemas.js';
 import { getRefText, enumSynonymsToStrings } from '../../adapters/model-helpers.js';
 import { TypeLink } from './TypeLink.js';
@@ -107,12 +106,15 @@ function EnumForm({
   allNodeIds
 }: EnumFormProps) {
   const d = data as any;
-  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
+  // ---- Form setup (useZodForm + upstream useExternalSync, R4) -------------
 
   const { form } = useZodForm(enumFormSchema, {
     defaultValues: toFormValues(data),
     mode: 'onChange'
   });
+
+  // Re-bind pristine field state when the caller swaps to a different node.
+  useExternalSync(form, data, toFormValues, { keepDirty: true });
 
   const { fields, append, remove, move } = useFieldArray({
     control: form.control,
@@ -263,7 +265,6 @@ function EnumForm({
 
   return (
     <FormProvider {...form}>
-      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">
