@@ -10,6 +10,19 @@
  * Definition and comments commit to graph actions via debounced callbacks.
  * Synonyms are managed as a form-state array with add/remove callbacks.
  *
+ * Two call paths are supported:
+ *
+ * 1. **Imperative** (today's editors): the host passes the per-action
+ *    callbacks (`onDefinitionCommit`, …) directly as props.
+ * 2. **Declarative** (Phase 7 / US5): the section is resolved by name
+ *    from z2f's `componentModule` and only receives `fields: string[]`.
+ *    The component falls back to `useEditorActionsContext()` to derive
+ *    the callbacks from `EditorFormActions` + `nodeId`.
+ *
+ * Both paths share the same render. Per `section-component.md` §3 the
+ * `fields` prop is informational — this section knows it owns
+ * `definition`, `comments`, and `synonyms` and renders them directly.
+ *
  * @module
  */
 
@@ -17,6 +30,7 @@ import { useState, useCallback } from 'react';
 import { useFormContext, Controller, useFieldArray } from 'react-hook-form';
 import { Field, FieldLabel, FieldGroup } from '@rune-langium/design-system/ui/field';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -26,13 +40,19 @@ export interface MetadataSectionProps {
   /** Whether the metadata section is read-only. */
   readOnly?: boolean;
   /** Called when definition changes (debounced commit to graph). */
-  onDefinitionCommit: (definition: string) => void;
+  onDefinitionCommit?: (definition: string) => void;
   /** Called when comments change (debounced commit to graph). */
-  onCommentsCommit: (comments: string) => void;
+  onCommentsCommit?: (comments: string) => void;
   /** Called when a synonym is added (immediate commit to graph). */
-  onSynonymAdd: (synonym: string) => void;
+  onSynonymAdd?: (synonym: string) => void;
   /** Called when a synonym is removed by index (immediate commit to graph). */
-  onSynonymRemove: (index: number) => void;
+  onSynonymRemove?: (index: number) => void;
+  /**
+   * z2f-host-supplied list of field paths this section groups (declarative
+   * path). Optional and intentionally unused at render time per
+   * `section-component.md` §3 — the section knows its field set.
+   */
+  fields?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -46,7 +66,7 @@ export interface MetadataSectionProps {
  * textareas for description and comments, tag-list with inline add for synonyms.
  */
 export function MetadataSection({
-  readOnly = false,
+  readOnly,
   onDefinitionCommit,
   onCommentsCommit,
   onSynonymAdd,
@@ -56,6 +76,43 @@ export function MetadataSection({
   const [expanded, setExpanded] = useState(true);
   const [synonymInput, setSynonymInput] = useState('');
 
+  // ------ Declarative-path fallback (Phase 7 / US5) -----------------------
+  //
+  // When a callback prop is missing the host must have wrapped this tree
+  // with <EditorActionsProvider>; we derive the action via the context.
+  // If neither is present we no-op (read-only-style behaviour, contract §6).
+  const ctx = useEditorActionsContext();
+  const effectiveReadOnly = readOnly ?? ctx?.readOnly ?? false;
+
+  const effectiveOnDefinitionCommit = useCallback(
+    (value: string) => {
+      if (onDefinitionCommit) return onDefinitionCommit(value);
+      if (ctx) ctx.actions.updateDefinition(ctx.nodeId, value);
+    },
+    [onDefinitionCommit, ctx]
+  );
+  const effectiveOnCommentsCommit = useCallback(
+    (value: string) => {
+      if (onCommentsCommit) return onCommentsCommit(value);
+      if (ctx) ctx.actions.updateComments(ctx.nodeId, value);
+    },
+    [onCommentsCommit, ctx]
+  );
+  const effectiveOnSynonymAdd = useCallback(
+    (synonym: string) => {
+      if (onSynonymAdd) return onSynonymAdd(synonym);
+      if (ctx) ctx.actions.addSynonym(ctx.nodeId, synonym);
+    },
+    [onSynonymAdd, ctx]
+  );
+  const effectiveOnSynonymRemove = useCallback(
+    (index: number) => {
+      if (onSynonymRemove) return onSynonymRemove(index);
+      if (ctx) ctx.actions.removeSynonym(ctx.nodeId, index);
+    },
+    [onSynonymRemove, ctx]
+  );
+
   // Synonyms field-array from the parent form
   const { append: appendSynonym, remove: removeSynonymField } = useFieldArray({
     control,
@@ -63,10 +120,10 @@ export function MetadataSection({
   });
 
   // Debounced auto-save for definition
-  const debouncedDefinition = useAutoSave(onDefinitionCommit, 500);
+  const debouncedDefinition = useAutoSave(effectiveOnDefinitionCommit, 500);
 
   // Debounced auto-save for comments
-  const debouncedComments = useAutoSave(onCommentsCommit, 500);
+  const debouncedComments = useAutoSave(effectiveOnCommentsCommit, 500);
 
   const handleAddSynonym = useCallback(() => {
     const trimmed = synonymInput.trim();
@@ -74,16 +131,16 @@ export function MetadataSection({
     // Update form state
     appendSynonym(trimmed as any);
     // Commit to graph
-    onSynonymAdd(trimmed);
+    effectiveOnSynonymAdd(trimmed);
     setSynonymInput('');
-  }, [synonymInput, appendSynonym, onSynonymAdd]);
+  }, [synonymInput, appendSynonym, effectiveOnSynonymAdd]);
 
   const handleRemoveSynonym = useCallback(
     (index: number) => {
       removeSynonymField(index);
-      onSynonymRemove(index);
+      effectiveOnSynonymRemove(index);
     },
-    [removeSynonymField, onSynonymRemove]
+    [removeSynonymField, effectiveOnSynonymRemove]
   );
 
   const handleSynonymKeyDown = useCallback(
@@ -127,7 +184,7 @@ export function MetadataSection({
                     debouncedDefinition(e.target.value);
                   }}
                   onBlur={field.onBlur}
-                  disabled={readOnly}
+                  disabled={effectiveReadOnly}
                   placeholder="Add a description..."
                   rows={2}
                   data-slot="metadata-description"
@@ -157,7 +214,7 @@ export function MetadataSection({
                     debouncedComments(e.target.value);
                   }}
                   onBlur={field.onBlur}
-                  disabled={readOnly}
+                  disabled={effectiveReadOnly}
                   placeholder="Add comments..."
                   rows={2}
                   data-slot="metadata-comments"
@@ -184,7 +241,7 @@ export function MetadataSection({
                     px-2 py-0.5 text-xs text-foreground"
                 >
                   {synonym}
-                  {!readOnly && (
+                  {!effectiveReadOnly && (
                     <button
                       type="button"
                       onClick={() => handleRemoveSynonym(index)}
@@ -197,7 +254,7 @@ export function MetadataSection({
                 </span>
               ))}
             </div>
-            {!readOnly && (
+            {!effectiveReadOnly && (
               <div className="flex items-center gap-1">
                 <input
                   type="text"
