@@ -1,0 +1,8 @@
+{
+  "validCases": [{ "value": 5, "threshold": 10 }],
+  "invalidCases": [
+    { "value": 0, "threshold": 10 },
+    { "value": -1, "threshold": 10 },
+    { "value": 15, "threshold": 10 }
+  ]
+}

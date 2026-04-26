@@ -1,0 +1,11 @@
+{
+  "validCases": [
+    { "items": ["a", "b"], "allowed": ["c", "d"] },
+    { "items": [], "allowed": ["c"] },
+    { "items": ["a"], "allowed": [] }
+  ],
+  "invalidCases": [
+    { "items": ["a", "b"], "allowed": ["b", "c"] },
+    { "items": ["x"], "allowed": ["x"] }
+  ]
+}

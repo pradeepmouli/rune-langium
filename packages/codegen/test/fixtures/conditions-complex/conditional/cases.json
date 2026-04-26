@@ -1,0 +1,4 @@
+{
+  "validCases": [{ "flag": true, "value": "something" }, { "flag": false }, {}],
+  "invalidCases": [{ "flag": true }]
+}

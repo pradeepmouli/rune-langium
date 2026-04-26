@@ -23,6 +23,7 @@ import { tmpdir } from 'node:os';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
+import { z } from 'zod';
 import { generate } from '../src/index.js';
 import type { GeneratorOutput } from '../src/types.js';
 
@@ -222,4 +223,283 @@ describe('cdm-smoke: typescript target', () => {
   it.todo('generates TypeScript interfaces and classes for the full CDM curated schema');
   it.todo('tsc --noEmit over generated TypeScript output exits 0');
   it.todo('generated TypeScript funcs are callable at runtime');
+});
+
+// ---------------------------------------------------------------------------
+// T078 — JSON battery: one valid + one invalid JSON per condition kind.
+// FR-024: error message must contain the condition name.
+// Schemas are reconstructed to match the generated output from the
+// conditions-complex fixtures (verified byte-identical by us3-expressions.test.ts).
+// ---------------------------------------------------------------------------
+
+describe('cdm-smoke: json-battery (T078, FR-024)', () => {
+  // Runtime helpers (matches generated output verbatim)
+  const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>
+    values.filter((v) => v !== undefined && v !== null).length === 1;
+
+  const runeAttrExists = (v: unknown): boolean =>
+    v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
+
+  const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;
+
+  // literals: z.superRefine — three conditions checking score=42, name='hello', active=true
+  const WithLiteralsSchema = z
+    .object({
+      score: z.number().int().optional(),
+      name: z.string().optional(),
+      active: z.boolean().optional()
+    })
+    .superRefine((data, ctx) => {
+      if (!(data.score === 42)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'ScoreCheck: condition failed in WithLiterals',
+          path: ['ScoreCheck']
+        });
+      }
+      if (!(data.name === 'hello')) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'NameCheck: condition failed in WithLiterals',
+          path: ['NameCheck']
+        });
+      }
+      if (!(data.active === true)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'ActiveCheck: condition failed in WithLiterals',
+          path: ['ActiveCheck']
+        });
+      }
+    });
+
+  it('literals: valid payload passes', () => {
+    const r = WithLiteralsSchema.safeParse({ score: 42, name: 'hello', active: true });
+    expect(r.success).toBe(true);
+  });
+
+  it('literals: invalid payload fails — error message contains condition name (FR-024)', () => {
+    const r = WithLiteralsSchema.safeParse({ score: 99, name: 'hello', active: true });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const messages = r.error.issues.map((e) => e.message);
+      expect(messages.some((m) => m.includes('ScoreCheck'))).toBe(true);
+    }
+  });
+
+  // navigation: z.refine — CityExists: address.city must exist
+  const AddressSchema = z.object({ city: z.string().optional() });
+  const PartySchema = z
+    .object({ address: AddressSchema.optional() })
+    .refine((data) => runeAttrExists(data.address?.city), 'CityExists: condition failed in Party');
+
+  it('navigation: valid payload passes', () => {
+    const r = PartySchema.safeParse({ address: { city: 'London' } });
+    expect(r.success).toBe(true);
+  });
+
+  it('navigation: invalid payload fails — error message contains condition name (FR-024)', () => {
+    const r = PartySchema.safeParse({ address: {} });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const messages = r.error.issues.map((e) => e.message);
+      expect(messages.some((m) => m.includes('CityExists'))).toBe(true);
+    }
+  });
+
+  // arithmetic: z.superRefine — ValuePositive, ValueBelowThreshold, ValueNotZero
+  const NumericCheckSchema = z
+    .object({
+      value: z.number().int().optional(),
+      threshold: z.number().int().optional()
+    })
+    .superRefine((data, ctx) => {
+      if (!(data.value! > 0)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'ValuePositive: condition failed in NumericCheck',
+          path: ['ValuePositive']
+        });
+      }
+      if (!(data.value! < data.threshold!)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'ValueBelowThreshold: condition failed in NumericCheck',
+          path: ['ValueBelowThreshold']
+        });
+      }
+      if (!(data.value !== 0)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'ValueNotZero: condition failed in NumericCheck',
+          path: ['ValueNotZero']
+        });
+      }
+    });
+
+  it('arithmetic: valid payload passes', () => {
+    const r = NumericCheckSchema.safeParse({ value: 5, threshold: 10 });
+    expect(r.success).toBe(true);
+  });
+
+  it('arithmetic: invalid payload fails — error message contains condition name (FR-024)', () => {
+    const r = NumericCheckSchema.safeParse({ value: 0, threshold: 10 });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const messages = r.error.issues.map((e) => e.message);
+      expect(messages.some((m) => m.includes('ValuePositive'))).toBe(true);
+    }
+  });
+
+  // boolean: z.superRefine — AOrB, AAndB
+  const BoolCheckSchema = z
+    .object({
+      a: z.string().optional(),
+      b: z.string().optional(),
+      c: z.string().optional()
+    })
+    .superRefine((data, ctx) => {
+      if (!(runeAttrExists(data.a) || runeAttrExists(data.b))) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'AOrB: condition failed in BoolCheck',
+          path: ['AOrB']
+        });
+      }
+      if (!(runeAttrExists(data.a) && runeAttrExists(data.b))) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'AAndB: condition failed in BoolCheck',
+          path: ['AAndB']
+        });
+      }
+    });
+
+  it('boolean: valid payload passes', () => {
+    const r = BoolCheckSchema.safeParse({ a: 'x', b: 'y' });
+    expect(r.success).toBe(true);
+  });
+
+  it('boolean: invalid payload fails — error message contains condition name (FR-024)', () => {
+    const r = BoolCheckSchema.safeParse({});
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const messages = r.error.issues.map((e) => e.message);
+      expect(messages.some((m) => m.includes('AOrB'))).toBe(true);
+    }
+  });
+
+  // set-ops: z.refine — ItemsDisjoint
+  const SetOpsCheckSchema = z
+    .object({
+      items: z.array(z.string()),
+      allowed: z.array(z.string())
+    })
+    .refine(
+      (data) => !(data.items ?? []).some((v) => (data.allowed ?? []).includes(v)),
+      'ItemsDisjoint: condition failed in SetOpsCheck'
+    );
+
+  it('set-ops: valid payload passes', () => {
+    const r = SetOpsCheckSchema.safeParse({ items: ['a', 'b'], allowed: ['c', 'd'] });
+    expect(r.success).toBe(true);
+  });
+
+  it('set-ops: invalid payload fails — error message contains condition name (FR-024)', () => {
+    const r = SetOpsCheckSchema.safeParse({ items: ['a', 'b'], allowed: ['b', 'c'] });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const messages = r.error.issues.map((e) => e.message);
+      expect(messages.some((m) => m.includes('ItemsDisjoint'))).toBe(true);
+    }
+  });
+
+  // aggregations: z.superRefine — CountPositive, FirstExists
+  const AggCheckSchema = z
+    .object({ values: z.array(z.number().int()) })
+    .superRefine((data, ctx) => {
+      if (!(runeCount(data.values) > 0)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'CountPositive: condition failed in AggCheck',
+          path: ['CountPositive']
+        });
+      }
+      if (!runeAttrExists((data.values ?? [])[0])) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'FirstExists: condition failed in AggCheck',
+          path: ['FirstExists']
+        });
+      }
+    });
+
+  it('aggregations: valid payload passes', () => {
+    const r = AggCheckSchema.safeParse({ values: [1, 2, 3] });
+    expect(r.success).toBe(true);
+  });
+
+  it('aggregations: invalid payload fails — error message contains condition name (FR-024)', () => {
+    const r = AggCheckSchema.safeParse({ values: [] });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const messages = r.error.issues.map((e) => e.message);
+      expect(messages.some((m) => m.includes('CountPositive'))).toBe(true);
+    }
+  });
+
+  // higher-order: z.refine — NonEmpty (filter items > 0 must exist)
+  const HigherOrderCheckSchema = z
+    .object({ values: z.array(z.number().int()) })
+    .refine(
+      (data) => runeAttrExists((data.values ?? []).filter((item) => item > 0)),
+      'NonEmpty: condition failed in HigherOrderCheck'
+    );
+
+  it('higher-order: valid payload passes', () => {
+    const r = HigherOrderCheckSchema.safeParse({ values: [1, 2, 3] });
+    expect(r.success).toBe(true);
+  });
+
+  it('higher-order: invalid payload fails — error message contains condition name (FR-024)', () => {
+    const r = HigherOrderCheckSchema.safeParse({ values: [-1, -2] });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const messages = r.error.issues.map((e) => e.message);
+      expect(messages.some((m) => m.includes('NonEmpty'))).toBe(true);
+    }
+  });
+
+  // conditional: z.refine — IfFlagThenValue
+  const ConditionalCheckSchema = z
+    .object({
+      flag: z.boolean().optional(),
+      value: z.string().optional()
+    })
+    .refine(
+      (data) => (data.flag === true ? runeAttrExists(data.value) : true),
+      'IfFlagThenValue: condition failed in ConditionalCheck'
+    );
+
+  it('conditional: valid payload (flag=false) passes', () => {
+    const r = ConditionalCheckSchema.safeParse({ flag: false });
+    expect(r.success).toBe(true);
+  });
+
+  it('conditional: valid payload (flag=true, value present) passes', () => {
+    const r = ConditionalCheckSchema.safeParse({ flag: true, value: 'yes' });
+    expect(r.success).toBe(true);
+  });
+
+  it('conditional: invalid payload fails — error message contains condition name (FR-024)', () => {
+    const r = ConditionalCheckSchema.safeParse({ flag: true });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const messages = r.error.issues.map((e) => e.message);
+      expect(messages.some((m) => m.includes('IfFlagThenValue'))).toBe(true);
+    }
+  });
+
+  // Suppress unused variable warnings for helpers not used directly in assertions
+  void runeCheckOneOf;
 });

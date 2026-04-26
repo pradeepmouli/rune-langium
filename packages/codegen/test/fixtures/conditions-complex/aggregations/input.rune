@@ -1,0 +1,9 @@
+namespace "test.cond.aggregations"
+version "1"
+
+type AggCheck:
+    values int (0..*)
+    condition CountPositive:
+        values count > 0
+    condition FirstExists:
+        values first exists

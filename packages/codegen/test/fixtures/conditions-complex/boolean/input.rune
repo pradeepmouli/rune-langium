@@ -1,0 +1,11 @@
+namespace "test.cond.boolean"
+version "1"
+
+type BoolCheck:
+    a string (0..1)
+    b string (0..1)
+    c string (0..1)
+    condition AOrB:
+        a exists or b exists
+    condition AAndB:
+        a exists and b exists

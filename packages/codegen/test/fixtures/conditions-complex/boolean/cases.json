@@ -1,0 +1,4 @@
+{
+  "validCases": [{ "a": "x", "b": "y" }, { "a": "x" }, { "b": "y" }],
+  "invalidCases": [{}, { "c": "z" }]
+}

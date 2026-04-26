@@ -1,0 +1,8 @@
+{
+  "validCases": [{ "score": 42, "label": "hello", "active": true }],
+  "invalidCases": [
+    { "score": 1, "label": "hello", "active": true },
+    { "score": 42, "label": "world", "active": true },
+    { "score": 42, "label": "hello", "active": false }
+  ]
+}

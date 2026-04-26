@@ -1,0 +1,7 @@
+namespace "test.cond.higherorder"
+version "1"
+
+type HigherOrderCheck:
+    values int (0..*)
+    condition NonEmpty:
+        values filter [item > 0] exists

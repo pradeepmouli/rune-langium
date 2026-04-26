@@ -1,0 +1,4 @@
+{
+  "validCases": [{ "address": { "city": "London" } }, { "address": { "city": "New York" } }],
+  "invalidCases": [{}, { "address": {} }, { "address": null }]
+}
