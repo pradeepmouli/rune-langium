@@ -14,6 +14,7 @@
  */
 
 import type { Transport } from '@codemirror/lsp-client';
+import { config } from '../config.js';
 import { createWebSocketTransport } from './ws-transport.js';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -57,7 +58,8 @@ export interface TransportProvider {
 // Implementation
 // ────────────────────────────────────────────────────────────────────────────
 
-const DEFAULT_WS_URI = 'ws://localhost:3001';
+/** LSP host base URL, env-configurable via VITE_LSP_WS_URL (T012/FR-021). */
+const DEFAULT_WS_URI = config.lspWsUrl;
 const DEFAULT_TIMEOUT = 2000;
 const DEFAULT_MAX_RECONNECT = 3;
 const DEFAULT_BACKOFF_BASE = 500;
@@ -111,13 +113,18 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
     // Node.js-only modules (node:events, node:crypto). Until a browser-
     // compatible LSP core is available, we cannot embed the server in a
     // Worker. Report the error so the UI shows "disconnected" status.
-    console.warn(
-      '[TransportProvider] WebSocket connection failed and embedded Worker transport is not available. Start the LSP server with: pnpm --filter @rune-langium/lsp-server start'
-    );
+    const errorMessage = config.devMode
+      ? `LSP server unavailable — start the external server on ${config.lspWsUrl}`
+      : 'Editor running offline — language services unavailable';
+    if (config.devMode) {
+      console.warn(
+        '[TransportProvider] WebSocket connection failed and embedded Worker transport is not available. Start the LSP server with: pnpm --filter @rune-langium/lsp-server start'
+      );
+    }
     setState({
       mode: 'disconnected',
       status: 'error',
-      error: new Error('LSP server unavailable — start the external server on ws://localhost:3001')
+      error: new Error(errorMessage)
     });
     // Return a no-op transport so callers don't crash
     return {
