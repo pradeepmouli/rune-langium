@@ -1,0 +1,37 @@
+{
+  "name": "@rune-langium/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Canonical design tokens (colour, typography, spacing, radii, shadows, motion) shared across the rune-langium landing site, docs, and Studio. Emits a CSS-variable stylesheet and a typed TS export.",
+  "type": "module",
+  "main": "./dist/tokens.js",
+  "types": "./dist/tokens.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/tokens.d.ts",
+      "import": "./dist/tokens.js"
+    },
+    "./tokens.css": "./dist/tokens.css",
+    "./tokens.json": "./src/tokens.json"
+  },
+  "files": [
+    "dist",
+    "src/tokens.json"
+  ],
+  "scripts": {
+    "build": "tsgo --noEmit && tsx src/build.ts",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run",
+    "type-check": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "vitest": "^4.1.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"
+}

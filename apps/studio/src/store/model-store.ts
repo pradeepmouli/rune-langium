@@ -32,8 +32,12 @@ interface ModelStoreState {
   models: Map<string, LoadedModel>;
   /** In-progress loading operations keyed by source ID. */
   loading: Map<string, ModelLoadingState>;
-  /** Errors from the most recent load attempt keyed by source ID. */
-  errors: Map<string, { code: ModelLoadErrorCode; message: string }>;
+  /**
+   * Errors from the most recent load attempt keyed by source ID.
+   * `source` is retained so Retry can re-run loads for custom-URL sources
+   * that aren't in the curated registry (FR-002 retry path).
+   */
+  errors: Map<string, { code: ModelLoadErrorCode; message: string; source: ModelSource }>;
 }
 
 interface ModelStoreActions {
@@ -110,7 +114,8 @@ export const useModelStore = create<ModelStore>((set, get) => ({
       const err = e as { code?: ModelLoadErrorCode; message?: string };
       currentErrors.set(source.id, {
         code: err.code ?? 'NETWORK',
-        message: err.message ?? 'Unknown error'
+        message: err.message ?? 'Unknown error',
+        source
       });
 
       set({ loading: currentLoading, errors: currentErrors });

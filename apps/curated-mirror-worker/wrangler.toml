@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: FSL-1.1-ALv2
+# Copyright (c) 2026 Pradeep Mouli
+#
+# Cloudflare Worker config for the curated-model R2 mirror
+# (feature 012-studio-workspace-ux).
+#
+# Runs nightly via Cron Trigger; downloads CDM / FpML / rune-dsl archives
+# from codeload.github.com and uploads to R2. Studio reads from
+# www.daikonic.dev/curated/* (route handler in this Worker:
+# apps/curated-mirror-worker/src/index.ts -> handleCuratedRead).
+
+name = "rune-curated-mirror-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-24"
+compatibility_flags = ["nodejs_compat"]
+account_id = "8327a4da4660eab7d78695268282da09"
+workers_dev = false
+
+# Nightly at 03:00 UTC. Off-peak; gives a fresh archive in time for any
+# user opening Studio first thing in the morning across most timezones.
+[triggers]
+crons = ["0 3 * * *"]
+
+# Same-origin read route — Studio fetches from www.daikonic.dev/curated/...
+# (no CORS preflight) and the worker serves bytes from R2.
+[[routes]]
+pattern = "www.daikonic.dev/curated/*"
+zone_name = "daikonic.dev"
+
+# R2 bucket created via `wrangler r2 bucket create rune-curated-mirror` (T005).
+# Binding name matches the wrangler output and is referenced in src/ as
+# env.rune_curated_mirror.
+[[r2_buckets]]
+binding = "rune_curated_mirror"
+bucket_name = "rune-curated-mirror"
+
+[observability]
+enabled = true
+
+[vars]
+# Source registry — bumping any of these refs forces the next nightly run
+# to publish a new archive. Keep in sync with the curated registry in
+# apps/studio/src/services/model-registry.ts.
+CURATED_SOURCES = """[
+  { "id": "cdm",      "owner": "REGnosys", "repo": "rosetta-cdm", "ref": "master" },
+  { "id": "fpml",     "owner": "finos",    "repo": "rune-fpml",   "ref": "main"   },
+  { "id": "rune-dsl", "owner": "REGnosys", "repo": "rosetta-dsl", "ref": "master" }
+]"""
+
+# Same-origin allowlist for read responses. Override per environment via
+# `wrangler dev --var ALLOWED_ORIGIN=...`.
+ALLOWED_ORIGIN = "https://www.daikonic.dev"
+
+# Keep the latest 14 archives per modelId. Older are pruned by the same
+# job. Flat var name — wrangler does not preserve `[vars.RETENTION]`
+# nested-table shape at runtime, and would otherwise render this as
+# `undefined`. The Worker tries the flat form first and falls back to
+# the nested shape only if a future wrangler change re-enables it.
+RETENTION_ARCHIVES_PER_MODEL = "14"

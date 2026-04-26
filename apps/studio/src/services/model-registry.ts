@@ -8,28 +8,37 @@
 
 import type { ModelSource } from '../types/model-types.js';
 
-/** Built-in curated model sources. */
+const MIRROR_BASE = 'https://www.daikonic.dev/curated';
+
+/**
+ * Built-in curated model sources. The `archiveUrl` is the preferred load
+ * path (CF R2 mirror); `repoUrl`/`ref` are kept for the custom-URL flow
+ * and as a documentation pointer to upstream.
+ */
 const CURATED_MODELS: readonly ModelSource[] = [
   {
     id: 'cdm',
     name: 'CDM (Common Domain Model)',
     repoUrl: 'https://github.com/REGnosys/rosetta-cdm.git',
     ref: 'master',
-    paths: ['rosetta-source/src/main/rosetta/**/*.rosetta']
+    paths: ['rosetta-source/src/main/rosetta/**/*.rosetta'],
+    archiveUrl: `${MIRROR_BASE}/cdm/latest.tar.gz`
   },
   {
     id: 'fpml',
     name: 'Rune FpML',
     repoUrl: 'https://github.com/finos/rune-fpml.git',
     ref: 'main',
-    paths: ['src/main/rosetta/**/*.rosetta']
+    paths: ['src/main/rosetta/**/*.rosetta'],
+    archiveUrl: `${MIRROR_BASE}/fpml/latest.tar.gz`
   },
   {
     id: 'rune-dsl',
     name: 'Rune DSL (Built-in Types)',
     repoUrl: 'https://github.com/REGnosys/rosetta-dsl.git',
     ref: 'master',
-    paths: ['rosetta-lang/src/main/resources/**/*.rosetta']
+    paths: ['rosetta-lang/src/main/resources/**/*.rosetta'],
+    archiveUrl: `${MIRROR_BASE}/rune-dsl/latest.tar.gz`
   }
 ] as const;
 

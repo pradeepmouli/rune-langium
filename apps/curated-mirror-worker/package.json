@@ -1,0 +1,30 @@
+{
+  "name": "@rune-langium/curated-mirror-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker (Cron-triggered) that mirrors curated Rune model archives (CDM, FpML, rune-dsl) into R2 nightly. Studio fetches from the mirror instead of cloning at runtime (feature 012-studio-workspace-ux).",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@rune-langium/curated-schema": "workspace:*",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250108.0",
+    "miniflare": "^3.20250108.0",
+    "vitest": "^4.1.4",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "FSL-1.1-ALv2",
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"
+}

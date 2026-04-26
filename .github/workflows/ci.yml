@@ -92,15 +92,63 @@ jobs:
         continue-on-error: true
 
   # ---------------------------------------------------------------------------
+  # studio-a11y: axe-core gate against the studio's main routes (T088 / T115).
+  #
+  # Runs Playwright headlessly on a single Node version, executes the e2e
+  # suite at apps/studio/test/e2e/a11y.spec.ts, and fails the job on any
+  # 'serious' or 'critical' violation in code we own. Monaco / ReactFlow
+  # / dockview surfaces are excluded inside the spec — their a11y posture
+  # is upstream's responsibility per FR-A04.
+  #
+  # Why a separate job: keeps the unit-test job fast on the matrix (no
+  # browser install per Node version) and makes a11y regressions easy to
+  # find in the checks list.
+  # ---------------------------------------------------------------------------
+  studio-a11y:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.32.0
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers (chromium only)
+        run: pnpm --filter @rune-langium/studio exec playwright install --with-deps chromium
+
+      - name: Build studio + workspace dependencies
+        # `...` suffix builds the studio's workspace deps first (design-tokens
+        # emits dist/tokens.css, core emits the AST types). Without it, the
+        # studio build can't resolve @rune-langium/design-tokens/tokens.css
+        # or @rune-langium/core from the parser worker.
+        run: pnpm --filter '@rune-langium/studio...' run build
+
+      - name: Run axe-core a11y gate
+        # Invoke playwright directly via `exec` so the --grep flag isn't
+        # routed through the pnpm-script `--` boundary (which made
+        # playwright interpret "--grep" as a test-file path).
+        run: pnpm --filter @rune-langium/studio exec playwright test --grep "Studio a11y"
+
+  # ---------------------------------------------------------------------------
   # check-generated: Verify generated schema files don't drift from source (T039, FR-018, SC-008)
   #
   # Runs generate:schemas, normalises formatting, then fails if any committed
   # generated file differs from the freshly-regenerated output.
   #
-  # Note: scaffold:forms is still intentionally omitted even though @zod-to-form/cli
-  # is now pinned to v0.2.4+ with --mode auto-save support; hand-authored forms in
-  # src/components/forms/generated/ are not yet reproduced and checked in CI.
-  # TODO: Add scaffold:forms check using auto-save mode now that the CLI supports it.
+  # Note: form scaffolding is no longer a separate step (012-studio-workspace-ux,
+  # T104–T108). Forms are emitted at Vite build time via `?z2f` virtual modules
+  # served by `@zod-to-form/vite`; nothing checked-in needs regenerating in CI.
   # ---------------------------------------------------------------------------
   check-generated:
     runs-on: ubuntu-latest

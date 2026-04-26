@@ -12,7 +12,32 @@ import { Input } from '@rune-langium/design-system/ui/input';
 import { cn } from '@rune-langium/design-system/utils';
 import { getModelRegistry, createCustomModelSource } from '../services/model-registry.js';
 import { useModelStore } from '../store/model-store.js';
-import type { ModelSource, LoadProgress } from '../types/model-types.js';
+import type { ModelSource, LoadProgress, ModelLoadErrorCode } from '../types/model-types.js';
+import { CuratedLoadErrorPanel } from './CuratedLoadErrorPanel.js';
+import { ErrorCategorySchema, type ErrorCategory } from '@rune-langium/curated-schema';
+
+/**
+ * Map either a legacy `ModelLoadErrorCode` (git-clone path) or an already-
+ * narrow `ErrorCategory` (curated path) to the panel's category enum.
+ */
+function mapToCategory(code: ModelLoadErrorCode | string | undefined): ErrorCategory {
+  switch (code) {
+    case 'NETWORK':
+      return 'network';
+    case 'NOT_FOUND':
+      return 'archive_not_found';
+    case 'NO_FILES':
+      return 'archive_decode';
+    case 'CANCELLED':
+      return 'cancelled';
+    default:
+      // CuratedLoadError already exposes `.category` directly; the store
+      // stuffs it into `code`. Validate against the schema rather than a
+      // hand-maintained lookup so adding a category in one place is enough.
+      const r = ErrorCategorySchema.safeParse(code);
+      return r.success ? r.data : 'unknown';
+  }
+}
 
 function ProgressBar({ progress, sourceId }: { progress: LoadProgress; sourceId: string }) {
   const cancel = useModelStore((s) => s.cancel);
@@ -126,18 +151,26 @@ export function ModelLoader() {
         )
       )}
 
-      {/* Errors */}
-      {Array.from(errors.entries()).map(([id, err]) => (
-        <div
-          key={id}
-          className="flex items-start gap-2 p-3 bg-destructive/10 text-destructive rounded-md text-sm"
-        >
-          <span className="flex-1">{err.message}</span>
-          <Button variant="ghost" size="sm" onClick={() => dismissError(id)}>
-            Dismiss
-          </Button>
-        </div>
-      ))}
+      {/* Errors — FR-002 distinct, actionable copy per failure category. */}
+      {Array.from(errors.entries()).map(([id, err]) => {
+        // Prefer the source captured at error time so Retry works for both
+        // curated (in-registry) and custom-URL loads. Fall back to the
+        // registry as a defensive lookup if we ever lose the entry.source.
+        const source = err.source ?? registry.find((s) => s.id === id);
+        const modelName = source?.name ?? id;
+        return (
+          <div key={id} className="p-3 bg-destructive/10 text-destructive rounded-md text-sm">
+            <CuratedLoadErrorPanel
+              category={mapToCategory(err.code)}
+              modelName={modelName}
+              onRetry={() => {
+                dismissError(id);
+                if (source) handleLoadCurated(source);
+              }}
+            />
+          </div>
+        );
+      })}
 
       {/* Curated model buttons */}
       <div className="space-y-2">

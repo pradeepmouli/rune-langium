@@ -10,6 +10,12 @@ Web-based visual editor for Rune DSL models with integrated LSP support.
 - **Dual Transport** — WebSocket connection to external `rune-lsp-server` with automatic SharedWorker/Worker fallback
 - **Diagnostics Bridge** — LSP errors appear as inline editor underlines _and_ as badges on graph nodes
 - **Multi-file Support** — Tab bar for switching between `.rosetta` files with per-file LSP document lifecycle
+- **Workspaces** — IDE-style dockable panels with persistent layouts. Three workspace kinds:
+  - *Browser-only* — files live in OPFS only; no roundtrips
+  - *Folder-backed* — files mirrored to a local directory via the File System Access API
+  - *GitHub-backed* — full clone/push/pull against any GitHub repo via Device-Flow auth (no tokens leave the browser)
+- **Curated model mirror** — CDM / FpML / rune-dsl archives served from R2 via `www.daikonic.dev/curated/*` (refreshed nightly), so first-load is fast and offline-friendly
+- **Anonymous telemetry (opt-out)** — closed-schema events power the SC-009 success-rate gate. No PII, no IPs, no file paths. Toggle in Settings.
 
 ## Architecture
 
@@ -101,6 +107,37 @@ Under the hood, Studio reads two build-time env vars:
 - `VITE_TURNSTILE_SITE_KEY` — Turnstile public site key. Defaults to Turnstile's "always-pass" dummy key for preview builds; set explicitly for the production deploy.
 
 See [`specs/011-export-code-cf/`](../../specs/011-export-code-cf/) for the full design. The Worker + container live under [`apps/codegen-worker/`](../codegen-worker/) and [`apps/codegen-container/`](../codegen-container/).
+
+## Workspaces & GitHub backing
+
+Studio's start page exposes **Open a folder…**, **New blank workspace**, and **Open a GitHub repo…** entry points. The three kinds map to:
+
+| Kind | Storage | Sync surface |
+|---|---|---|
+| browser-only | OPFS (Origin Private File System) | none |
+| folder-backed | OPFS mirrored to a chosen local directory via FSA | manual save / load handle |
+| git-backed | OPFS + isomorphic-git over OPFS | clone / fetch / push / status |
+
+Auth for git-backed uses **GitHub Device Flow** mediated by `apps/github-auth-worker`. Tokens never reach the Worker — the user enters the code in their browser, GitHub returns the token to the Studio page directly, and Studio stores it in the workspace's OPFS data at `<workspace-id>/.studio/token`. The Worker only brokers the Device Flow handshake (`device_code`) and token polling; it does not receive or persist the resulting access token.
+
+State on disk:
+- File contents → OPFS
+- GitHub access token for git-backed workspaces → OPFS (`<workspace-id>/.studio/token`)
+- Workspace metadata, tabs, recent list, settings → IndexedDB
+- Serialised FSA folder handles → IndexedDB (`handles` store)
+
+`pnpm dev` works without any of the new Workers; it routes telemetry/curated calls back to the dev origin (no-op or bundled fixtures).
+
+## Telemetry (FR-T01–T05)
+
+Studio emits closed-schema events (see `specs/012-studio-workspace-ux/contracts/telemetry-event.md`) to `apps/telemetry-worker`. Privacy invariants enforced both in the client and the server:
+
+- No file paths, names, or contents can ever appear in a body — the schema is `.strict()` enums + bounded strings.
+- The server hashes `cf-connecting-ip` with a daily-rotating in-memory salt; raw IPs never log, never persist.
+- Studio's `services/telemetry.ts` no-ops on `localhost` and when the user has set `telemetry-enabled=false` in Settings.
+- A single `429` response from the server drops the event silently — telemetry never blocks the user.
+
+Settings → **Diagnostics** has a single toggle. Off by default in dev builds; on by default in production builds. Either way, the user can flip it.
 
 ## Key Files
 

@@ -38,20 +38,20 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     // --- Global field mappings (apply across all schemas) ---
 
     // Cross-reference fields → TypeSelector
-    parent: { fieldType: 'TypeSelector' },
-    superType: { fieldType: 'TypeSelector' },
-    'attributes[].typeCall.type': { fieldType: 'TypeSelector' },
-    'typeCall.type': { fieldType: 'TypeSelector' },
-    'inputs[].typeCall.type': { fieldType: 'TypeSelector' },
-    'output.typeCall.type': { fieldType: 'TypeSelector' },
+    parent: { component: 'TypeSelector' },
+    superType: { component: 'TypeSelector' },
+    'attributes[].typeCall.type': { component: 'TypeSelector' },
+    'typeCall.type': { component: 'TypeSelector' },
+    'inputs[].typeCall.type': { component: 'TypeSelector' },
+    'output.typeCall.type': { component: 'TypeSelector' },
 
     // Cardinality fields → CardinalitySelector
-    'attributes[].card': { fieldType: 'CardinalitySelector' },
-    'inputs[].card': { fieldType: 'CardinalitySelector' },
-    'output.card': { fieldType: 'CardinalitySelector' },
+    'attributes[].card': { component: 'CardinalitySelector' },
+    'inputs[].card': { component: 'CardinalitySelector' },
+    'output.card': { component: 'CardinalitySelector' },
 
     // Definition fields → Textarea
-    definition: { fieldType: 'Textarea', props: { rows: 3 } },
+    definition: { component: 'Textarea', props: { rows: 3 } },
 
     // --- Hidden fields (handled by custom section components) ---
 
@@ -99,11 +99,11 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     DataSchema: {
       fields: {
         // Attributes list: member rows with name, type, cardinality
-        'attributes[].name': { fieldType: 'Input', order: 1 },
-        'attributes[].typeCall.type': { fieldType: 'TypeSelector', order: 2 },
-        'attributes[].card': { fieldType: 'CardinalitySelector', order: 3 },
+        'attributes[].name': { component: 'Input', order: 1 },
+        'attributes[].typeCall.type': { component: 'TypeSelector', order: 2 },
+        'attributes[].card': { component: 'CardinalitySelector', order: 3 },
         'attributes[].override': { hidden: true },
-        'attributes[].definition': { fieldType: 'Textarea', props: { rows: 2 }, order: 4 }
+        'attributes[].definition': { component: 'Textarea', props: { rows: 2 }, order: 4 }
       }
     },
 
@@ -111,30 +111,30 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
       fields: {
         // Choice options: name + type reference
         'attributes[].name': { hidden: true },
-        'attributes[].typeCall.type': { fieldType: 'TypeSelector', order: 1 },
-        'attributes[].definition': { fieldType: 'Textarea', props: { rows: 2 }, order: 2 }
+        'attributes[].typeCall.type': { component: 'TypeSelector', order: 1 },
+        'attributes[].definition': { component: 'Textarea', props: { rows: 2 }, order: 2 }
       }
     },
 
     RosettaEnumerationSchema: {
       fields: {
         // Enum values: name + display name
-        'enumValues[].name': { fieldType: 'Input', order: 1 },
-        'enumValues[].display': { fieldType: 'Input', order: 2 },
-        'enumValues[].definition': { fieldType: 'Textarea', props: { rows: 2 }, order: 3 }
+        'enumValues[].name': { component: 'Input', order: 1 },
+        'enumValues[].display': { component: 'Input', order: 2 },
+        'enumValues[].definition': { component: 'Textarea', props: { rows: 2 }, order: 3 }
       }
     },
 
     RosettaFunctionSchema: {
       fields: {
         // Input params: name + type + cardinality
-        'inputs[].name': { fieldType: 'Input', order: 1 },
-        'inputs[].typeCall.type': { fieldType: 'TypeSelector', order: 2 },
-        'inputs[].card': { fieldType: 'CardinalitySelector', order: 3 },
+        'inputs[].name': { component: 'Input', order: 1 },
+        'inputs[].typeCall.type': { component: 'TypeSelector', order: 2 },
+        'inputs[].card': { component: 'CardinalitySelector', order: 3 },
         // Output: type + cardinality
         'output.name': { hidden: true },
-        'output.typeCall': { fieldType: 'TypeSelector', order: 1 },
-        'output.card': { fieldType: 'CardinalitySelector', order: 2 },
+        'output.typeCall': { component: 'TypeSelector', order: 1 },
+        'output.card': { component: 'CardinalitySelector', order: 2 },
         // Shortcuts — not user-editable in generated form
         shortcuts: { hidden: true }
       }
@@ -143,7 +143,7 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     RosettaTypeAliasSchema: {
       fields: {
         // TypeAlias: wrapped type reference
-        'typeCall.type': { fieldType: 'TypeSelector', order: 1 },
+        'typeCall.type': { component: 'TypeSelector', order: 1 },
         'typeCall.arguments': { hidden: true }
       }
     }

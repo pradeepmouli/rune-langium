@@ -10,6 +10,9 @@
     "build:combined": "node scripts/build-combined.mjs",
     "preview": "vitepress preview"
   },
+  "dependencies": {
+    "@rune-langium/design-tokens": "workspace:*"
+  },
   "devDependencies": {
     "vitepress": "2.0.0-alpha.17",
     "typedoc": "0.28.17",

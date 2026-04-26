@@ -8,6 +8,9 @@
     "./theme.css": "./src/theme.css",
     "./tokens": "./src/tokens.ts",
     "./utils": "./src/utils.ts",
+    "./ui/heading": "./src/ui/heading.tsx",
+    "./ui/code-block": "./src/ui/code-block.tsx",
+    "./ui/app-switcher": "./src/ui/app-switcher.tsx",
     "./ui/badge": "./src/ui/badge.tsx",
     "./ui/button": "./src/ui/button.tsx",
     "./ui/collapsible": "./src/ui/collapsible.tsx",
@@ -38,6 +41,7 @@
   "license": "MIT",
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@rune-langium/design-tokens": "workspace:*",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-popover": "^1.1.15",

@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: FSL-1.1-ALv2
+# Copyright (c) 2026 Pradeep Mouli
+#
+# Cloudflare Worker config for the GitHub Device-Flow auth mediator
+# (feature 012-studio-workspace-ux). Stateless — no DO, no KV, no R2.
+# GITHUB_CLIENT_ID is a non-secret public identifier for the GitHub App;
+# stored as a [vars] entry, not a secret. The worker NEVER stores tokens.
+
+name = "rune-github-auth-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-24"
+compatibility_flags = ["nodejs_compat"]
+account_id = "8327a4da4660eab7d78695268282da09"
+workers_dev = false
+
+[[routes]]
+pattern = "www.daikonic.dev/rune-studio/api/github-auth/*"
+zone_name = "daikonic.dev"
+
+[vars]
+# TODO(012): replace with the production GitHub App client ID before first deploy.
+# Public, non-secret. The corresponding client secret (if needed) goes via
+# `wrangler secret put GITHUB_CLIENT_SECRET`.
+GITHUB_CLIENT_ID = "Iv1.PLACEHOLDER_REPLACE_BEFORE_DEPLOY"
+ALLOWED_ORIGIN = "https://www.daikonic.dev"
+
+[observability]
+enabled = true
+
+[limits]
+cpu_ms = 10000

@@ -9,7 +9,7 @@
 
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
-import LightningFS from '@isomorphic-git/lightning-fs';
+import { InMemoryFs } from './in-memory-fs.js';
 import type {
   ModelSource,
   CachedModel,
@@ -26,17 +26,41 @@ interface LoadOptions {
   signal?: AbortSignal;
   useCache?: boolean;
   onProgress?: (progress: LoadProgress) => void;
+  /**
+   * When `source.archiveUrl` is set (curated entries on the deployed CF
+   * site), the caller can supply a curated-archive loader to short-circuit
+   * the slow git-clone path. Dependency-injected so this module stays
+   * decoupled from OPFS imports — the actual implementation lives in
+   * `./curated-loader.ts` and is wired by the component layer
+   * (ModelLoader.tsx).
+   */
+  archiveLoader?: (
+    source: ModelSource,
+    opts: { signal?: AbortSignal; onProgress?: (p: LoadProgress) => void }
+  ) => Promise<LoadedModel>;
 }
 
 /**
- * Load a Rune DSL model from a git repository.
- * Checks cache first (if enabled), then clones/fetches from git.
+ * Load a Rune DSL model.
+ *
+ * - If `source.archiveUrl` is set AND `options.archiveLoader` is supplied,
+ *   route to the curated-archive (CF R2) path. This is the fast, reliable
+ *   path for deployed Studio.
+ * - Otherwise fall through to the git-clone path (existing behaviour;
+ *   covers user-supplied custom URLs).
+ *
+ * The progress + cancellation surface is identical across both paths.
  */
 export async function loadModel(
   source: ModelSource,
   options: LoadOptions = {}
 ): Promise<LoadedModel> {
-  const { signal, useCache = true, onProgress } = options;
+  const { signal, useCache = true, onProgress, archiveLoader } = options;
+
+  if (source.archiveUrl && archiveLoader) {
+    if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
+    return archiveLoader(source, { signal, onProgress });
+  }
 
   // Check cancellation
   if (signal?.aborted) {
@@ -73,8 +97,9 @@ export async function loadModel(
     );
   }
 
-  // Create an in-memory filesystem for this clone
-  const fs = new LightningFS(`model-${source.id}`, { wipe: true });
+  // Throwaway in-memory FS — the clone exists only long enough to walk
+  // the tree for .rosetta files; persistence happens in CachedModel below.
+  const fs = new InMemoryFs();
 
   const dir = `/${source.id}`;
 
@@ -175,15 +200,10 @@ export async function loadModel(
         `Repository or ref not found: ${source.repoUrl}@${source.ref}`
       );
     }
-    if (
-      msg.includes('fetch') ||
-      msg.includes('network') ||
-      msg.includes('CORS') ||
-      msg.includes('Failed')
-    ) {
-      throw new ModelLoadError('NETWORK', `Network error loading ${source.name}: ${msg}`);
-    }
-
+    // Anything else maps to NETWORK — we can't reliably distinguish
+    // network errors from programming bugs by string-matching the message,
+    // so prefer the user-actionable category and let the underlying msg
+    // through for diagnostics.
     throw new ModelLoadError('NETWORK', `Failed to load ${source.name}: ${msg}`);
   }
 }
@@ -193,7 +213,7 @@ export async function loadModel(
  * Supports simple glob patterns with ** and *.
  */
 async function discoverRosettaFiles(
-  fs: LightningFS,
+  fs: InMemoryFs,
   baseDir: string,
   patterns: string[]
 ): Promise<string[]> {
@@ -211,7 +231,7 @@ async function discoverRosettaFiles(
 
 /** Recursively walk a directory tree and collect all file paths. */
 async function walkDirectory(
-  fs: LightningFS,
+  fs: InMemoryFs,
   baseDir: string,
   relativePath: string
 ): Promise<string[]> {
