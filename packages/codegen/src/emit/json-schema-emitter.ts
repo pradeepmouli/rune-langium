@@ -58,6 +58,69 @@ import { topoSort } from '../topo-sort.js';
 const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
 
 /**
+ * oxfmt-compatible JSON serializer.
+ *
+ * oxfmt collapses short arrays onto a single line when they fit within
+ * the print width (100 chars). We replicate this behaviour so that
+ * committed `expected.schema.json` fixture files are byte-identical to the
+ * formatter's output. Specifically:
+ *   - Arrays of primitives (strings, numbers, booleans) that fit on one
+ *     line within the given indent level are serialised inline.
+ *   - Arrays of objects are always expanded.
+ *   - Objects are always expanded (one key per line).
+ *
+ * @param value - The JSON value to serialise.
+ * @param indent - Current indent level (0 = top level).
+ * @param printWidth - Maximum column width (default 100, matching oxfmt).
+ */
+function serializeJson(value: unknown, indent: number = 0, printWidth: number = 100): string {
+  const spaces = '  '.repeat(indent);
+  const innerSpaces = '  '.repeat(indent + 1);
+
+  if (value === null) return 'null';
+  if (typeof value === 'boolean') return String(value);
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') return JSON.stringify(value);
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+
+    // Try compact (inline) form — only for primitive arrays
+    const allPrimitives = value.every(
+      (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null
+    );
+    if (allPrimitives) {
+      const compact = '[' + value.map((v) => serializeJson(v, 0, printWidth)).join(', ') + ']';
+      // Check if it fits within the line budget at the current indentation level
+      const lineLength = spaces.length + compact.length;
+      if (lineLength <= printWidth) {
+        return compact;
+      }
+    }
+
+    // Expanded form
+    const items = value.map((v) => innerSpaces + serializeJson(v, indent + 1, printWidth));
+    return '[\n' + items.join(',\n') + '\n' + spaces + ']';
+  }
+
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>);
+    if (keys.length === 0) return '{}';
+
+    const entries = keys.map(
+      (k) =>
+        innerSpaces +
+        JSON.stringify(k) +
+        ': ' +
+        serializeJson((value as Record<string, unknown>)[k], indent + 1, printWidth)
+    );
+    return '{\n' + entries.join(',\n') + '\n' + spaces + '}';
+  }
+
+  return JSON.stringify(value);
+}
+
+/**
  * Internal emission context for one namespace.
  */
 interface EmissionContext {
@@ -428,7 +491,7 @@ export function emitNamespace(
     $defs
   };
 
-  const content = JSON.stringify(schema, null, 2) + '\n';
+  const content = serializeJson(schema) + '\n';
 
   return {
     relativePath: ctx.relativePath,
