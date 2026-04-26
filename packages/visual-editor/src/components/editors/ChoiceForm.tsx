@@ -56,6 +56,7 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { z } from 'zod';
 import { ChoiceSchema } from '../../generated/zod-schemas.js';
+import { formRegistry } from '../forms/rows/index.js';
 import { getTypeRefText, classExprSynonymsToStrings } from '../../adapters/model-helpers.js';
 import type {
   AnyGraphNode,
@@ -127,11 +128,13 @@ function ChoiceForm({
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema; pass the graph node
   // straight into `defaultValues` (ChoiceSchema is z.looseObject so the
-  // form-only metadata keys are accepted as extras).
+  // form-only metadata keys are accepted as extras). Phase 8 (US6) wires
+  // the bespoke <ChoiceOptionRow> as a custom row renderer via formRegistry.
 
   const { form } = useZodForm(ChoiceSchema, {
     defaultValues: toDefaults(data) as Partial<z.output<typeof ChoiceSchema>>,
-    mode: 'onChange'
+    mode: 'onChange',
+    formRegistry
   });
 
   // Re-bind pristine field state when the caller swaps to a different node.

@@ -47,6 +47,7 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { z } from 'zod';
 import { RosettaEnumerationSchema } from '../../generated/zod-schemas.js';
+import { formRegistry } from '../forms/rows/index.js';
 import { getRefText } from '../../adapters/model-helpers.js';
 import { TypeLink } from './TypeLink.js';
 import { AnnotationSection } from './AnnotationSection.js';
@@ -99,13 +100,15 @@ function EnumForm({
   // RosettaEnumerationSchema is `z.looseObject`, so the graph node passes
   // through `defaultValues` without a projection layer. The bespoke
   // <EnumValueRow> reads `enumValues.${index}.{name,display}` paths.
+  // Phase 8 (US6) wires the row as a custom renderer via formRegistry.
 
   const { form } = useZodForm(RosettaEnumerationSchema, {
     // The graph node is a union (`AnyGraphNode`); the host narrows by
     // `$type` upstream. Cast through `unknown` because the discriminated
     // union doesn't structurally match `Partial<RosettaEnumeration>`.
     defaultValues: data as unknown as Partial<z.output<typeof RosettaEnumerationSchema>>,
-    mode: 'onChange'
+    mode: 'onChange',
+    formRegistry
   });
 
   // Re-bind pristine field state when the caller swaps to a different node
