@@ -204,7 +204,19 @@ done
 curl -s -X POST \
   https://www.daikonic.dev/rune-studio/api/github-auth/device-code | jq
 
-# 7. Live Studio test (browser):
+# 7. LSP Worker health probe (feature 014, US3).
+#    Returns 200 with `{ok: true, langium_loaded: true}` when the
+#    Worker is routed AND the langium services bundle loads cleanly.
+#    404 = Worker unrouted (Step 4 not run for lsp-worker); 200 with
+#    `langium_loaded: false` = bundle regression at runtime.
+curl -s https://www.daikonic.dev/rune-studio/api/lsp/health | jq
+
+# 8. One-shot smoke battery — runs all of the above plus catch-all + LSP
+#    health check. Exits non-zero on first FAIL so cron / CI can rely on it.
+pnpm run verify:prod
+# Expected post-Phase-4: 7/7 PASS.
+
+# 9. Live Studio test (browser):
 #    https://www.daikonic.dev/rune-studio/studio/
 #    - Click "Open Workspace…" → "Open from GitHub…" — device-flow polling starts.
 #    - After auth, a workspace opens; Source Editor + File Tree are populated.

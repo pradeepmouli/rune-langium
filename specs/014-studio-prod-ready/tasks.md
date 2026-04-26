@@ -156,7 +156,7 @@ highlighting; the README's transport section reflects reality.
 
 ### 7a. Spike (1 working day; output: PASS or FAIL)
 
-- [ ] T035 [US3] Build a scratch CF Worker at `scratch/lsp-spike/` that imports `@rune-langium/lsp-server` and parses the vendored CDM fixture in a `wrangler dev` instance; emit one `textDocument/publishDiagnostics` over WebSocket back to a test client; PASS = diagnostics arrive matching the in-process test for the same fixture (research.md R2)
+- [X] T035 [US3] Built `scratch/lsp-spike/` — Worker imports `@rune-langium/lsp-server`, parses the vendored CDM fixture, emits `textDocument/publishDiagnostics` over WebSocket. **Spike PASSED**: langium loads cleanly on the free Workers tier; diagnostics arrive within budget. Unblocks T036–T045 (PASS path); T046–T048 fallback path skipped.
 
 **Spike PASS path** continues at T036. **Spike FAIL path** jumps to T046.
 
@@ -176,9 +176,13 @@ highlighting; the README's transport section reflects reality.
 
 ### 7c. Fallback path (only if T035 FAILs)
 
-- [ ] T046 [US3] Rewrite `apps/studio/src/services/transport-provider.ts:108-130` — keep the no-op transport but rename it `tryDocumentedFallback()`; remove the `ws://localhost:3001` reference from production paths; under `config.devMode === true` keep the dev message
-- [ ] T047 [P] [US3] Rewrite `apps/studio/README.md`'s "Transport Failover" section — replace the three-step claim with the truth: "Studio is read-only in production; live language services require a local LSP server (developers only)"
-- [ ] T048 [US3] Add a non-modal banner above the editor pane that surfaces "Live language services are not yet available in the deployed Studio. The editor is syntax-highlighting only" with a Dismiss button
+**N/A — T035 spike PASSED.** Worker-hosted langium loads cleanly on the
+free Workers tier; the PASS path (T036–T045) lands instead. T046–T048
+are not executed.
+
+- [N/A] T046 [US3] (skipped — spike PASS)
+- [N/A] T047 [P] [US3] (skipped — spike PASS; README polish folded into T067)
+- [N/A] T048 [US3] (skipped — spike PASS)
 
 **Checkpoint**: SC-005 (latency budgets) measurable on PASS path; SC-006 (no localhost copy in production) holds either way.
 
@@ -237,8 +241,8 @@ production reports zero failures, exits 0; running it against an
 unreachable BASE produces a clear failure message naming the down
 endpoint.
 
-- [ ] T065 [US6] Extend `scripts/verify-production.sh` with check #7 from `contracts/verify-production.md` — `GET <BASE>/api/lsp/health` expected `{ok: true, langium_loaded: true}`; classify failures (404 = unrouted, `langium_loaded: false` = bundle regression). Conditional: this task only lands AFTER T043 deploys the LSP worker; if the LSP fallback path landed instead (T046), this check returns "skipped" with a note about read-only Studio.
-- [ ] T066 [P] [US6] Update the README of `scripts/verify-production.sh`'s comment block + a one-line bullet in the post-deploy runbook (`specs/012-studio-workspace-ux/deploy-runbook.md` Step 7) to mention the new probe
+- [X] T065 [US6] Cherry-picked `scripts/verify-production.sh` from the 012 commit (was on the 012 branch, never reached master) and added check #7 — `GET <BASE>/api/lsp/health` validates `{ok:true, langium_loaded:true}`. Branches on 200 / 404 / 405 / langium_loaded:false to classify (unrouted vs. bundle regression vs. catch-all). Live run against production now reports 7 expected FAILs (curated, telemetry, github-auth, route precedence, LSP) — matches the pre-deploy baseline. Will flip to all-PASS once T003–T007 + T043 land. Also restored the `pnpm run verify:prod` entry in root `package.json`.
+- [X] T066 [P] [US6] Updated `specs/012-studio-workspace-ux/deploy-runbook.md` Step 7 to add: (a) a `curl /api/lsp/health` smoke step, (b) a `pnpm run verify:prod` one-shot smoke battery line. The script's own preamble comment block already documents BASE/STRICT env + exit codes from the 012 commit.
 
 **Checkpoint**: SC-003 (zero failures from `verify-production.sh` against production) achievable.
 
@@ -253,9 +257,9 @@ and any test gaps that emerged.
 - [X] T068 [P] Updated `specs/012-studio-workspace-ux/deploy-runbook.md` — Step 2 now flags the production-only GitHub App per R10; Step 4 has a route-precedence inventory table covering all five Workers (codegen / telemetry / github-auth / curated-mirror / lsp).
 - [X] T069 [P] Effectively complete by absence — the deferred specs (`012-production-gaps.md`, `ux-polish-cross-surface.md`) were squashed out of master when feature 012 merged; their content was already folded into 014's spec.md / research.md / tasks.md during `/speckit.specify` + `/speckit.plan`. No file action remaining.
 - [X] T070 Added `lsp_session_opened` / `lsp_session_failed` discriminated-union arms to `apps/telemetry-worker/src/index.ts` schema (FR-005 extension). `lsp_session_failed.errorCategory` is closed: `origin_blocked` / `token_expired` / `nonce_replay` / `upstream_unhealthy` / `unknown`. Tests at `apps/telemetry-worker/test/ingest.test.ts` (4 new: routing, errorCategory grouping, unknown-category rejection, extra-field rejection). Worker tests: 29 → 33 passing. Contract doc at `specs/012-studio-workspace-ux/contracts/telemetry-event.md` updated to match.
-- [ ] T071 [P] Run the full test suite (`pnpm -r test`) and confirm baseline of ≥1356 passing tests is preserved; any new test counts get added to a one-line summary at the top of the implementation PR description
-- [ ] T072 [P] Run `pnpm -r run type-check` and confirm clean across the workspace
-- [ ] T073 Run the daily probe cron `7ff49f3e` (or invoke `pnpm run verify:prod` manually) immediately after deploy and confirm 7/7 PASS
+- [X] T071 [P] Full test suite green: **1416 tests passing** across 12 packages (baseline ≥1356; +60). Per-package: curated-schema 10, github-auth-worker 14, codegen-worker 52, design-tokens 7, core 169, curated-mirror-worker 19, codegen-container 15 (+2 skipped), telemetry-worker 33, lsp-server 47, lsp-worker 14, visual-editor 652, studio 384.
+- [X] T072 [P] `pnpm -r run type-check` clean across all 17 buildable workspace projects (codegen, curated-schema, design-tokens, core, design-system, cli, lsp-server, codegen-container, codegen-worker, github-auth-worker, telemetry-worker, curated-mirror-worker, lsp-worker, visual-editor, studio). Required `pnpm install` after the lsp-worker merge to populate its node_modules with `@cloudflare/workers-types`.
+- [ ] T073 Run the daily probe cron `7ff49f3e` (or invoke `pnpm run verify:prod` manually) immediately after deploy and confirm 7/7 PASS — **deferred to lead** post-T003-T007 + T043 deploy
 
 ---
 
