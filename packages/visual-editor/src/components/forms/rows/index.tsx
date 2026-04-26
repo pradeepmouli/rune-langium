@@ -12,10 +12,11 @@
  * (`apps/docs/docs/editor-primitives/custom-row-renderer.md`, v0.8.0).
  *
  * Each render function receives the `FormField` for an array item; the
- * `field.key` is the per-row path (e.g. `"members.0"`). The renderer reads
- * sibling form values via `useFormContext` and pulls per-row callbacks
- * from `RowDispatchContext`, which the host editor provides via
- * `<RowDispatchProvider>` so the rows stay decoupled from the
+ * `field.key` is the per-row path (e.g. `"attributes.0"` for the Data
+ * form's AST-shaped `attributes[]`, `"choiceOptions.0"` for choices, etc.).
+ * The renderer reads sibling form values via `useFormContext` and pulls
+ * per-row callbacks from `RowDispatchContext`, which the host editor
+ * provides via `<RowDispatchProvider>` so the rows stay decoupled from the
  * kind-specific `EditorFormActions` shape.
  *
  * Two registries are exported:
@@ -62,8 +63,8 @@ import type { ReactElement } from 'react';
 /**
  * Extract the trailing array index from a FormField key.
  *
- * `field.key` for an array item is shaped like `"members.0"` or
- * `"attributes.2"`; the last segment is the row's positional index. Falls
+ * `field.key` for an array item is shaped like `"attributes.0"` or
+ * `"enumValues.2"`; the last segment is the row's positional index. Falls
  * back to `0` if the key has no trailing index — defensive only; the
  * walker only invokes `render` for matched array items.
  */
