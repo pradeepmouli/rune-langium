@@ -90,6 +90,24 @@ A visitor with a public or private GitHub repo containing `.rosetta` files click
 
 ---
 
+### User Story 7 - The three surfaces look like one product (Priority: P2)
+
+A reviewer comparing screenshots of equivalent UI primitives (button, link, body text, heading, code block, surface, focus ring) across the landing site (`www.daikonic.dev/`), the docs (`/rune-studio/`), and the Studio (`/rune-studio/studio/`) at 1280×800 cannot identify them as different products. The Studio specifically presents a clean, intentional layout — no muddled empty state, no orange-shouting secondary buttons, no navigation links rendered touching, no internal-identifier strings leaking into chrome.
+
+**Why this priority**: This is the still-open SC-007 from feature 012. A post-merge audit found that the Studio body font diverges (`Inter` vs landing/docs `Outfit`), the `secondary` Button variant ships solid amber making empty-state CTAs visually outrank the actual primary, three different primary-button shapes coexist (rect 8px / pill 20px / rect 6px), and ~30 hand-rolled CSS rules in Studio reference custom properties (`--space-1`…`--space-10`, `--text-md`, `--sidebar-width`) that are never defined — so paddings collapse to zero and entire panels look cramped. P2 because dock chrome and editor functionality (P1) outrank visual consistency, and the GitHub flow (P3) is for a smaller audience; but this is what every visitor sees on every page.
+
+**Independent Test**: Open the three surfaces side-by-side at 1280×800 and verify a primary button on each renders with the same height, radius, font, and weight; verify Studio body text is `Outfit`; verify the Studio empty state has visually-balanced spacing with one solid CTA; verify a fresh `pnpm --filter @rune-langium/studio exec vitest run test/visual` passes the visual-consistency suite.
+
+**Acceptance Scenarios**:
+
+1. **Given** any of the three production surfaces, **When** the reviewer measures `getComputedStyle(body).fontFamily`, **Then** the value matches across all three surfaces (chosen at clarify time; default `Outfit`).
+2. **Given** the Studio at 1280×800 with no workspace, **When** the reviewer inspects the empty state, **Then** the row of CTAs has exactly one solid-coloured primary button ("New") and the others ("Select Files", "Select Folder", "Open from GitHub") render with transparent backgrounds + visible borders.
+3. **Given** any production surface, **When** the reviewer measures a primary button's `border-radius`, `height`, and `font-weight`, **Then** all three surfaces produce the same values (chosen at clarify time; default 8px / 40px / 600).
+4. **Given** the Studio, **When** the reviewer inspects the live computed `padding` / `gap` of any chrome region (header, panel headers, status bar), **Then** no value resolves to `0px` or `normal` due to an undefined custom property; every spacing reference has a definition in the design-system's `theme.css`.
+5. **Given** any of the three surfaces, **When** a focus-visible element is keyboard-focused, **Then** the focus ring has consistent width (2px), offset (2px), and colour family across all three surfaces.
+
+---
+
 ### User Story 6 - Operator can verify production health in seconds (Priority: P2)
 
 An operator (the developer running deploys, or anyone with shell access) can run a single command and learn within 30 seconds whether each of the three new Workers is reachable, whether the curated-mirror has archives, and whether the production catch-all is eating Worker requests.
@@ -165,6 +183,18 @@ An operator (the developer running deploys, or anyone with shell access) can run
 - **FR-020**: The curated-load happy path MUST be covered by an automated end-to-end test that fails CI on regression. SC-001's latency budget cannot rely on manual verification once the curated path lands.
 - **FR-021**: The local-development LSP host MUST be configurable via an environment variable (e.g. `VITE_LSP_WS_URL`) with a sensible default. Hard-coding `ws://localhost:3001` blocks contributors who run a remote LSP host or use a different port.
 
+#### Cross-surface UX consistency (US7)
+
+- **FR-022**: All three production surfaces (landing, docs, Studio) MUST consume their typography (`font-family-display`, `font-family-mono`, font sizes, weights) from the shared `@rune-langium/design-tokens` package; no surface MAY redeclare its own font-family value.
+- **FR-023**: The Studio's `Button variant="secondary"` MUST render as a transparent button with a visible border, matching the landing's `.btn-secondary` and the docs' `.VPButton.alt` patterns. Solid amber MUST NOT render on any non-warning button surface.
+- **FR-024**: The primary button across all three surfaces MUST have identical visual dimensions (border-radius, height, font-weight). The canonical values are decided at clarify time; default 8px / 40px / 600.
+- **FR-025**: The Studio's design-system `theme.css` MUST define every custom property referenced by `apps/studio/src/styles.css` (the spacing scale `--space-1`…`--space-10`, text scale `--text-md`, sidebar widths, secondary-text alias). A CI guard MUST fail the build if `apps/studio/src/styles.css` introduces a new `var(--…)` reference whose definition does not exist.
+- **FR-026**: The focus-visible ring MUST be consistent across all three surfaces (single width, single offset, single colour family). The Studio's existing two-style mix (`focus-visible:ring-[3px]` on the design-system Button vs. `outline: 2px` on hand-rolled inputs) MUST be reconciled to a single rule.
+- **FR-027**: The Studio's chrome (toolbar, status bar) MUST visually group related controls. Panel-toggle buttons, layout-action buttons, and filter controls MUST be separated by visible separators, AND panel-toggle buttons MUST carry `aria-pressed` matching their `data-variant`.
+- **FR-028**: The empty-state layout MUST present a clear hierarchy: one primary CTA ("New" workspace), a row of equally-weighted secondary entry points (Select Files / Select Folder / Open from GitHub), and the curated-models section as a discoverable but visually subordinate row. The empty state MUST be vertically centred at viewports ≥ 1280×800.
+- **FR-029**: Brand identity elements (the brand mark) MUST share dimensions across landing and Studio (28×28, 6px radius). The 120×120 hero variant on the docs page is a separate, explicitly-sized variant.
+- **FR-030**: Diagnostic colours (`error` / `warning` / `info`) MUST consume design-system tokens, NOT hard-coded hex literals; a regression test MUST assert no hard-coded hex `error`/`warning`/`info` colour appears in `apps/studio/src/styles.css`.
+
 ### Key Entities
 
 - **Workspace record**: the persisted summary of an open project (id, kind, files-on-disk path, last-opened, recent tabs, dock layout). Already defined by 012; this feature ensures restore-on-reload actually engages.
@@ -186,6 +216,8 @@ An operator (the developer running deploys, or anyone with shell access) can run
 - **SC-008**: 90% of visitors who load a curated model on day 1 find their workspace intact on day 2 (browser cache + IndexedDB intact).
 - **SC-009**: Curated-load success is observable post-fact via the telemetry stats endpoint; a sustained success rate of ≥95% is achieved across a 48-hour rolling window after launch.
 - **SC-010**: The dock shell renders with visible chrome at 1280×800 and 1440×900 viewports — verified by an automated visual regression test that fails if panel titles render as raw identifiers or if tab strips are absent.
+- **SC-011**: A side-by-side screenshot review of equivalent UI primitives across the three production surfaces — landing, docs, Studio — does not allow a designer to identify them as different products. Carried from feature 012's SC-007.
+- **SC-012**: 100% of `var(--…)` references in `apps/studio/src/styles.css` resolve to a definition in the design-system theme; verified by a CI guard test that fails on undefined-property regressions.
 
 ## Assumptions
 
