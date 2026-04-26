@@ -80,7 +80,10 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
   return (
     <section
       className={cn(
-        'flex items-center justify-center h-full p-8 transition-colors',
+        // T057 — sized to the start-page column rather than to the
+        // entire viewport; the parent container handles vertical
+        // centring. Drag-target affordance still flashes on dragenter.
+        'flex items-center justify-center w-full transition-colors rounded-lg',
         isDragging && 'bg-primary/15'
       )}
       onDrop={handleDrop}
@@ -89,9 +92,20 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
       data-testid="file-loader"
       aria-label="File loader"
     >
-      <div className="text-center max-w-[480px]">
-        <p className="text-2xl font-semibold text-foreground mb-2">Load Rune DSL Models</p>
-        <p className="text-md text-muted-foreground mb-6">
+      {/* T057 (014/FR-028) — empty-state hierarchy:
+       *   1. Heading (text-3xl font-semibold tracking-tight, body
+       *      already maps to font-display via T053)
+       *   2. ONE primary CTA ("New blank workspace")
+       *   3. Equal-weight transparent secondaries (Select Files /
+       *      Select Folder). "Open from GitHub" is wired in Phase 6.
+       *   4. ModelLoader (curated reference models) renders below as
+       *      a discoverable but visually subordinate row — no
+       *      `border-t` divider, just `mt-8`. */}
+      <div className="text-center max-w-[560px]">
+        <h2 className="text-3xl font-semibold tracking-tight text-foreground mb-3">
+          Load Rune DSL Models
+        </h2>
+        <p className="text-md text-text-secondary mb-8">
           Start a new file, or drag and drop existing .rosetta files here
         </p>
 
@@ -116,11 +130,11 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
             </p>
           </div>
         ) : (
-          <>
+          <div className="flex flex-col items-stretch gap-4">
+            <Button size="lg" onClick={handleNew}>
+              New blank workspace
+            </Button>
             <div className="flex gap-3 justify-center flex-wrap">
-              <Button size="lg" onClick={handleNew}>
-                New
-              </Button>
               <Button variant="secondary" size="lg" onClick={() => fileInputRef.current?.click()}>
                 Select Files
               </Button>
@@ -128,7 +142,7 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
                 Select Folder
               </Button>
             </div>
-          </>
+          </div>
         )}
 
         {/* Visually hidden — NOT display:none, Chrome blocks .click() on those.
