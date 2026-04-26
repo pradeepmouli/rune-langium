@@ -78,6 +78,10 @@ pnpm --filter @rune-langium/studio dev
 
 The studio will connect to `ws://localhost:3001` automatically. If no server is running, it falls back to the embedded worker.
 
+### Environment Variables
+
+Studio loads its build-time configuration from `import.meta.env` and validates the result with Zod in `src/config.ts`; a malformed value crashes the bundle at module-init rather than degrading silently. Copy `.env.example` to `.env.local` and uncomment the fields you want to override. The five 014-introduced vars are `VITE_LSP_WS_URL` (LSP host base, defaults to `ws://localhost:3001` in dev / `wss://www.daikonic.dev/rune-studio/api/lsp` in prod), `VITE_LSP_SESSION_URL` (token-mint endpoint, derived from the WS URL when unset), `VITE_TELEMETRY_ENDPOINT` (defaults to `${location.origin}/api/telemetry/v1/event`), `VITE_DEV_MODE` (gates dev-only status copy; defaults to `import.meta.env.DEV`), and `VITE_LEGACY_GIT_PATH` (re-enables the legacy `cors.isomorphic-git.org` clone fallback per FR-019; production defaults `false`). See [`specs/014-studio-prod-ready/contracts/studio-config.md`](../../specs/014-studio-prod-ready/contracts/studio-config.md) for the full contract.
+
 ## Export Code
 
 The **Export Code** toolbar button generates source code in a selected target language (Java, TypeScript, JSON Schema, Zod, Python, …) from the currently loaded Rune model. It has two deployment modes — local development and the hosted CF deploy at `www.daikonic.dev/rune-studio/studio/` — with different backends:
