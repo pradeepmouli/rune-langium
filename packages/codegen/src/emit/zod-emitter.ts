@@ -273,7 +273,7 @@ function emitAttribute(attr: Attribute, ctx: EmissionContext): string {
   const card = attr.card;
   const zodExpr = applyCardinality(card, baseTypeExpr);
   const key = quoteKey(attr.name);
-  return `  ${key}: ${zodExpr},`;
+  return `  ${key}: ${zodExpr}`;
 }
 
 /**
@@ -285,7 +285,8 @@ function emitObjectBody(data: Data, ctx: EmissionContext): string {
     return 'z.object({})'; // FR-008
   }
   const attrs = data.attributes.map((attr) => emitAttribute(attr, ctx));
-  return `z.object({\n${attrs.join('\n')}\n})`;
+  // Join with comma+newline between entries; no trailing comma (linter rule: trailingComma: "none")
+  return `z.object({\n${attrs.join(',\n')}\n})`;
 }
 
 /**
@@ -309,7 +310,7 @@ function emitTypeSchema(data: Data, ctx: EmissionContext): string {
       schemaExpr = `${parentSchema}.extend({})`;
     } else {
       const attrs = data.attributes.map((attr) => emitAttribute(attr, ctx));
-      schemaExpr = `${parentSchema}.extend({\n${attrs.join('\n')}\n})`;
+      schemaExpr = `${parentSchema}.extend({\n${attrs.join(',\n')}\n})`;
     }
   } else {
     schemaExpr = emitObjectBody(data, ctx);
@@ -459,13 +460,13 @@ function emitEnum(enumNode: RosettaEnumeration, ctx: EmissionContext): string {
   // Emit display-name companion if any member has a display name
   const hasDisplayNames = enumNode.enumValues.some((v) => v.display != null);
   if (hasDisplayNames) {
-    const displayLines = enumNode.enumValues.map((v) => {
+    const displayEntries = enumNode.enumValues.map((v) => {
       const displayName = v.display != null ? escapeDisplayName(v.display) : v.name;
-      return `  '${v.name}': "${displayName}",`;
+      return `  '${v.name}': "${displayName}"`;
     });
     lines.push('');
     lines.push(
-      `export const ${name}DisplayNames: Record<${name}, string> = {\n${displayLines.join('\n')}\n};`
+      `export const ${name}DisplayNames: Record<${name}, string> = {\n${displayEntries.join(',\n')}\n};`
     );
   }
 

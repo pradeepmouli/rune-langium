@@ -11,10 +11,9 @@
 export const RUNTIME_HELPER_SOURCE: string =
   `// --- rune-codegen runtime helpers (inlined) ---\n` +
   `const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>\n` +
-  `  values.filter(v => v !== undefined && v !== null).length === 1;\n` +
+  `  values.filter((v) => v !== undefined && v !== null).length === 1;\n` +
   `\n` +
-  `const runeCount = (arr: unknown[] | undefined | null): number =>\n` +
-  `  arr?.length ?? 0;\n` +
+  `const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;\n` +
   `\n` +
   `const runeAttrExists = (v: unknown): boolean =>\n` +
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +

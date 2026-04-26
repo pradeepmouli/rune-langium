@@ -21,7 +21,7 @@ export const StatusEnumSchema = z.enum(['Active', 'Inactive', 'Pending']);
 export type StatusEnum = z.infer<typeof StatusEnumSchema>;
 
 export const StatusEnumDisplayNames: Record<StatusEnum, string> = {
-  Active: 'Active Status',
-  Inactive: 'Inactive Status',
-  Pending: 'Pending "Review"'
+  'Active': "Active Status",
+  'Inactive': "Inactive Status",
+  'Pending': "Pending \"Review\""
 };
