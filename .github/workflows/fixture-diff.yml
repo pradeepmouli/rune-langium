@@ -1,0 +1,41 @@
+name: Fixture Diff Gate (SC-007)
+
+on:
+  push:
+    paths:
+      - 'packages/codegen/**'
+      - 'packages/core/**'
+  pull_request:
+    paths:
+      - 'packages/codegen/**'
+      - 'packages/core/**'
+
+jobs:
+  fixture-diff:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.32.0
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build core
+        run: pnpm --filter @rune-langium/core run build
+
+      - name: Build codegen
+        run: pnpm --filter @rune-langium/codegen run build
+
+      - name: Run fixture-diff tests (SC-007)
+        run: pnpm --filter @rune-langium/codegen test fixture

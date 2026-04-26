@@ -124,6 +124,46 @@ export function describeFixture(name: string, dir: string, target: Target = 'zod
 }
 
 /**
+ * T133 / SC-007 in-process determinism guard.
+ *
+ * For every Tier 1 fixture that has both an input.rune and an expected.zod.ts,
+ * generate twice in the same vitest process and assert byte-identical output.
+ *
+ * This catches any generator state leakage that would violate SC-007.
+ */
+describe('fixture determinism (SC-007)', () => {
+  it('all Tier 1 zod fixtures produce byte-identical output on repeated generation', async () => {
+    const entries = await readdir(FIXTURES_DIR);
+    let checked = 0;
+    for (const entry of entries) {
+      const dir = join(FIXTURES_DIR, entry);
+      const s = await stat(dir);
+      if (!s.isDirectory()) continue;
+      const inputPath = join(dir, 'input.rune');
+      let input: string;
+      try {
+        input = await readFile(inputPath, 'utf-8');
+      } catch {
+        continue;
+      }
+      const { RuneDsl } = createRuneDslServices();
+      const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+        input,
+        URI.parse(`inmemory:///${entry}.rosetta`)
+      );
+      await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+      const run1 = generate([doc], { target: 'zod' });
+      const run2 = generate([doc], { target: 'zod' });
+      for (let i = 0; i < run1.length; i++) {
+        expect(run1[i]!.content, `${entry}[${i}]: second run differed`).toBe(run2[i]!.content);
+      }
+      checked++;
+    }
+    expect(checked, 'Expected at least one fixture to be checked').toBeGreaterThan(0);
+  });
+});
+
+/**
  * Phase 2: Smoke check — confirms the fixtures directory exists and all
  * ten placeholder category directories are present. This test will be
  * replaced by real fixture runs in Phase 3+.

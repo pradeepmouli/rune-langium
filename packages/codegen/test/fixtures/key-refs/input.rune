@@ -1,0 +1,14 @@
+namespace "test.keyrefs"
+version "1"
+
+type Party:
+    partyId string (0..1)
+
+func GetPartyKey:
+    inputs:
+        p Party (1..1)
+    output:
+        result string (0..1)
+
+    set result:
+        p -> partyId as-key
