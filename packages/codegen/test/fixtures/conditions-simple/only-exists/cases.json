@@ -1,0 +1,8 @@
+{
+  "schemaName": "HasABCSchema",
+  "valid": [{ "a": "hello" }, { "b": "world" }, { "a": "foo", "b": "bar" }],
+  "invalid": [
+    { "a": "hello", "c": "boom" },
+    { "a": "hello", "b": "world", "c": "boom" }
+  ]
+}
