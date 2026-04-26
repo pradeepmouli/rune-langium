@@ -1,0 +1,10 @@
+namespace "test.cardinality"
+version "1"
+
+type CardTest:
+    scalarAttr string (1..1)
+    optionalAttr string (0..1)
+    zeroOrMore string (0..*)
+    oneOrMore string (1..*)
+    bounded string (2..5)
+    exact string (3..3)
