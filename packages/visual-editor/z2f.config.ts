@@ -130,6 +130,14 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
     DataSchema: {
       fields: {
         // Attributes list: member rows with name, type, cardinality
+        // Per R5: declarative reorder ON. The native-DnD gesture surface in
+        // `AttributeRow.tsx` remains the gesture provider (drag handle, drop
+        // handlers); when Phase 8 (US6) promotes the array to z2f-driven
+        // rendering, this flag mounts the upstream `<ArrayReorderHandle>`
+        // and routes form-state mutations through `useFieldArray.move`.
+        // No `onReorder` callback at config time — Pattern B per R5: the
+        // row's `handleDrop` continues to fire `actions.reorderAttribute`.
+        attributes: { arrayConfig: { reorder: true } },
         'attributes[].name': { component: 'Input', order: 1 },
         'attributes[].typeCall.type': { component: 'TypeSelector', order: 2 },
         'attributes[].card': { component: 'CardinalitySelector', order: 3 },

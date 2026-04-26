@@ -594,3 +594,225 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     expect(lastCall?.[1]).toBe(nodeB);
   });
 });
+
+// ---------------------------------------------------------------------------
+// US2 TDD tests (T018–T019) — array reorder via z2f primitive routing
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a Data fixture with three attributes (a1, a2, a3) for reorder tests.
+ * The `useFieldArray` index is the same as the array index in `attributes[]`.
+ */
+function makeThreeAttrDataNode(): AnyGraphNode {
+  return {
+    $type: 'Data',
+    name: 'Trade',
+    namespace: 'test.model',
+    definition: 'A financial trade',
+    attributes: [
+      {
+        $type: 'Attribute',
+        name: 'a1',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'string' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      },
+      {
+        $type: 'Attribute',
+        name: 'a2',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'string' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      },
+      {
+        $type: 'Attribute',
+        name: 'a3',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'string' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      }
+    ],
+    superType: undefined,
+    conditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
+    hasExternalRefs: false,
+    errors: []
+  } as AnyGraphNode;
+}
+
+/**
+ * Construct a synthetic DataTransfer mock that supports setData/getData.
+ * The same backing store is shared between dragStart and drop so the
+ * source index round-trips through the synthetic event.
+ */
+function makeDataTransfer(): DataTransfer {
+  const store: Record<string, string> = {};
+  return {
+    setData: (type: string, value: string) => {
+      store[type] = value;
+    },
+    getData: (type: string) => store[type] ?? '',
+    effectAllowed: 'move',
+    dropEffect: 'move',
+    types: ['text/plain'],
+    items: [] as unknown as DataTransferItemList,
+    files: [] as unknown as FileList,
+    clearData: () => undefined,
+    setDragImage: () => undefined
+  } as unknown as DataTransfer;
+}
+
+describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // T018 — drag-handle reorder fires actions.reorderAttribute exactly once
+  // with (nodeId, fromIndex, toIndex) and the form's `members` field state
+  // reflects the new order.
+  it('drag-handle reorder fires actions.reorderAttribute once with (from, to) and updates form state', () => {
+    const reorderAttribute = vi.fn();
+    const actions = makeActions({ reorderAttribute });
+
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={makeThreeAttrDataNode()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
+
+    const rows = container.querySelectorAll('[data-slot="attribute-row"]');
+    expect(rows.length).toBe(3);
+
+    // Collect the rendered name input values to confirm initial order [a1,a2,a3]
+    const namesBefore = Array.from(container.querySelectorAll('[data-slot="attribute-name"]')).map(
+      (el) => (el as HTMLInputElement).value
+    );
+    expect(namesBefore).toEqual(['a1', 'a2', 'a3']);
+
+    // Simulate dragging row index 2 onto row index 0:
+    //  - dragStart on the source row writes index 2 to dataTransfer
+    //  - drop on the target row reads it back and calls handleReorder(2, 0)
+    const dataTransfer = makeDataTransfer();
+    fireEvent.dragStart(rows[2]!, { dataTransfer });
+    fireEvent.dragOver(rows[0]!, { dataTransfer });
+    fireEvent.drop(rows[0]!, { dataTransfer });
+
+    // Exactly one reorder action — no double-fire from gesture + primitive
+    expect(reorderAttribute).toHaveBeenCalledTimes(1);
+    expect(reorderAttribute).toHaveBeenCalledWith('test::Trade', 2, 0);
+
+    // Form state's members array reflects the new order [a3, a1, a2]
+    const namesAfter = Array.from(container.querySelectorAll('[data-slot="attribute-name"]')).map(
+      (el) => (el as HTMLInputElement).value
+    );
+    expect(namesAfter).toEqual(['a3', 'a1', 'a2']);
+  });
+
+  // T019 — add → reorder → remove sequence replays in user-visible order
+  // against the action surface (US2 Acceptance Scenario 3).
+  //
+  // The form is graph-controlled: the rendered row set is derived from `data`,
+  // and the parent host re-renders with a new `data` after each action lands
+  // in the store. This test simulates that round-trip by re-rendering with
+  // the updated fixture between actions, and asserts the three callbacks
+  // fire in user-visible order with correct indices/names.
+  it('add → reorder → remove sequence replays in order', () => {
+    const callOrder: string[] = [];
+    const addAttribute = vi.fn(() => {
+      callOrder.push('add');
+    });
+    const reorderAttribute = vi.fn(() => {
+      callOrder.push('reorder');
+    });
+    const removeAttribute = vi.fn(() => {
+      callOrder.push('remove');
+    });
+    const actions = makeActions({ addAttribute, reorderAttribute, removeAttribute });
+
+    const initial = makeThreeAttrDataNode();
+    const { container, rerender } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={initial}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
+
+    // ---- Step 1 — add a new attribute -------------------------------------
+    const addBtn = container.querySelector('[data-slot="add-attribute-btn"]')!;
+    fireEvent.click(addBtn);
+    expect(addAttribute).toHaveBeenCalledTimes(1);
+    expect(addAttribute).toHaveBeenLastCalledWith('test::Trade', '', 'string', '(1..1)');
+
+    // Simulate the parent's store updating: data now has 4 attrs (the new
+    // row appended at the tail). Re-render to surface the next user-visible
+    // state. useExternalSync resets pristine fields to the new data.
+    const afterAdd = makeThreeAttrDataNode();
+    (afterAdd as any).attributes = [
+      ...((initial as any).attributes as any[]),
+      {
+        $type: 'Attribute',
+        name: 'a4',
+        typeCall: { $type: 'TypeCall', type: { $refText: 'string' } },
+        card: { inf: 1, sup: 1, unbounded: false },
+        override: false
+      }
+    ];
+    rerender(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={afterAdd}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
+    let rows = container.querySelectorAll('[data-slot="attribute-row"]');
+    expect(rows.length).toBe(4);
+
+    // ---- Step 2 — drag the newly-added row (index 3) above row 1 -----------
+    const dataTransfer = makeDataTransfer();
+    fireEvent.dragStart(rows[3]!, { dataTransfer });
+    fireEvent.dragOver(rows[1]!, { dataTransfer });
+    fireEvent.drop(rows[1]!, { dataTransfer });
+    expect(reorderAttribute).toHaveBeenCalledTimes(1);
+    expect(reorderAttribute).toHaveBeenLastCalledWith('test::Trade', 3, 1);
+
+    // Simulate the store reordering attributes accordingly: [a1, a4, a2, a3].
+    const afterReorder = makeThreeAttrDataNode();
+    const reorderedAttrs = [...((afterAdd as any).attributes as any[])];
+    const [moved] = reorderedAttrs.splice(3, 1);
+    reorderedAttrs.splice(1, 0, moved);
+    (afterReorder as any).attributes = reorderedAttrs;
+    rerender(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={afterReorder}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
+    rows = container.querySelectorAll('[data-slot="attribute-row"]');
+    expect(rows.length).toBe(4);
+
+    // ---- Step 3 — remove the (now index 1) formerly-added row -------------
+    const removeBtns = rows[1]!.querySelectorAll('[data-slot="attribute-remove"]');
+    expect(removeBtns.length).toBe(1);
+    fireEvent.click(removeBtns[0]!);
+    expect(removeAttribute).toHaveBeenCalledTimes(1);
+    // The committed name at index 1 is 'a4' (the moved row).
+    expect(removeAttribute).toHaveBeenLastCalledWith('test::Trade', 'a4');
+
+    // Actions fired in user-visible order: add, reorder, remove
+    expect(callOrder).toEqual(['add', 'reorder', 'remove']);
+  });
+});

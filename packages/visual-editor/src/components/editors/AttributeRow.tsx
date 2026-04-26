@@ -126,7 +126,19 @@ function AttributeRow({
     [index, committedName, prefix, typeName, getValues, setValue, onUpdate]
   );
 
-  // ---- Drag reorder (simplified up/down for now) ---------------------------
+  // ---- Drag reorder ---------------------------------------------------------
+  //
+  // Per R5 of `specs/013-z2f-editor-migration/research.md` (Pattern B): this
+  // row owns the gesture surface (native HTML5 DnD via `dataTransfer`) and
+  // delegates the actual reorder to the parent's `onReorder(from, to)`
+  // callback. The parent (`DataTypeForm.handleReorderAttribute`) calls
+  // `useFieldArray.move(from, to)` to update form state, then fires
+  // `actions.reorderAttribute(nodeId, from, to)` so the graph store mirrors
+  // the change. The upstream `arrayConfig.reorder: true` flag declared in
+  // `z2f.config.ts` is the declarative scaffolding for Phase 8 (US6) when
+  // the array is promoted to z2f-driven rendering — at which point the
+  // upstream `<ArrayReorderHandle>` mounts alongside (or replaces) this
+  // gesture surface but the `onReorder` route is unchanged.
 
   function handleDragStart(e: React.DragEvent) {
     e.dataTransfer.setData('text/plain', String(index));
