@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { FormProvider, Controller, useFieldArray } from 'react-hook-form';
+import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
 import {
   Field,
   FieldError,
@@ -44,9 +44,9 @@ import {
   type ConditionDisplayInfo
 } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useZodForm } from '@zod-to-form/react';
-import { ExternalDataSync } from '../forms/ExternalDataSync.js';
-import { dataTypeFormSchema, type DataTypeFormValues } from '../../schemas/form-schemas.js';
+import { useZodForm, useExternalSync } from '@zod-to-form/react';
+import { z } from 'zod';
+import { DataSchema } from '../../generated/zod-schemas.js';
 import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
@@ -59,14 +59,28 @@ import type {
 import type { ReactNode } from 'react';
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Default-values projection
 // ---------------------------------------------------------------------------
 
-/** Convert AnyGraphNode to form-managed values. */
-function toFormValues(data: AnyGraphNode): DataTypeFormValues {
+/**
+ * Build the form's default values from an AST-shaped graph node.
+ *
+ * Per R11 of `specs/013-z2f-editor-migration/research.md`, the form is now
+ * driven directly by `DataSchema` from the langium-generated AST. Because
+ * `DataSchema` is a `z.looseObject`, extra keys (`members`, `parentName`,
+ * `definition`, `comments`, `synonyms`) are accepted without runtime cost.
+ *
+ * The `members[]` projection exists because the bespoke `<AttributeRow>`
+ * still reads `members.${index}.{name,typeName,cardinality,isOverride}`
+ * paths from form context. Phase 8 (US6 — custom row renderers) refactors
+ * `AttributeRow` to read `attributes.${index}.typeCall.type` etc. directly,
+ * at which point this projection collapses to a pass-through and the
+ * `members`/`parentName` keys disappear.
+ */
+function toDefaults(data: AnyGraphNode) {
   const d = data as any;
   return {
-    name: d.name ?? '',
+    ...d,
     parentName: getRefText(d.superType) ?? '',
     members: (d.attributes ?? []).map((a: any) => ({
       name: a.name ?? '',
@@ -118,15 +132,35 @@ function DataTypeForm({
   onNavigateToNode,
   allNodeIds
 }: DataTypeFormProps) {
-  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
+  // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
+  // Drive validation off the canonical AST schema; pass the graph node
+  // straight into `defaultValues` (DataSchema is a z.looseObject so the
+  // form-only projection keys are accepted as extras).
 
-  const { form } = useZodForm(dataTypeFormSchema, {
-    defaultValues: toFormValues(data),
+  const { form } = useZodForm(DataSchema, {
+    // DataSchema is z.looseObject — extra projection keys (members,
+    // parentName, definition, comments, synonyms) are allowed.
+    // The `as` cast covers the typed gap until Phase 8 (R11) refactors
+    // <AttributeRow> to read AST paths directly.
+    defaultValues: toDefaults(data) as Partial<z.output<typeof DataSchema>>,
     mode: 'onChange'
   });
 
+  // Re-bind pristine field state when the caller swaps to a different node
+  // (object identity is the contract). `keepDirty: true` preserves the
+  // pre-migration `keepDirtyValues: true` semantics so in-flight user edits
+  // are not stomped by a graph push.
+  useExternalSync(form, data, toDefaults as (n: typeof data) => z.output<typeof DataSchema>, {
+    keepDirty: true
+  });
+
+  // The bespoke <AttributeRow> reads `members.${index}.*` paths today.
+  // Until Phase 8 (R11) refactors it to AST paths (`attributes.${index}.*`),
+  // we widen the control type so useFieldArray accepts the projection key.
   const { fields, append, remove, move } = useFieldArray({
-    control: form.control,
+    control: form.control as unknown as Control<{
+      members: { name: string; typeName: string; cardinality: string; isOverride?: boolean }[];
+    }>,
     name: 'members'
   });
 
@@ -319,7 +353,6 @@ function DataTypeForm({
 
   return (
     <FormProvider {...form}>
-      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="data-type-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">

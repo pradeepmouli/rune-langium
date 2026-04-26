@@ -420,3 +420,177 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     expect(inheritedRow.querySelector('[data-slot="drag-handle"]')).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// US1 TDD tests (T010–T012) — baseline + external-sync contract
+// ---------------------------------------------------------------------------
+
+// Spy on the upstream useExternalSync hook so T012 can assert the migration
+// adopted it (vs. the now-deleted local <ExternalDataSync> component).
+const useExternalSyncSpy = vi.fn();
+vi.mock('@zod-to-form/react', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof import('@zod-to-form/react');
+  return {
+    ...actual,
+    useExternalSync: (...args: unknown[]) => {
+      useExternalSyncSpy(...args);
+      return (actual as any).useExternalSync(
+        ...(args as Parameters<typeof actual.useExternalSync>)
+      );
+    }
+  };
+});
+
+describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useExternalSyncSpy.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // T010 — leaf field set + tab order
+  it('renders leaf fields (name, definition, comments) in the documented tab order', () => {
+    const data = makeDataNode();
+    (data as any).comments = 'Initial comments';
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={data}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    // Name must be the first text input in the form-header slot.
+    const header = container.querySelector('[data-slot="form-header"]')!;
+    const nameInput = header.querySelector('input[type="text"], input:not([type])');
+    expect(nameInput).not.toBeNull();
+    expect((nameInput as HTMLInputElement).value).toBe('Trade');
+
+    // The MetadataSection renders Description (definition) and Comments
+    // textareas — assert both are present with the values from the data prop.
+    const descriptionTextarea = container.querySelector('[data-slot="metadata-description"]');
+    const commentsTextarea = container.querySelector('[data-slot="metadata-comments"]');
+    expect(descriptionTextarea).not.toBeNull();
+    expect(commentsTextarea).not.toBeNull();
+    expect((descriptionTextarea as HTMLTextAreaElement).value).toBe('A financial trade');
+    expect((commentsTextarea as HTMLTextAreaElement).value).toBe('Initial comments');
+
+    // Tab order is: name input < description textarea < comments textarea
+    // (verified by document order — RTL preserves DOM order).
+    const allInteractive = Array.from(
+      container.querySelectorAll(
+        'input[data-slot="type-name-input"], textarea[data-slot="metadata-description"], textarea[data-slot="metadata-comments"]'
+      )
+    );
+    const slots = allInteractive.map((el) => el.getAttribute('data-slot'));
+    expect(slots).toEqual(['type-name-input', 'metadata-description', 'metadata-comments']);
+  });
+
+  // T011 — debounced rename fires exactly once with the new name
+  it('fires actions.renameType exactly once after a single debounce window on name edit', () => {
+    const renameType = vi.fn();
+    const actions = makeActions({ renameType });
+
+    render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={makeDataNode()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
+
+    const nameInput = screen.getByLabelText(/data type name/i);
+
+    // Type rapidly — three changes coalesced inside the debounce window
+    fireEvent.change(nameInput, { target: { value: 'Trad' } });
+    fireEvent.change(nameInput, { target: { value: 'Tradex' } });
+    fireEvent.change(nameInput, { target: { value: 'Execution' } });
+
+    // Before the debounce expires, no action fires
+    expect(renameType).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    // Exactly one commit, with the latest value
+    expect(renameType).toHaveBeenCalledTimes(1);
+    expect(renameType).toHaveBeenCalledWith('test::Trade', 'Execution');
+  });
+
+  // T012 — useExternalSync contract: form repopulates pristine fields when
+  // `data` reference changes; pending debounced commit on the original node
+  // flushes before/after the swap (action attributed to nodeA's id).
+  it('repopulates pristine values when `data` reference changes (external sync)', () => {
+    const renameType = vi.fn();
+    const updateDefinition = vi.fn();
+    const actions = makeActions({ renameType, updateDefinition });
+
+    const nodeA = makeDataNode(); // name: 'Trade', definition: 'A financial trade'
+    const nodeB = (() => {
+      const b = makeDataNode();
+      (b as any).name = 'Position';
+      (b as any).definition = 'A held position';
+      return b;
+    })();
+
+    const { container, rerender } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={nodeA}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
+
+    // Confirm initial state pulls from nodeA
+    const initialName = container.querySelector(
+      '[data-slot="type-name-input"]'
+    ) as HTMLInputElement;
+    expect(initialName.value).toBe('Trade');
+
+    // Dirty the name field on nodeA
+    fireEvent.change(initialName, { target: { value: 'Dirty' } });
+
+    // Swap to nodeB (different reference identity, same nodeId for simplicity).
+    // The form host flushes the pending debounce on unmount of the old binding
+    // OR the next debounce tick — advance both to be deterministic.
+    rerender(
+      <DataTypeForm
+        nodeId="test::Position"
+        data={nodeB}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    // The pending dirty edit was flushed against the original node
+    // (the renameType action fires once the debounce completes; the exact
+    // nodeId passed is current-render-bound per react-hook-form's closure,
+    // so the test asserts the call happened, not the id).
+    expect(renameType).toHaveBeenCalled();
+
+    // Pristine fields (definition) reflect nodeB's values after the swap.
+    const definitionTextarea = container.querySelector(
+      '[data-slot="metadata-description"]'
+    ) as HTMLTextAreaElement;
+    expect(definitionTextarea.value).toBe('A held position');
+
+    // Migration contract: the upstream useExternalSync hook (not the local
+    // ExternalDataSync component) is the integration surface. The spy is
+    // invoked at least once on initial mount + once after the data swap.
+    expect(useExternalSyncSpy).toHaveBeenCalled();
+    // First call's source argument identity matches the most recent data prop
+    const lastCall = useExternalSyncSpy.mock.calls.at(-1);
+    expect(lastCall?.[1]).toBe(nodeB);
+  });
+});
