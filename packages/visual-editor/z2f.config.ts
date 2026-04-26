@@ -14,10 +14,10 @@
  * never sees them — they remain in the AST schema's static shape but
  * cost nothing at runtime.
  *
- * The hand-authored projection schemas in `src/schemas/form-schemas.ts`
- * remain a *separate* concern: they describe the value shape each editor
- * host projects into via `toFormValues(node)` for use with
- * `useZodForm(...)`. They are not the target of this config.
+ * Per R11, editors consume the AST graph node directly — there is no
+ * projection layer. `useZodForm(Schema, { defaultValues: node })` accepts
+ * the graph node unchanged because every form-driving AST schema is a
+ * `z.looseObject`.
  */
 
 import { defineConfig } from '@zod-to-form/core';

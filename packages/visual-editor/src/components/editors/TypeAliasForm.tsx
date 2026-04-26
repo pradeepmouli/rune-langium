@@ -10,8 +10,8 @@
  * - `useZodForm(RosettaTypeAliasSchema, …)` drives validation off the
  *   canonical AST schema (per R1). The graph node is passed straight
  *   into `defaultValues` (per R11) — no projection layer.
- * - `useExternalSync(form, data, (n) => n)` re-binds pristine field
- *   state when the host swaps to a different node (per R4). The
+ * - `useExternalSync(form, data, identityProjection)` re-binds pristine
+ *   field state when the host swaps to a different node (per R4). The
  *   projection is identity since the form consumes the AST shape
  *   directly.
  * - `<EditorActionsProvider>` wraps the form body so any
@@ -39,9 +39,9 @@ import { TypeSelector } from './TypeSelector.js';
 import { TypeLink } from './TypeLink.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
-import { z } from 'zod';
 import { RosettaTypeAliasSchema } from '../../generated/zod-schemas.js';
 import { EditorActionsProvider } from '../forms/sections/index.js';
+import { identityProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
   EditorFormActions,
@@ -50,18 +50,6 @@ import type {
   TypeOption
 } from '../../types.js';
 import type { ReactNode } from 'react';
-
-// ---------------------------------------------------------------------------
-// Identity projection (R11)
-// ---------------------------------------------------------------------------
-//
-// The graph node IS the AST shape. `RosettaTypeAliasSchema` is a
-// `z.looseObject`, so any extra graph-only keys (`namespace`, `position`,
-// `errors`, …) are accepted as extras with zero runtime cost. There is no
-// `toFormValues` projection — the upstream `useExternalSync` accepts an
-// identity function directly.
-
-const identity = <T,>(n: T): T => n;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -103,10 +91,10 @@ function TypeAliasForm({
 
   const { form } = useZodForm(RosettaTypeAliasSchema, {
     // RosettaTypeAliasSchema is z.looseObject — extra graph-only keys
-    // are accepted as extras. The double-cast covers the typed gap
-    // between the AnyGraphNode runtime shape and z2f's parameterized
+    // are accepted as extras. `identityProjection` covers the typed gap
+    // between the AnyGraphNode runtime shape and z2f's parameterised
     // `Partial<output<Schema>>` constraint.
-    defaultValues: data as unknown as Partial<z.output<typeof RosettaTypeAliasSchema>>,
+    defaultValues: identityProjection<typeof RosettaTypeAliasSchema>(data),
     mode: 'onChange'
   });
 
@@ -114,12 +102,9 @@ function TypeAliasForm({
   // (object identity is the contract). `keepDirty: true` preserves the
   // pre-migration `keepDirtyValues: true` semantics so in-flight user
   // edits are not stomped by a graph push.
-  useExternalSync(
-    form,
-    data,
-    identity as (n: typeof data) => z.output<typeof RosettaTypeAliasSchema>,
-    { keepDirty: true }
-  );
+  useExternalSync(form, data, identityProjection<typeof RosettaTypeAliasSchema>, {
+    keepDirty: true
+  });
 
   // Track committed (graph-confirmed) data for diffing
   const committedRef = useRef(data);
