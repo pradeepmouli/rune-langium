@@ -459,13 +459,16 @@
 }
 
 /* ---------- Focus-visible for namespace explorer ---------- */
+/* T058 (014/FR-026) — outline-offset normalised to 2px so it
+ * matches the design-system Button rule and the landing/docs
+ * `:focus-visible` baseline. Width and colour family are unchanged. */
 .ns-explorer__action-btn:focus-visible,
 .ns-row__chevron:focus-visible,
 .ns-row__visibility:focus-visible,
 .ns-type__visibility:focus-visible,
 .studio-source-view__tab:focus-visible {
   outline: 2px solid var(--primary);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .ns-explorer__action-btn:focus:not(:focus-visible),

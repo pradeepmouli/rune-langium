@@ -24,6 +24,8 @@
 --font-display:'Outfit',sans-serif;--font-mono:'JetBrains Mono',monospace;
 }
 html{scroll-behavior:smooth}
+/* T058 (014/FR-026) — single shared focus-ring spec across landing, docs, Studio */
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 body{background:var(--bg-primary);color:var(--text-primary);font-family:var(--font-display);font-weight:400;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 .grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.015) 1px,transparent 1px);background-size:80px 80px;pointer-events:none;z-index:0}
 section{position:relative;z-index:1}

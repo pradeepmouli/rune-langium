@@ -106,6 +106,12 @@ html.dark {
   color-scheme: dark;
 }
 
+/* T058 (014/FR-026) — single shared focus-ring spec across landing, docs, Studio */
+:focus-visible {
+  outline: 2px solid var(--rune-teal);
+  outline-offset: 2px;
+}
+
 /* ---------- Typography ---------- */
 
 :root {
