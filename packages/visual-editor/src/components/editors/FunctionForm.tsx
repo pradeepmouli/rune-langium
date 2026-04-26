@@ -37,6 +37,7 @@ import { MetadataSection } from './MetadataSection.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
+import { FunctionInputRow } from './FunctionInputRow.js';
 import {
   formatCardinality,
   getTypeRefText,
@@ -48,6 +49,7 @@ import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
 import { validateExpression } from '../../validation/edit-validator.js';
 import { functionFormSchema, type FunctionFormValues } from '../../schemas/form-schemas.js';
+import { functionFormRegistry } from '../forms/rows/index.js';
 import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
@@ -165,63 +167,6 @@ export interface FunctionFormProps {
 }
 
 // ---------------------------------------------------------------------------
-// InputParamRow (internal)
-// ---------------------------------------------------------------------------
-
-interface InputParamRowProps {
-  member: { name: string; typeName?: string };
-  nodeId: string;
-  availableTypes: TypeOption[];
-  onRemove: (nodeId: string, paramName: string) => void;
-  disabled?: boolean;
-  onNavigateToNode?: NavigateToNodeCallback;
-  allNodeIds?: string[];
-}
-
-function InputParamRow({
-  member,
-  nodeId,
-  availableTypes: _availableTypes,
-  onRemove,
-  disabled = false,
-  onNavigateToNode,
-  allNodeIds
-}: InputParamRowProps) {
-  return (
-    <div
-      data-slot="input-param-row"
-      className="flex items-center gap-1.5 py-1 px-1 rounded hover:bg-muted/50"
-      role="listitem"
-    >
-      <span className="text-xs text-muted-foreground w-3">⠇</span>
-
-      <span data-slot="param-name" className="text-sm font-medium min-w-20">
-        {member.name || '(unnamed)'}
-      </span>
-
-      <TypeLink
-        typeName={member.typeName ?? 'string'}
-        onNavigateToNode={onNavigateToNode}
-        allNodeIds={allNodeIds}
-        className="text-xs text-muted-foreground"
-      />
-
-      <button
-        data-slot="remove-param-btn"
-        type="button"
-        onClick={() => onRemove(nodeId, member.name)}
-        disabled={disabled}
-        className="ml-auto text-xs text-destructive hover:text-destructive/80
-          disabled:opacity-40 disabled:cursor-not-allowed"
-        aria-label={`Remove input ${member.name}`}
-      >
-        ✕
-      </button>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // FunctionForm
 // ---------------------------------------------------------------------------
 
@@ -241,7 +186,8 @@ function FunctionForm({
 
   const { form } = useZodForm(functionFormSchema, {
     defaultValues: toFormValues(data),
-    mode: 'onChange'
+    mode: 'onChange',
+    formRegistry: functionFormRegistry
   });
 
   // Re-bind pristine field state when the caller swaps to a different node.
@@ -461,7 +407,7 @@ function FunctionForm({
 
           <FieldGroup className="gap-0.5">
             {inputParams.map((member: { name: string; typeName?: string }, i: number) => (
-              <InputParamRow
+              <FunctionInputRow
                 key={`${nodeId}-param-${member.name}-${i}`}
                 member={member}
                 nodeId={nodeId}

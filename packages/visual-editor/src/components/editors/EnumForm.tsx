@@ -38,6 +38,7 @@ import { AnnotationSection } from './AnnotationSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { enumFormSchema, type EnumFormValues } from '../../schemas/form-schemas.js';
+import { formRegistry } from '../forms/rows/index.js';
 import { getRefText, enumSynonymsToStrings } from '../../adapters/model-helpers.js';
 import { TypeLink } from './TypeLink.js';
 import type {
@@ -110,7 +111,8 @@ function EnumForm({
 
   const { form } = useZodForm(enumFormSchema, {
     defaultValues: toFormValues(data),
-    mode: 'onChange'
+    mode: 'onChange',
+    formRegistry
   });
 
   // Re-bind pristine field state when the caller swaps to a different node.

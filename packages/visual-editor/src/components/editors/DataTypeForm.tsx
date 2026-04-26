@@ -47,6 +47,7 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { z } from 'zod';
 import { DataSchema } from '../../generated/zod-schemas.js';
+import { formRegistry } from '../forms/rows/index.js';
 import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
@@ -70,12 +71,17 @@ import type { ReactNode } from 'react';
  * `DataSchema` is a `z.looseObject`, extra keys (`members`, `parentName`,
  * `definition`, `comments`, `synonyms`) are accepted without runtime cost.
  *
- * The `members[]` projection exists because the bespoke `<AttributeRow>`
- * still reads `members.${index}.{name,typeName,cardinality,isOverride}`
- * paths from form context. Phase 8 (US6 — custom row renderers) refactors
- * `AttributeRow` to read `attributes.${index}.typeCall.type` etc. directly,
- * at which point this projection collapses to a pass-through and the
- * `members`/`parentName` keys disappear.
+ * The `members[]` projection still exists because the bespoke
+ * `<AttributeRow>` reads `members.${index}.{name,typeName,cardinality,
+ * isOverride}` paths from form context. Phase 8 (US6) registered the row
+ * components against the AST item schemas via
+ * `packages/visual-editor/src/components/forms/rows/index.tsx` — so the
+ * `FormMeta.render` slot is wired — but the row components themselves
+ * still bind to projection paths to keep their existing test surface
+ * stable. A follow-up will migrate the rows onto AST paths
+ * (`attributes.${i}.typeCall.type` etc.), at which point this projection
+ * collapses to a pass-through and the `members`/`parentName` keys
+ * disappear.
  */
 function toDefaults(data: AnyGraphNode) {
   const d = data as any;
@@ -140,10 +146,15 @@ function DataTypeForm({
   const { form } = useZodForm(DataSchema, {
     // DataSchema is z.looseObject — extra projection keys (members,
     // parentName, definition, comments, synonyms) are allowed.
-    // The `as` cast covers the typed gap until Phase 8 (R11) refactors
-    // <AttributeRow> to read AST paths directly.
+    // The `as` cast covers the typed gap until the row renderers move
+    // off the projection paths (`members.${i}.*`) onto AST paths
+    // (`attributes.${i}.typeCall.type` etc.). The Phase-8 (US6) registry
+    // registration in `forms/rows/index.tsx` is the FormMeta-render
+    // input the form host walks; the manual `.map(<AttributeRow/>)`
+    // below stays in place until that path migration ships.
     defaultValues: toDefaults(data) as Partial<z.output<typeof DataSchema>>,
-    mode: 'onChange'
+    mode: 'onChange',
+    formRegistry
   });
 
   // Re-bind pristine field state when the caller swaps to a different node
