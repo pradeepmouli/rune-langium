@@ -17,7 +17,6 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { AttributeRow } from '../../src/components/editors/AttributeRow.js';
 import type { TypeOption } from '../../src/types.js';
-import type { MemberValues } from '../../src/schemas/form-schemas.js';
 
 const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' },
@@ -25,7 +24,11 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::date', label: 'date', kind: 'builtin' }
 ];
 
-/** A simple member data shape for test fixtures. */
+/**
+ * Form-state shape consumed by `<AttributeRow>` via `useFormContext`.
+ * The row reads `members.${index}.{name,typeName,cardinality,isOverride,displayName}`
+ * — this inline literal mirrors that contract.
+ */
 interface TestMember {
   name: string;
   typeName: string;
@@ -44,8 +47,8 @@ function baseMember(overrides: Partial<TestMember> = {}): TestMember {
   };
 }
 
-/** Convert TestMember to MemberValues for the form. */
-function toMemberValues(m: TestMember): MemberValues {
+/** Identity passthrough — the row reads the member shape directly. */
+function toMemberValues(m: TestMember): TestMember {
   return {
     name: m.name,
     typeName: m.typeName ?? 'string',
@@ -56,13 +59,7 @@ function toMemberValues(m: TestMember): MemberValues {
 }
 
 /** Wrapper that provides FormProvider context required by AttributeRow. */
-function FormWrapper({
-  members,
-  children
-}: {
-  members: MemberValues[];
-  children: React.ReactNode;
-}) {
+function FormWrapper({ members, children }: { members: TestMember[]; children: React.ReactNode }) {
   const methods = useForm({ defaultValues: { members } });
   return <FormProvider {...methods}>{children}</FormProvider>;
 }

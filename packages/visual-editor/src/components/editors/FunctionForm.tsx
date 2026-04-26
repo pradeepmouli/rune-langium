@@ -56,11 +56,11 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { FunctionInputRow } from './FunctionInputRow.js';
 import { functionFormRegistry } from '../forms/rows/index.js';
-import { z } from 'zod';
 import { RosettaFunctionSchema } from '../../generated/zod-schemas.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
 import { validateExpression } from '../../validation/edit-validator.js';
 import { TypeLink } from './TypeLink.js';
+import { identityProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
   TypeOption,
@@ -125,28 +125,6 @@ export interface FunctionFormProps {
 // component.
 
 // ---------------------------------------------------------------------------
-// Default-values projection (R11)
-// ---------------------------------------------------------------------------
-
-/**
- * Identity projection for `useExternalSync`. Per R11, the editor consumes
- * the AST node directly — `RosettaFunctionSchema` is `z.looseObject` so
- * extra graph-only keys (`expressionText`, `definition`, `comments`,
- * `synonyms`, etc.) are accepted without runtime cost. The form's
- * `defaultValues` and the source passed into `useExternalSync` are the
- * same node reference; no transformation layer is needed.
- *
- * The double-cast (`unknown` → target) covers the typed gap between
- * `AnyGraphNode` (a union over every $type) and the narrow
- * `RosettaFunction` shape. The Function editor is only ever instantiated
- * with a `$type === 'RosettaFunction'` payload (per `EditorFormPanel`'s
- * dispatch), so the cast is safe at every call site.
- */
-function identityProjection(node: AnyGraphNode): Partial<z.output<typeof RosettaFunctionSchema>> {
-  return node as unknown as Partial<z.output<typeof RosettaFunctionSchema>>;
-}
-
-// ---------------------------------------------------------------------------
 // FunctionForm
 // ---------------------------------------------------------------------------
 
@@ -164,12 +142,11 @@ function FunctionForm({
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema; pass the graph node
-  // straight into `defaultValues` (RosettaFunctionSchema is a z.looseObject
-  // so the extra projection keys — `expressionText`, `definition`,
-  // `comments`, `synonyms` — are accepted as extras).
+  // straight into `defaultValues` (RosettaFunctionSchema is a z.looseObject,
+  // so the graph node passes through unchanged — no projection layer).
 
   const { form } = useZodForm(RosettaFunctionSchema, {
-    defaultValues: identityProjection(data),
+    defaultValues: identityProjection<typeof RosettaFunctionSchema>(data),
     mode: 'onChange',
     formRegistry: functionFormRegistry
   });
@@ -178,12 +155,9 @@ function FunctionForm({
   // node (object identity is the contract). `keepDirty: true` preserves
   // the pre-migration `keepDirtyValues: true` semantics so in-flight
   // user edits are not stomped by a graph push.
-  useExternalSync(
-    form,
-    data,
-    identityProjection as (n: typeof data) => z.output<typeof RosettaFunctionSchema>,
-    { keepDirty: true }
-  );
+  useExternalSync(form, data, identityProjection<typeof RosettaFunctionSchema>, {
+    keepDirty: true
+  });
 
   // The `inputs` array remains a graph-side collection rendered from the
   // data prop; bespoke add/remove affordances dispatch graph actions

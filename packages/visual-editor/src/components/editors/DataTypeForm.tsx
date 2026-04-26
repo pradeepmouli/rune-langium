@@ -41,7 +41,6 @@ import {
   formatCardinality,
   getTypeRefText,
   getRefText,
-  classExprSynonymsToStrings,
   type ConditionDisplayInfo
 } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
@@ -61,30 +60,30 @@ import type {
 import type { ReactNode } from 'react';
 
 // ---------------------------------------------------------------------------
-// Default-values projection
+// Row-renderer compatibility shim
 // ---------------------------------------------------------------------------
 
 /**
- * Build the form's default values from an AST-shaped graph node.
+ * Reshape an AST-shaped Data node into the form-state shape the bespoke
+ * `<AttributeRow>` reads via `useFormContext`.
  *
- * Per R11 of `specs/013-z2f-editor-migration/research.md`, the form is now
- * driven directly by `DataSchema` from the langium-generated AST. Because
- * `DataSchema` is a `z.looseObject`, extra keys (`members`, `parentName`,
- * `definition`, `comments`, `synonyms`) are accepted without runtime cost.
+ * Per R11 of `specs/013-z2f-editor-migration/research.md`, the canonical
+ * direction is for editors to consume the AST node directly. The remaining
+ * gap here is purely the row component: `<AttributeRow>` is hardcoded to
+ * read `members.${index}.{name,typeName,cardinality,isOverride}` paths.
+ * Until Phase 8 (US6) migrates the row to AST paths
+ * (`attributes.${index}.typeCall.type` etc.), this shim populates the
+ * `members` array the row expects. `DataSchema` is a `z.looseObject`, so
+ * the extra key flows through `useZodForm` without runtime cost.
  *
- * The `members[]` projection still exists because the bespoke
- * `<AttributeRow>` reads `members.${index}.{name,typeName,cardinality,
- * isOverride}` paths from form context. Phase 8 (US6) registered the row
- * components against the AST item schemas via
- * `packages/visual-editor/src/components/forms/rows/index.tsx` — so the
- * `FormMeta.render` slot is wired — but the row components themselves
- * still bind to projection paths to keep their existing test surface
- * stable. A follow-up will migrate the rows onto AST paths
- * (`attributes.${i}.typeCall.type` etc.), at which point this projection
- * collapses to a pass-through and the `members`/`parentName` keys
- * disappear.
+ * Once `<AttributeRow>` reads AST paths directly, this shim collapses to
+ * an identity passthrough and the helper can be deleted.
  */
-function toDefaults(data: AnyGraphNode) {
+function dataNodeToFormState(data: AnyGraphNode): z.output<typeof DataSchema> {
+  // The shim is a runtime shape adapter for the row component, not a
+  // type-level projection. The looseObject extras (`parentName`,
+  // `members`) are accepted by the schema at runtime but not in its
+  // static `output<>` shape, so the cast is unavoidable.
   const d = data as any;
   return {
     ...d,
@@ -95,10 +94,7 @@ function toDefaults(data: AnyGraphNode) {
       cardinality: formatCardinality(a.card) || '(1..1)',
       isOverride: a.override ?? false,
       displayName: a.name ?? ''
-    })),
-    definition: d.definition ?? '',
-    comments: d.comments ?? '',
-    synonyms: classExprSynonymsToStrings(d.synonyms)
+    }))
   };
 }
 
@@ -140,20 +136,13 @@ function DataTypeForm({
   allNodeIds
 }: DataTypeFormProps) {
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
-  // Drive validation off the canonical AST schema; pass the graph node
-  // straight into `defaultValues` (DataSchema is a z.looseObject so the
-  // form-only projection keys are accepted as extras).
+  // Drive validation off the canonical AST schema. Per R11 the editor
+  // consumes the AST node directly, but the bespoke <AttributeRow> still
+  // reads `members.${index}.*` paths — `dataNodeToFormState` populates that
+  // compatibility surface until Phase 8 (US6) migrates the row to AST paths.
 
   const { form } = useZodForm(DataSchema, {
-    // DataSchema is z.looseObject — extra projection keys (members,
-    // parentName, definition, comments, synonyms) are allowed.
-    // The `as` cast covers the typed gap until the row renderers move
-    // off the projection paths (`members.${i}.*`) onto AST paths
-    // (`attributes.${i}.typeCall.type` etc.). The Phase-8 (US6) registry
-    // registration in `forms/rows/index.tsx` is the FormMeta-render
-    // input the form host walks; the manual `.map(<AttributeRow/>)`
-    // below stays in place until that path migration ships.
-    defaultValues: toDefaults(data) as Partial<z.output<typeof DataSchema>>,
+    defaultValues: dataNodeToFormState(data),
     mode: 'onChange',
     formRegistry
   });
@@ -162,9 +151,7 @@ function DataTypeForm({
   // (object identity is the contract). `keepDirty: true` preserves the
   // pre-migration `keepDirtyValues: true` semantics so in-flight user edits
   // are not stomped by a graph push.
-  useExternalSync(form, data, toDefaults as (n: typeof data) => z.output<typeof DataSchema>, {
-    keepDirty: true
-  });
+  useExternalSync(form, data, dataNodeToFormState, { keepDirty: true });
 
   // The bespoke <AttributeRow> reads `members.${index}.*` paths today.
   // Until Phase 8 (R11) refactors it to AST paths (`attributes.${index}.*`),
