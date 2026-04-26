@@ -843,21 +843,26 @@
   color: var(--text-secondary, #8A8A96);
 }
 
-/* ── Refactory Dark — Diagnostics ────────────────────────────── */
+/* ── Refactory Dark — Diagnostics ──────────────────────────────
+ * T056 (014/FR-030) — colours flow from design tokens (--destructive,
+ * --color-warning, --color-info / --primary). Hard-coded hex literals
+ * were removed so a token re-skin doesn't leave diagnostics behind.
+ * The 6%-alpha tint is computed via `oklch(from … / 0.06)` so it
+ * tracks the foreground. */
 .diagnostic-error {
-  color: #FF6058;
-  background: rgba(255, 96, 88, 0.06);
-  border-left: 2px solid #FF6058;
+  color: var(--destructive);
+  background: oklch(from var(--destructive) l c h / 0.06);
+  border-left: 2px solid var(--destructive);
 }
 
 .diagnostic-warning {
-  color: #E8913A;
-  background: rgba(232, 145, 58, 0.06);
-  border-left: 2px solid #E8913A;
+  color: var(--color-warning);
+  background: oklch(from var(--color-warning) l c h / 0.06);
+  border-left: 2px solid var(--color-warning);
 }
 
 .diagnostic-info {
-  color: #00D4AA;
-  background: rgba(0, 212, 170, 0.06);
-  border-left: 2px solid #00D4AA;
+  color: var(--color-info);
+  background: oklch(from var(--color-info) l c h / 0.06);
+  border-left: 2px solid var(--color-info);
 }
