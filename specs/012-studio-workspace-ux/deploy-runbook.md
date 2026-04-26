@@ -44,10 +44,16 @@ The bucket binding `rune_curated_mirror` is already declared in
 
 ## Step 2 — Create the GitHub App (for device-flow workspaces)
 
+**A separate production-only GitHub App is registered** (per
+014-studio-prod-ready research.md R10). The dev GitHub App stays at
+localhost callback URLs for `pnpm dev`; production gets its own
+client_id so dev + prod traffic doesn't conflate in GitHub's
+rate-limit / usage telemetry.
+
 **Via GitHub** (not automated):
 
 1. https://github.com/settings/apps → **New GitHub App**
-2. Name: `Rune Studio (workspaces)`
+2. Name: `Rune Studio (workspaces) — production`
 3. Homepage URL: `https://www.daikonic.dev/rune-studio/studio/`
 4. Callback URL: `https://www.daikonic.dev/rune-studio/api/github-auth/callback`
 5. Disable webhooks; check **Enable Device Flow**.
@@ -63,7 +69,9 @@ Then update `apps/github-auth-worker/wrangler.toml`:
 GITHUB_CLIENT_ID = "Iv1.YOUR_REAL_ID_HERE"
 ```
 
-Commit + push (Client ID is public; safe to commit).
+Commit + push (Client ID is public; safe to commit). Redeploy the
+github-auth-worker with the real ID before announcing the workspace
+flow to users.
 
 ---
 
@@ -107,6 +115,26 @@ First deploy of each should report:
 - A route attached under `www.daikonic.dev/...`
 - For curated-mirror: cron `0 3 * * *` registered + R2 binding bound
 - For telemetry: DO class migration tag `v1` applied
+
+### Route precedence note
+
+The codegen Worker's route is `www.daikonic.dev/rune-studio/api/generate/*`
+(specific, NOT a catch-all). Each new Worker binds to its own narrow
+prefix:
+
+| Worker | Route |
+|---|---|
+| codegen-worker | `/rune-studio/api/generate/*` |
+| telemetry-worker | `/rune-studio/api/telemetry/*` |
+| github-auth-worker | `/rune-studio/api/github-auth/*` |
+| curated-mirror-worker | `/curated/*` (root-relative under www.daikonic.dev) |
+| lsp-worker (014, post-Phase-7) | `/rune-studio/api/lsp/*` |
+
+If `verify-production.sh` reports the "catch-all detection" check
+failing AFTER all five Workers are deployed, audit each
+`wrangler.toml`'s route pattern — a regression to a broader pattern
+(e.g. `/rune-studio/api/*`) on any Worker eats the others' requests.
+Tighten + redeploy.
 
 ---
 

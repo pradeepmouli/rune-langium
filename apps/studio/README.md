@@ -7,7 +7,7 @@ Web-based visual editor for Rune DSL models with integrated LSP support.
 - **ReactFlow Graph** — Interactive DAG visualization of Rune DSL types, enums, and choice types
 - **CodeMirror 6 Editor** — Full-featured source editor with Rune DSL syntax highlighting
 - **LSP Integration** — Real-time diagnostics, hover information, code completion, and go-to-definition
-- **Dual Transport** — WebSocket connection to external `rune-lsp-server` with automatic SharedWorker/Worker fallback
+- **Dual Transport** — WebSocket to a local `rune-lsp-server` for development, or to the production `rune-lsp-worker` (Cloudflare Worker + Durable Object hosting langium server-side)
 - **Diagnostics Bridge** — LSP errors appear as inline editor underlines _and_ as badges on graph nodes
 - **Multi-file Support** — Tab bar for switching between `.rosetta` files with per-file LSP document lifecycle
 - **Workspaces** — IDE-style dockable panels with persistent layouts. Three workspace kinds:
@@ -31,11 +31,26 @@ App (LSP client lifecycle)
 │   └── DiagnosticsPanel (error/warning list)
 ```
 
-### Transport Failover
+### Transport
 
-1. **Try WebSocket** → `ws://localhost:3001` (external LSP server)
-2. **Retry** up to 3 times with exponential backoff
-3. **Fall back** to embedded SharedWorker (or dedicated Worker) running Langium in-browser
+The studio connects to a langium server over WebSocket. Two hosts:
+
+| Mode | Host | When |
+|---|---|---|
+| **Dev** | `ws://localhost:3001` (`rune-lsp-server` running locally) | `pnpm dev` workflows |
+| **Prod** | `wss://www.daikonic.dev/rune-studio/api/lsp/ws/<sessionToken>` (`rune-lsp-worker` Cloudflare Worker + `RuneLspSession` Durable Object) | deployed Studio |
+
+The host URL is sourced from `config.lspWsUrl`, which reads
+`VITE_LSP_WS_URL` (overridable per build per FR-021). On a connection
+failure or 5xx during session-token mint, the studio drops to a
+"language services unavailable" status — read-only editing continues,
+no localhost host:port leaks into production copy (FR-014, SC-006).
+
+The earlier "embedded SharedWorker fallback" path is **not shipped** —
+running langium in a browser worker would require shimming
+`node:events` / `node:crypto`, which `nodejs_compat` already resolves
+in the CF isolate. See `specs/014-studio-prod-ready/research.md` R1
+for the architecture decision.
 
 ### Data Flow
 
@@ -76,7 +91,7 @@ pnpm --filter @rune-langium/lsp-server start
 pnpm --filter @rune-langium/studio dev
 ```
 
-The studio will connect to `ws://localhost:3001` automatically. If no server is running, it falls back to the embedded worker.
+The studio will connect to `ws://localhost:3001` automatically. If no server is running, the editor remains usable for syntax-highlighted editing but live diagnostics, hover, and autocomplete go offline. Set `VITE_LSP_WS_URL` to point at a remote dev LSP host instead.
 
 ### Environment Variables
 
@@ -165,11 +180,11 @@ Settings → **Diagnostics** has a single toggle. Off by default in dev builds; 
 | NFR | Target | Implementation |
 |-----|--------|----------------|
 | Diagnostics latency | < 500ms | Direct LSP pipeline, no intermediate buffering |
-| LSP handshake | < 2s (WS), < 1s (embedded) | 2s connection timeout, immediate Worker fallback |
+| LSP handshake | < 2s | 2s connection timeout to dev/prod WS host |
 | Editor load | < 500ms | Lazy CodeMirror initialization per tab |
 | SharedWorker memory | < 50MB | Langium ~2MB bundled, well within budget |
 | Reconnection | 3 attempts with exponential backoff | Configurable via `TransportProviderOptions` |
-| WebSocket security | Localhost-only | Default URI: `ws://localhost:3001` |
+| WebSocket security | Origin allowlist + signed session token | Token minted by `POST /api/lsp/session`; HMAC-SHA256 with daily-rotating server key; 24h expiry; per-isolate nonce ring buffer for replay protection |
 
 ## Testing
 

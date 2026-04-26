@@ -249,10 +249,10 @@ endpoint.
 Final sweep — pure-doc updates, telemetry observability follow-ups,
 and any test gaps that emerged.
 
-- [ ] T067 Update `apps/studio/README.md` "Transport Failover" section to match the actual behaviour shipping (PASS path: CF Worker + DO; FAIL path: read-only Studio). Single source of truth.
-- [ ] T068 [P] Update `specs/012-studio-workspace-ux/deploy-runbook.md` to reflect the route precedence fix (T001) and the GitHub App identity decision (R10 / T006); link 014's spec for the operational followup
-- [ ] T069 [P] Mark `specs/_deferred/012-production-gaps.md` and `specs/_deferred/ux-polish-cross-surface.md` as superseded by 014; add a one-line pointer at the top of each to `specs/014-studio-prod-ready/`
-- [ ] T070 Add a `lsp_session_opened` / `lsp_session_failed` discriminated-union arm to `apps/telemetry-worker/src/index.ts` schema with the field set from `contracts/lsp-worker.md` (FR-005 extension); add tests covering accept (`204`) and rejection of unknown errorCategory values (`400`)
+- [X] T067 Updated `apps/studio/README.md` — replaced "Transport Failover" three-step claim with the actual two-mode (dev WS / prod CF Worker + DO) shape; rewrote LSP-handshake + WebSocket-security NFR rows; pointed at the 014 spec for env-var details.
+- [X] T068 [P] Updated `specs/012-studio-workspace-ux/deploy-runbook.md` — Step 2 now flags the production-only GitHub App per R10; Step 4 has a route-precedence inventory table covering all five Workers (codegen / telemetry / github-auth / curated-mirror / lsp).
+- [X] T069 [P] Effectively complete by absence — the deferred specs (`012-production-gaps.md`, `ux-polish-cross-surface.md`) were squashed out of master when feature 012 merged; their content was already folded into 014's spec.md / research.md / tasks.md during `/speckit.specify` + `/speckit.plan`. No file action remaining.
+- [X] T070 Added `lsp_session_opened` / `lsp_session_failed` discriminated-union arms to `apps/telemetry-worker/src/index.ts` schema (FR-005 extension). `lsp_session_failed.errorCategory` is closed: `origin_blocked` / `token_expired` / `nonce_replay` / `upstream_unhealthy` / `unknown`. Tests at `apps/telemetry-worker/test/ingest.test.ts` (4 new: routing, errorCategory grouping, unknown-category rejection, extra-field rejection). Worker tests: 29 → 33 passing. Contract doc at `specs/012-studio-workspace-ux/contracts/telemetry-event.md` updated to match.
 - [ ] T071 [P] Run the full test suite (`pnpm -r test`) and confirm baseline of ≥1356 passing tests is preserved; any new test counts get added to a one-line summary at the top of the implementation PR description
 - [ ] T072 [P] Run `pnpm -r run type-check` and confirm clean across the workspace
 - [ ] T073 Run the daily probe cron `7ff49f3e` (or invoke `pnpm run verify:prod` manually) immediately after deploy and confirm 7/7 PASS
