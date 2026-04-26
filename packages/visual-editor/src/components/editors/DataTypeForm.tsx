@@ -38,16 +38,15 @@ import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import {
-  formatCardinality,
-  getTypeRefText,
   getRefText,
+  parseCardinality,
   type ConditionDisplayInfo
 } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
-import { z } from 'zod';
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
+import { identityProjection } from './identity-projection.js';
 import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
@@ -58,45 +57,6 @@ import type {
   NavigateToNodeCallback
 } from '../../types.js';
 import type { ReactNode } from 'react';
-
-// ---------------------------------------------------------------------------
-// Row-renderer compatibility shim
-// ---------------------------------------------------------------------------
-
-/**
- * Reshape an AST-shaped Data node into the form-state shape the bespoke
- * `<AttributeRow>` reads via `useFormContext`.
- *
- * Per R11 of `specs/013-z2f-editor-migration/research.md`, the canonical
- * direction is for editors to consume the AST node directly. The remaining
- * gap here is purely the row component: `<AttributeRow>` is hardcoded to
- * read `members.${index}.{name,typeName,cardinality,isOverride}` paths.
- * Until Phase 8 (US6) migrates the row to AST paths
- * (`attributes.${index}.typeCall.type` etc.), this shim populates the
- * `members` array the row expects. `DataSchema` is a `z.looseObject`, so
- * the extra key flows through `useZodForm` without runtime cost.
- *
- * Once `<AttributeRow>` reads AST paths directly, this shim collapses to
- * an identity passthrough and the helper can be deleted.
- */
-function dataNodeToFormState(data: AnyGraphNode): z.output<typeof DataSchema> {
-  // The shim is a runtime shape adapter for the row component, not a
-  // type-level projection. The looseObject extras (`parentName`,
-  // `members`) are accepted by the schema at runtime but not in its
-  // static `output<>` shape, so the cast is unavoidable.
-  const d = data as any;
-  return {
-    ...d,
-    parentName: getRefText(d.superType) ?? '',
-    members: (d.attributes ?? []).map((a: any) => ({
-      name: a.name ?? '',
-      typeName: getTypeRefText(a.typeCall) ?? 'string',
-      cardinality: formatCardinality(a.card) || '(1..1)',
-      isOverride: a.override ?? false,
-      displayName: a.name ?? ''
-    }))
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -137,12 +97,12 @@ function DataTypeForm({
 }: DataTypeFormProps) {
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema. Per R11 the editor
-  // consumes the AST node directly, but the bespoke <AttributeRow> still
-  // reads `members.${index}.*` paths — `dataNodeToFormState` populates that
-  // compatibility surface until Phase 8 (US6) migrates the row to AST paths.
+  // consumes the AST node directly — `<AttributeRow>` now reads AST paths
+  // (`attributes.${i}.{name,typeCall.type.$refText,card,override}`), so
+  // there is no projection layer and no reshape bridge.
 
   const { form } = useZodForm(DataSchema, {
-    defaultValues: dataNodeToFormState(data),
+    defaultValues: identityProjection<typeof DataSchema>(data),
     mode: 'onChange',
     formRegistry
   });
@@ -151,16 +111,22 @@ function DataTypeForm({
   // (object identity is the contract). `keepDirty: true` preserves the
   // pre-migration `keepDirtyValues: true` semantics so in-flight user edits
   // are not stomped by a graph push.
-  useExternalSync(form, data, dataNodeToFormState, { keepDirty: true });
+  useExternalSync(form, data, identityProjection<typeof DataSchema>, { keepDirty: true });
 
-  // The bespoke <AttributeRow> reads `members.${index}.*` paths today.
-  // Until Phase 8 (R11) refactors it to AST paths (`attributes.${index}.*`),
-  // we widen the control type so useFieldArray accepts the projection key.
+  // `DataSchema` is a `z.looseObject`; the inferred `output<>` does not
+  // expose `attributes` as a structured array path RHF's overloaded
+  // `useFieldArray` can latch onto. Widen the control type so the AST array
+  // key (`attributes`) is accepted — runtime behaviour is unchanged.
+  type AttributeFieldShape = {
+    $type: 'Attribute';
+    name: string;
+    typeCall: { $type: 'TypeCall'; type: { $refText: string } };
+    card: { inf: number; sup?: number; unbounded?: boolean };
+    override?: boolean;
+  };
   const { fields, append, remove, move } = useFieldArray({
-    control: form.control as unknown as Control<{
-      members: { name: string; typeName: string; cardinality: string; isOverride?: boolean }[];
-    }>,
-    name: 'members'
+    control: form.control as unknown as Control<{ attributes: AttributeFieldShape[] }>,
+    name: 'attributes'
   });
 
   // Track the committed (graph-confirmed) data for diffing
@@ -185,7 +151,11 @@ function DataTypeForm({
   const handleParentSelect = useCallback(
     (value: string | null) => {
       const label = value ? (availableTypes.find((o) => o.value === value)?.label ?? '') : '';
-      form.setValue('parentName', label, { shouldDirty: true });
+      // Mirror the selection into AST-canonical `superType.$refText` so the
+      // form stays consistent until the external graph push round-trips back
+      // through `useExternalSync`. The visible parent label below reads off
+      // `data.superType` (the committed graph value) for the same reason.
+      form.setValue('superType.$refText', label, { shouldDirty: true });
       actions.setInheritance(nodeId, value);
     },
     [nodeId, actions, availableTypes, form]
@@ -193,22 +163,33 @@ function DataTypeForm({
 
   // ---- Attribute actions ---------------------------------------------------
 
+  // Build an AST-shaped Attribute literal for `useFieldArray.append`. The
+  // bespoke <AttributeRow> reads `attributes.${i}.{name,typeCall.type.$refText,card,override}`
+  // (R11), so the appended item must be in that shape — no projection.
+  const makeAttributeAstItem = useCallback(
+    (name: string, typeName: string, cardinality: string, override = false) => ({
+      $type: 'Attribute' as const,
+      name,
+      typeCall: { $type: 'TypeCall' as const, type: { $refText: typeName } },
+      card: parseCardinality(cardinality),
+      override
+    }),
+    []
+  );
+
   const handleOverrideInherited = useCallback(
     (attr: { name: string; typeName: string; cardinality: string }) => {
-      append({
-        name: attr.name,
-        typeName: attr.typeName,
-        cardinality: attr.cardinality,
-        isOverride: false
-      });
+      append(makeAttributeAstItem(attr.name, attr.typeName, attr.cardinality));
       actions.addAttribute(nodeId, attr.name, attr.typeName, attr.cardinality);
     },
-    [nodeId, actions, append]
+    [nodeId, actions, append, makeAttributeAstItem]
   );
 
   const handleRevertOverride = useCallback(
     (attrName: string) => {
-      const fieldIdx = fields.findIndex((f) => f.name === attrName);
+      // `useFieldArray` field items carry the AST `name` field directly
+      // (the array `name: 'attributes'` binds to AST `Attribute` items).
+      const fieldIdx = fields.findIndex((f) => (f as { name?: string }).name === attrName);
       if (fieldIdx >= 0) {
         remove(fieldIdx);
         actions.removeAttribute(nodeId, attrName);
@@ -218,9 +199,9 @@ function DataTypeForm({
   );
 
   const handleAddAttribute = useCallback(() => {
-    append({ name: '', typeName: 'string', cardinality: '(1..1)', isOverride: false });
+    append(makeAttributeAstItem('', 'string', '(1..1)'));
     actions.addAttribute(nodeId, '', 'string', '(1..1)');
-  }, [nodeId, actions, append]);
+  }, [nodeId, actions, append, makeAttributeAstItem]);
 
   const handleRemoveAttribute = useCallback(
     (index: number) => {
