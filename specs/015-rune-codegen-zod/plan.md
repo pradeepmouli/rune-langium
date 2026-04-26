@@ -87,13 +87,13 @@ Worker.
   integration files.
 
 **Scale/Scope**:
-- 5 user stories, 27 FRs, 8 SCs.
+- 6 user stories, 32 FRs, 9 SCs.
 - 1 new package (`packages/codegen` — wholly new source, reusing the
   directory after rename), 1 renamed package (`packages/codegen-legacy`).
 - ~6 source files modified in `apps/codegen-container`, `apps/studio`,
   `packages/cli`.
-- ~15–20 new source files in the new `packages/codegen`.
-- ~30 fixture pairs under `packages/codegen/test/fixtures/`.
+- ~18–23 new source files in the new `packages/codegen`.
+- ~35 fixture pairs under `packages/codegen/test/fixtures/`.
 - 1 Studio panel component + 1 target-switcher component.
 
 ## Constitution Check
@@ -108,6 +108,8 @@ Worker.
 | **IV. Performance & Workers** | ✅ | Generation runs in a Web Worker in the Studio (not main thread), isolating the 30s CDM bound from the UI. The 500ms preview-update budget (FR-017, SC-004) applies to the debounce cycle on the already-parsed document, not a full re-parse. |
 | **V. Reversibility & Compatibility** | ✅ PASS-with-justification | The rename of `packages/codegen` → `packages/codegen-legacy` is a breaking import-path change for `apps/codegen-container`, `apps/studio`, and `packages/cli`. Constitution §V requires a migration guide and staged rollout for deprecations. Justification: the lead explicitly approved Q1/B; the rename is atomic within this feature's change set (FR-026, FR-027); `pnpm -r run type-check` must pass before merge (not after); the legacy package itself is not removed (removal is tracked separately); and downstream consumers are re-wired in the same PR, so there is no window where the workspace is inconsistent. The migration guide is `contracts/package-rename.md`. |
 | **Workflow Quality Gates (Feature Development)** | ✅ | Spec complete; clarify answers locked in; plan in progress; TDD will apply during `/speckit.implement`; code review on PRs. |
+
+**Additional scope note (US6)**: Rune `func` declarations are required for TS-target parity with the Java and Python Rosetta generators; without them the TypeScript target ships typed shapes + condition methods but cannot compute CDM-defined values (DCF, payoff math, date adjustments) — which is the principal gap that motivated the TypeScript target in the first place. Phase 8b is therefore a required sibling of Phase 8 (US5B class emission), not optional polish.
 
 **Result**: PASS. Two principles require justification (II, V), documented above.
 
@@ -207,7 +209,20 @@ modifications to three existing consumers. No new Cloudflare Workers;
 no new apps. The Studio integration is a pair of React components +
 a service layer update, not a new page.
 
-The feature splits into **5 phases**, each independently releasable:
+The feature splits into **10 phases**, each independently releasable:
+
+| Phase | Name | US | Priority |
+|-------|------|----|---------|
+| Phase 1 | Setup (Package Rename + Consumer Re-wire) | — | blocker |
+| Phase 2 | Foundational scaffold (new `packages/codegen`) | — | blocker |
+| Phase 3 | User Story 1 — Structural Zod Schemas | US1 | P1 / MVP |
+| Phase 4 | User Story 2 — Constraint Conditions | US2 | P2 |
+| Phase 5 | User Story 3 — Full Expression Transpiler | US3 | P2 |
+| Phase 6 | User Story 4 — Studio Live Preview | US4 | P3 |
+| Phase 7 | User Story 5A — JSON Schema 2020-12 Target | US5 | P3 |
+| Phase 8 | User Story 5B — Full TypeScript Class Target | US5 | P3 |
+| Phase 8b | User Story 6 — Rune `func` → TS function emission | US6 | P3 |
+| Phase 9 | Polish (CDM smoke, CI, determinism, acceptance gate) | — | P3 |
 
 1. **Phase 1 — Package rename + consumer re-wire**: Rename
    `packages/codegen` → `packages/codegen-legacy`, update its
@@ -238,3 +253,15 @@ The feature splits into **5 phases**, each independently releasable:
    Add `CodePreviewPanel.tsx` and `TargetSwitcher.tsx`. Wire
    generator into the Studio's build-phase listener. Source-mapping
    click handlers for all three targets. Studio integration tests.
+
+6. **Phase 8b — Rune `func` → TypeScript function emission (P3 / FR-028–FR-032)**:
+   Build on the TS-target module pipeline from Phase 8 (US5B) and the
+   expression transpiler from Phase 5 (US3). Every Rune `func` in a
+   namespace emits as a module-level `export function` in the same
+   `.ts` output file as its peer types. Includes: `RuneFunc` /
+   `FuncBodyContext` types; call-graph pre-scan + topological ordering
+   for non-cyclic call dependencies; `set` / `add` / `alias`
+   statement emitters; abstract-func handling (throw + non-fatal hint);
+   silent-skip path for Zod and JSON Schema targets; SC-009
+   function-fidelity test matrix. Depends on Phase 5 (US3 transpiler)
+   AND Phase 8 (US5B class emission).

@@ -274,6 +274,70 @@ accept/reject decision as the equivalent Zod schema's `.parse()`.
 
 ---
 
+### User Story 6 — Rune `func` declarations transpile to TypeScript functions (Priority: P3)
+
+A CDM author writes Rune `func` declarations with `inputs:`, `output:`,
+optional pre/post `condition` blocks, and a body of `set`, `add`, and
+`alias` statements that compute the output from the inputs. When the
+TypeScript target runs, every `func` emits as a module-level TypeScript
+function in the output module: typed inputs, typed return value, body
+transpiled from the same expression-language pipeline US3 builds, and
+its pre/post conditions surfaced as runtime checks at function entry
+and exit. The Zod and JSON Schema targets remain silent on `func`
+declarations — they are schema languages, not behaviour runtimes.
+
+**Why this priority**: Without `func` support, the TS target ships
+typed shapes + condition methods but cannot actually *compute*
+CDM-defined values (DCF, payoff math, date adjustments). The existing
+Rosetta TypeScript generator emits nothing for funcs — replicating
+that gap with prettier output would miss the most-requested capability
+TS consumers want from a CDM toolchain. P3 because it depends on US3
+(the expression transpiler is the load-bearing piece) and US5B (the
+class-style TS module is the host for emitted functions); shipping it
+as part of US5B's emission pipeline rather than a separate target.
+
+**Independent Test**: With a Rune model containing a small `func`
+(e.g., `func AddTwo: inputs: a int (1..1), b int (1..1), output: r int (1..1), set r: a + b`),
+run `rune-codegen --target typescript`, then `import { AddTwo } from
+'./generated'` and confirm `AddTwo({a: 2, b: 3}) === 5`. For a
+condition-bearing func (e.g., `func DivSafe` with a pre-condition that
+the divisor is non-zero), confirm valid inputs return a value and
+invalid inputs throw a diagnostic naming the failed condition.
+
+**Acceptance Scenarios**:
+
+1. **Given** a `func AddTwo` with two scalar inputs and one scalar
+   output, **When** generated as TypeScript,
+   **Then** the emitted module contains
+   `export function AddTwo(input: { a: number; b: number }): number`
+   with a body that returns the transpiled `set r: a + b` expression.
+2. **Given** a `func` whose body uses `alias x: input -> nested -> field`,
+   **When** generated, **Then** the emitted body contains a `const x = …`
+   binding scoped to the function and the `alias`'s definition uses the
+   same path-navigation transpilation as US3 conditions.
+3. **Given** a `func` with a `(0..*)` output and `add` statements that
+   accumulate items, **When** generated, **Then** the emitted body
+   declares `const result: T[] = []` and each `add` becomes
+   `result.push(...)`; the function returns `result`.
+4. **Given** a `func` with a `condition` block (precondition on inputs
+   or postcondition on output), **When** generated, **Then** the emitted
+   function body opens with the precondition checks (throw on failure
+   with a diagnostic naming the condition) and ends with the
+   postcondition checks before returning.
+5. **Given** a `func F` that calls another `func G` in its body,
+   **When** both are generated, **Then** the emitted module orders
+   declarations such that `G` is defined before `F`, and the call site
+   in `F` invokes `G(...)` directly (no namespace prefix needed for
+   same-module funcs).
+6. **Given** a Rune model with both a `condition`-bearing `type` and a
+   `func`, **When** the Zod target runs, **Then** the emitted Zod
+   schemas for the `type` are present and the `func` is silently
+   skipped (no Zod output for funcs); when the TypeScript target runs
+   on the same input, both type classes AND function declarations are
+   emitted in the same module file.
+
+---
+
 ### Edge Cases
 
 - **Reserved-word collisions**: A Rune attribute named `class`, `default`,
@@ -310,6 +374,25 @@ accept/reject decision as the equivalent Zod schema's `.parse()`.
   The feature must migrate `apps/codegen-worker` and
   `apps/codegen-container` to the new path inside the same change set,
   not as a follow-up.
+- **`func` recursion and self-reference**: A `func F` whose body calls
+  itself must emit valid TypeScript without infinite-loop in the
+  generator's dependency-ordering pass. Indirect cycles (`F` calls `G`,
+  `G` calls `F`) must also work; the emitted module uses function
+  declarations (hoisted) rather than `const` so call order at the source
+  level doesn't matter.
+- **`func` calling a `func` in another namespace**: When `func F` in
+  namespace `cdm.product` calls `func G` from `cdm.base.math`, the
+  generated TS module for `cdm.product` must `import { G } from
+  '../base/math/index.js'` — same import-resolution rules as
+  cross-namespace type references (FR-007).
+- **`func` with no body but conditions only**: An abstract-style func
+  declared as `func F: inputs: x int (1..1), output: y int (1..1),
+  condition: y > 0` (no `set`/`add`) — the TS target should emit a
+  function whose body throws a "not implemented" diagnostic, with
+  the conditions still installed as pre/post checks. Authors writing
+  abstract funcs are signalling "this is meant to be overridden"; the
+  emitted TS surfaces that intent rather than silently emitting an
+  empty body.
 
 ## Requirements *(mandatory)*
 
@@ -451,6 +534,41 @@ fixtures; one tier for the full CDM smoke).
   the migration, `pnpm -r run type-check` MUST pass without unresolved
   imports.
 
+#### Function declarations (US6 — TS target only)
+
+- **FR-028**: When the TypeScript target runs on a Rune model that
+  contains `func` declarations, every `func` MUST emit as a
+  module-level `export function` in the same generated module file as
+  the types it shares a namespace with. The function signature MUST
+  encode the Rune `inputs:` and `output:` shapes, including cardinality
+  (scalar vs. array, optional vs. required).
+- **FR-029**: The function body MUST be transpiled from the same
+  expression-language pipeline US3 builds (FR-012, FR-013). `set <out>:
+  <expr>` becomes `result = <expr>`; `add <out>: <expr>` becomes
+  `result.push(<expr>)` for `(0..*)` outputs; `alias <name>: <expr>`
+  becomes a `const <name> = <expr>` binding scoped to the function;
+  pre-condition blocks MUST install at function entry as
+  validation-throw checks; post-condition blocks MUST run at exit
+  before the return value is surfaced.
+- **FR-030**: When emitting a function module, the generator MUST order
+  declarations so that any non-cyclic forward-call dependency is
+  satisfied. For cyclic call graphs (mutual recursion), the generator
+  MUST use function-declaration syntax (hoisted) rather than `const`
+  bindings so source-level order does not matter. Cross-namespace
+  function calls MUST emit a corresponding `import` statement at the
+  top of the module file.
+- **FR-031**: The Zod and JSON Schema targets MUST silently skip Rune
+  `func` declarations (no Zod schema, no JSON Schema entry). The CLI
+  MUST NOT emit a warning when a model contains funcs and the active
+  target is Zod or JSON Schema; the silent skip is the contract.
+- **FR-032**: A `func` declared without a body (no `set` or `add`,
+  conditions only) is treated as abstract. The TS target MUST emit a
+  function whose body throws a `Diagnostic("not_implemented")` after
+  the pre-conditions run, AND MUST surface a generator-time hint
+  (non-fatal warning) reminding the author to add a body. The
+  pre/post conditions are still installed; abstract-ness is signalled
+  by the throw, not by skipping the function entirely.
+
 ### Key Entities
 
 - **Generator** — A pure function `(LangiumDocument | LangiumDocument[]) → GeneratorOutput`.
@@ -507,6 +625,14 @@ fixtures; one tier for the full CDM smoke).
   sessions in the Studio show an actively-rendered Zod preview panel
   (rather than the panel being closed or in a degraded state) — measured
   by the existing Studio telemetry.
+- **SC-009**: Every `func` declaration in the curated CDM round-trips
+  cleanly through the TypeScript target — the emitted module
+  (a) compiles with `tsc --noEmit`, (b) every emitted function is
+  callable with valid CDM input data and produces output that matches
+  the Python generator's evaluation of the same function on the same
+  input, measured by ≥99% behavioral parity on a 100-case
+  function-fidelity test matrix (sibling to SC-003's condition-fidelity
+  matrix).
 
 ## Assumptions
 
@@ -538,3 +664,17 @@ fixtures; one tier for the full CDM smoke).
 - Display name escaping follows JSON-string conventions (escape
   backslash, double-quote, and control characters); display names that
   cannot be expressed as a single-line JSON string are an authoring error.
+- Substantial prior art for both expression-language interpretation
+  AND `func` AST handling already exists in
+  `packages/visual-editor/src/adapters/` — specifically
+  `ast-to-expression-node.ts` (421 lines), `expression-node-to-dsl.ts`
+  (327 lines, complete operator-precedence + visitor-pattern emitter),
+  `ast-to-model.ts` lines 296–336 (handles `RosettaFunction` inputs,
+  output, and super-function inheritance), and the operator-catalog +
+  block-renderer machinery under
+  `src/components/editors/expression-builder/`. The codegen MUST reuse
+  the AST-shape understanding, operator-precedence table, and node
+  taxonomy from these adapters; reimplementing them is wasted work.
+  The new pipeline emits TypeScript / Zod / JSON Schema output rather
+  than DSL text, but the visitor-pattern dispatch over the same `$type`
+  discriminator is the same shape.

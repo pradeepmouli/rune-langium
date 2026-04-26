@@ -426,6 +426,126 @@ export interface GeneratorOptions {
 
 ---
 
+## §12 — RuneFunc (domain entity — US6)
+
+Represents a single Rune `func` declaration as extracted from the Langium AST,
+ready for the TypeScript emitter. Not exposed in the public generator API;
+produced by an internal extraction pass over `RosettaFunction` AST nodes.
+
+**Shape**:
+
+```ts
+// packages/codegen/src/types/func.ts (internal)
+export interface RuneFuncParam {
+  name: string;
+  typeName: string;
+  /** Resolved cardinality — mirrors the Rune attribute cardinality form. */
+  cardinality: { lower: number; upper: number | null }; // null = unbounded
+}
+
+export interface RuneFuncAlias {
+  name: string;
+  /** The Rune expression on the right-hand side of `alias name: expr`. */
+  exprNode: unknown; // typed as the Langium AST expression node
+}
+
+export interface RuneFuncAssignment {
+  /** 'set' for scalar output, 'add' for array output accumulation. */
+  kind: 'set' | 'add';
+  /** The Rune expression on the right-hand side. */
+  exprNode: unknown; // typed as the Langium AST expression node
+}
+
+export interface RuneFunc {
+  name: string;
+  /** Qualified namespace (mirrors RuneType.namespace). */
+  namespace: string;
+  inputs: RuneFuncParam[];
+  output: RuneFuncParam;
+  /** Name of the parent func if `extends` was used. */
+  superFunc?: string;
+  aliases: RuneFuncAlias[];
+  assignments: RuneFuncAssignment[];
+  preConditions: RuneCondition[];
+  postConditions: RuneCondition[];
+  /** True if no `set`/`add` body is present (abstract func — FR-032). */
+  isAbstract: boolean;
+}
+```
+
+**Validation rules**:
+- Every `RuneFuncAssignment` MUST reference an output that exists in
+  `inputs ∪ { output }`; violations emit `GeneratorDiagnostic { code:
+  'unknown-func-output', severity: 'error' }`.
+- `preConditions` MUST only reference names in `inputs`; referencing `output`
+  in a pre-condition emits `GeneratorDiagnostic { code: 'pre-condition-refs-output',
+  severity: 'warning' }`.
+- `postConditions` MAY reference names in `inputs ∪ { output }`.
+
+**Relationships**:
+- Extracted from `RosettaFunction` AST nodes by the TS emitter's pre-pass.
+- Consumed by `FuncBodyContext` (§13) and by the TS emitter's `emitFunc()`
+  function in `packages/codegen/src/emit/ts-emitter.ts`.
+- The `exprNode` fields are passed verbatim to `transpileExpression()` from
+  `packages/codegen/src/expr/transpiler.ts` (Phase 5 / US3).
+
+---
+
+## §13 — FuncBodyContext (internal type — US6)
+
+State passed to the function-body emitter for a single `RuneFunc`. Extends
+`ExpressionTranspilerContext` (§7) with function-specific tracking.
+Not exposed in the public API.
+
+**Shape**:
+
+```ts
+// packages/codegen/src/types/func.ts (internal)
+export interface FuncBodyContext extends ExpressionTranspilerContext {
+  /** The function being transpiled. */
+  currentFunc: RuneFunc;
+  /**
+   * 'scalar' when the output cardinality upper bound is 1 (emit `let result`
+   * filled by `result = …`). 'array' when unbounded (emit `const result: T[] = []`
+   * filled by `result.push(…)`).
+   */
+  outputAccumulator: 'scalar' | 'array';
+  /**
+   * Maps alias name → emitted TS local-variable name.
+   * Used for collision-free renaming when an alias name shadows an input
+   * parameter (e.g., alias named `a` when there is already an input `a`).
+   */
+  aliasBindings: Map<string, string>;
+  /**
+   * Call graph for the entire namespace: funcName → Set<funcName>.
+   * Populated during the pre-emission scan over all `RuneFunc` nodes in the
+   * namespace; used by the topological ordering step to satisfy FR-030
+   * (declarations ordered so non-cyclic callee appears before caller).
+   */
+  callGraph: Map<string, Set<string>>;
+}
+```
+
+**Invariants**:
+- `outputAccumulator` MUST be derived from `currentFunc.output.cardinality`:
+  `upper === null || upper > 1` → `'array'`; `upper === 1` → `'scalar'`.
+- `aliasBindings` is populated before body emission begins; if an alias name
+  collides with an input name, the emitted local is suffixed with `_alias`
+  (deterministic).
+- `callGraph` is built once per namespace (not per function); the same
+  `Map` instance is shared across all `FuncBodyContext` instances in the
+  same emission pass.
+
+**Relationships**:
+- Created by `emitNamespace()` in `packages/codegen/src/emit/ts-emitter.ts`
+  before iterating over the `RuneFunc` list.
+- Passed to `emitFuncBody()` which calls `transpileExpression()` (from
+  `expr/transpiler.ts`) for each assignment and alias RHS expression.
+- `callGraph` is consumed by `topoSortFuncs()` (a sibling of the existing
+  `topoSort()` for types) to produce the final function declaration order.
+
+---
+
 ## Entity Relationship Summary
 
 ```

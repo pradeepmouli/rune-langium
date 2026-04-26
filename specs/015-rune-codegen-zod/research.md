@@ -382,6 +382,71 @@ The temp directory is cleaned up after the test. CI fails only if
 
 ---
 
+---
+
+## R9 — Function body transpilation: reuse expression-builder prior art
+
+**Decision**: The codegen reuses the AST-shape and visitor-pattern dispatch
+already implemented in `packages/visual-editor/src/adapters/expression-node-to-dsl.ts`.
+Function bodies (`set`, `add`, `alias`, conditions) transpile through the same
+expression-language pipeline Phase 5 (US3) builds, with three additional
+statement-level forms layered on top: `set` → `result = …`, `add` →
+`result.push(…)`, `alias` → `const … = …`.
+
+**Rationale**: The expression-builder ships a working operator-precedence
+table, a complete block taxonomy (BinaryBlock, ComparisonBlock, ConditionalBlock,
+ConstructorBlock, FeatureCallBlock, LambdaBlock, ListBlock, LiteralBlock,
+ReferenceBlock, SwitchBlock, UnaryBlock), AST-to-node conversion, and DSL-text
+emission — all driven by visitor dispatch over the `$type` discriminator. The
+codegen's needs are isomorphic; only the output target differs. Reimplementing
+this would duplicate ~800 lines across `ast-to-expression-node.ts` (421 lines)
+and `expression-node-to-dsl.ts` (327 lines) and risk operator-precedence drift.
+The prior art in `ast-to-model.ts` lines 296–336 already handles
+`RosettaFunction` inputs, output, and super-function inheritance — the codegen
+walks the same AST nodes with a different emitter surface.
+
+**Alternatives considered**:
+
+1. **Full reimplementation in the codegen package** — rejected: duplicates ~800
+   lines, introduces a second operator-precedence table that will drift from the
+   visual-editor's table over time.
+2. **Extract a shared `packages/expression-engine` package** consumed by both
+   visual-editor and codegen — deferred: the correct long-term move, but adds a
+   refactor that should land in a dedicated feature, not inside feature 015.
+3. **Move adapters into `packages/codegen/src/expression/` and have
+   visual-editor depend on codegen** — rejected: wrong dependency direction;
+   visual-editor is a consumer of codegen output, not the host of its internals.
+
+---
+
+## R10 — `func` body emission shape (statement-level vs. expression-level)
+
+**Decision**: Function bodies emit as statement-level TypeScript with:
+- `let result: T` for `(1..1)` outputs (filled by `set` → `result = …`).
+- `const result: T[] = []` for `(0..*)` outputs (filled by `add` → `result.push(…)`).
+- `const`-bound `alias` bindings scoped to the function.
+- `if (…) { result = …; } else { result = …; }` for conditionals — the
+  statement form rather than the ternary used inside Zod refinements.
+- Pre-condition checks at function entry (throw `Diagnostic("condition_failed")`
+  on violation, naming the condition).
+- Post-condition checks before the `return result` at exit.
+
+**Rationale**: Matches the Java and Python Rosetta generators' emitted shape;
+reads naturally for TypeScript consumers who may debug at the statement level;
+preserves source-level statement structure for stack-trace fidelity. The
+conditional-as-`if` form is significantly more readable for CDM functions that
+have 6+ branching `set` statements.
+
+**Alternatives considered**:
+
+1. **Pure-expression body returning a single ternary** — rejected: unreadable
+   for non-trivial funcs; CDM has funcs with 6+ branching `set` statements.
+2. **IIFE-wrapped body returning a single expression** — rejected: compiles
+   correctly but loses stack-trace usefulness; the IIFE adds noise for no
+   benefit when the statement form is available.
+
+---
+
 ## Open questions resolved
 
 All Technical Context items and clarify answers are resolved. No
@@ -394,3 +459,4 @@ remaining NEEDS CLARIFICATION markers.
 | Q3/A — Inline runtime helpers | R5 (helpers section): three helpers inlined as `const` declarations in every emitted file; no `@rune-langium/runtime` package; adds ~30 LOC per file |
 | Q4/B — Studio multi-target preview | R6: target switcher on `CodePreviewPanel`; source mapping for all three targets; generation in LSP worker |
 | Q4b/C — Full class-style TypeScript target | R5: `class` + `interface` + `isType()` guard + `from()` + `validate*()` methods; zero Zod imports; expression transpiler reused |
+| Q5/A — US6 func body transpilation | R9: reuse visitor-pattern dispatch + operator-precedence table from `packages/visual-editor/src/adapters/`; R10: statement-level emission with `let result` / `result.push()` / `const alias` forms |

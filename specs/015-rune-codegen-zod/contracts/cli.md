@@ -119,6 +119,11 @@ In watch mode:
 | `json-schema` | `*.schema.json` | JSON Schema 2020-12 meta-schema |
 | `typescript` | `*.ts` | `tsc --noEmit` (no Zod import) |
 
+When `--target typescript`, the output includes both type schemas and any
+Rune `func` declarations from the input model. With `--target zod` or
+`--target json-schema`, funcs are silently skipped (FR-031) — no warning
+is emitted and no func output appears in the generated files.
+
 Invalid `--target` values print an error to stderr and exit 2:
 
 ```
