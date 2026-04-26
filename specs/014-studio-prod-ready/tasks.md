@@ -87,12 +87,12 @@ titles.
 labels read "Files" / "Editor" / "Problems" / "Output" / "Preview" /
 "Inspector", (c) sash handles are draggable, (d) Reset Layout works.
 
-- [ ] T021 [US4] Add `import 'dockview-react/dist/styles/dockview.css';` to `apps/studio/src/main.tsx` (or `@import` it from `apps/studio/src/styles.css` — pick whichever Vite resolves cleanly); B3
-- [ ] T022 [US4] Audit `apps/studio/src/shell/DockShell.tsx` and remove any redundant theme class — keep only `dockview-theme-abyss` (matches dark palette); the live DOM today applies BOTH `dockview-theme-light` and `dockview-theme-abyss`, which is the source of the "muddled" chrome
-- [ ] T023 [US4] Add a `PANEL_TITLES: Record<PanelComponentName, string>` map in `apps/studio/src/shell/layout-factory.ts` mapping `workspace.fileTree → "Files"`, `workspace.editor → "Editor"`, `workspace.problems → "Problems"`, `workspace.output → "Output"`, `workspace.visualPreview → "Preview"`, `workspace.inspector → "Inspector"`; export it
-- [ ] T024 [US4] In `apps/studio/src/shell/dockview-bridge.ts:108-141`, pass `title: PANEL_TITLES[c0.component]` (etc.) on every `addPanel({...})` call so the panel tab strip displays user-readable titles (C1)
-- [ ] T025 [P] [US4] Add a Playwright visual-regression test at `apps/studio/test/e2e/dock-chrome.spec.ts` that screenshots the Studio at 1280×800 and 1440×900 after a curated load completes; asserts no `dv-` selectors are missing (computed-style probe) and no internal `workspace.` strings are visible
-- [ ] T026 [US4] Run `pnpm --filter @rune-langium/studio test` and confirm the existing dockview-bridge / layout-factory tests still pass against the new title field
+- [X] T021 [US4] Add `import 'dockview-react/dist/styles/dockview.css';` to `apps/studio/src/main.tsx` (or `@import` it from `apps/studio/src/styles.css` — pick whichever Vite resolves cleanly); B3
+- [X] T022 [US4] Audit `apps/studio/src/shell/DockShell.tsx` and remove any redundant theme class — keep only `dockview-theme-abyss` (matches dark palette); the live DOM today applies BOTH `dockview-theme-light` and `dockview-theme-abyss`, which is the source of the "muddled" chrome
+- [X] T023 [US4] Add a `PANEL_TITLES: Record<PanelComponentName, string>` map in `apps/studio/src/shell/layout-factory.ts` mapping `workspace.fileTree → "Files"`, `workspace.editor → "Editor"`, `workspace.problems → "Problems"`, `workspace.output → "Output"`, `workspace.visualPreview → "Preview"`, `workspace.inspector → "Inspector"`; export it
+- [X] T024 [US4] In `apps/studio/src/shell/dockview-bridge.ts:108-141`, pass `title: PANEL_TITLES[c0.component]` (etc.) on every `addPanel({...})` call so the panel tab strip displays user-readable titles (C1)
+- [X] T025 [P] [US4] Add a Playwright visual-regression test at `apps/studio/test/e2e/dock-chrome.spec.ts` that screenshots the Studio at 1280×800 and 1440×900 after a curated load completes; asserts no `dv-` selectors are missing (computed-style probe) and no internal `workspace.` strings are visible
+- [X] T026 [US4] Run `pnpm --filter @rune-langium/studio test` and confirm the existing dockview-bridge / layout-factory tests still pass against the new title field
 
 **Checkpoint**: SC-010 (dock chrome visible at both viewports) measurable.
 
