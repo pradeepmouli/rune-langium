@@ -18,6 +18,7 @@ import {
   isData as _isData,
   type Data,
   type Attribute,
+  type Condition,
   type RosettaEnumeration,
   type RosettaModel,
   type RosettaCardinality
@@ -31,6 +32,11 @@ import type {
 import { buildTypeReferenceGraph, findCyclicTypes } from '../cycle-detector.js';
 import { topoSort } from '../topo-sort.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
+import {
+  transpileCondition,
+  buildConditionMessage,
+  type ExpressionTranspilerContext
+} from '../expr/transpiler.js';
 
 /**
  * Internal emission context threaded through the emitter for one namespace.
@@ -295,13 +301,16 @@ function emitObjectBody(data: Data, ctx: EmissionContext): string {
 
 /**
  * Emit a full schema declaration for a Data type.
- * Handles: plain object, extends, lazy wrapping for cycles.
+ * Handles: plain object, extends, lazy wrapping for cycles, condition blocks.
  * FR-002 (exports), FR-005 (extends), FR-006 (lazy), FR-008 (empty).
+ * FR-010, FR-011 (conditions via emitConditionBlock). T056.
  */
 function emitTypeSchema(data: Data, ctx: EmissionContext): string {
   const name = data.name;
   const schemaName = `${name}Schema`;
   const isLazy = ctx.lazyTypes.has(name);
+  const conditions = data.conditions ?? [];
+  const hasConditions = conditions.some((c) => c.expression != null);
 
   let schemaExpr: string;
 
@@ -322,18 +331,70 @@ function emitTypeSchema(data: Data, ctx: EmissionContext): string {
 
   if (isLazy) {
     // For cyclic types: add explicit ZodType annotation so TS can infer recursive schemas.
-    // Emit in the multiline form that oxfmt produces for arrow functions whose body
-    // exceeds printWidth when written inline:
-    //   z.lazy(() =>
-    //     z.object({
-    //       ...
-    //     })
-    //   )
+    // Conditions inside lazy: wrap the condition inside the lazy callback.
+    if (hasConditions) {
+      const condBlock = emitConditionBlock(conditions, data, ctx);
+      const innerExpr = `${schemaExpr}\n${condBlock}`;
+      const indented = innerExpr
+        .split('\n')
+        .map((line) => `  ${line}`)
+        .join('\n');
+      return `export const ${schemaName}: z.ZodType<${name}> = z.lazy(() =>\n${indented}\n);`;
+    }
     const indented = schemaExpr
       .split('\n')
       .map((line) => `  ${line}`)
       .join('\n');
     return `export const ${schemaName}: z.ZodType<${name}> = z.lazy(() =>\n${indented}\n);`;
+  }
+
+  if (hasConditions) {
+    const condBlock = emitConditionBlock(conditions, data, ctx);
+    // Format as oxfmt-style method chain:
+    //   export const Schema = z
+    //     .object({
+    //       a: z.string().optional(),
+    //       ...
+    //     })
+    //     .refine(...)
+    //
+    // Strategy: rebuild the object body with 4-space attr indentation, then chain.
+    let chainedObjectExpr: string;
+    if (data.superType?.ref) {
+      // extend chain: ParentSchema.extend({...})
+      // For simplicity, emit as non-chained since extend is on a schema ref, not z
+      const parentName = data.superType.ref.name;
+      const parentSchema = `${parentName}Schema`;
+      if (data.attributes.length === 0) {
+        chainedObjectExpr = `${parentSchema}.extend({})`;
+      } else {
+        const attrs = data.attributes.map((attr) => emitAttribute(attr, ctx));
+        // Reindent attrs to 4 spaces
+        const reindented = attrs.map((a) => `  ${a}`).join(',\n');
+        chainedObjectExpr = `${parentSchema}.extend({\n${reindented}\n})`;
+      }
+      const condIndented = condBlock
+        .split('\n')
+        .map((line) => `  ${line}`)
+        .join('\n');
+      return `export const ${schemaName} = ${chainedObjectExpr}\n${condIndented};`;
+    } else {
+      // z.object chain: build chain as `z\n  .object({...})\n  .refine(...)`
+      const attrLines =
+        data.attributes.length === 0 ? [] : data.attributes.map((attr) => emitAttribute(attr, ctx));
+      // Build object body with 4-space attribute indentation.
+      // emitAttribute returns '  key: val' (2-space prefix), so add 2 more for 4 total.
+      const objectBody =
+        attrLines.length === 0
+          ? `.object({})`
+          : `.object({\n${attrLines.map((a) => `  ${a}`).join(',\n')}\n  })`;
+      // Condition block indented 2 spaces
+      const condIndented = condBlock
+        .split('\n')
+        .map((line) => `  ${line}`)
+        .join('\n');
+      return `export const ${schemaName} = z\n  ${objectBody}\n${condIndented};`;
+    }
   }
 
   return `export const ${schemaName} = ${schemaExpr};`;
@@ -442,6 +503,89 @@ function emitTypeAlias(data: Data, ctx: EmissionContext): string {
     return ''; // interface was already declared; no additional alias needed
   }
   return `export type ${name} = z.infer<typeof ${schemaName}>;`;
+}
+
+/**
+ * Build an ExpressionTranspilerContext for a given Data node and emit mode.
+ * T055.
+ */
+function buildTranspilerContext(
+  data: Data,
+  emitMode: 'zod-refine' | 'zod-superRefine',
+  conditionName: string,
+  ctx: EmissionContext
+): ExpressionTranspilerContext {
+  const attributeTypes = new Map<string, string>();
+  for (const attr of data.attributes) {
+    attributeTypes.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
+  }
+  // Also include inherited attributes if the type extends a parent
+  if (data.superType?.ref) {
+    const parent = data.superType.ref;
+    if (isData(parent)) {
+      for (const attr of (parent as Data).attributes) {
+        if (!attributeTypes.has(attr.name)) {
+          attributeTypes.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
+        }
+      }
+    }
+  }
+  return {
+    selfName: 'data',
+    emitMode,
+    conditionName,
+    typeName: data.name,
+    attributeTypes,
+    diagnostics: ctx.diagnostics
+  };
+}
+
+/**
+ * Emit the condition block for a Data type.
+ * FR-010 (refine vs superRefine), FR-011 (single superRefine for multi-condition).
+ * T055.
+ *
+ * Returns a string like `.refine(...)` or `.superRefine(...)` to be appended
+ * to the schema expression. Returns empty string if no conditions.
+ */
+function emitConditionBlock(conditions: Condition[], data: Data, ctx: EmissionContext): string {
+  // Filter out conditions that have no expression or are unsupported
+  const activeConds = conditions.filter((c) => c.expression != null);
+  if (activeConds.length === 0) return '';
+
+  if (activeConds.length === 1) {
+    const cond = activeConds[0]!;
+    const condName = cond.name ?? 'Condition';
+    const transpilerCtx = buildTranspilerContext(data, 'zod-refine', condName, ctx);
+    const predicate = transpileCondition(cond, transpilerCtx);
+    const message = buildConditionMessage(cond, transpilerCtx);
+    // Use inline form when the full chained line fits within 87 chars.
+    // The chain is indented 2 spaces in emitTypeSchema, so the full line is:
+    //   "  .refine((data) => <pred>, '<msg>');"
+    // = 2 + ".refine((data) => ".length + pred.length + ", '".length + msg.length + "');" = ?
+    const inlineLine = `  .refine((data) => ${predicate}, '${message}');`;
+    if (!predicate.includes('\n') && inlineLine.length <= 87) {
+      return `.refine((data) => ${predicate}, '${message}')`;
+    }
+    return [`.refine(`, `  (data) => ${predicate},`, `  '${message}'`, `)`].join('\n');
+  }
+
+  // ≥ 2 conditions → single .superRefine() per FR-011
+  const lines: string[] = ['.superRefine((data, ctx) => {'];
+  for (const cond of activeConds) {
+    const condName = cond.name ?? 'Condition';
+    const transpilerCtx = buildTranspilerContext(data, 'zod-superRefine', condName, ctx);
+    const body = transpileCondition(cond, transpilerCtx);
+    // Indent each line of the body by 2 spaces.
+    // emitTypeSchema will then add 2 more via condIndented = total 4 spaces.
+    const indented = body
+      .split('\n')
+      .map((line) => `  ${line}`)
+      .join('\n');
+    lines.push(indented);
+  }
+  lines.push('})');
+  return lines.join('\n');
 }
 
 /**

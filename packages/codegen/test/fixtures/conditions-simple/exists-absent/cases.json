@@ -1,0 +1,5 @@
+{
+  "schemaName": "HasASchema",
+  "valid": [{ "a": "hello" }, { "a": "world" }],
+  "invalid": [{}, { "a": null }]
+}
