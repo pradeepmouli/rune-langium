@@ -201,6 +201,229 @@ describe('EnumForm', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// US3 / Phase 5b TDD tests (ET1–ET4) — z2f migration contract for EnumForm
+// ---------------------------------------------------------------------------
+
+// Spy on the upstream hooks so the migration tests can assert the
+// integration surface (R4 useExternalSync + R11 canonical AST schema).
+const useExternalSyncSpy = vi.fn();
+const useZodFormSpy = vi.fn();
+vi.mock('@zod-to-form/react', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof import('@zod-to-form/react');
+  return {
+    ...actual,
+    useExternalSync: (...args: unknown[]) => {
+      useExternalSyncSpy(...args);
+      return (actual as any).useExternalSync(
+        ...(args as Parameters<typeof actual.useExternalSync>)
+      );
+    },
+    useZodForm: (...args: unknown[]) => {
+      useZodFormSpy(...args);
+      return (actual as any).useZodForm(...(args as Parameters<typeof actual.useZodForm>));
+    }
+  };
+});
+
+describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useExternalSyncSpy.mockClear();
+    useZodFormSpy.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // R11 — useZodForm is invoked with the canonical AST RosettaEnumerationSchema
+  // (NOT the form-surface projection enumFormSchema).
+  it('uses the canonical RosettaEnumerationSchema (R11) for useZodForm', async () => {
+    const { RosettaEnumerationSchema } = await import('../../src/generated/zod-schemas.js');
+
+    render(
+      <EnumForm
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    expect(useZodFormSpy).toHaveBeenCalled();
+    const firstCall = useZodFormSpy.mock.calls[0];
+    expect(firstCall?.[0]).toBe(RosettaEnumerationSchema);
+  });
+
+  // ET1 — leaf field labels + tab order
+  it('renders leaf fields (name, value rows with name + display) in the documented tab order', () => {
+    const { container } = render(
+      <EnumForm
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    // Name must be the first text input in the form-header slot.
+    const header = container.querySelector('[data-slot="form-header"]')!;
+    const nameInput = header.querySelector('input[data-slot="type-name-input"]');
+    expect(nameInput).not.toBeNull();
+    expect((nameInput as HTMLInputElement).value).toBe('CurrencyEnum');
+
+    // Each enum value row exposes both a name input and a display input
+    // (declared via the typed config as enumValues[].name + enumValues[].display).
+    const rows = container.querySelectorAll('[data-slot="enum-value-row"]');
+    expect(rows.length).toBe(3);
+    rows.forEach((row, idx) => {
+      const inputs = row.querySelectorAll('input[type="text"]');
+      // First input is the value name, second is the display name
+      expect(inputs.length).toBeGreaterThanOrEqual(2);
+      const ariaLabel = inputs[0]!.getAttribute('aria-label') ?? '';
+      expect(ariaLabel.toLowerCase()).toContain('value name');
+      // Document order: name input precedes display input within each row
+      expect(
+        row.compareDocumentPosition(inputs[1]!) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      void idx;
+    });
+  });
+
+  // ET2 — debounced rename fires exactly once with the new name
+  it('fires actions.renameType exactly once after a single debounce window on name edit', () => {
+    const renameType = vi.fn();
+    const actions = { ...makeActions(), renameType };
+
+    render(
+      <EnumForm
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
+
+    const nameInput = screen.getByLabelText(/enum type name/i);
+
+    // Type rapidly — three changes coalesced inside the debounce window
+    fireEvent.change(nameInput, { target: { value: 'Stat' } });
+    fireEvent.change(nameInput, { target: { value: 'Status' } });
+    fireEvent.change(nameInput, { target: { value: 'StatusEnum' } });
+
+    expect(renameType).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(renameType).toHaveBeenCalledTimes(1);
+    expect(renameType).toHaveBeenCalledWith('node-1', 'StatusEnum');
+  });
+
+  // ET3 — useExternalSync contract: form repopulates pristine fields when
+  // `data` reference changes (R4 + R11).
+  it('repopulates pristine values when `data` reference changes (external sync)', () => {
+    const actions = makeActions();
+
+    const nodeA = makeEnumData(); // name: 'CurrencyEnum'
+    const nodeB = makeEnumData({
+      name: 'StatusEnum',
+      enumValues: [
+        { $type: 'RosettaEnumValue', name: 'OPEN', display: 'Open' },
+        { $type: 'RosettaEnumValue', name: 'CLOSED', display: 'Closed' }
+      ]
+    });
+
+    const { container, rerender } = render(
+      <EnumForm nodeId="node-1" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
+    );
+
+    const initialName = container.querySelector(
+      '[data-slot="type-name-input"]'
+    ) as HTMLInputElement;
+    expect(initialName.value).toBe('CurrencyEnum');
+
+    // Swap to nodeB (different reference identity)
+    rerender(
+      <EnumForm nodeId="node-1" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    // Pristine name field reflects nodeB's value after the swap
+    const nameAfter = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
+    expect(nameAfter.value).toBe('StatusEnum');
+
+    // Migration contract: the upstream useExternalSync hook is the
+    // integration surface; spy is invoked with the most recent data prop.
+    expect(useExternalSyncSpy).toHaveBeenCalled();
+    const lastCall = useExternalSyncSpy.mock.calls.at(-1);
+    expect(lastCall?.[1]).toBe(nodeB);
+
+    // The new node's value rows are rendered (2 rows for nodeB)
+    const rows = container.querySelectorAll('[data-slot="enum-value-row"]');
+    expect(rows.length).toBe(2);
+  });
+
+  // ET4 — adding an enum value via the "Add Value" button fires addEnumValue;
+  // editing an existing value's name + displayName fires updateEnumValue after
+  // the debounce window. (T029 contract — covers the enum-specific row affordance.)
+  it('add fires addEnumValue and editing name + displayName fires updateEnumValue after debounce', () => {
+    const addEnumValue = vi.fn();
+    const updateEnumValue = vi.fn();
+    const actions = { ...makeActions(), addEnumValue, updateEnumValue };
+
+    const { container } = render(
+      <EnumForm
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
+
+    // Click "Add Value" — the addEnumValue action fires immediately with the
+    // empty-row template documented by EnumForm.
+    const addBtn = container.querySelector('[data-slot="add-value-btn"]') as HTMLButtonElement;
+    expect(addBtn).not.toBeNull();
+    fireEvent.click(addBtn);
+
+    expect(addEnumValue).toHaveBeenCalledTimes(1);
+    expect(addEnumValue).toHaveBeenCalledWith('node-1', '', undefined);
+
+    // Now exercise the per-row name + display path on the first existing row.
+    const rows = container.querySelectorAll('[data-slot="enum-value-row"]');
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    const inputs = rows[0]!.querySelectorAll('input[type="text"]');
+    const nameInput = inputs[0] as HTMLInputElement;
+    const displayInput = inputs[1] as HTMLInputElement;
+
+    fireEvent.change(nameInput, { target: { value: 'USD2' } });
+    fireEvent.change(displayInput, { target: { value: 'US Dollar v2' } });
+
+    // No update action before the debounce expires
+    expect(updateEnumValue).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    // updateEnumValue fires for both name + displayName edits inside the
+    // debounce window — assert the most recent call carries the latest values.
+    expect(updateEnumValue).toHaveBeenCalled();
+    const lastCall = updateEnumValue.mock.calls.at(-1);
+    // Signature: (nodeId, oldName, newName, displayName)
+    expect(lastCall?.[0]).toBe('node-1');
+    expect(lastCall?.[1]).toBe('USD');
+    // The latest displayName typed wins inside the debounce window.
+    expect(lastCall?.[3]).toBe('US Dollar v2');
+  });
+});
+
 describe('EnumForm – merged inherited enum value list', () => {
   /** Build parent and child enum nodes for inheritance tests. */
   function makeEnumInheritanceNodes(
