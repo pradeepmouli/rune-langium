@@ -1,0 +1,33 @@
+{
+  "name": "@rune-langium/lsp-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker + Durable Object hosting the Rune DSL Langium LSP for the Studio (feature 014-studio-prod-ready, US3). Per-workspace DOs hold langium services + WS hibernation; the Worker mints HMAC-signed session tokens and gates the WS upgrade.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@lspeasy/core": "^2.1.1",
+    "@rune-langium/curated-schema": "workspace:*",
+    "@rune-langium/lsp-server": "workspace:*",
+    "langium": "^4.2.2",
+    "pino": "^9.5.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250108.0",
+    "vitest": "^4.1.4",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "FSL-1.1-ALv2",
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"
+}

@@ -31,6 +31,20 @@ export const PANEL_COMPONENT_NAMES = [
 
 export type PanelComponentName = (typeof PANEL_COMPONENT_NAMES)[number];
 
+/**
+ * User-facing tab titles for each locked panel component. Surfaced on
+ * dockview's tab strip via `addPanel({ title })` (FR-008). Internal
+ * `workspace.*` IDs must never leak into the rendered chrome.
+ */
+export const PANEL_TITLES: Record<PanelComponentName, string> = {
+  'workspace.fileTree': 'Files',
+  'workspace.editor': 'Editor',
+  'workspace.inspector': 'Inspector',
+  'workspace.problems': 'Problems',
+  'workspace.output': 'Output',
+  'workspace.visualPreview': 'Preview'
+};
+
 const SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
 
 export interface BuildLayoutInput {

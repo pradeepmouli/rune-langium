@@ -86,6 +86,27 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
       studio_version: StudioVersion,
       ua_class: UaClass
     })
+    .strict(),
+  z
+    .object({
+      event: z.literal('lsp_session_opened'),
+      studio_version: StudioVersion,
+      ua_class: UaClass
+    })
+    .strict(),
+  z
+    .object({
+      event: z.literal('lsp_session_failed'),
+      errorCategory: z.enum([
+        'origin_blocked',
+        'token_expired',
+        'nonce_replay',
+        'upstream_unhealthy',
+        'unknown'
+      ]),
+      studio_version: StudioVersion,
+      ua_class: UaClass
+    })
     .strict()
 ]);
 
@@ -225,7 +246,9 @@ function emptyResponse(status: number, extraHeaders: Record<string, string> = {}
 }
 
 function getErrorCategory(event: TelemetryEvent): string | null {
-  return event.event === 'curated_load_failure' ? event.errorCategory : null;
+  if (event.event === 'curated_load_failure') return event.errorCategory;
+  if (event.event === 'lsp_session_failed') return event.errorCategory;
+  return null;
 }
 
 function doIdName(event: TelemetryEvent, day: string): string {

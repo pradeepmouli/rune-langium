@@ -10,4 +10,4 @@ export type {
   CodeGenerationResult,
   GeneratedFile,
   GenerationError
-} from '@rune-langium/codegen';
+} from '@rune-langium/codegen-legacy';

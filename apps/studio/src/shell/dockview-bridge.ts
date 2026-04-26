@@ -31,7 +31,7 @@ import type {
   LayoutNode,
   BottomGroup
 } from '../workspace/persistence.js';
-import { buildDefaultLayout, type FactoryShape } from './layout-factory.js';
+import { buildDefaultLayout, PANEL_TITLES, type FactoryShape } from './layout-factory.js';
 
 /** Re-export for callers that previously imported from this module. */
 export type { FactoryShape } from './layout-factory.js';
@@ -105,18 +105,21 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
   const left = api.addPanel({
     id: c0.component,
     component: c0.component,
+    title: PANEL_TITLES[c0.component],
     initialWidth: c0.size ?? 240
   } satisfies AddPanelOptions);
 
   api.addPanel({
     id: c1.component,
     component: c1.component,
+    title: PANEL_TITLES[c1.component],
     position: { referencePanel: left.id, direction: 'right' }
   });
 
   const inspector = api.addPanel({
     id: c2.component,
     component: c2.component,
+    title: PANEL_TITLES[c2.component],
     initialWidth: c2.size ?? 320,
     position: { referencePanel: c1.component, direction: 'right' }
   });
@@ -128,6 +131,7 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
   const firstBottom = api.addPanel({
     id: firstTab.component,
     component: firstTab.component,
+    title: PANEL_TITLES[firstTab.component],
     position: { referencePanel: c1.component, direction: 'below' }
   });
   for (let i = 1; i < shape.bottomGroup.tabs.length; i++) {
@@ -136,6 +140,7 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
     api.addPanel({
       id: tab.component,
       component: tab.component,
+      title: PANEL_TITLES[tab.component],
       position: { referenceGroup: firstBottom.group, direction: 'within' }
     });
   }

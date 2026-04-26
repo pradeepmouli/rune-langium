@@ -19,6 +19,7 @@ import type {
 } from '../types/model-types.js';
 import { ModelLoadError } from '../types/model-types.js';
 import { getCachedModel, getCachedModelIfFresh, setCachedModel } from './model-cache.js';
+import { config } from '../config.js';
 
 const CORS_PROXY = 'https://cors.isomorphic-git.org';
 
@@ -65,6 +66,19 @@ export async function loadModel(
   // Check cancellation
   if (signal?.aborted) {
     throw new ModelLoadError('CANCELLED', 'Load cancelled');
+  }
+
+  // FR-019 — the legacy isomorphic-git clone path is unreachable in
+  // production builds. `config.legacyGitPathEnabled` defaults to `false`
+  // (see apps/studio/src/config.ts) so even custom-URL sources surface a
+  // clear error rather than silently hitting `cors.isomorphic-git.org`.
+  // Setting `VITE_LEGACY_GIT_PATH=true` at build time re-opens the path
+  // for local-dev contributors who explicitly want it.
+  if (!config.legacyGitPathEnabled) {
+    throw new ModelLoadError(
+      'NETWORK',
+      `Legacy git path is disabled in this build (config.legacyGitPathEnabled=false). Use a curated archive URL or enable the legacy path locally via VITE_LEGACY_GIT_PATH=true.`
+    );
   }
 
   // Check cache first

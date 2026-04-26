@@ -79,9 +79,9 @@ importers:
 
   apps/codegen-container:
     dependencies:
-      '@rune-langium/codegen':
+      '@rune-langium/codegen-legacy':
         specifier: workspace:*
-        version: link:../../packages/codegen
+        version: link:../../packages/codegen-legacy
       pino:
         specifier: ^9.5.0
         version: 9.14.0
@@ -187,6 +187,37 @@ importers:
         specifier: ^4.0.0
         version: 4.85.0(@cloudflare/workers-types@4.20260424.1)
 
+  apps/lsp-worker:
+    dependencies:
+      '@lspeasy/core':
+        specifier: ^2.1.1
+        version: 2.1.2(ws@8.20.0)
+      '@rune-langium/curated-schema':
+        specifier: workspace:*
+        version: link:../../packages/curated-schema
+      '@rune-langium/lsp-server':
+        specifier: workspace:*
+        version: link:../../packages/lsp-server
+      langium:
+        specifier: ^4.2.2
+        version: 4.2.2
+      pino:
+        specifier: ^9.5.0
+        version: 9.14.0
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250108.0
+        version: 4.20260424.1
+      vitest:
+        specifier: ^4.1.4
+        version: 4.1.4(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(@vitest/ui@4.1.4)(jsdom@28.1.0(@noble/hashes@1.8.0))(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.85.0(@cloudflare/workers-types@4.20260424.1)
+
   apps/studio:
     dependencies:
       '@codemirror/commands':
@@ -219,9 +250,9 @@ importers:
       '@marsidev/react-turnstile':
         specifier: ^1.3.1
         version: 1.5.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@rune-langium/codegen':
+      '@rune-langium/codegen-legacy':
         specifier: workspace:*
-        version: link:../../packages/codegen
+        version: link:../../packages/codegen-legacy
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -362,9 +393,9 @@ importers:
 
   packages/cli:
     dependencies:
-      '@rune-langium/codegen':
+      '@rune-langium/codegen-legacy':
         specifier: workspace:*
-        version: link:../codegen
+        version: link:../codegen-legacy
       '@rune-langium/core':
         specifier: workspace:*
         version: link:../core
@@ -383,6 +414,28 @@ importers:
         version: 5.9.3
 
   packages/codegen:
+    dependencies:
+      '@rune-langium/core':
+        specifier: workspace:*
+        version: link:../core
+      langium:
+        specifier: ^4.2.2
+        version: 4.2.2
+    devDependencies:
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.4
+        version: 4.1.4(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(@vitest/ui@4.1.4)(jsdom@28.1.0(@noble/hashes@1.8.0))(msw@2.12.10(@types/node@25.6.0)(typescript@5.9.3))(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+
+  packages/codegen-legacy:
     devDependencies:
       '@types/node':
         specifier: ^25.6.0
@@ -632,6 +685,28 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  scratch/lsp-spike:
+    dependencies:
+      '@lspeasy/core':
+        specifier: ^2.1.1
+        version: 2.1.2(ws@8.20.0)
+      '@rune-langium/lsp-server':
+        specifier: workspace:*
+        version: link:../../packages/lsp-server
+      langium:
+        specifier: ^4.2.2
+        version: 4.2.2
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250108.0
+        version: 4.20260424.1
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.85.0(@cloudflare/workers-types@4.20260424.1)
+      ws:
+        specifier: ^8.20.0
+        version: 8.20.0
 
 packages:
 

@@ -22,7 +22,7 @@ const SELECTORS_TO_EXCLUDE = [
   // in the visual-editor package and is covered by its own tests.
   '.react-flow',
   // dockview's internal chrome (drag handles etc.) — its own a11y track.
-  '.dockview-theme-light'
+  '.dockview-theme-abyss'
 ];
 
 test.describe('Studio a11y (T088)', () => {

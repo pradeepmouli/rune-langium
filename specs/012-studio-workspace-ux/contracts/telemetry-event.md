@@ -46,6 +46,23 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
     ]),
     studio_version: z.string().max(32),
     ua_class: z.string().max(64)
+  }),
+  // Added by 014 (T070) — emitted by the LSP transport-provider on
+  // session-mint outcomes. `lsp_session_failed.errorCategory` is closed
+  // and matches the worker-side categories from contracts/lsp-worker.md.
+  z.object({
+    event: z.literal('lsp_session_opened'),
+    studio_version: z.string().max(32),
+    ua_class: z.string().max(64)
+  }),
+  z.object({
+    event: z.literal('lsp_session_failed'),
+    errorCategory: z.enum([
+      'origin_blocked', 'token_expired', 'nonce_replay',
+      'upstream_unhealthy', 'unknown'
+    ]),
+    studio_version: z.string().max(32),
+    ua_class: z.string().max(64)
   })
 ]);
 ```

@@ -18,6 +18,7 @@ const ROOT = resolve(__dirname, '..');
 const CSS_OUT = resolve(ROOT, 'dist/tokens.css');
 const JS_OUT = resolve(ROOT, 'dist/tokens.js');
 const DTS_OUT = resolve(ROOT, 'dist/tokens.d.ts');
+const BRAND_OUT = resolve(ROOT, 'dist/brand.css');
 
 describe('@rune-langium/design-tokens build (T024)', () => {
   beforeAll(() => {
@@ -81,5 +82,70 @@ describe('@rune-langium/design-tokens build (T024)', () => {
     expect(dts).toMatch(/readonly surface:/);
     expect(dts).toMatch(/readonly spacing:/);
     expect(dts).toMatch(/readonly motion:/);
+  });
+
+  // T051 (014/Phase-8) — verify the new cross-surface namespaces emit
+  // through the existing flatten/emitTs/emitDts paths, plus the new
+  // dist/brand.css subset.
+  it('emits the cross-surface token namespaces in tokens.css (T049)', () => {
+    const css = readFileSync(CSS_OUT, 'utf8');
+    // Typography
+    expect(css).toMatch(/--font-display:/);
+    expect(css).toMatch(/--font-mono:/);
+    // Spacing scale (FR-025 fix)
+    expect(css).toMatch(/--space-1:\s*4px/);
+    expect(css).toMatch(/--space-4:\s*16px/);
+    expect(css).toMatch(/--space-10:\s*40px/);
+    // Text scale
+    expect(css).toMatch(/--text-md:\s*0\.9375rem/);
+    // Sidebar widths
+    expect(css).toMatch(/--sidebar-width-default:\s*280px/);
+    expect(css).toMatch(/--sidebar-width-min:\s*220px/);
+    expect(css).toMatch(/--sidebar-width-max:\s*360px/);
+    // Syntax palette
+    expect(css).toMatch(/--syntax-keyword:\s*#C792EA/);
+    expect(css).toMatch(/--syntax-string:/);
+    expect(css).toMatch(/--syntax-comment:/);
+    expect(css).toMatch(/--syntax-function:/);
+    expect(css).toMatch(/--syntax-operator:/);
+    expect(css).toMatch(/--syntax-constant:/);
+    expect(css).toMatch(/--syntax-variable:/);
+    // Radius / button / focus / brand
+    expect(css).toMatch(/--radius-md:\s*8px/);
+    expect(css).toMatch(/--button-height:\s*40px/);
+    expect(css).toMatch(/--focus-ring-width:\s*2px/);
+    expect(css).toMatch(/--focus-ring-offset:\s*2px/);
+    expect(css).toMatch(/--focus-ring-colour:/);
+    expect(css).toMatch(/--brand-mark-size:\s*28px/);
+    expect(css).toMatch(/--brand-mark-radius:\s*6px/);
+    expect(css).toMatch(/--brand-mark-border-width:\s*2px/);
+  });
+
+  it('emits dist/brand.css with the brand subset (T050)', () => {
+    const brand = readFileSync(BRAND_OUT, 'utf8');
+    expect(brand).toMatch(/--color-accent-base:/);
+    expect(brand).toMatch(/--font-display:/);
+    expect(brand).toMatch(/--syntax-keyword:/);
+    expect(brand).toMatch(/--radius-md:/);
+    expect(brand).toMatch(/--focus-ring-width:/);
+    expect(brand).toMatch(/--brand-mark-size:/);
+    // Brand subset MUST NOT carry the heavyweight Studio-only namespaces.
+    expect(brand).not.toMatch(/--space-1:/);
+    expect(brand).not.toMatch(/--sidebar-width-default:/);
+    expect(brand).not.toMatch(/--text-md:/);
+    expect(brand).not.toMatch(/--motion-duration-/);
+    expect(brand).not.toMatch(/--z-index-/);
+    expect(brand).not.toMatch(/--shadow-/);
+  });
+
+  it('extends the typed Tokens interface with the new key paths (T051)', () => {
+    const dts = readFileSync(DTS_OUT, 'utf8');
+    expect(dts).toMatch(/readonly display:/);
+    expect(dts).toMatch(/readonly space:/);
+    expect(dts).toMatch(/readonly text:/);
+    expect(dts).toMatch(/readonly sidebar:/);
+    expect(dts).toMatch(/readonly syntax:/);
+    expect(dts).toMatch(/readonly focus:/);
+    expect(dts).toMatch(/readonly brand:/);
   });
 });

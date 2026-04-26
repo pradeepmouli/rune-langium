@@ -12,7 +12,9 @@
       "import": "./dist/tokens.js"
     },
     "./tokens.css": "./dist/tokens.css",
-    "./tokens.json": "./src/tokens.json"
+    "./tokens.json": "./src/tokens.json",
+    "./dist/tokens.css": "./dist/tokens.css",
+    "./dist/brand.css": "./dist/brand.css"
   },
   "files": [
     "dist",
