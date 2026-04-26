@@ -220,8 +220,72 @@ describe('cdm-smoke: json-schema target', () => {
 });
 
 describe('cdm-smoke: typescript target', () => {
-  it.todo('generates TypeScript interfaces and classes for the full CDM curated schema');
-  it.todo('tsc --noEmit over generated TypeScript output exits 0');
+  /**
+   * T112: Activate the TypeScript-target CDM smoke section.
+   *
+   * Generates TypeScript classes for all US1 fixture documents,
+   * writes them to a temp directory, and verifies they compile
+   * with tsc --noEmit (FR-023, SC-005).
+   * Also confirms zero `from 'zod'` imports in generated output.
+   */
+  it('generates TypeScript classes for US1 fixture documents and tsc --noEmit exits 0 (T112, SC-005)', async () => {
+    const fixtureNames = [
+      'basic-types',
+      'cardinality',
+      'enums',
+      'inheritance',
+      'circular',
+      'reserved-words'
+    ];
+
+    const services = createRuneDslServices();
+    const docs = await Promise.all(fixtureNames.map((name) => parseFixture(name, services)));
+
+    const outputs = generate(docs, { target: 'typescript' });
+    expect(outputs.length).toBeGreaterThan(0);
+
+    // Confirm zero `from 'zod'` imports in all generated files
+    for (const output of outputs) {
+      expect(output.content).not.toContain("from 'zod'");
+      expect(output.content).not.toContain('from "zod"');
+    }
+
+    // Write outputs to a temp dir
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-ts-smoke-'));
+
+    for (const output of outputs) {
+      const outPath = join(tmpDir, output.relativePath);
+      await mkdir(dirname(outPath), { recursive: true });
+      await writeFile(outPath, output.content, 'utf-8');
+    }
+
+    // Build a tsconfig for TypeScript target output.
+    // No zod import needed — pure TypeScript.
+    const smokeTsconfig = {
+      compilerOptions: {
+        noEmit: true,
+        composite: false,
+        incremental: false,
+        strict: true,
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        target: 'ES2020',
+        skipLibCheck: true
+      },
+      include: outputs.map((o) => join(tmpDir, o.relativePath))
+    };
+
+    const smokeTsconfigPath = join(tmpDir, 'tsconfig.smoke.json');
+    await writeFile(smokeTsconfigPath, JSON.stringify(smokeTsconfig, null, 2), 'utf-8');
+
+    // Run tsc --noEmit
+    const { exitCode, stderr } = await runTscNoEmit(smokeTsconfigPath, tmpDir);
+    if (exitCode !== 0) {
+      throw new Error(`tsc --noEmit failed (exit ${exitCode}):\n${stderr}`);
+    }
+    expect(exitCode).toBe(0);
+  }, 30_000);
+
   it.todo('generated TypeScript funcs are callable at runtime');
 });
 

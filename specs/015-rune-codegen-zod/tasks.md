@@ -286,21 +286,21 @@ output (per spec §US5 Independent Test).
 
 ### 7a. RED tests for US5A (write first, ensure they fail)
 
-- [ ] T090 [P] [US5] Write failing test in `packages/codegen/test/us5a-jsonschema.test.ts`: for the `cardinality` fixture, generate `json-schema` target and assert `"type": "array", "minItems": 1` for `(1..*)`, `"minItems": 2, "maxItems": 5` for `(2..5)`, no `"maxItems"` for `(0..*)`, `"required"` contains `(1..1)` fields
-- [ ] T091 [P] [US5] Write failing test: for the `enums` fixture, generate JSON Schema and assert `"enum": ["Buy", "Sell"]` shape; write failing meta-schema validation test using `ajv` that the output validates against `https://json-schema.org/draft/2020-12/schema`
-- [ ] T092 [P] [US5] Create `packages/codegen/test/fixtures/cardinality/expected.schema.json` and `packages/codegen/test/fixtures/enums/expected.schema.json` (committed); write failing byte-identical fixture-diff test for JSON Schema target in `packages/codegen/test/fixture.test.ts`
+- [X] T090 [P] [US5] Write failing test in `packages/codegen/test/us5a-jsonschema.test.ts`: for the `cardinality` fixture, generate `json-schema` target and assert `"type": "array", "minItems": 1` for `(1..*)`, `"minItems": 2, "maxItems": 5` for `(2..5)`, no `"maxItems"` for `(0..*)`, `"required"` contains `(1..1)` fields
+- [X] T091 [P] [US5] Write failing test: for the `enums` fixture, generate JSON Schema and assert `"enum": ["Buy", "Sell"]` shape; write failing meta-schema validation test using `ajv` that the output validates against `https://json-schema.org/draft/2020-12/schema`
+- [X] T092 [P] [US5] Create `packages/codegen/test/fixtures/cardinality/expected.schema.json` and `packages/codegen/test/fixtures/enums/expected.schema.json` (committed); write failing byte-identical fixture-diff test for JSON Schema target in `packages/codegen/test/fixture.test.ts`
 
 ### 7b. JSON Schema emitter implementation
 
-- [ ] T093 [US5] Create `packages/codegen/src/emit/json-schema-emitter.ts`: implement `emitNamespace(docs, emissionCtx): GeneratorOutput` producing one `*.schema.json` per namespace; emit `$schema`, `$id`, `title`, `$defs` object with one entry per type; cross-namespace type references use `$ref: '<otherFile>.schema.json#/$defs/TypeName'`
-- [ ] T094 [US5] Implement `emitTypeDef(data: Data, ctx: EmissionContext): object` in `packages/codegen/src/emit/json-schema-emitter.ts`: emit `"type": "object"`, `"properties"` object, `"required"` array for `(1..1)` attributes, `"additionalProperties": false`; handle `extends` via `"allOf": [{ "$ref": "#/$defs/Parent" }, { "properties": {...} }]`
-- [ ] T095 [US5] Implement cardinality encoding in `packages/codegen/src/emit/json-schema-emitter.ts`: `(1..*)` → `"type": "array", "minItems": 1`; `(n..m)` → `"type": "array", "minItems": n, "maxItems": m`; `(0..*)` → `"type": "array"` (no minItems/maxItems); enum attribute → `"$ref": "#/$defs/EnumName"`; `"enum"` def for `Enumeration` nodes
-- [ ] T096 [US5] Implement JSON Schema source mapping in `packages/codegen/src/emit/json-schema-emitter.ts`: populate `GeneratorOutput.sourceMap` with entries mapping JSON Pointer paths (`/$defs/TypeName`, `/properties/attrName`) to source locations per `contracts/studio-preview.md §Source-map coverage per target`
-- [ ] T097 [US5] Wire JSON Schema emitter into `packages/codegen/src/generator.ts` for `options.target === 'json-schema'`; `relativePath` suffix is `.schema.json`
+- [X] T093 [US5] Create `packages/codegen/src/emit/json-schema-emitter.ts`: implement `emitNamespace(docs, emissionCtx): GeneratorOutput` producing one `*.schema.json` per namespace; emit `$schema`, `$id`, `title`, `$defs` object with one entry per type; cross-namespace type references use `$ref: '<otherFile>.schema.json#/$defs/TypeName'`
+- [X] T094 [US5] Implement `emitTypeDef(data: Data, ctx: EmissionContext): object` in `packages/codegen/src/emit/json-schema-emitter.ts`: emit `"type": "object"`, `"properties"` object, `"required"` array for `(1..1)` attributes, `"additionalProperties": false`; handle `extends` via `"allOf": [{ "$ref": "#/$defs/Parent" }, { "properties": {...} }]`
+- [X] T095 [US5] Implement cardinality encoding in `packages/codegen/src/emit/json-schema-emitter.ts`: `(1..*)` → `"type": "array", "minItems": 1`; `(n..m)` → `"type": "array", "minItems": n, "maxItems": m`; `(0..*)` → `"type": "array"` (no minItems/maxItems); enum attribute → `"$ref": "#/$defs/EnumName"`; `"enum"` def for `Enumeration` nodes
+- [X] T096 [US5] Implement JSON Schema source mapping in `packages/codegen/src/emit/json-schema-emitter.ts`: populate `GeneratorOutput.sourceMap` with entries mapping JSON Pointer paths (`/$defs/TypeName`, `/properties/attrName`) to source locations per `contracts/studio-preview.md §Source-map coverage per target`
+- [X] T097 [US5] Wire JSON Schema emitter into `packages/codegen/src/generator.ts` for `options.target === 'json-schema'`; `relativePath` suffix is `.schema.json`
 
 ### 7c. Turn US5A tests GREEN
 
-- [ ] T098 [US5] Run `pnpm --filter @rune-langium/codegen test us5a-jsonschema` and iterate until the three JSON Schema tests (T090–T092) pass; commit `expected.schema.json` fixtures; activate CDM smoke `tsc --noEmit` for JSON Schema target in `cdm-smoke.test.ts`
+- [X] T098 [US5] Run `pnpm --filter @rune-langium/codegen test us5a-jsonschema` and iterate until the three JSON Schema tests (T090–T092) pass; commit `expected.schema.json` fixtures; activate CDM smoke `tsc --noEmit` for JSON Schema target in `cdm-smoke.test.ts`
 
 **Checkpoint**: Three JSON Schema tests green; `ajv` meta-schema validation passes; CDM JSON Schema smoke target activated.
 
@@ -319,26 +319,26 @@ accept/reject (per spec §US5 Independent Test).
 
 ### 8a. RED tests for US5B (write first, ensure they fail)
 
-- [ ] T099 [P] [US5] Write failing test in `packages/codegen/test/us5b-typescript.test.ts`: for the `basic-types` fixture generate TypeScript target and assert: `class` keyword present, `static from(` present, `isTypeName(` function present, ZERO occurrences of `from 'zod'`
-- [ ] T100 [P] [US5] Write failing test: for `inheritance` fixture generate TypeScript and assert `class Child extends Parent` (not `implements`); assert discriminator function `isChild(x: Parent): x is Child` is present
-- [ ] T101 [P] [US5] Write failing test: for `conditions-simple/one-of` fixture generate TypeScript and assert a `validateOneOf()` method on the class with return type `{ valid: boolean; errors: string[] }`; execute the method against valid/invalid payloads via dynamic import and assert correct accept/reject
-- [ ] T102 [P] [US5] Create `packages/codegen/test/fixtures/basic-types/expected.ts` and `packages/codegen/test/fixtures/inheritance/expected.ts` (committed); write failing byte-identical fixture-diff tests for TypeScript target in `packages/codegen/test/fixture.test.ts`
-- [ ] T103 [P] [US5] Write failing test asserting that the TypeScript-target output for the `conditions-simple/one-of` fixture and the Zod-target `z.infer<typeof Schema>` for the same fixture are structurally assignment-compatible for plain-data fields (spec §US5 Scenario 5)
+- [X] T099 [P] [US5] Write failing test in `packages/codegen/test/us5b-typescript.test.ts`: for the `basic-types` fixture generate TypeScript target and assert: `class` keyword present, `static from(` present, `isTypeName(` function present, ZERO occurrences of `from 'zod'`
+- [X] T100 [P] [US5] Write failing test: for `inheritance` fixture generate TypeScript and assert `class Child extends Parent` (not `implements`); assert discriminator function `isChild(x: Parent): x is Child` is present
+- [X] T101 [P] [US5] Write failing test: for `conditions-simple/one-of` fixture generate TypeScript and assert a `validateOneOf()` method on the class with return type `{ valid: boolean; errors: string[] }`; execute the method against valid/invalid payloads via dynamic import and assert correct accept/reject
+- [X] T102 [P] [US5] Create `packages/codegen/test/fixtures/basic-types/expected.ts` and `packages/codegen/test/fixtures/inheritance/expected.ts` (committed); write failing byte-identical fixture-diff tests for TypeScript target in `packages/codegen/test/fixture.test.ts`
+- [X] T103 [P] [US5] Write failing test asserting that the TypeScript-target output for the `conditions-simple/one-of` fixture and the Zod-target `z.infer<typeof Schema>` for the same fixture are structurally assignment-compatible for plain-data fields (spec §US5 Scenario 5)
 
 ### 8b. TypeScript class emitter implementation
 
-- [ ] T104 [US5] Create `packages/codegen/src/emit/ts-emitter.ts`: implement `emitNamespace(docs, ctx): GeneratorOutput` producing one `*.ts` per namespace; file header includes SPDX MIT, `RUNTIME_HELPER_SOURCE` (no `import { z }` line), and cross-namespace plain-TS imports; `relativePath` suffix is `.ts`
-- [ ] T105 [US5] Implement `emitInterface(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `export interface <TypeName>Shape { ... }` with each attribute as a typed field; map Rune types to TS primitives; encode cardinality as `optional?: T` / `T[]` / `T` (no Zod involved)
-- [ ] T106 [US5] Implement `emitClass(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `export class <TypeName> implements <TypeName>Shape` (or `extends <ParentName>` for inherited types); emit instance fields matching the interface; emit `private constructor(data: <TypeName>Shape)` body assigning all fields
-- [ ] T107 [US5] Implement `emitFromFactory(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `static from(json: unknown): <TypeName>` that calls `isTypeName(json)`, throws `TypeError` on failure, returns `new TypeName(json as <TypeName>Shape)`
-- [ ] T108 [US5] Implement `emitTypeGuard(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `export function is<TypeName>(x: unknown): x is <TypeName>` checking all required fields via `typeof` and `Array.isArray`; for inherited types also check `x instanceof Parent`
-- [ ] T109 [US5] Implement `emitDiscriminatorPredicate(child: Data, parent: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `export function is<ChildName>(x: <ParentName>): x is <ChildName>` with a structural check for child-specific fields
-- [ ] T110 [US5] Implement `emitValidateMethods(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: for each `condition <Name>` on the type, emit `validate<Name>(): { valid: boolean; errors: string[] }`; reuse `transpileCondition()` from `packages/codegen/src/expr/transpiler.ts` with `emitMode: 'ts-method'` (predicate pushes to local `errors` array instead of `ctx.addIssue`)
-- [ ] T111 [US5] Wire TypeScript emitter into `packages/codegen/src/generator.ts` for `options.target === 'typescript'`
+- [X] T104 [US5] Create `packages/codegen/src/emit/ts-emitter.ts`: implement `emitNamespace(docs, ctx): GeneratorOutput` producing one `*.ts` per namespace; file header includes SPDX MIT, `RUNTIME_HELPER_SOURCE` (no `import { z }` line), and cross-namespace plain-TS imports; `relativePath` suffix is `.ts`
+- [X] T105 [US5] Implement `emitInterface(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `export interface <TypeName>Shape { ... }` with each attribute as a typed field; map Rune types to TS primitives; encode cardinality as `optional?: T` / `T[]` / `T` (no Zod involved)
+- [X] T106 [US5] Implement `emitClass(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `export class <TypeName> implements <TypeName>Shape` (or `extends <ParentName>` for inherited types); emit instance fields matching the interface; emit `private constructor(data: <TypeName>Shape)` body assigning all fields
+- [X] T107 [US5] Implement `emitFromFactory(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `static from(json: unknown): <TypeName>` that calls `isTypeName(json)`, throws `TypeError` on failure, returns `new TypeName(json as <TypeName>Shape)`
+- [X] T108 [US5] Implement `emitTypeGuard(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `export function is<TypeName>(x: unknown): x is <TypeName>` checking all required fields via `typeof` and `Array.isArray`; for inherited types also check `x instanceof Parent`
+- [X] T109 [US5] Implement `emitDiscriminatorPredicate(child: Data, parent: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: emit `export function is<ChildName>(x: <ParentName>): x is <ChildName>` with a structural check for child-specific fields
+- [X] T110 [US5] Implement `emitValidateMethods(data: Data, ctx): string` in `packages/codegen/src/emit/ts-emitter.ts`: for each `condition <Name>` on the type, emit `validate<Name>(): { valid: boolean; errors: string[] }`; reuse `transpileCondition()` from `packages/codegen/src/expr/transpiler.ts` with `emitMode: 'ts-method'` (predicate pushes to local `errors` array instead of `ctx.addIssue`)
+- [X] T111 [US5] Wire TypeScript emitter into `packages/codegen/src/generator.ts` for `options.target === 'typescript'`
 
 ### 8c. Turn US5B tests GREEN
 
-- [ ] T112 [US5] Run `pnpm --filter @rune-langium/codegen test us5b-typescript` and iterate until all five TypeScript-target tests (T099–T103) pass; commit `expected.ts` fixtures; activate CDM smoke TypeScript `tsc --noEmit` test in `cdm-smoke.test.ts`; confirm zero `from 'zod'` in CDM TypeScript output
+- [X] T112 [US5] Run `pnpm --filter @rune-langium/codegen test us5b-typescript` and iterate until all five TypeScript-target tests (T099–T103) pass; commit `expected.ts` fixtures; activate CDM smoke TypeScript `tsc --noEmit` test in `cdm-smoke.test.ts`; confirm zero `from 'zod'` in CDM TypeScript output
 
 **Independent Test Checkpoint**: `pnpm rune-codegen /tmp/hello.rune --target typescript -o /tmp/out/`; `grep "from 'zod'" /tmp/out/hello/world.ts` returns nothing; `tsc --noEmit` passes; quickstart §4 TypeScript assertions all pass.
 

@@ -88,14 +88,16 @@ export interface ExpressionTranspilerContext {
    * The name of the `this` value in the emitted predicate.
    * In superRefine mode: `data` (the `.superRefine((data, ctx) =>` parameter).
    * In refine mode: `data` (the `.refine((data) =>` parameter).
+   * In ts-method mode: `this` (the class instance).
    */
   selfName: string;
   /**
    * How to emit errors.
    * 'zod-refine': predicate returns a boolean.
    * 'zod-superRefine': predicate calls ctx.addIssue({...}).
+   * 'ts-method': predicate pushes to a local `errors` array (no Zod dependency).
    */
-  emitMode: 'zod-refine' | 'zod-superRefine';
+  emitMode: 'zod-refine' | 'zod-superRefine' | 'ts-method';
   /**
    * The name of the condition being transpiled (for error messages).
    */
@@ -160,6 +162,12 @@ export function emitOneOf(attrNames: string[], ctx: ExpressionTranspilerContext)
     return `runeCheckOneOf([${attrList}])`;
   }
 
+  if (ctx.emitMode === 'ts-method') {
+    return [`if (!runeCheckOneOf([${attrList}])) {`, `  errors.push('${message}');`, `}`].join(
+      '\n'
+    );
+  }
+
   // superRefine mode
   return [
     `if (!runeCheckOneOf([${attrList}])) {`,
@@ -185,6 +193,12 @@ export function emitChoice(attrNames: string[], ctx: ExpressionTranspilerContext
 
   if (ctx.emitMode === 'zod-refine') {
     return `runeCheckOneOf([${attrList}])`;
+  }
+
+  if (ctx.emitMode === 'ts-method') {
+    return [`if (!runeCheckOneOf([${attrList}])) {`, `  errors.push('${message}');`, `}`].join(
+      '\n'
+    );
   }
 
   // superRefine mode
@@ -215,6 +229,14 @@ export function emitExists(attrName: string, ctx: ExpressionTranspilerContext): 
     return `runeAttrExists(${dataRef}.${attrName})`;
   }
 
+  if (ctx.emitMode === 'ts-method') {
+    return [
+      `if (!runeAttrExists(${dataRef}.${attrName})) {`,
+      `  errors.push('${message}');`,
+      `}`
+    ].join('\n');
+  }
+
   // superRefine mode
   return [
     `if (!runeAttrExists(${dataRef}.${attrName})) {`,
@@ -241,6 +263,14 @@ export function emitIsAbsent(attrName: string, ctx: ExpressionTranspilerContext)
 
   if (ctx.emitMode === 'zod-refine') {
     return `!runeAttrExists(${dataRef}.${attrName})`;
+  }
+
+  if (ctx.emitMode === 'ts-method') {
+    return [
+      `if (runeAttrExists(${dataRef}.${attrName})) {`,
+      `  errors.push('${message}');`,
+      `}`
+    ].join('\n');
   }
 
   // superRefine mode
@@ -285,6 +315,16 @@ export function emitOnlyExists(
       return `!runeAttrExists(${dataRef}.${forbiddenAttrs[0]})`;
     }
     return forbiddenAttrs.map((n) => `!runeAttrExists(${dataRef}.${n})`).join(' && ');
+  }
+
+  if (ctx.emitMode === 'ts-method') {
+    if (forbiddenAttrs.length === 0) {
+      return '// only-exists: no forbidden attributes';
+    }
+    const checks = forbiddenAttrs.map((n) =>
+      [`if (runeAttrExists(${dataRef}.${n})) {`, `  errors.push('${message}');`, `}`].join('\n')
+    );
+    return checks.join('\n');
   }
 
   // superRefine mode — emit one addIssue block per forbidden attr
@@ -566,12 +606,18 @@ function wrapBoolExprForMode(boolExpr: string, ctx: ExpressionTranspilerContext)
   if (ctx.emitMode === 'zod-refine') {
     return boolExpr;
   }
-  // superRefine mode
+
   const message = `${ctx.conditionName}: condition failed in ${ctx.typeName}`;
+  const negation = isSimpleFuncCall(boolExpr) ? `!${boolExpr}` : `!(${boolExpr})`;
+
+  if (ctx.emitMode === 'ts-method') {
+    return [`if (${negation}) {`, `  errors.push('${message}');`, `}`].join('\n');
+  }
+
+  // superRefine mode
   // Omit redundant parens when the expression is a single function call with
   // no top-level binary operators — matching oxfmt's no-redundant-parens style.
   // Use !(expr) for binary/comparison/logical expressions to preserve semantics.
-  const negation = isSimpleFuncCall(boolExpr) ? `!${boolExpr}` : `!(${boolExpr})`;
   return [
     `if (${negation}) {`,
     `  ctx.addIssue({`,
@@ -875,6 +921,21 @@ export function transpileConditional(
         `      message: '${message}',`,
         `      path: ['${ctx.conditionName}']`,
         `    });`,
+        `  }`,
+        `}`
+      ].join('\n');
+    }
+    return `// if-then: no consequent`;
+  }
+
+  if (ctx.emitMode === 'ts-method') {
+    if (consequentExpr) {
+      const consequentStr = transpileExpression(consequentExpr, ctx);
+      const message = `${ctx.conditionName}: condition failed in ${ctx.typeName}`;
+      return [
+        `if (${antecedent}) {`,
+        `  if (!(${consequentStr})) {`,
+        `    errors.push('${message}');`,
         `  }`,
         `}`
       ].join('\n');

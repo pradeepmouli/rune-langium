@@ -7,6 +7,7 @@ import type { GeneratorOutput, GeneratorOptions } from './types.js';
 import { GeneratorError } from './types.js';
 import { createDiagnostic, hasFatalDiagnostics } from './diagnostics.js';
 import { emitNamespace } from './emit/zod-emitter.js';
+import { emitNamespace as emitTsNamespace } from './emit/ts-emitter.js';
 
 /**
  * Group Langium documents by their namespace name.
@@ -69,19 +70,16 @@ export function runGenerate(docs: LangiumDocument[], options: GeneratorOptions):
 
     if (target === 'zod') {
       output = emitNamespace(namespaceDocs, namespace, options);
+    } else if (target === 'typescript') {
+      output = emitTsNamespace(namespaceDocs, namespace, options);
     } else {
-      // json-schema and typescript targets: not implemented in Phase 3
+      // json-schema target: handled by Phase 7
       output = {
-        relativePath:
-          namespace.replace(/\./g, '/') + (target === 'json-schema' ? '.schema.json' : '.ts'),
+        relativePath: namespace.replace(/\./g, '/') + '.schema.json',
         content: '',
         sourceMap: [],
         diagnostics: [
-          createDiagnostic(
-            'error',
-            'not-implemented',
-            `Target '${target}' is not implemented in Phase 3. Only 'zod' is supported.`
-          )
+          createDiagnostic('error', 'not-implemented', `Target '${target}' is not yet implemented.`)
         ],
         funcs: []
       };
