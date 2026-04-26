@@ -115,10 +115,13 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 ### `MetadataSectionProps`
 **Properties:**
 - `readOnly: boolean` (optional) — Whether the metadata section is read-only.
-- `onDefinitionCommit: (definition: string) => void` — Called when definition changes (debounced commit to graph).
-- `onCommentsCommit: (comments: string) => void` — Called when comments change (debounced commit to graph).
-- `onSynonymAdd: (synonym: string) => void` — Called when a synonym is added (immediate commit to graph).
-- `onSynonymRemove: (index: number) => void` — Called when a synonym is removed by index (immediate commit to graph).
+- `onDefinitionCommit: (definition: string) => void` (optional) — Called when definition changes (debounced commit to graph).
+- `onCommentsCommit: (comments: string) => void` (optional) — Called when comments change (debounced commit to graph).
+- `onSynonymAdd: (synonym: string) => void` (optional) — Called when a synonym is added (immediate commit to graph).
+- `onSynonymRemove: (index: number) => void` (optional) — Called when a synonym is removed by index (immediate commit to graph).
+- `fields: string[]` (optional) — z2f-host-supplied list of field paths this section groups (declarative
+path). Optional and intentionally unused at render time per
+`section-component.md` §3 — the section knows its field set.
 
 ## AttributeRow
 
@@ -344,14 +347,5 @@ Maps each `TypeKind` to its form actions interface.
 - `annotation: CommonFormActions`
 
 ### `AllEditorFormActions`
-Intersection of all kind-specific actions (every method available).
-```ts
-DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions
-```
-
-### `EditorFormActions`
-Kind-aware editor form actions.
-
-When parameterized with a specific kind (e.g. `EditorFormActions<'data'>`),
 
 <!-- truncated -->
