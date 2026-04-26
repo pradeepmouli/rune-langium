@@ -10,6 +10,9 @@ on:
       - 'packages/codegen/**'
       - 'packages/core/**'
 
+permissions:
+  contents: read
+
 jobs:
   fixture-diff:
     runs-on: ubuntu-latest

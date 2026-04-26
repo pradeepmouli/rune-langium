@@ -2,10 +2,10 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 // Performance baseline (T132, SC-006):
-// `rune-codegen packages/curated-schema/fixtures/cdm/ --target zod` = N/A wall time
-// CDM fixture directory (packages/curated-schema/fixtures/cdm/) does not yet exist;
+// Target: `rune-codegen packages/curated-schema/fixtures/cdm/ --target zod` must complete in < 30s.
+// CDM fixture directory (packages/curated-schema/fixtures/cdm/) does not yet exist locally;
 // CDM .rosetta files must be downloaded via `bash scripts/update-fixtures.sh` in CI.
-// < 30s gate will be enforced by the test below once fixtures are present.
+// Baseline measurement pending CDM fixture availability; < 30s gate enforced once fixtures are present.
 
 /**
  * CDM Smoke Test Suite.

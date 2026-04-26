@@ -155,7 +155,8 @@ describe('fixture determinism (SC-007)', () => {
       const run1 = generate([doc], { target: 'zod' });
       const run2 = generate([doc], { target: 'zod' });
       for (let i = 0; i < run1.length; i++) {
-        expect(run1[i]!.content, `${entry}[${i}]: second run differed`).toBe(run2[i]!.content);
+        expect(run2[i], `${entry}[${i}]: second run produced fewer outputs`).toBeDefined();
+        expect(run1[i]?.content, `${entry}[${i}]: second run differed`).toBe(run2[i]?.content);
       }
       checked++;
     }
