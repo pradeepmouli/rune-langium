@@ -12,7 +12,7 @@ import type { WorkspaceFile, WorkspaceLoadProgress } from '../services/workspace
 import { createBlankWorkspaceFile, readFileList } from '../services/workspace.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { cn } from '@rune-langium/design-system/utils';
-import { GitHubConnectDialog } from './GitHubConnectDialog.js';
+import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
 
 export interface FileLoaderProps {
   onFilesLoaded: (files: WorkspaceFile[]) => void;
@@ -26,6 +26,25 @@ export interface FileLoaderProps {
    * production same-origin path; tests inject their own.
    */
   githubAuthBase?: string;
+  /**
+   * Inject a workspace-creation function for the GitHub flow (T032e).
+   * Production callers pass a thin wrapper around
+   * `WorkspaceManager.createGitBacked`. Tests can stub this to avoid
+   * mounting a real OPFS root. When omitted, the GitHub flow stops at
+   * the auth step (FileLoader's own tests cover that legacy shape).
+   */
+  createGitBackedWorkspace?: (input: {
+    name: string;
+    repoUrl: string;
+    branch: string;
+    user: string;
+    token: string;
+  }) => Promise<{ id: string }>;
+  /**
+   * Notified when the GitHub flow successfully creates a workspace.
+   * App.tsx swaps to that workspace via WorkspaceManager.open(id).
+   */
+  onGitHubWorkspaceCreated?: (workspaceId: string) => void;
 }
 
 function defaultGithubAuthBase(): string {
@@ -33,7 +52,13 @@ function defaultGithubAuthBase(): string {
   return `${origin}/rune-studio/api/github-auth`;
 }
 
-export function FileLoader({ onFilesLoaded, existingFiles = [], githubAuthBase }: FileLoaderProps) {
+export function FileLoader({
+  onFilesLoaded,
+  existingFiles = [],
+  githubAuthBase,
+  createGitBackedWorkspace,
+  onGitHubWorkspaceCreated
+}: FileLoaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [loadProgress, setLoadProgress] = useState<WorkspaceLoadProgress | null>(null);
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
@@ -162,10 +187,10 @@ export function FileLoader({ onFilesLoaded, existingFiles = [], githubAuthBase }
         )}
 
         {isGitHubOpen && (
-          // Phase 6 T031 — visible affordance lands; auth tokens flow into
-          // workspace creation via T032 once cloneRepository / createGitBacked
-          // scaffolding lands. For now the dialog completes auth and closes;
-          // a follow-up task surfaces the cloned tree.
+          // T031 visible affordance + T032e end-to-end clone wiring
+          // (when createGitBackedWorkspace is supplied). Without it the
+          // flow stops at auth; FileLoader-github.test.tsx asserts that
+          // legacy shape.
           <div
             role="presentation"
             className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
@@ -174,15 +199,29 @@ export function FileLoader({ onFilesLoaded, existingFiles = [], githubAuthBase }
             }}
           >
             <div className="bg-popover border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
-              <GitHubConnectDialog
-                authBase={authBase}
-                onConnected={() => {
-                  // Phase 6 follow-up will pipe the token into
-                  // WorkspaceManager.createGitBacked. For now: close + flag.
-                  setIsGitHubOpen(false);
-                }}
-                onCancel={() => setIsGitHubOpen(false)}
-              />
+              {createGitBackedWorkspace ? (
+                <GitHubWorkspaceFlow
+                  authBase={authBase}
+                  createWorkspace={createGitBackedWorkspace}
+                  onCreated={(id) => {
+                    setIsGitHubOpen(false);
+                    onGitHubWorkspaceCreated?.(id);
+                  }}
+                  onCancel={() => setIsGitHubOpen(false)}
+                />
+              ) : (
+                // Legacy auth-only path — kept for tests + for any
+                // mount-site that hasn't wired createGitBackedWorkspace
+                // yet (e.g. App.tsx before its WorkspaceManager wiring).
+                <GitHubWorkspaceFlow
+                  authBase={authBase}
+                  createWorkspace={async () => {
+                    throw new Error('Workspace creation not wired in this mount');
+                  }}
+                  onCreated={() => setIsGitHubOpen(false)}
+                  onCancel={() => setIsGitHubOpen(false)}
+                />
+              )}
             </div>
           </div>
         )}
