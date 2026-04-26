@@ -136,6 +136,38 @@ describe('useModelStore — archiveLoader DI (T015)', () => {
     expect(gitCloneSpy).not.toHaveBeenCalled();
   });
 
+  it('legacy git path throws when archiveUrl is missing AND legacyGitPathEnabled=false (T017)', async () => {
+    // The store passes through to the real model-loader for non-curated
+    // sources. With the FR-019 gate landed in T017, that path MUST throw
+    // a ModelLoadError before reaching git.clone().
+    vi.resetModules();
+    // Restore real model-loader for this case so we exercise the gate.
+    vi.doUnmock('../../src/services/model-loader.js');
+    vi.doMock('../../src/config.js', () => ({
+      config: {
+        legacyGitPathEnabled: false,
+        // The rest of the fields aren't read by model-loader.ts; satisfy
+        // TypeScript by providing the same shape.
+        lspWsUrl: 'ws://localhost:3001',
+        lspSessionUrl: 'http://localhost:3001/lsp/session',
+        telemetryEndpoint: 'http://localhost:5173/api/telemetry/v1/event',
+        devMode: true
+      },
+      studioConfig: { homeUrl: '', docsUrl: '', githubUrl: '' }
+    }));
+    const { loadModel } = await import('../../src/services/model-loader.js');
+    await expect(loadModel(CUSTOM_SOURCE)).rejects.toMatchObject({
+      code: 'NETWORK',
+      message: expect.stringMatching(/legacy git path is disabled/i)
+    });
+    expect(gitCloneSpy).not.toHaveBeenCalled();
+    // Re-mock so the rest of the suite continues to use loadModelMock.
+    vi.doMock('../../src/services/model-loader.js', () => ({
+      loadModel: (source: ModelSource, options: unknown) => loadModelMock(source, options)
+    }));
+    vi.doUnmock('../../src/config.js');
+  });
+
   it('archiveLoader callback delegates to the injected loadCuratedModelImpl', async () => {
     const fakeLoadCurated = vi.fn().mockResolvedValue({
       modelId: 'cdm',
