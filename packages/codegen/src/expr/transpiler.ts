@@ -5,10 +5,18 @@
  * Expression transpiler for Rune condition blocks.
  *
  * Phase 4 covers: one-of, choice, exists, is absent, only exists.
- * Phase 5 will add the full expression-language transpiler.
+ * Phase 5 adds the full expression-language transpiler (T067–T075):
+ *   literals, navigation, arithmetic, comparison, boolean, set-ops,
+ *   aggregations, higher-order (filter/map), and conditional (if/then/else).
  *
- * T052–T054.
- * FR-010 (refine vs superRefine), FR-014 (error messages), FR-025 (unknown attr).
+ * T052–T054 (Phase 4), T067–T075 (Phase 5).
+ * FR-010 (refine vs superRefine), FR-012 (all expression forms),
+ * FR-013 (optional chaining for navigation), FR-014 (error messages),
+ * FR-025 (unknown attr), SC-003 (≥99% Python parity).
+ *
+ * Operator-precedence table from:
+ *   packages/visual-editor/src/adapters/expression-node-to-dsl.ts
+ * Copied verbatim to avoid drift.
  */
 
 import {
@@ -18,10 +26,58 @@ import {
   isRosettaAbsentExpression,
   isRosettaOnlyExistsExpression,
   isRosettaSymbolReference,
+  isArithmeticOperation,
+  isComparisonOperation,
+  isEqualityOperation,
+  isLogicalOperation,
+  isRosettaContainsExpression,
+  isRosettaDisjointExpression,
+  isRosettaCountOperation,
+  isDistinctOperation,
+  isFilterOperation,
+  isFirstOperation,
+  isFlattenOperation,
+  isLastOperation,
+  isMapOperation,
+  isMaxOperation,
+  isMinOperation,
+  isReverseOperation,
+  isSortOperation,
+  isSumOperation,
+  isRosettaFeatureCall,
+  isRosettaDeepFeatureCall,
+  isRosettaConditionalExpression,
+  isRosettaBooleanLiteral,
+  isRosettaIntLiteral,
+  isRosettaNumberLiteral,
+  isRosettaStringLiteral,
+  isRosettaImplicitVariable,
   type Condition,
   type RosettaExpression
 } from '@rune-langium/core';
 import type { GeneratorDiagnostic } from '../types.js';
+
+// ---------------------------------------------------------------------------
+// Operator precedence table — copied from expression-node-to-dsl.ts (prior art).
+// Lower number = lower precedence = binds less tightly.
+// ---------------------------------------------------------------------------
+const PRECEDENCE: Record<string, number> = {
+  or: 1,
+  and: 2,
+  '=': 3,
+  '<>': 3,
+  contains: 3,
+  disjoint: 3,
+  default: 3,
+  '<': 4,
+  '<=': 4,
+  '>': 4,
+  '>=': 4,
+  '+': 5,
+  '-': 5,
+  '*': 6,
+  '/': 6
+};
 
 /**
  * Context passed to the expression transpiler for a single condition block.
@@ -287,13 +343,19 @@ export function buildConditionMessage(cond: Condition, ctx: ExpressionTranspiler
   }
 
   if (isRosettaExistsExpression(expr)) {
-    const name = extractAttrName(expr.argument) ?? '?';
-    return `${ctx.conditionName}: ${name} must be present in ${ctx.typeName}`;
+    const name = extractAttrName(expr.argument);
+    if (name !== undefined) {
+      return `${ctx.conditionName}: ${name} must be present in ${ctx.typeName}`;
+    }
+    // Complex argument (navigation, filter, etc.) — fall through to default
   }
 
   if (isRosettaAbsentExpression(expr)) {
-    const name = extractAttrName(expr.argument) ?? '?';
-    return `${ctx.conditionName}: ${name} must be absent in ${ctx.typeName}`;
+    const name = extractAttrName(expr.argument);
+    if (name !== undefined) {
+      return `${ctx.conditionName}: ${name} must be absent in ${ctx.typeName}`;
+    }
+    // Complex argument — fall through to default
   }
 
   if (isRosettaOnlyExistsExpression(expr)) {
@@ -312,7 +374,7 @@ export function buildConditionMessage(cond: Condition, ctx: ExpressionTranspiler
     return `${ctx.conditionName}: only [${names.join(', ')}] may exist in ${ctx.typeName}`;
   }
 
-  return `${ctx.conditionName} failed`;
+  return `${ctx.conditionName}: condition failed in ${ctx.typeName}`;
 }
 
 /**
@@ -384,29 +446,42 @@ export function transpileCondition(cond: Condition, ctx: ExpressionTranspilerCon
   // exists: `a exists` → RosettaExistsExpression
   if (isRosettaExistsExpression(expr)) {
     const name = extractAttrName(expr.argument);
-    if (!name) {
-      ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unsupported-condition',
-        message: `exists condition in '${ctx.conditionName}' has no attribute reference`
-      });
-      return ctx.emitMode === 'zod-refine' ? 'true' : '// unsupported exists';
+    if (name) {
+      // Simple direct attribute reference — use Phase 4 handler
+      return emitExists(name, ctx);
     }
-    return emitExists(name, ctx);
+    // Phase 5: argument is a navigation chain or other expression
+    // → transpile to boolean expression and wrap for mode
+    if (expr.argument) {
+      const boolExpr = `runeAttrExists(${transpileExpression(expr.argument, ctx)})`;
+      return wrapBoolExprForMode(boolExpr, ctx);
+    }
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'unsupported-condition',
+      message: `exists condition in '${ctx.conditionName}' has no attribute reference`
+    });
+    return ctx.emitMode === 'zod-refine' ? 'true' : '// unsupported exists';
   }
 
   // is absent: `a is absent` → RosettaAbsentExpression
   if (isRosettaAbsentExpression(expr)) {
     const name = extractAttrName(expr.argument);
-    if (!name) {
-      ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unsupported-condition',
-        message: `is-absent condition in '${ctx.conditionName}' has no attribute reference`
-      });
-      return ctx.emitMode === 'zod-refine' ? 'true' : '// unsupported is-absent';
+    if (name) {
+      // Simple direct attribute reference — use Phase 4 handler
+      return emitIsAbsent(name, ctx);
     }
-    return emitIsAbsent(name, ctx);
+    // Phase 5: argument is a navigation chain or other expression
+    if (expr.argument) {
+      const boolExpr = `!runeAttrExists(${transpileExpression(expr.argument, ctx)})`;
+      return wrapBoolExprForMode(boolExpr, ctx);
+    }
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'unsupported-condition',
+      message: `is-absent condition in '${ctx.conditionName}' has no attribute reference`
+    });
+    return ctx.emitMode === 'zod-refine' ? 'true' : '// unsupported is-absent';
   }
 
   // only exists: `[a, b] only exists` → RosettaOnlyExistsExpression
@@ -443,11 +518,496 @@ export function transpileCondition(cond: Condition, ctx: ExpressionTranspilerCon
     return ctx.emitMode === 'zod-refine' ? 'true' : '// unsupported only-exists';
   }
 
-  // Unrecognized expression type — Phase 5 will cover these
+  // Phase 5: delegate to full expression transpiler for all other expression types.
+  // transpileExpression returns a boolean JS expression string.
+  const boolExpr = transpileExpression(expr, ctx);
+  return wrapBoolExprForMode(boolExpr, ctx);
+}
+
+/**
+ * Wrap a boolean JS expression string for the current emit mode.
+ *
+ * In zod-refine mode: return the expression as-is (used as predicate).
+ * In zod-superRefine mode: wrap in an if(!expr) { ctx.addIssue({...}) } block.
+ *
+ * T074.
+ */
+function wrapBoolExprForMode(boolExpr: string, ctx: ExpressionTranspilerContext): string {
+  if (ctx.emitMode === 'zod-refine') {
+    return boolExpr;
+  }
+  // superRefine mode
+  const message = `${ctx.conditionName}: condition failed in ${ctx.typeName}`;
+  return [
+    `if (!(${boolExpr})) {`,
+    `  ctx.addIssue({`,
+    `    code: 'custom',`,
+    `    message: '${message}',`,
+    `    path: ['${ctx.conditionName}']`,
+    `  });`,
+    `}`
+  ].join('\n');
+}
+
+// ============================================================================
+// Phase 5 — Full expression transpiler (T067–T075)
+// ============================================================================
+
+/**
+ * T067: Transpile literal expressions to JS literal equivalents.
+ *
+ * RosettaBooleanLiteral → true / false
+ * RosettaIntLiteral     → <number> (BigInt → Number conversion)
+ * RosettaNumberLiteral  → <number>
+ * RosettaStringLiteral  → '<escaped-string>'
+ */
+export function transpileLiteral(
+  expr: RosettaExpression,
+  _ctx: ExpressionTranspilerContext
+): string {
+  if (isRosettaBooleanLiteral(expr)) {
+    return expr.value ? 'true' : 'false';
+  }
+  if (isRosettaIntLiteral(expr)) {
+    // BigInt → number (generator uses number literals in JS output)
+    return String(Number(expr.value));
+  }
+  if (isRosettaNumberLiteral(expr)) {
+    return String(expr.value);
+  }
+  if (isRosettaStringLiteral(expr)) {
+    // JSON-escape and use single quotes
+    const escaped = expr.value
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t');
+    return `'${escaped}'`;
+  }
+  return 'undefined /* unknown literal */';
+}
+
+/**
+ * T068: Transpile navigation chains (a -> b -> c) to optional-chain JS.
+ *
+ * RosettaFeatureCall { receiver, feature } → receiver?.feature
+ * RosettaDeepFeatureCall { receiver, feature } → receiver?.feature  (deep is flat here)
+ *
+ * Uses ctx.selfName as the root binding (default 'data').
+ * FR-013: optional chaining for path navigation.
+ */
+export function transpileNavigation(
+  expr: RosettaExpression,
+  ctx: ExpressionTranspilerContext
+): string {
+  if (isRosettaFeatureCall(expr)) {
+    const receiver = transpileExpression(expr.receiver, ctx);
+    // RosettaFeature includes ChoiceOption which may not have a name field;
+    // use $refText (the cross-reference text) as the feature name.
+    const feature = expr.feature?.$refText ?? (expr.feature?.ref as { name?: string })?.name ?? '?';
+    return `${receiver}?.${feature}`;
+  }
+  if (isRosettaDeepFeatureCall(expr)) {
+    const receiver = transpileExpression(expr.receiver, ctx);
+    const feature = expr.feature?.$refText ?? (expr.feature?.ref as { name?: string })?.name ?? '?';
+    return `${receiver}?.${feature}`;
+  }
+  // Fallback
+  return transpileExpression(expr, ctx);
+}
+
+/**
+ * T069: Transpile arithmetic operations (+, -, *, /).
+ * Returns a JS infix expression string.
+ *
+ * Operator mapping: + → +, - → -, * → *, / → /
+ */
+export function transpileArithmetic(
+  expr: RosettaExpression,
+  ctx: ExpressionTranspilerContext
+): string {
+  if (!isArithmeticOperation(expr)) {
+    return 'undefined /* not ArithmeticOperation */';
+  }
+  const left = transpileWithPrecedence(expr.left, expr.operator, ctx, 'left');
+  const right = transpileWithPrecedence(expr.right, expr.operator, ctx, 'right');
+  return `${left} ${expr.operator} ${right}`;
+}
+
+/**
+ * T069: Transpile comparison operations (<, <=, >, >=) and equality (=, <>).
+ * Returns a JS boolean expression string.
+ *
+ * Operator mapping: = → ===, <> → !==, <, <=, >, >= → direct.
+ */
+export function transpileComparison(
+  expr: RosettaExpression,
+  ctx: ExpressionTranspilerContext
+): string {
+  if (isEqualityOperation(expr)) {
+    const jsOp = expr.operator === '=' ? '===' : '!==';
+    const left = expr.left
+      ? transpileWithPrecedence(expr.left, expr.operator, ctx, 'left')
+      : ctx.selfName;
+    const right = transpileWithPrecedence(expr.right, expr.operator, ctx, 'right');
+    return `${left} ${jsOp} ${right}`;
+  }
+  if (isComparisonOperation(expr)) {
+    const left = expr.left
+      ? transpileWithPrecedence(expr.left, expr.operator, ctx, 'left')
+      : ctx.selfName;
+    const right = transpileWithPrecedence(expr.right, expr.operator, ctx, 'right');
+    return `${left} ${expr.operator} ${right}`;
+  }
+  return 'undefined /* not a comparison */';
+}
+
+/**
+ * T070: Transpile boolean logical operations (and → &&, or → ||).
+ * Parenthesizes children when child precedence is lower than parent.
+ */
+export function transpileBoolean(
+  expr: RosettaExpression,
+  ctx: ExpressionTranspilerContext
+): string {
+  if (!isLogicalOperation(expr)) {
+    return 'undefined /* not LogicalOperation */';
+  }
+  const jsOp = expr.operator === 'and' ? '&&' : '||';
+  const left = transpileWithPrecedence(expr.left, expr.operator, ctx, 'left');
+  const right = transpileWithPrecedence(expr.right, expr.operator, ctx, 'right');
+  return `${left} ${jsOp} ${right}`;
+}
+
+/**
+ * T071: Transpile set operations.
+ *
+ * contains: (left ?? []).includes(right)
+ * disjoint: !(left ?? []).some(v => (right ?? []).includes(v))
+ */
+export function transpileSetOps(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (isRosettaContainsExpression(expr)) {
+    const right = transpileExpression(expr.right, ctx);
+    const left = expr.left ? transpileExpression(expr.left, ctx) : `(${ctx.selfName} ?? [])`;
+    return `(${left} ?? []).includes(${right})`;
+  }
+  if (isRosettaDisjointExpression(expr)) {
+    const right = transpileExpression(expr.right, ctx);
+    const left = expr.left ? transpileExpression(expr.left, ctx) : `(${ctx.selfName} ?? [])`;
+    return `!(${left} ?? []).some((v) => (${right} ?? []).includes(v))`;
+  }
+  return 'undefined /* not a set-op */';
+}
+
+/**
+ * T072: Transpile aggregation operations.
+ * Each operation handles null/undefined gracefully.
+ *
+ * count    → runeCount(arr)
+ * sum      → (arr ?? []).reduce((a, b) => a + b, 0)
+ * min      → Math.min(...(arr ?? []))
+ * max      → Math.max(...(arr ?? []))
+ * sort     → [...(arr ?? [])].sort()
+ * distinct → [...new Set(arr ?? [])]
+ * first    → (arr ?? [])[0]
+ * last     → (arr ?? []).at(-1)
+ * flatten  → (arr ?? []).flat()
+ * reverse  → [...(arr ?? [])].reverse()
+ */
+export function transpileAggregation(
+  expr: RosettaExpression,
+  ctx: ExpressionTranspilerContext
+): string {
+  // Helper: get the argument expression (or ctx.selfName if no argument)
+  const getArg = (arg: RosettaExpression | undefined): string =>
+    arg ? transpileExpression(arg, ctx) : ctx.selfName;
+
+  if (isRosettaCountOperation(expr)) {
+    return `runeCount(${getArg(expr.argument)})`;
+  }
+  if (isSumOperation(expr)) {
+    const arr = getArg(expr.argument);
+    return `(${arr} ?? []).reduce((a, b) => a + b, 0)`;
+  }
+  if (isMinOperation(expr)) {
+    // MinOperation can have a comparison function — simple case: Math.min
+    const arr = getArg(expr.argument);
+    return `Math.min(...(${arr} ?? []))`;
+  }
+  if (isMaxOperation(expr)) {
+    const arr = getArg(expr.argument);
+    return `Math.max(...(${arr} ?? []))`;
+  }
+  if (isSortOperation(expr)) {
+    const arr = getArg(expr.argument);
+    return `[...(${arr} ?? [])].sort()`;
+  }
+  if (isDistinctOperation(expr)) {
+    const arr = getArg(expr.argument);
+    return `[...new Set(${arr} ?? [])]`;
+  }
+  if (isFirstOperation(expr)) {
+    const arr = getArg(expr.argument);
+    return `(${arr} ?? [])[0]`;
+  }
+  if (isLastOperation(expr)) {
+    const arr = getArg(expr.argument);
+    return `(${arr} ?? []).at(-1)`;
+  }
+  if (isFlattenOperation(expr)) {
+    const arr = getArg(expr.argument);
+    return `(${arr} ?? []).flat()`;
+  }
+  if (isReverseOperation(expr)) {
+    const arr = getArg(expr.argument);
+    return `[...(${arr} ?? [])].reverse()`;
+  }
+  return 'undefined /* unknown aggregation */';
+}
+
+/**
+ * T073: Transpile higher-order operations (filter, map/extract).
+ *
+ * filter: (arr ?? []).filter((item) => <body>)
+ * map:    (arr ?? []).map((item) => <body>)
+ *
+ * The lambda body is transpiled with a child context where selfName = lambda param name.
+ */
+export function transpileHigherOrder(
+  expr: RosettaExpression,
+  ctx: ExpressionTranspilerContext
+): string {
+  if (isFilterOperation(expr)) {
+    const arr = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+    const fn = expr.function;
+    if (!fn) {
+      return `(${arr} ?? []).filter((item) => item)`;
+    }
+    const paramName = fn.parameters?.[0]?.name ?? 'item';
+    const childCtx: ExpressionTranspilerContext = { ...ctx, selfName: paramName };
+    const body = transpileExpression(fn.body, childCtx);
+    return `(${arr} ?? []).filter((${paramName}) => ${body})`;
+  }
+  if (isMapOperation(expr)) {
+    const arr = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+    const fn = expr.function;
+    if (!fn) {
+      return `(${arr} ?? []).map((item) => item)`;
+    }
+    const paramName = fn.parameters?.[0]?.name ?? 'item';
+    const childCtx: ExpressionTranspilerContext = { ...ctx, selfName: paramName };
+    const body = transpileExpression(fn.body, childCtx);
+    return `(${arr} ?? []).map((${paramName}) => ${body})`;
+  }
+  return 'undefined /* not a higher-order op */';
+}
+
+/**
+ * T074: Transpile conditional expressions (if antecedent then consequent [else alternative]).
+ *
+ * In zod-refine mode (returns boolean expression):
+ *   (<antecedent> ? <consequent> : true)
+ *   or with else: (<antecedent> ? <consequent> : <alternative>)
+ *
+ * In zod-superRefine mode (used as a condition guard block):
+ *   if (<antecedent>) { <consequent> }
+ *   (returns the guarded block directly — not wrapped by wrapBoolExprForMode)
+ *
+ * The antecedent and consequent are transpiled recursively.
+ */
+export function transpileConditional(
+  expr: RosettaExpression,
+  ctx: ExpressionTranspilerContext
+): string {
+  if (!isRosettaConditionalExpression(expr)) {
+    return 'undefined /* not RosettaConditionalExpression */';
+  }
+
+  const antecedent = expr.if ? transpileExpression(expr.if, ctx) : 'true';
+  const consequentExpr = expr.ifthen;
+  const alternativeExpr = expr.elsethen;
+
+  if (ctx.emitMode === 'zod-superRefine') {
+    // Guard block: the consequent is an existence/boolean check
+    if (consequentExpr) {
+      const consequentStr = transpileExpression(consequentExpr, ctx);
+      const message = `${ctx.conditionName}: condition failed in ${ctx.typeName}`;
+      return [
+        `if (${antecedent}) {`,
+        `  if (!(${consequentStr})) {`,
+        `    ctx.addIssue({`,
+        `      code: 'custom',`,
+        `      message: '${message}',`,
+        `      path: ['${ctx.conditionName}']`,
+        `    });`,
+        `  }`,
+        `}`
+      ].join('\n');
+    }
+    return `// if-then: no consequent`;
+  }
+
+  // zod-refine mode: emit as ternary
+  const consequent = consequentExpr ? transpileExpression(consequentExpr, ctx) : 'true';
+  const alternative = alternativeExpr ? transpileExpression(alternativeExpr, ctx) : 'true';
+  return `(${antecedent} ? ${consequent} : ${alternative})`;
+}
+
+/**
+ * T075: Top-level expression dispatcher.
+ *
+ * Routes based on expr.$type to the appropriate transpiler function.
+ * Returns a JS expression string (not a statement).
+ *
+ * Uses the visitor-pattern dispatch shape from expression-node-to-dsl.ts.
+ * FR-012: all Rune expression node types are handled.
+ */
+export function transpileExpression(
+  expr: RosettaExpression | undefined | null,
+  ctx: ExpressionTranspilerContext
+): string {
+  if (!expr) {
+    return 'undefined /* null expression */';
+  }
+
+  // Literals (T067)
+  if (
+    isRosettaBooleanLiteral(expr) ||
+    isRosettaIntLiteral(expr) ||
+    isRosettaNumberLiteral(expr) ||
+    isRosettaStringLiteral(expr)
+  ) {
+    return transpileLiteral(expr, ctx);
+  }
+
+  // Symbol reference — attribute or lambda parameter (T068 / T075)
+  if (isRosettaSymbolReference(expr)) {
+    const name = expr.symbol?.$refText ?? expr.symbol?.ref?.name ?? '?';
+    return `${ctx.selfName}.${name}`;
+  }
+
+  // Implicit variable (lambda parameter 'item')
+  if (isRosettaImplicitVariable(expr)) {
+    return ctx.selfName;
+  }
+
+  // Navigation (T068)
+  if (isRosettaFeatureCall(expr) || isRosettaDeepFeatureCall(expr)) {
+    return transpileNavigation(expr, ctx);
+  }
+
+  // Arithmetic (T069)
+  if (isArithmeticOperation(expr)) {
+    return transpileArithmetic(expr, ctx);
+  }
+
+  // Comparison and equality (T069)
+  if (isComparisonOperation(expr) || isEqualityOperation(expr)) {
+    return transpileComparison(expr, ctx);
+  }
+
+  // Boolean logical (T070)
+  if (isLogicalOperation(expr)) {
+    return transpileBoolean(expr, ctx);
+  }
+
+  // Set operations (T071)
+  if (isRosettaContainsExpression(expr) || isRosettaDisjointExpression(expr)) {
+    return transpileSetOps(expr, ctx);
+  }
+
+  // Aggregations (T072)
+  if (
+    isRosettaCountOperation(expr) ||
+    isSumOperation(expr) ||
+    isMinOperation(expr) ||
+    isMaxOperation(expr) ||
+    isSortOperation(expr) ||
+    isDistinctOperation(expr) ||
+    isFirstOperation(expr) ||
+    isLastOperation(expr) ||
+    isFlattenOperation(expr) ||
+    isReverseOperation(expr)
+  ) {
+    return transpileAggregation(expr, ctx);
+  }
+
+  // Higher-order (T073)
+  if (isFilterOperation(expr) || isMapOperation(expr)) {
+    return transpileHigherOrder(expr, ctx);
+  }
+
+  // Exists / absent (delegates to Phase 4 logic but as boolean expressions)
+  if (isRosettaExistsExpression(expr)) {
+    const arg = expr.argument;
+    if (arg) {
+      const argStr = transpileExpression(arg, ctx);
+      return `runeAttrExists(${argStr})`;
+    }
+    return `runeAttrExists(${ctx.selfName})`;
+  }
+
+  if (isRosettaAbsentExpression(expr)) {
+    const arg = expr.argument;
+    if (arg) {
+      const argStr = transpileExpression(arg, ctx);
+      return `!runeAttrExists(${argStr})`;
+    }
+    return `!runeAttrExists(${ctx.selfName})`;
+  }
+
+  // Conditional if/then/else (T074)
+  if (isRosettaConditionalExpression(expr)) {
+    return transpileConditional(expr, ctx);
+  }
+
+  // Unknown expression type — emit diagnostic and placeholder
   ctx.diagnostics.push({
-    severity: 'warning',
-    code: 'unsupported-condition',
-    message: `Condition '${ctx.conditionName}' uses expression type '${expr.$type}' which is not supported in Phase 4; skipping`
+    severity: 'error',
+    code: 'unknown-expression-type',
+    message: `Unknown expression type: ${(expr as { $type?: string }).$type}`
   });
-  return ctx.emitMode === 'zod-refine' ? 'true' : `// unsupported: ${expr.$type}`;
+  return `true /* DIAGNOSTIC: unknown expression type "${(expr as { $type?: string }).$type}" */`;
+}
+
+// ---------------------------------------------------------------------------
+// Precedence helpers (internal)
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the precedence of an expression node for parenthesization decisions.
+ */
+function getExprPrecedence(expr: RosettaExpression): number | undefined {
+  if (isArithmeticOperation(expr)) return PRECEDENCE[expr.operator];
+  if (isLogicalOperation(expr)) return PRECEDENCE[expr.operator];
+  if (isEqualityOperation(expr)) return PRECEDENCE[expr.operator];
+  if (isComparisonOperation(expr)) return PRECEDENCE[expr.operator];
+  if (isRosettaContainsExpression(expr)) return PRECEDENCE['contains'];
+  if (isRosettaDisjointExpression(expr)) return PRECEDENCE['disjoint'];
+  return undefined;
+}
+
+/**
+ * Transpile a sub-expression, wrapping in parentheses if needed for precedence.
+ * Used by binary operators (T069, T070).
+ *
+ * @param expr      The sub-expression to transpile.
+ * @param parentOp  The operator of the parent expression.
+ * @param ctx       Transpiler context.
+ * @param side      Whether this is the left or right operand (for future associativity).
+ */
+function transpileWithPrecedence(
+  expr: RosettaExpression,
+  parentOp: string,
+  ctx: ExpressionTranspilerContext,
+  _side: 'left' | 'right'
+): string {
+  const result = transpileExpression(expr, ctx);
+  const myPrec = getExprPrecedence(expr);
+  const parentPrec = PRECEDENCE[parentOp];
+  if (myPrec !== undefined && parentPrec !== undefined && myPrec < parentPrec) {
+    return `(${result})`;
+  }
+  return result;
 }

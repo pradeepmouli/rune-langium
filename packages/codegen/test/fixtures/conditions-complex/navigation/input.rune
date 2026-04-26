@@ -1,0 +1,10 @@
+namespace "test.cond.navigation"
+version "1"
+
+type Address:
+    city string (0..1)
+
+type Party:
+    address Address (0..1)
+    condition CityExists:
+        address -> city exists
