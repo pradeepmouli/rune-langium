@@ -4,49 +4,64 @@
 /**
  * TypeAliasForm — structured editor form for a TypeAlias node.
  *
- * Uses react-hook-form `FormProvider` with `useZodForm` for validation.
- * `useExternalSync` (upstream `@zod-to-form/react`) keeps form in sync with
- * external data changes when the caller swaps to a different node.
+ * Phase 5d / US3 of `013-z2f-editor-migration`. Applies the Phase-3
+ * z2f template:
  *
- * Sections:
- * 1. Header: editable name + "TypeAlias" badge
- * 2. Metadata: description, comments, synonyms (MetadataSection)
+ * - `useZodForm(RosettaTypeAliasSchema, …)` drives validation off the
+ *   canonical AST schema (per R1). The graph node is passed straight
+ *   into `defaultValues` (per R11) — no projection layer.
+ * - `useExternalSync(form, data, (n) => n)` re-binds pristine field
+ *   state when the host swaps to a different node (per R4). The
+ *   projection is identity since the form consumes the AST shape
+ *   directly.
+ * - `<EditorActionsProvider>` wraps the form body so any
+ *   declaratively-rendered section components (Phase 7 / US5) can
+ *   derive their commit callbacks from `EditorFormActions` + `nodeId`
+ *   without prop-drilling.
+ * - `useAutoSave(commitFn, 500)` is preserved verbatim per R8 — the
+ *   debounced rename action keeps its existing timing semantics.
+ *
+ * TypeAlias-specific surface:
+ *   1. **Header**: editable name + "TypeAlias" badge.
+ *   2. **Wrapped type** (the primary affordance): a `<TypeSelector>`
+ *      bound to `typeCall.type` of the AST node. The `typeCall.arguments`
+ *      path stays hidden (configured in `z2f.config.ts`).
  *
  * @module
  */
 
 import { useCallback, useRef } from 'react';
-import { FormProvider, Controller } from 'react-hook-form';
-import { Field, FieldError } from '@rune-langium/design-system/ui/field';
+import { FormProvider, Controller, useWatch } from 'react-hook-form';
+import { Field, FieldError, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
-import { MetadataSection } from './MetadataSection.js';
-import { AnnotationSection } from './AnnotationSection.js';
-import { ConditionSection } from './ConditionSection.js';
-import {
-  classExprSynonymsToStrings,
-  type ConditionDisplayInfo
-} from '../../adapters/model-helpers.js';
+import { TypeSelector } from './TypeSelector.js';
+import { TypeLink } from './TypeLink.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
-import { typeAliasFormSchema, type TypeAliasFormValues } from '../../schemas/form-schemas.js';
-import type { AnyGraphNode, EditorFormActions, ExpressionEditorSlotProps } from '../../types.js';
+import { z } from 'zod';
+import { RosettaTypeAliasSchema } from '../../generated/zod-schemas.js';
+import { EditorActionsProvider } from '../forms/sections/index.js';
+import type {
+  AnyGraphNode,
+  EditorFormActions,
+  ExpressionEditorSlotProps,
+  NavigateToNodeCallback,
+  TypeOption
+} from '../../types.js';
 import type { ReactNode } from 'react';
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Identity projection (R11)
 // ---------------------------------------------------------------------------
+//
+// The graph node IS the AST shape. `RosettaTypeAliasSchema` is a
+// `z.looseObject`, so any extra graph-only keys (`namespace`, `position`,
+// `errors`, …) are accepted as extras with zero runtime cost. There is no
+// `toFormValues` projection — the upstream `useExternalSync` accepts an
+// identity function directly.
 
-/** Convert AnyGraphNode to form-managed values. */
-function toFormValues(data: AnyGraphNode): TypeAliasFormValues {
-  const d = data as any;
-  return {
-    name: d.name ?? '',
-    definition: d.definition ?? '',
-    comments: d.comments ?? '',
-    synonyms: classExprSynonymsToStrings(d.synonyms)
-  };
-}
+const identity = <T,>(n: T): T => n;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -59,27 +74,54 @@ export interface TypeAliasFormProps {
   data: AnyGraphNode;
   /** TypeAlias editor form action callbacks. */
   actions: EditorFormActions<'typeAlias'>;
-  /** Optional render-prop for a rich expression editor. */
+  /** Available type options for the wrapped-type selector. */
+  availableTypes?: TypeOption[];
+  /** Optional render-prop for a rich expression editor (parity slot — unused for TypeAlias). */
   renderExpressionEditor?: (props: ExpressionEditorSlotProps) => ReactNode;
+  /** Callback to navigate to a type's graph node. */
+  onNavigateToNode?: NavigateToNodeCallback;
+  /** All loaded graph node IDs for resolving type name to node ID. */
+  allNodeIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-function TypeAliasForm({ nodeId, data, actions, renderExpressionEditor }: TypeAliasFormProps) {
-  const d = data as any;
-  // ---- Form setup (useZodForm + upstream useExternalSync, R4) -------------
+function TypeAliasForm({
+  nodeId,
+  data,
+  actions,
+  availableTypes = [],
+  onNavigateToNode,
+  allNodeIds
+}: TypeAliasFormProps) {
+  // ---- Form setup (useZodForm + upstream useExternalSync, R11 / R4) -------
+  // Drive validation off the canonical AST schema; pass the graph node
+  // straight into `defaultValues` (RosettaTypeAliasSchema is a
+  // z.looseObject so any graph-only keys are accepted as extras).
 
-  const { form } = useZodForm(typeAliasFormSchema, {
-    defaultValues: toFormValues(data),
+  const { form } = useZodForm(RosettaTypeAliasSchema, {
+    // RosettaTypeAliasSchema is z.looseObject — extra graph-only keys
+    // are accepted as extras. The double-cast covers the typed gap
+    // between the AnyGraphNode runtime shape and z2f's parameterized
+    // `Partial<output<Schema>>` constraint.
+    defaultValues: data as unknown as Partial<z.output<typeof RosettaTypeAliasSchema>>,
     mode: 'onChange'
   });
 
-  // Re-bind pristine field state when the caller swaps to a different node.
-  useExternalSync(form, data, toFormValues, { keepDirty: true });
+  // Re-bind pristine field state when the caller swaps to a different node
+  // (object identity is the contract). `keepDirty: true` preserves the
+  // pre-migration `keepDirtyValues: true` semantics so in-flight user
+  // edits are not stomped by a graph push.
+  useExternalSync(
+    form,
+    data,
+    identity as (n: typeof data) => z.output<typeof RosettaTypeAliasSchema>,
+    { keepDirty: true }
+  );
 
-  // Track the committed data for diffing
+  // Track committed (graph-confirmed) data for diffing
   const committedRef = useRef(data);
   committedRef.current = data;
 
@@ -96,149 +138,110 @@ function TypeAliasForm({ nodeId, data, actions, renderExpressionEditor }: TypeAl
 
   const debouncedName = useAutoSave(commitName, 500);
 
-  // ---- Metadata callbacks --------------------------------------------------
+  // ---- Wrapped-type selector (TypeAlias-specific primary affordance) ------
+  //
+  // Selecting a type updates the form's `typeCall.type` so subsequent
+  // graph commits (and visual snapshot of the form) reflect the new
+  // wrapped type. The graph-mutation surface for TypeAlias does not
+  // expose a dedicated "set wrapped type" action today — the form-state
+  // update is the visible behaviour. A future extension may funnel this
+  // through a dedicated action without changing the JSX.
 
-  const commitDefinition = useCallback(
-    (def: string) => {
-      actions.updateDefinition(nodeId, def);
+  const handleTypeSelect = useCallback(
+    (value: string | null) => {
+      const label = value ? (availableTypes.find((opt) => opt.value === value)?.label ?? '') : '';
+      // Update the form's typeCall.type — RHF tolerates the looseObject
+      // extras at the nested `type` key.
+      form.setValue('typeCall.type' as never, { $refText: label } as never, { shouldDirty: true });
     },
-    [nodeId, actions]
+    [availableTypes, form]
   );
 
-  const commitComments = useCallback(
-    (comments: string) => {
-      actions.updateComments(nodeId, comments);
-    },
-    [nodeId, actions]
-  );
+  // ---- Resolve current wrapped-type for display ----------------------------
+  //
+  // Prefer the live form state so the selector reflects in-flight edits;
+  // fall back to the AST node when the form has not yet observed the
+  // typeCall path (initial render before any edit).
 
-  const handleAddSynonym = useCallback(
-    (synonym: string) => {
-      actions.addSynonym(nodeId, synonym);
-    },
-    [nodeId, actions]
-  );
-
-  const handleRemoveSynonym = useCallback(
-    (index: number) => {
-      actions.removeSynonym(nodeId, index);
-    },
-    [nodeId, actions]
-  );
-
-  // ---- Annotation callbacks ------------------------------------------------
-
-  const handleAddAnnotation = useCallback(
-    (annotationName: string) => {
-      actions.addAnnotation(nodeId, annotationName);
-    },
-    [nodeId, actions]
-  );
-
-  const handleRemoveAnnotation = useCallback(
-    (index: number) => {
-      actions.removeAnnotation(nodeId, index);
-    },
-    [nodeId, actions]
-  );
-
-  // ---- Condition callbacks -------------------------------------------------
-
-  const handleAddCondition = useCallback(
-    (condition: {
-      name?: string;
-      definition?: string;
-      expressionText: string;
-      isPostCondition?: boolean;
-    }) => {
-      actions.addCondition(nodeId, condition);
-    },
-    [nodeId, actions]
-  );
-
-  const handleRemoveCondition = useCallback(
-    (index: number) => {
-      actions.removeCondition(nodeId, index);
-    },
-    [nodeId, actions]
-  );
-
-  const handleUpdateCondition = useCallback(
-    (index: number, updates: Partial<ConditionDisplayInfo>) => {
-      actions.updateCondition(nodeId, index, updates);
-    },
-    [nodeId, actions]
-  );
-
-  const handleReorderCondition = useCallback(
-    (fromIndex: number, toIndex: number) => {
-      actions.reorderCondition(nodeId, fromIndex, toIndex);
-    },
-    [nodeId, actions]
-  );
+  const watchedTypeRef = useWatch({
+    control: form.control,
+    name: 'typeCall.type' as never
+  }) as { $refText?: string } | undefined;
+  const dataTypeRef = (data as { typeCall?: { type?: { $refText?: string } } }).typeCall?.type
+    ?.$refText;
+  const currentTypeLabel = watchedTypeRef?.$refText ?? dataTypeRef ?? '';
+  const currentTypeValue = currentTypeLabel
+    ? (availableTypes.find((opt) => opt.label === currentTypeLabel)?.value ?? null)
+    : null;
 
   // ---- Render --------------------------------------------------------------
 
   return (
-    <FormProvider {...form}>
-      <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
-        {/* Header: Name + Badge */}
-        <div data-slot="form-header" className="flex items-center gap-2">
-          <Controller
-            control={form.control}
-            name="name"
-            render={({ field, fieldState }) => (
-              <Field className="flex-1">
-                <Input
-                  {...field}
-                  id={field.name}
-                  data-slot="type-name-input"
-                  aria-invalid={fieldState.invalid}
-                  onChange={(e) => {
-                    field.onChange(e);
-                    debouncedName(e.target.value);
-                  }}
-                  className="text-lg font-semibold bg-transparent border-b border-transparent
-                    focus-visible:border-input focus-visible:ring-0 shadow-none
-                    px-1 py-0.5 h-auto rounded-none"
-                  placeholder="Type alias name"
-                  aria-label="Type alias name"
-                />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
+    <EditorActionsProvider
+      nodeId={nodeId}
+      // EditorActionsContextValue holds the unparameterized
+      // EditorFormActions (the full intersection) so any registered
+      // section can call any method without per-kind narrowing. The
+      // typeAlias surface only implements `CommonFormActions`; the
+      // upcast is safe because section components only call methods
+      // present on `CommonFormActions` (definition / comments /
+      // synonyms / annotations / conditions).
+      actions={actions as unknown as EditorFormActions}
+    >
+      <FormProvider {...form}>
+        <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
+          {/* Header: Name + Badge */}
+          <div data-slot="form-header" className="flex items-center gap-2">
+            <Controller
+              control={form.control}
+              name="name"
+              render={({ field, fieldState }) => (
+                <Field className="flex-1">
+                  <Input
+                    {...field}
+                    id={field.name}
+                    data-slot="type-name-input"
+                    aria-invalid={fieldState.invalid}
+                    onChange={(e) => {
+                      field.onChange(e);
+                      debouncedName(e.target.value);
+                    }}
+                    className="text-lg font-semibold bg-transparent border-b border-transparent
+                      focus-visible:border-input focus-visible:ring-0 shadow-none
+                      px-1 py-0.5 h-auto rounded-none"
+                    placeholder="Type alias name"
+                    aria-label="Type alias name"
+                  />
+                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                </Field>
+              )}
+            />
+            <Badge variant="typeAlias">TypeAlias</Badge>
+          </div>
+
+          {/* Wrapped type — the TypeAlias-specific primary affordance */}
+          <FieldSet className="gap-1.5">
+            <FieldLegend variant="label" className="mb-0 text-muted-foreground">
+              Wrapped type
+            </FieldLegend>
+            {currentTypeLabel && (
+              <TypeLink
+                typeName={currentTypeLabel}
+                onNavigateToNode={onNavigateToNode}
+                allNodeIds={allNodeIds}
+                className="text-sm font-mono mb-1"
+              />
             )}
-          />
-          <Badge variant="typeAlias">TypeAlias</Badge>
+            <TypeSelector
+              value={currentTypeValue ?? ''}
+              options={availableTypes}
+              onSelect={handleTypeSelect}
+              placeholder="Select wrapped type..."
+            />
+          </FieldSet>
         </div>
-
-        {/* Conditions */}
-        <ConditionSection
-          label="Conditions"
-          conditions={d.conditions}
-          readOnly={d.isReadOnly}
-          onAdd={handleAddCondition}
-          onRemove={handleRemoveCondition}
-          onUpdate={handleUpdateCondition}
-          onReorder={handleReorderCondition}
-          renderExpressionEditor={renderExpressionEditor}
-        />
-
-        {/* Annotations */}
-        <AnnotationSection
-          annotations={d.annotations}
-          onAdd={handleAddAnnotation}
-          onRemove={handleRemoveAnnotation}
-        />
-
-        {/* Metadata */}
-        <MetadataSection
-          onDefinitionCommit={commitDefinition}
-          onCommentsCommit={commitComments}
-          onSynonymAdd={handleAddSynonym}
-          onSynonymRemove={handleRemoveSynonym}
-        />
-      </div>
-    </FormProvider>
+      </FormProvider>
+    </EditorActionsProvider>
   );
 }
 
