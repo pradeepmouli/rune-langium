@@ -559,12 +559,12 @@ function emitConditionBlock(conditions: Condition[], data: Data, ctx: EmissionCo
     const transpilerCtx = buildTranspilerContext(data, 'zod-refine', condName, ctx);
     const predicate = transpileCondition(cond, transpilerCtx);
     const message = buildConditionMessage(cond, transpilerCtx);
-    // Use inline form when the full chained line fits within 87 chars.
+    // Use inline form when the full chained line fits within 88 chars.
     // The chain is indented 2 spaces in emitTypeSchema, so the full line is:
     //   "  .refine((data) => <pred>, '<msg>');"
     // = 2 + ".refine((data) => ".length + pred.length + ", '".length + msg.length + "');" = ?
     const inlineLine = `  .refine((data) => ${predicate}, '${message}');`;
-    if (!predicate.includes('\n') && inlineLine.length <= 87) {
+    if (!predicate.includes('\n') && inlineLine.length <= 88) {
       return `.refine((data) => ${predicate}, '${message}')`;
     }
     return [`.refine(`, `  (data) => ${predicate},`, `  '${message}'`, `)`].join('\n');
