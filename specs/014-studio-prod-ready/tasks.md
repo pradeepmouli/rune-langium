@@ -110,7 +110,7 @@ the editor appears.
 
 - [X] T027 [P] [US2] Write failing test at `apps/studio/test/components/App-restore.test.tsx` covering: (a) fresh profile → start page renders, (b) one workspace recently used → workspace restored at mount, (c) recent workspace exists but its OPFS handle is gone → fall back to start page with the recents list rendered (so user can pick a different one)
 - [X] T028 [US2] Modify `apps/studio/src/App.tsx` mount-time logic to call `listRecents()` from `apps/studio/src/workspace/persistence.ts` BEFORE rendering `<FileLoader>`; if a most-recent workspace exists AND its OPFS root is reachable, restore via `WorkspaceManager.open(record.id)`; otherwise show start page with recents listed (R5)
-- [ ] T029 [P] [US2] Mount `<WorkspaceSwitcher>` (already exists in `apps/studio/src/components/WorkspaceSwitcher.tsx`) on the start page above the curated-models row; surfaces recents with their kind and `lastOpenedAt` for FR-011
+- [X] T029 [P] [US2] Mount `<WorkspaceSwitcher>` (already exists in `apps/studio/src/components/WorkspaceSwitcher.tsx`) on the start page above the curated-models row; surfaces recents with their kind and `lastOpenedAt` for FR-011
 - [ ] T030 [US2] Manual smoke: load a workspace, modify a file, reload; verify the workspace restores within 5s (Chrome DevTools Performance tab); attach a perf trace to the implementation PR for the SC-002 baseline
 
 **Checkpoint**: SC-002 (5s restore), SC-008 (90% day-2 recovery — measurable post-deploy via telemetry counters).

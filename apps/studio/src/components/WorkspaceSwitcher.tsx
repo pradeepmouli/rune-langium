@@ -39,23 +39,29 @@ export function WorkspaceSwitcher({ onOpen, onCreate, onDelete }: Props): React.
   return (
     <div data-testid="workspace-switcher">
       <Button onClick={onCreate}>New workspace</Button>
-      <ul>
-        {rows.map((row) => (
-          <li key={row.id} data-testid="workspace-row" data-id={row.id} data-kind={row.kind}>
-            <button type="button" onClick={() => onOpen(row.id)} aria-label={`Open ${row.name}`}>
-              {row.name}
-              <span> ({KIND_LABEL[row.kind]})</span>
-            </button>
-            <Button
-              variant="ghost"
-              onClick={() => handleDelete(row)}
-              aria-label={`Delete ${row.name}`}
-            >
-              ×
-            </Button>
-          </li>
-        ))}
-      </ul>
+      {rows.length === 0 ? (
+        <p data-testid="workspace-switcher-empty" className="text-sm text-muted-foreground">
+          No recent workspaces
+        </p>
+      ) : (
+        <ul>
+          {rows.map((row) => (
+            <li key={row.id} data-testid="workspace-row" data-id={row.id} data-kind={row.kind}>
+              <button type="button" onClick={() => onOpen(row.id)} aria-label={`Open ${row.name}`}>
+                {row.name}
+                <span> ({KIND_LABEL[row.kind]})</span>
+              </button>
+              <Button
+                variant="ghost"
+                onClick={() => handleDelete(row)}
+                aria-label={`Delete ${row.name}`}
+              >
+                ×
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

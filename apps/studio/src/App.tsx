@@ -13,6 +13,7 @@ import '@xyflow/react/dist/style.css';
 import '@rune-langium/visual-editor/styles.css';
 import { FileLoader } from './components/FileLoader.js';
 import { ModelLoader } from './components/ModelLoader.js';
+import { WorkspaceSwitcher } from './components/WorkspaceSwitcher.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
@@ -183,6 +184,35 @@ export function App() {
     setErrors(new Map());
   }, []);
 
+  /** Switch to a recent workspace from the start page list (T029). */
+  const handleSwitchWorkspace = useCallback(async (workspaceId: string) => {
+    try {
+      const ws = await persistence.loadWorkspace(workspaceId);
+      if (!ws) return;
+      setRestoredWorkspace(ws);
+      setBootState('restored');
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[App] switch workspace failed:', err);
+    }
+  }, []);
+
+  /** New-workspace affordance from the recents list — same path as FileLoader. */
+  const handleCreateWorkspace = useCallback(() => {
+    setBootState('start');
+    setRestoredWorkspace(null);
+  }, []);
+
+  /** Delete a recent workspace from the recents store (T029). */
+  const handleDeleteWorkspace = useCallback(async (workspaceId: string) => {
+    try {
+      await persistence.deleteWorkspace(workspaceId);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[App] delete workspace failed:', err);
+    }
+  }, []);
+
   // Merge reference model files into workspace when models change
   const loadedModels = useModelStore((s) => s.models);
   useEffect(() => {
@@ -257,6 +287,14 @@ export function App() {
         {bootState === 'start' && !loading && userFiles.length === 0 && (
           <div className="flex flex-col h-full">
             <FileLoader onFilesLoaded={handleFilesLoaded} existingFiles={files} />
+            {/* Recents list — above curated models per FR-011 / T029. */}
+            <div className="border-t px-8 py-6">
+              <WorkspaceSwitcher
+                onOpen={handleSwitchWorkspace}
+                onCreate={handleCreateWorkspace}
+                onDelete={handleDeleteWorkspace}
+              />
+            </div>
             <div className="border-t px-8 py-6">
               <ModelLoader />
             </div>
