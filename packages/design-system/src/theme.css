@@ -258,7 +258,10 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans);
+    /* T053 (FR-022) — body uses --font-display (Outfit) so Studio
+     * matches landing + docs. --font-sans (Inter) stays defined for
+     * any consumer that explicitly opts in (e.g. dense data UI). */
+    font-family: var(--font-display);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
