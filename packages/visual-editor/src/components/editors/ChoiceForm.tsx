@@ -33,8 +33,7 @@ import { ChoiceOptionRow } from './ChoiceOptionRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useZodForm } from '@zod-to-form/react';
-import { ExternalDataSync } from '../forms/ExternalDataSync.js';
+import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { choiceFormSchema, type ChoiceFormValues } from '../../schemas/form-schemas.js';
 import { getTypeRefText, classExprSynonymsToStrings } from '../../adapters/model-helpers.js';
 import { TypeLink } from './TypeLink.js';
@@ -99,12 +98,16 @@ function ChoiceForm({
   allNodeIds
 }: ChoiceFormProps) {
   const d = data as any;
-  // ---- Form setup (useZodForm + ExternalDataSync for external data sync) ---
+  // ---- Form setup (useZodForm + upstream useExternalSync, R4) -------------
 
   const { form } = useZodForm(choiceFormSchema, {
     defaultValues: toFormValues(data),
     mode: 'onChange'
   });
+
+  // Re-bind pristine field state when the caller swaps to a different node.
+  // `keepDirty: true` preserves the prior local-component semantics.
+  useExternalSync(form, data, toFormValues, { keepDirty: true });
 
   const { fields: _fields } = useFieldArray({
     control: form.control,
@@ -200,7 +203,6 @@ function ChoiceForm({
 
   return (
     <FormProvider {...form}>
-      <ExternalDataSync data={data} toValues={() => toFormValues(data)} />
       <div data-slot="choice-form" className="flex flex-col gap-4 p-4">
         {/* Header: Name + Badge */}
         <div data-slot="form-header" className="flex items-center gap-2">
