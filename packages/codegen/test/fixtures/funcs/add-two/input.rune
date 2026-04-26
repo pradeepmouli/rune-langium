@@ -1,0 +1,12 @@
+namespace "test.funcs.addtwo"
+version "1"
+
+func AddTwo:
+    inputs:
+        a int (1..1)
+        b int (1..1)
+    output:
+        r int (1..1)
+
+    set r:
+        a + b

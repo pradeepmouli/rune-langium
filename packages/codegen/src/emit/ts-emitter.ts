@@ -44,7 +44,22 @@ import type {
 import { buildTypeReferenceGraph, findCyclicTypes } from '../cycle-detector.js';
 import { topoSort } from '../topo-sort.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
-import { transpileCondition, type ExpressionTranspilerContext } from '../expr/transpiler.js';
+import {
+  transpileCondition,
+  transpileExpression,
+  type ExpressionTranspilerContext
+} from '../expr/transpiler.js';
+import {
+  extractFuncs,
+  buildFuncCallGraph,
+  findCyclicFuncs,
+  topoSortFuncs,
+  resolveFuncTypeTs,
+  type RuneFunc,
+  type RuneFuncAssignment,
+  type RuneFuncAlias,
+  type FuncBodyContext
+} from '../types/func.js';
 
 // ---------------------------------------------------------------------------
 // Internal emission context
@@ -563,6 +578,272 @@ function emitValidateMethods(data: Data, ctx: EmissionContext): string {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 8b: Func emission helpers (T120–T126)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the TypeScript input object type for a func's input parameters.
+ * e.g., { a: number; b: number } for two int inputs.
+ * T120, FR-028.
+ */
+function buildFuncInputType(func: RuneFunc): string {
+  if (func.inputs.length === 0) return 'Record<string, never>';
+  const fields = func.inputs
+    .map((p) => {
+      const tsType = resolveFuncTypeTs(p.typeName);
+      const isArray = p.cardinality.upper === null || p.cardinality.upper > 1;
+      const isOpt = p.cardinality.lower === 0;
+      if (isArray) {
+        return isOpt ? `${p.name}?: ${tsType}[]` : `${p.name}: ${tsType}[]`;
+      }
+      return isOpt ? `${p.name}?: ${tsType}` : `${p.name}: ${tsType}`;
+    })
+    .join('; ');
+  return `{ ${fields} }`;
+}
+
+/**
+ * Build the TypeScript return type for a func's output parameter.
+ * T120, FR-028.
+ */
+function buildFuncOutputType(func: RuneFunc): string {
+  const tsType = resolveFuncTypeTs(func.output.typeName);
+  const isArray = func.output.cardinality.upper === null || func.output.cardinality.upper > 1;
+  return isArray ? `${tsType}[]` : tsType;
+}
+
+/**
+ * Build a FuncBodyContext for the given func.
+ * selfName = 'input' so that RosettaSymbolReference to input attrs emits as `input.<attr>`.
+ * T120–T124.
+ */
+function buildFuncBodyContext(
+  func: RuneFunc,
+  callGraph: Map<string, Set<string>>,
+  diagnostics: GeneratorDiagnostic[]
+): FuncBodyContext {
+  const isArray = func.output.cardinality.upper === null || func.output.cardinality.upper > 1;
+
+  // Build alias bindings: alias name → emitted local variable name
+  const inputNames = new Set(func.inputs.map((p) => p.name));
+  const aliasBindings = new Map<string, string>();
+  for (const alias of func.aliases) {
+    const localName = inputNames.has(alias.name) ? `${alias.name}_alias` : alias.name;
+    aliasBindings.set(alias.name, localName);
+  }
+
+  // Build attributeTypes for condition validation (inputs + output)
+  const attributeTypes = new Map<string, string>();
+  for (const p of func.inputs) {
+    attributeTypes.set(p.name, p.typeName);
+  }
+  attributeTypes.set(func.output.name, func.output.typeName);
+
+  return {
+    selfName: 'input',
+    emitMode: 'ts-method',
+    conditionName: func.name,
+    typeName: func.name,
+    attributeTypes,
+    diagnostics,
+    localBindings: aliasBindings,
+    currentFunc: func,
+    outputAccumulator: isArray ? 'array' : 'scalar',
+    aliasBindings,
+    callGraph
+  };
+}
+
+/**
+ * T120: Emit a single set or add assignment statement.
+ *
+ * set → `result = <expr>;`
+ * add → `result.push(<expr>);`
+ */
+function emitFuncSet(assignment: RuneFuncAssignment, ctx: FuncBodyContext): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const exprStr = transpileExpression(assignment.exprNode as any, ctx);
+  if (assignment.kind === 'add') {
+    return `  result.push(${exprStr});`;
+  }
+  return `  result = ${exprStr};`;
+}
+
+/**
+ * T121: Emit a single alias (shortcut) binding.
+ *
+ * `const <localName> = <expr>;`
+ */
+function emitFuncAlias(alias: RuneFuncAlias, ctx: FuncBodyContext): string {
+  const localName = ctx.aliasBindings.get(alias.name) ?? alias.name;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const exprStr = transpileExpression(alias.exprNode as any, ctx);
+  return `  const ${localName} = ${exprStr};`;
+}
+
+/**
+ * T122: Emit pre-condition validation checks at function entry.
+ *
+ * Each condition: `if (!(<predicate>)) throw new Error('Diagnostic: <condName> failed');`
+ */
+function emitFuncPreConditions(func: RuneFunc, ctx: FuncBodyContext): string[] {
+  const lines: string[] = [];
+  for (const cond of func.preConditions) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const condNode = cond as any;
+    const condName = condNode.name ?? func.name;
+    const condCtx: ExpressionTranspilerContext = {
+      ...ctx,
+      conditionName: condName,
+      typeName: func.name,
+      emitMode: 'ts-method'
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = transpileCondition(cond as any, condCtx);
+    // transpileCondition in ts-method mode returns if(!…) { errors.push(…); }
+    // We need to convert this to a throw form.
+    // Replace `errors.push('...')` with `throw new Error('Diagnostic: ...')`
+    const throwForm = body
+      .replace(/errors\.push\('(.+?)'\);/g, `throw new Error('Diagnostic: $1');`)
+      .replace(/if \(!/g, 'if (!')
+      .split('\n')
+      .map((line) => `  ${line}`)
+      .join('\n');
+    lines.push(throwForm);
+  }
+  return lines;
+}
+
+/**
+ * T123: Emit post-condition validation checks before return.
+ * Same shape as pre-conditions.
+ */
+function emitFuncPostConditions(func: RuneFunc, ctx: FuncBodyContext): string[] {
+  const lines: string[] = [];
+  for (const cond of func.postConditions) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const condNode = cond as any;
+    const condName = condNode.name ?? func.name;
+    const condCtx: ExpressionTranspilerContext = {
+      ...ctx,
+      conditionName: condName,
+      typeName: func.name,
+      emitMode: 'ts-method'
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = transpileCondition(cond as any, condCtx);
+    const throwForm = body
+      .replace(/errors\.push\('(.+?)'\);/g, `throw new Error('Diagnostic: $1');`)
+      .split('\n')
+      .map((line) => `  ${line}`)
+      .join('\n');
+    lines.push(throwForm);
+  }
+  return lines;
+}
+
+/**
+ * T124: Compose the complete function body.
+ *
+ * For concrete funcs:
+ *   let result: T;    (scalar) | const result: T[] = [];  (array)
+ *   <preConditions>
+ *   <aliases>
+ *   <assignments>
+ *   <postConditions>
+ *   return result;
+ *
+ * For abstract funcs (isAbstract: true):
+ *   <preConditions>
+ *   throw new Error('Diagnostic: <name> — not_implemented');
+ */
+function emitFuncBody(func: RuneFunc, ctx: FuncBodyContext): string[] {
+  const bodyLines: string[] = [];
+
+  if (func.isAbstract) {
+    // Pre-conditions still run before the throw
+    const preConds = emitFuncPreConditions(func, ctx);
+    for (const block of preConds) {
+      bodyLines.push(block);
+    }
+    bodyLines.push(`  throw new Error('Diagnostic: ${func.name} — not_implemented');`);
+    // Emit info diagnostic for abstract func (FR-032)
+    ctx.diagnostics.push({
+      severity: 'info',
+      code: 'abstract-func',
+      message: `Func '${func.name}' is abstract (no body). Add a set/add body to implement it.`
+    });
+    return bodyLines;
+  }
+
+  // Result variable declaration
+  const outputTs = resolveFuncTypeTs(func.output.typeName);
+  if (ctx.outputAccumulator === 'array') {
+    bodyLines.push(`  const result: ${outputTs}[] = [];`);
+  } else {
+    bodyLines.push(`  let result: ${outputTs};`);
+  }
+
+  // Pre-conditions at entry
+  const preConds = emitFuncPreConditions(func, ctx);
+  for (const block of preConds) {
+    bodyLines.push(block);
+  }
+
+  // Aliases
+  for (const alias of func.aliases) {
+    bodyLines.push(emitFuncAlias(alias, ctx));
+  }
+
+  // Assignments
+  for (const assignment of func.assignments) {
+    bodyLines.push(emitFuncSet(assignment, ctx));
+  }
+
+  // Post-conditions before return
+  const postConds = emitFuncPostConditions(func, ctx);
+  for (const block of postConds) {
+    bodyLines.push(block);
+  }
+
+  bodyLines.push(`  return result;`);
+
+  return bodyLines;
+}
+
+/**
+ * T125: Scan func bodies for cross-namespace calls and emit import statements.
+ * Currently a stub — cross-namespace func calls are a future enhancement.
+ * The function signature is present for FR-030 compliance.
+ */
+function collectFuncCrossNamespaceImports(_funcs: RuneFunc[], _namespace: string): string[] {
+  // TODO: Walk func expression trees for cross-namespace RosettaFunction refs
+  // and emit `import { G } from '../base/math/index.js'` statements.
+  // For Phase 8b, all funcs are assumed to be in the same namespace.
+  return [];
+}
+
+/**
+ * Emit a single func as a TypeScript function declaration.
+ *
+ * For non-cyclic funcs: `export function F(input: {...}): T { ... }`
+ * For cyclic funcs (hoisted): same syntax — `function` declarations are
+ * hoisted by JS runtime, satisfying FR-030 for cyclic call groups.
+ *
+ * T124, T126, FR-028, FR-030.
+ */
+function emitFunc(func: RuneFunc, ctx: FuncBodyContext, _isHoisted: boolean): string {
+  const inputType = buildFuncInputType(func);
+  const outputType = buildFuncOutputType(func);
+  const signature = `export function ${func.name}(input: ${inputType}): ${outputType}`;
+
+  const bodyLines = emitFuncBody(func, ctx);
+  const body = bodyLines.join('\n');
+
+  return `${signature} {\n${body}\n}`;
+}
+
+// ---------------------------------------------------------------------------
 // T104: emitNamespace
 // ---------------------------------------------------------------------------
 
@@ -630,18 +911,18 @@ function emitFileHeader(namespace: string, _ctx: EmissionContext): string {
  * Emit the namespace as a single *.ts file.
  *
  * Entry point for the TypeScript class emitter.
- * T104, FR-020, US5B.
+ * T104, FR-020, US5B, T126 (func emission).
  *
- * @param docs    - Langium documents for this namespace.
+ * @param docs      - Langium documents for this namespace.
  * @param namespace - The namespace string.
  * @param _options  - Generator options.
- * @param funcs     - Optional Phase 8b function declarations (defaults to []).
+ * @param _funcs    - Unused (Phase 8b populates funcs internally from docs).
  */
 export function emitNamespace(
   docs: LangiumDocument[],
   namespace: string,
   _options: GeneratorOptions,
-  funcs: GeneratedFunc[] = []
+  _funcs: GeneratedFunc[] = []
 ): GeneratorOutput {
   const ctx = buildEmissionContext(docs, namespace);
   const sections: string[] = [];
@@ -690,15 +971,46 @@ export function emitNamespace(
     emitDataType(data);
   }
 
-  // Phase 8b marker: functions emitted below this line
-  if (funcs.length > 0) {
-    sections.push('// (functions emitted by Phase 8b appear below this line)');
-    for (const func of funcs) {
-      sections.push(func.fileContents);
-      sections.push('');
-    }
-  } else {
-    sections.push('// (functions emitted by Phase 8b appear below this line)');
+  // ---------------------------------------------------------------------------
+  // T126: Phase 8b func emission (TypeScript target only)
+  // ---------------------------------------------------------------------------
+
+  // Extract funcs from the documents
+  const runeFuncs = extractFuncs(docs, namespace, ctx.diagnostics);
+
+  // Collect any cross-namespace imports (currently stub — Phase 8b only handles same-namespace)
+  const crossNsImports = collectFuncCrossNamespaceImports(runeFuncs, namespace);
+
+  // Build call graph and determine topological order
+  const callGraph = buildFuncCallGraph(runeFuncs);
+  const cyclicNames = findCyclicFuncs(callGraph);
+  const sortedFuncs = topoSortFuncs(runeFuncs, callGraph);
+
+  // Emit the Phase 8b marker
+  sections.push('// (functions emitted by Phase 8b appear below this line)');
+
+  // Emit cross-namespace imports before func declarations
+  for (const importLine of crossNsImports) {
+    sections.push(importLine);
+  }
+
+  // Track GeneratedFunc metadata for the output
+  const generatedFuncs: GeneratedFunc[] = [];
+
+  for (const func of sortedFuncs) {
+    const isHoisted = cyclicNames.has(func.name);
+    const funcCtx = buildFuncBodyContext(func, callGraph, ctx.diagnostics);
+    const funcText = emitFunc(func, funcCtx, isHoisted);
+
+    sections.push('');
+    sections.push(funcText);
+
+    generatedFuncs.push({
+      name: func.name,
+      relativePath: namespaceToPath(namespace),
+      fileContents: funcText,
+      sourceMap: []
+    });
   }
 
   // Remove trailing empty section
@@ -713,7 +1025,7 @@ export function emitNamespace(
     content,
     sourceMap: ctx.sourceMap,
     diagnostics: ctx.diagnostics,
-    funcs
+    funcs: generatedFuncs
   };
 }
 
