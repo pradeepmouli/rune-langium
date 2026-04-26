@@ -525,6 +525,36 @@ export function transpileCondition(cond: Condition, ctx: ExpressionTranspilerCon
 }
 
 /**
+ * Return true if `expr` is a bare function call with no top-level binary operators.
+ * Used to decide whether `!expr` is safe (no redundant parens) vs `!(expr)` required.
+ *
+ * Examples:
+ *   "runeAttrExists(x)"                 → true  → !runeAttrExists(x)
+ *   "runeAttrExists(x) || something"    → false → !(runeAttrExists(x) || something)
+ *   "runeCount(x) > 0"                  → false → !(runeCount(x) > 0)
+ */
+function isSimpleFuncCall(expr: string): boolean {
+  // Walk the string, track paren/bracket depth.
+  // If we find a top-level binary operator, it's not a simple call.
+  let depth = 0;
+  let inCall = false;
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i];
+    if (ch === '(' || ch === '[') {
+      if (depth === 0 && i > 0) inCall = true;
+      depth++;
+    } else if (ch === ')' || ch === ']') {
+      depth--;
+    } else if (depth === 0) {
+      // Top-level character — any space indicates a binary operator follows
+      if (ch === ' ') return false;
+    }
+  }
+  // Must start with an identifier and end with ) to be a function call
+  return inCall && depth === 0 && /^\w/.test(expr) && expr.endsWith(')');
+}
+
+/**
  * Wrap a boolean JS expression string for the current emit mode.
  *
  * In zod-refine mode: return the expression as-is (used as predicate).
@@ -538,8 +568,12 @@ function wrapBoolExprForMode(boolExpr: string, ctx: ExpressionTranspilerContext)
   }
   // superRefine mode
   const message = `${ctx.conditionName}: condition failed in ${ctx.typeName}`;
+  // Omit redundant parens when the expression is a single function call with
+  // no top-level binary operators — matching oxfmt's no-redundant-parens style.
+  // Use !(expr) for binary/comparison/logical expressions to preserve semantics.
+  const negation = isSimpleFuncCall(boolExpr) ? `!${boolExpr}` : `!(${boolExpr})`;
   return [
-    `if (!(${boolExpr})) {`,
+    `if (${negation}) {`,
     `  ctx.addIssue({`,
     `    code: 'custom',`,
     `    message: '${message}',`,
