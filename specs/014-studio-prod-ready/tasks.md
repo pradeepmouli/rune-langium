@@ -41,10 +41,10 @@ config layer that the new env vars flow through, plus the contract
 test scaffold for the LSP worker (so US3 has tests to drive when
 its phase opens).
 
-- [ ] T009 Create `apps/studio/src/config.ts` exporting a Zod-validated `config` singleton per `contracts/studio-config.md` — fields `lspWsUrl`, `lspSessionUrl`, `telemetryEndpoint`, `devMode`, `legacyGitPathEnabled`. Throw on validation failure so the build fails fast.
-- [ ] T010 Add `vite.config.ts` env-var declarations + a `.env.example` so contributors know what to set; document defaults in `apps/studio/README.md`
-- [ ] T011 [P] Write failing tests in `apps/studio/test/config.test.ts` asserting (a) production defaults route to `wss://www.daikonic.dev/...`, (b) dev defaults route to `ws://localhost:3001`, (c) override via `VITE_LSP_WS_URL` works, (d) malformed URL throws at module load, (e) `legacyGitPathEnabled` defaults to `false`
-- [ ] T012 [P] Replace any hard-coded `ws://localhost:3001` in `apps/studio/src/services/transport-provider.ts` with `config.lspWsUrl` (FR-021); confirm with `grep -rn "ws://localhost:3001" apps/studio/src/` returning zero hits
+- [X] T009 Create `apps/studio/src/config.ts` exporting a Zod-validated `config` singleton per `contracts/studio-config.md` — fields `lspWsUrl`, `lspSessionUrl`, `telemetryEndpoint`, `devMode`, `legacyGitPathEnabled`. Throw on validation failure so the build fails fast.
+- [X] T010 Add `vite.config.ts` env-var declarations + a `.env.example` so contributors know what to set; document defaults in `apps/studio/README.md`
+- [X] T011 [P] Write failing tests in `apps/studio/test/config.test.ts` asserting (a) production defaults route to `wss://www.daikonic.dev/...`, (b) dev defaults route to `ws://localhost:3001`, (c) override via `VITE_LSP_WS_URL` works, (d) malformed URL throws at module load, (e) `legacyGitPathEnabled` defaults to `false`
+- [X] T012 [P] Replace any hard-coded `ws://localhost:3001` in `apps/studio/src/services/transport-provider.ts` with `config.lspWsUrl` (FR-021); confirm with `grep -rn "ws://localhost:3001" apps/studio/src/` returning zero hits
 
 **Checkpoint**: Studio builds cleanly with `pnpm --filter @rune-langium/studio build`; config tests pass; no hard-coded LSP URL in src/.
 
