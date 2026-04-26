@@ -352,16 +352,23 @@
   padding: var(--space-10);
 }
 
+/* T055 (014/FR-022) — match landing's `.nav-links a` typography:
+ * uppercase + 0.04em tracking + 13px/500. Studio nav was previously
+ * left as 14px/regular muted-foreground, which read as a different
+ * product when held side-by-side with the landing site. */
 .studio-links {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-8);
 }
 
 .studio-links a {
-  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
   text-decoration: none;
-  font-size: var(--text-sm);
 }
 
 .studio-links a:hover {
