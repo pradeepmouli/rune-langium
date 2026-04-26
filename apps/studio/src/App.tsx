@@ -285,17 +285,22 @@ export function App() {
         )}
 
         {bootState === 'start' && !loading && userFiles.length === 0 && (
-          <div className="flex flex-col h-full">
+          // T057 (014/FR-028) — vertically centred at viewports ≥1280×800.
+          // FileLoader handles its own centering inside; WorkspaceSwitcher
+          // (recents) sits above the curated row per FR-011 / T029 with
+          // `mt-8` spacing and no `border-t` divider, so the column reads
+          // as one visually-balanced empty state rather than fenced-off
+          // sections.
+          <div className="flex flex-col items-center justify-center h-full px-8 py-12 gap-8">
             <FileLoader onFilesLoaded={handleFilesLoaded} existingFiles={files} />
-            {/* Recents list — above curated models per FR-011 / T029. */}
-            <div className="border-t px-8 py-6">
+            <div className="w-full max-w-[560px] mt-8">
               <WorkspaceSwitcher
                 onOpen={handleSwitchWorkspace}
                 onCreate={handleCreateWorkspace}
                 onDelete={handleDeleteWorkspace}
               />
             </div>
-            <div className="border-t px-8 py-6">
+            <div className="w-full max-w-[560px]">
               <ModelLoader />
             </div>
           </div>

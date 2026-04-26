@@ -3,11 +3,21 @@
  *
  * This file is imported AFTER `@import 'tailwindcss'` by the consuming app.
  * It provides:
- *  1. shadcn @theme inline bridge (--color-* → var(--*))
- *  2. Domain-specific color tokens (data/choice/enum/func/status)
- *  3. :root / .dark color palettes (Refactory Dark)
- *  4. Base layer defaults (typography, borders)
+ *  1. Cross-surface design tokens (T052 / 014/Phase-8) — every variable
+ *     emitted by `@rune-langium/design-tokens` is in scope before any
+ *     theme rule below. Studio + landing + docs share this source.
+ *  2. shadcn @theme inline bridge (--color-* → var(--*))
+ *  3. Domain-specific color tokens (data/choice/enum/func/status)
+ *  4. :root / .dark color palettes (Refactory Dark)
+ *  5. Base layer defaults (typography, borders)
  */
+
+/* T052 — pull the canonical token tree in so consumers (apps + design-
+ * system tests) get every --space-*, --text-md, --sidebar-width-*,
+ * --syntax-*, --focus-ring-*, --brand-mark-* without relying on the
+ * Studio app to import them first. FR-025: every var(--…) the Studio
+ * uses now resolves. */
+@import '@rune-langium/design-tokens/tokens.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -186,6 +196,32 @@
   --sidebar-accent-foreground: oklch(0.92 0.01 80);
   --sidebar-border: oklch(1 0 0 / 6%);
   --sidebar-ring: oklch(0.78 0.17 168);
+
+  /* ── T052 (014/FR-025) — Studio alias layer ────────────────────────
+   * The studio's hand-rolled CSS (apps/studio/src/styles.css) refers
+   * to a few short-form names that the imported design-tokens tree
+   * uses long-form for. Map those here so styles.css resolves cleanly
+   * without touching every rule:
+   *   --text-secondary      → muted-foreground (panel headers)
+   *   --sidebar-width       → sidebar.width.default (file tree)
+   *   --sidebar-min-width   → sidebar.width.min
+   *   --sidebar-max-width   → sidebar.width.max
+   * The full --space-1..10, --text-md, --syntax-*, --focus-ring-*,
+   * --brand-mark-* trees come from the design-tokens import above and
+   * need no aliasing — Studio already references them by their
+   * canonical emitted names. */
+  --text-secondary: var(--muted-foreground);
+  --sidebar-width: var(--sidebar-width-default);
+  --sidebar-min-width: var(--sidebar-width-min);
+  --sidebar-max-width: var(--sidebar-width-max);
+  /* Short-form text-size aliases — Studio uses `--text-xs/sm/base`
+   * while the canonical tokens emit `--font-size-*`. Map them so
+   * styles.css resolves cleanly without rewriting every rule. */
+  --text-xs: var(--font-size-xs);
+  --text-sm: var(--font-size-sm);
+  --text-base: var(--font-size-base);
+  --text-lg: var(--font-size-lg);
+  --text-xl: var(--font-size-xl);
 }
 
 .dark {
@@ -230,7 +266,10 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans);
+    /* T053 (FR-022) — body uses --font-display (Outfit) so Studio
+     * matches landing + docs. --font-sans (Inter) stays defined for
+     * any consumer that explicitly opts in (e.g. dense data UI). */
+    font-family: var(--font-display);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

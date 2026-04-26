@@ -14,6 +14,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* T060 (014/FR-022) — TODO(014): once the publishing pipeline copies
+ * `packages/design-tokens/dist/brand.css` to a stable URL on
+ * www.daikonic.dev, replace this inline `:root` block with
+ *   <link rel="stylesheet" href="/_assets/brand.css">.
+ * Until then, the inline tokens remain as the same-source-of-truth
+ * fallback. The values here MUST stay byte-identical to
+ * `packages/design-tokens/src/tokens.json` (the single source);
+ * a follow-up CI guard can enforce that. */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
 --bg-primary:#0C0C14;--bg-secondary:#12121C;--bg-card:#181824;--bg-card-hover:#1E1E2C;
@@ -24,6 +32,8 @@
 --font-display:'Outfit',sans-serif;--font-mono:'JetBrains Mono',monospace;
 }
 html{scroll-behavior:smooth}
+/* T058 (014/FR-026) — single shared focus-ring spec across landing, docs, Studio */
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 body{background:var(--bg-primary);color:var(--text-primary);font-family:var(--font-display);font-weight:400;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 .grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.015) 1px,transparent 1px);background-size:80px 80px;pointer-events:none;z-index:0}
 section{position:relative;z-index:1}
