@@ -214,6 +214,14 @@
   --sidebar-width: var(--sidebar-width-default);
   --sidebar-min-width: var(--sidebar-width-min);
   --sidebar-max-width: var(--sidebar-width-max);
+  /* Short-form text-size aliases — Studio uses `--text-xs/sm/base`
+   * while the canonical tokens emit `--font-size-*`. Map them so
+   * styles.css resolves cleanly without rewriting every rule. */
+  --text-xs: var(--font-size-xs);
+  --text-sm: var(--font-size-sm);
+  --text-base: var(--font-size-base);
+  --text-lg: var(--font-size-lg);
+  --text-xl: var(--font-size-xl);
 }
 
 .dark {
