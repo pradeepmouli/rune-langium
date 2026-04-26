@@ -12,6 +12,7 @@ import type { WorkspaceFile, WorkspaceLoadProgress } from '../services/workspace
 import { createBlankWorkspaceFile, readFileList } from '../services/workspace.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { cn } from '@rune-langium/design-system/utils';
+import { GitHubConnectDialog } from './GitHubConnectDialog.js';
 
 export interface FileLoaderProps {
   onFilesLoaded: (files: WorkspaceFile[]) => void;
@@ -20,13 +21,25 @@ export interface FileLoaderProps {
    * action (`untitled.rosetta`, `untitled-2.rosetta`, …). Defaults to empty.
    */
   existingFiles?: ReadonlyArray<WorkspaceFile>;
+  /**
+   * Override the github-auth base URL (T031 / FR-012). Defaults to the
+   * production same-origin path; tests inject their own.
+   */
+  githubAuthBase?: string;
 }
 
-export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProps) {
+function defaultGithubAuthBase(): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/rune-studio/api/github-auth`;
+}
+
+export function FileLoader({ onFilesLoaded, existingFiles = [], githubAuthBase }: FileLoaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [loadProgress, setLoadProgress] = useState<WorkspaceLoadProgress | null>(null);
+  const [isGitHubOpen, setIsGitHubOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
+  const authBase = githubAuthBase ?? defaultGithubAuthBase();
 
   const handleFiles = useCallback(
     async (fileList: FileList) => {
@@ -141,6 +154,35 @@ export function FileLoader({ onFilesLoaded, existingFiles = [] }: FileLoaderProp
               <Button variant="secondary" size="lg" onClick={() => dirInputRef.current?.click()}>
                 Select Folder
               </Button>
+              <Button variant="secondary" size="lg" onClick={() => setIsGitHubOpen(true)}>
+                Open from GitHub repository…
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {isGitHubOpen && (
+          // Phase 6 T031 — visible affordance lands; auth tokens flow into
+          // workspace creation via T032 once cloneRepository / createGitBacked
+          // scaffolding lands. For now the dialog completes auth and closes;
+          // a follow-up task surfaces the cloned tree.
+          <div
+            role="presentation"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsGitHubOpen(false);
+            }}
+          >
+            <div className="bg-popover border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+              <GitHubConnectDialog
+                authBase={authBase}
+                onConnected={() => {
+                  // Phase 6 follow-up will pipe the token into
+                  // WorkspaceManager.createGitBacked. For now: close + flag.
+                  setIsGitHubOpen(false);
+                }}
+                onCancel={() => setIsGitHubOpen(false)}
+              />
             </div>
           </div>
         )}
