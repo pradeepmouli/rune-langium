@@ -6,7 +6,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "./",
     "strict": true,
     "declaration": true,
     "declarationMap": true,
@@ -20,6 +20,6 @@
     "noUncheckedIndexedAccess": true,
     "composite": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "bin/**/*.ts"],
   "exclude": ["node_modules", "dist", "test"]
 }
