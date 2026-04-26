@@ -8,12 +8,10 @@
  * for use by per-story test suites (Phase 3+).
  *
  * Each fixture directory contains:
- *   - input.rune       — the Rune source model
- *   - expected.zod.ts  — the committed expected output (byte-identical match required)
- *   - cases.json       — (optional) JSON battery cases { valid: unknown[], invalid: unknown[] }
- *
- * Phase 2: no fixture directories have content yet; per-story suites (us1-structural.test.ts, etc.)
- * will call describeFixture() starting in Phase 3 (US1).
+ *   - input.rune             — the Rune source model
+ *   - expected.zod.ts        — committed expected output for the 'zod' target
+ *   - expected.schema.json   — committed expected output for the 'json-schema' target
+ *   - cases.json             — (optional) JSON battery cases { valid: unknown[], invalid: unknown[] }
  *
  * SC-007: byte-identical output required for all committed fixture pairs.
  */
@@ -21,6 +19,8 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { createRuneDslServices } from '@rune-langium/core';
+import { URI } from 'langium';
 import { generate } from '../src/index.js';
 import type { Target } from '../src/types.js';
 
@@ -65,17 +65,40 @@ export async function runFixtureTests(dir: string, target: Target = 'zod'): Prom
       continue;
     }
 
+    // Skip if no expected file for this target (not all fixtures have all targets)
+    try {
+      await stat(expectedPath);
+    } catch {
+      continue;
+    }
+
     it(`fixture: ${entry.name}`, async () => {
-      const expectedContent = await readFile(expectedPath, 'utf-8');
+      const [inputContent, expectedContent] = await Promise.all([
+        readFile(inputPath, 'utf-8'),
+        readFile(expectedPath, 'utf-8')
+      ]);
 
-      // Phase 3 will populate real parsing here.
-      // For now, this placeholder exercises the harness structure.
-      // TODO(Phase 3): Replace with real createRuneDslServices() + generate() call.
-      const outputs = generate([] as never, { target });
-      expect(outputs).toBeDefined();
+      const { RuneDsl } = createRuneDslServices();
+      const fixtureId = `${entry.name}.rosetta`;
+      const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+        inputContent,
+        URI.parse(`inmemory:///${fixtureId}`)
+      );
+      await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
 
-      void expectedContent; // used in Phase 3
-      throw new Error('Phase 2: fixture harness not yet wired to emitter (Phase 3 unlocks this)');
+      if (doc.parseResult.parserErrors.length > 0) {
+        const msgs = doc.parseResult.parserErrors
+          .map((e: { message: string }) => e.message)
+          .join(', ');
+        throw new Error(`Parse errors in ${entry.name}/input.rune: ${msgs}`);
+      }
+
+      const outputs = generate(doc, { target });
+      if (outputs.length === 0) {
+        throw new Error(`Generator produced no output for ${entry.name}`);
+      }
+
+      expect(outputs[0]!.content).toBe(expectedContent);
     });
   }
 }

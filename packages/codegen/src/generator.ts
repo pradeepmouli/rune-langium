@@ -6,7 +6,8 @@ import { isRosettaModel } from '@rune-langium/core';
 import type { GeneratorOutput, GeneratorOptions } from './types.js';
 import { GeneratorError } from './types.js';
 import { createDiagnostic, hasFatalDiagnostics } from './diagnostics.js';
-import { emitNamespace } from './emit/zod-emitter.js';
+import { emitNamespace as emitZodNamespace } from './emit/zod-emitter.js';
+import { emitNamespace as emitJsonSchemaNamespace } from './emit/json-schema-emitter.js';
 
 /**
  * Group Langium documents by their namespace name.
@@ -68,19 +69,20 @@ export function runGenerate(docs: LangiumDocument[], options: GeneratorOptions):
     let output: GeneratorOutput;
 
     if (target === 'zod') {
-      output = emitNamespace(namespaceDocs, namespace, options);
+      output = emitZodNamespace(namespaceDocs, namespace, options);
+    } else if (target === 'json-schema') {
+      output = emitJsonSchemaNamespace(namespaceDocs, namespace, options);
     } else {
-      // json-schema and typescript targets: not implemented in Phase 3
+      // typescript target: not implemented yet
       output = {
-        relativePath:
-          namespace.replace(/\./g, '/') + (target === 'json-schema' ? '.schema.json' : '.ts'),
+        relativePath: namespace.replace(/\./g, '/') + '.ts',
         content: '',
         sourceMap: [],
         diagnostics: [
           createDiagnostic(
             'error',
             'not-implemented',
-            `Target '${target}' is not implemented in Phase 3. Only 'zod' is supported.`
+            `Target '${target}' is not yet implemented. Use 'zod' or 'json-schema'.`
           )
         ],
         funcs: []

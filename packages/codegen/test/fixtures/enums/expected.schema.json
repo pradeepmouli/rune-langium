@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "test/enums.schema.json",
+  "title": "test.enums",
+  "$defs": {
+    "ColorEnum": {
+      "type": "string",
+      "enum": ["Red", "Green", "Blue"]
+    },
+    "StatusEnum": {
+      "type": "string",
+      "enum": ["Active", "Inactive", "Pending"],
+      "x-rune-enum-display": {
+        "Active": "Active Status",
+        "Inactive": "Inactive Status",
+        "Pending": "Pending \"Review\""
+      }
+    }
+  }
+}
