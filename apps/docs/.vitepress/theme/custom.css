@@ -3,23 +3,38 @@
  * Dark-only; VitePress is configured with `appearance: 'force-dark'`, so
  * this stylesheet intentionally defines a single dark theme (no light
  * override, no mode toggle).
+ *
+ * T061 (014/FR-022) — pulls brand colours, fonts, syntax palette, focus
+ * ring, and brand-mark dimensions from the shared
+ * `@rune-langium/design-tokens` source. The `--rune-*` aliases below
+ * exist for VitePress-specific surface tokens that aren't part of the
+ * brand subset (dark-mode chrome, surface tints) and remain hand-rolled
+ * to mirror the landing's dark palette.
  */
 
+@import '@rune-langium/design-tokens/dist/brand.css';
+
 :root {
-  /* Brand colors from site/index.html */
+  /* T061 — Typography is now sourced from the shared brand tokens
+   * (`--font-display`, `--font-mono`); a future colour-palette
+   * unification (a follow-up — the docs/landing teal palette and the
+   * tokens.json canonical accent diverge today) will collapse the
+   * remaining `--rune-*` aliases below. Surface tones stay
+   * consumer-specific because VitePress chrome needs them. */
   --rune-teal: #00D4AA;
   --rune-teal-dim: rgba(0, 212, 170, 0.12);
   --rune-teal-glow: rgba(0, 212, 170, 0.06);
   --rune-amber: #E8913A;
   --rune-amber-dim: rgba(232, 145, 58, 0.12);
 
-  /* Dark surfaces */
+  /* Dark surfaces (Studio's "Refactory Dark" palette — not part of the
+   * brand subset because they're consumer-specific). */
   --rune-bg-primary: #0C0C14;
   --rune-bg-secondary: #12121C;
   --rune-bg-card: #181824;
   --rune-bg-card-hover: #1E1E2C;
 
-  /* Text on dark */
+  /* Text on dark (consumer-specific; brand subset stays palette-only). */
   --rune-text-primary: #E8E6E1;
   --rune-text-secondary: #8A8A96;
   --rune-text-tertiary: #5C5C6A;
@@ -27,8 +42,9 @@
   --rune-border: rgba(255, 255, 255, 0.06);
   --rune-border-accent: rgba(255, 255, 255, 0.1);
 
-  --rune-font-display: 'Outfit', ui-sans-serif, system-ui, sans-serif;
-  --rune-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Typography — pulled from shared brand.css (FR-022) */
+  --rune-font-display: var(--font-display);
+  --rune-font-mono: var(--font-mono);
 }
 
 /* ---------- VitePress variable overrides ---------- */
