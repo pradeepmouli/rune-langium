@@ -124,22 +124,26 @@ const BUILTIN_TYPE_MAP: Record<string, string> = {
 };
 
 /**
- * Quote a property key if it is a TypeScript reserved word.
- * FR-009.
+ * Return a property key expression for a Zod object literal.
+ *
+ * In ES5+ / TypeScript, reserved words are valid unquoted property keys
+ * (e.g. `{ class: z.string() }` is legal). The oxfmt linter removes quotes
+ * from reserved-word keys, so we emit them unquoted to keep byte-identical
+ * output after formatting. FR-009.
  */
 function quoteKey(key: string): string {
-  if (RESERVED_WORDS.has(key)) {
-    return `"${key}"`;
-  }
+  // All valid identifiers (including JS reserved words) can be used unquoted
+  // as property keys in object literals per ES5+. Return key as-is.
   return key;
 }
 
 /**
- * Escape a display-name string for use in a TypeScript string literal.
- * Spec edge case: display names may contain `"` or backslashes.
+ * Escape a display-name string for use in a single-quoted TypeScript string literal.
+ * Spec edge case: display names may contain `'` or backslashes.
+ * We use single quotes to match the oxfmt singleQuote: true style.
  */
 function escapeDisplayName(name: string): string {
-  return name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 /**
@@ -317,8 +321,19 @@ function emitTypeSchema(data: Data, ctx: EmissionContext): string {
   }
 
   if (isLazy) {
-    // For cyclic types: add explicit ZodType annotation so TS can infer recursive schemas
-    return `export const ${schemaName}: z.ZodType<${name}> = z.lazy(() => ${schemaExpr});`;
+    // For cyclic types: add explicit ZodType annotation so TS can infer recursive schemas.
+    // Emit in the multiline form that oxfmt produces for arrow functions whose body
+    // exceeds printWidth when written inline:
+    //   z.lazy(() =>
+    //     z.object({
+    //       ...
+    //     })
+    //   )
+    const indented = schemaExpr
+      .split('\n')
+      .map((line) => `  ${line}`)
+      .join('\n');
+    return `export const ${schemaName}: z.ZodType<${name}> = z.lazy(() =>\n${indented}\n);`;
   }
 
   return `export const ${schemaName} = ${schemaExpr};`;
@@ -461,8 +476,10 @@ function emitEnum(enumNode: RosettaEnumeration, ctx: EmissionContext): string {
   const hasDisplayNames = enumNode.enumValues.some((v) => v.display != null);
   if (hasDisplayNames) {
     const displayEntries = enumNode.enumValues.map((v) => {
-      const displayName = v.display != null ? escapeDisplayName(v.display) : v.name;
-      return `  '${v.name}': "${displayName}"`;
+      // Use single-quoted value (oxfmt singleQuote: true); key unquoted (valid ES5+ property key)
+      const displayName =
+        v.display != null ? escapeDisplayName(v.display) : escapeDisplayName(v.name);
+      return `  ${v.name}: '${displayName}'`;
     });
     lines.push('');
     lines.push(

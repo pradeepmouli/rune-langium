@@ -24,14 +24,20 @@ export interface SelfRef {
   self?: SelfRef;
 }
 
-export const NodeASchema: z.ZodType<NodeA> = z.lazy(() => z.object({
-  child: NodeBSchema.optional()
-}));
+export const NodeASchema: z.ZodType<NodeA> = z.lazy(() =>
+  z.object({
+    child: NodeBSchema.optional()
+  })
+);
 
-export const NodeBSchema: z.ZodType<NodeB> = z.lazy(() => z.object({
-  parent: NodeASchema.optional()
-}));
+export const NodeBSchema: z.ZodType<NodeB> = z.lazy(() =>
+  z.object({
+    parent: NodeASchema.optional()
+  })
+);
 
-export const SelfRefSchema: z.ZodType<SelfRef> = z.lazy(() => z.object({
-  self: SelfRefSchema.optional()
-}));
+export const SelfRefSchema: z.ZodType<SelfRef> = z.lazy(() =>
+  z.object({
+    self: SelfRefSchema.optional()
+  })
+);

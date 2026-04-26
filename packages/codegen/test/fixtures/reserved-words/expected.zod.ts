@@ -15,9 +15,9 @@ const runeAttrExists = (v: unknown): boolean =>
 // --- end runtime helpers ---
 
 export const ReservedTestSchema = z.object({
-  "class": z.string(),
-  "var": z.string().optional(),
-  "let": z.array(z.string()),
-  "const": z.array(z.string()).min(1)
+  class: z.string(),
+  var: z.string().optional(),
+  let: z.array(z.string()),
+  const: z.array(z.string()).min(1)
 });
 export type ReservedTest = z.infer<typeof ReservedTestSchema>;
