@@ -2,12 +2,16 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Transport provider with automatic failover (T011).
+ * Transport provider with automatic failover (T011 + T044).
  *
  * Connection strategy:
- *   1. Try WebSocket (external server — full Langium + OS access).
+ *   1. Try WebSocket (external dev server — full Langium + OS access).
  *   2. On failure, retry up to `maxReconnectAttempts` with exponential backoff.
- *   3. Fall back to embedded Worker transport (in-browser Langium).
+ *   3. Fall back to the **CF Worker LSP** (T044) — POST a same-origin token
+ *      mint to `${config.lspSessionUrl}`, then open
+ *      `WebSocket(\`${config.lspWsUrl}/ws/${token}\`)`. On 401 from the mint
+ *      we retry once with a fresh token; on 429 / 5xx we surface
+ *      "language services unavailable" with the dev-mode-gated copy from FR-014.
  *
  * The provider exposes a reactive state so UI components can show
  * connection status without polling.
@@ -21,7 +25,7 @@ import { createWebSocketTransport } from './ws-transport.js';
 // Types
 // ────────────────────────────────────────────────────────────────────────────
 
-export type TransportMode = 'disconnected' | 'websocket' | 'embedded';
+export type TransportMode = 'disconnected' | 'websocket' | 'cf-worker' | 'embedded';
 export type TransportStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export interface TransportState {
@@ -39,6 +43,22 @@ export interface TransportProviderOptions {
   maxReconnectAttempts?: number;
   /** Base backoff delay in ms (default: 500). */
   backoffBase?: number;
+  /**
+   * HTTP endpoint for `POST /api/lsp/session` (T044). Defaults to
+   * `config.lspSessionUrl`. Override for tests.
+   */
+  sessionUrl?: string;
+  /**
+   * WebSocket base for the CF LSP worker; the token is appended at
+   * `\`${cfWsBase}/ws/${token}\``. Defaults to `config.lspWsUrl`.
+   */
+  cfWsBase?: string;
+  /**
+   * Opaque workspace identifier sent to the CF mint endpoint. Tests pass a
+   * fixed ULID; production callers will pull this from the active
+   * workspace record.
+   */
+  workspaceId?: string;
 }
 
 export interface TransportProvider {
@@ -63,12 +83,17 @@ const DEFAULT_WS_URI = config.lspWsUrl;
 const DEFAULT_TIMEOUT = 2000;
 const DEFAULT_MAX_RECONNECT = 3;
 const DEFAULT_BACKOFF_BASE = 500;
+/** Default workspaceId for the session mint until the active workspace is wired in. */
+const DEFAULT_WORKSPACE_ID = '01J7M8AAAAAAAAAAAAAAAAAAAA';
 
 export function createTransportProvider(opts?: TransportProviderOptions): TransportProvider {
   const wsUri = opts?.wsUri ?? DEFAULT_WS_URI;
   const connectionTimeout = opts?.connectionTimeout ?? DEFAULT_TIMEOUT;
   const maxReconnectAttempts = opts?.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT;
   const backoffBase = opts?.backoffBase ?? DEFAULT_BACKOFF_BASE;
+  const sessionUrl = opts?.sessionUrl ?? config.lspSessionUrl;
+  const cfWsBase = opts?.cfWsBase ?? config.lspWsUrl;
+  const workspaceId = opts?.workspaceId ?? DEFAULT_WORKSPACE_ID;
 
   let state: TransportState = { mode: 'disconnected', status: 'disconnected' };
   let currentTransport: Transport | undefined;
@@ -107,26 +132,109 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
     throw lastError ?? new Error('WebSocket connection failed');
   }
 
-  /** Fall back to the embedded Worker transport. */
-  function tryWorker(): Transport {
-    // The in-browser LSP server requires @lspeasy/core which depends on
-    // Node.js-only modules (node:events, node:crypto). Until a browser-
-    // compatible LSP core is available, we cannot embed the server in a
-    // Worker. Report the error so the UI shows "disconnected" status.
+  /**
+   * Mint a session token via `POST ${sessionUrl}` and return the parsed
+   * 200 body. Throws an Error tagged with the HTTP status when the mint
+   * is rejected so the caller can branch on 401 / 429 / 5xx.
+   */
+  async function mintSessionToken(): Promise<string> {
+    const res = await fetch(sessionUrl, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId })
+    });
+    if (!res.ok) {
+      const err = new Error(`session_mint_failed:${res.status}`) as Error & {
+        status: number;
+      };
+      err.status = res.status;
+      throw err;
+    }
+    const body = (await res.json()) as { token: string; expiresAt: number };
+    if (!body || typeof body.token !== 'string') {
+      throw new Error('session_mint_invalid_response');
+    }
+    return body.token;
+  }
+
+  /**
+   * Open a token-gated WS to the CF LSP worker. Returns a real Transport
+   * via `createWebSocketTransport`; surfaces the underlying WS error
+   * untouched so the caller's retry logic can branch.
+   */
+  async function openCfWorkerWs(token: string): Promise<Transport> {
+    const wsUrl = `${cfWsBase.replace(/\/$/, '')}/ws/${encodeURIComponent(token)}`;
+    return createWebSocketTransport(wsUrl, connectionTimeout);
+  }
+
+  /**
+   * Step 3 — CF Worker LSP via session token. Replaces the legacy
+   * embedded-Worker fallback. On 401 from the mint, refreshes the token
+   * once and retries; on 429 / 5xx surfaces the documented "language
+   * services unavailable" copy from FR-014 and falls through to the
+   * disconnected no-op transport.
+   */
+  async function tryCfWorker(): Promise<Transport> {
+    setState({ mode: 'cf-worker', status: 'connecting' });
+    let token: string;
+    try {
+      token = await mintSessionToken();
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 401) {
+        // Per the contract, a 401 from the mint is a stale/missing
+        // signing-key on the CF side OR a rotated key that invalidated
+        // the cached token; one retry buys us the happy-path on a fresh
+        // session.
+        try {
+          token = await mintSessionToken();
+        } catch (err2) {
+          return cfWorkerUnavailable(err2);
+        }
+      } else {
+        return cfWorkerUnavailable(err);
+      }
+    }
+    try {
+      const transport = await openCfWorkerWs(token);
+      setState({ mode: 'cf-worker', status: 'connected' });
+      currentTransport = transport;
+      return transport;
+    } catch (err) {
+      // The WS open MAY itself fail with 401 (server rotated the signing
+      // key between mint and connect) — handle that with one retry,
+      // matching the documented state-machine.
+      try {
+        token = await mintSessionToken();
+        const transport = await openCfWorkerWs(token);
+        setState({ mode: 'cf-worker', status: 'connected' });
+        currentTransport = transport;
+        return transport;
+      } catch (err2) {
+        return cfWorkerUnavailable(err2 ?? err);
+      }
+    }
+  }
+
+  /**
+   * Surface the "language services unavailable" terminal state. Mirrors
+   * the legacy fallback's no-op Transport so callers don't crash, but
+   * sets `status: 'error'` with the documented copy.
+   */
+  function cfWorkerUnavailable(cause: unknown): Transport {
     const errorMessage = config.devMode
-      ? `LSP server unavailable — start the external server on ${config.lspWsUrl}`
+      ? `CF LSP worker unreachable (${describeCause(cause)}) — verify ${config.lspSessionUrl} is deployed and CORS allows ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
       : 'Editor running offline — language services unavailable';
     if (config.devMode) {
-      console.warn(
-        '[TransportProvider] WebSocket connection failed and embedded Worker transport is not available. Start the LSP server with: pnpm --filter @rune-langium/lsp-server start'
-      );
+      console.warn('[TransportProvider] CF LSP worker step failed:', cause);
     }
     setState({
       mode: 'disconnected',
       status: 'error',
       error: new Error(errorMessage)
     });
-    // Return a no-op transport so callers don't crash
+    // No-op transport so callers don't crash on send/subscribe.
     return {
       send() {
         /* no-op */
@@ -140,12 +248,17 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
     };
   }
 
-  /** Main connection flow: WS first → Worker fallback. */
+  function describeCause(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    return String(err);
+  }
+
+  /** Main connection flow: WS first → CF Worker fallback. */
   async function connect(): Promise<Transport> {
     try {
       return await tryWebSocket();
     } catch {
-      return tryWorker();
+      return tryCfWorker();
     }
   }
 
