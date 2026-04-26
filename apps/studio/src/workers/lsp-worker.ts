@@ -185,4 +185,14 @@ if ('onconnect' in self) {
   listen(transport).catch((err: unknown) => {
     console.error('[lsp-worker] LSP listen error:', err);
   });
+
+  // T084: handle codegen:generate messages from the studio's CodePreviewPanel.
+  // Full document-builder integration is deferred; respond with codegen:outdated
+  // to signal that a result is not yet available.
+  workerScope.addEventListener('message', (e: MessageEvent) => {
+    const msg = e.data as { type?: string } | null;
+    if (msg && msg.type === 'codegen:generate') {
+      workerScope.postMessage({ type: 'codegen:outdated' });
+    }
+  });
 }
