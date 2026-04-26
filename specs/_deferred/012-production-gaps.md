@@ -135,13 +135,11 @@ Code (this is the spec proper):
   meets SC-001 / SC-002.
 
 **Open questions for the spec**:
-- For LSP gap (#3): build the in-browser LSP, or accept "Studio is
-  read-only in production" and rewrite the README + status-bar
-  copy + spec to match? This is the single highest-stakes
-  decision in this scope. A real in-browser LSP is a multi-week
-  project (browser-shim `node:events`/`node:crypto`, vendor
-  langium, Vite-bundle the worker chunk); the alternative is a
-  one-day documentation + UI fix.
+- For LSP gap (#3): the architecture is settled (CF Worker + DO,
+  see C3 below). The remaining decision is whether to run the
+  1-day spike *before* `/speckit.plan` (recommended — bounds
+  the C3 task at "build the worker" vs "rewrite the spec for
+  read-only Studio") or *during* the implementation phase.
 - Should `archiveLoader` be wired in `model-store.ts` (the call
   site that exists today) or in a new "model-loading service"
   that abstracts both paths? The verification agent traced today's
@@ -252,30 +250,90 @@ without it.
   - This is a cosmetic patch over a real gap (see C3) but **must
     ship regardless** because it's leaking dev URLs to public users.
 
-- [ ] **C3 — DECISION: implement embedded LSP worker, OR document the gap.**
-  - File: `apps/studio/src/services/transport-provider.ts:108-130`.
-    The function `tryWorker()` is a documented stub:
-    ```ts
-    // The in-browser LSP server requires @lspeasy/core which depends on
-    // Node.js-only modules (node:events, node:crypto). Until a browser-
-    // compatible LSP core is available, we cannot embed the server in a
-    // Worker. Report the error so the UI shows "disconnected" status.
+- [ ] **C3 — Host the LSP server in a Cloudflare Worker + Durable Object.**
+  - File today: `apps/studio/src/services/transport-provider.ts:108-130`.
+    `tryWorker()` is a documented stub: *"The in-browser LSP server
+    requires @lspeasy/core which depends on Node.js-only modules
+    (node:events, node:crypto). Until a browser-compatible LSP core
+    is available, we cannot embed the server in a Worker."* This
+    contradicts both `apps/studio/README.md`'s three-step fallback
+    claim AND the spec's implicit "Studio is functional in
+    production" assumption.
+  - **Approach**: replace the in-browser embedded-Worker leg with a
+    server-hosted LSP on Cloudflare. A new `apps/lsp-worker` Worker
+    accepts a WebSocket upgrade at
+    `wss://www.daikonic.dev/rune-studio/api/lsp/ws/<sessionId>` and
+    forwards to a `RuneLspSession` Durable Object that holds the
+    WebSocket plus the langium services + open-document state in
+    memory. WS hibernation (`acceptWebSocket()`) keeps idle sessions
+    cheap; per-session DO routing isolates state per tab.
+
     ```
-  - This contradicts both `apps/studio/README.md`'s three-step
-    fallback claim AND the spec's implicit "Studio is functional
-    in production" assumption.
-  - **Two paths, pick one**:
-    1. **Build the embedded LSP** — vendor langium into a worker
-       chunk that doesn't depend on `@lspeasy/core`'s Node-only
-       transitives. Multi-week project; spec it separately.
-    2. **Accept read-only Studio in production** — rewrite the
-       README's transport section, mark the editor as
-       "syntax-highlighting only, no live diagnostics" in the spec,
-       and add a banner / docstring on the editor panel itself
-       explaining the limitation. ~1 day.
-  - The spec must NOT proceed past `/speckit.plan` without this
-    decision. Default recommendation: path (2) for this release,
-    spec path (1) as a follow-up feature.
+    Studio (browser)                www.daikonic.dev
+        │                                │
+        │ WebSocket /api/lsp/ws/<wsId>   │
+        ├───────────────────────────────▶│  apps/lsp-worker (route)
+        │                                ▼
+        │                       ┌───────────────────────┐
+        │                       │  RuneLspSession DO    │
+        │                       │  - holds the WS       │
+        │                       │  - holds langium      │
+        │                       │    services + open    │
+        │                       │    docs in memory     │
+        │                       │  - acceptWebSocket()  │
+        │                       │    → hibernates idle  │
+        │                       └───────────────────────┘
+    ```
+
+    Why this works where the in-browser path didn't:
+      - CF Worker isolates have the platform shape (V8, fetch,
+        crypto.subtle, WebSocket) that langium needs, AND
+        `nodejs_compat` is already enabled in this repo's other
+        Workers — `node:events` / `node:crypto` resolve.
+      - Langium's parsing + validation cost runs on CF infra, not
+        the user's laptop. Heavy CDM parses don't burn battery.
+      - The studio's existing WebSocket transport
+        (`apps/studio/src/services/ws-transport.ts`) is reused
+        verbatim; only the URL changes from `ws://localhost:3001`
+        to the production CF endpoint.
+
+    Tasks:
+    1. **Spike (1 day) — confirm langium boots in a CF Worker.**
+       New scratch worker that imports `@rune-langium/lsp-server`
+       and parses a fixture file in a `wrangler dev` instance.
+       Risk surface is non-langium transitives; langium itself is
+       browser-friendly.
+    2. **Build `apps/lsp-worker`** (~1 week) — Worker entry +
+       `RuneLspSession` DO + WS upgrade + LSP message routing.
+       Mirror the patterns in `apps/codegen-worker` (Worker +
+       routing) and `apps/telemetry-worker` (DO with state).
+    3. **Wire `apps/studio/src/services/transport-provider.ts:108`**
+       to connect to the CF endpoint as the documented Step 3 of
+       the fallback chain. Drop the no-op transport.
+    4. **Auth at the WS upgrade** — same Origin allowlist pattern
+       as the other Workers, plus a session token to bound DO spawn
+       (re-use the github-auth token if present, otherwise a
+       per-tab nonce minted by an unauthenticated `/lsp/session`
+       endpoint).
+    5. **Update `apps/studio/README.md`** — rewrite the transport
+       section to reflect Step 3 = CF Worker, not in-browser
+       SharedWorker.
+
+  - **Cost / capacity caveats** (worth deciding before
+    `/speckit.plan`):
+    - Paid CF plan required (30s CPU per request; free plan's
+      50ms is not enough for cold parse).
+    - Each `didChange` is a billable WS event. Rough order
+      $1–3/month/active editor; revisit if usage scales.
+    - 128 MB DO memory per session; CDM parsed AST fits, but
+      verify in the spike.
+
+  - **Fallback if the spike fails**: drop to "accept read-only
+    Studio in production" — rewrite the README + spec to describe
+    Studio as syntax-highlighting only, change the status-bar copy
+    permanently, ship a banner. ~1 day. The spike's pass/fail
+    determines which path; don't proceed past `/speckit.plan`
+    without it.
 
 - [ ] **C4 — Workspace persistence: actually save + restore.**
   - The verification agent observed: reload after "New blank
