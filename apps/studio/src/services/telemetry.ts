@@ -124,7 +124,15 @@ export function resolveTelemetryEndpoint(origin?: string): string {
   const o = origin ?? (typeof location !== 'undefined' ? location.origin : '');
   try {
     const u = new URL(o);
-    if (LOCALHOST_HOSTS.has(u.hostname) || u.protocol === 'file:') {
+    // `file:` URLs have origin "null" (the string), so naïvely returning
+    // `${u.origin}/...` produces `null/rune-studio/...`, which would parse
+    // but never resolve. Map both file: and localhost to a known-localhost
+    // URL — the client's no-op gate (isLocalhost / `enabled === false`)
+    // short-circuits before any fetch is issued.
+    if (u.protocol === 'file:') {
+      return 'http://localhost/rune-studio/api/telemetry/v1/event';
+    }
+    if (LOCALHOST_HOSTS.has(u.hostname)) {
       return `${u.origin}/rune-studio/api/telemetry/v1/event`;
     }
   } catch {

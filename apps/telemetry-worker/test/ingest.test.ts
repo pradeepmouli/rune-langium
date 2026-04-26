@@ -548,4 +548,68 @@ describe('telemetry ingest contract', () => {
       expect(a).not.toBe(b);
     });
   });
+
+  describe('TelemetryAggregator DO defends its own boundary', () => {
+    // Direct fetches against the DO — bypasses the Worker's schema gate.
+    function makeAggregator(): TelemetryAggregator {
+      const state = {
+        storage: makeStorage(),
+        async blockConcurrencyWhile<T>(fn: () => Promise<T>): Promise<T> {
+          return fn();
+        }
+      } as unknown as ConstructorParameters<typeof TelemetryAggregator>[0];
+      return new TelemetryAggregator(state);
+    }
+
+    it('400 invalid_json on a malformed POST /inc body', async () => {
+      const agg = makeAggregator();
+      const res = await agg.fetch(
+        new Request('https://do/inc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{not-json'
+        })
+      );
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe('invalid_json');
+    });
+
+    it('400 invalid_body on a non-object POST /inc body', async () => {
+      const agg = makeAggregator();
+      const res = await agg.fetch(
+        new Request('https://do/inc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '"a string, not an object"'
+        })
+      );
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe('invalid_body');
+    });
+
+    it('400 invalid_errorCategory when errorCategory is the wrong type', async () => {
+      const agg = makeAggregator();
+      const res = await agg.fetch(
+        new Request('https://do/inc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ errorCategory: 42 })
+        })
+      );
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe('invalid_errorCategory');
+    });
+
+    it('204 with errorCategory:null when the field is omitted', async () => {
+      const agg = makeAggregator();
+      const res = await agg.fetch(
+        new Request('https://do/inc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        })
+      );
+      expect(res.status).toBe(204);
+    });
+  });
 });
