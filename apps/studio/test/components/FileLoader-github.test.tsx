@@ -4,16 +4,19 @@
 /**
  * T031 — start-page Open-from-GitHub affordance (FR-012, US5).
  *
- * The empty-state row has three secondary buttons: Select Files,
- * Select Folder, and (new) "Open from GitHub repository…". The
- * GitHub button mounts the existing GitHubConnectDialog as a modal
- * surface. End-to-end auth + workspace creation lands in T032; this
- * test pins only the affordance shape.
+ * The empty-state row has three secondary buttons by default (Select
+ * Files / Select Folder / New). The "Open from GitHub repository…" CTA
+ * is only added when the parent threads in `createGitBackedWorkspace`,
+ * because clicking it requires the full clone path. App.tsx hasn't
+ * wired that yet (T032 deferred); these tests pin both halves of that
+ * contract: hidden-by-default, visible-when-wired.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FileLoader } from '../../src/components/FileLoader.js';
+
+const stubCreateGitBacked = async () => ({ id: 'STUB' });
 
 describe('FileLoader — Open from GitHub affordance (T031 / FR-012)', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -36,21 +39,26 @@ describe('FileLoader — Open from GitHub affordance (T031 / FR-012)', () => {
   });
   afterEach(() => fetchSpy.mockRestore());
 
-  it('renders an Open from GitHub button on the empty-state row', () => {
+  it('hides the GitHub CTA when createGitBackedWorkspace is not provided', () => {
     render(<FileLoader onFilesLoaded={() => {}} />);
+    expect(screen.queryByRole('button', { name: /Open from GitHub/i })).toBeNull();
+  });
+
+  it('renders an Open from GitHub button when createGitBackedWorkspace is provided', () => {
+    render(<FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />);
     const btn = screen.getByRole('button', { name: /Open from GitHub/i });
     expect(btn).toBeInTheDocument();
   });
 
   it('opens the GitHubConnectDialog when the button is clicked', () => {
-    render(<FileLoader onFilesLoaded={() => {}} />);
+    render(<FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />);
     expect(screen.queryByTestId('github-connect-dialog')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Open from GitHub/i }));
     expect(screen.getByTestId('github-connect-dialog')).toBeInTheDocument();
   });
 
   it('hides the dialog when Cancel is clicked', async () => {
-    render(<FileLoader onFilesLoaded={() => {}} />);
+    render(<FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />);
     fireEvent.click(screen.getByRole('button', { name: /Open from GitHub/i }));
     // Wait until the dialog moved past the synchronous 'init' phase to
     // surface the Cancel button.

@@ -90,13 +90,15 @@ const ERR_INTERNAL = -32603;
 // ────────────────────────────────────────────────────────────────────────────
 // LSP capabilities the DO advertises to clients
 // ────────────────────────────────────────────────────────────────────────────
+//
+// Only textDocumentSync is wired today. Hover/completion/definition and
+// diagnostics are intentionally NOT advertised until the langium
+// connection-adapter lands (T044b follow-on). Advertising capabilities the
+// server doesn't honour would let the client surface "no result" to users
+// for queries the server isn't actually answering.
 
 const SERVER_CAPABILITIES = {
-  textDocumentSync: { openClose: true, change: 1 /* full */ },
-  hoverProvider: true,
-  completionProvider: { triggerCharacters: ['.', ':'] },
-  definitionProvider: true,
-  diagnosticProvider: { interFileDependencies: false, workspaceDiagnostics: false }
+  textDocumentSync: { openClose: true, change: 1 /* full */ }
 };
 
 // Debounce window for didChange → re-parse pipeline (contracts/lsp-worker.md).
@@ -245,12 +247,11 @@ export class RuneLspSession {
       case 'shutdown':
         await this.handleShutdown();
         return this.respond(req, null);
-      case 'textDocument/hover':
-        return this.respond(req, await this.langiumRequest('hover', req.params));
-      case 'textDocument/completion':
-        return this.respond(req, await this.langiumRequest('completion', req.params));
-      case 'textDocument/definition':
-        return this.respond(req, await this.langiumRequest('definition', req.params));
+      // hover/completion/definition: see SERVER_CAPABILITIES note. The
+      // server does not advertise these features today, so a well-behaved
+      // client should not send them. If one does anyway (out-of-spec),
+      // reply with method_not_found rather than `null` so the deviation
+      // surfaces in client logs instead of being silently swallowed.
       default:
         return this.errorReply(req, ERR_METHOD_NOT_FOUND, 'method_not_found');
     }
@@ -321,29 +322,16 @@ export class RuneLspSession {
 
   // ── LSP feature plumbing (deferred to T044+ once a real langium is wired)
 
-  private async parseAndPublish(uri: string): Promise<void> {
-    // Real langium parse runs through `getLangiumServices()` once that
-    // path is wired through the connection-adapter pattern from
-    // `packages/lsp-server/src/rune-dsl-server.ts`. For now we publish an
-    // empty diagnostics list so the client clears any stale entries —
-    // matches the LSP convention "absence of diagnostics = clean".
-    this.send({
-      jsonrpc: '2.0',
-      method: 'textDocument/publishDiagnostics',
-      params: { uri, diagnostics: [] }
-    });
-  }
-
-  private async langiumRequest(
-    _kind: 'hover' | 'completion' | 'definition',
-    _params: unknown
-  ): Promise<unknown> {
-    // Placeholder — full langium wiring is in T041's follow-on (see TODO in
-    // contracts/lsp-worker.md). Returning `null` matches the LSP "no
-    // result" sentinel that all three of hover / completion / definition
-    // accept without surfacing a client-visible error.
+  private async parseAndPublish(_uri: string): Promise<void> {
+    // Do not publish `diagnostics: []` until this path is backed by a real
+    // langium parse / validation pass. In LSP, an empty diagnostics array
+    // means "document is clean", which would silently clear real errors
+    // and make this transport appear functional before it actually is.
+    //
+    // We still force langium initialisation here so the session follows
+    // its intended lifecycle (heavy import warmed once per DO) and the
+    // future wiring in T044b can reuse this call site without restructure.
     await this.ensureLangium();
-    return null;
   }
 
   private async ensureLangium(): Promise<void> {
@@ -398,9 +386,14 @@ export class RuneLspSession {
   private async touchMeta(): Promise<void> {
     const now = Date.now();
     const existing = (await this.state.storage.get<MetaRecord>(META_KEY)) ?? null;
+    // The DO id encodes the workspace identity (Worker derives it from
+    // the session token's `workspaceId` claim). Stamping it here keeps
+    // stored metadata self-describing for `wrangler tail` debugging and
+    // future cross-DO metrics — the alternative empty-string sentinel
+    // was a placeholder.
     const next: MetaRecord = existing
       ? { ...existing, lastActiveAt: now }
-      : { workspaceId: '', createdAt: now, lastActiveAt: now };
+      : { workspaceId: this.state.id.toString(), createdAt: now, lastActiveAt: now };
     await this.state.storage.put(META_KEY, next);
   }
 }

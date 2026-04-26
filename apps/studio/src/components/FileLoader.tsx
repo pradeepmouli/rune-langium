@@ -179,18 +179,21 @@ export function FileLoader({
               <Button variant="secondary" size="lg" onClick={() => dirInputRef.current?.click()}>
                 Select Folder
               </Button>
-              <Button variant="secondary" size="lg" onClick={() => setIsGitHubOpen(true)}>
-                Open from GitHub repository…
-              </Button>
+              {createGitBackedWorkspace && (
+                <Button variant="secondary" size="lg" onClick={() => setIsGitHubOpen(true)}>
+                  Open from GitHub repository…
+                </Button>
+              )}
             </div>
           </div>
         )}
 
-        {isGitHubOpen && (
-          // T031 visible affordance + T032e end-to-end clone wiring
-          // (when createGitBackedWorkspace is supplied). Without it the
-          // flow stops at auth; FileLoader-github.test.tsx asserts that
-          // legacy shape.
+        {isGitHubOpen && createGitBackedWorkspace && (
+          // T031 visible affordance + T032e end-to-end clone wiring.
+          // The CTA only renders when `createGitBackedWorkspace` is wired,
+          // so reaching here means the full flow is available. App.tsx
+          // hasn't threaded the prop in yet → the CTA stays hidden and
+          // the legacy "auth-only" stub no longer ships in production.
           <div
             role="presentation"
             className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
@@ -199,29 +202,15 @@ export function FileLoader({
             }}
           >
             <div className="bg-popover border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
-              {createGitBackedWorkspace ? (
-                <GitHubWorkspaceFlow
-                  authBase={authBase}
-                  createWorkspace={createGitBackedWorkspace}
-                  onCreated={(id) => {
-                    setIsGitHubOpen(false);
-                    onGitHubWorkspaceCreated?.(id);
-                  }}
-                  onCancel={() => setIsGitHubOpen(false)}
-                />
-              ) : (
-                // Legacy auth-only path — kept for tests + for any
-                // mount-site that hasn't wired createGitBackedWorkspace
-                // yet (e.g. App.tsx before its WorkspaceManager wiring).
-                <GitHubWorkspaceFlow
-                  authBase={authBase}
-                  createWorkspace={async () => {
-                    throw new Error('Workspace creation not wired in this mount');
-                  }}
-                  onCreated={() => setIsGitHubOpen(false)}
-                  onCancel={() => setIsGitHubOpen(false)}
-                />
-              )}
+              <GitHubWorkspaceFlow
+                authBase={authBase}
+                createWorkspace={createGitBackedWorkspace}
+                onCreated={(id) => {
+                  setIsGitHubOpen(false);
+                  onGitHubWorkspaceCreated?.(id);
+                }}
+                onCancel={() => setIsGitHubOpen(false)}
+              />
             </div>
           </div>
         )}
