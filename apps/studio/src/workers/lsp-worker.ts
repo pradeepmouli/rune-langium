@@ -187,11 +187,13 @@ if ('onconnect' in self) {
   });
 
   // T084: handle codegen:generate messages from the studio's CodePreviewPanel.
-  // Full document-builder integration is deferred; respond with codegen:outdated
-  // to signal that a result is not yet available.
+  // TODO: Full document-builder integration — once the LSP server exposes built documents
+  // via a shared reference, call generate(builtDocuments, { target: msg.target }) here
+  // and postMessage a codegen:result instead of codegen:outdated.
   workerScope.addEventListener('message', (e: MessageEvent) => {
-    const msg = e.data as { type?: string } | null;
+    const msg = e.data as { type?: string; target?: string } | null;
     if (msg && msg.type === 'codegen:generate') {
+      // Stub: signal outdated until full doc-builder integration is wired.
       workerScope.postMessage({ type: 'codegen:outdated' });
     }
   });

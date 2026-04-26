@@ -154,8 +154,8 @@ describe('fixture determinism (SC-007)', () => {
       await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
       const run1 = generate([doc], { target: 'zod' });
       const run2 = generate([doc], { target: 'zod' });
+      expect(run2.length, `${entry}: second run produced different output count`).toBe(run1.length);
       for (let i = 0; i < run1.length; i++) {
-        expect(run2[i], `${entry}[${i}]: second run produced fewer outputs`).toBeDefined();
         expect(run1[i]?.content, `${entry}[${i}]: second run differed`).toBe(run2[i]?.content);
       }
       checked++;

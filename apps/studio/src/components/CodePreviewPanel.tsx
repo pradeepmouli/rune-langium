@@ -81,11 +81,6 @@ export function CodePreviewPanel({
     [worker]
   );
 
-  const handlePreviewMouseDown = useCallback(() => {
-    // Source-map navigation is handled by the CodeMirror EditorView in full integration.
-    // In jsdom tests, the editor host is a plain div so no line resolution occurs here.
-  }, []);
-
   return (
     <section
       role="region"
@@ -97,11 +92,9 @@ export function CodePreviewPanel({
       <div data-testid="codegen-status" aria-live="polite">
         {statusLabel(status, target)}
       </div>
-      <div
-        ref={editorHostRef}
-        data-testid="code-preview-editor"
-        onMouseDown={handlePreviewMouseDown}
-      />
+      {/* TODO: install CodeMirror EditorView click-to-navigate handler here once
+          the full doc-builder integration provides sourceMap entries (FR-018). */}
+      <div ref={editorHostRef} data-testid="code-preview-editor" />
     </section>
   );
 }
