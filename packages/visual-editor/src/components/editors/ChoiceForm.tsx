@@ -8,15 +8,10 @@
  * Phase 3 (DataTypeForm) z2f migration template:
  *
  * - Validation drives off the canonical `ChoiceSchema` from the
- *   langium-generated AST (R1 / R11). The hand-authored
- *   `choiceFormSchema` projection in `src/schemas/form-schemas.ts` is no
- *   longer consumed here; deletion is parked for T076 (Phase 10 cleanup).
- * - The graph node is passed straight into `defaultValues` (R11);
- *   `toDefaults` is a thin AST-shape augmentation that injects the form-
- *   projection keys (`definition`, `comments`, `synonyms`) the bespoke
- *   `<MetadataSection>` reads via `useFormContext`. Phase 8 cleanup
- *   collapses this once the section is migrated to the declarative
- *   `section:` config.
+ *   langium-generated AST (R1 / R11).
+ * - The graph node is passed straight into `defaultValues` (R11). The
+ *   AST schema is a `z.looseObject`, so any graph-only keys flow through
+ *   without a projection layer.
  * - External-data sync uses the upstream `useExternalSync` hook with an
  *   identity projection (R11) — the graph node IS the AST shape, so no
  *   transformation is required at the sync boundary.
@@ -54,43 +49,16 @@ import { MetadataSection } from './MetadataSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
-import { z } from 'zod';
 import { ChoiceSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
-import { getTypeRefText, classExprSynonymsToStrings } from '../../adapters/model-helpers.js';
+import { identityProjection } from './identity-projection.js';
+import { getTypeRefText } from '../../adapters/model-helpers.js';
 import type {
   AnyGraphNode,
   TypeOption,
   EditorFormActions,
   NavigateToNodeCallback
 } from '../../types.js';
-
-// ---------------------------------------------------------------------------
-// Default-values projection
-// ---------------------------------------------------------------------------
-
-/**
- * Build the form's default values from an AST-shaped graph node.
- *
- * Per R11 of `specs/013-z2f-editor-migration/research.md`, the form is now
- * driven directly by `ChoiceSchema` (the langium-generated AST). Because
- * `ChoiceSchema` is a `z.looseObject`, extra keys (`definition`, `comments`,
- * `synonyms`) are accepted without runtime cost and feed the bespoke
- * `<MetadataSection>` which reads them via `useFormContext`.
- *
- * Phase 8 cleanup: once `<MetadataSection>` migrates to the declarative
- * `section:` config and the AST schema picks up the metadata fields
- * directly, this projection collapses to a pass-through.
- */
-function toDefaults(data: AnyGraphNode) {
-  const d = data as any;
-  return {
-    ...d,
-    definition: d.definition ?? '',
-    comments: d.comments ?? '',
-    synonyms: classExprSynonymsToStrings(d.synonyms)
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -127,12 +95,12 @@ function ChoiceForm({
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema; pass the graph node
-  // straight into `defaultValues` (ChoiceSchema is z.looseObject so the
-  // form-only metadata keys are accepted as extras). Phase 8 (US6) wires
-  // the bespoke <ChoiceOptionRow> as a custom row renderer via formRegistry.
+  // straight into `defaultValues` (ChoiceSchema is z.looseObject, so the
+  // graph node passes through unchanged). Phase 8 (US6) wires the bespoke
+  // <ChoiceOptionRow> as a custom row renderer via formRegistry.
 
   const { form } = useZodForm(ChoiceSchema, {
-    defaultValues: toDefaults(data) as Partial<z.output<typeof ChoiceSchema>>,
+    defaultValues: identityProjection<typeof ChoiceSchema>(data),
     mode: 'onChange',
     formRegistry
   });
@@ -140,9 +108,7 @@ function ChoiceForm({
   // Re-bind pristine field state when the caller swaps to a different node.
   // `keepDirty: true` preserves the prior local-component semantics so
   // in-flight user edits are not stomped by a graph push.
-  useExternalSync(form, data, toDefaults as (n: typeof data) => z.output<typeof ChoiceSchema>, {
-    keepDirty: true
-  });
+  useExternalSync(form, data, identityProjection<typeof ChoiceSchema>, { keepDirty: true });
 
   // Track committed data for diffing
   const committedRef = useRef(data);

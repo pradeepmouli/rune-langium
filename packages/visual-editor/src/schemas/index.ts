@@ -2,31 +2,15 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Form-surface Zod schemas for editor forms.
+ * Schema barrel for the visual editor.
  *
- * These are small projections of the user-editable fields that
- * each form manages. Forms accept AnyGraphNode and use toFormValues()
- * to extract fields from the AST-shaped data.
+ * Per R1 / R11 of `specs/013-z2f-editor-migration/research.md`, editor
+ * forms drive validation off the langium-generated AST schemas in
+ * `src/generated/zod-schemas.ts` directly. Only schemas that describe
+ * non-AST surfaces (expression-node renderers, UI derivation) live here.
  *
  * @module
  */
-
-export {
-  dataTypeFormSchema,
-  enumFormSchema,
-  choiceFormSchema,
-  functionFormSchema,
-  metadataSchema,
-  attributeSchema,
-  enumValueSchema,
-  type DataTypeFormValues,
-  type EnumFormValues,
-  type ChoiceFormValues,
-  type FunctionFormValues,
-  type MetadataValues,
-  type AttributeValues,
-  type EnumValueValues
-} from './form-schemas.js';
 
 export { deriveUiSchema, type DeriveOptions } from './derive-ui-schema.js';
 export {

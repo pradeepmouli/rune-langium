@@ -45,9 +45,9 @@ import { TypeSelector } from './TypeSelector.js';
 import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
-import { z } from 'zod';
 import { RosettaEnumerationSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
+import { identityProjection } from './identity-projection.js';
 import { getRefText } from '../../adapters/model-helpers.js';
 import { TypeLink } from './TypeLink.js';
 import { AnnotationSection } from './AnnotationSection.js';
@@ -104,9 +104,9 @@ function EnumForm({
 
   const { form } = useZodForm(RosettaEnumerationSchema, {
     // The graph node is a union (`AnyGraphNode`); the host narrows by
-    // `$type` upstream. Cast through `unknown` because the discriminated
-    // union doesn't structurally match `Partial<RosettaEnumeration>`.
-    defaultValues: data as unknown as Partial<z.output<typeof RosettaEnumerationSchema>>,
+    // `$type` upstream. `identityProjection` covers the typed gap between
+    // the discriminated union and z2f's `Partial<output<Schema>>` constraint.
+    defaultValues: identityProjection<typeof RosettaEnumerationSchema>(data),
     mode: 'onChange',
     formRegistry
   });
@@ -115,7 +115,7 @@ function EnumForm({
   // (object identity is the contract). `keepDirty: true` preserves the
   // pre-migration `keepDirtyValues: true` semantics. Identity projection
   // per R11 — the graph node IS already AST-shaped.
-  useExternalSync(form, data, (n) => n as unknown as z.output<typeof RosettaEnumerationSchema>, {
+  useExternalSync(form, data, identityProjection<typeof RosettaEnumerationSchema>, {
     keepDirty: true
   });
 
