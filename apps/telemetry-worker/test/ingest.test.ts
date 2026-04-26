@@ -389,6 +389,70 @@ describe('telemetry ingest contract', () => {
     }
   });
 
+  describe('lsp_session_* events (T070)', () => {
+    it('lsp_session_opened reaches DO id lsp_session_opened:<UTC-day>', async () => {
+      const { env, do: doNs } = makeEnv();
+      const res = await worker.fetch(
+        makeReq({
+          event: 'lsp_session_opened',
+          studio_version: '0.1.0',
+          ua_class: 'smoke'
+        }),
+        env
+      );
+      expect(res.status).toBe(204);
+      const entry = doNs.instances.get('lsp_session_opened:2026-04-25');
+      expect(entry).toBeDefined();
+      expect(await entry!.storage.get<number>('count:null')).toBe(1);
+    });
+
+    it('lsp_session_failed groups counters by errorCategory', async () => {
+      const { env, do: doNs } = makeEnv();
+      const validBody = (errorCategory: string) => ({
+        event: 'lsp_session_failed',
+        errorCategory,
+        studio_version: '0.1.0',
+        ua_class: 'smoke'
+      });
+      await worker.fetch(makeReq(validBody('origin_blocked')), env);
+      await worker.fetch(makeReq(validBody('token_expired'), '203.0.113.99'), env);
+      const entry = doNs.instances.get('lsp_session_failed:2026-04-25');
+      expect(entry).toBeDefined();
+      expect(await entry!.storage.get<number>('count:origin_blocked')).toBe(1);
+      expect(await entry!.storage.get<number>('count:token_expired')).toBe(1);
+    });
+
+    it('lsp_session_failed rejects an unknown errorCategory (closed schema)', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        makeReq({
+          event: 'lsp_session_failed',
+          errorCategory: 'not_a_real_category',
+          studio_version: '0.1.0',
+          ua_class: 'smoke'
+        }),
+        env
+      );
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe('schema_violation');
+    });
+
+    it('lsp_session_opened rejects an extra field (closed schema)', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        makeReq({
+          event: 'lsp_session_opened',
+          studio_version: '0.1.0',
+          ua_class: 'smoke',
+          leaked_path: '/Users/me/secret.rosetta'
+        }),
+        env
+      );
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('DO failure surfaces as 500 (not silent 204)', () => {
     it('500 when DO returns 5xx', async () => {
       const { env, do: doNs } = makeEnv();

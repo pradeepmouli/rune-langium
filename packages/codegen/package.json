@@ -1,25 +1,18 @@
 {
   "name": "@rune-langium/codegen",
   "version": "0.1.0",
-  "description": "Code generation service and types for Rune DSL models via rosetta-code-generators",
+  "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./node": {
-      "types": "./dist/node.d.ts",
-      "default": "./dist/node.js"
-    },
-    "./serve": {
-      "default": "./dist/serve.js"
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
     }
   },
   "bin": {
-    "codegen-serve": "./dist/serve.js"
+    "rune-codegen": "./dist/bin/rune-codegen.js"
   },
   "files": [
     "dist",
@@ -28,33 +21,38 @@
   "scripts": {
     "build": "tsgo -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "type-check": "tsgo --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@rune-langium/core": "workspace:*",
+    "commander": "^14.0.3",
+    "langium": "^4.2.2"
+  },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.4",
+    "zod": "^4.3.6"
   },
-  "license": "MIT",
   "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen",
   "repository": {
     "type": "git",
     "url": "https://github.com/pradeepmouli/rune-langium.git",
     "directory": "packages/codegen"
   },
-  "bugs": {
-    "url": "https://github.com/pradeepmouli/rune-langium/issues"
-  },
-  "keywords": [
-    "rune",
-    "rosetta",
-    "dsl",
-    "codegen",
-    "code-generation",
-    "cdm"
-  ],
-  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
+  "keywords": [
+    "rune",
+    "langium",
+    "codegen",
+    "zod",
+    "json-schema",
+    "typescript",
+    "cdm"
+  ]
 }

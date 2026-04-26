@@ -352,16 +352,23 @@
   padding: var(--space-10);
 }
 
+/* T055 (014/FR-022) — match landing's `.nav-links a` typography:
+ * uppercase + 0.04em tracking + 13px/500. Studio nav was previously
+ * left as 14px/regular muted-foreground, which read as a different
+ * product when held side-by-side with the landing site. */
 .studio-links {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-8);
 }
 
 .studio-links a {
-  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
   text-decoration: none;
-  font-size: var(--text-sm);
 }
 
 .studio-links a:hover {
@@ -452,13 +459,16 @@
 }
 
 /* ---------- Focus-visible for namespace explorer ---------- */
+/* T058 (014/FR-026) — outline-offset normalised to 2px so it
+ * matches the design-system Button rule and the landing/docs
+ * `:focus-visible` baseline. Width and colour family are unchanged. */
 .ns-explorer__action-btn:focus-visible,
 .ns-row__chevron:focus-visible,
 .ns-row__visibility:focus-visible,
 .ns-type__visibility:focus-visible,
 .studio-source-view__tab:focus-visible {
   outline: 2px solid var(--primary);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .ns-explorer__action-btn:focus:not(:focus-visible),
@@ -836,21 +846,26 @@
   color: var(--text-secondary, #8A8A96);
 }
 
-/* ── Refactory Dark — Diagnostics ────────────────────────────── */
+/* ── Refactory Dark — Diagnostics ──────────────────────────────
+ * T056 (014/FR-030) — colours flow from design tokens (--destructive,
+ * --color-warning, --color-info / --primary). Hard-coded hex literals
+ * were removed so a token re-skin doesn't leave diagnostics behind.
+ * The 6%-alpha tint is computed via `oklch(from … / 0.06)` so it
+ * tracks the foreground. */
 .diagnostic-error {
-  color: #FF6058;
-  background: rgba(255, 96, 88, 0.06);
-  border-left: 2px solid #FF6058;
+  color: var(--destructive);
+  background: oklch(from var(--destructive) l c h / 0.06);
+  border-left: 2px solid var(--destructive);
 }
 
 .diagnostic-warning {
-  color: #E8913A;
-  background: rgba(232, 145, 58, 0.06);
-  border-left: 2px solid #E8913A;
+  color: var(--color-warning);
+  background: oklch(from var(--color-warning) l c h / 0.06);
+  border-left: 2px solid var(--color-warning);
 }
 
 .diagnostic-info {
-  color: #00D4AA;
-  background: rgba(0, 212, 170, 0.06);
-  border-left: 2px solid #00D4AA;
+  color: var(--color-info);
+  background: oklch(from var(--color-info) l c h / 0.06);
+  border-left: 2px solid var(--color-info);
 }

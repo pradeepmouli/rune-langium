@@ -1,0 +1,13 @@
+namespace "test.cond.multi"
+version "1"
+
+type UnitType:
+    a string (0..1)
+    b string (0..1)
+    c string (0..1)
+    condition AExists:
+        a exists
+    condition BAbsent:
+        b is absent
+    condition OneOfAC:
+        [a, c] one-of

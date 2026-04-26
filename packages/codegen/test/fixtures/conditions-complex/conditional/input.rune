@@ -1,0 +1,8 @@
+namespace "test.cond.conditional"
+version "1"
+
+type ConditionalCheck:
+    flag boolean (0..1)
+    value string (0..1)
+    condition IfFlagThenValue:
+        if flag = True then value exists

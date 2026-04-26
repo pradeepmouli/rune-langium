@@ -15,6 +15,21 @@ export default defineConfig({
   optimizeDeps: {
     include: ['buffer']
   },
+  // langium-zod's `dist/index.js` re-exports its CLI (`generate` from `cli.js`)
+  // which runs `process.argv.slice(2)` at module-init. When vite optimises
+  // the package the top-level CLI bytes execute in the browser and crash the
+  // page with `process is not defined`. We're not running the CLI in-browser;
+  // the smallest fix is to expose a no-op `process` shim so the CLI's
+  // top-level guards short-circuit. This affects neither prod bundling nor
+  // any code that actually wants Node's process at runtime.
+  define: {
+    'process.argv': '[]',
+    'process.platform': '"browser"',
+    'process.env': '{}',
+    'process.exit': '(()=>{})',
+    'process.cwd': '(()=>"/")',
+    process: '({argv:[],platform:"browser",env:{},exit:()=>{},cwd:()=>"/"})'
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))

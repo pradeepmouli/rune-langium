@@ -63,4 +63,31 @@ describe('CuratedLoadErrorPanel (T037)', () => {
     expect(text).not.toMatch(/unknown error/i);
     expect(text).toMatch(/unexpected/i);
   });
+
+  // T018 — all seven ErrorCategory values must produce distinct titles AND
+  // distinct body copy. A regression that collapses two categories into the
+  // same string violates FR-002 / SC-004 (no generic copy).
+  it('renders distinct title + body copy for every ErrorCategory value', async () => {
+    const { ErrorCategorySchema } = await import('@rune-langium/curated-schema');
+    const allCategories = ErrorCategorySchema.options as readonly ErrorCategory[];
+    expect(allCategories.length).toBeGreaterThanOrEqual(7);
+
+    const titles = new Set<string>();
+    const bodies = new Set<string>();
+    for (const cat of allCategories) {
+      const { unmount } = render(
+        <CuratedLoadErrorPanel category={cat} modelName="CDM" onRetry={vi.fn()} />
+      );
+      const heading = screen.getByRole('heading', { level: 3 });
+      const body = heading.parentElement?.querySelector('p');
+      expect(heading.textContent).toBeTruthy();
+      expect(body?.textContent).toBeTruthy();
+      titles.add(heading.textContent!.trim());
+      bodies.add(body!.textContent!.trim());
+      unmount();
+    }
+    // Every category must produce a unique title + body.
+    expect(titles.size).toBe(allCategories.length);
+    expect(bodies.size).toBe(allCategories.length);
+  });
 });

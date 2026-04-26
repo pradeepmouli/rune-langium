@@ -24,6 +24,8 @@ import {
   type RecentWorkspaceRecord
 } from './persistence.js';
 import { WorkspaceOwnership } from '../services/multi-tab-broadcast.js';
+import { cloneRepository } from '../services/git-backing.js';
+import { storeWorkspaceToken } from '../services/github-auth.js';
 
 export interface WorkspaceManagerOptions {
   opfsRoot: FileSystemDirectoryHandle;
@@ -45,6 +47,82 @@ export class WorkspaceManager {
   constructor(private readonly opts: WorkspaceManagerOptions) {
     this.fs = new OpfsFs(opts.opfsRoot);
     this.ownership = new WorkspaceOwnership(opts.tabId);
+  }
+
+  /**
+   * Clone a GitHub repository into a fresh git-backed workspace.
+   * Closes T032d (014/Phase 6 deferred). Persists a `git-backed`
+   * `WorkspaceRecord`, stashes the access token under the workspace's
+   * private OPFS path (per `services/github-auth.ts`'s storage layout),
+   * and claims ownership.
+   *
+   * The token is held only on the user's device — `services/github-auth.ts`
+   * writes it to `<workspaceId>/.studio/token` in OPFS. Deleting the
+   * workspace clears it. Per FR-018, no Worker ever sees or persists it.
+   */
+  async createGitBacked(input: {
+    name: string;
+    repoUrl: string;
+    branch?: string;
+    user: string;
+    token: string;
+    onProgress?: (evt: { phase: string; loaded?: number; total?: number }) => void;
+  }): Promise<WorkspaceRecord> {
+    const id = generateUlid();
+    const branch = input.branch ?? 'main';
+    const now = new Date().toISOString();
+
+    // Reserve the OPFS dir tree before any write — clone() expects
+    // <id>/ to exist; it manages /.git internally.
+    await this.fs.mkdir('/' + id);
+    await this.fs.mkdir('/' + id + '/files');
+    await this.fs.mkdir('/' + id + '/.studio');
+
+    // Persist the token first; if the clone fails partway, the user's
+    // retry doesn't have to redo device-flow auth.
+    await storeWorkspaceToken(this.fs, id, input.token);
+
+    try {
+      await cloneRepository(this.fs, id, {
+        remoteUrl: input.repoUrl,
+        ref: branch,
+        token: input.token,
+        user: input.user,
+        onProgress: input.onProgress
+      });
+    } catch (err) {
+      // Clean up on failure so the user doesn't see an orphan record.
+      try {
+        await this.opts.opfsRoot.removeEntry(id, { recursive: true });
+      } catch {
+        /* best-effort */
+      }
+      throw err;
+    }
+
+    const ws: WorkspaceRecord = {
+      id,
+      name: input.name,
+      createdAt: now,
+      lastOpenedAt: now,
+      kind: 'git-backed',
+      gitBacking: {
+        repoUrl: input.repoUrl,
+        branch,
+        user: input.user,
+        tokenPath: `/${id}/.studio/token`,
+        syncState: 'clean',
+        lastSyncedSha: null
+      },
+      layout: { version: 1, writtenBy: this.opts.studioVersion, dockview: null },
+      tabs: [],
+      activeTabPath: null,
+      curatedModels: [],
+      schemaVersion: 1
+    };
+    await saveWorkspace(ws);
+    await this.ownership.claim(id);
+    return ws;
   }
 
   /** Create a fresh browser-only workspace and return its record. */

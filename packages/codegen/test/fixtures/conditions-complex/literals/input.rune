@@ -1,0 +1,13 @@
+namespace "test.cond.literals"
+version "1"
+
+type WithLiterals:
+    score int (0..1)
+    name string (0..1)
+    active boolean (0..1)
+    condition ScoreCheck:
+        score = 42
+    condition NameCheck:
+        name = "hello"
+    condition ActiveCheck:
+        active = True

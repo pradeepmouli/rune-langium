@@ -1,0 +1,11 @@
+namespace "test.circular"
+version "1"
+
+type NodeA:
+    child NodeB (0..1)
+
+type NodeB:
+    parent NodeA (0..1)
+
+type SelfRef:
+    self SelfRef (0..1)

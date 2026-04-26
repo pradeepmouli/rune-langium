@@ -16,7 +16,7 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
-    "@rune-langium/codegen": "workspace:*",
+    "@rune-langium/codegen-legacy": "workspace:*",
     "pino": "^9.5.0"
   },
   "devDependencies": {

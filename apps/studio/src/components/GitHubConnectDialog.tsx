@@ -19,8 +19,28 @@ import {
   initDeviceFlow,
   pollDeviceFlow,
   type InitResult,
-  type PollResult
+  type PollResult,
+  type GitHubAuthErrorCategory
 } from '../services/github-auth.js';
+
+/**
+ * User-facing copy per error category (FR-006 / EC-6). Surfaces the
+ * github-auth Worker's structured failures as plain English instead
+ * of a raw `HTTP 5xx` string.
+ */
+function categoryCopy(category: GitHubAuthErrorCategory, fallback: string): string {
+  switch (category) {
+    case 'misconfigured':
+      return 'GitHub authorisation is not yet available — please come back later.';
+    case 'unavailable':
+      return 'GitHub appears to be down — please retry shortly.';
+    case 'origin_blocked':
+      return 'Studio configuration error — contact support.';
+    case 'unknown':
+    default:
+      return `Connection failed: ${fallback}`;
+  }
+}
 
 interface Props {
   authBase: string;
@@ -29,9 +49,10 @@ interface Props {
 }
 
 interface DialogState {
-  phase: 'init' | 'pending' | 'expired' | 'error';
+  phase: 'init' | 'pending' | 'expired' | 'access_denied' | 'error';
   init?: Extract<InitResult, { kind: 'ok' }>;
   errorReason?: string;
+  errorCategory?: GitHubAuthErrorCategory;
 }
 
 export function GitHubConnectDialog({
@@ -65,7 +86,11 @@ export function GitHubConnectDialog({
     const init = await initDeviceFlow(authBase);
     if (cancelledRef.current) return;
     if (init.kind !== 'ok') {
-      setState({ phase: 'error', errorReason: init.reason });
+      setState({
+        phase: 'error',
+        errorReason: init.reason,
+        errorCategory: init.category
+      });
       return;
     }
     setState({ phase: 'pending', init });
@@ -123,9 +148,19 @@ export function GitHubConnectDialog({
       setState((s) => ({ ...s, phase: 'expired' }));
       return;
     }
+    if (r.kind === 'access_denied') {
+      clearPollTimer();
+      setState((s) => ({ ...s, phase: 'access_denied' }));
+      return;
+    }
     if (r.kind === 'error') {
       clearPollTimer();
-      setState((s) => ({ ...s, phase: 'error', errorReason: r.reason }));
+      setState((s) => ({
+        ...s,
+        phase: 'error',
+        errorReason: r.reason,
+        errorCategory: r.category
+      }));
       return;
     }
     // pending / slow_down: stay in pending; caller (re)schedules the next tick.
@@ -175,9 +210,25 @@ export function GitHubConnectDialog({
           </Button>
         </>
       )}
+      {state.phase === 'access_denied' && (
+        <>
+          <p>Authorisation declined. You can try again or close this dialog.</p>
+          <Button onClick={() => void run()}>Retry</Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              cancelledRef.current = true;
+              clearPollTimer();
+              onCancel();
+            }}
+          >
+            Close
+          </Button>
+        </>
+      )}
       {state.phase === 'error' && (
         <>
-          <p>Connection failed: {state.errorReason}</p>
+          <p>{categoryCopy(state.errorCategory ?? 'unknown', state.errorReason ?? '')}</p>
           <Button onClick={() => void run()}>Retry</Button>
           <Button
             variant="ghost"

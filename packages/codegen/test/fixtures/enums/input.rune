@@ -1,0 +1,12 @@
+namespace "test.enums"
+version "1"
+
+enum ColorEnum:
+    Red
+    Green
+    Blue
+
+enum StatusEnum:
+    Active displayName "Active Status"
+    Inactive displayName "Inactive Status"
+    Pending displayName "Pending \"Review\""

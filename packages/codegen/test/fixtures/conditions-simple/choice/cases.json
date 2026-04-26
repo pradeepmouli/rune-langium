@@ -1,0 +1,5 @@
+{
+  "schemaName": "UnitTypeSchema",
+  "valid": [{ "a": "hello" }, { "b": "world" }, { "c": "foo" }],
+  "invalid": [{}, { "a": "hello", "b": "world" }, { "a": "hello", "b": "world", "c": "foo" }]
+}

@@ -17,13 +17,13 @@
  * @see specs/011-export-code-cf/contracts/http-generate.md (hosted)
  */
 
-import { KNOWN_GENERATORS } from '@rune-langium/codegen';
+import { KNOWN_GENERATORS } from '@rune-langium/codegen-legacy';
 import type {
   CodeGenerationRequest,
   CodeGenerationResult,
   GeneratedFile,
   GenerationError
-} from '@rune-langium/codegen';
+} from '@rune-langium/codegen-legacy';
 
 export type { CodeGenerationRequest, CodeGenerationResult, GeneratedFile };
 export { KNOWN_GENERATORS };
@@ -42,7 +42,7 @@ export interface GenerateOptions {
 
 /**
  * Browser-compatible proxy that calls the codegen HTTP API.
- * For CLI usage, use CodegenServiceProxy from '@rune-langium/codegen/node'.
+ * For CLI usage, use CodegenServiceProxy from '@rune-langium/codegen-legacy/node'.
  */
 export class BrowserCodegenProxy {
   private readonly baseUrl: string;

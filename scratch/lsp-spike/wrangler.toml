@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Pradeep Mouli
+#
+# Throwaway spike worker — feasibility test for hosting @rune-langium/lsp-server
+# inside a Cloudflare Worker isolate (T035, feature 014-studio-prod-ready).
+#
+# Not deployed; runs only via `wrangler dev` on localhost:8788.
+
+name = "rune-lsp-spike"
+main = "src/index.ts"
+compatibility_date = "2026-04-24"
+
+# nodejs_compat is the linchpin of the spike — without it, @lspeasy/server's
+# transitive deps (vscode-languageserver-textdocument, langium internals) lose
+# access to Buffer, util.inspect, etc.
+compatibility_flags = ["nodejs_compat"]
+
+# Paid-plan-shaped: 30s CPU per request gives us headroom for the cold parse.
+[limits]
+cpu_ms = 30000
+
+[observability]
+enabled = true
