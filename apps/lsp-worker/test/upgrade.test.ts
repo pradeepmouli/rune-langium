@@ -80,6 +80,37 @@ beforeAll(() => {
   }
 });
 
+/**
+ * Build a Response-shaped object reporting `status === 101`. Real
+ * `new Response(null, { status: 101 })` throws under undici because the
+ * status range is clamped to 200..599 in spec-compliant fetch
+ * implementations; the workerd runtime is the exception (it accepts 101
+ * for WebSocket upgrades). We fake just enough of the Response surface
+ * for our Worker entry to forward the DO's reply unmodified.
+ */
+function makeFakeUpgradeResponse(): Response {
+  const headers = new Headers();
+  return {
+    status: 101,
+    statusText: 'Switching Protocols',
+    ok: false,
+    headers,
+    body: null,
+    bodyUsed: false,
+    redirected: false,
+    type: 'default' as Response['type'],
+    url: '',
+    clone() {
+      return makeFakeUpgradeResponse();
+    },
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    blob: () => Promise.resolve(new Blob()),
+    formData: () => Promise.resolve(new FormData()),
+    json: () => Promise.resolve({}),
+    text: () => Promise.resolve('')
+  } as unknown as Response;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // DO fakes
 // ────────────────────────────────────────────────────────────────────────────
@@ -106,12 +137,16 @@ function makeDONamespace(): DONamespaceFake {
       get(_id: FakeDOId): DOInstance {
         // For upgrade tests we don't actually need the DO to process the
         // upgrade — the Worker validates the token before forwarding.
-        // Return a stub that 101's any request so the happy path completes.
+        // The DO stub returns a 101-shaped fake Response. We can't use
+        // `new Response(null, { status: 101 })` because undici (used by
+        // node's fetch) rejects status codes outside the 200..599 range,
+        // even though workerd accepts 101 for the WS-upgrade response. We
+        // therefore fabricate a thenable Response-shaped object whose
+        // `.status` getter returns 101.
         return {
           async fetch(req: Request): Promise<Response> {
             if (req.headers.get('Upgrade') === 'websocket') {
-              const pair = new (globalThis as any).WebSocketPair();
-              return new Response(null, { status: 101, webSocket: pair[0] });
+              return makeFakeUpgradeResponse();
             }
             return new Response(null, { status: 200 });
           }
