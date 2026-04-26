@@ -21,8 +21,8 @@ Operational unblock + shared scaffolding. Some of these are pure ops
 (wrangler commands); a human with deploy credentials runs them.
 Everything code-side runs locally first.
 
-- [ ] T001 Tighten the codegen-worker route pattern in `apps/codegen-worker/wrangler.toml` from `/rune-studio/api/*` to `/rune-studio/api/codegen/*` (closes the catch-all that's eating telemetry/github-auth/curated-mirror posts; verified by `verify-production.sh` check 6)
-- [ ] T002 Run `pnpm --filter @rune-langium/codegen-worker exec wrangler deploy` to push the narrowed route
+- [X] T001 ~~Tighten the codegen-worker route pattern~~. **Skipped** — the route was already `pattern = "www.daikonic.dev/rune-studio/api/generate/*"` (specific, not a catch-all). The verify-production-detected 405s were because the *other* three workers aren't deployed yet, NOT because codegen-worker is eating their requests. Once T003-T005 land, real `/api/telemetry/v1/event` POSTs will return 204 from the telemetry worker while a random unknown path still returns 405 — the catch-all check passes naturally. No code change needed.
+- [X] T002 ~~Run `wrangler deploy` for codegen-worker~~. **Skipped** — no change to redeploy (depends on T001).
 - [ ] T003 Run `pnpm --filter @rune-langium/curated-mirror-worker exec wrangler deploy` (Worker exists at master HEAD; just needs binding to the route)
 - [ ] T004 [P] Run `pnpm --filter @rune-langium/github-auth-worker exec wrangler deploy`
 - [ ] T005 [P] Run `pnpm --filter @rune-langium/telemetry-worker exec wrangler deploy`
