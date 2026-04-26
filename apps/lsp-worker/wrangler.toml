@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: FSL-1.1-ALv2
+# Copyright (c) 2026 Pradeep Mouli
+#
+# Cloudflare Worker config for the Rune DSL LSP host (feature 014-studio-prod-ready).
+# Per-workspace Durable Object holds langium services + WS hibernation; the
+# Worker mints HMAC-signed session tokens and gates WS upgrades.
+
+name = "rune-lsp-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-24"
+
+# nodejs_compat is load-bearing per the T035 spike — without it,
+# @lspeasy/server's transitive deps (vscode-languageserver-textdocument,
+# langium internals) lose access to Buffer / util.inspect at runtime.
+compatibility_flags = ["nodejs_compat"]
+
+account_id = "8327a4da4660eab7d78695268282da09"
+workers_dev = false
+
+[[routes]]
+pattern = "www.daikonic.dev/rune-studio/api/lsp/*"
+zone_name = "daikonic.dev"
+
+# DO class for per-workspace LSP sessions. Implemented in src/session.ts.
+# Binding name MUST match env.LSP_SESSION in src/.
+[[durable_objects.bindings]]
+name = "LSP_SESSION"
+class_name = "RuneLspSession"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RuneLspSession"]
+
+[observability]
+enabled = true
+
+# Paid-plan-shaped: 30s CPU per request gives headroom for the cold parse.
+# The langium service container's first parse on a non-trivial workspace
+# can use multiple seconds; the spike showed sub-second on a 170-byte
+# fixture, but production CDM-scale parses dominate.
+[limits]
+cpu_ms = 30000
+
+[vars]
+ALLOWED_ORIGIN = "https://www.daikonic.dev"

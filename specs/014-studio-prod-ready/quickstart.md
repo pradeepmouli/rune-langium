@@ -109,17 +109,30 @@ If the spike PASSes, proceed with the worker build. If it FAILs,
 drop to the documentation-rewrite fallback (research.md R2). The
 spike's pass/fail outcome is the gate.
 
-**After deploy**:
+**Deploy `apps/lsp-worker` (T043 — operational)**:
 
 ```sh
-# Health probe.
-curl -s https://www.daikonic.dev/rune-studio/api/lsp/health | jq
-# Expected: {"ok":true,"langium_loaded":true,...}
+# 1. Mint a fresh signing key and stash it as a wrangler secret.
+#    Rotated per-feature-release; never logged.
+openssl rand -base64 32 | \
+  pnpm --filter @rune-langium/lsp-worker exec wrangler secret put SESSION_SIGNING_KEY
 
-# Re-run verify-production — should now be all-pass.
+# 2. Deploy the Worker + Durable Object.
+pnpm --filter @rune-langium/lsp-worker exec wrangler deploy
+
+# 3. Verify the deploy.
+curl -s https://www.daikonic.dev/rune-studio/api/lsp/health | jq
+# Expected: {"ok":true, "version":"0.1.0", "langium_loaded":true, "uptime_seconds":N}
+
+# 4. Re-run verify-production — should now be all-pass.
 pnpm run verify:prod
 # Expected: all 7 checks PASS.
 ```
+
+**On migration**: the wrangler.toml ships a `v1` migration that creates
+the `RuneLspSession` DO class. There are no existing instances on this
+class, so the deploy is a clean roll-forward; no `--force` flags or
+storage backups are required.
 
 **Browser test**:
 
