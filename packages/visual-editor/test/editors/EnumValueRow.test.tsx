@@ -34,7 +34,9 @@ function baseProps(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Wraps the component in a FormProvider seeded with member values from props. */
+/** Wraps the component in a FormProvider seeded with AST-shaped enum value
+ *  records. Per R11 (013-z2f-editor-migration), EnumValueRow now reads
+ *  `enumValues.${index}.{name,display}` directly. */
 function Wrapper({
   name,
   displayName,
@@ -46,7 +48,7 @@ function Wrapper({
 }) {
   const form = useForm({
     defaultValues: {
-      members: [{ name, displayName, typeName: '', cardinality: '', isOverride: false }]
+      enumValues: [{ $type: 'RosettaEnumValue', name, display: displayName }]
     }
   });
   return <FormProvider {...form}>{children}</FormProvider>;
