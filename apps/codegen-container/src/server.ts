@@ -16,8 +16,8 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import type { CodeGenerationRequest, CodeGenerationResult } from '@rune-langium/codegen';
-import { CodegenServiceProxy } from '@rune-langium/codegen/node';
+import type { CodeGenerationRequest, CodeGenerationResult } from '@rune-langium/codegen-legacy';
+import { CodegenServiceProxy } from '@rune-langium/codegen-legacy/node';
 import type { Logger } from 'pino';
 import { logger as defaultLogger } from './logger.js';
 

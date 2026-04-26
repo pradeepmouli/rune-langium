@@ -29,32 +29,32 @@ codegen-worker | grep -v codegen-container` must produce zero output.
 
 ### 1a. Rename the package directory and identity
 
-- [ ] T001 Rename `packages/codegen/` to `packages/codegen-legacy/` on disk (the pnpm workspace glob `packages/*` still matches)
-- [ ] T002 Update `packages/codegen-legacy/package.json`: set `"name": "@rune-langium/codegen-legacy"`, add `"deprecated"` field: `"This package bridges the legacy JVM/Rosetta codegen. Use @rune-langium/codegen for the Langium-native generator."`
+- [X] T001 Rename `packages/codegen/` to `packages/codegen-legacy/` on disk (the pnpm workspace glob `packages/*` still matches)
+- [X] T002 Update `packages/codegen-legacy/package.json`: set `"name": "@rune-langium/codegen-legacy"`, add `"deprecated"` field: `"This package bridges the legacy JVM/Rosetta codegen. Use @rune-langium/codegen for the Langium-native generator."`
 
 ### 1b. Re-wire apps/codegen-container
 
-- [ ] T003 Update `apps/codegen-container/package.json`: change `dependencies["@rune-langium/codegen"]` → `"@rune-langium/codegen-legacy": "workspace:*"`
-- [ ] T004 [P] Update `apps/codegen-container/src/server.ts`: rewrite every `from '@rune-langium/codegen'` import to `'@rune-langium/codegen-legacy'` (and `/node` subpath accordingly)
-- [ ] T005 [P] Update `apps/codegen-container/test/server.test.ts`: rewrite every `from '@rune-langium/codegen'` import to `'@rune-langium/codegen-legacy'`
+- [X] T003 Update `apps/codegen-container/package.json`: change `dependencies["@rune-langium/codegen"]` → `"@rune-langium/codegen-legacy": "workspace:*"`
+- [X] T004 [P] Update `apps/codegen-container/src/server.ts`: rewrite every `from '@rune-langium/codegen'` import to `'@rune-langium/codegen-legacy'` (and `/node` subpath accordingly)
+- [X] T005 [P] Update `apps/codegen-container/test/server.test.ts`: rewrite every `from '@rune-langium/codegen'` import to `'@rune-langium/codegen-legacy'`
 
 ### 1c. Re-wire packages/cli
 
-- [ ] T006 Update `packages/cli/package.json`: change `dependencies["@rune-langium/codegen"]` → `"@rune-langium/codegen-legacy": "workspace:*"`
-- [ ] T007 [P] Update `packages/cli/src/generate.ts`: rewrite `from '@rune-langium/codegen/node'` → `'@rune-langium/codegen-legacy/node'` and `from '@rune-langium/codegen'` → `'@rune-langium/codegen-legacy'`
-- [ ] T008 [P] Update `packages/cli/src/types/codegen-types.ts`: rewrite all imports from `'@rune-langium/codegen'` → `'@rune-langium/codegen-legacy'`
+- [X] T006 Update `packages/cli/package.json`: change `dependencies["@rune-langium/codegen"]` → `"@rune-langium/codegen-legacy": "workspace:*"`
+- [X] T007 [P] Update `packages/cli/src/generate.ts`: rewrite `from '@rune-langium/codegen/node'` → `'@rune-langium/codegen-legacy/node'` and `from '@rune-langium/codegen'` → `'@rune-langium/codegen-legacy'`
+- [X] T008 [P] Update `packages/cli/src/types/codegen-types.ts`: rewrite all imports from `'@rune-langium/codegen'` → `'@rune-langium/codegen-legacy'`
 
 ### 1d. Re-wire apps/studio
 
-- [ ] T009 Update `apps/studio/package.json`: change `dependencies["@rune-langium/codegen"]` → `"@rune-langium/codegen-legacy": "workspace:*"`
-- [ ] T010 [P] Update `apps/studio/src/services/codegen-service.ts`: rewrite all imports from `'@rune-langium/codegen'` → `'@rune-langium/codegen-legacy'`
-- [ ] T011 [P] Update `apps/studio/src/components/ExportDialog.tsx`: rewrite all imports from `'@rune-langium/codegen'` → `'@rune-langium/codegen-legacy'`
+- [X] T009 Update `apps/studio/package.json`: change `dependencies["@rune-langium/codegen"]` → `"@rune-langium/codegen-legacy": "workspace:*"`
+- [X] T010 [P] Update `apps/studio/src/services/codegen-service.ts`: rewrite all imports from `'@rune-langium/codegen'` → `'@rune-langium/codegen-legacy'`
+- [X] T011 [P] Update `apps/studio/src/components/ExportDialog.tsx`: rewrite all imports from `'@rune-langium/codegen'` → `'@rune-langium/codegen-legacy'`
 
 ### 1e. Verification gate
 
-- [ ] T012 Run `pnpm install` to update workspace symlinks after the rename
-- [ ] T013 Run `pnpm -r run type-check` and confirm exit 0 — this is the Phase 1 gate; no Phase 2 work begins until this is green
-- [ ] T014 Run the stale-import grep from `contracts/package-rename.md §Post-rename verification` and confirm zero output
+- [X] T012 Run `pnpm install` to update workspace symlinks after the rename
+- [X] T013 Run `pnpm -r run type-check` and confirm exit 0 — this is the Phase 1 gate; no Phase 2 work begins until this is green
+- [X] T014 Run the stale-import grep from `contracts/package-rename.md §Post-rename verification` and confirm zero output
 
 **Checkpoint**: `pnpm -r run type-check` exit 0; no remaining imports of `@rune-langium/codegen` (bare, without `-legacy` suffix) in any source file.
 

@@ -26,7 +26,7 @@
     "@lezer/highlight": "^1.2.3",
     "@lspeasy/core": "^2.1.1",
     "@marsidev/react-turnstile": "^1.3.1",
-    "@rune-langium/codegen": "workspace:*",
+    "@rune-langium/codegen-legacy": "workspace:*",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/curated-schema": "workspace:*",
     "@rune-langium/design-system": "workspace:*",

@@ -1,7 +1,8 @@
 {
-  "name": "@rune-langium/codegen",
+  "name": "@rune-langium/codegen-legacy",
   "version": "0.1.0",
-  "description": "Code generation service and types for Rune DSL models via rosetta-code-generators",
+  "description": "Legacy JVM-bridge codegen for Rune DSL via rosetta-code-generators. Use @rune-langium/codegen for the Langium-native generator.",
+  "deprecated": "This package bridges the legacy JVM/Rosetta codegen. Use @rune-langium/codegen for the Langium-native generator.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -36,11 +37,11 @@
     "typescript": "^5.9.3"
   },
   "license": "MIT",
-  "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen",
+  "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen-legacy",
   "repository": {
     "type": "git",
     "url": "https://github.com/pradeepmouli/rune-langium.git",
-    "directory": "packages/codegen"
+    "directory": "packages/codegen-legacy"
   },
   "bugs": {
     "url": "https://github.com/pradeepmouli/rune-langium/issues"
