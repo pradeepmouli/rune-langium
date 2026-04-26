@@ -1,0 +1,57 @@
+{
+  "name": "@rune-langium/codegen",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "rune-codegen": "./dist/bin/rune-codegen.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsgo -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@rune-langium/core": "workspace:*",
+    "langium": "^4.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.4",
+    "zod": "^4.3.6"
+  },
+  "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pradeepmouli/rune-langium.git",
+    "directory": "packages/codegen"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
+  "keywords": [
+    "rune",
+    "langium",
+    "codegen",
+    "zod",
+    "json-schema",
+    "typescript",
+    "cdm"
+  ]
+}

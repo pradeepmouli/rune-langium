@@ -71,31 +71,31 @@ everything Phases 3–8 build upon.
 
 ### 2a. Package scaffolding
 
-- [ ] T015 Create `packages/codegen/package.json` per `contracts/generator-api.md §Package metadata`: `name: @rune-langium/codegen`, `version: 0.1.0`, `license: MIT`, `type: module`, exports map with `"."` → `dist/index.{d.ts,js}`, deps on `@rune-langium/core` and `langium@^4.2.0`; add `bin: { "rune-codegen": "./dist/bin/rune-codegen.js" }`; devDeps: `zod@^4.3.6`, `vitest@^4.x`, `typescript@^5.9.x`
-- [ ] T016 [P] Create `packages/codegen/tsconfig.json`: strict mode, ESM, `moduleResolution: bundler`, `outDir: dist`, `rootDir: src`; add `packages/codegen/tsconfig.smoke.json` referencing a temp dir for the CDM smoke runner
-- [ ] T017 [P] Add `// SPDX-License-Identifier: MIT` header convention note in `packages/codegen/src/` — all new source files in this package use the MIT SPDX header
+- [X] T015 Create `packages/codegen/package.json` per `contracts/generator-api.md §Package metadata`: `name: @rune-langium/codegen`, `version: 0.1.0`, `license: MIT`, `type: module`, exports map with `"."` → `dist/index.{d.ts,js}`, deps on `@rune-langium/core` and `langium@^4.2.0`; add `bin: { "rune-codegen": "./dist/bin/rune-codegen.js" }`; devDeps: `zod@^4.3.6`, `vitest@^4.x`, `typescript@^5.9.x`
+- [X] T016 [P] Create `packages/codegen/tsconfig.json`: strict mode, ESM, `moduleResolution: bundler`, `outDir: dist`, `rootDir: src`; add `packages/codegen/tsconfig.smoke.json` referencing a temp dir for the CDM smoke runner
+- [X] T017 [P] Add `// SPDX-License-Identifier: MIT` header convention note in `packages/codegen/src/` — all new source files in this package use the MIT SPDX header
 
 ### 2b. Shared types (data model entities)
 
-- [ ] T018 Create `packages/codegen/src/types.ts` with exported interfaces: `GeneratorOutput` (relativePath, content, sourceMap, diagnostics), `GeneratorOptions` (target, strict, headerComment), `Target` union (`'zod' | 'json-schema' | 'typescript'`), `SourceMapEntry` (outputLine, sourceUri, sourceLine, sourceChar), `GeneratorDiagnostic` (severity, message, code, sourceUri?, line?, char?); add `GeneratorError extends Error` class with `.diagnostics` field
-- [ ] T019 [P] Create `packages/codegen/src/helpers.ts`: export `RUNTIME_HELPER_SOURCE` constant string containing the three inlined helpers (`runeCheckOneOf`, `runeCount`, `runeAttrExists`) per `contracts/runtime-helpers.md §Inlined source text`
-- [ ] T020 [P] Create `packages/codegen/src/diagnostics.ts`: export `createDiagnostic(severity, code, message, opts?)` factory; export `hasFatalDiagnostics(diags: GeneratorDiagnostic[]): boolean`
+- [X] T018 Create `packages/codegen/src/types.ts` with exported interfaces: `GeneratorOutput` (relativePath, content, sourceMap, diagnostics), `GeneratorOptions` (target, strict, headerComment), `Target` union (`'zod' | 'json-schema' | 'typescript'`), `SourceMapEntry` (outputLine, sourceUri, sourceLine, sourceChar), `GeneratorDiagnostic` (severity, message, code, sourceUri?, line?, char?); add `GeneratorError extends Error` class with `.diagnostics` field
+- [X] T019 [P] Create `packages/codegen/src/helpers.ts`: export `RUNTIME_HELPER_SOURCE` constant string containing the three inlined helpers (`runeCheckOneOf`, `runeCount`, `runeAttrExists`) per `contracts/runtime-helpers.md §Inlined source text`
+- [X] T020 [P] Create `packages/codegen/src/diagnostics.ts`: export `createDiagnostic(severity, code, message, opts?)` factory; export `hasFatalDiagnostics(diags: GeneratorDiagnostic[]): boolean`
 
 ### 2c. Type-reference graph and topological infrastructure
 
-- [ ] T021 Create `packages/codegen/src/cycle-detector.ts`: implement `buildTypeReferenceGraph(docs: LangiumDocument[]): TypeReferenceGraph` scanning all `Data` and `Attribute` nodes (including `extends` edges); implement `findCyclicTypes(graph): Set<string>` via Tarjan SCC (internal `TypeReferenceGraph` interface with `nodes: string[]` and `edges: Map<string, string[]>`)
-- [ ] T022 Create `packages/codegen/src/topo-sort.ts`: implement `topoSort(graph: TypeReferenceGraph, cyclicTypes: Set<string>): string[]` via Kahn's algorithm over the SCC-condensation DAG; types within an SCC are ordered by document source position; output is deterministic for identical input
+- [X] T021 Create `packages/codegen/src/cycle-detector.ts`: implement `buildTypeReferenceGraph(docs: LangiumDocument[]): TypeReferenceGraph` scanning all `Data` and `Attribute` nodes (including `extends` edges); implement `findCyclicTypes(graph): Set<string>` via Tarjan SCC (internal `TypeReferenceGraph` interface with `nodes: string[]` and `edges: Map<string, string[]>`)
+- [X] T022 Create `packages/codegen/src/topo-sort.ts`: implement `topoSort(graph: TypeReferenceGraph, cyclicTypes: Set<string>): string[]` via Kahn's algorithm over the SCC-condensation DAG; types within an SCC are ordered by document source position; output is deterministic for identical input
 
 ### 2d. Public API entry point
 
-- [ ] T023 Create `packages/codegen/src/generator.ts`: implement top-level orchestrator `runGenerate(docs: LangiumDocument[], options: GeneratorOptions): GeneratorOutput[]` — groups docs by namespace, calls cycle-detector, topo-sort, then dispatches to the selected emitter; handles `options.strict` (throw `GeneratorError` on any fatal diagnostic); returns outputs sorted by `relativePath` ascending
-- [ ] T024 Create `packages/codegen/src/index.ts`: re-export `generate` (wraps `runGenerate`, normalises `documents` to array), all public types from `types.ts`, `GeneratorError`; this is the sole public API surface per `contracts/generator-api.md §Public exports`
+- [X] T023 Create `packages/codegen/src/generator.ts`: implement top-level orchestrator `runGenerate(docs: LangiumDocument[], options: GeneratorOptions): GeneratorOutput[]` — groups docs by namespace, calls cycle-detector, topo-sort, then dispatches to the selected emitter; handles `options.strict` (throw `GeneratorError` on any fatal diagnostic); returns outputs sorted by `relativePath` ascending
+- [X] T024 Create `packages/codegen/src/index.ts`: re-export `generate` (wraps `runGenerate`, normalises `documents` to array), all public types from `types.ts`, `GeneratorError`; this is the sole public API surface per `contracts/generator-api.md §Public exports`
 
 ### 2e. Fixture test harness skeleton
 
-- [ ] T025 Create `packages/codegen/test/fixtures/` directory tree with placeholder directories: `basic-types/`, `cardinality/`, `enums/`, `inheritance/`, `conditions-simple/`, `conditions-complex/`, `circular/`, `reserved-words/`, `meta-types/`, `key-refs/` — each with a `.gitkeep` so the tree is committed
-- [ ] T026 [P] Create `packages/codegen/test/fixture.test.ts`: implement the Tier 1 harness — `runFixtureTests(dir)` that for each fixture directory: parses `input.rune` via `createRuneServices()`, calls `generate(doc, { target: 'zod' })`, and asserts byte-identical equality with `expected.zod.ts`; exports `describeFixture(name, dir)` used by per-story test suites
-- [ ] T027 [P] Create `packages/codegen/test/cdm-smoke.test.ts` skeleton: import `generate`, set up temp dir, define the `tsc --noEmit` subprocess runner, define the JSON battery runner; mark all tests as `.todo` until Phase 3 unlocks them
+- [X] T025 Create `packages/codegen/test/fixtures/` directory tree with placeholder directories: `basic-types/`, `cardinality/`, `enums/`, `inheritance/`, `conditions-simple/`, `conditions-complex/`, `circular/`, `reserved-words/`, `meta-types/`, `key-refs/` — each with a `.gitkeep` so the tree is committed
+- [X] T026 [P] Create `packages/codegen/test/fixture.test.ts`: implement the Tier 1 harness — `runFixtureTests(dir)` that for each fixture directory: parses `input.rune` via `createRuneServices()`, calls `generate(doc, { target: 'zod' })`, and asserts byte-identical equality with `expected.zod.ts`; exports `describeFixture(name, dir)` used by per-story test suites
+- [X] T027 [P] Create `packages/codegen/test/cdm-smoke.test.ts` skeleton: import `generate`, set up temp dir, define the `tsc --noEmit` subprocess runner, define the JSON battery runner; mark all tests as `.todo` until Phase 3 unlocks them
 
 **Checkpoint**: `pnpm --filter @rune-langium/codegen build` succeeds (no source yet for emitters, but scaffolding compiles); `pnpm --filter @rune-langium/codegen test` exits 0 (harness has no tests to run yet).
 
