@@ -86,7 +86,7 @@ export function EditorPage({
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
-  const codegenWorkerRef = useRef<Worker | null>(null);
+  const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [groupedLayout, setGroupedLayout] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -181,22 +181,21 @@ export function EditorPage({
     const worker = new Worker(new URL('../workers/codegen-worker.ts', import.meta.url), {
       type: 'module'
     });
-    codegenWorkerRef.current = worker;
+    setCodegenWorker(worker);
     return () => {
       worker.terminate();
-      codegenWorkerRef.current = null;
+      setCodegenWorker(null);
     };
   }, []);
 
   // Keep the codegen worker in sync with the workspace file set.
   useEffect(() => {
-    const worker = codegenWorkerRef.current;
-    if (!worker) return;
-    worker.postMessage({
+    if (!codegenWorker) return;
+    codegenWorker.postMessage({
       type: 'codegen:setFiles',
       files: files.map((f) => ({ uri: pathToUri(f.path), content: f.content }))
     });
-  }, [files]);
+  }, [codegenWorker, files]);
 
   const handleSourceChange = useCallback(
     (path: string, content: string) => {
@@ -627,10 +626,9 @@ export function EditorPage({
   );
 
   const CodePreviewPanelMounted = useCallback(() => {
-    const worker = codegenWorkerRef.current;
-    if (!worker) return null;
-    return <CodePreviewPanel worker={worker} sourceEditorRef={sourceEditorHandle} />;
-  }, [sourceEditorHandle]);
+    if (!codegenWorker) return null;
+    return <CodePreviewPanel worker={codegenWorker} sourceEditorRef={sourceEditorHandle} />;
+  }, [codegenWorker, sourceEditorHandle]);
 
   const VisualPreviewPanelMounted = useCallback(
     () => (
@@ -650,6 +648,28 @@ export function EditorPage({
       />
     ),
     [groupedLayout, handleModelChanged, navigateToNode]
+  );
+
+  // Memoize the overrides object so DockShell's useMemo([panelComponents])
+  // only recomputes the dockview component map when a callback actually changes,
+  // not on every EditorPage render.
+  const panelComponents = useMemo(
+    () => ({
+      'workspace.fileTree': FileTreePanelMounted,
+      'workspace.editor': SourceEditorPanelMounted,
+      'workspace.inspector': InspectorPanelMounted,
+      'workspace.problems': ProblemsPanelMounted,
+      'workspace.visualPreview': VisualPreviewPanelMounted,
+      'workspace.codePreview': CodePreviewPanelMounted
+    }),
+    [
+      FileTreePanelMounted,
+      SourceEditorPanelMounted,
+      InspectorPanelMounted,
+      ProblemsPanelMounted,
+      VisualPreviewPanelMounted,
+      CodePreviewPanelMounted
+    ]
   );
 
   return (
@@ -735,14 +755,7 @@ export function EditorPage({
         <DockShell
           studioVersion={studioVersion}
           workspaceId={workspaceId}
-          panelComponents={{
-            'workspace.fileTree': FileTreePanelMounted,
-            'workspace.editor': SourceEditorPanelMounted,
-            'workspace.inspector': InspectorPanelMounted,
-            'workspace.problems': ProblemsPanelMounted,
-            'workspace.visualPreview': VisualPreviewPanelMounted,
-            'workspace.codePreview': CodePreviewPanelMounted
-          }}
+          panelComponents={panelComponents}
         />
       </div>
 

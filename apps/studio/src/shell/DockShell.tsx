@@ -22,7 +22,7 @@
  * assertions remain reachable.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { DockviewReact } from 'dockview-react';
 import type { DockviewApi, IDockviewPanelProps, DockviewReadyEvent } from 'dockview-react';
@@ -156,6 +156,15 @@ export function DockShell({
     [layout, studioVersion]
   );
 
+  // Stable component map — only recomputed when the override functions change.
+  // Calling mergeComponents (and wrapForDockview) inline would create new
+  // component type identities on every render, causing dockview to unmount and
+  // remount each panel (blank flash).
+  const dockviewComponents = useMemo(
+    () => mergeComponents(DEFAULT_DOCKVIEW_COMPONENTS, panelComponents),
+    [panelComponents]
+  );
+
   useEffect(() => {
     return installShellShortcuts(window, (action) => {
       onAction?.(action);
@@ -193,7 +202,7 @@ export function DockShell({
       data-workspace-id={workspaceId}
     >
       <DockviewReact
-        components={mergeComponents(DEFAULT_DOCKVIEW_COMPONENTS, panelComponents)}
+        components={dockviewComponents}
         onReady={onReady}
         className="dockview-theme-abyss"
       />
