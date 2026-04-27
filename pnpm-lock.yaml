@@ -295,6 +295,9 @@ importers:
       isomorphic-git:
         specifier: ^1.37.6
         version: 1.37.6
+      langium:
+        specifier: ^4.2.2
+        version: 4.2.2
       lucide-react:
         specifier: ^1.11.0
         version: 1.11.0(react@19.2.5)
