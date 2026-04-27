@@ -4,7 +4,7 @@
 # Cloudflare Worker config for the curated-model R2 mirror
 # (feature 012-studio-workspace-ux).
 #
-# Runs nightly via Cron Trigger; downloads CDM / FpML / rune-dsl archives
+# Runs nightly via Cron Trigger; downloads CDM / rune-dsl archives
 # from codeload.github.com and uploads to R2. Studio reads from
 # www.daikonic.dev/curated/* (route handler in this Worker:
 # apps/curated-mirror-worker/src/index.ts -> handleCuratedRead).
@@ -43,8 +43,7 @@ enabled = true
 # apps/studio/src/services/model-registry.ts.
 CURATED_SOURCES = """[
   { "id": "cdm",      "owner": "REGnosys", "repo": "rosetta-cdm", "ref": "master" },
-  { "id": "fpml",     "owner": "finos",    "repo": "rune-fpml",   "ref": "main"   },
-  { "id": "rune-dsl", "owner": "REGnosys", "repo": "rosetta-dsl", "ref": "master" }
+  { "id": "rune-dsl", "owner": "finos",    "repo": "rune-dsl",    "ref": "main"   }
 ]"""
 
 # Same-origin allowlist for read responses. Override per environment via

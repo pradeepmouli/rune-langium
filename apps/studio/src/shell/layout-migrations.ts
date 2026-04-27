@@ -20,11 +20,8 @@
  */
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import {
-  buildDefaultLayout,
-  PANEL_COMPONENT_NAMES,
-  type BuildLayoutInput
-} from './layout-factory.js';
+import { buildDefaultLayout, type BuildLayoutInput } from './layout-factory.js';
+import { PANEL_COMPONENT_NAMES } from './layout-types.js';
 
 const CURRENT_VERSION = 1;
 const KNOWN_COMPONENTS = new Set<string>(PANEL_COMPONENT_NAMES);

@@ -1,6 +1,6 @@
 # Types & Enums
 
-## ast
+## generated
 
 ### `RuneDslTerminalNames`
 ```ts

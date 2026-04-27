@@ -1,0 +1,29 @@
+namespace "test.funcs.constructor"
+version "1"
+
+type Point:
+    x int (1..1)
+    y int (1..1)
+
+type Box:
+    origin Point (1..1)
+    width int (1..1)
+
+func MakePoint:
+    inputs:
+        x int (1..1)
+        y int (1..1)
+    output:
+        result Point (1..1)
+
+    set result:
+        Point { x: x, y: y }
+
+func MakeEmptyBox:
+    inputs:
+        w int (1..1)
+    output:
+        result Box (1..1)
+
+    set result:
+        Box { origin: Point { ... }, width: w }

@@ -15,8 +15,41 @@
  */
 
 import type { Transport, Message } from '@lspeasy/core';
-import { DedicatedWorkerTransport } from '@lspeasy/core';
 import { createRuneLspServer } from '@rune-langium/lsp-server';
+
+interface CodegenGenerateMessage {
+  type: 'codegen:generate';
+  target?: string;
+}
+
+function isCodegenMessage(data: unknown): data is { type: string } {
+  return (
+    !!data &&
+    typeof data === 'object' &&
+    'type' in data &&
+    typeof (data as Record<string, unknown>)['type'] === 'string' &&
+    String((data as Record<string, unknown>)['type']).startsWith('codegen:')
+  );
+}
+
+function isCodegenGenerateMessage(data: unknown): data is CodegenGenerateMessage {
+  return isCodegenMessage(data) && data.type === 'codegen:generate';
+}
+
+function handleCodegenGenerateMessage(
+  data: unknown,
+  respond: (message: { type: 'codegen:outdated' }) => void
+): void {
+  if (!isCodegenGenerateMessage(data)) {
+    return;
+  }
+
+  try {
+    respond({ type: 'codegen:outdated' });
+  } catch (err) {
+    console.error('[lsp-worker] Failed to post codegen response:', err);
+  }
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Port Transport Adapter
@@ -40,6 +73,9 @@ function createPortTransport(port: MessagePort): Transport {
 
     try {
       const data = e.data;
+      if (isCodegenMessage(data)) {
+        return;
+      }
       let message: Message;
 
       // Unwrap envelope if present
@@ -61,8 +97,8 @@ function createPortTransport(port: MessagePort): Transport {
     }
   };
 
-  const handleError = () => {
-    const error = new Error('MessagePort error');
+  const handleError = (event: MessageEvent) => {
+    const error = new Error(`MessagePort error: ${String(event.data)}`);
     for (const handler of errorHandlers) {
       handler(error);
     }
@@ -129,6 +165,106 @@ function createPortTransport(port: MessagePort): Transport {
   };
 }
 
+/**
+ * Create a Transport for a dedicated worker global scope.
+ *
+ * Unlike the shared-port transport, there are no clientId envelopes to unwrap,
+ * but we still need to filter `codegen:*` traffic so preview requests do not
+ * get forwarded into the LSP server as JSON-RPC messages.
+ */
+function createDedicatedScopeTransport(scope: DedicatedWorkerGlobalScope): Transport {
+  const messageHandlers = new Set<(message: Message) => void>();
+  const errorHandlers = new Set<(error: Error) => void>();
+  const closeHandlers = new Set<() => void>();
+  let connected = true;
+
+  const handleMessage = (e: MessageEvent) => {
+    if (!connected) return;
+
+    try {
+      if (isCodegenMessage(e.data)) {
+        return;
+      }
+
+      const message = e.data as Message;
+      for (const handler of messageHandlers) {
+        handler(message);
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      for (const handler of errorHandlers) {
+        handler(error);
+      }
+    }
+  };
+
+  const handleError = (event: MessageEvent) => {
+    const error = new Error(`Dedicated worker message error: ${String(event.data)}`);
+    for (const handler of errorHandlers) {
+      handler(error);
+    }
+  };
+
+  scope.addEventListener('message', handleMessage);
+  scope.addEventListener('messageerror', handleError);
+
+  return {
+    async send(message: Message): Promise<void> {
+      if (!connected) {
+        throw new Error('Transport is closed');
+      }
+      scope.postMessage(message);
+    },
+
+    onMessage(handler: (message: Message) => void) {
+      messageHandlers.add(handler);
+      return {
+        dispose: () => {
+          messageHandlers.delete(handler);
+        }
+      };
+    },
+
+    onError(handler: (error: Error) => void) {
+      errorHandlers.add(handler);
+      return {
+        dispose: () => {
+          errorHandlers.delete(handler);
+        }
+      };
+    },
+
+    onClose(handler: () => void) {
+      closeHandlers.add(handler);
+      return {
+        dispose: () => {
+          closeHandlers.delete(handler);
+        }
+      };
+    },
+
+    async close(): Promise<void> {
+      if (!connected) return;
+
+      connected = false;
+      scope.removeEventListener('message', handleMessage);
+      scope.removeEventListener('messageerror', handleError);
+
+      for (const handler of closeHandlers) {
+        handler();
+      }
+
+      messageHandlers.clear();
+      errorHandlers.clear();
+      closeHandlers.clear();
+    },
+
+    isConnected(): boolean {
+      return connected;
+    }
+  };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Entry — SharedWorker or dedicated Worker
 // ────────────────────────────────────────────────────────────────────────────
@@ -147,9 +283,20 @@ function servePort(port: MessagePort): void {
     console.error('[lsp-worker] LSP listen error:', err);
   });
 
+  // T084/T085: handle codegen:generate requests forwarded via this SharedWorker port.
+  // TODO: Full document-builder integration — once the LSP server exposes built documents
+  // via a shared reference, call generate(builtDocuments, { target: msg.target }) here
+  // and port.postMessage a codegen:result instead of codegen:outdated.
+  port.addEventListener('message', (e: MessageEvent) => {
+    handleCodegenGenerateMessage(e.data, (message) => port.postMessage(message));
+  });
+
   // Clean up transport when port encounters an error
-  port.addEventListener('messageerror', () => {
-    transport.close().catch(() => {});
+  port.addEventListener('messageerror', (event: MessageEvent) => {
+    console.error('[lsp-worker] Port messageerror:', event.data);
+    transport.close().catch((err: unknown) => {
+      console.error('[lsp-worker] Failed to close transport after messageerror:', err);
+    });
   });
 }
 
@@ -166,23 +313,18 @@ if ('onconnect' in self) {
 } else {
   // Dedicated Worker — single connection through global scope.
   const workerScope = self as unknown as DedicatedWorkerGlobalScope;
-
-  // Adapt the worker global scope to a Worker-like interface expected by
-  // DedicatedWorkerTransport, without claiming the scope itself is a Worker.
-  const workerLike = {
-    postMessage: (...args: Parameters<DedicatedWorkerGlobalScope['postMessage']>) =>
-      workerScope.postMessage(...args),
-    addEventListener: workerScope.addEventListener.bind(workerScope),
-    removeEventListener: workerScope.removeEventListener.bind(workerScope),
-    dispatchEvent: workerScope.dispatchEvent.bind(workerScope)
-  } as unknown as Worker;
-
-  const transport = new DedicatedWorkerTransport({
-    worker: workerLike
-  });
+  const transport = createDedicatedScopeTransport(workerScope);
 
   const { listen } = createRuneLspServer();
   listen(transport).catch((err: unknown) => {
     console.error('[lsp-worker] LSP listen error:', err);
+  });
+
+  // T084/T085: handle codegen:generate messages from the studio's CodePreviewPanel.
+  // TODO: Full document-builder integration — once the LSP server exposes built documents
+  // via a shared reference, call generate(builtDocuments, { target: msg.target }) here
+  // and postMessage a codegen:result instead of codegen:outdated.
+  workerScope.addEventListener('message', (e: MessageEvent) => {
+    handleCodegenGenerateMessage(e.data, (message) => workerScope.postMessage(message));
   });
 }

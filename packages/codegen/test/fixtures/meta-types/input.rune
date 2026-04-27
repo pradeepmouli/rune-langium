@@ -1,0 +1,7 @@
+namespace "test.meta"
+version "1"
+
+metaType id string
+
+type Identity:
+    key string (0..1)

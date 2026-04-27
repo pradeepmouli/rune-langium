@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createContainerServer } from '../src/server.js';
 import type { Server } from 'node:http';
-import type { CodeGenerationRequest, CodeGenerationResult } from '@rune-langium/codegen';
+import type { CodeGenerationRequest, CodeGenerationResult } from '@rune-langium/codegen-legacy';
 
 // Deterministic fake of the codegen proxy.
 class FakeCodegenProxy {

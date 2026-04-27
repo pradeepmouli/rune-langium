@@ -11,9 +11,10 @@ import { describe, it, expect } from 'vitest';
 import { getModelRegistry, getModelSource } from '../../src/services/model-registry.js';
 
 describe('model-registry — curated entries (T032)', () => {
-  it('still exposes the three curated ids', () => {
+  it('still exposes the two curated ids', () => {
     const ids = getModelRegistry().map((m) => m.id);
-    expect(ids).toEqual(expect.arrayContaining(['cdm', 'fpml', 'rune-dsl']));
+    expect(ids).toEqual(expect.arrayContaining(['cdm', 'rune-dsl']));
+    expect(ids).not.toContain('fpml');
   });
 
   it('CDM has an archiveUrl pointing at the production mirror', () => {

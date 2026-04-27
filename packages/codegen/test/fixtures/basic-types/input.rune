@@ -1,0 +1,10 @@
+namespace "test.basic"
+version "1"
+
+type Empty:
+
+type Person:
+    name string (1..1)
+    age int (1..1)
+    active boolean (1..1)
+    birthday date (1..1)

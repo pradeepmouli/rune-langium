@@ -1,0 +1,14 @@
+namespace "test.inheritance"
+version "1"
+
+type Animal:
+    name string (1..1)
+
+type Dog extends Animal:
+    breed string (1..1)
+
+type Poodle extends Dog:
+    size string (1..1)
+
+type Sibling extends Animal:
+    age int (1..1)

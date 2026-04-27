@@ -36,19 +36,19 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
-    "@dagrejs/dagre": "^2.0.4",
+    "@dagrejs/dagre": "^3.0.0",
     "@hookform/resolvers": "^5.2.2",
     "@rune-langium/core": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
-    "@tanstack/react-virtual": "^3.13.23",
-    "@xyflow/react": "^12.10.1",
+    "@tanstack/react-virtual": "^3.13.24",
+    "@xyflow/react": "^12.10.2",
     "@zod-to-form/core": "^0.8.0",
     "@zod-to-form/react": "^0.8.0",
-    "lucide-react": "^0.577.0",
-    "react-hook-form": "^7.71.2",
+    "lucide-react": "^1.11.0",
+    "react-hook-form": "^7.74.0",
     "zod": "^4.3.6",
     "zundo": "^2.3.0",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.12"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
@@ -60,11 +60,11 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@zod-to-form/vite": "^0.2.3",
-    "jsdom": "^28.1.0",
+    "jsdom": "^29.1.0",
     "langium-zod": "^0.5.3",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "typescript": "^5.9.3"
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=20.0.0"

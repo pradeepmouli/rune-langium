@@ -1,0 +1,9 @@
+namespace "test.cond.oneof"
+version "1"
+
+type UnitType:
+    a string (0..1)
+    b string (0..1)
+    c string (0..1)
+    condition OneOf:
+        [a, b, c] one-of

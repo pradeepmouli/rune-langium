@@ -1,21 +1,22 @@
 # Functions
 
-## Codegen
+## codegen/src
 
-### `isKnownGenerator`
-Check whether a language ID corresponds to a known generator.
+### `generate`
+Generate code from one or more parsed Langium documents.
+
+This is the primary entry point for the code generator. It accepts
+a single document or an array of documents and normalizes them before
+passing to the internal generator pipeline.
 ```ts
-isKnownGenerator(language: string): boolean
+generate(documents: LangiumDocument<AstNode> | LangiumDocument<AstNode>[], options?: GeneratorOptions): GeneratorOutput[]
 ```
 **Parameters:**
-- `language: string` — The generator ID to check (e.g., `"scala"`, `"typescript"`).
-**Returns:** `boolean` — `true` if the ID matches a generator in KNOWN_GENERATORS.
-
-### `getGenerator`
-Get generator metadata by ID.
+- `documents: LangiumDocument<AstNode> | LangiumDocument<AstNode>[]` — One or more parsed Langium documents with resolved ASTs.
+- `options: GeneratorOptions` (optional) — Optional generator options (target, strict, headerComment).
+**Returns:** `GeneratorOutput[]` — Array of GeneratorOutput sorted by relativePath ascending.
+**Throws:** GeneratorError when strict mode is enabled and any error diagnostic is produced.
 ```ts
-getGenerator(language: string): GeneratorInfo | undefined
+import { generate } from '@rune-langium/codegen';
+const outputs = generate(doc, { target: 'zod' });
 ```
-**Parameters:**
-- `language: string` — The generator ID to look up.
-**Returns:** `GeneratorInfo | undefined` — The matching GeneratorInfo, or `undefined` if not found.

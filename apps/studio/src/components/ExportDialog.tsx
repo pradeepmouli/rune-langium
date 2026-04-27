@@ -20,8 +20,12 @@ import {
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
-import { KNOWN_GENERATORS } from '@rune-langium/codegen';
-import type { CodeGenerationResult, GeneratedFile, GenerationError } from '@rune-langium/codegen';
+import { KNOWN_GENERATORS } from '@rune-langium/codegen-legacy';
+import type {
+  CodeGenerationResult,
+  GeneratedFile,
+  GenerationError
+} from '@rune-langium/codegen-legacy';
 import { getCodegenService } from '../services/codegen-service.js';
 import { downloadFile } from '../services/export.js';
 

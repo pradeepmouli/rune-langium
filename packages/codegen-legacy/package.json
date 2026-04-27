@@ -1,0 +1,60 @@
+{
+  "name": "@rune-langium/codegen-legacy",
+  "version": "0.1.0",
+  "description": "Legacy JVM-bridge codegen for Rune DSL via rosetta-code-generators. Use @rune-langium/codegen for the Langium-native generator.",
+  "deprecated": "This package bridges the legacy JVM/Rosetta codegen. Use @rune-langium/codegen for the Langium-native generator.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./serve": {
+      "default": "./dist/serve.js"
+    }
+  },
+  "bin": {
+    "codegen-serve": "./dist/serve.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsgo -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "type-check": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen-legacy",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pradeepmouli/rune-langium.git",
+    "directory": "packages/codegen-legacy"
+  },
+  "bugs": {
+    "url": "https://github.com/pradeepmouli/rune-langium/issues"
+  },
+  "keywords": [
+    "rune",
+    "rosetta",
+    "dsl",
+    "codegen",
+    "code-generation",
+    "cdm"
+  ],
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
+  "publishConfig": {
+    "access": "public"
+  }
+}

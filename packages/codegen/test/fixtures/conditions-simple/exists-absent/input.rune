@@ -1,0 +1,12 @@
+namespace "test.cond.existsabsent"
+version "1"
+
+type HasA:
+    a string (0..1)
+    condition AExists:
+        a exists
+
+type HasNoB:
+    b string (0..1)
+    condition BAbsent:
+        b is absent

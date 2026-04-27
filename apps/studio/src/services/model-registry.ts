@@ -25,19 +25,11 @@ const CURATED_MODELS: readonly ModelSource[] = [
     archiveUrl: `${MIRROR_BASE}/cdm/latest.tar.gz`
   },
   {
-    id: 'fpml',
-    name: 'Rune FpML',
-    repoUrl: 'https://github.com/finos/rune-fpml.git',
-    ref: 'main',
-    paths: ['src/main/rosetta/**/*.rosetta'],
-    archiveUrl: `${MIRROR_BASE}/fpml/latest.tar.gz`
-  },
-  {
     id: 'rune-dsl',
     name: 'Rune DSL (Built-in Types)',
-    repoUrl: 'https://github.com/REGnosys/rosetta-dsl.git',
-    ref: 'master',
-    paths: ['rosetta-lang/src/main/resources/**/*.rosetta'],
+    repoUrl: 'https://github.com/finos/rune-dsl.git',
+    ref: 'main',
+    paths: ['rune-runtime/src/main/resources/model/**/*.rosetta'],
     archiveUrl: `${MIRROR_BASE}/rune-dsl/latest.tar.gz`
   }
 ] as const;

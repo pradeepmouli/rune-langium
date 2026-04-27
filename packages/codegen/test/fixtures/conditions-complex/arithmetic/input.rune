@@ -1,0 +1,12 @@
+namespace "test.cond.arithmetic"
+version "1"
+
+type NumericCheck:
+    value int (0..1)
+    threshold int (0..1)
+    condition ValuePositive:
+        value > 0
+    condition ValueBelowThreshold:
+        value < threshold
+    condition ValueNotZero:
+        value <> 0

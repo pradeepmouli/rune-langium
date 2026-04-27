@@ -1,45 +1,39 @@
 # Variables & Constants
 
-## RuneTypeGraph
+## components
 
 ### `RuneTypeGraph`
 ```ts
 const RuneTypeGraph: ForwardRefExoticComponent<RuneTypeGraphProps & RefAttributes<RuneTypeGraphRef>>
 ```
 
-## EditorFormPanel
+## components/panels
 
 ### `EditorFormPanel`
 ```ts
-const EditorFormPanel: NamedExoticComponent<EditorFormPanelProps>
+const EditorFormPanel: MemoExoticComponent<(__namedParameters: EditorFormPanelProps) => Element>
 ```
-
-## NamespaceExplorerPanel
 
 ### `NamespaceExplorerPanel`
 ```ts
-const NamespaceExplorerPanel: NamedExoticComponent<NamespaceExplorerPanelProps>
+const NamespaceExplorerPanel: MemoExoticComponent<(__namedParameters: NamespaceExplorerPanelProps) => Element>
 ```
 
-## TypeCreator
+## components/editors
 
 ### `TypeCreator`
 ```ts
-const TypeCreator: NamedExoticComponent<TypeCreatorProps>
+const TypeCreator: MemoExoticComponent<(__namedParameters: TypeCreatorProps) => Element>
 ```
-
-## AttributeEditor
 
 ### `AttributeEditor`
 ```ts
-const AttributeEditor: NamedExoticComponent<AttributeEditorProps>
+const AttributeEditor: MemoExoticComponent<(__namedParameters: AttributeEditorProps) => Element>
 ```
-
-## CardinalityEditor
 
 ### `CardinalityEditor`
 ```ts
-const CardinalityEditor: NamedExoticComponent<CardinalityEditorProps>
+const CardinalityEditor: MemoExoticComponent<(__namedParameters: CardinalityEditorProps) => Element>
 ```
 
 ## types
@@ -50,7 +44,7 @@ Built-in primitive types available in the Rune DSL.
 const BUILTIN_TYPES: readonly ["string", "int", "number", "boolean", "date", "time", "dateTime", "zonedDateTime"]
 ```
 
-## model-helpers
+## adapters
 
 ### `AST_TYPE_TO_NODE_TYPE`
 Kind-to-ReactFlow-type mapping. Used to set `Node.type` for
@@ -64,7 +58,7 @@ const AST_TYPE_TO_NODE_TYPE: Record<string, string>
 const NODE_TYPE_TO_AST_TYPE: Record<string, string>
 ```
 
-## editor-store
+## store
 
 ### `useEditorStore`
 Default store instance for use with RuneTypeGraph.

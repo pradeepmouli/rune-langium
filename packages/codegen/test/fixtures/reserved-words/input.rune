@@ -1,0 +1,8 @@
+namespace "test.reserved"
+version "1"
+
+type ReservedTest:
+    class string (1..1)
+    var string (0..1)
+    let string (0..*)
+    const string (1..*)

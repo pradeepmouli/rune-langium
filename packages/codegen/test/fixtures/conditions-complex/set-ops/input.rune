@@ -1,0 +1,8 @@
+namespace "test.cond.setops"
+version "1"
+
+type SetOpsCheck:
+    items string (0..*)
+    allowed string (0..*)
+    condition ItemsDisjoint:
+        items disjoint allowed

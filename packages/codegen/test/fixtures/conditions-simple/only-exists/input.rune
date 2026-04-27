@@ -1,0 +1,9 @@
+namespace "test.cond.onlyexists"
+version "1"
+
+type HasABC:
+    a string (0..1)
+    b string (0..1)
+    c string (0..1)
+    condition OnlyAB:
+        [a, b] only exists
