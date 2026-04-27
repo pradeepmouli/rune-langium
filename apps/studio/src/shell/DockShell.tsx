@@ -116,17 +116,31 @@ export function DockShell({
     sanitizeLayout(initialLayout ?? null, { studioVersion, viewportWidth: getViewportWidth() })
   );
 
+  // Refs kept current on every render so stable callbacks always read
+  // the latest values without needing them as useCallback deps.
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const studioVersionRef = useRef(studioVersion);
+  studioVersionRef.current = studioVersion;
+
+  // onReady is called exactly once by dockview (on mount). Including
+  // layout/studioVersion as deps would recreate the callback whenever
+  // those change, but the new function would never be invoked — the old
+  // closure would remain permanently stale. Using refs avoids the dep
+  // while guaranteeing we always read the current value.
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
+      const currentLayout = layoutRef.current;
+      const currentVersion = studioVersionRef.current;
       apiRef.current = event.api;
       layoutChangeDisposableRef.current?.dispose();
-      let appliedLayout = layout;
+      let appliedLayout = currentLayout;
 
       try {
-        applyLayout(event.api, layout);
+        applyLayout(event.api, currentLayout);
       } catch (err) {
         const fallback = buildDefaultLayout({
-          studioVersion,
+          studioVersion: currentVersion,
           viewportWidth: getViewportWidth()
         });
         console.error('[DockShell] Failed to apply layout, falling back to default layout', err);
@@ -144,7 +158,7 @@ export function DockShell({
           const dockviewJson = serializeLayout(event.api);
           onLayoutChangeRef.current({
             version: 1,
-            writtenBy: studioVersion,
+            writtenBy: studioVersionRef.current,
             dockview: dockviewJson as PanelLayoutRecord['dockview']
           });
         } catch (err) {
@@ -153,7 +167,7 @@ export function DockShell({
       });
       onLayoutChangeRef.current?.(appliedLayout);
     },
-    [layout, studioVersion]
+    [] // stable — reads layout and studioVersion via refs above
   );
 
   // Stable component map — only recomputed when the override functions change.
