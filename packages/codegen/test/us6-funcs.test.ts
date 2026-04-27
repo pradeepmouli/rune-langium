@@ -206,6 +206,30 @@ describe('US6 funcs: recursive / hoisted function (T117)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T128: constructor-expr — constructor expressions emit as plain object literals
+// ---------------------------------------------------------------------------
+
+describe('US6 funcs: constructor-expr (T128)', () => {
+  it('emits constructor expressions as plain object literals (byte-identical)', async () => {
+    const [actual, expected] = await Promise.all([
+      generateFuncFixture('constructor-expr'),
+      readFile(join(FIXTURES_DIR, 'constructor-expr', 'expected.ts'), 'utf-8')
+    ]);
+    expect(actual).toBe(expected);
+  });
+
+  it('constructor expression with named fields emits key-value pairs', async () => {
+    const actual = await generateFuncFixture('constructor-expr');
+    expect(actual).toContain('{ x: input.x, y: input.y }');
+  });
+
+  it('constructor expression with implicit-empty emits empty object', async () => {
+    const actual = await generateFuncFixture('constructor-expr');
+    expect(actual).toContain('origin: {}');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // T127: Silent-skip — Zod and JSON Schema targets produce empty funcs[]
 // ---------------------------------------------------------------------------
 

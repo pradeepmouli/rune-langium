@@ -60,8 +60,8 @@
  *   RosettaConditionalExpression → transpileConditional() (ternary or if-block)
  *   OneOfOperation           → emitOneOf() → runeCheckOneOf([…])
  *   ChoiceOperation          → emitChoice() → runeCheckOneOf([…])
- *   RosettaOnlyExistsExpression → emitOnlyExists()
- *
+ *   RosettaOnlyExistsExpression → emitOnlyExists() *   RosettaConstructorExpression → transpileConstructor() → { k1: v1, k2: v2 }
+ *   ListLiteral              → transpileListLiteral() → [e1, e2, ...] *
  * ═══════════════════════════════════════════════════════════════════════
  * BLOCK TAXONOMY (from expression-builder/blocks/)
  * ═══════════════════════════════════════════════════════════════════════
@@ -233,6 +233,19 @@ function collectCallees(expr: unknown, callees: Set<string>): void {
     }
     // Also recurse into receiver
     collectCallees(node['receiver'], callees);
+    return;
+  }
+
+  // Constructor expression: only walk value expressions, not typeRef/key cross-references.
+  // Walking typeRef or ConstructorKeyValuePair.key causes infinite recursion into the type AST.
+  if (node['$type'] === 'RosettaConstructorExpression') {
+    const values = node['values'];
+    if (Array.isArray(values)) {
+      for (const kv of values) {
+        const kvNode = kv as Record<string, unknown>;
+        collectCallees(kvNode['value'], callees);
+      }
+    }
     return;
   }
 

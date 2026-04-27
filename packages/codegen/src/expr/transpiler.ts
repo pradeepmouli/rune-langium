@@ -52,6 +52,8 @@ import {
   isRosettaNumberLiteral,
   isRosettaStringLiteral,
   isRosettaImplicitVariable,
+  isRosettaConstructorExpression,
+  isListLiteral,
   type Condition,
   type RosettaExpression
 } from '@rune-langium/core';
@@ -957,6 +959,53 @@ export function transpileConditional(
 }
 
 /**
+ * T076: Transpile a constructor expression to a plain JS object literal.
+ *
+ * RosettaConstructorExpression { typeRef, values, implicitEmpty } →
+ *   { key1: val1, key2: val2 }  (or {} for implicit-empty / no values)
+ *
+ * Java reference: ExpressionGenerator.caseConstructorExpression emits
+ *   TypeName.builder().setKey1(val1).setKey2(val2).build().
+ * In TypeScript we emit plain objects because the generated Zod types
+ * accept plain-object inputs rather than builder instances.
+ */
+export function transpileConstructor(
+  expr: RosettaExpression,
+  ctx: ExpressionTranspilerContext
+): string {
+  if (!isRosettaConstructorExpression(expr)) {
+    return 'undefined /* not RosettaConstructorExpression */';
+  }
+  if (expr.implicitEmpty || expr.values.length === 0) {
+    return '{}';
+  }
+  const pairs = expr.values
+    .map((kv) => {
+      const key = kv.key.$refText ?? '?';
+      const val = transpileExpression(kv.value, ctx);
+      return `${key}: ${val}`;
+    })
+    .join(', ');
+  return `{ ${pairs} }`;
+}
+
+/**
+ * T077: Transpile a list literal to a JS array literal.
+ *
+ * ListLiteral { elements } → [ elem1, elem2, ... ]
+ */
+export function transpileListLiteral(
+  expr: RosettaExpression,
+  ctx: ExpressionTranspilerContext
+): string {
+  if (!isListLiteral(expr)) {
+    return 'undefined /* not ListLiteral */';
+  }
+  const elements = (expr.elements ?? []).map((e) => transpileExpression(e, ctx));
+  return `[${elements.join(', ')}]`;
+}
+
+/**
  * T075: Top-level expression dispatcher.
  *
  * Routes based on expr.$type to the appropriate transpiler function.
@@ -1066,6 +1115,16 @@ export function transpileExpression(
   // Conditional if/then/else (T074)
   if (isRosettaConditionalExpression(expr)) {
     return transpileConditional(expr, ctx);
+  }
+
+  // Constructor expression (T076)
+  if (isRosettaConstructorExpression(expr)) {
+    return transpileConstructor(expr, ctx);
+  }
+
+  // List literal (T077)
+  if (isListLiteral(expr)) {
+    return transpileListLiteral(expr, ctx);
   }
 
   // Unknown expression type — emit diagnostic and placeholder
