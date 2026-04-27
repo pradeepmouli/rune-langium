@@ -44,7 +44,7 @@ function statusLabel(status: Status, target: Target): string {
       return 'Preview unavailable — reload Studio';
     default: {
       const exhaustiveCheck: never = status;
-      return exhaustiveCheck;
+      throw new Error(`Unknown code preview status: ${String(exhaustiveCheck)}`);
     }
   }
 }
