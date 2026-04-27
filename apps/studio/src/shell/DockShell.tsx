@@ -188,6 +188,7 @@ export function DockShell({
     <div
       role="application"
       aria-label="Studio dock shell"
+      className="h-full"
       data-testid="dock-shell"
       data-workspace-id={workspaceId}
     >
