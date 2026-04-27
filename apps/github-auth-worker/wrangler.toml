@@ -21,11 +21,11 @@ zone_name = "daikonic.dev"
 # TODO(012): replace with the production GitHub App client ID before first deploy.
 # Public, non-secret. The corresponding client secret (if needed) goes via
 # `wrangler secret put GITHUB_CLIENT_SECRET`.
-GITHUB_CLIENT_ID = "Iv1.PLACEHOLDER_REPLACE_BEFORE_DEPLOY"
+GITHUB_CLIENT_ID = "Iv23liiDuYY41565zxut"
 ALLOWED_ORIGIN = "https://www.daikonic.dev"
 
 [observability]
 enabled = true
 
 [limits]
-cpu_ms = 10000
+#cpu_ms = 10000
