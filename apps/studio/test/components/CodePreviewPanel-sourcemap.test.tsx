@@ -117,4 +117,28 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
     expect(sourceEditorRef.revealLineInCenter).not.toHaveBeenCalled();
     expect(sourceEditorRef.setSelection).not.toHaveBeenCalled();
   });
+
+  it('does nothing when sourceEditorRef is null', async () => {
+    const w = makeWorker();
+    const { container } = render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    await act(async () => {
+      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
+        | ((e: MessageEvent) => void)
+        | undefined;
+      handler?.({
+        data: {
+          type: 'codegen:result',
+          target: 'zod',
+          relativePath: 'ns.zod.ts',
+          content: 'line0\n',
+          sourceMap: [{ outputLine: 0, sourceUri: 'file:///trade.rune', sourceLine: 5, sourceChar: 3 }]
+        }
+      } as MessageEvent);
+    });
+    const lineEl = container.querySelector('[data-line="0"]');
+    await act(async () => {
+      if (lineEl) fireEvent.click(lineEl);
+    });
+    expect(lineEl).toBeTruthy();
+  });
 });

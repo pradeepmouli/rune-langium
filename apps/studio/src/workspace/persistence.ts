@@ -14,6 +14,7 @@
  */
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import type { DockviewPayload } from '../shell/layout-types.js';
 
 export type WorkspaceKind = 'browser-only' | 'folder-backed' | 'git-backed';
 
@@ -34,23 +35,6 @@ export interface PanelLayoutRecord {
   /** Studio version that wrote this layout (display only). */
   writtenBy: string;
   dockview: DockviewPayload | null;
-}
-
-export type DockviewPayload =
-  | { shape: 'factory'; columns: [LayoutNode, LayoutNode, LayoutNode]; bottomGroup: BottomGroup }
-  | { shape: 'native'; json: unknown };
-
-export interface LayoutNode {
-  component: string;
-  collapsed?: boolean;
-  size?: number;
-  weight?: number;
-}
-
-export interface BottomGroup {
-  active: string;
-  collapsed: boolean;
-  tabs: LayoutNode[];
 }
 
 export interface TabRecord {

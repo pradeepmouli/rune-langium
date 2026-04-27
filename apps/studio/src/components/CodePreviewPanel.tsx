@@ -4,10 +4,16 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import type { Target, SourceMapEntry } from '@rune-langium/codegen';
 import { TargetSwitcher } from './TargetSwitcher.js';
 import { useCodegenStore } from '../store/codegen-store.js';
+import { CODE_PREVIEW_PANEL_ID, TARGET_LABELS } from './codegen-ui.js';
+
+interface SourcePosition {
+  line: number;
+  character: number;
+}
 
 export interface SourceEditorHandle {
   revealLineInCenter(line: number): void;
-  setSelection(range: unknown): void;
+  setSelection(range: SourcePosition): void;
 }
 
 interface CodegenResultMessage {
@@ -26,12 +32,6 @@ type CodegenWorkerMessage = CodegenResultMessage | CodegenOutdatedMessage;
 
 type Status = 'generating' | 'generated' | 'outdated' | 'unavailable';
 
-const TARGET_LABELS: Record<Target, string> = {
-  zod: 'Zod',
-  'json-schema': 'JSON Schema',
-  typescript: 'TypeScript'
-};
-
 function statusLabel(status: Status, target: Target): string {
   switch (status) {
     case 'generating':
@@ -42,6 +42,10 @@ function statusLabel(status: Status, target: Target): string {
       return 'Outdated — fix errors to refresh';
     case 'unavailable':
       return 'Preview unavailable — reload Studio';
+    default: {
+      const exhaustiveCheck: never = status;
+      throw new Error(`Unknown code preview status: ${String(exhaustiveCheck)}`);
+    }
   }
 }
 
@@ -54,7 +58,6 @@ export function CodePreviewPanel({
   worker,
   sourceEditorRef
 }: CodePreviewPanelProps): React.ReactElement {
-  // target is the single source of truth from the shared codegen store
   const target = useCodegenStore((s) => s.codePreviewTarget);
   const setCodePreviewTarget = useCodegenStore((s) => s.setCodePreviewTarget);
 
@@ -62,31 +65,64 @@ export function CodePreviewPanel({
   // Retain the last successfully generated content so the panel doesn't blank on outdated
   const [lastContent, setLastContent] = useState<string>('');
   const sourceMapRef = useRef<SourceMapEntry[]>([]);
-  const editorHostRef = useRef<HTMLDivElement>(null);
+  const currentTargetRef = useRef<Target>(target);
+
+  const requestGeneration = useCallback(
+    (requestedTarget: Target) => {
+      currentTargetRef.current = requestedTarget;
+      setStatus('generating');
+      try {
+        worker.postMessage({ type: 'codegen:generate', target: requestedTarget });
+      } catch (err) {
+        console.error('[CodePreviewPanel] Failed to request code generation:', err);
+        setStatus('unavailable');
+      }
+    },
+    [worker]
+  );
 
   useEffect(() => {
     function handleMessage(e: MessageEvent<CodegenWorkerMessage>) {
       const msg = e.data;
       if (msg.type === 'codegen:result') {
+        if (msg.target !== currentTargetRef.current) {
+          return;
+        }
         setStatus('generated');
         setLastContent(msg.content);
         sourceMapRef.current = msg.sourceMap;
-        setCodePreviewTarget(msg.target);
       } else if (msg.type === 'codegen:outdated') {
         // Keep lastContent — show previous output with an outdated badge
         setStatus('outdated');
       }
     }
-    worker.addEventListener('message', handleMessage as EventListener);
-    return () => worker.removeEventListener('message', handleMessage as EventListener);
-  }, [worker, setCodePreviewTarget]);
+
+    function handleWorkerError(event: ErrorEvent) {
+      console.error('[CodePreviewPanel] Worker error:', event.message, event.error);
+      setStatus('unavailable');
+    }
+
+    const messageListener = handleMessage as EventListener;
+    const errorListener = handleWorkerError as EventListener;
+    worker.addEventListener('message', messageListener);
+    worker.addEventListener('error', errorListener);
+
+    return () => {
+      worker.removeEventListener('message', messageListener);
+      worker.removeEventListener('error', errorListener);
+    };
+  }, [requestGeneration, worker]);
+
+  useEffect(() => {
+    currentTargetRef.current = target;
+    requestGeneration(target);
+  }, [requestGeneration, target]);
 
   const handleTargetChange = useCallback(
     (newTarget: Target) => {
       setCodePreviewTarget(newTarget);
-      worker.postMessage({ type: 'codegen:generate', target: newTarget });
     },
-    [worker, setCodePreviewTarget]
+    [setCodePreviewTarget]
   );
 
   // Click-to-navigate: map output line index → source location via sourceMap
@@ -103,8 +139,10 @@ export function CodePreviewPanel({
 
   return (
     <section
-      role="region"
+      id={CODE_PREVIEW_PANEL_ID}
+      role="tabpanel"
       aria-label="Code preview"
+      aria-labelledby={`codegen-tab-${target}`}
       data-testid="panel-codePreview"
       data-component="workspace.codePreview"
     >
@@ -112,7 +150,7 @@ export function CodePreviewPanel({
       <div data-testid="codegen-status" aria-live="polite">
         {statusLabel(status, target)}
       </div>
-      <div ref={editorHostRef} data-testid="code-preview-editor">
+      <div data-testid="code-preview-editor">
         {lastContent && (
           <pre>
             {lastContent.split('\n').map((line, idx) => (

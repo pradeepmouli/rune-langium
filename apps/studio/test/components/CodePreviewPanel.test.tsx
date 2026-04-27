@@ -59,6 +59,7 @@ describe('CodePreviewPanel — status transitions', () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Generating/i);
+    expect(w.postMessage).toHaveBeenCalledWith({ type: 'codegen:generate', target: 'zod' });
   });
 
   it('shows "Generated (Zod)" after codegen:result with target=zod', async () => {
@@ -133,5 +134,25 @@ describe('CodePreviewPanel — status transitions', () => {
     });
     // Not blanked back to "Generating..."
     expect(screen.getByTestId('codegen-status')).not.toHaveTextContent(/Generating…/i);
+  });
+
+  it('shows "Preview unavailable" when the worker errors', async () => {
+    const w = makeWorker();
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    await act(async () => {
+      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'error') ?? [])[1] as
+        | ((e: ErrorEvent) => void)
+        | undefined;
+      handler?.({ message: 'worker crashed', error: new Error('boom') } as ErrorEvent);
+    });
+    expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Preview unavailable/i);
+  });
+
+  it('removes worker listeners on unmount', () => {
+    const w = makeWorker();
+    const { unmount } = render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    unmount();
+    expect(w.removeEventListener).toHaveBeenCalledWith('message', expect.any(Function));
+    expect(w.removeEventListener).toHaveBeenCalledWith('error', expect.any(Function));
   });
 });

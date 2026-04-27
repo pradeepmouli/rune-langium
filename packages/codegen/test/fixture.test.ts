@@ -16,6 +16,7 @@
  * SC-007: byte-identical output required for all committed fixture pairs.
  */
 
+import { existsSync, readdirSync } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -27,6 +28,8 @@ import type { Target } from '../src/types.js';
 // chevrotain@12 uses Object.groupBy which requires Node ≥ 22.
 // Tests that invoke the Rune parser are skipped on earlier runtimes.
 const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
+// LSP diagnostic severities: 1=Error, 2=Warning, 3=Information, 4=Hint.
+const ERROR_DIAGNOSTIC_SEVERITY = 1;
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures');
 
@@ -50,11 +53,11 @@ export interface FixtureCase {
  * @param dir - Absolute path to the fixture category directory.
  * @param target - Generator target (default: 'zod').
  */
-export async function runFixtureTests(dir: string, target: Target = 'zod'): Promise<void> {
+export function runFixtureTests(dir: string, target: Target = 'zod'): void {
   // Resolve the expected output file extension by target
   const expectedExt = target === 'json-schema' ? 'schema.json' : `${target}.ts`;
 
-  const entries = await readdir(dir, { withFileTypes: true });
+  const entries = readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
 
@@ -63,20 +66,16 @@ export async function runFixtureTests(dir: string, target: Target = 'zod'): Prom
     const expectedPath = join(fixtureDir, `expected.${expectedExt}`);
 
     // Skip placeholder directories (no input.rune)
-    try {
-      await stat(inputPath);
-    } catch {
+    if (!existsSync(inputPath)) {
       continue;
     }
 
     // Skip if no expected file for this target (not all fixtures have all targets)
-    try {
-      await stat(expectedPath);
-    } catch {
+    if (!existsSync(expectedPath)) {
       continue;
     }
 
-    it(`fixture: ${entry.name}`, async () => {
+    skipIfNodeLt22(`fixture: ${entry.name}`, async () => {
       const [inputContent, expectedContent] = await Promise.all([
         readFile(inputPath, 'utf-8'),
         readFile(expectedPath, 'utf-8')
@@ -89,13 +88,7 @@ export async function runFixtureTests(dir: string, target: Target = 'zod'): Prom
         URI.parse(`inmemory:///${fixtureId}`)
       );
       await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
-
-      if (doc.parseResult.parserErrors.length > 0) {
-        const msgs = doc.parseResult.parserErrors
-          .map((e: { message: string }) => e.message)
-          .join(', ');
-        throw new Error(`Parse errors in ${entry.name}/input.rune: ${msgs}`);
-      }
+      assertDocumentReady(doc, `${entry.name}/input.rune`);
 
       const outputs = generate(doc, { target });
       if (outputs.length === 0) {
@@ -123,7 +116,7 @@ export async function runFixtureTests(dir: string, target: Target = 'zod'): Prom
  */
 export function describeFixture(name: string, dir: string, target: Target = 'zod'): void {
   describe(`fixtures: ${name}`, () => {
-    void runFixtureTests(dir, target);
+    runFixtureTests(dir, target);
   });
 }
 
@@ -160,6 +153,7 @@ describe('fixture determinism (SC-007)', () => {
           URI.parse(`inmemory:///${entry}.rosetta`)
         );
         await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+        assertDocumentReady(doc, `${entry}/input.rune`);
         const run1 = generate([doc], { target: 'zod' });
         const run2 = generate([doc], { target: 'zod' });
         expect(run2.length, `${entry}: second run produced different output count`).toBe(
@@ -174,6 +168,27 @@ describe('fixture determinism (SC-007)', () => {
     }
   );
 });
+
+function assertDocumentReady(
+  doc: {
+    parseResult: { parserErrors: { message: string }[] };
+    diagnostics?: { severity?: 1 | 2 | 3 | 4; message: string }[];
+  },
+  label: string
+): void {
+  if (doc.parseResult.parserErrors.length > 0) {
+    const messages = doc.parseResult.parserErrors.map((error) => error.message).join(', ');
+    throw new Error(`Parse errors in ${label}: ${messages}`);
+  }
+
+  const diagnostics =
+    doc.diagnostics?.filter((diagnostic) => diagnostic.severity === ERROR_DIAGNOSTIC_SEVERITY) ??
+    [];
+  if (diagnostics.length > 0) {
+    const messages = diagnostics.map((diagnostic) => diagnostic.message).join(', ');
+    throw new Error(`Diagnostic errors in ${label}: ${messages}`);
+  }
+}
 
 /**
  * Phase 2: Smoke check — confirms the fixtures directory exists and all

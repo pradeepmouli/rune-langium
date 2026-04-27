@@ -19,18 +19,16 @@
  */
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-
-export const PANEL_COMPONENT_NAMES = [
-  'workspace.fileTree',
-  'workspace.editor',
-  'workspace.inspector',
-  'workspace.problems',
-  'workspace.output',
-  'workspace.visualPreview',
-  'workspace.codePreview'
-] as const;
-
-export type PanelComponentName = (typeof PANEL_COMPONENT_NAMES)[number];
+import type { FactoryShape, PanelComponentName } from './layout-types.js';
+export {
+  PANEL_COMPONENT_NAMES,
+  type BottomGroup,
+  type DockviewPayload,
+  type FactoryShape,
+  type LayoutNode,
+  type NativeShape,
+  type PanelComponentName
+} from './layout-types.js';
 
 /**
  * User-facing tab titles for each locked panel component. Surfaced on
@@ -53,42 +51,6 @@ export interface BuildLayoutInput {
   studioVersion: string;
   viewportWidth: number;
 }
-
-export interface LayoutNode {
-  component: PanelComponentName;
-  collapsed?: boolean;
-  /** Pixel width hint. */
-  size?: number;
-  /** Relative weight when no explicit size is given. */
-  weight?: number;
-}
-
-export interface BottomGroup {
-  active: PanelComponentName;
-  collapsed: boolean;
-  tabs: LayoutNode[];
-}
-
-/**
- * Factory shape — what `buildDefaultLayout` emits and what the bridge
- * translates into `addPanel(...)` calls. Three columns, fixed-arity.
- */
-export interface FactoryShape {
-  shape: 'factory';
-  columns: [LayoutNode, LayoutNode, LayoutNode];
-  bottomGroup: BottomGroup;
-}
-
-/**
- * Native shape — `api.toJSON()` output. Opaque; the bridge feeds it
- * straight back to `api.fromJSON()`.
- */
-export interface NativeShape {
-  shape: 'native';
-  json: unknown;
-}
-
-export type DockviewPayload = FactoryShape | NativeShape;
 
 export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
   const small = input.viewportWidth <= SMALL_VIEWPORT_BREAKPOINT_PX;

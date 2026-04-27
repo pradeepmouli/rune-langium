@@ -25,12 +25,8 @@
  */
 
 import type { DockviewApi, AddPanelOptions } from 'dockview-react';
-import type {
-  PanelLayoutRecord,
-  DockviewPayload,
-  LayoutNode,
-  BottomGroup
-} from '../workspace/persistence.js';
+import type { PanelLayoutRecord } from '../workspace/persistence.js';
+import type { BottomGroup, DockviewPayload, LayoutNode } from './layout-types.js';
 import { buildDefaultLayout, PANEL_TITLES, type FactoryShape } from './layout-factory.js';
 
 /** Re-export for callers that previously imported from this module. */
