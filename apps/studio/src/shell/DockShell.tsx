@@ -39,6 +39,8 @@ import { applyLayout, serializeLayout } from './dockview-bridge.js';
 import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 
+const DEFAULT_VIEWPORT_WIDTH = 1920;
+
 type PanelOverrides = Partial<{
   'workspace.fileTree': React.FC;
   'workspace.editor': React.FC;
@@ -103,7 +105,8 @@ export function DockShell({
   onLayoutChange,
   onAction
 }: DockShellProps): React.ReactElement {
-  const getViewportWidth = () => (typeof window !== 'undefined' ? window.innerWidth : 1920);
+  const getViewportWidth = () =>
+    typeof window !== 'undefined' ? window.innerWidth : DEFAULT_VIEWPORT_WIDTH;
   const apiRef = useRef<DockviewApi | null>(null);
   const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
   const onLayoutChangeRef = useRef(onLayoutChange);

@@ -28,6 +28,7 @@ import type { Target } from '../src/types.js';
 // chevrotain@12 uses Object.groupBy which requires Node ≥ 22.
 // Tests that invoke the Rune parser are skipped on earlier runtimes.
 const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
+// LSP diagnostic severities: 1=Error, 2=Warning, 3=Information, 4=Hint.
 const ERROR_DIAGNOSTIC_SEVERITY = 1;
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures');

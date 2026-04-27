@@ -14,16 +14,21 @@ export function TargetSwitcher({ value, onChange }: TargetSwitcherProps): React.
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (activeIndex < 0) return;
+      if (activeIndex < 0) {
+        console.error('[TargetSwitcher] Unknown target value:', value);
+        return;
+      }
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
         onChange(TARGET_OPTIONS[(activeIndex + 1) % TARGET_OPTIONS.length]!.value);
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        onChange(TARGET_OPTIONS[(activeIndex - 1 + TARGET_OPTIONS.length) % TARGET_OPTIONS.length]!.value);
+        onChange(
+          TARGET_OPTIONS[(activeIndex - 1 + TARGET_OPTIONS.length) % TARGET_OPTIONS.length]!.value
+        );
       }
     },
-    [activeIndex, onChange]
+    [activeIndex, onChange, value]
   );
 
   return (
