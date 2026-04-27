@@ -28,6 +28,7 @@ import type { Target } from '../src/types.js';
 // chevrotain@12 uses Object.groupBy which requires Node ≥ 22.
 // Tests that invoke the Rune parser are skipped on earlier runtimes.
 const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
+const ERROR_DIAGNOSTIC_SEVERITY = 1;
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures');
 
@@ -170,7 +171,7 @@ describe('fixture determinism (SC-007)', () => {
 function assertDocumentReady(
   doc: {
     parseResult: { parserErrors: { message: string }[] };
-    diagnostics?: { severity?: number; message: string }[];
+    diagnostics?: { severity?: 1 | 2 | 3 | 4; message: string }[];
   },
   label: string
 ): void {
@@ -179,7 +180,9 @@ function assertDocumentReady(
     throw new Error(`Parse errors in ${label}: ${messages}`);
   }
 
-  const diagnostics = doc.diagnostics?.filter((diagnostic) => diagnostic.severity === 1) ?? [];
+  const diagnostics =
+    doc.diagnostics?.filter((diagnostic) => diagnostic.severity === ERROR_DIAGNOSTIC_SEVERITY) ??
+    [];
   if (diagnostics.length > 0) {
     const messages = diagnostics.map((diagnostic) => diagnostic.message).join(', ');
     throw new Error(`Diagnostic errors in ${label}: ${messages}`);

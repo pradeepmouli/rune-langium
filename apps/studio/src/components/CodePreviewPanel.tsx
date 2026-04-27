@@ -6,14 +6,14 @@ import { TargetSwitcher } from './TargetSwitcher.js';
 import { useCodegenStore } from '../store/codegen-store.js';
 import { CODE_PREVIEW_PANEL_ID, TARGET_LABELS } from './codegen-ui.js';
 
-interface SourceSelection {
+interface SourcePosition {
   line: number;
   character: number;
 }
 
 export interface SourceEditorHandle {
   revealLineInCenter(line: number): void;
-  setSelection(range: SourceSelection): void;
+  setSelection(range: SourcePosition): void;
 }
 
 interface CodegenResultMessage {
