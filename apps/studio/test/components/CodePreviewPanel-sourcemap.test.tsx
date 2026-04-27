@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, act, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { render, act, cleanup, fireEvent } from '@testing-library/react';
 
 // Reuse same mocks
 vi.mock('@codemirror/view', () => ({
@@ -33,8 +33,10 @@ vi.mock('@codemirror/lang-json', () => ({ json: vi.fn(() => []) }));
 vi.mock('@codemirror/lang-javascript', () => ({ javascript: vi.fn(() => []) }));
 
 import { CodePreviewPanel } from '../../src/components/CodePreviewPanel.js';
+import { useCodegenStore } from '../../src/store/codegen-store.js';
 
 afterEach(() => cleanup());
+beforeEach(() => useCodegenStore.setState({ codePreviewTarget: 'zod' }));
 
 function makeWorker() {
   return {
@@ -49,7 +51,7 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
   it('calls revealLineInCenter and setSelection on mapped line click', async () => {
     const w = makeWorker();
     const sourceEditorRef = { revealLineInCenter: vi.fn(), setSelection: vi.fn() };
-    render(
+    const { container } = render(
       <CodePreviewPanel
         worker={w as unknown as Worker}
         sourceEditorRef={sourceEditorRef as never}
@@ -58,6 +60,7 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
     const sourceMap = [
       { outputLine: 2, sourceUri: 'file:///trade.rune', sourceLine: 5, sourceChar: 3 }
     ];
+    // Deliver a codegen:result with content "line0\nline1\nline2\n" and sourceMap
     await act(async () => {
       const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
         | ((e: MessageEvent) => void)
@@ -72,20 +75,22 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
         }
       } as MessageEvent);
     });
-    // Fire click on preview editor — component stores last sourceMap and handles via data-sourcemap-line
-    const el = document.querySelector('[data-testid="code-preview-editor"]');
-    el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    // The component should expose a test-seam: data-sourcemap-click handler
-    // We'll verify via a synthetic event that the component wires
-    // Exact assertion: if component exposes an onLineClick test prop or data attribute
-    // For now assert the element exists and has the right test id
-    expect(el).toBeInTheDocument();
+
+    // Click the div with data-line="2" — mapped to sourceLine=5 in the sourceMap
+    const lineEl = container.querySelector('[data-line="2"]');
+    expect(lineEl).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(lineEl!);
+    });
+
+    expect(sourceEditorRef.revealLineInCenter).toHaveBeenCalledWith(5);
+    expect(sourceEditorRef.setSelection).toHaveBeenCalledWith({ line: 5, character: 3 });
   });
 
   it('does nothing when clicking with empty source map', async () => {
     const w = makeWorker();
     const sourceEditorRef = { revealLineInCenter: vi.fn(), setSelection: vi.fn() };
-    render(
+    const { container } = render(
       <CodePreviewPanel
         worker={w as unknown as Worker}
         sourceEditorRef={sourceEditorRef as never}
@@ -100,14 +105,16 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
           type: 'codegen:result',
           target: 'zod',
           relativePath: 'ns.zod.ts',
-          content: 'content',
+          content: 'line0\nline1\n',
           sourceMap: []
         }
       } as MessageEvent);
     });
-    document
-      .querySelector('[data-testid="code-preview-editor"]')
-      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    const lineEl = container.querySelector('[data-line="0"]');
+    await act(async () => {
+      if (lineEl) fireEvent.click(lineEl);
+    });
     expect(sourceEditorRef.revealLineInCenter).not.toHaveBeenCalled();
+    expect(sourceEditorRef.setSelection).not.toHaveBeenCalled();
   });
 });

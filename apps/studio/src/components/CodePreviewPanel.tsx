@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import type { Target, SourceMapEntry } from '@rune-langium/codegen';
 import { TargetSwitcher } from './TargetSwitcher.js';
+import { useCodegenStore } from '../store/codegen-store.js';
 
 export interface SourceEditorHandle {
   revealLineInCenter(line: number): void;
@@ -53,8 +54,13 @@ export function CodePreviewPanel({
   worker,
   sourceEditorRef
 }: CodePreviewPanelProps): React.ReactElement {
-  const [target, setTarget] = useState<Target>('zod');
+  // target is the single source of truth from the shared codegen store
+  const target = useCodegenStore((s) => s.codePreviewTarget);
+  const setCodePreviewTarget = useCodegenStore((s) => s.setCodePreviewTarget);
+
   const [status, setStatus] = useState<Status>('generating');
+  // Retain the last successfully generated content so the panel doesn't blank on outdated
+  const [lastContent, setLastContent] = useState<string>('');
   const sourceMapRef = useRef<SourceMapEntry[]>([]);
   const editorHostRef = useRef<HTMLDivElement>(null);
 
@@ -63,22 +69,36 @@ export function CodePreviewPanel({
       const msg = e.data;
       if (msg.type === 'codegen:result') {
         setStatus('generated');
+        setLastContent(msg.content);
         sourceMapRef.current = msg.sourceMap;
-        setTarget(msg.target);
+        setCodePreviewTarget(msg.target);
       } else if (msg.type === 'codegen:outdated') {
+        // Keep lastContent — show previous output with an outdated badge
         setStatus('outdated');
       }
     }
     worker.addEventListener('message', handleMessage as EventListener);
     return () => worker.removeEventListener('message', handleMessage as EventListener);
-  }, [worker]);
+  }, [worker, setCodePreviewTarget]);
 
   const handleTargetChange = useCallback(
     (newTarget: Target) => {
-      setTarget(newTarget);
+      setCodePreviewTarget(newTarget);
       worker.postMessage({ type: 'codegen:generate', target: newTarget });
     },
-    [worker]
+    [worker, setCodePreviewTarget]
+  );
+
+  // Click-to-navigate: map output line index → source location via sourceMap
+  const handleLineClick = useCallback(
+    (outputLine: number) => {
+      if (!sourceEditorRef) return;
+      const entry = sourceMapRef.current.find((e) => e.outputLine === outputLine);
+      if (!entry) return;
+      sourceEditorRef.revealLineInCenter(entry.sourceLine);
+      sourceEditorRef.setSelection({ line: entry.sourceLine, character: entry.sourceChar });
+    },
+    [sourceEditorRef]
   );
 
   return (
@@ -92,9 +112,17 @@ export function CodePreviewPanel({
       <div data-testid="codegen-status" aria-live="polite">
         {statusLabel(status, target)}
       </div>
-      {/* TODO: install CodeMirror EditorView click-to-navigate handler here once
-          the full doc-builder integration provides sourceMap entries (FR-018). */}
-      <div ref={editorHostRef} data-testid="code-preview-editor" />
+      <div ref={editorHostRef} data-testid="code-preview-editor">
+        {lastContent && (
+          <pre>
+            {lastContent.split('\n').map((line, idx) => (
+              <div key={idx} data-line={idx} onClick={() => handleLineClick(idx)}>
+                {line}
+              </div>
+            ))}
+          </pre>
+        )}
+      </div>
     </section>
   );
 }

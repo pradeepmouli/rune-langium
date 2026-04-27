@@ -147,6 +147,18 @@ function servePort(port: MessagePort): void {
     console.error('[lsp-worker] LSP listen error:', err);
   });
 
+  // T084/T085: handle codegen:generate requests forwarded via this SharedWorker port.
+  // TODO: Full document-builder integration — once the LSP server exposes built documents
+  // via a shared reference, call generate(builtDocuments, { target: msg.target }) here
+  // and port.postMessage a codegen:result instead of codegen:outdated.
+  port.addEventListener('message', (e: MessageEvent) => {
+    const msg = e.data as { type?: string; target?: string } | null;
+    if (msg && msg.type === 'codegen:generate') {
+      // Stub: signal outdated until full doc-builder integration is wired.
+      port.postMessage({ type: 'codegen:outdated' });
+    }
+  });
+
   // Clean up transport when port encounters an error
   port.addEventListener('messageerror', () => {
     transport.close().catch(() => {});

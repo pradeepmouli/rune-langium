@@ -9,13 +9,12 @@ Documentation site for rune-langium
 
 ## When to Use
 
-- Validating user-supplied `--language` input before submitting a
-- CodeGenerationRequest.
-- API surface: 2 functions, 5 types, 1 constants
+- API surface: 1 functions, 1 classes, 6 types
 
 ## Quick Reference
 
-**Codegen:** `isKnownGenerator`, `getGenerator`, `CodeGenerationRequest`, `CodeGenerationResult`, `GeneratedFile`, `GenerationError`, `GeneratorInfo`, `KNOWN_GENERATORS`
+`generate`
+**types:** `GeneratorError`, `GeneratorOptions`, `GeneratorOutput`, `GeneratorDiagnostic`, `SourceMapEntry`, `Target`, `GeneratedFunc`
 
 ## Links
 

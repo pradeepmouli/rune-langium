@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 
 vi.mock('@codemirror/view', () => ({
@@ -32,8 +32,10 @@ vi.mock('@codemirror/lang-json', () => ({ json: vi.fn(() => []) }));
 vi.mock('@codemirror/lang-javascript', () => ({ javascript: vi.fn(() => []) }));
 
 import { CodePreviewPanel } from '../../src/components/CodePreviewPanel.js';
+import { useCodegenStore } from '../../src/store/codegen-store.js';
 
 afterEach(() => cleanup());
+beforeEach(() => useCodegenStore.setState({ codePreviewTarget: 'zod' }));
 
 function makeWorker() {
   return {
