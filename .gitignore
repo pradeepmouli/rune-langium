@@ -1,4 +1,6 @@
 .claude/settings.local.json
+.claude/worktrees/
+.claire/
 node_modules/
 dist/
 build/

@@ -94,9 +94,7 @@ async function main() {
   }
 
   if (chosen === undefined) {
-    stderr(
-      `no free port found in the candidate range (${CANDIDATE_PORTS.join(', ')}).`
-    );
+    stderr(`no free port found in the candidate range (${CANDIDATE_PORTS.join(', ')}).`);
     stderr('set STUDIO_DEV_PORT to an explicit free port and retry.');
     process.exit(1);
   }

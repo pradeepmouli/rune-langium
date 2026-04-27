@@ -1,6 +1,8 @@
 # Functions
 
-## `generate`
+## codegen/src
+
+### `generate`
 Generate code from one or more parsed Langium documents.
 
 This is the primary entry point for the code generator. It accepts

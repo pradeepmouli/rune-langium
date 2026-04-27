@@ -1,6 +1,6 @@
 # Classes
 
-## ast
+## generated
 
 ### `RuneDslAstReflection`
 *extends `AbstractAstReflection`*

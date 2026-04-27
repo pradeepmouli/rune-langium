@@ -122,14 +122,12 @@ describe('container retry (T026)', () => {
   });
 
   it('does NOT retry on 2xx success (first call only)', async () => {
-    const container = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ language: 'typescript', files: [], errors: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-      );
+    const container = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ language: 'typescript', files: [], errors: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    );
 
     const res = await generateWithSession(makeEnv(container));
     expect(container).toHaveBeenCalledTimes(1);

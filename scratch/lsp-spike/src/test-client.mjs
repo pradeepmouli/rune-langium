@@ -139,7 +139,5 @@ ws.on('message', (data) => {
   }
 
   // Anything else — log briefly
-  console.log(
-    `[lsp] ${msg.method ?? 'response#' + msg.id}: ${JSON.stringify(msg).slice(0, 160)}`
-  );
+  console.log(`[lsp] ${msg.method ?? 'response#' + msg.id}: ${JSON.stringify(msg).slice(0, 160)}`);
 });

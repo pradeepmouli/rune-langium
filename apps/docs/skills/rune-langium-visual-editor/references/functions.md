@@ -1,6 +1,6 @@
 # Functions
 
-## DetailPanel
+## components/panels
 
 ### `DetailPanel`
 ```ts
@@ -10,7 +10,7 @@ DetailPanel(__namedParameters: DetailPanelProps): Element | null
 - `__namedParameters: DetailPanelProps`
 **Returns:** `Element | null`
 
-## TypeSelector
+## components/editors
 
 ### `TypeSelector`
 Searchable type selector with kind-colored badges.
@@ -45,8 +45,6 @@ getKindLabel(kind: TypeKind | "builtin"): string
 - `kind: TypeKind | "builtin"`
 **Returns:** `string`
 
-## CardinalityPicker
-
 ### `CardinalityPicker`
 Cardinality picker as a compact dropdown with 4 presets and a custom option.
 
@@ -58,8 +56,6 @@ CardinalityPicker(__namedParameters: CardinalityPickerProps): ReactNode
 **Parameters:**
 - `__namedParameters: CardinalityPickerProps`
 **Returns:** `ReactNode`
-
-## MetadataSection
 
 ### `MetadataSection`
 Collapsible metadata section with description, comments, and synonym fields.
@@ -73,8 +69,6 @@ MetadataSection(__namedParameters: MetadataSectionProps): ReactNode
 - `__namedParameters: MetadataSectionProps`
 **Returns:** `ReactNode`
 
-## AttributeRow
-
 ### `AttributeRow`
 ```ts
 AttributeRow(__namedParameters: AttributeRowProps): Element
@@ -82,8 +76,6 @@ AttributeRow(__namedParameters: AttributeRowProps): Element
 **Parameters:**
 - `__namedParameters: AttributeRowProps`
 **Returns:** `Element`
-
-## DataTypeForm
 
 ### `DataTypeForm`
 ```ts
@@ -93,8 +85,6 @@ DataTypeForm(__namedParameters: DataTypeFormProps): Element
 - `__namedParameters: DataTypeFormProps`
 **Returns:** `Element`
 
-## EnumValueRow
-
 ### `EnumValueRow`
 ```ts
 EnumValueRow(__namedParameters: EnumValueRowProps): Element
@@ -102,8 +92,6 @@ EnumValueRow(__namedParameters: EnumValueRowProps): Element
 **Parameters:**
 - `__namedParameters: EnumValueRowProps`
 **Returns:** `Element`
-
-## EnumForm
 
 ### `EnumForm`
 ```ts
@@ -113,8 +101,6 @@ EnumForm(__namedParameters: EnumFormProps): Element
 - `__namedParameters: EnumFormProps`
 **Returns:** `Element`
 
-## ChoiceOptionRow
-
 ### `ChoiceOptionRow`
 ```ts
 ChoiceOptionRow(__namedParameters: ChoiceOptionRowProps): Element
@@ -122,8 +108,6 @@ ChoiceOptionRow(__namedParameters: ChoiceOptionRowProps): Element
 **Parameters:**
 - `__namedParameters: ChoiceOptionRowProps`
 **Returns:** `Element`
-
-## ChoiceForm
 
 ### `ChoiceForm`
 ```ts
@@ -133,8 +117,6 @@ ChoiceForm(__namedParameters: ChoiceFormProps): Element
 - `__namedParameters: ChoiceFormProps`
 **Returns:** `Element`
 
-## FunctionForm
-
 ### `FunctionForm`
 ```ts
 FunctionForm(__namedParameters: FunctionFormProps): Element
@@ -143,7 +125,15 @@ FunctionForm(__namedParameters: FunctionFormProps): Element
 - `__namedParameters: FunctionFormProps`
 **Returns:** `Element`
 
-## ast-to-model
+### `ExpressionBuilder`
+```ts
+ExpressionBuilder(__namedParameters: ExpressionBuilderProps): Element
+```
+**Parameters:**
+- `__namedParameters: ExpressionBuilderProps`
+**Returns:** `Element`
+
+## adapters
 
 ### `astToModel`
 Convert RosettaModel AST roots into ReactFlow nodes and edges.
@@ -158,8 +148,6 @@ astToModel(models: unknown, options?: AstToModelOptions): AstToModelResult
 - `options: AstToModelOptions` (optional)
 **Returns:** `AstToModelResult`
 
-## model-to-ast
-
 ### `modelsToAst`
 Convert graph nodes and edges to serializer-compatible model objects.
 Groups nodes by namespace and produces one model per namespace.
@@ -170,8 +158,6 @@ modelsToAst(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): ModelOutput[]
 - `nodes: TypeGraphNode[]`
 - `edges: TypeGraphEdge[]`
 **Returns:** `ModelOutput[]`
-
-## model-helpers
 
 ### `formatCardinality`
 Format a RosettaCardinality model as a display string, e.g. `(1..*)`.
@@ -246,7 +232,7 @@ enumSynonymsToStrings(synonyms: EnumSynonymShape[] | undefined): string[]
 - `synonyms: EnumSynonymShape[] | undefined`
 **Returns:** `string[]`
 
-## dagre-layout
+## layout
 
 ### `computeLayout`
 Compute layout positions for ReactFlow nodes using dagre.
@@ -290,8 +276,6 @@ Clear the entire position cache (call on model reload).
 clearLayoutCache(): void
 ```
 
-## layout-worker
-
 ### `computeLayoutAsync`
 Compute layout asynchronously.
 
@@ -313,8 +297,6 @@ Cancel any in-flight async layout.
 ```ts
 cancelAsyncLayout(): void
 ```
-
-## grouped-layout
 
 ### `computeGroupedLayout`
 Layout each group independently with dagre, then arrange
@@ -338,7 +320,7 @@ findInheritanceGroups(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): GroupInfo
 - `edges: TypeGraphEdge[]`
 **Returns:** `GroupInfo[]`
 
-## namespace-tree
+## utils
 
 ### `buildNamespaceTree`
 Build a sorted list of namespace tree entries from graph nodes.
@@ -384,7 +366,7 @@ createEditorStore(overrides?: Partial<EditorState>): UseBoundStore<Write<StoreAp
 - `overrides: Partial<EditorState>` (optional) — Optional partial initial state to override defaults.
 **Returns:** `UseBoundStore<Write<StoreApi<EditorStore>, { temporal: StoreApi }>>` — A zustand `useStore` hook bound to the new isolated store.
 
-## history
+## store
 
 ### `useTemporalStore`
 Access the temporal (undo/redo) store attached to the editor store.
@@ -423,17 +405,7 @@ useRedo(): () => void
 ```
 **Returns:** `() => void`
 
-## ExpressionBuilder
-
-### `ExpressionBuilder`
-```ts
-ExpressionBuilder(__namedParameters: ExpressionBuilderProps): Element
-```
-**Parameters:**
-- `__namedParameters: ExpressionBuilderProps`
-**Returns:** `Element`
-
-## useAutoSave
+## hooks
 
 ### `useAutoSave`
 Returns a debounced callback that auto-saves the latest value after
@@ -446,8 +418,6 @@ useAutoSave<T>(onCommit: (value: T) => void, delay: number): (value: T) => void
 - `delay: number` — default: `500` — Debounce delay in milliseconds (default 500).
 **Returns:** `(value: T) => void` — A debounced setter function.
 
-## useExpressionAutocomplete
-
 ### `useExpressionAutocomplete`
 ```ts
 useExpressionAutocomplete(availableTypes: TypeOption[], inputParams?: { name: string; typeName?: string }[]): UseExpressionAutocompleteResult
@@ -457,7 +427,7 @@ useExpressionAutocomplete(availableTypes: TypeOption[], inputParams?: { name: st
 - `inputParams: { name: string; typeName?: string }[]` (optional)
 **Returns:** `UseExpressionAutocompleteResult`
 
-## edit-validator
+## validation
 
 ### `detectCircularInheritance`
 Detect whether setting `childId extends parentId` would create a cycle.

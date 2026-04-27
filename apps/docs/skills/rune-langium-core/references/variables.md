@@ -1,6 +1,6 @@
 # Variables & Constants
 
-## ast
+## generated
 
 ### `RuneDslTerminals`
 ```ts

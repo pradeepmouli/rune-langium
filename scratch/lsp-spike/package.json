@@ -9,13 +9,13 @@
     "test-client": "node src/test-client.mjs ws://localhost:8788/spike/ws"
   },
   "dependencies": {
+    "@lspeasy/core": "^2.1.2",
     "@rune-langium/lsp-server": "workspace:*",
-    "@lspeasy/core": "^2.1.1",
     "langium": "^4.2.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250108.0",
-    "wrangler": "^4.0.0",
+    "@cloudflare/workers-types": "^4.20260426.1",
+    "wrangler": "^4.85.0",
     "ws": "^8.20.0"
   }
 }

@@ -93,9 +93,7 @@ writeFileSync(
   join(combinedDist, '_redirects'),
   '/rune-studio/studio/* /rune-studio/studio/index.html 200\n'
 );
-console.log(
-  '[build-combined] Wrote _redirects with SPA fallback for /rune-studio/studio/*'
-);
+console.log('[build-combined] Wrote _redirects with SPA fallback for /rune-studio/studio/*');
 
 rmSync(docsRawDist, { recursive: true, force: true });
 

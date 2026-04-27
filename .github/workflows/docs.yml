@@ -4,22 +4,22 @@ on:
   push:
     branches: [master]
     paths:
-      - "site/**"
-      - "apps/docs/**"
-      - "apps/studio/**"
-      - "packages/**/src/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/docs.yml"
+      - 'site/**'
+      - 'apps/docs/**'
+      - 'apps/studio/**'
+      - 'packages/**/src/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/docs.yml'
   pull_request:
     paths:
-      - "site/**"
-      - "apps/docs/**"
-      - "apps/studio/**"
-      - "packages/**/src/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/docs.yml"
+      - 'site/**'
+      - 'apps/docs/**'
+      - 'apps/studio/**'
+      - 'packages/**/src/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:

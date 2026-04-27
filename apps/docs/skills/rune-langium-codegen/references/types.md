@@ -2,17 +2,6 @@
 
 ## types
 
-### `GeneratorOptions`
-Options for a generation run.
-FR-001 (target selection), FR-022 (strict mode).
-**Properties:**
-- `target: Target` (optional) — Selects the emitter pipeline. Defaults to 'zod'.
-- `strict: boolean` (optional) — If true, any GeneratorDiagnostic with severity 'error' causes
-generate() to throw a GeneratorError instead of returning a partial result.
-FR-022.
-- `headerComment: string` (optional) — Optional string prepended to each emitted file's header comment.
-Do NOT set when requiring byte-identical output (SC-007).
-
 ### `GeneratorOutput`
 One emitted output file from the generator.
 FR-001 (output structure).
