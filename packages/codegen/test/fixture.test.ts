@@ -136,7 +136,7 @@ export function describeFixture(name: string, dir: string, target: Target = 'zod
  * This catches any generator state leakage that would violate SC-007.
  */
 describe('fixture determinism (SC-007)', () => {
-  skipIfNode20(
+  skipIfNodeLt22(
     'all Tier 1 zod fixtures produce byte-identical output on repeated generation',
     async () => {
       const entries = await readdir(FIXTURES_DIR);
