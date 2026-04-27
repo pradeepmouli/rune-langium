@@ -103,33 +103,52 @@ export function DockShell({
   onLayoutChange,
   onAction
 }: DockShellProps): React.ReactElement {
-  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+  const getViewportWidth = () => (typeof window !== 'undefined' ? window.innerWidth : 1920);
   const apiRef = useRef<DockviewApi | null>(null);
+  const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
   const onLayoutChangeRef = useRef(onLayoutChange);
   onLayoutChangeRef.current = onLayoutChange;
 
   const [layout, setLayout] = useState<PanelLayoutRecord>(() =>
-    sanitizeLayout(initialLayout ?? null, { studioVersion, viewportWidth })
+    sanitizeLayout(initialLayout ?? null, { studioVersion, viewportWidth: getViewportWidth() })
   );
 
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       apiRef.current = event.api;
-      applyLayout(event.api, layout);
+      layoutChangeDisposableRef.current?.dispose();
+      let appliedLayout = layout;
+
+      try {
+        applyLayout(event.api, layout);
+      } catch (err) {
+        const fallback = buildDefaultLayout({
+          studioVersion,
+          viewportWidth: getViewportWidth()
+        });
+        console.error('[DockShell] Failed to apply layout, falling back to default layout', err);
+        appliedLayout = fallback;
+        setLayout(fallback);
+        event.api.clear();
+        applyLayout(event.api, fallback);
+      }
 
       // Persist on every layout change. The serialized JSON replaces our
       // factory-shape layout so subsequent mounts go through fromJSON.
-      const disposable = event.api.onDidLayoutChange(() => {
+      layoutChangeDisposableRef.current = event.api.onDidLayoutChange(() => {
         if (!onLayoutChangeRef.current) return;
-        const dockviewJson = serializeLayout(event.api);
-        onLayoutChangeRef.current({
-          version: 1,
-          writtenBy: studioVersion,
-          dockview: dockviewJson as PanelLayoutRecord['dockview']
-        });
+        try {
+          const dockviewJson = serializeLayout(event.api);
+          onLayoutChangeRef.current({
+            version: 1,
+            writtenBy: studioVersion,
+            dockview: dockviewJson as PanelLayoutRecord['dockview']
+          });
+        } catch (err) {
+          console.error('[DockShell] Failed to serialize layout change', err);
+        }
       });
-      onLayoutChangeRef.current?.(layout);
-      return () => disposable.dispose();
+      onLayoutChangeRef.current?.(appliedLayout);
     },
     [layout, studioVersion]
   );
@@ -140,12 +159,24 @@ export function DockShell({
     });
   }, [onAction]);
 
+  useEffect(
+    () => () => {
+      layoutChangeDisposableRef.current?.dispose();
+      layoutChangeDisposableRef.current = null;
+    },
+    []
+  );
+
   function resetLayout(): void {
-    const fresh = buildDefaultLayout({ studioVersion, viewportWidth });
+    const fresh = buildDefaultLayout({ studioVersion, viewportWidth: getViewportWidth() });
     setLayout(fresh);
     if (apiRef.current) {
-      apiRef.current.clear();
-      applyLayout(apiRef.current, fresh);
+      try {
+        apiRef.current.clear();
+        applyLayout(apiRef.current, fresh);
+      } catch (err) {
+        console.error('[DockShell] Failed to reset layout', err);
+      }
     }
     onLayoutChangeRef.current?.(fresh);
   }

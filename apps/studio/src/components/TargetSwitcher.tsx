@@ -2,29 +2,25 @@
 // Copyright (c) 2026 Pradeep Mouli
 import React, { useCallback } from 'react';
 import type { Target } from '@rune-langium/codegen';
+import { CODE_PREVIEW_PANEL_ID, TARGET_OPTIONS } from './codegen-ui.js';
 
 export interface TargetSwitcherProps {
   value: Target;
   onChange: (target: Target) => void;
 }
 
-const TARGETS: { value: Target; label: string }[] = [
-  { value: 'zod', label: 'Zod' },
-  { value: 'json-schema', label: 'JSON Schema' },
-  { value: 'typescript', label: 'TypeScript' }
-];
-
 export function TargetSwitcher({ value, onChange }: TargetSwitcherProps): React.ReactElement {
-  const activeIndex = TARGETS.findIndex((t) => t.value === value);
+  const activeIndex = TARGET_OPTIONS.findIndex((t) => t.value === value);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (activeIndex < 0) return;
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
-        onChange(TARGETS[(activeIndex + 1) % TARGETS.length]!.value);
+        onChange(TARGET_OPTIONS[(activeIndex + 1) % TARGET_OPTIONS.length]!.value);
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        onChange(TARGETS[(activeIndex - 1 + TARGETS.length) % TARGETS.length]!.value);
+        onChange(TARGET_OPTIONS[(activeIndex - 1 + TARGET_OPTIONS.length) % TARGET_OPTIONS.length]!.value);
       }
     },
     [activeIndex, onChange]
@@ -37,12 +33,13 @@ export function TargetSwitcher({ value, onChange }: TargetSwitcherProps): React.
       data-testid="target-switcher"
       onKeyDown={handleKeyDown}
     >
-      {TARGETS.map((t) => (
+      {TARGET_OPTIONS.map((t) => (
         <button
           key={t.value}
           type="button"
           role="tab"
           id={`codegen-tab-${t.value}`}
+          aria-controls={CODE_PREVIEW_PANEL_ID}
           aria-selected={value === t.value}
           tabIndex={value === t.value ? 0 : -1}
           onClick={() => onChange(t.value)}

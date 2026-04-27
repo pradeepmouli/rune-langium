@@ -19,6 +19,7 @@ describe('TargetSwitcher', () => {
       'aria-selected',
       'false'
     );
+    expect(screen.getByRole('tab', { name: 'TypeScript' })).toHaveAttribute('aria-selected', 'false');
   });
 
   it('calls onChange("zod") when Zod tab clicked', () => {
@@ -45,5 +46,24 @@ describe('TargetSwitcher', () => {
   it('has role="tablist" container for keyboard navigation', () => {
     const { container } = render(<TargetSwitcher value="zod" onChange={vi.fn()} />);
     expect(container.querySelector('[role="tablist"]')).toBeInTheDocument();
+  });
+
+  it('links tabs to the shared code preview tabpanel', () => {
+    render(<TargetSwitcher value="zod" onChange={vi.fn()} />);
+    expect(screen.getByRole('tab', { name: 'Zod' })).toHaveAttribute('aria-controls', 'code-preview-panel');
+  });
+
+  it('moves to the next tab with ArrowRight and wraps from the last tab', () => {
+    const onChange = vi.fn();
+    render(<TargetSwitcher value="typescript" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+    expect(onChange).toHaveBeenCalledWith('zod');
+  });
+
+  it('moves to the previous tab with ArrowLeft', () => {
+    const onChange = vi.fn();
+    render(<TargetSwitcher value="json-schema" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' });
+    expect(onChange).toHaveBeenCalledWith('zod');
   });
 });

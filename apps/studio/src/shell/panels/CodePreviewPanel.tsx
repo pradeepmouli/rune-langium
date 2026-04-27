@@ -3,12 +3,7 @@
 
 import type React from 'react';
 import { useCodegenStore } from '../../store/codegen-store.js';
-
-const TARGET_LABELS: Record<string, string> = {
-  zod: 'Zod',
-  'json-schema': 'JSON Schema',
-  typescript: 'TypeScript'
-};
+import { TARGET_LABELS } from '../../components/codegen-ui.js';
 
 export interface CodePreviewPanelProps {
   children?: React.ReactNode;
@@ -22,7 +17,7 @@ export interface CodePreviewPanelProps {
  */
 export function CodePreviewPanel({ children }: CodePreviewPanelProps): React.ReactElement {
   const target = useCodegenStore((s) => s.codePreviewTarget);
-  const label = TARGET_LABELS[target] ?? target;
+  const label = TARGET_LABELS[target];
 
   return (
     <section

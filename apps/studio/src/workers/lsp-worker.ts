@@ -18,6 +18,40 @@ import type { Transport, Message } from '@lspeasy/core';
 import { DedicatedWorkerTransport } from '@lspeasy/core';
 import { createRuneLspServer } from '@rune-langium/lsp-server';
 
+interface CodegenGenerateMessage {
+  type: 'codegen:generate';
+  target?: string;
+}
+
+function isCodegenMessage(data: unknown): data is { type: string } {
+  return (
+    !!data &&
+    typeof data === 'object' &&
+    'type' in data &&
+    typeof (data as Record<string, unknown>)['type'] === 'string' &&
+    String((data as Record<string, unknown>)['type']).startsWith('codegen:')
+  );
+}
+
+function isCodegenGenerateMessage(data: unknown): data is CodegenGenerateMessage {
+  return isCodegenMessage(data) && data.type === 'codegen:generate';
+}
+
+function handleCodegenGenerateMessage(
+  data: unknown,
+  respond: (message: { type: 'codegen:outdated' }) => void
+): void {
+  if (!isCodegenGenerateMessage(data)) {
+    return;
+  }
+
+  try {
+    respond({ type: 'codegen:outdated' });
+  } catch (err) {
+    console.error('[lsp-worker] Failed to post codegen response:', err);
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Port Transport Adapter
 // ────────────────────────────────────────────────────────────────────────────
@@ -40,6 +74,9 @@ function createPortTransport(port: MessagePort): Transport {
 
     try {
       const data = e.data;
+      if (isCodegenMessage(data)) {
+        return;
+      }
       let message: Message;
 
       // Unwrap envelope if present
@@ -61,8 +98,8 @@ function createPortTransport(port: MessagePort): Transport {
     }
   };
 
-  const handleError = () => {
-    const error = new Error('MessagePort error');
+  const handleError = (event: MessageEvent) => {
+    const error = new Error(`MessagePort error: ${String(event.data)}`);
     for (const handler of errorHandlers) {
       handler(error);
     }
@@ -152,16 +189,15 @@ function servePort(port: MessagePort): void {
   // via a shared reference, call generate(builtDocuments, { target: msg.target }) here
   // and port.postMessage a codegen:result instead of codegen:outdated.
   port.addEventListener('message', (e: MessageEvent) => {
-    const msg = e.data as { type?: string; target?: string } | null;
-    if (msg && msg.type === 'codegen:generate') {
-      // Stub: signal outdated until full doc-builder integration is wired.
-      port.postMessage({ type: 'codegen:outdated' });
-    }
+    handleCodegenGenerateMessage(e.data, (message) => port.postMessage(message));
   });
 
   // Clean up transport when port encounters an error
-  port.addEventListener('messageerror', () => {
-    transport.close().catch(() => {});
+  port.addEventListener('messageerror', (event: MessageEvent) => {
+    console.error('[lsp-worker] Port messageerror:', event.data);
+    transport.close().catch((err: unknown) => {
+      console.error('[lsp-worker] Failed to close transport after messageerror:', err);
+    });
   });
 }
 
@@ -198,15 +234,11 @@ if ('onconnect' in self) {
     console.error('[lsp-worker] LSP listen error:', err);
   });
 
-  // T084: handle codegen:generate messages from the studio's CodePreviewPanel.
+  // T084/T085: handle codegen:generate messages from the studio's CodePreviewPanel.
   // TODO: Full document-builder integration — once the LSP server exposes built documents
   // via a shared reference, call generate(builtDocuments, { target: msg.target }) here
   // and postMessage a codegen:result instead of codegen:outdated.
   workerScope.addEventListener('message', (e: MessageEvent) => {
-    const msg = e.data as { type?: string; target?: string } | null;
-    if (msg && msg.type === 'codegen:generate') {
-      // Stub: signal outdated until full doc-builder integration is wired.
-      workerScope.postMessage({ type: 'codegen:outdated' });
-    }
+    handleCodegenGenerateMessage(e.data, (message) => workerScope.postMessage(message));
   });
 }

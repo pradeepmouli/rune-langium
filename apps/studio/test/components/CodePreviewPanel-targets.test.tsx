@@ -79,4 +79,31 @@ describe('CodePreviewPanel — target switching', () => {
     });
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Generated \(JSON Schema\)/i);
   });
+
+  it('ignores stale results for a previously selected target', async () => {
+    const w = makeWorker();
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: 'TypeScript' }));
+    });
+    await act(async () => {
+      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
+        | ((e: MessageEvent) => void)
+        | undefined;
+      handler?.({
+        data: {
+          type: 'codegen:result',
+          target: 'json-schema',
+          relativePath: 'ns.schema.json',
+          content: '{}',
+          sourceMap: []
+        }
+      } as MessageEvent);
+    });
+    expect(screen.getByRole('tab', { name: 'TypeScript' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Generating/i);
+  });
 });

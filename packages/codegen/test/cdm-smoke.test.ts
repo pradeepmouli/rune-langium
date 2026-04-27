@@ -417,6 +417,16 @@ describe('cdm-smoke: json-battery (T078, FR-024)', () => {
 
   const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;
 
+  const OneOfSchema = z
+    .object({
+      a: z.string().optional(),
+      b: z.string().optional(),
+      c: z.string().optional()
+    })
+    .refine((data) => runeCheckOneOf([data.a, data.b, data.c]), {
+      message: 'OneOfCheck: condition failed in OneOf'
+    });
+
   // literals: z.superRefine — three conditions checking score=42, name='hello', active=true
   const WithLiteralsSchema = z
     .object({
@@ -460,6 +470,25 @@ describe('cdm-smoke: json-battery (T078, FR-024)', () => {
       const messages = r.error.issues.map((e) => e.message);
       expect(messages.some((m) => m.includes('ScoreCheck'))).toBe(true);
     }
+  });
+
+  it('one-of: valid payload (exactly one present) passes', () => {
+    const r = OneOfSchema.safeParse({ b: 'x' });
+    expect(r.success).toBe(true);
+  });
+
+  it('one-of: invalid payload (zero present) fails — error message contains condition name (FR-024)', () => {
+    const r = OneOfSchema.safeParse({});
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const messages = r.error.issues.map((issue) => issue.message);
+      expect(messages.some((message) => message.includes('OneOfCheck'))).toBe(true);
+    }
+  });
+
+  it('one-of: invalid payload (two present) fails', () => {
+    const r = OneOfSchema.safeParse({ a: 'x', b: 'y' });
+    expect(r.success).toBe(false);
   });
 
   // navigation: z.refine — CityExists: address.city must exist
@@ -674,7 +703,4 @@ describe('cdm-smoke: json-battery (T078, FR-024)', () => {
       expect(messages.some((m) => m.includes('IfFlagThenValue'))).toBe(true);
     }
   });
-
-  // Suppress unused variable warnings for helpers not used directly in assertions
-  void runeCheckOneOf;
 });
