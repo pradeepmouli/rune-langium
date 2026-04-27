@@ -15,7 +15,6 @@
  */
 
 import type { Transport, Message } from '@lspeasy/core';
-import { DedicatedWorkerTransport } from '@lspeasy/core';
 import { createRuneLspServer } from '@rune-langium/lsp-server';
 
 interface CodegenGenerateMessage {
@@ -166,6 +165,106 @@ function createPortTransport(port: MessagePort): Transport {
   };
 }
 
+/**
+ * Create a Transport for a dedicated worker global scope.
+ *
+ * Unlike the shared-port transport, there are no clientId envelopes to unwrap,
+ * but we still need to filter `codegen:*` traffic so preview requests do not
+ * get forwarded into the LSP server as JSON-RPC messages.
+ */
+function createDedicatedScopeTransport(scope: DedicatedWorkerGlobalScope): Transport {
+  const messageHandlers = new Set<(message: Message) => void>();
+  const errorHandlers = new Set<(error: Error) => void>();
+  const closeHandlers = new Set<() => void>();
+  let connected = true;
+
+  const handleMessage = (e: MessageEvent) => {
+    if (!connected) return;
+
+    try {
+      if (isCodegenMessage(e.data)) {
+        return;
+      }
+
+      const message = e.data as Message;
+      for (const handler of messageHandlers) {
+        handler(message);
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      for (const handler of errorHandlers) {
+        handler(error);
+      }
+    }
+  };
+
+  const handleError = (event: MessageEvent) => {
+    const error = new Error(`Dedicated worker message error: ${String(event.data)}`);
+    for (const handler of errorHandlers) {
+      handler(error);
+    }
+  };
+
+  scope.addEventListener('message', handleMessage);
+  scope.addEventListener('messageerror', handleError);
+
+  return {
+    async send(message: Message): Promise<void> {
+      if (!connected) {
+        throw new Error('Transport is closed');
+      }
+      scope.postMessage(message);
+    },
+
+    onMessage(handler: (message: Message) => void) {
+      messageHandlers.add(handler);
+      return {
+        dispose: () => {
+          messageHandlers.delete(handler);
+        }
+      };
+    },
+
+    onError(handler: (error: Error) => void) {
+      errorHandlers.add(handler);
+      return {
+        dispose: () => {
+          errorHandlers.delete(handler);
+        }
+      };
+    },
+
+    onClose(handler: () => void) {
+      closeHandlers.add(handler);
+      return {
+        dispose: () => {
+          closeHandlers.delete(handler);
+        }
+      };
+    },
+
+    async close(): Promise<void> {
+      if (!connected) return;
+
+      connected = false;
+      scope.removeEventListener('message', handleMessage);
+      scope.removeEventListener('messageerror', handleError);
+
+      for (const handler of closeHandlers) {
+        handler();
+      }
+
+      messageHandlers.clear();
+      errorHandlers.clear();
+      closeHandlers.clear();
+    },
+
+    isConnected(): boolean {
+      return connected;
+    }
+  };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Entry — SharedWorker or dedicated Worker
 // ────────────────────────────────────────────────────────────────────────────
@@ -214,20 +313,7 @@ if ('onconnect' in self) {
 } else {
   // Dedicated Worker — single connection through global scope.
   const workerScope = self as unknown as DedicatedWorkerGlobalScope;
-
-  // Adapt the worker global scope to a Worker-like interface expected by
-  // DedicatedWorkerTransport, without claiming the scope itself is a Worker.
-  const workerLike = {
-    postMessage: (...args: Parameters<DedicatedWorkerGlobalScope['postMessage']>) =>
-      workerScope.postMessage(...args),
-    addEventListener: workerScope.addEventListener.bind(workerScope),
-    removeEventListener: workerScope.removeEventListener.bind(workerScope),
-    dispatchEvent: workerScope.dispatchEvent.bind(workerScope)
-  } as unknown as Worker;
-
-  const transport = new DedicatedWorkerTransport({
-    worker: workerLike
-  });
+  const transport = createDedicatedScopeTransport(workerScope);
 
   const { listen } = createRuneLspServer();
   listen(transport).catch((err: unknown) => {

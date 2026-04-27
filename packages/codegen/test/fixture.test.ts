@@ -75,7 +75,7 @@ export function runFixtureTests(dir: string, target: Target = 'zod'): void {
       continue;
     }
 
-    it(`fixture: ${entry.name}`, async () => {
+    skipIfNodeLt22(`fixture: ${entry.name}`, async () => {
       const [inputContent, expectedContent] = await Promise.all([
         readFile(inputPath, 'utf-8'),
         readFile(expectedPath, 'utf-8')
