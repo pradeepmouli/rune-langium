@@ -26,7 +26,7 @@ import type { Target } from '../src/types.js';
 
 // chevrotain@12 uses Object.groupBy which requires Node ≥ 22.
 // Tests that invoke the Rune parser are skipped on earlier runtimes.
-const skipIfNode20 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
+const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures');
 
