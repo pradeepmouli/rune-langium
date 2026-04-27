@@ -1,37 +1,67 @@
 # Types & Enums
 
-## Codegen
+## types
 
-### `CodeGenerationRequest`
-Request to generate code from one or more Rune DSL model files.
+### `GeneratorOptions`
+Options for a generation run.
+FR-001 (target selection), FR-022 (strict mode).
 **Properties:**
-- `language: string` — Target language (e.g., "scala", "typescript", "kotlin"). See KNOWN_GENERATORS.
-- `files: { path: string; content: string }[]` — `.rosetta` files with absolute path and content, including all dependency namespaces.
-- `options: Record<string, string>` (optional) — Generator-specific options forwarded to the JVM generator as key-value pairs.
+- `target: Target` (optional) — Selects the emitter pipeline. Defaults to 'zod'.
+- `strict: boolean` (optional) — If true, any GeneratorDiagnostic with severity 'error' causes
+generate() to throw a GeneratorError instead of returning a partial result.
+FR-022.
+- `headerComment: string` (optional) — Optional string prepended to each emitted file's header comment.
+Do NOT set when requiring byte-identical output (SC-007).
 
-### `CodeGenerationResult`
-Result of a code generation run.
+### `GeneratorOutput`
+One emitted output file from the generator.
+FR-001 (output structure).
 **Properties:**
-- `language: string` — Target language used
-- `files: GeneratedFile[]` — Output code files
-- `errors: GenerationError[]` — Errors encountered during generation (may coexist with partial output).
-- `warnings: string[]` — Non-fatal warnings
+- `relativePath: string` — Relative path of the emitted file (e.g. 'cdm/base/math.zod.ts').
+- `content: string` — Full text content of the emitted file.
+- `sourceMap: SourceMapEntry[]` — Source-map entries for this file.
+- `diagnostics: GeneratorDiagnostic[]` — Diagnostics produced during generation of this file.
+- `funcs: GeneratedFunc[]` — Emitted function declarations for this namespace.
+Non-empty only when target === 'typescript' (FR-028, FR-031).
+Empty array for 'zod' and 'json-schema' targets — funcs are silently
+skipped (FR-031).
 
-### `GeneratedFile`
-A single generated output file.
+### `GeneratorDiagnostic`
+A generator-time diagnostic (not a Langium validation diagnostic).
+FR-025 (diagnostics).
 **Properties:**
-- `path: string` — Output file path relative to the output directory (e.g., `"com/rosetta/model/MyType.java"`).
-- `content: string` — Generated source code content.
+- `severity: "error" | "warning" | "info"` — Severity of the diagnostic.
+- `message: string` — Human-readable message describing the issue.
+- `code: string` — Short diagnostic code (e.g. 'unresolved-ref', 'unknown-attribute').
+- `sourceUri: string` (optional) — Source URI where the issue was detected, if known.
+- `line: number` (optional) — Source line (one-based), if known.
+- `char: number` (optional) — Source character offset (one-based), if known.
 
-### `GenerationError`
-An error encountered during code generation for a specific DSL construct.
+### `SourceMapEntry`
+One source-map entry: maps an output line back to a source location.
+FR-024 (source maps).
 **Properties:**
-- `sourceFile: string` — `.rosetta` file that caused the error
-- `construct: string` — DSL construct that failed (e.g., type name or function name)
-- `message: string` — Error description
+- `outputLine: number` — Output line number (zero-based).
+- `sourceUri: string` — URI of the source Rune document.
+- `sourceLine: number` — Source line number (one-based).
+- `sourceChar: number` — Source character offset (one-based).
 
-### `GeneratorInfo`
-Metadata about a known code generator.
+### `Target`
+The three supported generator targets.
+FR-019 (json-schema), FR-020 (typescript), FR-002–FR-014 (zod).
+```ts
+"zod" | "json-schema" | "typescript"
+```
+
+### `GeneratedFunc`
+Metadata for a single emitted Rune `func` (TypeScript target only).
+FR-028–FR-032 (function declarations, US6).
 **Properties:**
-- `id: string` — Generator identifier used in the CLI and API (e.g., `"java"`, `"scala"`).
-- `label: string` — Human-readable label for display (e.g., `"Scala"`).
+- `name: string` — The func's identifier as declared in the Rune model.
+- `relativePath: string` — The relative output path of the module file containing this func
+(same as the enclosing GeneratorOutput.relativePath).
+- `fileContents: string` — The full text of just the emitted function declaration (subset of
+GeneratorOutput.content). Useful for unit-testing the emitter in
+isolation without parsing the full file.
+- `sourceMap: SourceMapEntry[]` — Source-map entries scoped to this function's output lines.
+A subset of the enclosing GeneratorOutput.sourceMap.

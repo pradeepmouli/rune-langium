@@ -32,6 +32,7 @@ import { InspectorPanel } from './panels/InspectorPanel.js';
 import { ProblemsPanel } from './panels/ProblemsPanel.js';
 import { OutputPanel } from './panels/OutputPanel.js';
 import { VisualPreviewPanel } from './panels/VisualPreviewPanel.js';
+import { CodePreviewPanel as CodePreviewPanelShell } from './panels/CodePreviewPanel.js';
 import { buildDefaultLayout } from './layout-factory.js';
 import { sanitizeLayout } from './layout-migrations.js';
 import { applyLayout, serializeLayout } from './dockview-bridge.js';
@@ -45,6 +46,7 @@ type PanelOverrides = Partial<{
   'workspace.problems': React.FC;
   'workspace.output': React.FC;
   'workspace.visualPreview': React.FC;
+  'workspace.codePreview': React.FC;
 }>;
 
 interface DockShellProps {
@@ -89,7 +91,8 @@ const DEFAULT_DOCKVIEW_COMPONENTS = {
   'workspace.inspector': wrapForDockview(InspectorPanel),
   'workspace.problems': wrapForDockview(ProblemsPanel),
   'workspace.output': wrapForDockview(OutputPanel),
-  'workspace.visualPreview': wrapForDockview(VisualPreviewPanel)
+  'workspace.visualPreview': wrapForDockview(VisualPreviewPanel),
+  'workspace.codePreview': wrapForDockview(CodePreviewPanelShell)
 };
 
 export function DockShell({

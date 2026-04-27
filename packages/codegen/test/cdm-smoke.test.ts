@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+// Performance baseline (T132, SC-006):
+// Target: `rune-codegen packages/curated-schema/fixtures/cdm/ --target zod` must complete in < 30s.
+// CDM fixture directory (packages/curated-schema/fixtures/cdm/) does not yet exist locally;
+// CDM .rosetta files must be downloaded via `bash scripts/update-fixtures.sh` in CI.
+// Baseline measurement pending CDM fixture availability; < 30s gate enforced once fixtures are present.
+
 /**
  * CDM Smoke Test Suite.
  *
@@ -206,10 +212,21 @@ describe('cdm-smoke: Zod target', () => {
     }
   });
 
-  it.todo('generates Zod schemas for the full CDM curated schema (SC-002)');
-  it.todo('generated Zod schemas parse valid CDM JSON payloads');
-  it.todo('generated Zod schemas reject invalid CDM JSON payloads');
-  it.todo('generation completes within 5 seconds for the full CDM namespace set (SC-009)');
+  // CDM fixture directory (packages/curated-schema/fixtures/cdm/) does not yet exist locally.
+  // These tests will be activated once CDM .rosetta files are downloaded via
+  // `bash scripts/update-fixtures.sh` (or the CI fixture cache is populated).
+  it.todo(
+    'generates Zod schemas for the full CDM curated schema (SC-002) — pending: CDM fixtures not present at packages/curated-schema/fixtures/cdm/'
+  );
+  it.todo(
+    'generated Zod schemas parse valid CDM JSON payloads — pending: CDM fixtures not present'
+  );
+  it.todo(
+    'generated Zod schemas reject invalid CDM JSON payloads — pending: CDM fixtures not present'
+  );
+  it.todo(
+    'generation completes in < 30s for the full CDM namespace set (SC-006) — pending: CDM fixtures not present at packages/curated-schema/fixtures/cdm/'
+  );
 });
 
 describe('cdm-smoke: json-schema target', () => {
@@ -264,9 +281,16 @@ describe('cdm-smoke: json-schema target', () => {
     }
   }, 30_000);
 
-  it.todo('generates JSON Schema for the full CDM curated schema');
-  it.todo('generated JSON Schema accepts valid CDM JSON payloads (ajv)');
-  it.todo('generated JSON Schema rejects invalid CDM JSON payloads (ajv)');
+  // CDM fixture directory (packages/curated-schema/fixtures/cdm/) does not yet exist locally.
+  it.todo(
+    'generates JSON Schema for the full CDM curated schema — pending: CDM fixtures not present at packages/curated-schema/fixtures/cdm/'
+  );
+  it.todo(
+    'generated JSON Schema accepts valid CDM JSON payloads (ajv) — pending: CDM fixtures not present'
+  );
+  it.todo(
+    'generated JSON Schema rejects invalid CDM JSON payloads (ajv) — pending: CDM fixtures not present'
+  );
 });
 
 describe('cdm-smoke: typescript target', () => {
@@ -369,7 +393,11 @@ describe('cdm-smoke: typescript target', () => {
     }
   });
 
-  it.todo('generated TypeScript funcs are callable at runtime');
+  // Runtime func callability would require the CDM fixtures to be present and
+  // the func transpiler to produce callable output. Tracked separately.
+  it.todo(
+    'generated TypeScript funcs are callable at runtime — pending: CDM fixtures not present; func runtime-callability test deferred'
+  );
 });
 
 // ---------------------------------------------------------------------------

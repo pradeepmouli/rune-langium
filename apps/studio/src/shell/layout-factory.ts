@@ -26,7 +26,8 @@ export const PANEL_COMPONENT_NAMES = [
   'workspace.inspector',
   'workspace.problems',
   'workspace.output',
-  'workspace.visualPreview'
+  'workspace.visualPreview',
+  'workspace.codePreview'
 ] as const;
 
 export type PanelComponentName = (typeof PANEL_COMPONENT_NAMES)[number];
@@ -42,7 +43,8 @@ export const PANEL_TITLES: Record<PanelComponentName, string> = {
   'workspace.inspector': 'Inspector',
   'workspace.problems': 'Problems',
   'workspace.output': 'Output',
-  'workspace.visualPreview': 'Preview'
+  'workspace.visualPreview': 'Preview',
+  'workspace.codePreview': 'Code Preview'
 };
 
 const SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
@@ -108,7 +110,8 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
       tabs: [
         { component: 'workspace.problems', collapsed: small },
         { component: 'workspace.output', collapsed: small },
-        { component: 'workspace.visualPreview', collapsed: small }
+        { component: 'workspace.visualPreview', collapsed: small },
+        { component: 'workspace.codePreview', collapsed: small }
       ]
     }
   };

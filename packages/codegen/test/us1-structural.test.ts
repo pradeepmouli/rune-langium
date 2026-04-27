@@ -107,3 +107,26 @@ describe('US1: reserved-words fixture', () => {
     await assertFixture('reserved-words');
   });
 });
+
+// T137: meta-types fixture
+// Note: The Rune grammar supports `metaType` declarations but the zod-emitter currently
+// silently skips RosettaMetaType/RosettaBasicType/Annotation root elements (only data types and
+// enumerations are emitted). The fixture verifies that
+// models containing metaType declarations alongside regular type declarations do not crash
+// the generator and produce deterministic output (SC-007).
+describe('US1: meta-types fixture', () => {
+  it('generates byte-identical output for a model with metaType declarations (T137)', async () => {
+    await assertFixture('meta-types');
+  });
+});
+
+// T137: key-refs fixture
+// Note: The Rune grammar supports `as-key` expressions in func operation bodies, but the
+// zod-emitter silently skips all RosettaFunction elements (FR-031 deferred). The fixture verifies
+// that models with as-key func operations produce deterministic output for the type
+// declarations they contain (SC-007).
+describe('US1: key-refs fixture', () => {
+  it('generates byte-identical output for a model with as-key func expressions (T137)', async () => {
+    await assertFixture('key-refs');
+  });
+});

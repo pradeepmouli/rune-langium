@@ -213,6 +213,10 @@ path). Optional and intentionally unused at render time per
 - `inheritedGroups: InheritedGroup[]` (optional) — Inherited member groups from super-function (if any).
 - `renderExpressionEditor: (props: ExpressionEditorSlotProps) => ReactNode` (optional) — Optional render-prop for a rich expression editor (e.g. CodeMirror).
 When omitted, a plain `<Textarea>` is rendered as fallback.
+
+Per FR-010 / R10, this slot is preserved verbatim through the
+z2f migration: the bespoke expression-builder UX is owned by the
+studio app and remains a controlled override.
 - `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
 - `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
 
@@ -342,10 +346,5 @@ Maps each `TypeKind` to its form actions interface.
 - `choice: ChoiceFormActions`
 - `func: FuncFormActions`
 - `record: CommonFormActions`
-- `typeAlias: CommonFormActions`
-- `basicType: CommonFormActions`
-- `annotation: CommonFormActions`
-
-### `AllEditorFormActions`
 
 <!-- truncated -->

@@ -26,7 +26,9 @@ TypeSelector(__namedParameters: TypeSelectorProps): ReactNode
 **Returns:** `ReactNode`
 
 ### `getKindBadgeClasses`
-Returns badge CSS classes for a given type kind.
+Returns badge CSS classes for a given type kind. Wraps the design-system
+`badgeVariants` so callers (e.g. `ChoiceOptionRow`, `TypeLink`) get
+token-backed colors automatically.
 ```ts
 getKindBadgeClasses(kind: TypeKind | "builtin"): string
 ```
