@@ -24,6 +24,10 @@ import { URI } from 'langium';
 import { generate } from '../src/index.js';
 import type { Target } from '../src/types.js';
 
+// chevrotain@12 uses Object.groupBy which requires Node ≥ 22.
+// Tests that invoke the Rune parser are skipped on earlier runtimes.
+const skipIfNode20 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
+
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures');
 
 export interface FixtureCase {
@@ -132,36 +136,43 @@ export function describeFixture(name: string, dir: string, target: Target = 'zod
  * This catches any generator state leakage that would violate SC-007.
  */
 describe('fixture determinism (SC-007)', () => {
-  it('all Tier 1 zod fixtures produce byte-identical output on repeated generation', async () => {
-    const entries = await readdir(FIXTURES_DIR);
-    let checked = 0;
-    for (const entry of entries) {
-      const dir = join(FIXTURES_DIR, entry);
-      const s = await stat(dir);
-      if (!s.isDirectory()) continue;
-      const inputPath = join(dir, 'input.rune');
-      let input: string;
-      try {
-        input = await readFile(inputPath, 'utf-8');
-      } catch {
-        continue;
-      }
+  skipIfNode20(
+    'all Tier 1 zod fixtures produce byte-identical output on repeated generation',
+    async () => {
+      const entries = await readdir(FIXTURES_DIR);
+      // Create services once — chevrotain@12 re-initialisation in the same
+      // process causes Object.groupBy errors on Node <22.
       const { RuneDsl } = createRuneDslServices();
-      const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
-        input,
-        URI.parse(`inmemory:///${entry}.rosetta`)
-      );
-      await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
-      const run1 = generate([doc], { target: 'zod' });
-      const run2 = generate([doc], { target: 'zod' });
-      expect(run2.length, `${entry}: second run produced different output count`).toBe(run1.length);
-      for (let i = 0; i < run1.length; i++) {
-        expect(run1[i]?.content, `${entry}[${i}]: second run differed`).toBe(run2[i]?.content);
+      let checked = 0;
+      for (const entry of entries) {
+        const dir = join(FIXTURES_DIR, entry);
+        const s = await stat(dir);
+        if (!s.isDirectory()) continue;
+        const inputPath = join(dir, 'input.rune');
+        let input: string;
+        try {
+          input = await readFile(inputPath, 'utf-8');
+        } catch {
+          continue;
+        }
+        const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+          input,
+          URI.parse(`inmemory:///${entry}.rosetta`)
+        );
+        await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+        const run1 = generate([doc], { target: 'zod' });
+        const run2 = generate([doc], { target: 'zod' });
+        expect(run2.length, `${entry}: second run produced different output count`).toBe(
+          run1.length
+        );
+        for (let i = 0; i < run1.length; i++) {
+          expect(run1[i]?.content, `${entry}[${i}]: second run differed`).toBe(run2[i]?.content);
+        }
+        checked++;
       }
-      checked++;
+      expect(checked, 'Expected at least one fixture to be checked').toBeGreaterThan(0);
     }
-    expect(checked, 'Expected at least one fixture to be checked').toBeGreaterThan(0);
-  });
+  );
 });
 
 /**
