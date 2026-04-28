@@ -27,7 +27,11 @@ vi.mock('@codemirror/state', () => ({
     reconfigure = vi.fn(() => ({}));
   }
 }));
-vi.mock('@codemirror/language', () => ({ StreamLanguage: { define: vi.fn(() => []) } }));
+vi.mock('@codemirror/language', () => ({
+  StreamLanguage: { define: vi.fn(() => []) },
+  HighlightStyle: { define: vi.fn(() => ({})) },
+  syntaxHighlighting: vi.fn(() => [])
+}));
 vi.mock('@codemirror/lang-json', () => ({ json: vi.fn(() => []) }));
 vi.mock('@codemirror/lang-javascript', () => ({ javascript: vi.fn(() => []) }));
 
