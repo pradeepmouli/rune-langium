@@ -11,6 +11,7 @@ import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode } from '../../types.js';
+import { NodeKindBadge } from './NodeKindBadge.js';
 
 export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
@@ -20,7 +21,7 @@ export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
     <div className={`rune-node rune-node-enum${selected ? ' rune-node-selected' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="rune-node-header">
-        <span className="rune-node-kind-badge">Enum</span>
+        <NodeKindBadge kind="enum" />
         <span>{d.name}</span>
       </div>
       <div className="rune-node-body">

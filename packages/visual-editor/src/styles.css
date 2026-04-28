@@ -41,12 +41,51 @@
 }
 
 .rune-node-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
   font-size: var(--text-xs, 10px);
   padding: var(--space-1, 1px) var(--space-3, 6px);
   border-radius: var(--radius-sm, 3px);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.rune-kind-badge--data {
+  background: var(--color-data-badge, #bee3f8);
+  color: var(--color-data-text, #2a69ac);
+}
+
+.rune-kind-badge--choice {
+  background: var(--color-choice-badge, #feebc8);
+  color: var(--color-choice-text, #c05621);
+}
+
+.rune-kind-badge--enum {
+  background: var(--color-enum-badge, #c6f6d5);
+  color: var(--color-enum-text, #276749);
+}
+
+.rune-kind-badge--func {
+  background: var(--color-func-badge, rgba(168, 85, 247, 0.25));
+  color: var(--color-func-text, #d8b4fe);
+}
+
+.rune-kind-badge--record {
+  background: color-mix(in oklch, var(--color-data, #00D4AA) 18%, transparent);
+  color: color-mix(in oklch, var(--color-data, #00D4AA) 75%, white 25%);
+}
+
+.rune-kind-badge--typeAlias,
+.rune-kind-badge--basicType {
+  background: color-mix(in oklch, var(--muted-foreground, #8A8A96) 18%, transparent);
+  color: color-mix(in oklch, var(--muted-foreground, #8A8A96) 92%, white 8%);
+}
+
+.rune-kind-badge--annotation {
+  background: color-mix(in oklch, var(--color-choice, #E8913A) 18%, transparent);
+  color: color-mix(in oklch, var(--color-choice, #E8913A) 72%, white 28%);
 }
 
 .rune-node-body {
@@ -119,11 +158,6 @@ button[data-navigable]:focus-visible {
   color: var(--color-data-text, #2b6cb0);
 }
 
-.rune-node-data .rune-node-kind-badge {
-  background: var(--color-data-badge, #bee3f8);
-  color: var(--color-data-text, #2a69ac);
-}
-
 /* ── Choice node (amber) ──────────────────────────────────────── */
 
 .rune-node-choice {
@@ -135,11 +169,6 @@ button[data-navigable]:focus-visible {
 
 .rune-node-choice .rune-node-header {
   background: var(--color-choice-bg, #fffaf0);
-  color: var(--color-choice-text, #c05621);
-}
-
-.rune-node-choice .rune-node-kind-badge {
-  background: var(--color-choice-badge, #feebc8);
   color: var(--color-choice-text, #c05621);
 }
 
@@ -157,11 +186,6 @@ button[data-navigable]:focus-visible {
   color: var(--color-enum-text, #276749);
 }
 
-.rune-node-enum .rune-node-kind-badge {
-  background: var(--color-enum-badge, #c6f6d5);
-  color: var(--color-enum-text, #276749);
-}
-
 /* ── Function node (blue) ───────────────────────────────────── */
 
 .rune-node-func {
@@ -173,11 +197,6 @@ button[data-navigable]:focus-visible {
 
 .rune-node-func .rune-node-header {
   background: var(--color-func-bg, rgba(168, 85, 247, 0.15));
-  color: var(--color-func-text, #d8b4fe);
-}
-
-.rune-node-func .rune-node-kind-badge {
-  background: var(--color-func-badge, rgba(168, 85, 247, 0.25));
   color: var(--color-func-text, #d8b4fe);
 }
 

@@ -12,7 +12,7 @@
 import { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import type { AnyGraphNode } from '../../types.js';
+import type { AnyGraphNode, TypeKind } from '../../types.js';
 import {
   AST_TYPE_TO_NODE_TYPE,
   getTypeRefText,
@@ -20,14 +20,7 @@ import {
   getRefText
 } from '../../adapters/model-helpers.js';
 import { useNavigation, resolveTypeNodeId } from './NavigationContext.js';
-
-const KIND_LABELS: Record<string, string> = {
-  func: 'Function',
-  record: 'Record',
-  typeAlias: 'Alias',
-  basicType: 'Basic',
-  annotation: 'Annotation'
-};
+import { NodeKindBadge } from './NodeKindBadge.js';
 
 const KIND_CSS: Record<string, string> = {
   func: 'rune-node-func',
@@ -39,8 +32,7 @@ const KIND_CSS: Record<string, string> = {
 
 export const GenericNode = memo(function GenericNode({ data, selected }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
-  const kind = AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data';
-  const kindLabel = KIND_LABELS[kind] ?? kind;
+  const kind = (AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data') as TypeKind;
   const kindCss = KIND_CSS[kind] ?? '';
   const parentName = getRefText((d as any).superType);
   const { onNavigateToType, allNodeIds } = useNavigation();
@@ -67,7 +59,7 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
     <div className={`rune-node ${kindCss}${selected ? ' rune-node-selected' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="rune-node-header">
-        <span className="rune-node-kind-badge">{kindLabel}</span>
+        <NodeKindBadge kind={kind} />
         <span>{d.name}</span>
       </div>
       <div className="rune-node-body">

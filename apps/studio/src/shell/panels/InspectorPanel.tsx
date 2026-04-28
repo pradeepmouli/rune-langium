@@ -15,9 +15,13 @@ export function InspectorPanel({ children }: InspectorPanelProps): React.ReactEl
       aria-label="Inspector"
       data-testid="panel-inspector"
       data-component="workspace.inspector"
+      className="flex h-full flex-col overflow-hidden"
     >
-      <h2>Inspector</h2>
-      {children ?? <p>Select a node in the editor or visual preview to inspect it.</p>}
+      {children ?? (
+        <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
+          Select a node in the editor or visual preview to inspect it.
+        </div>
+      )}
     </section>
   );
 }

@@ -14,6 +14,7 @@ import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode } from '../../types.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
 import { useNavigation, resolveTypeNodeId } from './NavigationContext.js';
+import { NodeKindBadge } from './NodeKindBadge.js';
 
 export const DataNode = memo(function DataNode({ data, selected }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
@@ -32,7 +33,7 @@ export const DataNode = memo(function DataNode({ data, selected }: NodeProps) {
     <div className={`rune-node rune-node-data${selected ? ' rune-node-selected' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="rune-node-header">
-        <span className="rune-node-kind-badge">Type</span>
+        <NodeKindBadge kind="data" />
         <span>{d.name}</span>
       </div>
       <div className="rune-node-body">

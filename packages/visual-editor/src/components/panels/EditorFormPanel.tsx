@@ -21,7 +21,6 @@
 import { useEffect, useCallback, useRef, useMemo, Component, memo } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { X } from 'lucide-react';
-import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { DataTypeForm } from '../editors/DataTypeForm.js';
 import { EnumForm } from '../editors/EnumForm.js';
@@ -29,7 +28,6 @@ import { ChoiceForm } from '../editors/ChoiceForm.js';
 import { FunctionForm } from '../editors/FunctionForm.js';
 import { TypeAliasForm } from '../editors/TypeAliasForm.js';
 import { DetailPanel } from './DetailPanel.js';
-import { getKindLabel } from '../editors/TypeSelector.js';
 import { useInheritedMembers } from '../../hooks/useInheritedMembers.js';
 import type {
   AnyGraphNode,
@@ -40,6 +38,7 @@ import type {
   ExpressionEditorSlotProps
 } from '../../types.js';
 import { AST_TYPE_TO_NODE_TYPE } from '../../adapters/model-helpers.js';
+import { NodeKindBadge } from '../nodes/NodeKindBadge.js';
 
 // ---------------------------------------------------------------------------
 // Error Boundary
@@ -310,7 +309,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
           border-b bg-muted"
       >
         <span className="text-sm font-semibold truncate">{displayName}</span>
-        <Badge variant={displayKind}>{getKindLabel(displayKind)}</Badge>
+        <NodeKindBadge kind={displayKind} />
         {onClose && (
           <Button
             variant="ghost"
