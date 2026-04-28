@@ -341,7 +341,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
         return merged;
       });
       setEdges(visibleEdges);
-    }, [layoutedNodes, visibleEdges, setNodes, setEdges, fitView]);
+    }, [layoutedNodes, visibleEdges, setNodes, setEdges, fitView, setViewport]);
 
     const graphNodes = useMemo(() => nodes.filter(isTypeGraphNode), [nodes]);
 
