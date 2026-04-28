@@ -12,6 +12,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { useState } from 'react';
 
 interface CapturedReady {
   components: Record<string, unknown>;
@@ -55,7 +56,18 @@ vi.mock('dockview-react', () => ({
     captured.components = props.components;
     captured.onReady = props.onReady;
     setTimeout(() => props.onReady({ api: new FakeApi() }), 0);
-    return null;
+    return (
+      <div data-testid="dockview-react-mock">
+        {Object.entries(props.components).map(([name, Component]) => {
+          const Panel = Component as React.FC;
+          return (
+            <div key={name} data-testid={`dockview-panel-${name}`}>
+              <Panel />
+            </div>
+          );
+        })}
+      </div>
+    );
   }
 }));
 
@@ -111,6 +123,30 @@ describe('DockShell — dockview integration (T065)', () => {
     const last = onChange.mock.calls.at(-1)?.[0];
     expect(last.writtenBy).toBe('9.9.9');
     expect(last.dockview).toHaveProperty('columns');
+  });
+
+  it('updates override panel content when parent state changes', async () => {
+    function Harness() {
+      const [label, setLabel] = useState('initial file tree');
+      const FileTree = () => <div>{label}</div>;
+      return (
+        <>
+          <button type="button" onClick={() => setLabel('updated file tree')}>
+            update panel
+          </button>
+          <DockShell
+            studioVersion="0.1.0"
+            workspaceId="ws-1"
+            panelComponents={{ 'workspace.fileTree': FileTree }}
+          />
+        </>
+      );
+    }
+
+    render(<Harness />);
+    expect(screen.getByText('initial file tree')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('update panel'));
+    expect(screen.getByText('updated file tree')).toBeInTheDocument();
   });
 });
 

@@ -13,7 +13,9 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { parse } from '@rune-langium/core';
 import { EditorFormPanel } from '../../src/components/panels/EditorFormPanel.js';
+import { astToModel } from '../../src/adapters/ast-to-model.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
@@ -168,6 +170,31 @@ describe('EditorFormPanel', () => {
     expect(screen.getAllByText('Data').length).toBeGreaterThanOrEqual(1);
     // Should show add-attribute button
     expect(screen.getByText(/Add Attribute/)).toBeDefined();
+  });
+
+  it('renders a parsed AST-backed node without recursing through runtime fields', async () => {
+    const parsed = await parse(`
+      namespace test.model
+
+      type Trade:
+        tradeDate date (1..1)
+    `);
+    const { nodes } = astToModel(parsed.value);
+    const tradeNode = nodes.find((node) => node.data.name === 'Trade');
+
+    expect(tradeNode).toBeDefined();
+
+    render(
+      <EditorFormPanel
+        nodeData={tradeNode!.data}
+        nodeId={tradeNode!.id}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    expect(screen.getByRole('complementary')).toBeInTheDocument();
+    expect(screen.getByText(/Add Attribute/)).toBeInTheDocument();
   });
 
   it('renders DetailPanel for read-only nodes', () => {

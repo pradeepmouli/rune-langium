@@ -5,12 +5,11 @@
  * AST → Model adapter.
  *
  * Converts Rune DSL AST nodes into GraphNode<T> objects for ReactFlow.
- * Since AST objects from the worker already have Langium internals
- * ($container, $cstNode, $document) stripped via structured clone,
- * AstNodeModel<T> is essentially a type-level VIEW over the existing
- * runtime objects — no deep transformation needed.
  *
- * Each build function spreads the AST fields and adds GraphMetadata.
+ * The visual editor intentionally uses the AST shape directly, but the
+ * runtime objects still carry Langium internals and resolved reference
+ * targets that should not reach the client/editor model. We therefore
+ * strip those additional fields without introducing a bespoke projection.
  */
 
 import {
@@ -27,20 +26,16 @@ import type {
   RosettaModel,
   RosettaRootElement,
   Data,
-  Choice,
   RosettaEnumeration,
   RosettaFunction,
   RosettaRecordType,
-  RosettaTypeAlias,
-  RosettaBasicType,
-  Annotation
+  RosettaTypeAlias
 } from '@rune-langium/core';
 import type {
   TypeGraphNode,
   TypeGraphEdge,
   AnyGraphNode,
   GraphNode,
-  EdgeData,
   GraphFilters,
   TypeKind
 } from '../types.js';
@@ -50,6 +45,7 @@ import {
   formatCardinality,
   AST_TYPE_TO_NODE_TYPE
 } from './model-helpers.js';
+import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
 
 // ---------------------------------------------------------------------------
 // Options / Result
@@ -108,10 +104,9 @@ function buildGraphNode<T extends { $type: string; name: string }>(
   isReadOnly: boolean
 ): TypeGraphNode {
   const nodeType = AST_TYPE_TO_NODE_TYPE[element.$type] ?? 'data';
-  // Spread the AST element directly — it IS the AstNodeModel at runtime
-  // (Langium internals already stripped by structured clone from worker)
+  const astData = stripAdditionalAstFields(element);
   const data = {
-    ...element,
+    ...astData,
     // GraphMetadata fields:
     namespace,
     position: { x: 0, y: 0 },

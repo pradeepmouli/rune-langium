@@ -176,6 +176,35 @@ export function EditorPage({
     filesRef.current = files;
   }, [files]);
 
+  useEffect(() => {
+    if (files.length === 0) {
+      setOpenedFilePaths((prev) => (prev.size === 0 ? prev : new Set<string>()));
+      setActiveEditorFile((prev) => (prev === undefined ? prev : undefined));
+      return;
+    }
+
+    const availablePaths = new Set(files.map((file) => file.path));
+    const preferredFile = files.find((file) => !file.readOnly) ?? files[0]!;
+
+    setOpenedFilePaths((prev) => {
+      const next = new Set([...prev].filter((path) => availablePaths.has(path)));
+      if (next.size === 0) {
+        next.add(preferredFile.path);
+      }
+      if (next.size === prev.size && [...next].every((path) => prev.has(path))) {
+        return prev;
+      }
+      return next;
+    });
+
+    setActiveEditorFile((prev) => {
+      if (prev && availablePaths.has(prev)) {
+        return prev;
+      }
+      return preferredFile.path;
+    });
+  }, [files]);
+
   // Initialise dedicated codegen worker once on mount.
   useEffect(() => {
     const worker = new Worker(new URL('../workers/codegen-worker.ts', import.meta.url), {

@@ -22,7 +22,15 @@
  * assertions remain reachable.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import type React from 'react';
 import { DockviewReact } from 'dockview-react';
 import type { DockviewApi, IDockviewPanelProps, DockviewReadyEvent } from 'dockview-react';
@@ -33,7 +41,7 @@ import { ProblemsPanel } from './panels/ProblemsPanel.js';
 import { OutputPanel } from './panels/OutputPanel.js';
 import { VisualPreviewPanel } from './panels/VisualPreviewPanel.js';
 import { CodePreviewPanel as CodePreviewPanelShell } from './panels/CodePreviewPanel.js';
-import { buildDefaultLayout } from './layout-factory.js';
+import { buildDefaultLayout, PANEL_COMPONENT_NAMES } from './layout-factory.js';
 import { sanitizeLayout } from './layout-migrations.js';
 import { applyLayout, serializeLayout } from './dockview-bridge.js';
 import { installShellShortcuts, type ShellAction } from './keyboard.js';
@@ -67,35 +75,42 @@ interface DockShellProps {
   onAction?: (action: ShellAction) => void;
 }
 
-// Each dockview panel receives `{ params, api }` props. Our panels don't
-// need params today — wrap each one so dockview can mount it generically.
-function wrapForDockview<P extends object>(Component: React.FC<P>): React.FC<IDockviewPanelProps> {
-  return function Wrapped() {
-    return <Component {...({} as P)} />;
+type PanelComponentName = keyof PanelOverrides;
+type PanelRegistry = Record<PanelComponentName, React.FC>;
+
+const DEFAULT_PANEL_REGISTRY: PanelRegistry = {
+  'workspace.fileTree': FileTreePanel,
+  'workspace.editor': EditorPanel,
+  'workspace.inspector': InspectorPanel,
+  'workspace.problems': ProblemsPanel,
+  'workspace.output': OutputPanel,
+  'workspace.visualPreview': VisualPreviewPanel,
+  'workspace.codePreview': CodePreviewPanelShell
+};
+
+const PanelRegistryContext = createContext<PanelRegistry>(DEFAULT_PANEL_REGISTRY);
+
+function mergePanelRegistry(overrides: PanelOverrides | undefined): PanelRegistry {
+  return {
+    ...DEFAULT_PANEL_REGISTRY,
+    ...(overrides ?? {})
   };
 }
 
-function mergeComponents(
-  defaults: Record<string, React.FC<IDockviewPanelProps>>,
-  overrides: PanelOverrides | undefined
-): Record<string, React.FC<IDockviewPanelProps>> {
-  if (!overrides) return defaults;
-  const out: Record<string, React.FC<IDockviewPanelProps>> = { ...defaults };
-  for (const [name, Component] of Object.entries(overrides)) {
-    if (Component) out[name] = wrapForDockview(Component);
+function createDockviewPanelBridge(name: PanelComponentName): React.FC<IDockviewPanelProps> {
+  function DockviewPanelBridge() {
+    const registry = useContext(PanelRegistryContext);
+    const PanelComponent = registry[name];
+    return <PanelComponent />;
   }
-  return out;
+
+  DockviewPanelBridge.displayName = `DockviewPanelBridge(${name})`;
+  return DockviewPanelBridge;
 }
 
-const DEFAULT_DOCKVIEW_COMPONENTS = {
-  'workspace.fileTree': wrapForDockview(FileTreePanel),
-  'workspace.editor': wrapForDockview(EditorPanel),
-  'workspace.inspector': wrapForDockview(InspectorPanel),
-  'workspace.problems': wrapForDockview(ProblemsPanel),
-  'workspace.output': wrapForDockview(OutputPanel),
-  'workspace.visualPreview': wrapForDockview(VisualPreviewPanel),
-  'workspace.codePreview': wrapForDockview(CodePreviewPanelShell)
-};
+const DOCKVIEW_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = Object.fromEntries(
+  PANEL_COMPONENT_NAMES.map((name) => [name, createDockviewPanelBridge(name as PanelComponentName)])
+);
 
 export function DockShell({
   studioVersion,
@@ -170,14 +185,7 @@ export function DockShell({
     [] // stable — reads layout and studioVersion via refs above
   );
 
-  // Stable component map — only recomputed when the override functions change.
-  // Calling mergeComponents (and wrapForDockview) inline would create new
-  // component type identities on every render, causing dockview to unmount and
-  // remount each panel (blank flash).
-  const dockviewComponents = useMemo(
-    () => mergeComponents(DEFAULT_DOCKVIEW_COMPONENTS, panelComponents),
-    [panelComponents]
-  );
+  const panelRegistry = useMemo(() => mergePanelRegistry(panelComponents), [panelComponents]);
 
   useEffect(() => {
     return installShellShortcuts(window, (action) => {
@@ -215,11 +223,13 @@ export function DockShell({
       data-testid="dock-shell"
       data-workspace-id={workspaceId}
     >
-      <DockviewReact
-        components={dockviewComponents}
-        onReady={onReady}
-        className="dockview-theme-abyss"
-      />
+      <PanelRegistryContext.Provider value={panelRegistry}>
+        <DockviewReact
+          components={DOCKVIEW_COMPONENTS}
+          onReady={onReady}
+          className="dockview-theme-abyss"
+        />
+      </PanelRegistryContext.Provider>
       <button type="button" onClick={resetLayout} data-testid="reset-layout">
         Reset layout
       </button>
