@@ -85,7 +85,8 @@ import type {
   GraphFilters,
   LayoutOptions,
   ValidationError,
-  AnyGraphNode
+  AnyGraphNode,
+  EdgeData
 } from '../types.js';
 import type { GroupContainerData, GroupContainerNodeType } from './nodes/GroupContainerNode.js';
 
@@ -93,7 +94,12 @@ import type { GroupContainerData, GroupContainerNodeType } from './nodes/GroupCo
 // Default configuration
 // ---------------------------------------------------------------------------
 
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: {
+  layout: LayoutOptions;
+  showMinimap: boolean;
+  showControls: boolean;
+  readOnly: boolean;
+} = {
   layout: { direction: 'TB' as const, nodeSeparation: 50, rankSeparation: 100 },
   showMinimap: false,
   showControls: true,
@@ -112,6 +118,14 @@ type DisplayGraphNode = TypeGraphNode | GroupContainerNodeType;
 interface InheritanceDisplayModel {
   nodes: DisplayGraphNode[];
   groupLabelsByNodeId: Map<string, string>;
+}
+
+function isGroupContainerNode(node: DisplayGraphNode): node is GroupContainerNodeType {
+  return node.type === 'groupContainer';
+}
+
+function isTypeGraphNode(node: DisplayGraphNode): node is TypeGraphNode {
+  return !isGroupContainerNode(node);
 }
 
 function estimateNodeHeight(node: TypeGraphNode): number {
@@ -266,7 +280,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     const layoutedNodes =
       visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD ? asyncLayoutResult : syncLayoutedNodes;
 
-    const [nodes, setNodes, onNodesChange] = useNodesState<TypeGraphNode>([]);
+    const [nodes, setNodes, onNodesChange] = useNodesState<DisplayGraphNode>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<TypeGraphEdge>([]);
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
@@ -308,10 +322,11 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
       }
 
       // Merge: preserve local positions, update data from store
-      setNodes((localNodes: TypeGraphNode[]) => {
+      setNodes((localNodes: DisplayGraphNode[]) => {
+        const localTypeNodes = localNodes.filter(isTypeGraphNode);
         const storeMap = new Map(layoutedNodes.map((n) => [n.id, n]));
-        const merged: TypeGraphNode[] = [];
-        for (const n of localNodes) {
+        const merged: DisplayGraphNode[] = [];
+        for (const n of localTypeNodes) {
           const sn = storeMap.get(n.id);
           if (!sn) continue;
           // Preserve position from local state, update data from store
@@ -319,7 +334,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
         }
 
         // Add new nodes not yet in local state
-        const localIds = new Set(localNodes.map((n) => n.id));
+        const localIds = new Set(localTypeNodes.map((n) => n.id));
         for (const sn of layoutedNodes) {
           if (!localIds.has(sn.id)) merged.push(sn);
         }
@@ -327,6 +342,8 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
       });
       setEdges(visibleEdges);
     }, [layoutedNodes, visibleEdges, setNodes, setEdges, fitView]);
+
+    const graphNodes = useMemo(() => nodes.filter(isTypeGraphNode), [nodes]);
 
     const hoveredEdge = useMemo(
       () => (hoveredEdgeId ? (edges.find((edge) => edge.id === hoveredEdgeId) ?? null) : null),
@@ -357,9 +374,9 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     const inheritanceDisplay = useMemo<InheritanceDisplayModel>(
       () =>
         mergedConfig.layout.groupByInheritance
-          ? buildInheritanceDisplayNodes(nodes, edges)
-          : { nodes, groupLabelsByNodeId: new Map() },
-      [nodes, edges, mergedConfig.layout.groupByInheritance]
+          ? buildInheritanceDisplayNodes(graphNodes, edges)
+          : { nodes: graphNodes, groupLabelsByNodeId: new Map() },
+      [graphNodes, edges, mergedConfig.layout.groupByInheritance]
     );
 
     const baseDisplayNodes = inheritanceDisplay.nodes;
@@ -394,14 +411,15 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
 
     const displayEdges = useMemo(
       () =>
-        edges.map((edge) => {
+        edges.map((edge): TypeGraphEdge => {
+          const edgeData = edge.data as EdgeData;
           const isRelated = emphasis?.focusedEdgeIds.has(edge.id) ?? false;
           const isDimmed = emphasis ? !isRelated : false;
           const shouldShowLabel = zoomLevel >= 0.9 || isRelated;
           return {
             ...edge,
             data: {
-              ...edge.data,
+              ...edgeData,
               showLabel: shouldShowLabel
             },
             style: {
@@ -415,8 +433,8 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     );
 
     const activeNode = useMemo(
-      () => nodes.find((node) => node.id === (hoveredNodeId ?? selectedNodeId)) ?? null,
-      [nodes, hoveredNodeId, selectedNodeId]
+      () => graphNodes.find((node) => node.id === (hoveredNodeId ?? selectedNodeId)) ?? null,
+      [graphNodes, hoveredNodeId, selectedNodeId]
     );
 
     const breadcrumbItems = useMemo(() => {
@@ -466,7 +484,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     // Node double-click handler
     const handleNodeDoubleClick = useCallback(
       (_event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
-        if (node.type === 'groupContainer') return;
+        if (isGroupContainerNode(node)) return;
         callbacks?.onNodeDoubleClick?.(node.id, node.data);
       },
       [callbacks]
@@ -481,7 +499,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
         },
 
         focusNode(nodeId: string) {
-          const node = nodes.find((n) => n.id === nodeId);
+          const node = graphNodes.find((n) => n.id === nodeId);
           if (node) {
             setCenter(node.position.x + 110, node.position.y + 60, { zoom: 1.5, duration: 300 });
             // Programmatically select the target node in React Flow
@@ -498,7 +516,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
           const results: string[] = [];
           if (!query.trim()) return results;
           const regex = new RegExp(query, 'i');
-          for (const node of nodes) {
+          for (const node of graphNodes) {
             if (regex.test((node.data as AnyGraphNode).name as string)) {
               results.push(node.id);
             }
@@ -516,7 +534,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
 
         relayout(options?: LayoutOptions) {
           const opts = options ?? mergedConfig.layout;
-          const layouted = computeLayout(nodes, edges, opts);
+          const layouted = computeLayout(graphNodes, edges, opts);
           setNodes(layouted);
         },
 
@@ -552,17 +570,30 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
           return validateGraph(storeNodes, storeEdges);
         }
       }),
-      [nodes, edges, storeNodes, storeEdges, mergedConfig, fitView, setCenter, setNodes, callbacks]
+      [
+        graphNodes,
+        edges,
+        storeNodes,
+        storeEdges,
+        mergedConfig,
+        fitView,
+        setCenter,
+        setNodes,
+        callbacks
+      ]
     );
 
     // Context menu state
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
-    const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: TypeGraphNode) => {
-      if ((node as Node).type === 'groupContainer') return;
-      event.preventDefault();
-      setContextMenu({ x: event.clientX, y: event.clientY, node });
-    }, []);
+    const handleNodeContextMenu = useCallback(
+      (event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
+        if (isGroupContainerNode(node)) return;
+        event.preventDefault();
+        setContextMenu({ x: event.clientX, y: event.clientY, node });
+      },
+      []
+    );
 
     const handlePaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
       event.preventDefault();
@@ -619,6 +650,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
 
     const handleEdgeClick = useCallback(
       (_event: React.MouseEvent, edge: TypeGraphEdge) => {
+        if (!edge.data) return;
         callbacks?.onEdgeSelect?.(edge.id, edge.data);
       },
       [callbacks]
@@ -651,7 +683,8 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
           </div>
         )}
         <NavigationContext.Provider value={navigationCtx}>
-          <ReactFlow
+          <ReactFlow<DisplayGraphNode, TypeGraphEdge>
+            // Display nodes include synthetic group containers; domain nodes remain in the store.
             nodes={displayNodes}
             edges={displayEdges}
             onNodesChange={onNodesChange}

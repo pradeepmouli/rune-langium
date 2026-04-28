@@ -3,7 +3,7 @@
 
 import type { Node, NodeProps } from '@xyflow/react';
 
-export interface GroupContainerData {
+export interface GroupContainerData extends Record<string, unknown> {
   label: string;
   description?: string;
   nodeCount: number;

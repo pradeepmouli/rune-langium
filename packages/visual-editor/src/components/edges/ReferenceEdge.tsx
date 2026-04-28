@@ -43,7 +43,7 @@ export const ReferenceEdge = memo(function ReferenceEdge({
   const stroke = isAttributeRef
     ? colors.edge.ref
     : isTypeAliasRef
-      ? colors.mutedForeground
+      ? colors.expr.literal.DEFAULT
       : colors.choice.DEFAULT;
 
   return (
