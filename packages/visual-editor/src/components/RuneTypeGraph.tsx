@@ -61,9 +61,11 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
-  ReactFlowProvider
+  ReactFlowProvider,
+  type Node
 } from '@xyflow/react';
 import type { OnSelectionChangeParams } from '@xyflow/react';
+import { cn } from '@rune-langium/design-system/utils';
 import { nodeTypes } from './nodes/index.js';
 import { NavigationContext } from './nodes/NavigationContext.js';
 import { edgeTypes } from './edges/index.js';
@@ -71,6 +73,7 @@ import { GraphContextMenu } from './GraphContextMenu.js';
 import type { ContextMenuState } from './GraphContextMenu.js';
 import { computeLayout, computeLayoutIncremental } from '../layout/dagre-layout.js';
 import { computeLayoutAsync, cancelAsyncLayout } from '../layout/layout-worker.js';
+import { findInheritanceGroups } from '../layout/grouped-layout.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
@@ -84,6 +87,7 @@ import type {
   ValidationError,
   AnyGraphNode
 } from '../types.js';
+import type { GroupContainerData, GroupContainerNodeType } from './nodes/GroupContainerNode.js';
 
 // ---------------------------------------------------------------------------
 // Default configuration
@@ -96,6 +100,104 @@ const DEFAULT_CONFIG = {
   readOnly: true
 };
 
+const VIEWPORT_STORAGE_KEY = 'rune-type-graph:viewport';
+const GROUP_HORIZONTAL_PADDING = 26;
+const GROUP_TOP_PADDING = 40;
+const GROUP_BOTTOM_PADDING = 18;
+const ESTIMATED_NODE_WIDTH = 220;
+const ESTIMATED_NODE_MIN_HEIGHT = 120;
+
+type DisplayGraphNode = TypeGraphNode | GroupContainerNodeType;
+
+interface InheritanceDisplayModel {
+  nodes: DisplayGraphNode[];
+  groupLabelsByNodeId: Map<string, string>;
+}
+
+function estimateNodeHeight(node: TypeGraphNode): number {
+  const d = node.data as Record<string, unknown>;
+  const members = (d.attributes ?? d.enumValues ?? d.inputs ?? d.features ?? []) as unknown[];
+  return Math.max(ESTIMATED_NODE_MIN_HEIGHT, 40 + members.length * 24 + 16);
+}
+
+function buildInheritanceDisplayNodes(
+  nodes: TypeGraphNode[],
+  edges: TypeGraphEdge[]
+): InheritanceDisplayModel {
+  const groups = findInheritanceGroups(nodes, edges).filter((group) => group.nodes.length > 1);
+  if (groups.length === 0) return { nodes, groupLabelsByNodeId: new Map() };
+
+  const groupedNodeIds = new Set<string>();
+  const groupedNodes: DisplayGraphNode[] = [];
+  const groupLabelsByNodeId = new Map<string, string>();
+
+  for (const group of groups) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const node of group.nodes) {
+      const height = estimateNodeHeight(node);
+      minX = Math.min(minX, node.position.x);
+      minY = Math.min(minY, node.position.y);
+      maxX = Math.max(maxX, node.position.x + ESTIMATED_NODE_WIDTH);
+      maxY = Math.max(maxY, node.position.y + height);
+      groupedNodeIds.add(node.id);
+    }
+
+    const groupPosition = {
+      x: minX - GROUP_HORIZONTAL_PADDING,
+      y: minY - GROUP_TOP_PADDING
+    };
+    const groupWidth = maxX - minX + GROUP_HORIZONTAL_PADDING * 2;
+    const groupHeight = maxY - minY + GROUP_TOP_PADDING + GROUP_BOTTOM_PADDING;
+    const groupNodeId = `__group__inheritance__${group.id}`;
+    const rootName = group.nodes[0]?.data.name ?? 'Inheritance cluster';
+    const groupNode: GroupContainerNodeType = {
+      id: groupNodeId,
+      type: 'groupContainer',
+      position: groupPosition,
+      data: {
+        label: rootName,
+        description: 'Inheritance cluster',
+        nodeCount: group.nodes.length,
+        scope: 'inheritance'
+      } satisfies GroupContainerData,
+      style: {
+        width: groupWidth,
+        height: groupHeight
+      },
+      draggable: false,
+      selectable: false,
+      deletable: false,
+      connectable: false
+    };
+
+    groupedNodes.push(groupNode);
+    for (const node of group.nodes) {
+      groupLabelsByNodeId.set(node.id, rootName);
+      groupedNodes.push({
+        ...node,
+        parentId: groupNodeId,
+        extent: 'parent',
+        position: {
+          x: node.position.x - groupPosition.x,
+          y: node.position.y - groupPosition.y
+        }
+      });
+    }
+  }
+
+  for (const node of nodes) {
+    if (!groupedNodeIds.has(node.id)) {
+      groupedNodes.push(node);
+    }
+  }
+
+  return { nodes: groupedNodes, groupLabelsByNodeId };
+}
+
 // ---------------------------------------------------------------------------
 // Inner component (needs ReactFlowProvider context)
 // ---------------------------------------------------------------------------
@@ -103,13 +205,14 @@ const DEFAULT_CONFIG = {
 const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
   function RuneTypeGraphInner({ config, callbacks, className }, ref) {
     const mergedConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
-    const { fitView, setCenter } = useReactFlow();
+    const { fitView, setCenter, setViewport } = useReactFlow();
 
     // Subscribe to store state
     const storeNodes = useEditorStore((s) => s.nodes);
     const storeEdges = useEditorStore((s) => s.edges);
     const visibility = useEditorStore((s) => s.visibility);
     const selectNode = useEditorStore((s) => s.selectNode);
+    const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
 
     // Derive visible nodes/edges from store, respecting namespace, kind, and individual visibility
     const { visibleNodes, visibleEdges } = useMemo(() => {
@@ -165,6 +268,9 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
 
     const [nodes, setNodes, onNodesChange] = useNodesState<TypeGraphNode>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<TypeGraphEdge>([]);
+    const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+    const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+    const [zoomLevel, setZoomLevel] = useState(1);
 
     // Track current filters
     const filtersRef = useRef<GraphFilters>(mergedConfig.initialFilters ?? {});
@@ -182,7 +288,17 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
         if (layoutedNodes.length > 0) {
           setTimeout(() => {
             try {
-              fitView({ duration: 200 });
+              const rawViewport = window.localStorage.getItem(VIEWPORT_STORAGE_KEY);
+              if (rawViewport) {
+                const viewport = JSON.parse(rawViewport) as {
+                  x: number;
+                  y: number;
+                  zoom: number;
+                };
+                void setViewport(viewport, { duration: 180 });
+              } else {
+                fitView({ duration: 200, padding: 0.16 });
+              }
             } catch {
               /* SSR/test guard */
             }
@@ -210,24 +326,125 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
         return merged;
       });
       setEdges(visibleEdges);
-
-      // Auto fit-view when visibility changes
-      if (layoutedNodes.length > 0 && layoutedNodes.length !== prev.length) {
-        setTimeout(() => {
-          try {
-            fitView({ duration: 200 });
-          } catch {
-            /* SSR/test guard */
-          }
-        }, 50);
-      }
     }, [layoutedNodes, visibleEdges, setNodes, setEdges, fitView]);
+
+    const hoveredEdge = useMemo(
+      () => (hoveredEdgeId ? (edges.find((edge) => edge.id === hoveredEdgeId) ?? null) : null),
+      [edges, hoveredEdgeId]
+    );
+
+    const focusNodeId = hoveredNodeId ?? selectedNodeId;
+    const emphasis = useMemo(() => {
+      if (hoveredEdge) {
+        return {
+          focusedNodeIds: new Set<string>([hoveredEdge.source, hoveredEdge.target]),
+          focusedEdgeIds: new Set<string>([hoveredEdge.id])
+        };
+      }
+      if (!focusNodeId) return null;
+      const focusedNodeIds = new Set<string>([focusNodeId]);
+      const focusedEdgeIds = new Set<string>();
+      for (const edge of edges) {
+        if (edge.source === focusNodeId || edge.target === focusNodeId) {
+          focusedNodeIds.add(edge.source);
+          focusedNodeIds.add(edge.target);
+          focusedEdgeIds.add(edge.id);
+        }
+      }
+      return { focusedNodeIds, focusedEdgeIds };
+    }, [edges, focusNodeId, hoveredEdge]);
+
+    const inheritanceDisplay = useMemo<InheritanceDisplayModel>(
+      () =>
+        mergedConfig.layout.groupByInheritance
+          ? buildInheritanceDisplayNodes(nodes, edges)
+          : { nodes, groupLabelsByNodeId: new Map() },
+      [nodes, edges, mergedConfig.layout.groupByInheritance]
+    );
+
+    const baseDisplayNodes = inheritanceDisplay.nodes;
+
+    const displayNodes = useMemo(
+      () =>
+        baseDisplayNodes.map((node) => {
+          if (node.type === 'groupContainer') {
+            return {
+              ...node,
+              className: cn(
+                'rune-graph-group-shell',
+                emphasis && 'rune-graph-group-shell--contextual'
+              )
+            };
+          }
+          const isFocus = focusNodeId === node.id;
+          const isRelated = emphasis?.focusedNodeIds.has(node.id) ?? false;
+          const isDimmed = emphasis ? !isRelated : false;
+          return {
+            ...node,
+            className: cn(
+              'rune-flow-node-shell',
+              isFocus && 'rune-flow-node-shell--focus',
+              isRelated && !isFocus && 'rune-flow-node-shell--related',
+              isDimmed && 'rune-flow-node-shell--dimmed'
+            )
+          };
+        }),
+      [baseDisplayNodes, emphasis, focusNodeId]
+    );
+
+    const displayEdges = useMemo(
+      () =>
+        edges.map((edge) => {
+          const isRelated = emphasis?.focusedEdgeIds.has(edge.id) ?? false;
+          const isDimmed = emphasis ? !isRelated : false;
+          const shouldShowLabel = zoomLevel >= 0.9 || isRelated;
+          return {
+            ...edge,
+            data: {
+              ...edge.data,
+              showLabel: shouldShowLabel
+            },
+            style: {
+              ...edge.style,
+              opacity: isDimmed ? 0.16 : 1,
+              strokeWidth: isRelated ? 2.35 : edge.style?.strokeWidth
+            }
+          };
+        }),
+      [edges, emphasis, zoomLevel]
+    );
+
+    const activeNode = useMemo(
+      () => nodes.find((node) => node.id === (hoveredNodeId ?? selectedNodeId)) ?? null,
+      [nodes, hoveredNodeId, selectedNodeId]
+    );
+
+    const breadcrumbItems = useMemo(() => {
+      if (!activeNode) return [];
+      const items: Array<{ key: string; label: string }> = [];
+      const groupLabel = inheritanceDisplay.groupLabelsByNodeId.get(activeNode.id);
+      if (groupLabel) {
+        items.push({ key: 'group', label: groupLabel });
+      }
+      items.push({ key: 'node', label: activeNode.data.name as string });
+      const neighborCount = edges.filter(
+        (edge) => edge.source === activeNode.id || edge.target === activeNode.id
+      ).length;
+      if (neighborCount > 0) {
+        items.push({
+          key: 'neighbors',
+          label: `${neighborCount} related ${neighborCount === 1 ? 'edge' : 'edges'}`
+        });
+      }
+      return items;
+    }, [activeNode, inheritanceDisplay.groupLabelsByNodeId, edges]);
 
     // Selection handler — writes to store
     const handleSelectionChange = useCallback(
       ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
         if (selectedNodes.length > 0) {
-          const node = selectedNodes[0] as TypeGraphNode;
+          const node = selectedNodes[0] as Node;
+          if (node.type === 'groupContainer') return;
           selectNode(node.id);
         } else {
           callbacks?.onSelectionClear?.();
@@ -239,12 +456,17 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     // Navigation context value for clickable type references in nodes
     const navigationCtx = useMemo(() => {
       const allNodeIds = new Set(storeNodes.map((n) => n.id));
-      return { onNavigateToType: callbacks?.onNavigateToType, allNodeIds };
-    }, [storeNodes, callbacks?.onNavigateToType]);
+      return {
+        onNavigateToType: callbacks?.onNavigateToType,
+        allNodeIds,
+        layoutDirection: mergedConfig.layout.direction ?? 'TB'
+      };
+    }, [storeNodes, callbacks?.onNavigateToType, mergedConfig.layout.direction]);
 
     // Node double-click handler
     const handleNodeDoubleClick = useCallback(
-      (_event: React.MouseEvent, node: TypeGraphNode) => {
+      (_event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
+        if (node.type === 'groupContainer') return;
         callbacks?.onNodeDoubleClick?.(node.id, node.data);
       },
       [callbacks]
@@ -337,6 +559,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
     const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: TypeGraphNode) => {
+      if ((node as Node).type === 'groupContainer') return;
       event.preventDefault();
       setContextMenu({ x: event.clientX, y: event.clientY, node });
     }, []);
@@ -353,24 +576,102 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     // Close context menu on pane click
     const handlePaneClick = useCallback(() => {
       setContextMenu(null);
+      setHoveredNodeId(null);
+      setHoveredEdgeId(null);
     }, []);
 
+    const handleNodeMouseEnter = useCallback(
+      (_event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
+        if (node.type === 'groupContainer') return;
+        setHoveredNodeId(node.id);
+      },
+      []
+    );
+
+    const handleMove = useCallback(
+      (
+        _event: MouseEvent | TouchEvent | null,
+        viewport: { x: number; y: number; zoom: number }
+      ) => {
+        setZoomLevel((prev) => (Math.abs(prev - viewport.zoom) > 0.02 ? viewport.zoom : prev));
+      },
+      []
+    );
+
+    const densityClass =
+      zoomLevel < 0.58
+        ? 'rune-type-graph--zoom-low'
+        : zoomLevel < 0.86
+          ? 'rune-type-graph--zoom-mid'
+          : 'rune-type-graph--zoom-full';
+
+    const handleNodeMouseLeave = useCallback(() => {
+      setHoveredNodeId(null);
+    }, []);
+
+    const handleEdgeMouseEnter = useCallback((_event: React.MouseEvent, edge: TypeGraphEdge) => {
+      setHoveredEdgeId(edge.id);
+    }, []);
+
+    const handleEdgeMouseLeave = useCallback(() => {
+      setHoveredEdgeId(null);
+    }, []);
+
+    const handleEdgeClick = useCallback(
+      (_event: React.MouseEvent, edge: TypeGraphEdge) => {
+        callbacks?.onEdgeSelect?.(edge.id, edge.data);
+      },
+      [callbacks]
+    );
+
+    const handleMoveEnd = useCallback(
+      (
+        _event: MouseEvent | TouchEvent | null,
+        viewport: { x: number; y: number; zoom: number }
+      ) => {
+        try {
+          window.localStorage.setItem(VIEWPORT_STORAGE_KEY, JSON.stringify(viewport));
+        } catch {
+          /* storage unavailable */
+        }
+      },
+      []
+    );
+
     return (
-      <div className={`rune-type-graph ${className ?? ''}`}>
+      <div className={cn('rune-type-graph', densityClass, className)}>
+        {breadcrumbItems.length > 0 && (
+          <div className="rune-graph-breadcrumbs" aria-label="Graph navigation context">
+            {breadcrumbItems.map((item, index) => (
+              <span key={item.key} className="rune-graph-breadcrumbs__item">
+                {index > 0 && <span className="rune-graph-breadcrumbs__sep">/</span>}
+                <span>{item.label}</span>
+              </span>
+            ))}
+          </div>
+        )}
         <NavigationContext.Provider value={navigationCtx}>
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={displayNodes}
+            edges={displayEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onSelectionChange={handleSelectionChange}
             onNodeDoubleClick={handleNodeDoubleClick}
             onNodeContextMenu={handleNodeContextMenu}
+            onNodeMouseEnter={handleNodeMouseEnter}
+            onNodeMouseLeave={handleNodeMouseLeave}
+            onEdgeMouseEnter={handleEdgeMouseEnter}
+            onEdgeMouseLeave={handleEdgeMouseLeave}
+            onEdgeClick={handleEdgeClick}
             onPaneContextMenu={handlePaneContextMenu}
             onPaneClick={handlePaneClick}
+            onMove={handleMove}
+            onMoveEnd={handleMoveEnd}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
+            onlyRenderVisibleElements
             nodesDraggable={!mergedConfig.readOnly}
             nodesConnectable={!mergedConfig.readOnly}
             elementsSelectable

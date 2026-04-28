@@ -25,11 +25,12 @@ import {
 // ---------------------------------------------------------------------------
 
 function ContextReader() {
-  const { onNavigateToType, allNodeIds } = useNavigation();
+  const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();
   return (
     <div>
       <span data-testid="has-callback">{onNavigateToType ? 'yes' : 'no'}</span>
       <span data-testid="node-count">{allNodeIds.size}</span>
+      <span data-testid="layout-direction">{layoutDirection}</span>
     </div>
   );
 }
@@ -45,6 +46,7 @@ describe('NavigationContext', () => {
 
       expect(screen.getByTestId('has-callback').textContent).toBe('no');
       expect(screen.getByTestId('node-count').textContent).toBe('0');
+      expect(screen.getByTestId('layout-direction').textContent).toBe('TB');
     });
 
     it('returns provided values when wrapped in NavigationContext.Provider', () => {
@@ -52,13 +54,14 @@ describe('NavigationContext', () => {
       const allNodeIds = new Set(['cdm.base.math::Quantity', 'cdm.product::Trade']);
 
       render(
-        <NavigationContext.Provider value={{ onNavigateToType, allNodeIds }}>
+        <NavigationContext.Provider value={{ onNavigateToType, allNodeIds, layoutDirection: 'LR' }}>
           <ContextReader />
         </NavigationContext.Provider>
       );
 
       expect(screen.getByTestId('has-callback').textContent).toBe('yes');
       expect(screen.getByTestId('node-count').textContent).toBe('2');
+      expect(screen.getByTestId('layout-direction').textContent).toBe('LR');
     });
   });
 

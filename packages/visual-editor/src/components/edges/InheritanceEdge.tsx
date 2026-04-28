@@ -8,8 +8,9 @@
  */
 
 import { memo } from 'react';
-import { BaseEdge, getStraightPath, EdgeLabelRenderer } from '@xyflow/react';
+import { BaseEdge, getSmoothStepPath } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
+import type { EdgeData } from '../../types.js';
 import { colors } from '@rune-langium/design-system/tokens';
 
 export const InheritanceEdge = memo(function InheritanceEdge({
@@ -18,14 +19,23 @@ export const InheritanceEdge = memo(function InheritanceEdge({
   sourceY,
   targetX,
   targetY,
+  sourcePosition,
+  targetPosition,
   style,
-  markerEnd
+  markerEnd,
+  data
 }: EdgeProps) {
-  const [edgePath] = getStraightPath({
+  const edgeData = data as EdgeData | undefined;
+  const isEnumExtends = edgeData?.kind === 'enum-extends';
+  const [edgePath] = getSmoothStepPath({
     sourceX,
     sourceY,
+    sourcePosition,
     targetX,
-    targetY
+    targetY,
+    targetPosition,
+    borderRadius: 16,
+    offset: 24
   });
 
   return (
@@ -33,8 +43,8 @@ export const InheritanceEdge = memo(function InheritanceEdge({
       id={id}
       path={edgePath}
       style={{
-        stroke: colors.data.DEFAULT,
-        strokeWidth: 2,
+        stroke: isEnumExtends ? colors.enum.DEFAULT : colors.data.DEFAULT,
+        strokeWidth: 2.25,
         ...style
       }}
       markerEnd={markerEnd}

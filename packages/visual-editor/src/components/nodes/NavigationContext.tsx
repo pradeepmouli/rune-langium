@@ -10,19 +10,42 @@
  */
 
 import { createContext, useContext } from 'react';
+import { Position } from '@xyflow/react';
 import type { NavigateToNodeCallback } from '../../types.js';
+import type { LayoutOptions } from '../../types.js';
+
+export type GraphLayoutDirection = NonNullable<LayoutOptions['direction']>;
 
 export interface NavigationContextValue {
   onNavigateToType?: NavigateToNodeCallback;
   /** Set of all node IDs currently in the graph, used to check if a type is navigable. */
   allNodeIds: Set<string>;
+  /** Active layout direction so node handles can align with dagre output. */
+  layoutDirection: GraphLayoutDirection;
 }
 
-const defaultValue: NavigationContextValue = { allNodeIds: new Set() };
+const defaultValue: NavigationContextValue = { allNodeIds: new Set(), layoutDirection: 'TB' };
 
 export const NavigationContext = createContext<NavigationContextValue>(defaultValue);
 
 export const useNavigation = () => useContext(NavigationContext);
+
+export function getHandlePositions(direction: GraphLayoutDirection): {
+  target: Position;
+  source: Position;
+} {
+  switch (direction) {
+    case 'BT':
+      return { target: Position.Bottom, source: Position.Top };
+    case 'LR':
+      return { target: Position.Left, source: Position.Right };
+    case 'RL':
+      return { target: Position.Right, source: Position.Left };
+    case 'TB':
+    default:
+      return { target: Position.Top, source: Position.Bottom };
+  }
+}
 
 /**
  * Resolve a type name to a node ID from the set of all node IDs.
