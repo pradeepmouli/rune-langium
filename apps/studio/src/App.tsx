@@ -80,6 +80,9 @@ export function App() {
   const lspClientRef = useRef<LspClientService | null>(null);
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Incremented before each model-merge parse; only the matching result is
+  // applied, preventing stale async results from overwriting newer state.
+  const modelParseTokenRef = useRef(0);
   // Tracks the latest files state so the model-loading effect can read it
   // synchronously without stale-closure issues. Starts as [] (matching the
   // `files` initial state) and is kept in sync via the effect below.
@@ -378,8 +381,11 @@ export function App() {
     }
     setFiles(merged);
     lspClientRef.current?.syncWorkspaceFiles(merged);
+    modelParseTokenRef.current += 1;
+    const token = modelParseTokenRef.current;
     parseWorkspaceFiles(merged)
       .then(({ models: m, errors: e }) => {
+        if (token !== modelParseTokenRef.current) return;
         setModels(m);
         setErrors(e);
       })
@@ -402,17 +408,6 @@ export function App() {
 
   return (
     <div className="studio-app flex flex-col h-full text-foreground bg-background">
-      {/* Screen-reader + test accessible file count — always in DOM so the
-       * App-restore test can confirm file loading without EditorPage mounted.
-       * The global <header> is suppressed when EditorPage is active (see below)
-       * to prevent a duplicate toolbar, so this element carries the count
-       * text for both tests and assistive technology. */}
-      {userFiles.length > 0 && (
-        <span className="sr-only" role="status" aria-live="polite">
-          {userFiles.length} file(s)
-        </span>
-      )}
-
       {/* Global header — hidden when EditorPage is active to avoid a
        * duplicate toolbar. The EditorPage toolbar hosts Close + workspace
        * name in that mode. */}
@@ -482,6 +477,7 @@ export function App() {
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
             workspaceName={restoredWorkspace?.name}
+            fileCount={userFiles.length}
             onClose={handleReset}
           />
         )}
@@ -515,6 +511,7 @@ export function App() {
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
             workspaceName={restoredWorkspace?.name}
+            fileCount={userFiles.length}
             onClose={handleReset}
           />
         )}
