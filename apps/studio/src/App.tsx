@@ -82,13 +82,15 @@ export function App() {
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks the latest files state so the model-loading effect can read it
-  // synchronously without causing stale-closure issues.
+  // synchronously without stale-closure issues. Starts as [] (matching the
+  // `files` initial state) and is kept in sync via the effect below.
   const filesRef = useRef<WorkspaceFile[]>([]);
 
   const syncWorkspaceToEditor = useCallback(async (workspaceFiles: WorkspaceFile[]) => {
     setLoading(true);
     try {
-      let allFiles: WorkspaceFile[] = [
+      // Start with the built-in base types and the user's workspace files.
+      let mergedFiles: WorkspaceFile[] = [
         ...BASE_TYPE_FILES.map((file) => ({ ...file })),
         ...workspaceFiles
       ];
@@ -96,12 +98,12 @@ export function App() {
       // switching/restoring a workspace doesn't silently drop them.
       const loadedModels = useModelStore.getState().models;
       for (const model of loadedModels.values()) {
-        allFiles = mergeModelFiles(allFiles, model);
+        mergedFiles = mergeModelFiles(mergedFiles, model);
       }
-      setFiles(allFiles);
-      lspClientRef.current?.syncWorkspaceFiles(allFiles);
+      setFiles(mergedFiles);
+      lspClientRef.current?.syncWorkspaceFiles(mergedFiles);
 
-      const result = await parseWorkspaceFiles(allFiles);
+      const result = await parseWorkspaceFiles(mergedFiles);
       setModels(result.models);
       setErrors(result.errors);
     } finally {
@@ -357,6 +359,9 @@ export function App() {
   useEffect(() => {
     const prev = filesRef.current;
     const hadModelFiles = prev.some((f) => f.path.startsWith('['));
+    // Skip the no-op case: no models loaded and none to clean up.
+    // When models are removed (size === 0 but hadModelFiles === true) we
+    // still run so their read-only entries are stripped from the file set.
     if (loadedModels.size === 0 && !hadModelFiles) return;
 
     let merged = prev.filter((f) => !f.path.startsWith('['));
@@ -370,8 +375,9 @@ export function App() {
         setModels(m);
         setErrors(e);
       })
-      .catch(() => {
-        // Parse failure — keep existing models
+      .catch((err) => {
+        // Keep existing models on failure; log so it's still visible in devtools.
+        console.warn('[App] reparse after model load failed:', err);
       });
   }, [loadedModels]);
 
