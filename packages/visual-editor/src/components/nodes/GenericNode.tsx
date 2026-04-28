@@ -10,7 +10,7 @@
  */
 
 import { memo, useCallback } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode, TypeKind } from '../../types.js';
 import {
@@ -19,7 +19,7 @@ import {
   formatCardinality,
   getRefText
 } from '../../adapters/model-helpers.js';
-import { useNavigation, resolveTypeNodeId } from './NavigationContext.js';
+import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
 
 const KIND_CSS: Record<string, string> = {
@@ -35,7 +35,8 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
   const kind = (AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data') as TypeKind;
   const kindCss = KIND_CSS[kind] ?? '';
   const parentName = getRefText((d as any).superType);
-  const { onNavigateToType, allNodeIds } = useNavigation();
+  const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();
+  const handles = getHandlePositions(layoutDirection);
   // For functions, show inputs as members; otherwise show attributes/features
   const members = (
     kind === 'func'
@@ -54,14 +55,26 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
   const outputTypeName = kind === 'func' ? getTypeRefText((d as any).output?.typeCall) : undefined;
   const outputTargetId = outputTypeName ? resolveTypeNodeId(outputTypeName, allNodeIds) : undefined;
   const parentTargetId = parentName ? resolveTypeNodeId(parentName, allNodeIds) : undefined;
+  const summaryParts: string[] = [];
+  if (parentName) summaryParts.push(`extends ${parentName}`);
+  if (members.length > 0) {
+    summaryParts.push(`${members.length} member${members.length === 1 ? '' : 's'}`);
+  } else if (kind === 'func' && outputTypeName) {
+    summaryParts.push(`returns ${outputTypeName}`);
+  }
+  const summary = summaryParts.join(' • ') || 'No members';
 
   return (
-    <div className={`rune-node ${kindCss}${selected ? ' rune-node-selected' : ''}`}>
-      <Handle type="target" position={Position.Top} />
+    <div
+      className={`rune-node ${kindCss}${selected ? ' rune-node-selected' : ''}`}
+      data-summary={summary}
+    >
+      <Handle type="target" position={handles.target} />
       <div className="rune-node-header">
         <NodeKindBadge kind={kind} />
         <span>{d.name}</span>
       </div>
+      <div className="rune-node-summary">{summary}</div>
       <div className="rune-node-body">
         {parentName && (
           <div className="rune-node-parent">
@@ -138,7 +151,7 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={handles.source} />
     </div>
   );
 });

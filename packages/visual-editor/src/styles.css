@@ -12,6 +12,109 @@
   position: relative;
 }
 
+.rune-graph-breadcrumbs {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: oklch(0.14 0.02 280 / 0.82);
+  backdrop-filter: blur(12px);
+  color: var(--foreground, #e8e6e1);
+  font-size: 11px;
+  box-shadow: 0 10px 24px oklch(0 0 0 / 0.22);
+}
+
+.rune-graph-breadcrumbs__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rune-graph-breadcrumbs__item:last-child {
+  color: var(--muted-foreground, #8a8a96);
+}
+
+.rune-graph-breadcrumbs__sep {
+  color: var(--muted-foreground, #8a8a96);
+}
+
+.rune-flow-node-shell {
+  transition:
+    opacity 140ms ease,
+    filter 140ms ease,
+    transform 140ms ease;
+}
+
+.rune-flow-node-shell--dimmed {
+  opacity: 0.32;
+  filter: saturate(0.72);
+}
+
+.rune-flow-node-shell--related .rune-node {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 8px 24px oklch(0 0 0 / 0.32);
+}
+
+.rune-flow-node-shell--focus .rune-node {
+  box-shadow:
+    0 0 0 1px oklch(0.78 0.17 168 / 0.45),
+    0 12px 28px oklch(0 0 0 / 0.42);
+}
+
+.rune-graph-group-shell {
+  pointer-events: none;
+}
+
+.rune-graph-group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  border: 1px solid color-mix(in oklch, var(--primary, #00d4aa) 14%, transparent);
+  background:
+    linear-gradient(180deg, oklch(0.19 0.02 280 / 0.4), oklch(0.15 0.02 280 / 0.16)),
+    radial-gradient(circle at top left, oklch(0.78 0.17 168 / 0.04), transparent 46%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 8px 22px oklch(0 0 0 / 0.12);
+}
+
+.rune-graph-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 0;
+}
+
+.rune-graph-group__title {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in oklch, var(--foreground, #e8e6e1) 70%, var(--primary, #00d4aa) 12%);
+}
+
+.rune-graph-group__meta,
+.rune-graph-group__description {
+  font-size: 10px;
+  color: var(--muted-foreground, #8a8a96);
+}
+
+.rune-graph-group__description {
+  padding: 2px 14px 0;
+}
+
 /* ── Node base ────────────────────────────────────────────────── */
 
 .rune-node {
@@ -38,6 +141,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-3, 6px);
+}
+
+.rune-node-summary {
+  display: none;
 }
 
 .rune-node-kind-badge {
@@ -92,21 +199,34 @@
   padding: var(--space-4, 8px) var(--space-6, 12px);
 }
 
-.rune-node-member {
+.rune-node-members {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-1, 3px) 0;
-  gap: var(--space-4, 8px);
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rune-node-member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  column-gap: var(--space-3, 6px);
+  padding: 4px 0;
+  row-gap: var(--space-4, 8px);
 }
 
 .rune-node-member-name {
+  min-width: 0;
   color: var(--color-node-text, #E8E6E1);
+  overflow-wrap: anywhere;
 }
 
 .rune-node-member-type {
   color: var(--color-node-member-type, #8A8A96);
   font-style: italic;
+  justify-self: end;
+  text-align: right;
+  max-width: 15ch;
+  overflow-wrap: anywhere;
 }
 
 /* Navigable type references in graph nodes — rendered as semantic <button> */
@@ -136,6 +256,9 @@ button[data-navigable]:focus-visible {
 .rune-node-member-cardinality {
   color: var(--color-node-member-card, #a0aec0);
   font-size: var(--text-xs, 11px);
+  justify-self: end;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .rune-node-member-override {
@@ -243,11 +366,60 @@ button[data-navigable]:focus-visible {
   border: 1px solid var(--color-edge-label-border, rgba(255, 255, 255, 0.06));
   color: var(--color-node-text, #E8E6E1);
   pointer-events: all;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
 }
 
 .rune-edge-label__cardinality {
   color: var(--color-edge-label-text, #a0aec0);
   margin-left: var(--space-2, 4px);
+}
+
+.rune-edge-label--choice-option {
+  border-color: color-mix(in oklch, var(--color-choice, #ed8936) 28%, transparent);
+}
+
+.rune-edge-label--attribute-ref {
+  border-color: color-mix(in oklch, var(--color-edge-ref, #5C5C6A) 42%, transparent);
+}
+
+.rune-type-graph--zoom-mid .rune-edge-label {
+  opacity: 0.78;
+}
+
+.rune-type-graph--zoom-mid .rune-node-member-cardinality {
+  display: none;
+}
+
+.rune-type-graph--zoom-low .rune-node {
+  min-width: 176px;
+}
+
+.rune-type-graph--zoom-low .rune-node-header {
+  padding: 7px 10px;
+}
+
+.rune-type-graph--zoom-low .rune-node-summary {
+  display: block;
+  padding: 0 10px 8px;
+  font-size: 10px;
+  color: var(--muted-foreground, #8a8a96);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rune-type-graph--zoom-low .rune-node-body,
+.rune-type-graph--zoom-low .rune-edge-label,
+.rune-type-graph--zoom-low .react-flow__minimap {
+  display: none;
+}
+
+.rune-type-graph--zoom-low .rune-graph-group__description,
+.rune-type-graph--zoom-low .rune-graph-breadcrumbs {
+  display: none;
 }
 
 /* ── Panel styles ─────────────────────────────────────────────── */

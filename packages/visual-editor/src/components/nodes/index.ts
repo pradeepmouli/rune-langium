@@ -12,6 +12,7 @@ import { DataNode } from './DataNode.js';
 import { ChoiceNode } from './ChoiceNode.js';
 import { EnumNode } from './EnumNode.js';
 import { GenericNode } from './GenericNode.js';
+import { GroupContainerNode } from './GroupContainerNode.js';
 
 export const nodeTypes: NodeTypes = {
   data: DataNode,
@@ -21,5 +22,6 @@ export const nodeTypes: NodeTypes = {
   record: GenericNode,
   typeAlias: GenericNode,
   basicType: GenericNode,
-  annotation: GenericNode
+  annotation: GenericNode,
+  groupContainer: GroupContainerNode
 };

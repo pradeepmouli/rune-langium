@@ -9,7 +9,7 @@
  */
 
 import { memo } from 'react';
-import { BaseEdge, getBezierPath, EdgeLabelRenderer } from '@xyflow/react';
+import { BaseEdge, getSmoothStepPath, EdgeLabelRenderer } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
 import type { EdgeData } from '../../types.js';
 import { colors } from '@rune-langium/design-system/tokens';
@@ -26,17 +26,25 @@ export const ReferenceEdge = memo(function ReferenceEdge({
   markerEnd,
   data
 }: EdgeProps) {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
-    targetPosition
+    targetPosition,
+    borderRadius: 14,
+    offset: 18
   });
 
   const edgeData = data as EdgeData | undefined;
   const isAttributeRef = edgeData?.kind === 'attribute-ref';
+  const isTypeAliasRef = edgeData?.kind === 'type-alias-ref';
+  const stroke = isAttributeRef
+    ? colors.edge.ref
+    : isTypeAliasRef
+      ? colors.expr.literal.DEFAULT
+      : colors.choice.DEFAULT;
 
   return (
     <>
@@ -44,21 +52,21 @@ export const ReferenceEdge = memo(function ReferenceEdge({
         id={id}
         path={edgePath}
         style={{
-          stroke: isAttributeRef ? colors.edge.ref : colors.choice.DEFAULT,
-          strokeWidth: 1.5,
-          strokeDasharray: isAttributeRef ? '5 3' : undefined,
+          stroke,
+          strokeWidth: isAttributeRef ? 1.65 : 1.85,
+          strokeDasharray: isAttributeRef || isTypeAliasRef ? '5 3' : undefined,
           ...style
         }}
         markerEnd={markerEnd}
       />
-      {edgeData?.label && (
+      {edgeData?.label && edgeData?.showLabel !== false && (
         <EdgeLabelRenderer>
           <div
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`
             }}
-            className="rune-edge-label nodrag nopan"
+            className={`rune-edge-label rune-edge-label--${edgeData.kind} nodrag nopan`}
           >
             {edgeData.label}
             {edgeData.cardinality && (
