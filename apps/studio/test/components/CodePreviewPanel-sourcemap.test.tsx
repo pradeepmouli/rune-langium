@@ -28,7 +28,11 @@ vi.mock('@codemirror/state', () => ({
     reconfigure = vi.fn(() => ({}));
   }
 }));
-vi.mock('@codemirror/language', () => ({ StreamLanguage: { define: vi.fn(() => []) } }));
+vi.mock('@codemirror/language', () => ({
+  StreamLanguage: { define: vi.fn(() => []) },
+  HighlightStyle: { define: vi.fn(() => ({})) },
+  syntaxHighlighting: vi.fn(() => [])
+}));
 vi.mock('@codemirror/lang-json', () => ({ json: vi.fn(() => []) }));
 vi.mock('@codemirror/lang-javascript', () => ({ javascript: vi.fn(() => []) }));
 
@@ -120,7 +124,9 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
 
   it('does nothing when sourceEditorRef is null', async () => {
     const w = makeWorker();
-    const { container } = render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    const { container } = render(
+      <CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />
+    );
     await act(async () => {
       const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
         | ((e: MessageEvent) => void)
@@ -131,7 +137,9 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
           target: 'zod',
           relativePath: 'ns.zod.ts',
           content: 'line0\n',
-          sourceMap: [{ outputLine: 0, sourceUri: 'file:///trade.rune', sourceLine: 5, sourceChar: 3 }]
+          sourceMap: [
+            { outputLine: 0, sourceUri: 'file:///trade.rune', sourceLine: 5, sourceChar: 3 }
+          ]
         }
       } as MessageEvent);
     });

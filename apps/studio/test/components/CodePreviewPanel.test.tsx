@@ -33,7 +33,9 @@ vi.mock('@codemirror/state', () => ({
 }));
 
 vi.mock('@codemirror/language', () => ({
-  StreamLanguage: { define: vi.fn(() => []) }
+  StreamLanguage: { define: vi.fn(() => []) },
+  HighlightStyle: { define: vi.fn(() => ({})) },
+  syntaxHighlighting: vi.fn(() => [])
 }));
 vi.mock('@codemirror/lang-json', () => ({ json: vi.fn(() => []) }));
 vi.mock('@codemirror/lang-javascript', () => ({ javascript: vi.fn(() => []) }));
@@ -150,7 +152,9 @@ describe('CodePreviewPanel — status transitions', () => {
 
   it('removes worker listeners on unmount', () => {
     const w = makeWorker();
-    const { unmount } = render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    const { unmount } = render(
+      <CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />
+    );
     unmount();
     expect(w.removeEventListener).toHaveBeenCalledWith('message', expect.any(Function));
     expect(w.removeEventListener).toHaveBeenCalledWith('error', expect.any(Function));

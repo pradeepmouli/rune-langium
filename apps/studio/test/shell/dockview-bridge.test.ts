@@ -107,7 +107,7 @@ describe('applyLayout — factory shape', () => {
     expect(titleById.get('workspace.inspector')).toBe('Inspector');
     expect(titleById.get('workspace.problems')).toBe('Problems');
     expect(titleById.get('workspace.output')).toBe('Output');
-    expect(titleById.get('workspace.visualPreview')).toBe('Preview');
+    expect(titleById.get('workspace.visualPreview')).toBe('Graph');
     // Every call must carry a title — no internal workspace.* leaks.
     for (const call of api.calls) {
       expect(call.title).toBeTruthy();

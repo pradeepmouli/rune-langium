@@ -107,8 +107,10 @@ function createDockviewPanelBridge(name: PanelComponentName): React.FC<IDockview
     // rendering as JSX) prevents React from treating a new function reference
     // as a new component type, which would unmount and remount the subtree
     // (destroying the CodeMirror editor) on every files-state change.
-    const renderPanel = registry[name] as () => React.ReactElement | null;
-    return renderPanel();
+    const renderPanel = registry[name] as (
+      props?: Record<string, never>
+    ) => React.ReactElement | null;
+    return renderPanel({});
   }
 
   DockviewPanelBridge.displayName = `DockviewPanelBridge(${name})`;
