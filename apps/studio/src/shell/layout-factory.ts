@@ -41,7 +41,7 @@ export const PANEL_TITLES: Record<PanelComponentName, string> = {
   'workspace.inspector': 'Inspector',
   'workspace.problems': 'Problems',
   'workspace.output': 'Output',
-  'workspace.visualPreview': 'Preview',
+  'workspace.visualPreview': 'Graph',
   'workspace.codePreview': 'Code Preview'
 };
 

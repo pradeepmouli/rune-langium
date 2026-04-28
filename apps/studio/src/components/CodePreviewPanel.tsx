@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { EditorView } from '@codemirror/view';
+import { EditorState } from '@codemirror/state';
+import { basicSetup } from 'codemirror';
+import { refactoryDark } from '../lang/refactory-dark-theme.js';
 import type { Target, SourceMapEntry } from '@rune-langium/codegen';
 import { TargetSwitcher } from './TargetSwitcher.js';
 import { useCodegenStore } from '../store/codegen-store.js';
@@ -35,13 +39,13 @@ type Status = 'generating' | 'generated' | 'outdated' | 'unavailable';
 function statusLabel(status: Status, target: Target): string {
   switch (status) {
     case 'generating':
-      return 'Generating…';
+      return 'Generating\u2026';
     case 'generated':
       return `Generated (${TARGET_LABELS[target]})`;
     case 'outdated':
-      return 'Outdated — fix errors to refresh';
+      return 'Outdated \u2014 fix errors to refresh';
     case 'unavailable':
-      return 'Preview unavailable — reload Studio';
+      return 'Preview unavailable \u2014 reload Studio';
     default: {
       const exhaustiveCheck: never = status;
       throw new Error(`Unknown code preview status: ${String(exhaustiveCheck)}`);
@@ -66,6 +70,12 @@ export function CodePreviewPanel({
   const [lastContent, setLastContent] = useState<string>('');
   const sourceMapRef = useRef<SourceMapEntry[]>([]);
   const currentTargetRef = useRef<Target>(target);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
+  // Kept current so the click handler always reads the latest ref without
+  // needing to be recreated (avoids rebuilding the editor extension).
+  const sourceEditorRefRef = useRef(sourceEditorRef);
+  sourceEditorRefRef.current = sourceEditorRef;
 
   const requestGeneration = useCallback(
     (requestedTarget: Target) => {
@@ -125,17 +135,61 @@ export function CodePreviewPanel({
     [setCodePreviewTarget]
   );
 
-  // Click-to-navigate: map output line index → source location via sourceMap
+  // Click-to-navigate: map output line index -> source location via sourceMap
   const handleLineClick = useCallback(
     (outputLine: number) => {
-      if (!sourceEditorRef) return;
+      const ref = sourceEditorRefRef.current;
+      if (!ref) return;
       const entry = sourceMapRef.current.find((e) => e.outputLine === outputLine);
       if (!entry) return;
-      sourceEditorRef.revealLineInCenter(entry.sourceLine);
-      sourceEditorRef.setSelection({ line: entry.sourceLine, character: entry.sourceChar });
+      ref.revealLineInCenter(entry.sourceLine);
+      ref.setSelection({ line: entry.sourceLine, character: entry.sourceChar });
     },
-    [sourceEditorRef]
+    [] // stable -- reads via refs at call time
   );
+
+  // Create the CodeMirror editor once on mount.
+  useEffect(() => {
+    if (!editorContainerRef.current) return;
+
+    const state = EditorState.create({
+      doc: '',
+      extensions: [
+        basicSetup,
+        EditorState.readOnly.of(true),
+        ...refactoryDark,
+        EditorView.domEventHandlers({
+          click: (event, view) => {
+            const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+            if (pos === null) return;
+            // lineAt returns 1-based line numbers; sourceMap uses 0-based.
+            const lineNumber = view.state.doc.lineAt(pos).number - 1;
+            handleLineClick(lineNumber);
+          }
+        })
+      ]
+    });
+
+    const view = new EditorView({ state, parent: editorContainerRef.current });
+    editorViewRef.current = view;
+
+    return () => {
+      view.destroy();
+      editorViewRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Update editor content whenever generated output changes.
+  useEffect(() => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (current === lastContent) return;
+    view.dispatch({
+      changes: { from: 0, to: current.length, insert: lastContent }
+    });
+  }, [lastContent]);
 
   return (
     <section
@@ -145,22 +199,23 @@ export function CodePreviewPanel({
       aria-labelledby={`codegen-tab-${target}`}
       data-testid="panel-codePreview"
       data-component="workspace.codePreview"
+      className="flex flex-col h-full overflow-hidden bg-background"
     >
-      <TargetSwitcher value={target} onChange={handleTargetChange} />
-      <div data-testid="codegen-status" aria-live="polite">
-        {statusLabel(status, target)}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border shrink-0">
+        <TargetSwitcher value={target} onChange={handleTargetChange} />
+        <span
+          className="text-xs text-muted-foreground ml-auto"
+          data-testid="codegen-status"
+          aria-live="polite"
+        >
+          {statusLabel(status, target)}
+        </span>
       </div>
-      <div data-testid="code-preview-editor">
-        {lastContent && (
-          <pre>
-            {lastContent.split('\n').map((line, idx) => (
-              <div key={idx} data-line={idx} onClick={() => handleLineClick(idx)}>
-                {line}
-              </div>
-            ))}
-          </pre>
-        )}
-      </div>
+      <div
+        ref={editorContainerRef}
+        data-testid="code-preview-editor"
+        className="flex-1 overflow-auto"
+      />
     </section>
   );
 }

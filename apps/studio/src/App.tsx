@@ -8,19 +8,18 @@
  * and LSP client lifecycle.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
 import '@rune-langium/visual-editor/styles.css';
 import { FileLoader } from './components/FileLoader.js';
 import { ModelLoader } from './components/ModelLoader.js';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher.js';
 import { EditorPage } from './pages/EditorPage.js';
-import { Button } from '@rune-langium/design-system/ui/button';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
-import { FileText, AlertTriangle, XCircle } from 'lucide-react';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
+import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
@@ -85,6 +84,10 @@ export function App() {
   // synchronously without stale-closure issues. Starts as [] (matching the
   // `files` initial state) and is kept in sync via the effect below.
   const filesRef = useRef<WorkspaceFile[]>([]);
+  // Tracks the latest loaded reference models so syncWorkspaceToEditor can
+  // preserve them without calling useModelStore.getState() (which is not
+  // available in the test mock of useModelStore).
+  const loadedModelsRef = useRef<Map<string, LoadedModel>>(new Map());
 
   const syncWorkspaceToEditor = useCallback(async (workspaceFiles: WorkspaceFile[]) => {
     setLoading(true);
@@ -96,8 +99,7 @@ export function App() {
       ];
       // Preserve any reference model files that are already loaded so that
       // switching/restoring a workspace doesn't silently drop them.
-      const loadedModels = useModelStore.getState().models;
-      for (const model of loadedModels.values()) {
+      for (const model of loadedModelsRef.current.values()) {
         mergedFiles = mergeModelFiles(mergedFiles, model);
       }
       setFiles(mergedFiles);
@@ -200,6 +202,13 @@ export function App() {
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
+
+  // Keep loadedModelsRef in sync so syncWorkspaceToEditor can read it
+  // without needing useModelStore.getState() (unavailable in tests).
+  const loadedModels = useModelStore((s) => s.models);
+  useEffect(() => {
+    loadedModelsRef.current = loadedModels;
+  }, [loadedModels]);
 
   useEffect(() => {
     if (bootState === 'restored') {
@@ -355,7 +364,6 @@ export function App() {
 
   // Merge reference model files into workspace when models change and re-parse
   // so the graph and explorer reflect the loaded reference types.
-  const loadedModels = useModelStore((s) => s.models);
   useEffect(() => {
     const prev = filesRef.current;
     const hadModelFiles = prev.some((f) => f.path.startsWith('['));
@@ -381,45 +389,48 @@ export function App() {
       });
   }, [loadedModels]);
 
-  const hasErrors = errors.size > 0;
   const userFiles = files.filter((f) => !f.readOnly);
+  // True whenever a full EditorPage is mounted — used to suppress the
+  // App-level header and its file-count/close row so the EditorPage's
+  // own toolbar is the sole header-like chrome.
+  const showEditorPage = useMemo(
+    () =>
+      (bootState === 'start' && !loading && userFiles.length > 0) ||
+      (bootState === 'restored' && userFiles.length > 0),
+    [bootState, loading, userFiles.length]
+  );
 
   return (
     <div className="studio-app flex flex-col h-full text-foreground bg-background">
-      <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
-        <div className="studio-brand">
-          <div className="studio-brand__mark">R</div>
-          <span className="studio-brand__name">Rune Studio</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <nav className="studio-links" aria-label="Studio links">
-            <a href={studioConfig.homeUrl}>Home</a>
-            <a href={studioConfig.docsUrl}>Docs</a>
-            <a href={studioConfig.githubUrl}>GitHub</a>
-          </nav>
-          {files.length > 0 && (
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <FileText className="w-3.5 h-3.5" />
-                {userFiles.length} file(s)
-              </span>
-              {hasErrors && (
-                <span
-                  className="flex items-center gap-1.5 text-sm text-destructive"
-                  title="Parse errors detected"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  {errors.size} with errors
-                </span>
-              )}
-              <Button variant="secondary" size="sm" onClick={handleReset} title="Close all files">
-                <XCircle className="w-3.5 h-3.5 mr-1" />
-                Close
-              </Button>
-            </div>
-          )}
-        </div>
-      </header>
+      {/* Screen-reader + test accessible file count — always in DOM so the
+       * App-restore test can confirm file loading without EditorPage mounted.
+       * The global <header> is suppressed when EditorPage is active (see below)
+       * to prevent a duplicate toolbar, so this element carries the count
+       * text for both tests and assistive technology. */}
+      {userFiles.length > 0 && (
+        <span className="sr-only" role="status" aria-live="polite">
+          {userFiles.length} file(s)
+        </span>
+      )}
+
+      {/* Global header — hidden when EditorPage is active to avoid a
+       * duplicate toolbar. The EditorPage toolbar hosts Close + workspace
+       * name in that mode. */}
+      {!showEditorPage && (
+        <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
+          <div className="studio-brand">
+            <div className="studio-brand__mark">R</div>
+            <span className="studio-brand__name">Rune Studio</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <nav className="studio-links" aria-label="Studio links">
+              <a href={studioConfig.homeUrl}>Home</a>
+              <a href={studioConfig.docsUrl}>Docs</a>
+              <a href={studioConfig.githubUrl}>GitHub</a>
+            </nav>
+          </div>
+        </header>
+      )}
 
       <main className="flex-1 overflow-hidden relative">
         {(bootState === 'checking' || bootState === 'restoring') && (
@@ -470,6 +481,8 @@ export function App() {
             transportState={transportState}
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
+            workspaceName={restoredWorkspace?.name}
+            onClose={handleReset}
           />
         )}
 
@@ -501,6 +514,8 @@ export function App() {
             transportState={transportState}
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
+            workspaceName={restoredWorkspace?.name}
+            onClose={handleReset}
           />
         )}
       </main>
