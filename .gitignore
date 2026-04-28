@@ -3,6 +3,7 @@
 .claire/
 node_modules/
 dist/
+.wrangler/
 build/
 coverage/
 .coverage/
