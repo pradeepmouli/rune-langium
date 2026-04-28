@@ -30,17 +30,14 @@
  * @module
  */
 
-import { useCallback, useRef } from 'react';
-import { FormProvider, Controller, useWatch } from 'react-hook-form';
-import { Field, FieldError, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
+import { useCallback, useEffect, useState } from 'react';
+import { FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
-import { TypeSelector } from './TypeSelector.js';
 import { TypeLink } from './TypeLink.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { useZodForm, useExternalSync } from '@zod-to-form/react';
+import { ZodForm } from '@zod-to-form/react';
 import { RosettaTypeAliasSchema } from '../../generated/zod-schemas.js';
-import { EditorActionsProvider } from '../forms/sections/index.js';
 import { identityProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
@@ -80,153 +77,80 @@ function TypeAliasForm({
   nodeId,
   data,
   actions,
-  availableTypes = [],
   onNavigateToNode,
   allNodeIds
 }: TypeAliasFormProps) {
-  // ---- Form setup (useZodForm + upstream useExternalSync, R11 / R4) -------
-  // Drive validation off the canonical AST schema; pass the graph node
-  // straight into `defaultValues` (RosettaTypeAliasSchema is a
-  // z.looseObject so any graph-only keys are accepted as extras).
+  const [nameValue, setNameValue] = useState(() => data.name ?? '');
+  const [currentTypeLabel, setCurrentTypeLabel] = useState(
+    () => (data as { typeCall?: { type?: { $refText?: string } } }).typeCall?.type?.$refText ?? ''
+  );
 
-  const { form } = useZodForm(RosettaTypeAliasSchema, {
-    // RosettaTypeAliasSchema is z.looseObject — extra graph-only keys
-    // are accepted as extras. `identityProjection` covers the typed gap
-    // between the AnyGraphNode runtime shape and z2f's parameterised
-    // `Partial<output<Schema>>` constraint.
-    defaultValues: identityProjection<typeof RosettaTypeAliasSchema>(data),
-    mode: 'onChange'
-  });
-
-  // Re-bind pristine field state when the caller swaps to a different node
-  // (object identity is the contract). `keepDirty: true` preserves the
-  // pre-migration `keepDirtyValues: true` semantics so in-flight user
-  // edits are not stomped by a graph push.
-  useExternalSync(form, data, identityProjection<typeof RosettaTypeAliasSchema>, {
-    keepDirty: true
-  });
-
-  // Track committed (graph-confirmed) data for diffing
-  const committedRef = useRef(data);
-  committedRef.current = data;
+  useEffect(() => {
+    setNameValue(data.name ?? '');
+    setCurrentTypeLabel(
+      (data as { typeCall?: { type?: { $refText?: string } } }).typeCall?.type?.$refText ?? ''
+    );
+  }, [data]);
 
   // ---- Name auto-save (debounced) ------------------------------------------
 
   const commitName = useCallback(
     (newName: string) => {
-      if (newName && newName.trim() && newName !== committedRef.current.name) {
+      if (newName && newName.trim() && newName !== data.name) {
         actions.renameType(nodeId, newName.trim());
       }
     },
-    [nodeId, actions]
+    [actions, data.name, nodeId]
   );
 
   const debouncedName = useAutoSave(commitName, 500);
 
-  // ---- Wrapped-type selector (TypeAlias-specific primary affordance) ------
-  //
-  // Selecting a type updates the form's `typeCall.type` so subsequent
-  // graph commits (and visual snapshot of the form) reflect the new
-  // wrapped type. The graph-mutation surface for TypeAlias does not
-  // expose a dedicated "set wrapped type" action today — the form-state
-  // update is the visible behaviour. A future extension may funnel this
-  // through a dedicated action without changing the JSX.
-
-  const handleTypeSelect = useCallback(
-    (value: string | null) => {
-      const label = value ? (availableTypes.find((opt) => opt.value === value)?.label ?? '') : '';
-      // Update the form's typeCall.type — RHF tolerates the looseObject
-      // extras at the nested `type` key.
-      form.setValue('typeCall.type' as never, { $refText: label } as never, { shouldDirty: true });
-    },
-    [availableTypes, form]
-  );
-
-  // ---- Resolve current wrapped-type for display ----------------------------
-  //
-  // Prefer the live form state so the selector reflects in-flight edits;
-  // fall back to the AST node when the form has not yet observed the
-  // typeCall path (initial render before any edit).
-
-  const watchedTypeRef = useWatch({
-    control: form.control,
-    name: 'typeCall.type' as never
-  }) as { $refText?: string } | undefined;
-  const dataTypeRef = (data as { typeCall?: { type?: { $refText?: string } } }).typeCall?.type
-    ?.$refText;
-  const currentTypeLabel = watchedTypeRef?.$refText ?? dataTypeRef ?? '';
-  const currentTypeValue = currentTypeLabel
-    ? (availableTypes.find((opt) => opt.label === currentTypeLabel)?.value ?? null)
-    : null;
-
   // ---- Render --------------------------------------------------------------
 
   return (
-    <EditorActionsProvider
-      nodeId={nodeId}
-      // EditorActionsContextValue holds the unparameterized
-      // EditorFormActions (the full intersection) so any registered
-      // section can call any method without per-kind narrowing. The
-      // typeAlias surface only implements `CommonFormActions`; the
-      // upcast is safe because section components only call methods
-      // present on `CommonFormActions` (definition / comments /
-      // synonyms / annotations / conditions).
-      actions={actions as unknown as EditorFormActions}
-    >
-      <FormProvider {...form}>
-        <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
-          {/* Header: Name + Badge */}
-          <div data-slot="form-header" className="flex items-center gap-2">
-            <Controller
-              control={form.control}
-              name="name"
-              render={({ field, fieldState }) => (
-                <Field className="flex-1">
-                  <Input
-                    {...field}
-                    id={field.name}
-                    data-slot="type-name-input"
-                    aria-invalid={fieldState.invalid}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      debouncedName(e.target.value);
-                    }}
-                    className="text-lg font-semibold bg-transparent border-b border-transparent
-                      focus-visible:border-input focus-visible:ring-0 shadow-none
-                      px-1 py-0.5 h-auto rounded-none"
-                    placeholder="Type alias name"
-                    aria-label="Type alias name"
-                  />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <Badge variant="typeAlias">TypeAlias</Badge>
-          </div>
+    <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
+      <div data-slot="form-header" className="flex items-center gap-2">
+        <Input
+          value={nameValue}
+          data-slot="type-name-input"
+          onChange={(e) => {
+            setNameValue(e.target.value);
+            debouncedName(e.target.value);
+          }}
+          className="text-lg font-semibold bg-transparent border-b border-transparent
+            focus-visible:border-input focus-visible:ring-0 shadow-none
+            px-1 py-0.5 h-auto rounded-none"
+          placeholder="Type alias name"
+          aria-label="Type alias name"
+        />
+        <Badge variant="typeAlias">TypeAlias</Badge>
+      </div>
 
-          {/* Wrapped type — the TypeAlias-specific primary affordance */}
-          <FieldSet className="gap-1.5">
-            <FieldLegend variant="label" className="mb-0 text-muted-foreground">
-              Wrapped type
-            </FieldLegend>
-            {currentTypeLabel && (
-              <TypeLink
-                typeName={currentTypeLabel}
-                onNavigateToNode={onNavigateToNode}
-                allNodeIds={allNodeIds}
-                className="text-sm font-mono mb-1"
-              />
-            )}
-            <TypeSelector
-              value={currentTypeValue ?? ''}
-              options={availableTypes}
-              onSelect={handleTypeSelect}
-              placeholder="Select wrapped type..."
-            />
-          </FieldSet>
-        </div>
-      </FormProvider>
-    </EditorActionsProvider>
+      <FieldSet className="gap-1.5">
+        <FieldLegend variant="label" className="mb-0 text-muted-foreground">
+          Wrapped type
+        </FieldLegend>
+        {currentTypeLabel && (
+          <TypeLink
+            typeName={currentTypeLabel}
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
+            className="text-sm font-mono mb-1"
+          />
+        )}
+        <ZodForm
+          key={nodeId}
+          schema={RosettaTypeAliasSchema}
+          defaultValues={identityProjection<typeof RosettaTypeAliasSchema>(data)}
+          onValueChange={(values) => {
+            const nextTypeLabel =
+              (values as { typeCall?: { type?: { $refText?: string } } }).typeCall?.type
+                ?.$refText ?? '';
+            setCurrentTypeLabel(nextTypeLabel);
+          }}
+        />
+      </FieldSet>
+    </div>
   );
 }
 

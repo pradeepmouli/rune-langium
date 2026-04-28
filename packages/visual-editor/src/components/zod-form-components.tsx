@@ -11,7 +11,7 @@
  * @module
  */
 
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Input as DesignInput } from '@rune-langium/design-system/ui/input';
 import { Textarea as DesignTextarea } from '@rune-langium/design-system/ui/textarea';
 export * from '@rune-langium/design-system/ui/components';
@@ -42,6 +42,9 @@ import {
 
 import { TypeSelector as RawTypeSelector } from './editors/TypeSelector.js';
 import { CardinalityPicker } from './editors/CardinalityPicker.js';
+import { useEditorStore } from '../store/editor-store.js';
+import { AST_TYPE_TO_NODE_TYPE } from '../adapters/model-helpers.js';
+import { BUILTIN_TYPES, type TypeOption } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Section components (Phase 7 / US5) — resolved by name via z2f's
@@ -119,10 +122,36 @@ export function Select({
   );
 }
 
-export function TypeSelector({ value, onChange, ...rest }: ControlledProps) {
+export function TypeSelector({
+  value,
+  onChange,
+  options,
+  ...rest
+}: ControlledProps & { options?: TypeOption[] }) {
+  const storeNodes = useEditorStore((s) => s.nodes);
+  const fallbackOptions = useMemo<TypeOption[]>(
+    () => [
+      ...BUILTIN_TYPES.map((builtin) => ({
+        value: builtin,
+        label: builtin,
+        kind: 'builtin' as const
+      })),
+      ...storeNodes.map(
+        (node): TypeOption => ({
+          value: node.id,
+          label: node.data.name,
+          kind: (AST_TYPE_TO_NODE_TYPE[node.data.$type] ?? 'data') as TypeOption['kind'],
+          namespace: node.data.namespace
+        })
+      )
+    ],
+    [storeNodes]
+  );
+
   return (
     <RawTypeSelector
       value={(value as string) ?? ''}
+      options={options ?? fallbackOptions}
       onSelect={(v) => onChange?.(v ?? '')}
       placeholder="Select type..."
     />

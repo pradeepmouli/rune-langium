@@ -59,7 +59,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@zod-to-form/vite": "^0.2.3",
+    "@zod-to-form/vite": "^0.3.1",
     "jsdom": "^29.1.0",
     "langium-zod": "^0.5.3",
     "react": "^19.2.5",

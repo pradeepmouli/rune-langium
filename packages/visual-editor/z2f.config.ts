@@ -181,6 +181,14 @@ export default defineConfig<typeof Components, typeof ZodSchemas>({
 
     RosettaTypeAliasSchema: {
       fields: {
+        // Header keeps name/badge custom; generated form only owns the wrapped type.
+        name: { hidden: true },
+        annotations: { hidden: true },
+        conditions: { hidden: true },
+        postConditions: { hidden: true },
+        definition: { hidden: true },
+        comments: { hidden: true },
+        synonyms: { hidden: true },
         // TypeAlias: wrapped type reference
         'typeCall.type': { component: 'TypeSelector', order: 1 },
         'typeCall.arguments': { hidden: true }

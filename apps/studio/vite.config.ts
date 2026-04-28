@@ -2,16 +2,41 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { defineConfig } from 'vite';
+import type { Alias } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import z2fVite from '@zod-to-form/vite';
 import { fileURLToPath } from 'url';
 
+const z2fConfigPath = fileURLToPath(
+  new URL('../../packages/visual-editor/z2f.config.ts', import.meta.url)
+);
+const visualEditorSourceEntry = fileURLToPath(
+  new URL('../../packages/visual-editor/src/index.ts', import.meta.url)
+);
+const visualEditorSourceStyles = fileURLToPath(
+  new URL('../../packages/visual-editor/src/styles.css', import.meta.url)
+);
+const resolveAliases: Alias[] = [
+  { find: '@rune-langium/visual-editor/styles.css', replacement: visualEditorSourceStyles },
+  { find: '@rune-langium/visual-editor', replacement: visualEditorSourceEntry },
+  { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) }
+];
+
 export default defineConfig({
   base: process.env.VITE_BASE_URL || (process.env.CF_PAGES === '1' ? '/rune-studio/studio/' : '/'),
   // Plugin order: z2fVite BEFORE react() per upstream's quickstart, so the
-  // generated TSX flows through React's JSX transform normally.
-  plugins: [z2fVite(), tailwindcss(), react()],
+  // generated TSX flows through React's JSX transform normally. Point the
+  // plugin at the shared visual-editor config so Studio does not fall back to
+  // defaults and miss the typed field/optimization settings.
+  plugins: [
+    z2fVite({
+      configPath: z2fConfigPath,
+      generate: {}
+    }),
+    tailwindcss(),
+    react()
+  ],
   optimizeDeps: {
     include: ['buffer']
   },
@@ -31,9 +56,7 @@ export default defineConfig({
     process: '({argv:[],platform:"browser",env:{},exit:()=>{},cwd:()=>"/"})'
   },
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    },
+    alias: resolveAliases,
     dedupe: ['react', 'react-dom', '@xyflow/react']
   },
   server: {

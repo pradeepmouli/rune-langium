@@ -100,14 +100,12 @@
   },
   "pnpm": {
     "overrides": {
+      "@zod-to-form/codegen": "^0.8.1",
       "x-to-zod": "^0.8.0",
-      "@zod-to-form/core": "^0.8.0",
+      "@zod-to-form/core": "^0.8.1",
       "@zod-to-form/react": "^0.8.0",
-      "@zod-to-form/vite": "^0.2.3",
+      "@zod-to-form/vite": "^0.3.1",
       "codemirror": "6.0.2"
-    },
-    "patchedDependencies": {
-      "@zod-to-form/core@0.8.0": "patches/@zod-to-form__core@0.8.0.patch"
     }
   },
   "simple-git-hooks": {
