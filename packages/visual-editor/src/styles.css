@@ -211,7 +211,7 @@
   align-items: baseline;
   column-gap: var(--space-3, 6px);
   padding: 4px 0;
-  gap: var(--space-4, 8px);
+  row-gap: var(--space-4, 8px);
 }
 
 .rune-node-member-name {
