@@ -195,6 +195,7 @@ function buildInheritanceDisplayNodes(
         ...node,
         parentId: groupNodeId,
         extent: 'parent',
+        draggable: false,
         position: {
           x: node.position.x - groupPosition.x,
           y: node.position.y - groupPosition.y
@@ -351,6 +352,21 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
     );
 
     const focusNodeId = hoveredNodeId ?? selectedNodeId;
+
+    // Precompute adjacency map so emphasis lookups are O(1) per focus change
+    const adjacencyMap = useMemo(() => {
+      const map = new Map<string, { nodeIds: Set<string>; edgeIds: Set<string> }>();
+      for (const edge of edges) {
+        if (!map.has(edge.source)) map.set(edge.source, { nodeIds: new Set(), edgeIds: new Set() });
+        if (!map.has(edge.target)) map.set(edge.target, { nodeIds: new Set(), edgeIds: new Set() });
+        map.get(edge.source)!.nodeIds.add(edge.target);
+        map.get(edge.source)!.edgeIds.add(edge.id);
+        map.get(edge.target)!.nodeIds.add(edge.source);
+        map.get(edge.target)!.edgeIds.add(edge.id);
+      }
+      return map;
+    }, [edges]);
+
     const emphasis = useMemo(() => {
       if (hoveredEdge) {
         return {
@@ -361,15 +377,13 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
       if (!focusNodeId) return null;
       const focusedNodeIds = new Set<string>([focusNodeId]);
       const focusedEdgeIds = new Set<string>();
-      for (const edge of edges) {
-        if (edge.source === focusNodeId || edge.target === focusNodeId) {
-          focusedNodeIds.add(edge.source);
-          focusedNodeIds.add(edge.target);
-          focusedEdgeIds.add(edge.id);
-        }
+      const adjacent = adjacencyMap.get(focusNodeId);
+      if (adjacent) {
+        for (const nodeId of adjacent.nodeIds) focusedNodeIds.add(nodeId);
+        for (const edgeId of adjacent.edgeIds) focusedEdgeIds.add(edgeId);
       }
       return { focusedNodeIds, focusedEdgeIds };
-    }, [edges, focusNodeId, hoveredEdge]);
+    }, [adjacencyMap, focusNodeId, hoveredEdge]);
 
     const inheritanceDisplay = useMemo<InheritanceDisplayModel>(
       () =>
