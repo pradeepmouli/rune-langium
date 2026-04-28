@@ -1,0 +1,18 @@
+diff --git a/dist/processors/wrappers.js b/dist/processors/wrappers.js
+index 33ccb6519551d9318c7a0a04c702024d14dba58a..e7178d375f3a5b9f79d23e58c0fc7a0e180a3d3c 100644
+--- a/dist/processors/wrappers.js
++++ b/dist/processors/wrappers.js
+@@ -135,6 +135,13 @@ export function processLazy(schema, ctx, field, params) {
+         field.props['type'] = 'text';
+         return;
+     }
++    // Mark the resolved inner schema as seen BEFORE recursing so that
++    // self-referential lazy schemas (e.g. z.lazy(() => ExprSchema) where
++    // ExprSchema itself contains more z.lazy(() => ExprSchema) fields) are
++    // detected on the next encounter, even when the lazy getter is reached
++    // via a wrapper chain (optional/nullable/default) that does not pass
++    // through processField (which would otherwise add it via seen.add).
++    ctx.seen.add(innerSchema);
+     runInner(innerSchema, { ...ctx, currentDepth: ctx.currentDepth + 1 }, field, params);
+ }
+ //# sourceMappingURL=wrappers.js.map
