@@ -81,14 +81,23 @@ export function App() {
   const lspClientRef = useRef<LspClientService | null>(null);
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks the latest files state so the model-loading effect can read it
+  // synchronously without causing stale-closure issues.
+  const filesRef = useRef<WorkspaceFile[]>([]);
 
   const syncWorkspaceToEditor = useCallback(async (workspaceFiles: WorkspaceFile[]) => {
     setLoading(true);
     try {
-      const allFiles: WorkspaceFile[] = [
+      let allFiles: WorkspaceFile[] = [
         ...BASE_TYPE_FILES.map((file) => ({ ...file })),
         ...workspaceFiles
       ];
+      // Preserve any reference model files that are already loaded so that
+      // switching/restoring a workspace doesn't silently drop them.
+      const loadedModels = useModelStore.getState().models;
+      for (const model of loadedModels.values()) {
+        allFiles = mergeModelFiles(allFiles, model);
+      }
       setFiles(allFiles);
       lspClientRef.current?.syncWorkspaceFiles(allFiles);
 
@@ -183,6 +192,12 @@ export function App() {
       document.body.removeAttribute('data-studio-app');
     };
   }, []);
+
+  // Keep filesRef in sync so the model-loading effect below can read the
+  // current file list without stale-closure issues.
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
 
   useEffect(() => {
     if (bootState === 'restored') {
@@ -285,6 +300,11 @@ export function App() {
     setFiles([]);
     setModels([]);
     setErrors(new Map());
+    // Return to the start page so the user can open or create a workspace.
+    // Without this, bootState stays 'restored' and the "Workspace ready."
+    // placeholder is shown with no way to load new files.
+    setBootState('start');
+    setRestoredWorkspace(null);
   }, [restoredWorkspace]);
 
   /** Switch to a recent workspace from the start page list (T029). */
@@ -331,17 +351,28 @@ export function App() {
     [restoredWorkspace]
   );
 
-  // Merge reference model files into workspace when models change
+  // Merge reference model files into workspace when models change and re-parse
+  // so the graph and explorer reflect the loaded reference types.
   const loadedModels = useModelStore((s) => s.models);
   useEffect(() => {
-    if (loadedModels.size === 0) return;
-    setFiles((prev) => {
-      let result = prev.filter((f) => !f.path.startsWith('['));
-      for (const model of loadedModels.values()) {
-        result = mergeModelFiles(result, model);
-      }
-      return result;
-    });
+    const prev = filesRef.current;
+    const hadModelFiles = prev.some((f) => f.path.startsWith('['));
+    if (loadedModels.size === 0 && !hadModelFiles) return;
+
+    let merged = prev.filter((f) => !f.path.startsWith('['));
+    for (const model of loadedModels.values()) {
+      merged = mergeModelFiles(merged, model);
+    }
+    setFiles(merged);
+    lspClientRef.current?.syncWorkspaceFiles(merged);
+    parseWorkspaceFiles(merged)
+      .then(({ models: m, errors: e }) => {
+        setModels(m);
+        setErrors(e);
+      })
+      .catch(() => {
+        // Parse failure — keep existing models
+      });
   }, [loadedModels]);
 
   const hasErrors = errors.size > 0;
