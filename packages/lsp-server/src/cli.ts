@@ -69,10 +69,12 @@ async function main(): Promise<void> {
     });
   });
 
-  // Graceful shutdown
+  // Graceful shutdown — force-exit after 300 ms so node --watch restarts
+  // don't race the port release (wss.close waits for connections to drain).
   const shutdown = () => {
     console.log('\nShutting down...');
     wss.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 300).unref();
   };
 
   process.on('SIGINT', shutdown);

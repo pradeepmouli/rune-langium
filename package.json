@@ -105,6 +105,9 @@
       "@zod-to-form/react": "^0.8.0",
       "@zod-to-form/vite": "^0.2.3",
       "codemirror": "6.0.2"
+    },
+    "patchedDependencies": {
+      "@zod-to-form/core@0.8.0": "patches/@zod-to-form__core@0.8.0.patch"
     }
   },
   "simple-git-hooks": {

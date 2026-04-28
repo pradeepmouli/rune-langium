@@ -34,3 +34,8 @@ ALLOWED_ORIGIN = "https://www.daikonic.dev"
 
 [limits]
 cpu_ms = 5000
+
+# inspector_port avoids EADDRINUSE when multiple workers run in parallel.
+[dev]
+port = 8791
+inspector_port = 9234

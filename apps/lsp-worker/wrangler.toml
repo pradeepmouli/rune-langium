@@ -29,17 +29,15 @@ class_name = "RuneLspSession"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["RuneLspSession"]
+new_sqlite_classes = ["RuneLspSession"]
 
 [observability]
 enabled = true
 
-# Paid-plan-shaped: 30s CPU per request gives headroom for the cold parse.
-# The langium service container's first parse on a non-trivial workspace
-# can use multiple seconds; the spike showed sub-second on a 170-byte
-# fixture, but production CDM-scale parses dominate.
-[limits]
-cpu_ms = 30000
-
 [vars]
 ALLOWED_ORIGIN = "https://www.daikonic.dev"
+
+# inspector_port avoids EADDRINUSE when multiple workers run in parallel.
+[dev]
+port = 8790
+inspector_port = 9233

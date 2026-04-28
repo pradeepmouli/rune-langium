@@ -5,8 +5,8 @@
   "description": "Throwaway feasibility spike for T035 (014-studio-prod-ready). Boots @rune-langium/lsp-server inside a Cloudflare Worker isolate to verify langium + @lspeasy/server can run on the CF runtime with nodejs_compat. NOT production code.",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --port 8788",
-    "test-client": "node src/test-client.mjs ws://localhost:8788/spike/ws"
+    "dev": "wrangler dev",
+    "test-client": "node src/test-client.mjs ws://localhost:8792/spike/ws"
   },
   "dependencies": {
     "@lspeasy/core": "^2.1.2",

@@ -57,6 +57,9 @@ import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
+import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
+import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
+import { pathToUri } from '../utils/uri.js';
 
 export interface EditorPageProps {
   models: RosettaModel[];
@@ -83,6 +86,7 @@ export function EditorPage({
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
+  const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [groupedLayout, setGroupedLayout] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -171,6 +175,27 @@ export function EditorPage({
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
+
+  // Initialise dedicated codegen worker once on mount.
+  useEffect(() => {
+    const worker = new Worker(new URL('../workers/codegen-worker.ts', import.meta.url), {
+      type: 'module'
+    });
+    setCodegenWorker(worker);
+    return () => {
+      worker.terminate();
+      setCodegenWorker(null);
+    };
+  }, []);
+
+  // Keep the codegen worker in sync with the workspace file set.
+  useEffect(() => {
+    if (!codegenWorker) return;
+    codegenWorker.postMessage({
+      type: 'codegen:setFiles',
+      files: files.map((f) => ({ uri: pathToUri(f.path), content: f.content }))
+    });
+  }, [codegenWorker, files]);
 
   const handleSourceChange = useCallback(
     (path: string, content: string) => {
@@ -589,6 +614,22 @@ export function EditorPage({
     [fileDiagnostics, files, openFileInSource]
   );
 
+  // Stable adapter: SourceEditorRef (revealLine) → SourceEditorHandle (revealLineInCenter + setSelection).
+  const sourceEditorHandle = useMemo<SourceEditorHandle>(
+    () => ({
+      revealLineInCenter: (line) => sourceEditorRef.current?.revealLine(line),
+      setSelection: (range) => sourceEditorRef.current?.revealLine(range.line)
+    }),
+    // Intentionally stable — reads ref.current at call time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const CodePreviewPanelMounted = useCallback(() => {
+    if (!codegenWorker) return null;
+    return <CodePreviewPanel worker={codegenWorker} sourceEditorRef={sourceEditorHandle} />;
+  }, [codegenWorker, sourceEditorHandle]);
+
   const VisualPreviewPanelMounted = useCallback(
     () => (
       <RuneTypeGraph
@@ -607,6 +648,28 @@ export function EditorPage({
       />
     ),
     [groupedLayout, handleModelChanged, navigateToNode]
+  );
+
+  // Memoize the overrides object so DockShell's useMemo([panelComponents])
+  // only recomputes the dockview component map when a callback actually changes,
+  // not on every EditorPage render.
+  const panelComponents = useMemo(
+    () => ({
+      'workspace.fileTree': FileTreePanelMounted,
+      'workspace.editor': SourceEditorPanelMounted,
+      'workspace.inspector': InspectorPanelMounted,
+      'workspace.problems': ProblemsPanelMounted,
+      'workspace.visualPreview': VisualPreviewPanelMounted,
+      'workspace.codePreview': CodePreviewPanelMounted
+    }),
+    [
+      FileTreePanelMounted,
+      SourceEditorPanelMounted,
+      InspectorPanelMounted,
+      ProblemsPanelMounted,
+      VisualPreviewPanelMounted,
+      CodePreviewPanelMounted
+    ]
   );
 
   return (
@@ -692,13 +755,7 @@ export function EditorPage({
         <DockShell
           studioVersion={studioVersion}
           workspaceId={workspaceId}
-          panelComponents={{
-            'workspace.fileTree': FileTreePanelMounted,
-            'workspace.editor': SourceEditorPanelMounted,
-            'workspace.inspector': InspectorPanelMounted,
-            'workspace.problems': ProblemsPanelMounted,
-            'workspace.visualPreview': VisualPreviewPanelMounted
-          }}
+          panelComponents={panelComponents}
         />
       </div>
 
