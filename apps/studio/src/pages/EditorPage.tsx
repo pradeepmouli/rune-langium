@@ -771,6 +771,7 @@ export function EditorPage({
         >
           <span>{toastMessage}</span>
           <button
+            type="button"
             className="ml-2 text-destructive hover:text-destructive/80 font-medium"
             onClick={() => setToastMessage(null)}
             aria-label="Dismiss"

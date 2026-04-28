@@ -131,8 +131,8 @@ export function FileLoader({
       aria-label="File loader"
     >
       {/* T057 (014/FR-028) — empty-state hierarchy:
-       *   1. Heading (text-3xl font-semibold tracking-tight, body
-       *      already maps to font-display via T053)
+       *   1. Heading (text-3xl font-semibold tracking-tight, explicit
+       *      brand display face)
        *   2. ONE primary CTA ("New blank workspace")
        *   3. Equal-weight transparent secondaries (Select Files /
        *      Select Folder). "Open from GitHub" is wired in Phase 6.

@@ -178,6 +178,13 @@ export function App() {
   // editor is mounted (T028 contract). Cleared on unmount so the next
   // test case starts clean.
   useEffect(() => {
+    document.body.setAttribute('data-studio-app', 'true');
+    return () => {
+      document.body.removeAttribute('data-studio-app');
+    };
+  }, []);
+
+  useEffect(() => {
     if (bootState === 'restored') {
       document.body.setAttribute('data-workspace-active', 'true');
       return () => {
@@ -281,18 +288,21 @@ export function App() {
   }, [restoredWorkspace]);
 
   /** Switch to a recent workspace from the start page list (T029). */
-  const handleSwitchWorkspace = useCallback(async (workspaceId: string) => {
-    try {
-      const ws = await persistence.loadWorkspace(workspaceId);
-      if (!ws) return;
-      setBootState('restoring');
-      await restoreWorkspace(ws);
-      setBootState('restored');
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[App] switch workspace failed:', err);
-    }
-  }, [restoreWorkspace]);
+  const handleSwitchWorkspace = useCallback(
+    async (workspaceId: string) => {
+      try {
+        const ws = await persistence.loadWorkspace(workspaceId);
+        if (!ws) return;
+        setBootState('restoring');
+        await restoreWorkspace(ws);
+        setBootState('restored');
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[App] switch workspace failed:', err);
+      }
+    },
+    [restoreWorkspace]
+  );
 
   /** New-workspace affordance from the recents list — same path as FileLoader. */
   const handleCreateWorkspace = useCallback(() => {
@@ -301,22 +311,25 @@ export function App() {
   }, []);
 
   /** Delete a recent workspace from the recents store (T029). */
-  const handleDeleteWorkspace = useCallback(async (workspaceId: string) => {
-    try {
-      await persistence.deleteWorkspace(workspaceId);
-      await deleteWorkspaceFiles(workspaceId);
-      if (restoredWorkspace?.id === workspaceId) {
-        setRestoredWorkspace(null);
-        setFiles([]);
-        setModels([]);
-        setErrors(new Map());
-        setBootState('start');
+  const handleDeleteWorkspace = useCallback(
+    async (workspaceId: string) => {
+      try {
+        await persistence.deleteWorkspace(workspaceId);
+        await deleteWorkspaceFiles(workspaceId);
+        if (restoredWorkspace?.id === workspaceId) {
+          setRestoredWorkspace(null);
+          setFiles([]);
+          setModels([]);
+          setErrors(new Map());
+          setBootState('start');
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[App] delete workspace failed:', err);
       }
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[App] delete workspace failed:', err);
-    }
-  }, [restoredWorkspace]);
+    },
+    [restoredWorkspace]
+  );
 
   // Merge reference model files into workspace when models change
   const loadedModels = useModelStore((s) => s.models);
@@ -335,7 +348,7 @@ export function App() {
   const userFiles = files.filter((f) => !f.readOnly);
 
   return (
-    <div className="studio-app flex flex-col h-full font-sans text-foreground bg-background">
+    <div className="studio-app flex flex-col h-full text-foreground bg-background">
       <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
         <div className="studio-brand">
           <div className="studio-brand__mark">R</div>

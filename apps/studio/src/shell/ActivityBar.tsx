@@ -8,6 +8,7 @@
  */
 
 import type React from 'react';
+import { Button } from '@rune-langium/design-system/ui/button';
 
 interface Props {
   onWorkspaceClick: () => void;
@@ -21,16 +22,42 @@ export function ActivityBar({
   onSettingsClick
 }: Props): React.ReactElement {
   return (
-    <nav role="navigation" aria-label="Studio activity bar" data-testid="activity-bar">
-      <button type="button" onClick={onWorkspaceClick} aria-label="Workspaces">
+    <nav
+      role="navigation"
+      aria-label="Studio activity bar"
+      data-testid="activity-bar"
+      className="flex flex-col items-center gap-1.5 p-2"
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={onWorkspaceClick}
+        aria-label="Workspaces"
+        className="studio-chrome-button"
+      >
         WS
-      </button>
-      <button type="button" onClick={onModelsClick} aria-label="Models">
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={onModelsClick}
+        aria-label="Models"
+        className="studio-chrome-button"
+      >
         M
-      </button>
-      <button type="button" onClick={onSettingsClick} aria-label="Settings">
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={onSettingsClick}
+        aria-label="Settings"
+        className="studio-chrome-button"
+      >
         ⚙
-      </button>
+      </Button>
     </nav>
   );
 }

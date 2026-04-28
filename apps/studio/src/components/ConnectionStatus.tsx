@@ -48,7 +48,7 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
 
   return (
     <output
-      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
+      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
       role="status"
     >
       <span

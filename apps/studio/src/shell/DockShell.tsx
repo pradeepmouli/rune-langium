@@ -46,6 +46,7 @@ import { sanitizeLayout } from './layout-migrations.js';
 import { applyLayout, serializeLayout } from './dockview-bridge.js';
 import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
+import { Button } from '@rune-langium/design-system/ui/button';
 
 const DEFAULT_VIEWPORT_WIDTH = 1920;
 
@@ -93,7 +94,7 @@ const PanelRegistryContext = createContext<PanelRegistry>(DEFAULT_PANEL_REGISTRY
 function mergePanelRegistry(overrides: PanelOverrides | undefined): PanelRegistry {
   return {
     ...DEFAULT_PANEL_REGISTRY,
-    ...(overrides ?? {})
+    ...overrides
   };
 }
 
@@ -219,7 +220,7 @@ export function DockShell({
     <div
       role="application"
       aria-label="Studio dock shell"
-      className="h-full"
+      className="relative h-full"
       data-testid="dock-shell"
       data-workspace-id={workspaceId}
     >
@@ -230,9 +231,16 @@ export function DockShell({
           className="dockview-theme-abyss"
         />
       </PanelRegistryContext.Provider>
-      <button type="button" onClick={resetLayout} data-testid="reset-layout">
+      <Button
+        type="button"
+        variant="secondary"
+        size="xs"
+        onClick={resetLayout}
+        data-testid="reset-layout"
+        className="studio-chrome-button absolute right-3 bottom-3 z-10 shadow-lg"
+      >
         Reset layout
-      </button>
+      </Button>
     </div>
   );
 }

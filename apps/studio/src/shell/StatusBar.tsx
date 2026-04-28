@@ -9,6 +9,7 @@
 
 import type React from 'react';
 import type { SyncState } from '../services/git-backing.js';
+import { Button } from '@rune-langium/design-system/ui/button';
 
 interface Props {
   workspaceName: string;
@@ -34,18 +35,26 @@ export function StatusBar({
   onToggleTelemetry
 }: Props): React.ReactElement {
   return (
-    <footer role="contentinfo" aria-label="Studio status bar" data-testid="status-bar">
+    <footer
+      role="contentinfo"
+      aria-label="Studio status bar"
+      data-testid="status-bar"
+      className="flex items-center gap-3 px-3 py-1 text-xs text-muted-foreground"
+    >
       <span data-testid="status-workspace">{workspaceName}</span>
       {gitState && <span data-testid="status-git">{SYNC_LABEL[gitState]}</span>}
       <span data-testid="status-lsp">{lspState}</span>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="xs"
         onClick={onToggleTelemetry}
         aria-pressed={telemetryEnabled}
         aria-label={`Telemetry ${telemetryEnabled ? 'enabled' : 'disabled'}`}
+        className="studio-chrome-button ml-auto"
       >
         {telemetryEnabled ? '◉ Diagnostics' : '○ Diagnostics'}
-      </button>
+      </Button>
     </footer>
   );
 }

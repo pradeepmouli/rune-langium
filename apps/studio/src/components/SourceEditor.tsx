@@ -407,7 +407,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
               aria-controls="editor-tabpanel"
               tabIndex={file.path === selectedPath ? 0 : -1}
               className={cn(
-                'pl-3 pr-1 py-1.5 text-sm bg-transparent border-none cursor-pointer whitespace-nowrap transition-colors',
+                'pl-2.5 pr-1 py-1 text-xs bg-transparent border-none cursor-pointer whitespace-nowrap transition-[color,background-color,transform]',
                 'hover:text-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
                 file.path === selectedPath ? 'text-primary' : 'text-muted-foreground'
@@ -435,7 +435,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
                 type="button"
                 aria-label={`Close ${file.name}`}
                 className={cn(
-                  'shrink-0 p-0.5 rounded-sm text-muted-foreground transition-colors',
+                  'shrink-0 p-0.5 rounded-sm text-muted-foreground transition-[color,background-color,opacity,transform]',
                   'hover:text-foreground hover:bg-muted',
                   'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
                   file.path === selectedPath && 'opacity-60'
