@@ -13,7 +13,7 @@ import { parse } from '@rune-langium/core';
 import { astToModel } from '../../src/adapters/ast-to-model.js';
 import { AST_TYPE_TO_NODE_TYPE } from '../../src/adapters/model-helpers.js';
 import type { GraphNode } from '../../src/types.js';
-import type { Data, Choice, RosettaEnumeration } from '@rune-langium/core';
+import type { Data, RosettaEnumeration } from '@rune-langium/core';
 import {
   SIMPLE_INHERITANCE_SOURCE,
   CHOICE_MODEL_SOURCE,
@@ -64,6 +64,19 @@ describe('astToModel', () => {
         (e) => e.id.includes('Trade') && e.id.includes('Event')
       );
       expect(tradeExtendsEdge).toBeDefined();
+    });
+
+    it('strips runtime-only AST fields from graph node data', async () => {
+      const result = await parse(SIMPLE_INHERITANCE_SOURCE);
+      const { nodes } = astToModel(result.value);
+
+      const tradeNode = nodes.find((n) => n.data.name === 'Trade');
+      expect(tradeNode).toBeDefined();
+
+      expect(() => JSON.stringify(tradeNode!.data)).not.toThrow();
+      expect(tradeNode!.data).not.toHaveProperty('$container');
+      expect(tradeNode!.data.attributes[0]).not.toHaveProperty('$container');
+      expect(tradeNode!.data.attributes[0]?.typeCall?.type).not.toHaveProperty('ref');
     });
 
     it('creates attribute-ref edges for type references', async () => {

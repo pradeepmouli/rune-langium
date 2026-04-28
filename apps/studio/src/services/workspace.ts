@@ -6,7 +6,7 @@
  * and cross-file resolution for the studio app (T083, T098, T100, T102).
  */
 
-import { parse } from '@rune-langium/core';
+import { parse, parseWorkspace } from '@rune-langium/core';
 import type {
   WorkerRequest,
   ParseResponse,
@@ -131,6 +131,10 @@ export async function parseFile(
 export async function parseWorkspaceFiles(
   files: WorkspaceFile[]
 ): Promise<{ models: unknown[]; errors: Map<string, string[]> }> {
+  if (files.length === 0) {
+    return { models: [], errors: new Map() };
+  }
+
   // Try worker batch parse first (T098)
   try {
     const id = String(++requestId);
@@ -149,16 +153,24 @@ export async function parseWorkspaceFiles(
   }
 
   // Main-thread fallback
+  const results = await parseWorkspace(
+    files.map((file) => ({
+      uri: file.path,
+      content: file.content
+    }))
+  );
   const models: unknown[] = [];
   const errors = new Map<string, string[]>();
 
-  for (const file of files) {
-    const result = await parseFile(file.content, file.path);
-    if (result.model) {
-      models.push(result.model);
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i]!;
+    const file = files[i]!;
+    if (result.value) {
+      models.push(result.value);
     }
-    if (result.errors.length > 0) {
-      errors.set(file.path, result.errors);
+    const fileErrors = result.parserErrors.map((err) => err.message);
+    if (fileErrors.length > 0) {
+      errors.set(file.path, fileErrors);
     }
   }
 

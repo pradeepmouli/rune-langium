@@ -81,6 +81,48 @@ type B:
     expect(result.errors).toBeInstanceOf(Map);
   });
 
+  it('resolves cross-file references when parsing a workspace', async () => {
+    const files: WorkspaceFile[] = [
+      {
+        name: 'types.rosetta',
+        path: 'types.rosetta',
+        content: `namespace demo
+
+type Person:
+  name string (1..1)
+`,
+        dirty: false
+      },
+      {
+        name: 'trade.rosetta',
+        path: 'trade.rosetta',
+        content: `namespace demo
+
+type Trade:
+  party Person (1..1)
+`,
+        dirty: false
+      }
+    ];
+
+    const result = await parseWorkspaceFiles(files);
+    const tradeModel = result.models.find(
+      (model) => (model as { elements?: Array<{ name?: string }> }).elements?.some((el) => el.name === 'Trade')
+    ) as
+      | {
+          elements?: Array<{
+            name?: string;
+            attributes?: Array<{ typeCall?: { type?: { ref?: { name?: string } } } }>;
+          }>;
+        }
+      | undefined;
+
+    const trade = tradeModel?.elements?.find((element) => element.name === 'Trade');
+    const partyAttribute = trade?.attributes?.find(() => true);
+    expect(partyAttribute?.typeCall?.type?.ref?.name).toBe('Person');
+    expect(result.errors.size).toBe(0);
+  });
+
   it('should handle empty file list', async () => {
     const result = await parseWorkspaceFiles([]);
     expect(result.models).toHaveLength(0);

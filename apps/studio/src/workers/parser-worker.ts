@@ -9,7 +9,7 @@
  * and returns parsed results.
  */
 
-import { parse } from '@rune-langium/core';
+import { parse, parseWorkspace } from '@rune-langium/core';
 
 export interface ParseRequest {
   type: 'parse';
@@ -106,21 +106,28 @@ async function handleParse(req: ParseRequest): Promise<ParseResponse> {
 }
 
 async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWorkspaceResponse> {
-  const models: unknown[] = [];
   const errors: Record<string, string[]> = {};
+  if (req.files.length === 0) {
+    return { type: 'parseWorkspaceResult', id: req.id, models: [], errors };
+  }
 
-  for (const file of req.files) {
-    try {
-      const result = await parse(file.content, file.name);
-      if (result.value) {
-        preserveCstText(result.value);
-        models.push(result.value);
-      }
-      if (result.parserErrors?.length) {
-        errors[file.name] = result.parserErrors.map((e) => e.message);
-      }
-    } catch (e) {
-      errors[file.name] = [(e as Error).message];
+  const results = await parseWorkspace(
+    req.files.map((file) => ({
+      uri: file.name,
+      content: file.content
+    }))
+  );
+  const models: unknown[] = [];
+
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i]!;
+    const file = req.files[i]!;
+    if (result.value) {
+      preserveCstText(result.value);
+      models.push(result.value);
+    }
+    if (result.parserErrors.length > 0) {
+      errors[file.name] = result.parserErrors.map((e) => e.message);
     }
   }
 

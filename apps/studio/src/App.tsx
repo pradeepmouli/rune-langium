@@ -27,6 +27,11 @@ import { BASE_TYPE_FILES } from './resources/base-types.js';
 import { studioConfig } from './config.js';
 import * as persistence from './workspace/persistence.js';
 import type { WorkspaceRecord } from './workspace/persistence.js';
+import {
+  deleteWorkspaceFiles,
+  loadWorkspaceFiles,
+  saveWorkspaceFiles
+} from './workspace/workspace-files.js';
 
 /**
  * Mount-time workspace boot state machine (T028 / 014-US2).
@@ -37,6 +42,29 @@ import type { WorkspaceRecord } from './workspace/persistence.js';
  *   restored   → a workspace was restored — body[data-workspace-active=true]
  */
 type BootState = 'checking' | 'restoring' | 'start' | 'restored';
+
+const STUDIO_VERSION = '0.1.0';
+
+function makeWorkspaceId(): string {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `ws-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function deriveWorkspaceName(files: readonly WorkspaceFile[]): string {
+  const firstFile = files[0];
+  if (!firstFile) {
+    return 'Workspace';
+  }
+
+  const rootFolder = firstFile.path.split('/')[0];
+  if (files.length > 1 && rootFolder && rootFolder !== firstFile.name) {
+    return rootFolder;
+  }
+
+  return firstFile.name.replace(/\.rosetta$/i, '') || 'Workspace';
+}
 
 export function App() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
@@ -53,6 +81,59 @@ export function App() {
   const lspClientRef = useRef<LspClientService | null>(null);
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const syncWorkspaceToEditor = useCallback(async (workspaceFiles: WorkspaceFile[]) => {
+    setLoading(true);
+    try {
+      const allFiles: WorkspaceFile[] = [
+        ...BASE_TYPE_FILES.map((file) => ({ ...file })),
+        ...workspaceFiles
+      ];
+      setFiles(allFiles);
+      lspClientRef.current?.syncWorkspaceFiles(allFiles);
+
+      const result = await parseWorkspaceFiles(allFiles);
+      setModels(result.models);
+      setErrors(result.errors);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const createWorkspaceRecord = useCallback(async (name: string): Promise<WorkspaceRecord> => {
+    const now = new Date().toISOString();
+    const workspace: WorkspaceRecord = {
+      id: makeWorkspaceId(),
+      name,
+      kind: 'browser-only',
+      createdAt: now,
+      lastOpenedAt: now,
+      layout: { version: 1, writtenBy: STUDIO_VERSION, dockview: null },
+      tabs: [],
+      activeTabPath: null,
+      curatedModels: [],
+      schemaVersion: 1
+    };
+
+    await saveWorkspaceFiles(workspace.id, []);
+    await persistence.saveWorkspace(workspace);
+    return workspace;
+  }, []);
+
+  const restoreWorkspace = useCallback(
+    async (workspace: WorkspaceRecord) => {
+      const nextWorkspace = {
+        ...workspace,
+        lastOpenedAt: new Date().toISOString()
+      };
+      await persistence.saveWorkspace(nextWorkspace);
+      setRestoredWorkspace(nextWorkspace);
+
+      const restoredFiles = await loadWorkspaceFiles(nextWorkspace.id);
+      await syncWorkspaceToEditor(restoredFiles);
+    },
+    [syncWorkspaceToEditor]
+  );
 
   // Mount-time workspace restore (research.md R5 / T028).
   //
@@ -79,7 +160,7 @@ export function App() {
           return;
         }
         setBootState('restoring');
-        setRestoredWorkspace(ws);
+        await restoreWorkspace(ws);
         setBootState('restored');
       } catch (err) {
         if (cancelled) return;
@@ -136,39 +217,49 @@ export function App() {
     };
   }, []);
 
-  const handleFilesLoaded = useCallback(async (loadedFiles: WorkspaceFile[]) => {
-    setLoading(true);
-    // Prepend system base-type files so cross-references resolve
-    const allFiles: WorkspaceFile[] = [...BASE_TYPE_FILES.map((f) => ({ ...f })), ...loadedFiles];
-    setFiles(allFiles);
-    lspClientRef.current?.syncWorkspaceFiles(allFiles);
+  const handleFilesLoaded = useCallback(
+    async (loadedFiles: WorkspaceFile[]) => {
+      let workspace = restoredWorkspace;
+      if (!workspace) {
+        workspace = await createWorkspaceRecord(deriveWorkspaceName(loadedFiles));
+        setRestoredWorkspace(workspace);
+      }
 
-    const result = await parseWorkspaceFiles(allFiles);
-    setModels(result.models);
-    setErrors(result.errors);
-    setLoading(false);
-  }, []);
+      await saveWorkspaceFiles(workspace.id, loadedFiles);
+      await syncWorkspaceToEditor(loadedFiles);
+    },
+    [createWorkspaceRecord, restoredWorkspace, syncWorkspaceToEditor]
+  );
 
   /**
    * Handle file content changes (e.g., from source editor edits).
    * Updates files immediately and debounce-reparses after 500ms idle.
    */
-  const handleFilesChange = useCallback((updatedFiles: WorkspaceFile[]) => {
-    setFiles(updatedFiles);
-    lspClientRef.current?.syncWorkspaceFiles(updatedFiles);
+  const handleFilesChange = useCallback(
+    (updatedFiles: WorkspaceFile[]) => {
+      setFiles(updatedFiles);
+      lspClientRef.current?.syncWorkspaceFiles(updatedFiles);
 
-    // Debounced reparse — wait for typing to settle
-    if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
-    reparseTimerRef.current = setTimeout(async () => {
-      try {
-        const result = await parseWorkspaceFiles(updatedFiles);
-        setModels(result.models);
-        setErrors(result.errors);
-      } catch {
-        // Parse failure — keep existing models
+      if (restoredWorkspace) {
+        void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles).catch((err) => {
+          console.warn('[App] workspace file save failed:', err);
+        });
       }
-    }, 500);
-  }, []);
+
+      // Debounced reparse — wait for typing to settle
+      if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
+      reparseTimerRef.current = setTimeout(async () => {
+        try {
+          const result = await parseWorkspaceFiles(updatedFiles);
+          setModels(result.models);
+          setErrors(result.errors);
+        } catch {
+          // Parse failure — keep existing models
+        }
+      }, 500);
+    },
+    [restoredWorkspace]
+  );
 
   const handleReconnect = useCallback(async () => {
     try {
@@ -179,23 +270,29 @@ export function App() {
   }, []);
 
   const handleReset = useCallback(() => {
+    if (restoredWorkspace) {
+      void saveWorkspaceFiles(restoredWorkspace.id, []).catch((err) => {
+        console.warn('[App] workspace reset save failed:', err);
+      });
+    }
     setFiles([]);
     setModels([]);
     setErrors(new Map());
-  }, []);
+  }, [restoredWorkspace]);
 
   /** Switch to a recent workspace from the start page list (T029). */
   const handleSwitchWorkspace = useCallback(async (workspaceId: string) => {
     try {
       const ws = await persistence.loadWorkspace(workspaceId);
       if (!ws) return;
-      setRestoredWorkspace(ws);
+      setBootState('restoring');
+      await restoreWorkspace(ws);
       setBootState('restored');
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[App] switch workspace failed:', err);
     }
-  }, []);
+  }, [restoreWorkspace]);
 
   /** New-workspace affordance from the recents list — same path as FileLoader. */
   const handleCreateWorkspace = useCallback(() => {
@@ -207,11 +304,19 @@ export function App() {
   const handleDeleteWorkspace = useCallback(async (workspaceId: string) => {
     try {
       await persistence.deleteWorkspace(workspaceId);
+      await deleteWorkspaceFiles(workspaceId);
+      if (restoredWorkspace?.id === workspaceId) {
+        setRestoredWorkspace(null);
+        setFiles([]);
+        setModels([]);
+        setErrors(new Map());
+        setBootState('start');
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[App] delete workspace failed:', err);
     }
-  }, []);
+  }, [restoredWorkspace]);
 
   // Merge reference model files into workspace when models change
   const loadedModels = useModelStore((s) => s.models);
@@ -314,6 +419,7 @@ export function App() {
             lspClient={lspClientRef.current ?? undefined}
             transportState={transportState}
             onReconnect={handleReconnect}
+            workspaceId={restoredWorkspace?.id ?? 'default'}
           />
         )}
 

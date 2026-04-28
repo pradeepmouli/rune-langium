@@ -25,6 +25,36 @@ import {
   _resetForTests,
   type WorkspaceRecord
 } from '../../src/workspace/persistence.js';
+import { createOpfsRoot, type OpfsRoot } from '../setup/opfs-mock.js';
+import { saveWorkspaceFiles, setWorkspaceFilesDeps } from '../../src/workspace/workspace-files.js';
+
+vi.mock('../../src/components/ModelLoader.js', () => ({
+  ModelLoader: () => null
+}));
+
+vi.mock('../../src/pages/EditorPage.js', () => ({
+  EditorPage: () => null
+}));
+
+vi.mock('../../src/store/model-store.js', () => ({
+  useModelStore: () => new Map()
+}));
+
+vi.mock('../../src/services/transport-provider.js', () => ({
+  createTransportProvider: () => ({
+    onStateChange: () => () => {},
+    dispose: () => {}
+  })
+}));
+
+vi.mock('../../src/services/lsp-client.js', () => ({
+  createLspClientService: () => ({
+    connect: vi.fn().mockResolvedValue(undefined),
+    reconnect: vi.fn().mockResolvedValue(undefined),
+    syncWorkspaceFiles: vi.fn(),
+    dispose: vi.fn()
+  })
+}));
 
 function makeWorkspace(
   id: string,
@@ -46,6 +76,16 @@ function makeWorkspace(
 }
 
 beforeEach(async () => {
+  const opfsRoot: OpfsRoot = createOpfsRoot();
+  setWorkspaceFilesDeps({
+    getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle
+  });
+  Object.defineProperty(navigator, 'storage', {
+    configurable: true,
+    value: {
+      getDirectory: vi.fn().mockResolvedValue(opfsRoot as unknown as FileSystemDirectoryHandle)
+    }
+  });
   await _resetForTests();
   await new Promise<void>((resolve) => {
     const req = indexedDB.deleteDatabase('rune-studio');
@@ -57,6 +97,11 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  setWorkspaceFilesDeps({
+    getOpfsRoot: async () => {
+      throw new Error('test opfs root not configured');
+    }
+  });
   cleanup();
 });
 
@@ -79,6 +124,25 @@ describe('App workspace restore on mount (T027/US2)', () => {
       { timeout: 4000 }
     );
     // Start-page copy must NOT appear once a workspace has been restored.
+    expect(screen.queryByText(/Load Rune DSL Models/i)).not.toBeInTheDocument();
+  });
+
+  it('reloads saved workspace files on mount', async () => {
+    await saveWorkspace(makeWorkspace('ws-files', 'Restored Files'));
+    await saveWorkspaceFiles('ws-files', [
+      {
+        name: 'trade.rosetta',
+        path: 'trade.rosetta',
+        content: 'namespace restored.model\n\ntype Trade:\n  tradeDate date (1..1)\n',
+        dirty: false
+      }
+    ]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('1 file(s)')).toBeInTheDocument();
+    });
     expect(screen.queryByText(/Load Rune DSL Models/i)).not.toBeInTheDocument();
   });
 
