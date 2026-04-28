@@ -26,6 +26,7 @@ import type {
   RosettaModel,
   RosettaRootElement,
   Data,
+  Choice,
   RosettaEnumeration,
   RosettaFunction,
   RosettaRecordType,
