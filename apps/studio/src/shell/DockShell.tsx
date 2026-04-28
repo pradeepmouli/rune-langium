@@ -101,15 +101,14 @@ function mergePanelRegistry(overrides: PanelOverrides | undefined): PanelRegistr
 function createDockviewPanelBridge(name: PanelComponentName): React.FC<IDockviewPanelProps> {
   function DockviewPanelBridge() {
     const registry = useContext(PanelRegistryContext);
-    const renderPanel = registry[name];
-    // Invoke as a render function rather than as JSX (<renderPanel />) so that
-    // React does NOT see a new component type when the function reference
-    // changes (e.g. when sourceEditorFiles updates after a keystroke). Using
-    // JSX would cause React to unmount and remount the entire subtree —
-    // destroying the CodeMirror editor on every change. Calling it directly
-    // returns plain JSX that React reconciles as children of this stable
-    // bridge component, preserving editor state across re-renders.
-    return renderPanel() as React.ReactElement;
+    // Cast to a zero-arg render function before calling. All panel components
+    // (both stubs and live overrides from EditorPage) take no props — they
+    // close over their data via context / hooks. Calling directly (rather than
+    // rendering as JSX) prevents React from treating a new function reference
+    // as a new component type, which would unmount and remount the subtree
+    // (destroying the CodeMirror editor) on every files-state change.
+    const renderPanel = registry[name] as () => React.ReactElement | null;
+    return renderPanel();
   }
 
   DockviewPanelBridge.displayName = `DockviewPanelBridge(${name})`;
