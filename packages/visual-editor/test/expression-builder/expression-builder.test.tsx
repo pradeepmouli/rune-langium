@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 import { ExpressionBuilder } from '../../src/components/editors/expression-builder/ExpressionBuilder.js';
+import * as astToExpressionNodeModule from '../../src/adapters/ast-to-expression-node.js';
 import type { FunctionScope } from '../../src/store/expression-store.js';
 
 const testScope: FunctionScope = {
@@ -105,5 +106,30 @@ describe('ExpressionBuilder', () => {
     fireEvent.change(textarea, { target: { value: 'trade -> price + 1' } });
     fireEvent.blur(textarea);
     expect(onChange).toHaveBeenCalledWith('trade -> price + 1');
+  });
+
+  it('converts expression AST only once per mounted editor instance', () => {
+    const astSpy = vi.spyOn(astToExpressionNodeModule, 'astToExpressionNode');
+    const expressionAst = { $type: 'RosettaIntLiteral', value: 1 };
+    const { rerender } = render(
+      <ExpressionBuilder
+        value="1"
+        onChange={vi.fn()}
+        scope={testScope}
+        expressionAst={expressionAst}
+      />
+    );
+
+    rerender(
+      <ExpressionBuilder
+        value="1"
+        onChange={vi.fn()}
+        scope={{ ...testScope, aliases: [] }}
+        expressionAst={expressionAst}
+      />
+    );
+
+    expect(astSpy).toHaveBeenCalledTimes(1);
+    astSpy.mockRestore();
   });
 });

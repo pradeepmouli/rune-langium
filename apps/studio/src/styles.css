@@ -37,6 +37,10 @@
     font-family: var(--font-sans);
   }
 
+  .studio-display-heading {
+    font-family: var(--font-display);
+  }
+
   .studio-app [data-slot='button'] {
     cursor: pointer;
     transition:
@@ -1004,7 +1008,7 @@
 }
 
 .studio-brand__name {
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
   font-weight: 650;
   font-size: 14px;
   color: var(--foreground);

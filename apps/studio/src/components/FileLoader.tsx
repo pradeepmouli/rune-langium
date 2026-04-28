@@ -140,7 +140,7 @@ export function FileLoader({
        *      a discoverable but visually subordinate row — no
        *      `border-t` divider, just `mt-8`. */}
       <div className="text-center max-w-[560px]">
-        <h2 className="text-3xl font-semibold tracking-tight text-foreground mb-3">
+        <h2 className="studio-display-heading text-3xl font-semibold tracking-tight text-foreground mb-3">
           Load Rune DSL Models
         </h2>
         <p className="text-md text-text-secondary mb-8">

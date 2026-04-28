@@ -48,10 +48,14 @@ export function ExpressionBuilder({
   onDragNode,
   expressionAst
 }: ExpressionBuilderProps) {
-  // Convert AST directly if available, otherwise fall back to text parsing
-  const initialTree = expressionAst
-    ? astToExpressionNode(expressionAst, value ?? '')
-    : parseExpression(value ?? '');
+  const initialTreeRef = useRef<ExpressionNode | null>(null);
+  if (initialTreeRef.current === null) {
+    // Convert the initial source once per mounted editor instance.
+    initialTreeRef.current = expressionAst
+      ? astToExpressionNode(expressionAst, value ?? '')
+      : parseExpression(value ?? '');
+  }
+  const initialTree = initialTreeRef.current;
 
   const {
     tree,

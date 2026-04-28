@@ -24,7 +24,6 @@
 import { useRef, useCallback, useState, useMemo, useEffect, type KeyboardEvent } from 'react';
 import {
   RuneTypeGraph,
-  NamespaceExplorerPanel,
   EditorFormPanel,
   ExpressionBuilder,
   BUILTIN_TYPES,
@@ -40,6 +39,7 @@ import type {
   FunctionScope
 } from '@rune-langium/visual-editor';
 import type { RosettaModel } from '@rune-langium/core';
+import { ExplorerPanel } from '../components/ExplorerPanel.js';
 import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
@@ -48,7 +48,6 @@ import { ExportMenu } from '../components/ExportMenu.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
-import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Maximize2, LayoutGrid, Code2, Network } from 'lucide-react';
 import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { DockShell } from '../shell/DockShell.js';
@@ -143,6 +142,24 @@ export function EditorPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);
 
+  const functionScopeSignature = useMemo(() => {
+    const d = selectedNodeData as any;
+    if (!d || d.$type !== 'RosettaFunction') {
+      return '';
+    }
+    return JSON.stringify({
+      inputs: (d.inputs ?? []).map((p: any) => [
+        p.name,
+        p.typeCall?.type?.$refText,
+        p.card?.inf,
+        p.card?.sup,
+        p.card?.unbounded
+      ]),
+      output: d.output?.typeCall?.type?.$refText ?? null,
+      aliases: (d.shortcuts ?? []).map((s: any) => [s.name, s.typeCall?.type?.$refText])
+    });
+  }, [selectedNodeData]);
+
   const functionScope: FunctionScope = useMemo(() => {
     const d = selectedNodeData as any;
     if (!d || d.$type !== 'RosettaFunction') {
@@ -164,7 +181,7 @@ export function EditorPage({
         typeName: s.typeCall?.type?.$refText
       }))
     };
-  }, [selectedNodeData]);
+  }, [functionScopeSignature]);
 
   const renderExpressionEditor = useCallback(
     (props: ExpressionEditorSlotProps) => <ExpressionBuilder {...props} scope={functionScope} />,
@@ -548,25 +565,29 @@ export function EditorPage({
 
   const FileTreePanelMounted = useCallback(
     () => (
-      <ScrollArea className="h-full">
-        <NamespaceExplorerPanel
-          nodes={storeNodes}
-          expandedNamespaces={expandedNamespaces}
-          hiddenNodeIds={hiddenNodeIds}
-          selectedNodeId={selectedNodeId}
-          onToggleNamespace={storeToggleNamespace}
-          onToggleNode={storeToggleNodeVisibility}
-          onExpandAll={storeExpandAllNamespaces}
-          onCollapseAll={storeCollapseAllNamespaces}
-          onSelectNode={handleExplorerSelectNode}
-        />
-      </ScrollArea>
+      <ExplorerPanel
+        files={files}
+        activeFile={activeEditorFile}
+        nodes={storeNodes}
+        expandedNamespaces={expandedNamespaces}
+        hiddenNodeIds={hiddenNodeIds}
+        selectedNodeId={selectedNodeId}
+        onOpenFile={openFileInSource}
+        onToggleNamespace={storeToggleNamespace}
+        onToggleNode={storeToggleNodeVisibility}
+        onExpandAll={storeExpandAllNamespaces}
+        onCollapseAll={storeCollapseAllNamespaces}
+        onSelectNode={handleExplorerSelectNode}
+      />
     ),
     [
+      files,
+      activeEditorFile,
       storeNodes,
       expandedNamespaces,
       hiddenNodeIds,
       selectedNodeId,
+      openFileInSource,
       storeToggleNamespace,
       storeToggleNodeVisibility,
       storeExpandAllNamespaces,

@@ -11,7 +11,7 @@
  * and shadcn/ui primitives with lucide-react icons.
  */
 
-import { useState, useMemo, useCallback, useRef, memo } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react';
 import type { JSX } from 'react';
 import {
   ChevronRight,
@@ -149,6 +149,36 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
 
   const virtualizer = useVirtualTree(flatRows, scrollRef);
 
+  const selectedNamespace = useMemo(() => {
+    if (!selectedNodeId) return null;
+    return nodes.find((node) => node.id === selectedNodeId)?.data.namespace ?? null;
+  }, [nodes, selectedNodeId]);
+
+  const selectedRowIndex = useMemo(
+    () =>
+      selectedNodeId
+        ? flatRows.findIndex((row) => row.kind === 'type' && row.nodeId === selectedNodeId)
+        : -1,
+    [flatRows, selectedNodeId]
+  );
+
+  useEffect(() => {
+    if (!selectedNamespace || searchQuery.trim()) return;
+    setTreeExpanded((prev) => {
+      if (prev.has(selectedNamespace)) return prev;
+      const next = new Set(prev);
+      next.add(selectedNamespace);
+      return next;
+    });
+  }, [selectedNamespace, searchQuery]);
+
+  useEffect(() => {
+    if (selectedRowIndex < 0) return;
+    const maybeScrollToIndex = (virtualizer as { scrollToIndex?: (index: number) => void })
+      .scrollToIndex;
+    maybeScrollToIndex?.(selectedRowIndex);
+  }, [selectedRowIndex, virtualizer]);
+
   // Toggle tree expansion (UI-only, not visibility)
   const toggleTreeExpand = useCallback((namespace: string) => {
     setTreeExpanded((prev) => {
@@ -175,7 +205,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b">
-          <span className="text-sm font-semibold">Explorer</span>
+          <span className="text-sm font-semibold">Namespaces</span>
           <Badge variant="secondary">
             {visibleCount}/{totalTypes}
           </Badge>
@@ -379,6 +409,8 @@ function TypeItemRow({
             : 'text-muted-foreground opacity-60'
       }`}
       data-testid={`ns-type-${row.nodeId}`}
+      aria-selected={isSelected}
+      data-selected={isSelected ? 'true' : 'false'}
     >
       <Button
         variant="ghost"
