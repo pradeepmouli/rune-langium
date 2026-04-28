@@ -21,3 +21,8 @@ cpu_ms = 30000
 
 [observability]
 enabled = true
+
+# inspector_port avoids EADDRINUSE when multiple workers run in parallel.
+[dev]
+port = 8792
+inspector_port = 9235

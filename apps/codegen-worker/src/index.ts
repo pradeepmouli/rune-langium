@@ -18,6 +18,7 @@
 
 import type { WorkerEnv } from './types.js';
 import { RateLimiter } from './rate-limit.js';
+import { CodegenContainer } from './container.js';
 import { verifyTurnstile } from './turnstile.js';
 import { logRequest } from './log.js';
 import {
@@ -28,7 +29,7 @@ import {
   verifySessionJwt
 } from './session.js';
 
-export { RateLimiter };
+export { RateLimiter, CodegenContainer };
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 const EXPECTED_HOSTNAME = 'www.daikonic.dev';

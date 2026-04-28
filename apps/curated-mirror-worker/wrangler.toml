@@ -56,3 +56,8 @@ ALLOWED_ORIGIN = "https://www.daikonic.dev"
 # `undefined`. The Worker tries the flat form first and falls back to
 # the nested shape only if a future wrangler change re-enables it.
 RETENTION_ARCHIVES_PER_MODEL = "14"
+
+# inspector_port avoids EADDRINUSE when multiple workers run in parallel.
+[dev]
+port = 8788
+inspector_port = 9231

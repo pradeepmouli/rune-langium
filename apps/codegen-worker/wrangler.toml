@@ -34,10 +34,22 @@ id = "a3007b9cfdd8415384fef5397890e19f"
 name = "RATE_LIMITER"
 class_name = "RateLimiter"
 
+# DO lifecycle class backing the CODEGEN container binding (CF Containers beta).
+# The class is implemented in apps/codegen-worker/src/container.ts.
+# wrangler requires class_name in [[containers]] to match a [[durable_objects.bindings]]
+# entry and an export from the worker script.
+[[durable_objects.bindings]]
+name = "CODEGEN_LIFECYCLE"
+class_name = "CodegenContainer"
+
 # Initial migration must declare the class so wrangler provisions storage.
 [[migrations]]
 tag = "v1"
 new_classes = ["RateLimiter"]
+
+[[migrations]]
+tag = "v2"
+new_classes = ["CodegenContainer"]
 
 # Hosted codegen container binding. The image is built + pushed from
 # apps/codegen-container/ (see that package's README.md).
@@ -45,11 +57,21 @@ new_classes = ["RateLimiter"]
 # if wrangler complains at deploy time, consult the current docs and
 # update this block. The semantics we rely on are "env.CODEGEN.fetch(req)".
 # Binding name must match env.CODEGEN used in src/index.ts (uppercase).
+# class_name must match an exported class in the worker (CodegenContainer).
 [[containers]]
 name = "CODEGEN"
-image = "rune-codegen:latest"
-instance_type = "standard"
-instances = 1
+class_name = "CodegenContainer"
+image = "../codegen-container/Dockerfile"
+instance_type = "standard-1"
+max_instances = 1
+
+# Local dev: disable container builds (requires Docker daemon) so wrangler dev
+# starts without a running Docker. inspector_port avoids EADDRINUSE when
+# multiple workers run in parallel via `pnpm -r --parallel run dev`.
+[dev]
+enable_containers = false
+port = 8787
+inspector_port = 9230
 
 # Observability — structured logs via Tail without Logpush.
 [observability]
