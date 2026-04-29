@@ -28,6 +28,7 @@ interface NamespaceIndex {
   namespace: string;
   dataByName: Map<string, { node: Data; sourceUri: string }>;
   enumByName: Map<string, { node: RosettaEnumeration; sourceUri: string }>;
+  duplicateDataNames: Set<string>;
 }
 
 interface FieldContext {
@@ -69,6 +70,10 @@ export function generatePreviewSchemas(
       const data = namespace.dataByName.get(name)!;
       const targetId = `${namespace.namespace}.${name}`;
       if (options.targetId && options.targetId !== targetId) continue;
+      if (namespace.duplicateDataNames.has(name)) {
+        schemas.push(buildDuplicateTargetSchema(data.node, targetId));
+        continue;
+      }
       schemas.push(
         buildDataSchema(
           data.node,
@@ -96,12 +101,21 @@ function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[] {
 
     let index = byNamespace.get(namespace);
     if (!index) {
-      index = { namespace, dataByName: new Map(), enumByName: new Map() };
+      index = {
+        namespace,
+        dataByName: new Map(),
+        enumByName: new Map(),
+        duplicateDataNames: new Set()
+      };
       byNamespace.set(namespace, index);
     }
 
     for (const element of (model as RosettaModel).elements) {
       if (isData(element)) {
+        if (index.dataByName.has(element.name)) {
+          index.duplicateDataNames.add(element.name);
+          continue;
+        }
         index.dataByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
       } else if (isRosettaEnumeration(element)) {
         index.enumByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
@@ -149,6 +163,17 @@ function buildDataSchema(
     ...(unsupportedFeatures.size > 0
       ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() }
       : {})
+  };
+}
+
+function buildDuplicateTargetSchema(data: Data, targetId: string): FormPreviewSchema {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    targetId,
+    title: data.name,
+    status: 'unsupported',
+    fields: [],
+    unsupportedFeatures: [`duplicate-target:${targetId}`]
   };
 }
 

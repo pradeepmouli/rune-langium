@@ -52,12 +52,25 @@ const { sourceEditorMockState } = vi.hoisted(() => ({
 class MockWorker {
   static instances: MockWorker[] = [];
   readonly postMessage = vi.fn();
-  readonly addEventListener = vi.fn();
-  readonly removeEventListener = vi.fn();
+  readonly listeners = new Map<string, Set<EventListener>>();
+  readonly addEventListener = vi.fn((type: string, listener: EventListener) => {
+    const handlers = this.listeners.get(type) ?? new Set<EventListener>();
+    handlers.add(listener);
+    this.listeners.set(type, handlers);
+  });
+  readonly removeEventListener = vi.fn((type: string, listener: EventListener) => {
+    this.listeners.get(type)?.delete(listener);
+  });
   readonly terminate = vi.fn();
 
   constructor(_url: URL, _options?: WorkerOptions) {
     MockWorker.instances.push(this);
+  }
+
+  dispatch(type: 'message' | 'error' | 'messageerror', event: unknown) {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event as Event);
+    }
   }
 }
 
@@ -369,10 +382,97 @@ describe('EditorPage preview target identity', () => {
         .map(([message]) => message as { type?: string; requestId?: string })
         .filter((message) => message.type === 'codegen:setFiles');
       expect(codegenSetFilesMessages.length).toBeGreaterThan(0);
-      expect(codegenSetFilesMessages.every((message) => message.requestId === undefined)).toBe(
-        true
-      );
+      expect(
+        codegenSetFilesMessages.every((message) => message.requestId?.startsWith('codegen:'))
+      ).toBe(true);
+      expect(
+        codegenSetFilesMessages.every((message) => !message.requestId?.startsWith('preview:'))
+      ).toBe(true);
     });
+  });
+
+  it('ignores out-of-order stale preview responses for the same target', async () => {
+    editorStoreState.nodes = [
+      {
+        id: 'preview.alpha::Trade',
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+
+    const { rerender } = render(
+      <EditorPage
+        models={[modelWithType('Trade') as never]}
+        files={[
+          { path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(MockWorker.instances).toHaveLength(1);
+    });
+
+    const worker = MockWorker.instances[0]!;
+    const originalRequestId = worker.postMessage.mock.calls
+      .map(([message]) => message as { type?: string; requestId?: string })
+      .find((message) => message.type === 'preview:generate')?.requestId;
+
+    rerender(
+      <EditorPage
+        models={[modelWithType('Trade') as never]}
+        files={[
+          {
+            path: 'preview-alpha.rosetta',
+            content: 'namespace preview.alpha\n\ntype Trade:\n  settlementDate string (0..1)',
+            dirty: true
+          }
+        ]}
+      />
+    );
+
+    const latestRequestId = worker.postMessage.mock.calls
+      .map(([message]) => message as { type?: string; requestId?: string })
+      .filter((message) => message.type === 'preview:setFiles')
+      .at(-1)?.requestId;
+
+    await act(async () => {
+      worker.dispatch('message', {
+        data: {
+          type: 'preview:result',
+          targetId: 'preview.alpha.Trade',
+          requestId: originalRequestId,
+          schema: {
+            schemaVersion: 1,
+            targetId: 'preview.alpha.Trade',
+            title: 'Old Trade',
+            status: 'ready',
+            fields: []
+          }
+        }
+      });
+    });
+
+    expect(usePreviewStore.getState().schemas.get('preview.alpha.Trade')).toBeUndefined();
+
+    await act(async () => {
+      worker.dispatch('message', {
+        data: {
+          type: 'preview:result',
+          targetId: 'preview.alpha.Trade',
+          requestId: latestRequestId,
+          schema: {
+            schemaVersion: 1,
+            targetId: 'preview.alpha.Trade',
+            title: 'Trade',
+            status: 'ready',
+            fields: []
+          }
+        }
+      });
+    });
+
+    expect(usePreviewStore.getState().schemas.get('preview.alpha.Trade')?.title).toBe('Trade');
   });
 
   it('resolves displayFile by opening the matching source file and returning its editor view', async () => {

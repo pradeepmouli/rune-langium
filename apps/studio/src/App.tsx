@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
 import '@rune-langium/visual-editor/styles.css';
+import type { RosettaModel } from '@rune-langium/core';
 import { FileLoader } from './components/FileLoader.js';
 import { ModelLoader } from './components/ModelLoader.js';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher.js';
@@ -69,8 +70,10 @@ function deriveWorkspaceName(files: readonly WorkspaceFile[]): string {
 
 export function App() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
-  const [models, setModels] = useState<unknown[]>([]);
-  const [parsedModels, setParsedModels] = useState<Array<{ filePath: string; model: unknown }>>([]);
+  const [models, setModels] = useState<RosettaModel[]>([]);
+  const [parsedModels, setParsedModels] = useState<
+    Array<{ filePath: string; model: RosettaModel }>
+  >([]);
   const [, setErrors] = useState<Map<string, string[]>>(new Map());
   const [loading, setLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
@@ -178,13 +181,8 @@ export function App() {
     [syncWorkspaceToEditor]
   );
 
-  // Mount-time workspace restore (research.md R5 / T028).
-  //
-  // Read the recents store; if a most-recent record exists AND its full
-  // workspace metadata is loadable, switch to `restored` so the body is
-  // marked `data-workspace-active=true` (FR-010). Anything that throws or
-  // returns nothing falls back to the empty start page so the user can
-  // pick a different workspace.
+  // Restore the most recently opened workspace on mount when its metadata and
+  // saved files are still available; otherwise fall back to the start page.
   useEffect(() => {
     let cancelled = false;
     (async function bootRestore() {
@@ -567,7 +565,7 @@ export function App() {
 
         {bootState === 'start' && !loading && userFiles.length > 0 && (
           <EditorPage
-            models={models as import('@rune-langium/core').RosettaModel[]}
+            models={models}
             parsedModels={parsedModels}
             files={files}
             onFilesChange={handleFilesChange}
@@ -601,7 +599,7 @@ export function App() {
 
         {bootState === 'restored' && userFiles.length > 0 && (
           <EditorPage
-            models={models as import('@rune-langium/core').RosettaModel[]}
+            models={models}
             parsedModels={parsedModels}
             files={files}
             onFilesChange={handleFilesChange}

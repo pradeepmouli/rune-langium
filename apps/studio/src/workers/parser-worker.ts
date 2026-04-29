@@ -9,7 +9,7 @@
  * and returns parsed results.
  */
 
-import { parse, parseWorkspace } from '@rune-langium/core';
+import { parse, parseWorkspace, type RosettaModel } from '@rune-langium/core';
 
 export interface ParseRequest {
   type: 'parse';
@@ -30,15 +30,15 @@ export type WorkerRequest = ParseRequest | ParseWorkspaceRequest;
 export interface ParseResponse {
   type: 'parseResult';
   id: string;
-  model: unknown;
+  model: RosettaModel | null;
   errors: string[];
 }
 
 export interface ParseWorkspaceResponse {
   type: 'parseWorkspaceResult';
   id: string;
-  models: unknown[];
-  parsedModels: Array<{ filePath: string; model: unknown }>;
+  models: RosettaModel[];
+  parsedModels: Array<{ filePath: string; model: RosettaModel }>;
   errors: Record<string, string[]>;
 }
 
@@ -112,29 +112,41 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
     return { type: 'parseWorkspaceResult', id: req.id, models: [], parsedModels: [], errors };
   }
 
-  const results = await parseWorkspace(
-    req.files.map((file) => ({
-      uri: file.name,
-      content: file.content
-    }))
-  );
-  const models: unknown[] = [];
-  const parsedModels: Array<{ filePath: string; model: unknown }> = [];
+  try {
+    const results = await parseWorkspace(
+      req.files.map((file) => ({
+        uri: file.name,
+        content: file.content
+      }))
+    );
+    const models: RosettaModel[] = [];
+    const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
 
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i]!;
-    const file = req.files[i]!;
-    if (result.value) {
-      preserveCstText(result.value);
-      models.push(result.value);
-      parsedModels.push({ filePath: file.name, model: result.value });
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i]!;
+      const file = req.files[i]!;
+      if (result.value) {
+        preserveCstText(result.value);
+        models.push(result.value);
+        parsedModels.push({ filePath: file.name, model: result.value });
+      }
+      if (result.parserErrors.length > 0) {
+        errors[file.name] = result.parserErrors.map((e) => e.message);
+      }
     }
-    if (result.parserErrors.length > 0) {
-      errors[file.name] = result.parserErrors.map((e) => e.message);
-    }
+
+    return { type: 'parseWorkspaceResult', id: req.id, models, parsedModels, errors };
+  } catch (error) {
+    return {
+      type: 'parseWorkspaceResult',
+      id: req.id,
+      models: [],
+      parsedModels: [],
+      errors: {
+        __worker__: [error instanceof Error ? error.message : 'Workspace parsing failed.']
+      }
+    };
   }
-
-  return { type: 'parseWorkspaceResult', id: req.id, models, parsedModels, errors };
 }
 
 // ---------------------------------------------------------------------------

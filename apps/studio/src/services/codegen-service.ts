@@ -64,6 +64,13 @@ export interface PreviewStaleMessage {
 export type PreviewWorkerRequest = PreviewSetFilesMessage | PreviewGenerateMessage;
 export type PreviewWorkerMessage = PreviewResultMessage | PreviewStaleMessage;
 
+const PREVIEW_STALE_REASONS = new Set<PreviewStaleMessage['reason']>([
+  'parse-error',
+  'generation-error',
+  'unsupported-target',
+  'no-files'
+]);
+
 export function createPreviewSetFilesMessage(
   files: PreviewFileEntry[],
   requestId?: string
@@ -86,8 +93,7 @@ export function isPreviewWorkerMessage(message: unknown): message is PreviewWork
     return (
       typeof candidate.targetId === 'string' &&
       typeof candidate.requestId === 'string' &&
-      !!candidate.schema &&
-      typeof candidate.schema === 'object'
+      isFormPreviewSchema(candidate.schema)
     );
   }
   if (type === 'preview:stale') {
@@ -95,10 +101,108 @@ export function isPreviewWorkerMessage(message: unknown): message is PreviewWork
       (candidate.targetId === undefined || typeof candidate.targetId === 'string') &&
       typeof candidate.requestId === 'string' &&
       typeof candidate.reason === 'string' &&
+      PREVIEW_STALE_REASONS.has(candidate.reason as PreviewStaleMessage['reason']) &&
       typeof candidate.message === 'string'
     );
   }
   return false;
+}
+
+function isFormPreviewSchema(value: unknown): value is FormPreviewSchema {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  if (
+    candidate.schemaVersion !== 1 ||
+    typeof candidate.targetId !== 'string' ||
+    typeof candidate.title !== 'string' ||
+    (candidate.status !== 'ready' && candidate.status !== 'unsupported') ||
+    !Array.isArray(candidate.fields) ||
+    !candidate.fields.every(isPreviewField)
+  ) {
+    return false;
+  }
+  if (
+    candidate.unsupportedFeatures !== undefined &&
+    (!Array.isArray(candidate.unsupportedFeatures) ||
+      !candidate.unsupportedFeatures.every((item) => typeof item === 'string'))
+  ) {
+    return false;
+  }
+  if (
+    candidate.sourceMap !== undefined &&
+    (!Array.isArray(candidate.sourceMap) || !candidate.sourceMap.every(isPreviewSourceMapEntry))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isPreviewField(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.path !== 'string' ||
+    typeof candidate.label !== 'string' ||
+    typeof candidate.required !== 'boolean' ||
+    !isPreviewFieldKind(candidate.kind)
+  ) {
+    return false;
+  }
+  if (
+    candidate.cardinality !== undefined &&
+    !isPreviewCardinality(candidate.cardinality as Record<string, unknown>)
+  ) {
+    return false;
+  }
+  if (
+    candidate.enumValues !== undefined &&
+    (!Array.isArray(candidate.enumValues) || !candidate.enumValues.every(isEnumValue))
+  ) {
+    return false;
+  }
+  if (
+    candidate.children !== undefined &&
+    (!Array.isArray(candidate.children) || !candidate.children.every(isPreviewField))
+  ) {
+    return false;
+  }
+  return candidate.description === undefined || typeof candidate.description === 'string';
+}
+
+function isPreviewFieldKind(value: unknown): boolean {
+  return (
+    value === 'string' ||
+    value === 'number' ||
+    value === 'boolean' ||
+    value === 'enum' ||
+    value === 'object' ||
+    value === 'array' ||
+    value === 'unknown'
+  );
+}
+
+function isPreviewCardinality(value: Record<string, unknown>): boolean {
+  return (
+    (value.min === undefined || typeof value.min === 'number') &&
+    (value.max === undefined || typeof value.max === 'number' || value.max === 'unbounded')
+  );
+}
+
+function isEnumValue(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.value === 'string' && typeof candidate.label === 'string';
+}
+
+function isPreviewSourceMapEntry(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.fieldPath === 'string' &&
+    typeof candidate.sourceUri === 'string' &&
+    typeof candidate.sourceLine === 'number' &&
+    typeof candidate.sourceChar === 'number'
+  );
 }
 
 /** Default codegen service URL. Override via VITE_CODEGEN_URL env var. */

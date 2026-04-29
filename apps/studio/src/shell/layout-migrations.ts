@@ -44,6 +44,8 @@ export function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayo
   if (cloned.dockview?.shape === 'factory') {
     const activeResult = normalizeFactoryActives(cloned.dockview);
     if (activeResult === 'invalid-shape') {
+      // eslint-disable-next-line no-console
+      console.warn('[layout-migrations] reset invalid saved layout to defaults');
       return buildDefaultLayout(ctx);
     }
     normalizedActive = activeResult;

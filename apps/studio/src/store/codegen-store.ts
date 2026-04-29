@@ -32,7 +32,9 @@ export type CodePreviewSnapshot =
 
 interface CodegenState {
   codePreviewTarget: Target;
+  currentRequestId: string;
   snapshot: CodePreviewSnapshot;
+  beginCodePreviewRequest: (target: Target) => string;
   setCodePreviewTarget: (target: Target) => void;
   setActiveCodePreviewFile: (relativePath: string) => void;
   receiveCodePreviewResult: (input: { target: Target; files: CodePreviewFile[] }) => void;
@@ -42,6 +44,7 @@ interface CodegenState {
 }
 
 const DEFAULT_TARGET: Target = 'zod';
+const INITIAL_REQUEST_ID = `codegen:${DEFAULT_TARGET}:0`;
 
 function createInitialSnapshot(target: Target = DEFAULT_TARGET): CodePreviewSnapshot {
   return {
@@ -65,10 +68,21 @@ function pickActiveRelativePath(
 
 export const useCodegenStore = create<CodegenState>((set) => ({
   codePreviewTarget: DEFAULT_TARGET,
+  currentRequestId: INITIAL_REQUEST_ID,
   snapshot: createInitialSnapshot(),
+  beginCodePreviewRequest: (target) => {
+    const requestId = `codegen:${target}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    set({
+      codePreviewTarget: target,
+      currentRequestId: requestId,
+      snapshot: createInitialSnapshot(target)
+    });
+    return requestId;
+  },
   setCodePreviewTarget: (target) =>
     set({
       codePreviewTarget: target,
+      currentRequestId: `codegen:${target}:0`,
       snapshot: createInitialSnapshot(target)
     }),
   setActiveCodePreviewFile: (relativePath) =>
@@ -147,5 +161,9 @@ export const useCodegenStore = create<CodegenState>((set) => ({
       }
     })),
   resetCodegenState: () =>
-    set({ codePreviewTarget: DEFAULT_TARGET, snapshot: createInitialSnapshot() })
+    set({
+      codePreviewTarget: DEFAULT_TARGET,
+      currentRequestId: INITIAL_REQUEST_ID,
+      snapshot: createInitialSnapshot()
+    })
 }));

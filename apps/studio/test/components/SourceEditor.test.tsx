@@ -215,6 +215,27 @@ describe('SourceEditor', () => {
       });
       expect(lastEditorView?.focus).toHaveBeenCalled();
     });
+
+    it('matches a basename when revealPosition is given a different file path format', async () => {
+      const ref = React.createRef<import('../../src/components/SourceEditor.js').SourceEditorRef>();
+      const onFileSelect = vi.fn();
+      render(
+        <SourceEditor
+          ref={ref}
+          files={sampleFiles}
+          activeFile="/workspace/model.rosetta"
+          onFileSelect={onFileSelect}
+        />
+      );
+
+      await act(async () => {
+        ref.current?.revealPosition({ line: 2, character: 3 }, 'types.rosetta');
+      });
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      expect(onFileSelect).toHaveBeenCalledWith('/workspace/types.rosetta');
+      expect(lastEditorView?.focus).toHaveBeenCalled();
+    });
   });
 
   describe('diagnostics', () => {

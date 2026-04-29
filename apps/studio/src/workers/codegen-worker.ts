@@ -4,8 +4,6 @@
 /// <reference lib="webworker" />
 
 /**
- * Codegen Worker (T084/T085).
- *
  * Dedicated worker for running @rune-langium/codegen off the main thread.
  * Accepts code-preview and form-preview messages, tracks the latest request
  * identity per surface, and only emits results tagged with that request id.
@@ -207,6 +205,9 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
 
     if (msg.type === 'codegen:setFiles') {
       currentFiles = msg.files;
+      if (msg.requestId) {
+        lastCodegenRequestId = msg.requestId;
+      }
       runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
     } else if (msg.type === 'codegen:generate') {
       if (msg.target !== undefined) {

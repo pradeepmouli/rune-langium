@@ -68,6 +68,7 @@ import {
 } from '../services/codegen-service.js';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
+import { useCodegenStore } from '../store/codegen-store.js';
 import '../test-api.js';
 import { getRuneStudioTestApi } from '../test-api.js';
 
@@ -155,6 +156,8 @@ export function EditorPage({
   const selectPreviewTarget = usePreviewStore((s) => s.selectTarget);
   const receivePreviewResult = usePreviewStore((s) => s.receivePreviewResult);
   const receivePreviewStale = usePreviewStore((s) => s.receivePreviewStale);
+  const codePreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
+  const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
 
   useEffect(() => {
     if (models.length > 0) {
@@ -379,11 +382,35 @@ export function EditorPage({
     };
   }, []);
 
+  const handlePreviewWorkerFailure = useCallback(
+    (baseMessage: string, error: unknown, targetId?: string) => {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'object' && error && 'type' in error && error.type === 'messageerror'
+            ? 'A preview worker message could not be deserialized.'
+            : typeof error === 'object' &&
+                error &&
+                'message' in error &&
+                typeof error.message === 'string'
+              ? error.message
+              : 'Reload Studio to restore form preview.';
+      receivePreviewStale({
+        targetId,
+        reason: 'generation-error',
+        message: `${baseMessage} ${detail}`.trim()
+      });
+      console.error(`[EditorPage] ${baseMessage}`, error);
+    },
+    [receivePreviewStale]
+  );
+
   // Keep the codegen worker in sync with the workspace file set and
   // regenerate the selected preview whenever the backing files change.
   useEffect(() => {
     if (!codegenWorker) return;
     const previewFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+    const codegenRequestId = beginCodePreviewRequest(codePreviewTarget);
     const requestId = previewSelectedTargetId
       ? `preview:${previewSelectedTargetId}:${++previewRequestSequenceRef.current}`
       : undefined;
@@ -391,18 +418,25 @@ export function EditorPage({
     try {
       codegenWorker.postMessage({
         type: 'codegen:setFiles',
-        files: previewFiles
+        files: previewFiles,
+        requestId: codegenRequestId
       });
       codegenWorker.postMessage(createPreviewSetFilesMessage(previewFiles, requestId));
     } catch (error) {
-      receivePreviewStale({
-        targetId: previewSelectedTargetId,
-        reason: 'generation-error',
-        message: 'Preview worker is unavailable — reload Studio to restore form preview.'
-      });
-      console.error('[EditorPage] Failed to sync preview worker files:', error);
+      handlePreviewWorkerFailure(
+        'Preview worker could not process updated files.',
+        error,
+        previewSelectedTargetId
+      );
     }
-  }, [codegenWorker, files, previewSelectedTargetId]);
+  }, [
+    beginCodePreviewRequest,
+    codePreviewTarget,
+    codegenWorker,
+    files,
+    handlePreviewWorkerFailure,
+    previewSelectedTargetId
+  ]);
 
   useEffect(() => {
     if (!codegenWorker || !previewSelectedTargetId) return;
@@ -411,14 +445,13 @@ export function EditorPage({
     try {
       codegenWorker.postMessage(createPreviewGenerateMessage(previewSelectedTargetId, requestId));
     } catch (error) {
-      receivePreviewStale({
-        targetId: previewSelectedTargetId,
-        reason: 'generation-error',
-        message: 'Preview worker is unavailable — reload Studio to restore form preview.'
-      });
-      console.error('[EditorPage] Failed to request preview generation:', error);
+      handlePreviewWorkerFailure(
+        'Preview worker could not start generation for the selected type.',
+        error,
+        previewSelectedTargetId
+      );
     }
-  }, [codegenWorker, previewSelectedTargetId, receivePreviewStale]);
+  }, [codegenWorker, handlePreviewWorkerFailure, previewSelectedTargetId]);
 
   useEffect(() => {
     if (!codegenWorker) return;
@@ -433,12 +466,12 @@ export function EditorPage({
         receivePreviewStale(e.data);
       }
     }
-    function handleWorkerFailure() {
-      receivePreviewStale({
-        targetId: previewSelectedTargetId,
-        reason: 'generation-error',
-        message: 'Preview worker crashed — reload Studio to restore form preview.'
-      });
+    function handleWorkerFailure(event: ErrorEvent | MessageEvent<unknown>) {
+      const baseMessage =
+        event.type === 'messageerror'
+          ? 'Preview worker rejected a message.'
+          : 'Preview worker crashed.';
+      handlePreviewWorkerFailure(baseMessage, event, previewSelectedTargetId);
     }
     codegenWorker.addEventListener('message', handleMessage as EventListener);
     codegenWorker.addEventListener('error', handleWorkerFailure as EventListener);
@@ -448,7 +481,13 @@ export function EditorPage({
       codegenWorker.removeEventListener('error', handleWorkerFailure as EventListener);
       codegenWorker.removeEventListener('messageerror', handleWorkerFailure as EventListener);
     };
-  }, [codegenWorker, previewSelectedTargetId, receivePreviewResult, receivePreviewStale]);
+  }, [
+    codegenWorker,
+    handlePreviewWorkerFailure,
+    previewSelectedTargetId,
+    receivePreviewResult,
+    receivePreviewStale
+  ]);
 
   const handleSourceChange = useCallback(
     (path: string, content: string) => {

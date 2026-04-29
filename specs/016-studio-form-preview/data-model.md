@@ -25,7 +25,7 @@ Serializable description of a generated form for one preview target.
 - `schemaVersion`: contract version
 - `targetId`: matching `FormPreviewTarget.id`
 - `title`: user-facing form title
-- `status`: `ready`, `unsupported`, or `unavailable`
+- `status`: `ready` or `unsupported`
 - `fields`: ordered `PreviewField[]`
 - `unsupportedFeatures`: optional list of schema features not yet renderable
 - `sourceMap`: optional mapping from preview fields back to model source locations
@@ -33,6 +33,7 @@ Serializable description of a generated form for one preview target.
 **Validation Rules**
 - `fields` must preserve generated-schema field order.
 - Required, optional, array, enum, and nested object semantics must match generated Zod behavior.
+- Optional object fields must be omittable from the sample state instead of always materializing child defaults.
 - Recursive references must be represented with depth controls instead of expanding infinitely.
 
 ## PreviewField

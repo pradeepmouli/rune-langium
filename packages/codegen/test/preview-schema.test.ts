@@ -214,4 +214,33 @@ describe('FormPreviewSchema generation', () => {
     ]);
     expect(trade?.unsupportedFeatures).toContain('unresolved-reference:MissingType');
   });
+
+  skipIfNodeLt22(
+    'marks duplicate target ids as unsupported instead of silently overwriting',
+    async () => {
+      const first = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Trade:
+        tradeId string (1..1)
+    `);
+      const second = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Trade:
+        settlementDate string (0..1)
+    `);
+
+      const [trade] = generatePreviewSchemas([first, second], { targetId: 'test.preview.Trade' });
+
+      expect(trade).toMatchObject({
+        targetId: 'test.preview.Trade',
+        status: 'unsupported',
+        fields: [],
+        unsupportedFeatures: ['duplicate-target:test.preview.Trade']
+      });
+    }
+  );
 });

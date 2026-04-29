@@ -6,7 +6,7 @@
  * and cross-file resolution for the studio app (T083, T098, T100, T102).
  */
 
-import { parse, parseWorkspace } from '@rune-langium/core';
+import { parse, parseWorkspace, type RosettaModel } from '@rune-langium/core';
 import type {
   WorkerRequest,
   ParseResponse,
@@ -30,7 +30,7 @@ export interface WorkspaceLoadProgress {
 
 export interface WorkspaceState {
   files: WorkspaceFile[];
-  models: unknown[];
+  models: RosettaModel[];
   parsedModels: ParsedWorkspaceModel[];
   errors: Map<string, string[]>;
   loading: boolean;
@@ -38,20 +38,20 @@ export interface WorkspaceState {
 
 export interface ParsedWorkspaceModel {
   filePath: string;
-  model: unknown;
+  model: RosettaModel;
 }
 
 export type ParseMode = 'worker' | 'main-thread-fallback';
 
 export interface ParseFileResult {
-  model: unknown;
+  model: RosettaModel | null;
   errors: string[];
   parseMode: ParseMode;
   fallbackMessage?: string;
 }
 
 export interface ParseWorkspaceFilesResult {
-  models: unknown[];
+  models: RosettaModel[];
   parsedModels: ParsedWorkspaceModel[];
   errors: Map<string, string[]>;
   parseMode: ParseMode;
@@ -64,8 +64,14 @@ export interface ParseWorkspaceFilesResult {
 
 let worker: Worker | null = null;
 let requestId = 0;
+let workerInitError: Error | null = null;
 const WORKER_FALLBACK_MESSAGE =
   'Parser worker unavailable — using main-thread parsing, which may feel slower on large workspaces.';
+
+function formatWorkerFallbackMessage(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  return `${WORKER_FALLBACK_MESSAGE} (${detail})`;
+}
 
 function getWorker(): Worker | null {
   if (worker) return worker;
@@ -73,9 +79,11 @@ function getWorker(): Worker | null {
     worker = new Worker(new URL('../workers/parser-worker.ts', import.meta.url), {
       type: 'module'
     });
+    workerInitError = null;
     return worker;
-  } catch {
+  } catch (error) {
     // Worker not available (e.g., in test env or SSR)
+    workerInitError = error instanceof Error ? error : new Error(String(error));
     return null;
   }
 }
@@ -86,23 +94,51 @@ function workerRequest<T extends ParseResponse | ParseWorkspaceResponse>(
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (!w) {
-      reject(new Error('Worker not available'));
+      reject(workerInitError ?? new Error('Worker not available'));
       return;
     }
 
     const id = msg.id;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const clearPendingTimeout = () => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
+    };
     const handler = (e: MessageEvent) => {
       if (e.data?.id === id) {
+        clearPendingTimeout();
+        w.removeEventListener('error', errorHandler);
+        w.removeEventListener('messageerror', messageErrorHandler);
         w.removeEventListener('message', handler);
         resolve(e.data as T);
       }
     };
+    const errorHandler = (event: ErrorEvent) => {
+      clearPendingTimeout();
+      w.removeEventListener('message', handler);
+      w.removeEventListener('error', errorHandler);
+      w.removeEventListener('messageerror', messageErrorHandler);
+      reject(new Error(event.message || 'Worker error'));
+    };
+    const messageErrorHandler = () => {
+      clearPendingTimeout();
+      w.removeEventListener('message', handler);
+      w.removeEventListener('error', errorHandler);
+      w.removeEventListener('messageerror', messageErrorHandler);
+      reject(new Error('Worker message could not be deserialized'));
+    };
     w.addEventListener('message', handler);
+    w.addEventListener('error', errorHandler);
+    w.addEventListener('messageerror', messageErrorHandler);
     w.postMessage(msg);
 
     // Timeout after 30s
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       w.removeEventListener('message', handler);
+      w.removeEventListener('error', errorHandler);
+      w.removeEventListener('messageerror', messageErrorHandler);
       reject(new Error('Worker timeout'));
     }, 30000);
   });
@@ -123,8 +159,9 @@ export async function parseFile(content: string, uri?: string): Promise<ParseFil
       uri
     });
     return { model: response.model, errors: response.errors, parseMode: 'worker' };
-  } catch {
+  } catch (error) {
     // Fallback to main thread
+    console.warn('[workspace] parseFile worker fallback:', error);
   }
 
   // Main-thread fallback
@@ -147,7 +184,7 @@ export async function parseFile(content: string, uri?: string): Promise<ParseFil
       model: null,
       errors: [(e as Error).message],
       parseMode: 'main-thread-fallback',
-      fallbackMessage: WORKER_FALLBACK_MESSAGE
+      fallbackMessage: formatWorkerFallbackMessage(e)
     };
   }
 }
@@ -172,6 +209,9 @@ export async function parseWorkspaceFiles(
       id,
       files: files.map((f) => ({ name: f.path, content: f.content }))
     });
+    if (response.errors.__worker__?.length) {
+      throw new Error(response.errors.__worker__.join('; '));
+    }
     const errMap = new Map<string, string[]>();
     for (const [k, v] of Object.entries(response.errors)) {
       errMap.set(k, v);
@@ -182,46 +222,47 @@ export async function parseWorkspaceFiles(
       errors: errMap,
       parseMode: 'worker'
     };
-  } catch {
+  } catch (error) {
     // Fallback to main thread
-  }
+    console.warn('[workspace] parseWorkspaceFiles worker fallback:', error);
+    const fallbackMessage = formatWorkerFallbackMessage(error);
+    const results = await parseWorkspace(
+      files.map((file) => ({
+        uri: file.path,
+        content: file.content
+      }))
+    );
+    const models: RosettaModel[] = [];
+    const parsedModels: ParsedWorkspaceModel[] = [];
+    const errors = new Map<string, string[]>();
 
-  // Main-thread fallback
-  const results = await parseWorkspace(
-    files.map((file) => ({
-      uri: file.path,
-      content: file.content
-    }))
-  );
-  const models: unknown[] = [];
-  const parsedModels: ParsedWorkspaceModel[] = [];
-  const errors = new Map<string, string[]>();
-
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i]!;
-    const file = files[i]!;
-    if (result.value) {
-      models.push(result.value);
-      parsedModels.push({ filePath: file.path, model: result.value });
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i]!;
+      const file = files[i]!;
+      if (result.value) {
+        models.push(result.value);
+        parsedModels.push({ filePath: file.path, model: result.value });
+      }
+      const fileErrors = result.parserErrors.map((err) => err.message);
+      if (fileErrors.length > 0) {
+        errors.set(file.path, fileErrors);
+      }
     }
-    const fileErrors = result.parserErrors.map((err) => err.message);
-    if (fileErrors.length > 0) {
-      errors.set(file.path, fileErrors);
-    }
-  }
 
-  return {
-    models,
-    parsedModels,
-    errors,
-    parseMode: 'main-thread-fallback',
-    fallbackMessage: WORKER_FALLBACK_MESSAGE
-  };
+    return {
+      models,
+      parsedModels,
+      errors,
+      parseMode: 'main-thread-fallback',
+      fallbackMessage
+    };
+  }
 }
 
 export function _resetParserWorkerForTests(): void {
   worker = null;
   requestId = 0;
+  workerInitError = null;
 }
 
 /**

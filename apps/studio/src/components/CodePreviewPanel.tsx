@@ -84,6 +84,8 @@ export function CodePreviewPanel({
   sourceEditorRef
 }: CodePreviewPanelProps): React.ReactElement {
   const target = useCodegenStore((s) => s.codePreviewTarget);
+  const currentRequestId = useCodegenStore((s) => s.currentRequestId);
+  const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
   const snapshot = useCodegenStore((s) => s.snapshot);
   const setCodePreviewTarget = useCodegenStore((s) => s.setCodePreviewTarget);
   const setActiveCodePreviewFile = useCodegenStore((s) => s.setActiveCodePreviewFile);
@@ -93,8 +95,6 @@ export function CodePreviewPanel({
   const activeFile = useMemo(() => activeFileFromSnapshot(snapshot), [snapshot]);
 
   const currentTargetRef = useRef<Target>(target);
-  const currentRequestIdRef = useRef('codegen:zod:0');
-  const nextRequestSequenceRef = useRef(0);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const sourceEditorRefRef = useRef(sourceEditorRef);
@@ -102,11 +102,13 @@ export function CodePreviewPanel({
   sourceEditorRefRef.current = sourceEditorRef;
   activeFileRef.current = activeFile;
 
+  currentTargetRef.current = target;
+  const currentRequestIdRef = useRef(currentRequestId);
+  currentRequestIdRef.current = currentRequestId;
+
   const requestGeneration = useCallback(
     (requestedTarget: Target) => {
-      currentTargetRef.current = requestedTarget;
-      const requestId = `codegen:${requestedTarget}:${++nextRequestSequenceRef.current}`;
-      currentRequestIdRef.current = requestId;
+      const requestId = beginCodePreviewRequest(requestedTarget);
       try {
         worker.postMessage({ type: 'codegen:generate', target: requestedTarget, requestId });
       } catch (err) {
@@ -117,7 +119,7 @@ export function CodePreviewPanel({
         });
       }
     },
-    [markCodePreviewUnavailable, worker]
+    [beginCodePreviewRequest, markCodePreviewUnavailable, worker]
   );
 
   useEffect(() => {
@@ -162,7 +164,6 @@ export function CodePreviewPanel({
   }, [markCodePreviewStale, markCodePreviewUnavailable, receiveCodePreviewResult, worker]);
 
   useEffect(() => {
-    currentTargetRef.current = target;
     requestGeneration(target);
   }, [requestGeneration, target]);
 

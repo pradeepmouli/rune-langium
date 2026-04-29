@@ -14,6 +14,7 @@ Updates the worker's current workspace files. May reuse the same payload shape a
 interface PreviewSetFilesMessage {
   type: 'preview:setFiles';
   files: Array<{ uri: string; content: string }>;
+  requestId?: string;
 }
 ```
 
@@ -25,6 +26,7 @@ Requests a preview schema for the selected model type.
 interface PreviewGenerateMessage {
   type: 'preview:generate';
   targetId: string;
+  requestId: string;
 }
 ```
 
@@ -36,6 +38,7 @@ Returned when a preview schema is available.
 interface PreviewResultMessage {
   type: 'preview:result';
   targetId: string;
+  requestId: string;
   schema: FormPreviewSchema;
 }
 ```
@@ -48,6 +51,7 @@ Returned when current files cannot produce a fresh schema, but the UI may keep a
 interface PreviewStaleMessage {
   type: 'preview:stale';
   targetId?: string;
+  requestId: string;
   reason: 'parse-error' | 'generation-error' | 'unsupported-target' | 'no-files';
   message: string;
 }
@@ -60,7 +64,7 @@ interface FormPreviewSchema {
   schemaVersion: 1;
   targetId: string;
   title: string;
-  status: 'ready' | 'unsupported' | 'unavailable';
+  status: 'ready' | 'unsupported';
   fields: PreviewField[];
   unsupportedFeatures?: string[];
   sourceMap?: PreviewSourceMapEntry[];
@@ -88,6 +92,7 @@ interface PreviewSourceMapEntry {
 ## Acceptance Contract
 
 - The UI must treat `schemaVersion !== 1` as unavailable.
+- The UI must ignore preview worker messages whose `requestId` does not match the latest in-flight request for the selected target.
 - Unknown or unsupported fields must render as unsupported rows, not editable controls.
 - The UI must validate sample values according to `required`, `kind`, `enumValues`, and `cardinality`.
 - Sample values are UI-only state and must not be written to workspace files by this contract.

@@ -161,6 +161,7 @@ type Foo:
 
     expect(result.parseMode).toBe('main-thread-fallback');
     expect(result.fallbackMessage).toContain('Parser worker unavailable');
+    expect(result.fallbackMessage).toContain('worker boot failed');
   });
 });
 

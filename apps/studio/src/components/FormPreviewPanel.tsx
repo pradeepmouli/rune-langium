@@ -132,6 +132,20 @@ export function FormPreviewPanel({
     [activeSample, applyValidation, schema]
   );
 
+  const handleObjectToggle = useCallback(
+    (field: PreviewField, present: boolean, arrayIndex?: number) => {
+      if (!schema || !activeSample) return;
+      const segments = pathToSegments(field.path, arrayIndex);
+      const nextValues = (
+        present
+          ? setValueAtPath(activeSample.values, segments, buildDefaultObjectValue(field))
+          : removeValueAtPath(activeSample.values, segments)
+      ) as Record<string, unknown>;
+      applyValidation(nextValues, activeSample.validated);
+    },
+    [activeSample, applyValidation, schema]
+  );
+
   const handleReset = useCallback(() => {
     if (!schema) return;
     resetSample(schema.targetId, defaultValues);
@@ -225,6 +239,7 @@ export function FormPreviewPanel({
             onFieldChange={handleFieldChange}
             onArrayAdd={handleArrayAdd}
             onArrayRemove={handleArrayRemove}
+            onObjectToggle={handleObjectToggle}
           />
         ))}
         {schema.unsupportedFeatures?.length ? (
@@ -266,6 +281,7 @@ interface PreviewFieldControlProps {
   onFieldChange: (fieldPath: string, value: unknown, arrayIndex?: number) => void;
   onArrayAdd: (field: PreviewField) => void;
   onArrayRemove: (field: PreviewField, index: number) => void;
+  onObjectToggle: (field: PreviewField, present: boolean, arrayIndex?: number) => void;
   arrayIndex?: number;
 }
 
@@ -277,30 +293,56 @@ function PreviewFieldControl({
   onFieldChange,
   onArrayAdd,
   onArrayRemove,
+  onObjectToggle,
   arrayIndex
 }: PreviewFieldControlProps): ReactElement {
   const fieldPath = formatFieldPath(field.path, arrayIndex);
   const fieldError = sample?.validated ? sample.errors[fieldPath] : undefined;
 
   if (field.kind === 'object') {
+    const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndex));
+    const isPresent = value !== undefined;
     return (
       <fieldset className="space-y-1.5 border border-border p-1.5">
-        <legend className="px-1 text-xs font-medium text-muted-foreground">{field.label}</legend>
+        <legend className="px-1 text-xs font-medium text-muted-foreground">
+          {resolvedFieldLabel(field, arrayIndex)}
+        </legend>
         <FieldMeta field={field} lookupFieldSource={lookupFieldSource} arrayIndex={arrayIndex} />
         <FieldDescription description={field.description} />
-        {field.children?.map((child) => (
-          <PreviewFieldControl
-            key={`${child.path}-${arrayIndex ?? 'root'}`}
-            field={child}
-            sample={sample}
-            lookupFieldSource={lookupFieldSource}
-            onFieldBlur={onFieldBlur}
-            onFieldChange={onFieldChange}
-            onArrayAdd={onArrayAdd}
-            onArrayRemove={onArrayRemove}
-            arrayIndex={arrayIndex}
-          />
-        ))}
+        {!field.required ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
+              onClick={() => onObjectToggle(field, !isPresent, arrayIndex)}
+            >
+              {isPresent
+                ? `Remove ${resolvedFieldLabel(field, arrayIndex)}`
+                : `Add ${resolvedFieldLabel(field, arrayIndex)}`}
+            </button>
+            {!isPresent ? (
+              <span className="text-[11px] text-muted-foreground">
+                Section omitted from the sample.
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {(field.required || isPresent) &&
+          field.children?.map((child) => (
+            <PreviewFieldControl
+              key={`${child.path}-${arrayIndex ?? 'root'}`}
+              field={child}
+              sample={sample}
+              lookupFieldSource={lookupFieldSource}
+              onFieldBlur={onFieldBlur}
+              onFieldChange={onFieldChange}
+              onArrayAdd={onArrayAdd}
+              onArrayRemove={onArrayRemove}
+              onObjectToggle={onObjectToggle}
+              arrayIndex={arrayIndex}
+            />
+          ))}
+        {fieldError ? <FieldError message={fieldError} /> : null}
       </fieldset>
     );
   }
@@ -350,6 +392,7 @@ function PreviewFieldControl({
                   onFieldChange={onFieldChange}
                   onArrayAdd={onArrayAdd}
                   onArrayRemove={onArrayRemove}
+                  onObjectToggle={onObjectToggle}
                   arrayIndex={index}
                 />
               </div>
@@ -533,14 +576,25 @@ function buildDefaultValue(field: PreviewField): unknown {
     case 'enum':
       return field.required ? (field.enumValues?.[0]?.value ?? '') : '';
     case 'object':
-      return Object.fromEntries(
-        (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildDefaultValue(child)])
-      );
+      return field.required
+        ? Object.fromEntries(
+            (field.children ?? []).map((child) => [
+              fieldLeafKey(child.path),
+              buildDefaultValue(child)
+            ])
+          )
+        : undefined;
     case 'array':
       return [];
     default:
       return '';
   }
+}
+
+function buildDefaultObjectValue(field: PreviewField): Record<string, unknown> {
+  return Object.fromEntries(
+    (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildDefaultValue(child)])
+  );
 }
 
 function getFieldMetaChips(field: PreviewField): string[] {
@@ -640,6 +694,38 @@ function setValueAtPath(
       ? { ...(value as Record<string, unknown>) }
       : {};
   record[head] = setValueAtPath(record[head], rest, nextValue);
+  return record;
+}
+
+function removeValueAtPath(value: unknown, segments: Array<string | number>): unknown {
+  if (segments.length === 0) {
+    return undefined;
+  }
+  const [head, ...rest] = segments;
+  if (head === undefined) {
+    return value;
+  }
+
+  if (typeof head === 'number') {
+    if (!Array.isArray(value)) return value;
+    const next = [...value];
+    if (rest.length === 0) {
+      next.splice(head, 1);
+      return next;
+    }
+    next[head] = removeValueAtPath(next[head], rest);
+    return next;
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return value;
+  }
+  const record = { ...(value as Record<string, unknown>) };
+  if (rest.length === 0) {
+    delete record[head];
+    return record;
+  }
+  record[head] = removeValueAtPath(record[head], rest);
   return record;
 }
 

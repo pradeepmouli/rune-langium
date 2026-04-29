@@ -287,7 +287,7 @@ describe('codegen-worker code preview messages', () => {
     });
   });
 
-  it('preserves the last codegen request id when file sync messages use a different id', async () => {
+  it('uses the latest codegen file-sync request id for regenerated output', async () => {
     generateMock.mockReturnValue([
       {
         relativePath: 'trade.zod.ts',
@@ -314,14 +314,14 @@ describe('codegen-worker code preview messages', () => {
     dispatch({
       type: 'codegen:setFiles',
       files: [{ uri: 'file:///trade.rosetta', content: 'namespace demo\n\ntype Trade:' }],
-      requestId: 'preview:demo.Trade:3'
+      requestId: 'codegen:zod:8'
     });
     await flushWorker();
 
     expect(scope.postMessage).toHaveBeenLastCalledWith({
       type: 'codegen:result',
       target: 'zod',
-      requestId: 'codegen:zod:7',
+      requestId: 'codegen:zod:8',
       files: [
         {
           relativePath: 'trade.zod.ts',

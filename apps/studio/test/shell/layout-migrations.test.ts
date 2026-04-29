@@ -126,6 +126,7 @@ describe('sanitizeLayout (T063)', () => {
   });
 
   it('rebuilds malformed factory layouts instead of throwing during active-tab normalization', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const malformed = {
       version: 1,
       writtenBy: '0.1.0',
@@ -150,5 +151,47 @@ describe('sanitizeLayout (T063)', () => {
 
     expect(out.writtenBy).toBe('0.2.0');
     expect(out.dockview.columns).toHaveLength(4);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[layout-migrations] reset invalid saved layout to defaults'
+    );
+  });
+
+  it('rebuilds when dropping obsolete tabs leaves a required factory group empty', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stale = {
+      version: 1,
+      writtenBy: '0.1.0',
+      dockview: {
+        shape: 'factory',
+        columns: [
+          { component: 'workspace.fileTree' },
+          {
+            active: 'workspace.editor',
+            tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
+          },
+          { component: 'workspace.visualPreview' },
+          {
+            active: 'workspace.formPreview',
+            tabs: [{ component: 'workspace.legacyFormPreview' }]
+          }
+        ],
+        bottomGroup: {
+          active: 'workspace.problems',
+          collapsed: false,
+          tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
+        }
+      }
+    };
+
+    const out = sanitizeLayout(stale, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    if (!out.dockview || out.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected');
+    }
+
+    expect(out.dockview.columns).toHaveLength(4);
+    expect(out.dockview.columns[3].active).toBe('workspace.formPreview');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[layout-migrations] reset invalid saved layout to defaults'
+    );
   });
 });

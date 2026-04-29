@@ -218,6 +218,28 @@ describe('preview worker message helpers', () => {
       })
     ).toBe(true);
     expect(isPreviewWorkerMessage({ type: 'codegen:outdated' })).toBe(false);
+    expect(
+      isPreviewWorkerMessage({
+        type: 'preview:result',
+        targetId: 'test.preview.Trade',
+        requestId: 'preview:test.preview.Trade:2',
+        schema: {
+          schemaVersion: 2,
+          targetId: 'test.preview.Trade',
+          title: 'Trade',
+          status: 'ready',
+          fields: []
+        }
+      })
+    ).toBe(false);
+    expect(
+      isPreviewWorkerMessage({
+        type: 'preview:stale',
+        requestId: 'preview:test.preview.Trade:3',
+        reason: 'mystery',
+        message: 'No files'
+      })
+    ).toBe(false);
   });
 
   it('recognizes parse-error and generation-error stale payloads as preview worker messages', () => {

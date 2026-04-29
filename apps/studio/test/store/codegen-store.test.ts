@@ -13,9 +13,21 @@ describe('useCodegenStore', () => {
     useCodegenStore.getState().setCodePreviewTarget('typescript');
 
     expect(useCodegenStore.getState().codePreviewTarget).toBe('typescript');
+    expect(useCodegenStore.getState().currentRequestId).toBe('codegen:typescript:0');
     expect(useCodegenStore.getState().snapshot).toMatchObject({
       status: 'waiting',
       target: 'typescript'
+    });
+  });
+
+  it('issues a fresh request id when code preview generation begins', () => {
+    const requestId = useCodegenStore.getState().beginCodePreviewRequest('zod');
+
+    expect(requestId).toMatch(/^codegen:zod:/);
+    expect(useCodegenStore.getState().currentRequestId).toBe(requestId);
+    expect(useCodegenStore.getState().snapshot).toMatchObject({
+      status: 'waiting',
+      target: 'zod'
     });
   });
 
@@ -30,12 +42,10 @@ describe('useCodegenStore', () => {
         }
       ]
     });
-    useCodegenStore
-      .getState()
-      .markCodePreviewStale({
-        target: 'zod',
-        message: 'Fix model errors to refresh the code preview.'
-      });
+    useCodegenStore.getState().markCodePreviewStale({
+      target: 'zod',
+      message: 'Fix model errors to refresh the code preview.'
+    });
 
     expect(useCodegenStore.getState().snapshot).toMatchObject({
       status: 'stale',

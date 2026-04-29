@@ -108,6 +108,23 @@ const validationTradeSchema: FormPreviewSchema = {
   ]
 };
 
+const optionalSectionSchema: FormPreviewSchema = {
+  schemaVersion: 1,
+  targetId: 'test.preview.OptionalTrade',
+  title: 'Optional Trade',
+  status: 'ready',
+  fields: [
+    { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+    {
+      path: 'counterparty',
+      label: 'Counterparty',
+      kind: 'object',
+      required: false,
+      children: [{ path: 'counterparty.name', label: 'Name', kind: 'string', required: true }]
+    }
+  ]
+};
+
 describe('FormPreviewPanel', () => {
   beforeEach(() => {
     usePreviewStore.getState().resetPreviewState();
@@ -269,6 +286,28 @@ describe('FormPreviewPanel', () => {
 
     expect(screen.getByText(/use at most 2 aliases items/i)).toBeInTheDocument();
     expect(screen.getByText(/invalid sample/i)).toBeInTheDocument();
+  });
+
+  it('lets optional object sections stay absent until explicitly added', () => {
+    render(
+      <FormPreviewPanel
+        schema={optionalSectionSchema}
+        status={{ state: 'ready', targetId: optionalSectionSchema.targetId }}
+      />
+    );
+
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(screen.getByText(/section omitted from the sample/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /add counterparty/i }));
+    expect(screen.getByLabelText('Name')).toBeInTheDocument();
+
+    fireEvent.blur(screen.getByLabelText('Name'));
+    expect(screen.getByText(/name is required/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /remove counterparty/i }));
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(screen.queryByText(/name is required/i)).not.toBeInTheDocument();
   });
 
   it('renders synchronized sample data and copies it through the clipboard action', async () => {

@@ -3,14 +3,14 @@
 **Feature Branch**: `016-studio-form-preview`
 **Created**: 2026-04-28
 **Status**: Refined
-**Refined**: 2026-04-28 — Require Studio form preview to use z2f-derived schemas and honor exported subschema mapping defaults
+**Refined**: 2026-04-28 — Require Studio form preview to use generated preview-schema snapshots from the codegen worker
 **Input**: User description: "implement form preview in studio using generated zod schema + minor layout cleanup in studio (default arrangement of panels may need work to support form preview)"
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Preview a generated form for the selected model type (Priority: P1)
 
-A modeller selects a type in Studio and sees a live form preview for that selected type. The preview is derived from the z2f-generated validation schema for the current model, so the rendered fields, required/optional state, list controls, enums, nested objects, schema-level component mappings, and validation messages match what downstream users will experience when the generated schema is used to collect data.
+A modeller selects a type in Studio and sees a live form preview for that selected type. The preview is derived from the latest generated preview-schema snapshot for the current model, so the rendered fields, required/optional state, list controls, enums, nested objects, and validation messages stay aligned with the generated preview metadata Studio can safely consume in-browser.
 
 **Why this priority**: The form preview is the core user value. It lets a modeller check whether the model they are authoring will produce an understandable data-entry surface without leaving Studio or writing a separate application.
 
@@ -18,18 +18,18 @@ A modeller selects a type in Studio and sees a live form preview for that select
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid workspace and a selected model type, **When** the form preview panel is visible, **Then** the panel renders a data-entry form for the selected type using the latest successful z2f-generated schema.
+1. **Given** a valid workspace and a selected model type, **When** the form preview panel is visible, **Then** the panel renders a data-entry form for the selected type using the latest successful generated preview schema.
 2. **Given** the selected type contains required, optional, and repeating fields, **When** the preview renders, **Then** each field communicates its entry requirement and list affordances accurately.
 3. **Given** the selected type references an enumeration, **When** the preview renders, **Then** the enum field is shown as a bounded choice list using the generated enum values and labels.
 4. **Given** the selected type contains nested model references, **When** the preview renders, **Then** nested sections are visible and navigable without losing the parent form context.
-5. **Given** the generated schema reuses an exported subschema with a z2f schema-level component or field mapping, **When** the preview renders that nested subschema, **Then** it honors the same subschema defaults that z2f would apply during generated form output.
+5. **Given** the generated preview schema contains nested unsupported features, **When** the preview renders, **Then** it keeps all supported fields interactive and lists unsupported features without silently hiding them.
 6. **Given** no type is selected, **When** the preview panel is visible, **Then** the panel shows an empty state that invites the user to select a type from the graph, file tree, or source editor.
 
 ---
 
 ### User Story 2 - Validate sample input against the generated schema (Priority: P1)
 
-A modeller enters sample data into the form preview and immediately sees whether the values satisfy the z2f-generated schema. Validation feedback appears at the relevant fields and a compact summary indicates whether the sample instance is valid.
+A modeller enters sample data into the form preview and immediately sees whether the values satisfy the generated preview schema. Validation feedback appears at the relevant fields and a compact summary indicates whether the sample instance is valid.
 
 **Why this priority**: A form preview without validation can only check layout. The feature must help modellers catch schema and cardinality mistakes while they are still editing the model.
 
@@ -95,11 +95,11 @@ A modeller can view the sample data represented by the form preview, copy it, an
 
 ### Edge Cases
 
-- A z2f-generated schema cannot be produced for the selected type because the model has errors: keep the last successful preview if available and mark it stale; otherwise show a clear unavailable state.
+- A preview schema cannot be produced for the selected type because the model has errors: keep the last successful preview if available and mark it stale; otherwise show a clear unavailable state.
 - The selected type has unsupported schema features: render all supported fields, list unsupported features in the preview status, and avoid presenting the sample as fully valid.
 - The selected type has recursive references: prevent infinite rendering and provide a controlled way to add nested items up to a reasonable depth.
 - The model contains multiple types with the same display name in different namespaces: identify the preview target by its fully-qualified model identity, not by display name alone.
-- The selected type or one of its nested fields relies on z2f exported-subschema defaults: preview rendering and validation must follow those nested schema mappings instead of flattening everything to generic controls.
+- The selected type or one of its nested fields uses unsupported preview metadata: keep supported fields interactive, mark the preview as limited, and list unsupported features instead of flattening or silently discarding them.
 - A workspace has no generated schemas yet: show a waiting state during generation, then either render the preview or show a specific generation failure.
 - A previous browser session has an older saved layout: the feature may reset that workspace to the new defaults; preserving old customized layouts is out of scope.
 
@@ -108,9 +108,9 @@ A modeller can view the sample data represented by the form preview, copy it, an
 ### Functional Requirements
 
 - **FR-001**: Studio MUST provide a form preview panel that renders a data-entry form for the currently selected model type.
-- **FR-002**: The form preview MUST be derived from the latest successful z2f-generated Zod schema for the current workspace, not from a separate hand-authored form definition.
+- **FR-002**: The form preview MUST be derived from the latest successful generated preview schema snapshot for the current workspace, not from a separate hand-authored form definition.
 - **FR-003**: The preview MUST represent required fields, optional fields, repeated fields, bounded lists, enum choices, nested objects, and readable field labels from the generated schema.
-- **FR-003a**: When z2f schema-level exported-subschema mappings define a component or nested field defaults, the preview MUST honor those mappings for reused nested schemas in the same way generated z2f form output would.
+- **FR-003a**: When preview generation encounters unsupported nested-schema features, the preview MUST keep supported fields interactive and surface the unsupported features explicitly.
 - **FR-004**: The preview MUST validate sample input against the same generated schema used to render the preview and MUST show field-level validation messages.
 - **FR-005**: The preview MUST show an overall sample status with at least these states: waiting for generation, valid, invalid, stale, and unavailable.
 - **FR-006**: When the model changes and schema generation succeeds, the preview MUST update to match the latest generated schema while preserving the selected type when it can be resolved.
@@ -137,8 +137,8 @@ A modeller can view the sample data represented by the form preview, copy it, an
 ### Key Entities
 
 - **Form preview target**: The currently selected model type, identified by namespace and type identity, for which Studio renders a preview form.
-- **Generated schema snapshot**: The latest successful generated Zod schema set for the workspace, including enough metadata to locate the schema for a selected type.
-- **z2f preview mapping**: The z2f-derived schema metadata, including exported-subschema component and field defaults that must carry into nested preview rendering.
+- **Generated preview schema snapshot**: The latest successful serializable preview-schema set for the workspace, including enough metadata to locate the schema for a selected type.
+- **Unsupported preview metadata**: Generated nested-schema features the current preview renderer cannot expand and must therefore report to the user.
 - **Preview sample**: The in-memory values entered into the form preview for the selected target. It is separate from the authored model.
 - **Preview status**: The panel state that communicates whether the preview is waiting, valid, invalid, stale, or unavailable.
 - **Studio mode layout**: The default workspace arrangement that maps Navigate to the left, Edit to the middle, Preview to the right, Visualize to graph exploration, and Problems/Messages to bottom utilities.
@@ -158,8 +158,8 @@ A modeller can view the sample data represented by the form preview, copy it, an
 
 ## Assumptions
 
-- The code generation work that emits z2f-compatible Zod schemas for Rune models is available to Studio before this feature is implemented.
-- The form preview should reuse z2f behavior rather than introducing a second independent schema-to-form interpretation path.
+- The code generation work can emit serializable preview-schema snapshots from the same Rune model analysis already used for Studio code generation.
+- The form preview should consume those preview-schema snapshots rather than executing generated source in the browser.
 - The form preview is scoped to the selected model type, not to generating a complete multi-page application.
 - This feature previews and validates sample data only; importing sample data back into the model is out of scope.
 - The default layout uses a grouped mode model: Navigate, Edit, Visualize, and Preview.
