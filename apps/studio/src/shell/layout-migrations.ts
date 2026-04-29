@@ -42,7 +42,11 @@ export function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayo
     droppedAny = true;
   });
   if (cloned.dockview?.shape === 'factory') {
-    normalizedActive = normalizeFactoryActives(cloned.dockview);
+    const activeResult = normalizeFactoryActives(cloned.dockview);
+    if (activeResult === 'invalid-shape') {
+      return buildDefaultLayout(ctx);
+    }
+    normalizedActive = activeResult;
   }
   if (droppedAny) {
     // eslint-disable-next-line no-console
@@ -94,11 +98,20 @@ function walkAndDrop(node: unknown, onDrop: () => void): void {
   }
 }
 
-function normalizeFactoryActives(shape: FactoryShape): boolean {
+function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape' {
   let normalized = false;
   const groups = [shape.columns[1], shape.columns[3], shape.bottomGroup];
   for (const group of groups) {
+    if (!group || !('tabs' in group) || !Array.isArray(group.tabs) || group.tabs.length === 0) {
+      return 'invalid-shape';
+    }
+    if (typeof group.active !== 'string') {
+      return 'invalid-shape';
+    }
     const components = group.tabs.map((tab) => tab.component);
+    if (components.some((component) => typeof component !== 'string')) {
+      return 'invalid-shape';
+    }
     if (components.includes(group.active)) continue;
     const [first] = components;
     if (!first) {

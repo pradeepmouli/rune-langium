@@ -116,6 +116,14 @@ describe('App workspace restore on mount (T027/US2)', () => {
 
   it('restores the most-recent workspace on mount when one exists', async () => {
     await saveWorkspace(makeWorkspace('ws-restored', 'Restored Project'));
+    await saveWorkspaceFiles('ws-restored', [
+      {
+        name: 'trade.rosetta',
+        path: 'trade.rosetta',
+        content: 'namespace restored.project\n\ntype Trade:\n  tradeDate date (1..1)\n',
+        dirty: false
+      }
+    ]);
     render(<App />);
     await waitFor(
       () => {
@@ -161,5 +169,17 @@ describe('App workspace restore on mount (T027/US2)', () => {
     });
     expect(document.body).not.toHaveAttribute('data-workspace-active', 'true');
     spy.mockRestore();
+  });
+
+  it('falls back to the start page when the most recent workspace has no saved files', async () => {
+    await saveWorkspace(makeWorkspace('ws-empty', 'Empty Project'));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Load Rune DSL Models/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('workspace-restored')).not.toBeInTheDocument();
+    expect(document.body).not.toHaveAttribute('data-workspace-active', 'true');
   });
 });

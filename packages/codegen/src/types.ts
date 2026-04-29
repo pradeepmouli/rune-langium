@@ -149,7 +149,8 @@ export interface FormPreviewSchema {
  * Options for `generatePreviewSchemas()`.
  *
  * `targetId` narrows generation to a single data type / form target. When
- * omitted, schemas are generated for every supported target in the document set.
+ * omitted, schemas are generated for every data target in the document set;
+ * targets that cannot produce a preview schema are marked as unsupported.
  */
 export interface GeneratePreviewSchemaOptions {
   /** Generate only the schema for this fully-qualified target id. */

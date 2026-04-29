@@ -17,8 +17,10 @@
  *
  * Responds with:
  *   codegen:result   — On success; returns the full generated file set for the target.
- *   codegen:outdated — When files are missing or contain parse/validation errors.
+ *   codegen:outdated — When files are missing or contain parse errors.
  *   codegen:error    — When generation itself fails unexpectedly.
+ *   preview:result   — On success; returns the generated form-preview schema.
+ *   preview:stale    — When preview inputs are missing, unsupported, or stale.
  */
 
 import type { LangiumDocument } from 'langium';
@@ -205,9 +207,6 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
 
     if (msg.type === 'codegen:setFiles') {
       currentFiles = msg.files;
-      if (msg.requestId) {
-        lastCodegenRequestId = msg.requestId;
-      }
       runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
     } else if (msg.type === 'codegen:generate') {
       if (msg.target !== undefined) {

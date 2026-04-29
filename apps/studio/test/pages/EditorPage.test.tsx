@@ -365,6 +365,13 @@ describe('EditorPage preview target identity', () => {
         .map(([message]) => (message as { requestId?: string }).requestId)
         .filter(Boolean);
       expect(new Set(setFilesRequestIds).size).toBe(setFilesRequestIds.length);
+      const codegenSetFilesMessages = worker.postMessage.mock.calls
+        .map(([message]) => message as { type?: string; requestId?: string })
+        .filter((message) => message.type === 'codegen:setFiles');
+      expect(codegenSetFilesMessages.length).toBeGreaterThan(0);
+      expect(codegenSetFilesMessages.every((message) => message.requestId === undefined)).toBe(
+        true
+      );
     });
   });
 

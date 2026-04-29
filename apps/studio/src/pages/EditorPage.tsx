@@ -391,8 +391,7 @@ export function EditorPage({
     try {
       codegenWorker.postMessage({
         type: 'codegen:setFiles',
-        files: previewFiles,
-        requestId
+        files: previewFiles
       });
       codegenWorker.postMessage(createPreviewSetFilesMessage(previewFiles, requestId));
     } catch (error) {

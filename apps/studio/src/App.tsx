@@ -159,16 +159,21 @@ export function App() {
   }, []);
 
   const restoreWorkspace = useCallback(
-    async (workspace: WorkspaceRecord) => {
+    async (workspace: WorkspaceRecord): Promise<boolean> => {
+      const restoredFiles = await loadWorkspaceFiles(workspace.id);
+      if (restoredFiles.length === 0) {
+        setRestoredWorkspace(null);
+        return false;
+      }
+
       const nextWorkspace = {
         ...workspace,
         lastOpenedAt: new Date().toISOString()
       };
       await persistence.saveWorkspace(nextWorkspace);
       setRestoredWorkspace(nextWorkspace);
-
-      const restoredFiles = await loadWorkspaceFiles(nextWorkspace.id);
       await syncWorkspaceToEditor(restoredFiles);
+      return true;
     },
     [syncWorkspaceToEditor]
   );
@@ -198,7 +203,11 @@ export function App() {
           return;
         }
         setBootState('restoring');
-        await restoreWorkspace(ws);
+        const restored = await restoreWorkspace(ws);
+        if (!restored) {
+          setBootState('start');
+          return;
+        }
         setBootState('restored');
       } catch (err) {
         if (cancelled) return;
@@ -388,7 +397,13 @@ export function App() {
           return;
         }
         setBootState('restoring');
-        await restoreWorkspace(ws);
+        const restored = await restoreWorkspace(ws);
+        if (!restored) {
+          setBootState('start');
+          setWorkspaceError(null);
+          setWorkspaceNotice(null);
+          return;
+        }
         setBootState('restored');
         setWorkspaceError(null);
         setWorkspaceNotice(null);

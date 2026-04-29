@@ -7,6 +7,10 @@ description: "Documentation site and generated agent skills for rune-langium API
 
 Documentation site and generated agent skills for rune-langium APIs
 
+Use `RuneTypeGraph` for an interactive type graph, the exported panel and
+editor components for custom shells, and the store/layout helpers when you
+need to embed the editor in a larger application.
+
 ## When to Use
 
 **Use this skill when:**

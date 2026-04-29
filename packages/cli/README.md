@@ -1,23 +1,11 @@
 # @rune-langium/cli
 
-Command-line interface for the Rune DSL, powered by [Langium](https://langium.org).
+> Parse, validate, and generate Rune DSL workspaces from the command line.
 
-## Installation
+Command-line entry points for batch Rune DSL parsing, validation, and code generation.
 
-```bash
-npm install -g @rune-langium/cli
-```
+## Features
 
-## Usage
-
-```bash
-# Parse and validate Rune DSL files
-rune-dsl parse <file.rosetta>
-
-# See all available commands
-rune-dsl --help
-```
-
-## License
-
-Apache-2.0
+- `rune-dsl parse <paths...>`
+- `rune-dsl validate <paths...>`
+- `rune-dsl generate --input <paths...> --language <lang> --output <dir>`

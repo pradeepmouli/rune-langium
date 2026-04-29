@@ -13,7 +13,7 @@ const skillsRoot = join(docsRoot, 'skills');
 const curatedRouterSkill = join(repoRoot, 'skills', 'rune-langium', 'SKILL.md');
 const generatedRouterSkill = join(skillsRoot, 'rune-langium', 'SKILL.md');
 
-if (existsSync(curatedRouterSkill)) {
+if (existsSync(curatedRouterSkill) && existsSync(generatedRouterSkill)) {
   cpSync(curatedRouterSkill, generatedRouterSkill);
 }
 
@@ -25,9 +25,20 @@ for (const entry of readdirSync(skillsRoot, { withFileTypes: true })) {
   if (!existsSync(skillPath)) {
     continue;
   }
-  const content = readFileSync(skillPath, 'utf8').replaceAll(
-    'references/classes/',
-    'references/classes.md'
-  );
+  const skillDir = join(skillsRoot, entry.name);
+  let content = readFileSync(skillPath, 'utf8');
+
+  content = rewriteReferenceLink(content, skillDir, 'functions');
+  content = rewriteReferenceLink(content, skillDir, 'classes');
+
   writeFileSync(skillPath, content);
+}
+
+function rewriteReferenceLink(content, skillDir, section) {
+  const markdownRef = `references/${section}.md`;
+  const directoryRef = `references/${section}/`;
+  const hasMarkdownRef = existsSync(join(skillDir, markdownRef));
+  const preferredRef = hasMarkdownRef ? markdownRef : directoryRef;
+  const alternateRef = hasMarkdownRef ? directoryRef : markdownRef;
+  return content.replaceAll(alternateRef, preferredRef);
 }

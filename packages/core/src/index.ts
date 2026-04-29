@@ -1,6 +1,20 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+/**
+ * @packageDocumentation
+ *
+ * Parse `.rosetta` source into typed ASTs, build cross-file workspaces, and
+ * serialize models back to source text.
+ *
+ * @remarks
+ * Use `parse()` for a single self-contained document, `parseWorkspace()` when
+ * files reference each other, and `createRuneDslServices()` when you need raw
+ * Langium services for custom tooling. The serializer exports are best for
+ * AST-driven workflows, tests, and code transformations that do not need to
+ * preserve original formatting.
+ */
+
 // Core AST types — re-export generated types
 export * from './generated/ast.js';
 

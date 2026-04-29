@@ -2,6 +2,19 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
+ * @packageDocumentation
+ *
+ * Generate TypeScript, Zod, JSON Schema, and form-preview metadata from parsed
+ * Rune DSL documents.
+ *
+ * @remarks
+ * Use `generate()` when you need emitted files for a concrete target, and
+ * `generatePreviewSchemas()` when UI tooling needs structured field metadata and
+ * source maps for a selected data type. This package expects parsed Langium
+ * documents from `@rune-langium/core`.
+ */
+
+/**
  * @rune-langium/codegen — Public API entry point.
  *
  * This module is the primary library entry point for the package. Internal

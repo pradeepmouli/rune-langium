@@ -7,6 +7,11 @@ description: Documentation site and generated agent skills for rune-langium APIs
 
 Documentation site and generated agent skills for rune-langium APIs
 
+Use `generate()` when you need emitted files for a concrete target, and
+`generatePreviewSchemas()` when UI tooling needs structured field metadata and
+source maps for a selected data type. This package expects parsed Langium
+documents from `@rune-langium/core`.
+
 ## Configuration
 
 2 configuration interfaces — see references/config.md for details.

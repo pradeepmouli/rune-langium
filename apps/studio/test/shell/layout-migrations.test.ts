@@ -124,4 +124,31 @@ describe('sanitizeLayout (T063)', () => {
       '[layout-migrations] normalized invalid active tabs in saved layout'
     );
   });
+
+  it('rebuilds malformed factory layouts instead of throwing during active-tab normalization', () => {
+    const malformed = {
+      version: 1,
+      writtenBy: '0.1.0',
+      dockview: {
+        shape: 'factory',
+        columns: [
+          { component: 'workspace.fileTree' },
+          { active: 'workspace.editor', tabs: [{ component: 'workspace.editor' }] }
+        ],
+        bottomGroup: {
+          active: 'workspace.problems',
+          collapsed: false,
+          tabs: [{ component: 'workspace.problems' }]
+        }
+      }
+    };
+
+    const out = sanitizeLayout(malformed, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    if (!out.dockview || out.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected');
+    }
+
+    expect(out.writtenBy).toBe('0.2.0');
+    expect(out.dockview.columns).toHaveLength(4);
+  });
 });

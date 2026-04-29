@@ -1,6 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+/**
+ * @packageDocumentation
+ *
+ * ReactFlow-based graph and form components for exploring and editing Rune DSL
+ * models in the browser.
+ *
+ * @remarks
+ * Use `RuneTypeGraph` for an interactive type graph, the exported panel and
+ * editor components for custom shells, and the store/layout helpers when you
+ * need to embed the editor in a larger application.
+ */
+
 // @rune-langium/visual-editor — Public API
 
 // Main component

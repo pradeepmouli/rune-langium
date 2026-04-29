@@ -38,7 +38,7 @@ This repository is designed for multi-agent collaboration (Copilot, Claude, Gemi
 - TypeScript 5.x (strict mode) + React 19 (peer), React Hook Form 7+ (peer), Zod v4 (peer), (013-z2f-editor-migration)
 - N/A (in-memory editor state; persistence handled by the graph store (013-z2f-editor-migration)
 - TypeScript 5.x strict mode, React 19, Vite 8 + `dockview-react`, CodeMirror 6, `@rune-langium/codegen`, `@rune-langium/core`, `@rune-langium/visual-editor`, React Hook Form 7, Zod v4, `@zod-to-form/*` where reusable for rendering metadata (016-studio-form-preview)
-- Browser workspace state and layout records already use IndexedDB-backed Studio persistence; form preview sample state is in-memory only (016-studio-form-preview)
+- Workspace metadata and saved layouts persist in IndexedDB while browser workspace files live in OPFS; form preview sample state is in-memory only (016-studio-form-preview)
 
 ## Recent Changes
 - 013-z2f-editor-migration: Added TypeScript 5.x (strict mode) + React 19 (peer), React Hook Form 7+ (peer), Zod v4 (peer),

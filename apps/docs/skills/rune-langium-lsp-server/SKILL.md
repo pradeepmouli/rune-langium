@@ -7,6 +7,11 @@ description: "Documentation site and generated agent skills for rune-langium API
 
 Documentation site and generated agent skills for rune-langium APIs
 
+Use `createRuneLspServer()` when you need diagnostics, hover, completion, and
+go-to-definition for `.rosetta` files in an editor or web app. Reach for
+`createConnectionAdapter()` when tests or nonstandard transports need to plug
+into the same server lifecycle.
+
 ## When to Use
 
 **Use this skill when:**

@@ -234,3 +234,101 @@ describe('codegen-worker preview messages', () => {
     });
   });
 });
+
+describe('codegen-worker code preview messages', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    generateMock.mockReset();
+    generatePreviewSchemasMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('posts codegen:result for the requested target after files are loaded', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'trade.zod.ts',
+        content: 'export const Trade = z.object({});',
+        sourceMap: []
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace demo' }]
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'codegen:generate',
+      target: 'zod',
+      requestId: 'codegen:zod:1'
+    });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledWith(expect.any(Array), { target: 'zod' });
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'codegen:result',
+      target: 'zod',
+      requestId: 'codegen:zod:1',
+      files: [
+        {
+          relativePath: 'trade.zod.ts',
+          content: 'export const Trade = z.object({});',
+          sourceMap: []
+        }
+      ]
+    });
+  });
+
+  it('preserves the last codegen request id when file sync messages use a different id', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'trade.zod.ts',
+        content: 'export const Trade = z.object({});',
+        sourceMap: []
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace demo' }]
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'codegen:generate',
+      target: 'zod',
+      requestId: 'codegen:zod:7'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace demo\n\ntype Trade:' }],
+      requestId: 'preview:demo.Trade:3'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'codegen:result',
+      target: 'zod',
+      requestId: 'codegen:zod:7',
+      files: [
+        {
+          relativePath: 'trade.zod.ts',
+          content: 'export const Trade = z.object({});',
+          sourceMap: []
+        }
+      ]
+    });
+  });
+});

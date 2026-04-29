@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { SourceEditor } from '../../src/components/SourceEditor.js';
 import type { SourceEditorProps } from '../../src/components/SourceEditor.js';
 
@@ -182,6 +182,33 @@ describe('SourceEditor', () => {
 
       ref.current?.revealPosition({ line: 2, character: 3 });
 
+      expect(lastEditorView?.dispatch).toHaveBeenCalledWith({
+        selection: { anchor: 12 },
+        effects: { anchor: 12 }
+      });
+      expect(lastEditorView?.focus).toHaveBeenCalled();
+    });
+
+    it('switches files before revealing a source position in another tab', async () => {
+      const ref = React.createRef<import('../../src/components/SourceEditor.js').SourceEditorRef>();
+      const onFileSelect = vi.fn();
+      render(
+        <SourceEditor
+          ref={ref}
+          files={sampleFiles}
+          activeFile="/workspace/model.rosetta"
+          onFileSelect={onFileSelect}
+        />
+      );
+
+      await act(async () => {
+        ref.current?.revealPosition({ line: 2, character: 3 }, '/workspace/types.rosetta');
+      });
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      expect(onFileSelect).toHaveBeenCalledWith('/workspace/types.rosetta');
+      const typesTab = screen.getByText('types.rosetta').closest('button')!;
+      expect(typesTab.getAttribute('aria-selected')).toBe('true');
       expect(lastEditorView?.dispatch).toHaveBeenCalledWith({
         selection: { anchor: 12 },
         effects: { anchor: 12 }
