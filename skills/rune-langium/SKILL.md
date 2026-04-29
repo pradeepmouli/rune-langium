@@ -1,24 +1,50 @@
 ---
 name: rune-langium
-description: "Langium port for Rune DSL tooling Use when working with rune, rosetta, dsl, langium, cdm, isda, drr, finos, language-server, lsp, visual-editor, reactflow."
+description: "Router skill for the rune-langium monorepo. Use it to choose the right package skill before working in core, cli, lsp-server, codegen, or visual-editor."
 license: SEE LICENSE IN LICENSE
 ---
 
 # rune-langium
 
-Langium port for Rune DSL tooling
+Use this router when the task spans the monorepo or you are not yet sure which package owns the behavior.
 
-## When to Use
+## Route by task
 
-- Working with rune, rosetta, dsl, langium, cdm, isda, drr, finos, language-server, lsp, visual-editor, reactflow
-- API surface: 2 functions, 1 types
+1. Parsing, ASTs, serializers, or `.rosetta` validation → `rune-langium-core`
+2. CLI commands or terminal workflows → `rune-langium-cli`
+3. Language-server integration, WebSocket LSP, diagnostics, hover, or completion → `rune-langium-lsp-server`
+4. Code generation, preview schemas, or exported source maps → `rune-langium-codegen`
+5. Graph rendering, React Flow nodes, layout, or visual-editor state → `rune-langium-visual-editor`
 
-## Quick Reference
+## Quick package guide
 
-**rune-dsl-server:** `createRuneLspServer`, `RuneLspServer`
-**connection-adapter:** `createConnectionAdapter`
+### core → `rune-langium-core`
 
-## Links
+- Parse a single file or a full workspace
+- Validate cross-file references
+- Serialize models back to Rune/Rosetta text
 
-- [Repository](https://github.com/pradeepmouli/rune-langium)
-- Author: Pradeep Mouli <pmouli@mac.com>
+### cli → `rune-langium-cli`
+
+- Run the `rune-dsl` command
+- Wire parser/codegen flows into shell scripts or local tooling
+
+### lsp-server → `rune-langium-lsp-server`
+
+- Embed or host the Rune DSL language server
+- Bridge Monaco/CodeMirror/browser editors to LSP features
+
+### codegen → `rune-langium-codegen`
+
+- Generate derived artifacts from parsed documents
+- Build or consume form-preview schemas and code-preview source maps
+
+### visual-editor → `rune-langium-visual-editor`
+
+- Render and interact with Rune graphs in React
+- Work on node rendering, layout, or store behavior
+
+## Rules
+
+- Do not load every package skill at once; start with the owning package.
+- If a task crosses package boundaries, begin with the foundational package and then move outward.

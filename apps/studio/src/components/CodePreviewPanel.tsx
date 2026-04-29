@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
+import type { Target } from '@rune-langium/codegen';
 import { refactoryDark } from '../lang/refactory-dark-theme.js';
-import type { Target, SourceMapEntry } from '@rune-langium/codegen';
 import { TargetSwitcher } from './TargetSwitcher.js';
-import { useCodegenStore } from '../store/codegen-store.js';
+import {
+  useCodegenStore,
+  type CodePreviewFile,
+  type CodePreviewSnapshot
+} from '../store/codegen-store.js';
 import { CODE_PREVIEW_PANEL_ID, TARGET_LABELS } from './codegen-ui.js';
+import { uriToPath } from '../utils/uri.js';
 
 interface SourcePosition {
   line: number;
@@ -16,38 +21,44 @@ interface SourcePosition {
 }
 
 export interface SourceEditorHandle {
-  revealLineInCenter(line: number): void;
-  setSelection(range: SourcePosition): void;
+  revealPosition(position: SourcePosition, filePath?: string): void;
 }
 
 interface CodegenResultMessage {
   type: 'codegen:result';
   target: Target;
-  relativePath: string;
-  content: string;
-  sourceMap: SourceMapEntry[];
+  requestId: string;
+  files: CodePreviewFile[];
 }
 
 interface CodegenOutdatedMessage {
   type: 'codegen:outdated';
+  target: Target;
+  requestId: string;
+  message: string;
 }
 
-type CodegenWorkerMessage = CodegenResultMessage | CodegenOutdatedMessage;
+interface CodegenErrorMessage {
+  type: 'codegen:error';
+  target: Target;
+  requestId: string;
+  message: string;
+}
 
-type Status = 'generating' | 'generated' | 'outdated' | 'unavailable';
+type CodegenWorkerMessage = CodegenResultMessage | CodegenOutdatedMessage | CodegenErrorMessage;
 
-function statusLabel(status: Status, target: Target): string {
-  switch (status) {
-    case 'generating':
-      return 'Generating\u2026';
-    case 'generated':
+function statusLabel(snapshot: CodePreviewSnapshot, target: Target): string {
+  switch (snapshot.status) {
+    case 'waiting':
+      return 'Generating…';
+    case 'ready':
       return `Generated (${TARGET_LABELS[target]})`;
-    case 'outdated':
-      return 'Outdated \u2014 fix errors to refresh';
+    case 'stale':
+      return 'Outdated — fix errors to refresh';
     case 'unavailable':
-      return 'Preview unavailable \u2014 reload Studio';
+      return 'Preview unavailable — reload Studio';
     default: {
-      const exhaustiveCheck: never = status;
+      const exhaustiveCheck: never = snapshot;
       throw new Error(`Unknown code preview status: ${String(exhaustiveCheck)}`);
     }
   }
@@ -58,58 +69,85 @@ export interface CodePreviewPanelProps {
   sourceEditorRef: SourceEditorHandle | null;
 }
 
+function activeFileFromSnapshot(snapshot: CodePreviewSnapshot): CodePreviewFile | undefined {
+  if (!('files' in snapshot) || !snapshot.files) {
+    return undefined;
+  }
+  return (
+    snapshot.files.find((file) => file.relativePath === snapshot.activeRelativePath) ??
+    snapshot.files[0]
+  );
+}
+
 export function CodePreviewPanel({
   worker,
   sourceEditorRef
 }: CodePreviewPanelProps): React.ReactElement {
   const target = useCodegenStore((s) => s.codePreviewTarget);
+  const snapshot = useCodegenStore((s) => s.snapshot);
   const setCodePreviewTarget = useCodegenStore((s) => s.setCodePreviewTarget);
+  const setActiveCodePreviewFile = useCodegenStore((s) => s.setActiveCodePreviewFile);
+  const receiveCodePreviewResult = useCodegenStore((s) => s.receiveCodePreviewResult);
+  const markCodePreviewStale = useCodegenStore((s) => s.markCodePreviewStale);
+  const markCodePreviewUnavailable = useCodegenStore((s) => s.markCodePreviewUnavailable);
+  const activeFile = useMemo(() => activeFileFromSnapshot(snapshot), [snapshot]);
 
-  const [status, setStatus] = useState<Status>('generating');
-  // Retain the last successfully generated content so the panel doesn't blank on outdated
-  const [lastContent, setLastContent] = useState<string>('');
-  const sourceMapRef = useRef<SourceMapEntry[]>([]);
   const currentTargetRef = useRef<Target>(target);
+  const currentRequestIdRef = useRef('codegen:zod:0');
+  const nextRequestSequenceRef = useRef(0);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
-  // Kept current so the click handler always reads the latest ref without
-  // needing to be recreated (avoids rebuilding the editor extension).
   const sourceEditorRefRef = useRef(sourceEditorRef);
+  const activeFileRef = useRef<CodePreviewFile | undefined>(undefined);
   sourceEditorRefRef.current = sourceEditorRef;
+  activeFileRef.current = activeFile;
 
   const requestGeneration = useCallback(
     (requestedTarget: Target) => {
       currentTargetRef.current = requestedTarget;
-      setStatus('generating');
+      const requestId = `codegen:${requestedTarget}:${++nextRequestSequenceRef.current}`;
+      currentRequestIdRef.current = requestId;
       try {
-        worker.postMessage({ type: 'codegen:generate', target: requestedTarget });
+        worker.postMessage({ type: 'codegen:generate', target: requestedTarget, requestId });
       } catch (err) {
         console.error('[CodePreviewPanel] Failed to request code generation:', err);
-        setStatus('unavailable');
+        markCodePreviewUnavailable({
+          target: requestedTarget,
+          message: 'Code preview worker is unavailable.'
+        });
       }
     },
-    [worker]
+    [markCodePreviewUnavailable, worker]
   );
 
   useEffect(() => {
     function handleMessage(e: MessageEvent<CodegenWorkerMessage>) {
       const msg = e.data;
-      if (msg.type === 'codegen:result') {
-        if (msg.target !== currentTargetRef.current) {
-          return;
-        }
-        setStatus('generated');
-        setLastContent(msg.content);
-        sourceMapRef.current = msg.sourceMap;
-      } else if (msg.type === 'codegen:outdated') {
-        // Keep lastContent — show previous output with an outdated badge
-        setStatus('outdated');
+      if (
+        msg.target !== currentTargetRef.current ||
+        msg.requestId !== currentRequestIdRef.current
+      ) {
+        return;
+      }
+      switch (msg.type) {
+        case 'codegen:result':
+          receiveCodePreviewResult({ target: msg.target, files: msg.files });
+          break;
+        case 'codegen:outdated':
+          markCodePreviewStale({ target: msg.target, message: msg.message });
+          break;
+        case 'codegen:error':
+          markCodePreviewUnavailable({ target: msg.target, message: msg.message });
+          break;
       }
     }
 
     function handleWorkerError(event: ErrorEvent) {
       console.error('[CodePreviewPanel] Worker error:', event.message, event.error);
-      setStatus('unavailable');
+      markCodePreviewUnavailable({
+        target: currentTargetRef.current,
+        message: 'Code preview worker crashed — reload Studio.'
+      });
     }
 
     const messageListener = handleMessage as EventListener;
@@ -121,7 +159,7 @@ export function CodePreviewPanel({
       worker.removeEventListener('message', messageListener);
       worker.removeEventListener('error', errorListener);
     };
-  }, [requestGeneration, worker]);
+  }, [markCodePreviewStale, markCodePreviewUnavailable, receiveCodePreviewResult, worker]);
 
   useEffect(() => {
     currentTargetRef.current = target;
@@ -135,20 +173,18 @@ export function CodePreviewPanel({
     [setCodePreviewTarget]
   );
 
-  // Click-to-navigate: map output line index -> source location via sourceMap
-  const handleLineClick = useCallback(
-    (outputLine: number) => {
-      const ref = sourceEditorRefRef.current;
-      if (!ref) return;
-      const entry = sourceMapRef.current.find((e) => e.outputLine === outputLine);
-      if (!entry) return;
-      ref.revealLineInCenter(entry.sourceLine);
-      ref.setSelection({ line: entry.sourceLine, character: entry.sourceChar });
-    },
-    [] // stable -- reads via refs at call time
-  );
+  const handleLineClick = useCallback((outputLine: number) => {
+    const ref = sourceEditorRefRef.current;
+    const file = activeFileRef.current;
+    if (!ref || !file) return;
+    const entry = file.sourceMap.find((sourceMapEntry) => sourceMapEntry.outputLine === outputLine);
+    if (!entry) return;
+    ref.revealPosition(
+      { line: entry.sourceLine, character: entry.sourceChar },
+      uriToPath(entry.sourceUri)
+    );
+  }, []);
 
-  // Create the CodeMirror editor once on mount.
   useEffect(() => {
     if (!editorContainerRef.current) return;
 
@@ -157,12 +193,12 @@ export function CodePreviewPanel({
       extensions: [
         basicSetup,
         EditorState.readOnly.of(true),
+        EditorView.lineWrapping,
         ...refactoryDark,
         EditorView.domEventHandlers({
           click: (event, view) => {
             const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
             if (pos === null) return;
-            // lineAt returns 1-based line numbers; sourceMap uses 0-based.
             const lineNumber = view.state.doc.lineAt(pos).number - 1;
             handleLineClick(lineNumber);
           }
@@ -180,16 +216,25 @@ export function CodePreviewPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update editor content whenever generated output changes.
   useEffect(() => {
     const view = editorViewRef.current;
     if (!view) return;
+    const nextContent = activeFile?.content ?? '';
     const current = view.state.doc.toString();
-    if (current === lastContent) return;
+    if (current === nextContent) return;
     view.dispatch({
-      changes: { from: 0, to: current.length, insert: lastContent }
+      changes: { from: 0, to: current.length, insert: nextContent }
     });
-  }, [lastContent]);
+  }, [activeFile]);
+
+  const statusMessage =
+    snapshot.status === 'stale' || snapshot.status === 'unavailable' ? snapshot.message : undefined;
+  const selectableFiles =
+    snapshot.status === 'ready' || snapshot.status === 'stale' ? snapshot.files : undefined;
+  const activeRelativePath =
+    snapshot.status === 'ready' || snapshot.status === 'stale'
+      ? snapshot.activeRelativePath
+      : undefined;
 
   return (
     <section
@@ -201,20 +246,53 @@ export function CodePreviewPanel({
       data-component="workspace.codePreview"
       className="flex flex-col h-full overflow-hidden bg-background"
     >
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border shrink-0">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-1.5 shrink-0">
         <TargetSwitcher value={target} onChange={handleTargetChange} />
-        <span
-          className="text-xs text-muted-foreground ml-auto"
-          data-testid="codegen-status"
-          aria-live="polite"
-        >
-          {statusLabel(status, target)}
-        </span>
+        {selectableFiles && selectableFiles.length > 1 ? (
+          <label className="min-w-0 text-xs text-muted-foreground">
+            <span className="sr-only">Generated file</span>
+            <select
+              className="max-w-[18rem] rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+              value={activeRelativePath}
+              onChange={(event) => setActiveCodePreviewFile(event.target.value)}
+              data-testid="codegen-file-select"
+            >
+              {selectableFiles.map((file) => (
+                <option key={file.relativePath} value={file.relativePath}>
+                  {file.relativePath}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <div className="ml-auto min-w-0 text-right">
+          <span
+            className="block text-xs text-muted-foreground"
+            data-testid="codegen-status"
+            aria-live="polite"
+          >
+            {statusLabel(snapshot, target)}
+          </span>
+          {activeFile?.relativePath ? (
+            <span
+              className="block max-w-[22rem] truncate text-[11px] text-muted-foreground"
+              data-testid="codegen-relative-path"
+              title={activeFile.relativePath}
+            >
+              {activeFile.relativePath}
+            </span>
+          ) : null}
+          {statusMessage ? (
+            <span className="block max-w-[22rem] truncate text-[11px] text-muted-foreground">
+              {statusMessage}
+            </span>
+          ) : null}
+        </div>
       </div>
       <div
         ref={editorContainerRef}
         data-testid="code-preview-editor"
-        className="flex-1 overflow-auto"
+        className="min-w-0 flex-1 overflow-auto"
       />
     </section>
   );

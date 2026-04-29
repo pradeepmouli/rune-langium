@@ -14,5 +14,10 @@
   "scss.lint.unknownAtRules": "ignore",
   "files.associations": {
     "*.css": "tailwindcss"
-  }
+},
+"builder.serverUrl": "http://localhost:5173/",
+"builder.command": "",
+"builder.runDevServer": false,
+"builder.autoDetectDevServer": true,
+"builder.launchType": "editor"
 }

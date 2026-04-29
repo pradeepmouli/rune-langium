@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, act, cleanup, fireEvent } from '@testing-library/react';
+import { render, act, cleanup } from '@testing-library/react';
 
-// Reuse same mocks
+// Capture the domEventHandlers argument so tests can invoke the click handler
+// directly — the CodeMirror-based panel no longer has per-line DOM elements.
+const capturedHandlers: { click?: (event: MouseEvent, view: object) => void } = {};
+
 vi.mock('@codemirror/view', () => ({
   EditorView: class MockEditorView {
     dom = document.createElement('div');
@@ -12,7 +15,11 @@ vi.mock('@codemirror/view', () => ({
     dispatch = vi.fn();
     static theme = vi.fn(() => []);
     static updateListener = { of: vi.fn(() => []) };
-    static domEventHandlers = vi.fn(() => []);
+    static lineWrapping = [];
+    static domEventHandlers = vi.fn((handlers: { click?: (e: MouseEvent, v: object) => void }) => {
+      if (handlers.click) capturedHandlers.click = handlers.click;
+      return [];
+    });
     constructor({ parent }: { parent?: Element }) {
       if (parent) parent.appendChild(this.dom);
     }
@@ -40,7 +47,10 @@ import { CodePreviewPanel } from '../../src/components/CodePreviewPanel.js';
 import { useCodegenStore } from '../../src/store/codegen-store.js';
 
 afterEach(() => cleanup());
-beforeEach(() => useCodegenStore.setState({ codePreviewTarget: 'zod' }));
+beforeEach(() => {
+  useCodegenStore.setState({ codePreviewTarget: 'zod' });
+  capturedHandlers.click = undefined;
+});
 
 function makeWorker() {
   return {
@@ -51,102 +61,169 @@ function makeWorker() {
   };
 }
 
+function getMessageHandler(worker: ReturnType<typeof makeWorker>) {
+  return (worker.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
+    | ((e: MessageEvent) => void)
+    | undefined;
+}
+
+/** Returns a fake CodeMirror view whose posAtCoords maps to a given outputLine. */
+function makeFakeView(outputLine: number) {
+  return {
+    posAtCoords: vi.fn((_: { x: number; y: number }) => outputLine),
+    state: { doc: { lineAt: vi.fn((_pos: number) => ({ number: outputLine + 1 })) } }
+  };
+}
+
 describe('CodePreviewPanel — source-map click-to-navigate', () => {
   it('calls revealLineInCenter and setSelection on mapped line click', async () => {
     const w = makeWorker();
-    const sourceEditorRef = { revealLineInCenter: vi.fn(), setSelection: vi.fn() };
-    const { container } = render(
+    const sourceEditorRef = { revealPosition: vi.fn() };
+    render(
       <CodePreviewPanel
         worker={w as unknown as Worker}
         sourceEditorRef={sourceEditorRef as never}
       />
     );
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     const sourceMap = [
-      { outputLine: 2, sourceUri: 'file:///trade.rune', sourceLine: 5, sourceChar: 3 }
+      { outputLine: 2, sourceUri: 'file:///workspace/trade.rune', sourceLine: 5, sourceChar: 3 }
     ];
-    // Deliver a codegen:result with content "line0\nline1\nline2\n" and sourceMap
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
+      getMessageHandler(w)?.({
         data: {
           type: 'codegen:result',
           target: 'zod',
-          relativePath: 'ns.zod.ts',
-          content: 'line0\nline1\nline2\n',
-          sourceMap
+          requestId,
+          files: [{ relativePath: 'ns.zod.ts', content: 'line0\nline1\nline2\n', sourceMap }]
         }
       } as MessageEvent);
     });
 
-    // Click the div with data-line="2" — mapped to sourceLine=5 in the sourceMap
-    const lineEl = container.querySelector('[data-line="2"]');
-    expect(lineEl).toBeTruthy();
+    // Invoke the CodeMirror click handler — posAtCoords returns 2, lineAt(2)
+    // returns { number: 3 }, so lineNumber = 3 - 1 = 2, matching outputLine 2.
     await act(async () => {
-      fireEvent.click(lineEl!);
+      capturedHandlers.click?.(
+        new MouseEvent('click', { clientX: 0, clientY: 0 }),
+        makeFakeView(2)
+      );
     });
 
-    expect(sourceEditorRef.revealLineInCenter).toHaveBeenCalledWith(5);
-    expect(sourceEditorRef.setSelection).toHaveBeenCalledWith({ line: 5, character: 3 });
+    expect(sourceEditorRef.revealPosition).toHaveBeenCalledWith(
+      { line: 5, character: 3 },
+      'trade.rune'
+    );
   });
 
   it('does nothing when clicking with empty source map', async () => {
     const w = makeWorker();
-    const sourceEditorRef = { revealLineInCenter: vi.fn(), setSelection: vi.fn() };
-    const { container } = render(
+    const sourceEditorRef = { revealPosition: vi.fn() };
+    render(
       <CodePreviewPanel
         worker={w as unknown as Worker}
         sourceEditorRef={sourceEditorRef as never}
       />
     );
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
+      getMessageHandler(w)?.({
         data: {
           type: 'codegen:result',
           target: 'zod',
-          relativePath: 'ns.zod.ts',
-          content: 'line0\nline1\n',
-          sourceMap: []
+          requestId,
+          files: [{ relativePath: 'ns.zod.ts', content: 'line0\nline1\n', sourceMap: [] }]
         }
       } as MessageEvent);
     });
-    const lineEl = container.querySelector('[data-line="0"]');
     await act(async () => {
-      if (lineEl) fireEvent.click(lineEl);
+      capturedHandlers.click?.(
+        new MouseEvent('click', { clientX: 0, clientY: 0 }),
+        makeFakeView(0)
+      );
     });
-    expect(sourceEditorRef.revealLineInCenter).not.toHaveBeenCalled();
-    expect(sourceEditorRef.setSelection).not.toHaveBeenCalled();
+    expect(sourceEditorRef.revealPosition).not.toHaveBeenCalled();
   });
 
   it('does nothing when sourceEditorRef is null', async () => {
     const w = makeWorker();
-    const { container } = render(
-      <CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />
-    );
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
+      getMessageHandler(w)?.({
         data: {
           type: 'codegen:result',
           target: 'zod',
-          relativePath: 'ns.zod.ts',
-          content: 'line0\n',
-          sourceMap: [
-            { outputLine: 0, sourceUri: 'file:///trade.rune', sourceLine: 5, sourceChar: 3 }
+          requestId,
+          files: [
+            {
+              relativePath: 'ns.zod.ts',
+              content: 'line0\n',
+              sourceMap: [
+                {
+                  outputLine: 0,
+                  sourceUri: 'file:///workspace/trade.rune',
+                  sourceLine: 5,
+                  sourceChar: 3
+                }
+              ]
+            }
           ]
         }
       } as MessageEvent);
     });
-    const lineEl = container.querySelector('[data-line="0"]');
+    // Invoking the click handler with a null ref must not throw.
     await act(async () => {
-      if (lineEl) fireEvent.click(lineEl);
+      capturedHandlers.click?.(
+        new MouseEvent('click', { clientX: 0, clientY: 0 }),
+        makeFakeView(0)
+      );
     });
-    expect(lineEl).toBeTruthy();
+  });
+
+  it('opens the mapped source file when the source map points at a different file', async () => {
+    const w = makeWorker();
+    const sourceEditorRef = { revealPosition: vi.fn() };
+    render(
+      <CodePreviewPanel
+        worker={w as unknown as Worker}
+        sourceEditorRef={sourceEditorRef as never}
+      />
+    );
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+    await act(async () => {
+      getMessageHandler(w)?.({
+        data: {
+          type: 'codegen:result',
+          target: 'zod',
+          requestId,
+          files: [
+            {
+              relativePath: 'ns.zod.ts',
+              content: 'line0\n',
+              sourceMap: [
+                {
+                  outputLine: 0,
+                  sourceUri: 'file:///workspace/other-file.rosetta',
+                  sourceLine: 9,
+                  sourceChar: 2
+                }
+              ]
+            }
+          ]
+        }
+      } as MessageEvent);
+    });
+
+    await act(async () => {
+      capturedHandlers.click?.(
+        new MouseEvent('click', { clientX: 0, clientY: 0 }),
+        makeFakeView(0)
+      );
+    });
+
+    expect(sourceEditorRef.revealPosition).toHaveBeenCalledWith(
+      { line: 9, character: 2 },
+      'other-file.rosetta'
+    );
   });
 });

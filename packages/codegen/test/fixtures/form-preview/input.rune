@@ -1,0 +1,11 @@
+namespace "test.form.preview"
+version "1"
+
+type Address:
+  street string (1..1)
+  city string (1..1)
+
+type Trade:
+  tradeId string (1..1)
+  tags string (0..*)
+  address Address (1..1)

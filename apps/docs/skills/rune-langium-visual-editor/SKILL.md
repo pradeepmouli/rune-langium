@@ -1,11 +1,11 @@
 ---
 name: rune-langium-visual-editor
-description: "Documentation site for rune-langium Use when: Rendering two or more `RuneTypeGraph` components simultaneously (different...."
+description: "Documentation site and generated agent skills for rune-langium APIs Use when: Rendering two or more `RuneTypeGraph` components simultaneously (different...."
 ---
 
 # @rune-langium/visual-editor
 
-Documentation site for rune-langium
+Documentation site and generated agent skills for rune-langium APIs
 
 ## When to Use
 

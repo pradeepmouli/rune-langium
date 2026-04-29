@@ -1,11 +1,11 @@
 ---
 name: rune-langium-cli
-description: Documentation site for rune-langium
+description: Documentation site and generated agent skills for rune-langium APIs
 ---
 
 # @rune-langium/cli
 
-Documentation site for rune-langium
+Documentation site and generated agent skills for rune-langium APIs
 
 ## Links
 

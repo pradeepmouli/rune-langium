@@ -1,6 +1,7 @@
 {
   "name": "@rune-langium/codegen",
   "version": "0.1.0",
+  "description": "Code generators and preview-schema utilities for Rune DSL models",
   "license": "MIT",
   "type": "module",
   "main": "./dist/src/index.js",

@@ -16,16 +16,28 @@ describe('default layout vs viewport (T080)', () => {
   it('at 1280px the editor area is the dominant slot', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1280 });
     const dock = layout.dockview as unknown as {
-      columns: Array<{ component: string; size?: number; weight?: number; collapsed?: boolean }>;
+      columns: Array<{
+        component?: string;
+        tabs?: Array<{ component: string }>;
+        size?: number;
+        weight?: number;
+        collapsed?: boolean;
+      }>;
     };
-    const editor = dock.columns.find((c) => c.component === 'workspace.editor');
+    const editor = dock.columns.find((c) =>
+      c.tabs?.some((tab) => tab.component === 'workspace.editor')
+    );
     const fileTree = dock.columns.find((c) => c.component === 'workspace.fileTree');
-    const inspector = dock.columns.find((c) => c.component === 'workspace.inspector');
+    const preview = dock.columns.find((c) =>
+      c.tabs?.some((tab) => tab.component === 'workspace.formPreview')
+    );
+    const visualize = dock.columns.find((c) => c.component === 'workspace.visualPreview');
 
     expect(editor).toBeDefined();
     expect((editor!.weight ?? 0) >= 3).toBe(true);
-    expect(fileTree!.size).toBeLessThanOrEqual(240);
-    expect(inspector!.collapsed).toBe(true);
+    expect(fileTree!.size).toBeLessThanOrEqual(220);
+    expect(visualize!.size).toBeLessThanOrEqual(220);
+    expect(preview!.size).toBeLessThanOrEqual(280);
   });
 });
 

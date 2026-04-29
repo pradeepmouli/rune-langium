@@ -103,11 +103,13 @@ describe('applyLayout — factory shape', () => {
     applyLayout(api as never, layout);
     const titleById = new Map(api.calls.map((c) => [c.id, c.title]));
     expect(titleById.get('workspace.fileTree')).toBe('Files');
-    expect(titleById.get('workspace.editor')).toBe('Editor');
-    expect(titleById.get('workspace.inspector')).toBe('Inspector');
+    expect(titleById.get('workspace.editor')).toBe('Source');
+    expect(titleById.get('workspace.inspector')).toBe('Structure');
     expect(titleById.get('workspace.problems')).toBe('Problems');
-    expect(titleById.get('workspace.output')).toBe('Output');
-    expect(titleById.get('workspace.visualPreview')).toBe('Graph');
+    expect(titleById.get('workspace.output')).toBe('Messages');
+    expect(titleById.get('workspace.visualPreview')).toBe('Visualize');
+    expect(titleById.get('workspace.formPreview')).toBe('Form');
+    expect(titleById.get('workspace.codePreview')).toBe('Code');
     // Every call must carry a title — no internal workspace.* leaks.
     for (const call of api.calls) {
       expect(call.title).toBeTruthy();
@@ -123,7 +125,13 @@ describe('applyLayout — factory shape', () => {
     expect(editor?.position?.direction).toBe('right');
     expect(editor?.position?.referencePanel).toBe('workspace.fileTree');
     const inspector = api.calls.find((c) => c.id === 'workspace.inspector');
-    expect(inspector?.position?.direction).toBe('right');
+    expect(inspector?.position?.direction).toBe('within');
+    const visualize = api.calls.find((c) => c.id === 'workspace.visualPreview');
+    expect(visualize?.position?.direction).toBe('right');
+    expect(visualize?.position?.referencePanel).toBe('workspace.editor');
+    const preview = api.calls.find((c) => c.id === 'workspace.formPreview');
+    expect(preview?.position?.direction).toBe('right');
+    expect(preview?.position?.referencePanel).toBe('workspace.visualPreview');
   });
 
   it('positions the first bottom tab below the editor and the rest within the same group', () => {
@@ -131,11 +139,10 @@ describe('applyLayout — factory shape', () => {
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     const bottomCalls = api.calls.filter((c) =>
-      ['workspace.problems', 'workspace.output', 'workspace.visualPreview'].includes(c.id)
+      ['workspace.problems', 'workspace.output'].includes(c.id)
     );
     expect(bottomCalls[0]?.position?.direction).toBe('below');
     expect(bottomCalls[1]?.position?.direction).toBe('within');
-    expect(bottomCalls[2]?.position?.direction).toBe('within');
   });
 
   it('activates the configured default bottom tab', () => {
@@ -145,13 +152,11 @@ describe('applyLayout — factory shape', () => {
     expect(api.activatedPanels).toContain('workspace.problems');
   });
 
-  it('collapses the inspector + bottom group at viewport ≤ 1280px (FR-024)', () => {
+  it('collapses the bottom utilities at viewport ≤ 1280px (FR-024)', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1280 });
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
-    const inspectorGroup = api.groups.get('workspace.inspector');
     const firstBottom = api.groups.get('workspace.problems');
-    expect(inspectorGroup?.sizeCalls).toEqual([{ width: 0 }]);
     expect(firstBottom?.sizeCalls).toEqual([{ height: 0 }]);
   });
 });
@@ -185,8 +190,8 @@ describe('applyLayout — native shape', () => {
     expect(errSpy).toHaveBeenCalledOnce();
     const arg0 = errSpy.mock.calls[0]?.[0];
     expect(String(arg0)).toContain('api.fromJSON rejected');
-    // Fallback factory layout was applied (3 columns + 3 bottom tabs).
-    expect(api.calls.length).toBeGreaterThanOrEqual(6);
+    // Fallback factory layout was applied (4 top-level columns + utility tabs).
+    expect(api.calls.length).toBeGreaterThanOrEqual(7);
     errSpy.mockRestore();
   });
 });

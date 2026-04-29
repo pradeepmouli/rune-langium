@@ -22,6 +22,8 @@ import { OpfsFs } from '../opfs/opfs-fs.js';
 import { createTelemetryClient, type TelemetryClient } from '../services/telemetry.js';
 import { config } from '../config.js';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
+import { usePreviewStore } from './preview-store.js';
+import { useCodegenStore } from './codegen-store.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -104,6 +106,10 @@ export function setModelStoreDeps(next: Partial<ModelStoreDeps>): void {
 
 const VALID_CURATED_IDS = new Set<string>(CURATED_MODEL_IDS);
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Build the `archiveLoader` callback the model-loader DI hook expects.
  * Returns `undefined` when no curated archive URL is set on the source —
@@ -184,8 +190,10 @@ async function walk(fs: OpfsFs, root: string, rel: string, out: CachedFile[]): P
   let entries: string[];
   try {
     entries = await fs.readdir(dirPath);
-  } catch {
-    return;
+  } catch (error) {
+    throw new Error(
+      `[model-store] Failed to read curated archive directory "${dirPath}": ${errorMessage(error)}`
+    );
   }
   for (const entry of entries) {
     const childRel = rel ? `${rel}/${entry}` : entry;
@@ -193,13 +201,22 @@ async function walk(fs: OpfsFs, root: string, rel: string, out: CachedFile[]): P
     let stat;
     try {
       stat = await fs.stat(childPath);
-    } catch {
-      continue;
+    } catch (error) {
+      throw new Error(
+        `[model-store] Failed to stat curated archive entry "${childPath}": ${errorMessage(error)}`
+      );
     }
     if (stat.isDirectory()) {
       await walk(fs, root, childRel, out);
     } else if (entry.endsWith('.rosetta')) {
-      const content = (await fs.readFile(childPath, 'utf8')) as string;
+      let content: string;
+      try {
+        content = (await fs.readFile(childPath, 'utf8')) as string;
+      } catch (error) {
+        throw new Error(
+          `[model-store] Failed to read curated archive file "${childPath}": ${errorMessage(error)}`
+        );
+      }
       out.push({
         path: childRel,
         content,
@@ -313,6 +330,10 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     const newModels = new Map(models);
     newModels.delete(sourceId);
     set({ models: newModels });
+    if (newModels.size === 0) {
+      usePreviewStore.getState().resetPreviewState();
+      useCodegenStore.getState().resetCodegenState();
+    }
   },
 
   async clearModelCache(sourceId?: string) {

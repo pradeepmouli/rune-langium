@@ -33,3 +33,20 @@ export function pathToUri(path: string): string {
 
   return `file://${uriPath}`;
 }
+
+/** Convert a file:// URI back to the workspace-relative path used by Studio. */
+export function uriToPath(uri: string): string {
+  if (!uri.startsWith('file://')) {
+    return uri;
+  }
+
+  const parsed = new URL(uri);
+  let path = decodeURIComponent(parsed.pathname);
+  if (/^\/[a-zA-Z]:\//.test(path)) {
+    path = path.slice(1);
+  }
+  if (path.startsWith('/workspace/')) {
+    return path.slice('/workspace/'.length);
+  }
+  return path;
+}

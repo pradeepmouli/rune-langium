@@ -31,6 +31,8 @@ import {
   loadWorkspaceFiles,
   saveWorkspaceFiles
 } from './workspace/workspace-files.js';
+import './test-api.js';
+import { setRuneStudioTestApi } from './test-api.js';
 
 /**
  * Mount-time workspace boot state machine (T028 / 014-US2).
@@ -68,8 +70,11 @@ function deriveWorkspaceName(files: readonly WorkspaceFile[]): string {
 export function App() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [models, setModels] = useState<unknown[]>([]);
-  const [errors, setErrors] = useState<Map<string, string[]>>(new Map());
+  const [parsedModels, setParsedModels] = useState<Array<{ filePath: string; model: unknown }>>([]);
+  const [, setErrors] = useState<Map<string, string[]>>(new Map());
   const [loading, setLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const [transportState, setTransportState] = useState<TransportState>({
     mode: 'disconnected',
     status: 'disconnected'
@@ -89,29 +94,49 @@ export function App() {
   // available in the test mock of useModelStore).
   const loadedModelsRef = useRef<Map<string, LoadedModel>>(new Map());
 
-  const syncWorkspaceToEditor = useCallback(async (workspaceFiles: WorkspaceFile[]) => {
-    setLoading(true);
-    try {
-      // Start with the built-in base types and the user's workspace files.
-      let mergedFiles: WorkspaceFile[] = [
-        ...BASE_TYPE_FILES.map((file) => ({ ...file })),
-        ...workspaceFiles
-      ];
-      // Preserve any reference model files that are already loaded so that
-      // switching/restoring a workspace doesn't silently drop them.
-      for (const model of loadedModelsRef.current.values()) {
-        mergedFiles = mergeModelFiles(mergedFiles, model);
-      }
-      setFiles(mergedFiles);
-      lspClientRef.current?.syncWorkspaceFiles(mergedFiles);
-
-      const result = await parseWorkspaceFiles(mergedFiles);
-      setModels(result.models);
-      setErrors(result.errors);
-    } finally {
-      setLoading(false);
-    }
+  const reportWorkspaceError = useCallback((message: string, error: unknown) => {
+    console.warn(`[App] ${message}:`, error);
+    setWorkspaceError(message);
   }, []);
+
+  const applyParseResult = useCallback(
+    (result: Awaited<ReturnType<typeof parseWorkspaceFiles>>) => {
+      setModels(result.models);
+      setParsedModels(result.parsedModels);
+      setErrors(result.errors);
+      setWorkspaceNotice(
+        result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null
+      );
+    },
+    []
+  );
+
+  const syncWorkspaceToEditor = useCallback(
+    async (workspaceFiles: WorkspaceFile[]) => {
+      setLoading(true);
+      try {
+        // Start with the built-in base types and the user's workspace files.
+        let mergedFiles: WorkspaceFile[] = [
+          ...BASE_TYPE_FILES.map((file) => ({ ...file })),
+          ...workspaceFiles
+        ];
+        // Preserve any reference model files that are already loaded so that
+        // switching/restoring a workspace doesn't silently drop them.
+        for (const model of loadedModelsRef.current.values()) {
+          mergedFiles = mergeModelFiles(mergedFiles, model);
+        }
+        setFiles(mergedFiles);
+        lspClientRef.current?.syncWorkspaceFiles(mergedFiles);
+
+        const result = await parseWorkspaceFiles(mergedFiles);
+        applyParseResult(result);
+        setWorkspaceError(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [applyParseResult]
+  );
 
   const createWorkspaceRecord = useCallback(async (name: string): Promise<WorkspaceRecord> => {
     const now = new Date().toISOString();
@@ -177,15 +202,14 @@ export function App() {
         setBootState('restored');
       } catch (err) {
         if (cancelled) return;
-        // eslint-disable-next-line no-console
-        console.warn('[App] workspace restore failed; falling back to start page:', err);
+        reportWorkspaceError('Workspace restore failed; showing the start page instead', err);
         setBootState('start');
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reportWorkspaceError, restoreWorkspace]);
 
   // Tag the body so the dock chrome / e2e selectors can detect that an
   // editor is mounted (T028 contract). Cleared on unmount so the next
@@ -275,7 +299,10 @@ export function App() {
 
       if (restoredWorkspace) {
         void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles).catch((err) => {
-          console.warn('[App] workspace file save failed:', err);
+          reportWorkspaceError(
+            'Failed to save workspace changes to browser storage; edits remain in memory',
+            err
+          );
         });
       }
 
@@ -284,14 +311,16 @@ export function App() {
       reparseTimerRef.current = setTimeout(async () => {
         try {
           const result = await parseWorkspaceFiles(updatedFiles);
-          setModels(result.models);
-          setErrors(result.errors);
-        } catch {
-          // Parse failure — keep existing models
+          applyParseResult(result);
+        } catch (error) {
+          reportWorkspaceError(
+            'Failed to re-parse updated files; keeping the last valid graph',
+            error
+          );
         }
       }, 500);
     },
-    [restoredWorkspace]
+    [applyParseResult, reportWorkspaceError, restoredWorkspace]
   );
 
   const handleReconnect = useCallback(async () => {
@@ -305,40 +334,76 @@ export function App() {
   const handleReset = useCallback(() => {
     if (restoredWorkspace) {
       void saveWorkspaceFiles(restoredWorkspace.id, []).catch((err) => {
-        console.warn('[App] workspace reset save failed:', err);
+        reportWorkspaceError(
+          'Failed to persist the cleared workspace state to browser storage',
+          err
+        );
       });
     }
     setFiles([]);
     setModels([]);
+    setParsedModels([]);
     setErrors(new Map());
     // Return to the start page so the user can open or create a workspace.
     // Without this, bootState stays 'restored' and the "Workspace ready."
     // placeholder is shown with no way to load new files.
     setBootState('start');
     setRestoredWorkspace(null);
-  }, [restoredWorkspace]);
+    setWorkspaceError(null);
+    setWorkspaceNotice(null);
+  }, [reportWorkspaceError, restoredWorkspace]);
+
+  useEffect(() => {
+    setRuneStudioTestApi((current) => ({
+      ...current,
+      replaceWorkspaceFiles: async (workspaceFiles: WorkspaceFile[]) => {
+        if (restoredWorkspace) {
+          await saveWorkspaceFiles(restoredWorkspace.id, workspaceFiles);
+        }
+        await syncWorkspaceToEditor(workspaceFiles);
+      }
+    }));
+    return () => {
+      setRuneStudioTestApi((current) => {
+        if (!current) {
+          return current;
+        }
+        const next = { ...current };
+        delete next.replaceWorkspaceFiles;
+        return next;
+      });
+    };
+  }, [restoredWorkspace, syncWorkspaceToEditor]);
 
   /** Switch to a recent workspace from the start page list (T029). */
   const handleSwitchWorkspace = useCallback(
     async (workspaceId: string) => {
       try {
         const ws = await persistence.loadWorkspace(workspaceId);
-        if (!ws) return;
+        if (!ws) {
+          reportWorkspaceError(
+            'The selected workspace no longer exists in browser storage',
+            workspaceId
+          );
+          return;
+        }
         setBootState('restoring');
         await restoreWorkspace(ws);
         setBootState('restored');
+        setWorkspaceError(null);
+        setWorkspaceNotice(null);
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[App] switch workspace failed:', err);
+        reportWorkspaceError('Failed to switch workspaces', err);
       }
     },
-    [restoreWorkspace]
+    [reportWorkspaceError, restoreWorkspace]
   );
 
   /** New-workspace affordance from the recents list — same path as FileLoader. */
   const handleCreateWorkspace = useCallback(() => {
     setBootState('start');
     setRestoredWorkspace(null);
+    setWorkspaceNotice(null);
   }, []);
 
   /** Delete a recent workspace from the recents store (T029). */
@@ -351,15 +416,17 @@ export function App() {
           setRestoredWorkspace(null);
           setFiles([]);
           setModels([]);
+          setParsedModels([]);
           setErrors(new Map());
           setBootState('start');
         }
+        setWorkspaceError(null);
+        setWorkspaceNotice(null);
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[App] delete workspace failed:', err);
+        reportWorkspaceError('Failed to delete the selected workspace', err);
       }
     },
-    [restoredWorkspace]
+    [reportWorkspaceError, restoredWorkspace]
   );
 
   // Merge reference model files into workspace when models change and re-parse
@@ -379,20 +446,16 @@ export function App() {
     setFiles(merged);
     lspClientRef.current?.syncWorkspaceFiles(merged);
     parseWorkspaceFiles(merged)
-      .then(({ models: m, errors: e }) => {
-        setModels(m);
-        setErrors(e);
-      })
+      .then((result) => applyParseResult(result))
       .catch((err) => {
-        // Keep existing models on failure; log so it's still visible in devtools.
-        console.warn('[App] reparse after model load failed:', err);
+        reportWorkspaceError(
+          'Failed to re-parse the workspace after loading reference models; keeping the last valid graph',
+          err
+        );
       });
-  }, [loadedModels]);
+  }, [applyParseResult, loadedModels, reportWorkspaceError]);
 
   const userFiles = files.filter((f) => !f.readOnly);
-  // True whenever a full EditorPage is mounted — used to suppress the
-  // App-level header and its file-count/close row so the EditorPage's
-  // own toolbar is the sole header-like chrome.
   const showEditorPage = useMemo(
     () =>
       (bootState === 'start' && !loading && userFiles.length > 0) ||
@@ -403,36 +466,51 @@ export function App() {
   return (
     <div className="studio-app flex flex-col h-full text-foreground bg-background">
       {/* Screen-reader + test accessible file count — always in DOM so the
-       * App-restore test can confirm file loading without EditorPage mounted.
-       * The global <header> is suppressed when EditorPage is active (see below)
-       * to prevent a duplicate toolbar, so this element carries the count
-       * text for both tests and assistive technology. */}
+       * App-restore test can confirm file loading without EditorPage mounted. */}
       {userFiles.length > 0 && (
         <span className="sr-only" role="status" aria-live="polite">
           {userFiles.length} file(s)
         </span>
       )}
 
-      {/* Global header — hidden when EditorPage is active to avoid a
-       * duplicate toolbar. The EditorPage toolbar hosts Close + workspace
-       * name in that mode. */}
-      {!showEditorPage && (
-        <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
-          <div className="studio-brand">
-            <div className="studio-brand__mark">R</div>
-            <span className="studio-brand__name">Rune Studio</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <nav className="studio-links" aria-label="Studio links">
-              <a href={studioConfig.homeUrl}>Home</a>
-              <a href={studioConfig.docsUrl}>Docs</a>
-              <a href={studioConfig.githubUrl}>GitHub</a>
-            </nav>
-          </div>
-        </header>
-      )}
+      <header
+        className={`glass-header studio-app-header flex items-center justify-between px-3 ${
+          showEditorPage ? 'studio-app-header--compact' : ''
+        }`}
+      >
+        <div className="studio-brand">
+          <div className="studio-brand__mark">R</div>
+          <span className="studio-brand__name">Rune Studio</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <nav className="studio-links" aria-label="Studio links">
+            <a href={studioConfig.homeUrl}>Home</a>
+            <a href={studioConfig.docsUrl}>Docs</a>
+            <a href={studioConfig.githubUrl}>GitHub</a>
+          </nav>
+        </div>
+      </header>
 
       <main className="flex-1 overflow-hidden relative">
+        {workspaceError ? (
+          <div
+            role="alert"
+            className="absolute left-3 right-3 top-3 z-20 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive shadow-sm"
+          >
+            {workspaceError}
+          </div>
+        ) : null}
+        {workspaceNotice ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`absolute left-3 right-3 z-20 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 shadow-sm dark:text-amber-100 ${
+              workspaceError ? 'top-16' : 'top-3'
+            }`}
+          >
+            {workspaceNotice}
+          </div>
+        ) : null}
         {(bootState === 'checking' || bootState === 'restoring') && (
           <div
             className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md"
@@ -475,6 +553,7 @@ export function App() {
         {bootState === 'start' && !loading && userFiles.length > 0 && (
           <EditorPage
             models={models as import('@rune-langium/core').RosettaModel[]}
+            parsedModels={parsedModels}
             files={files}
             onFilesChange={handleFilesChange}
             lspClient={lspClientRef.current ?? undefined}
@@ -508,6 +587,7 @@ export function App() {
         {bootState === 'restored' && userFiles.length > 0 && (
           <EditorPage
             models={models as import('@rune-langium/core').RosettaModel[]}
+            parsedModels={parsedModels}
             files={files}
             onFilesChange={handleFilesChange}
             lspClient={lspClientRef.current ?? undefined}

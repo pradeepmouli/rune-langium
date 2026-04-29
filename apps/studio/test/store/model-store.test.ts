@@ -15,6 +15,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ModelSource, LoadedModel } from '../../src/types/model-types.js';
+import { usePreviewStore } from '../../src/store/preview-store.js';
+import { useCodegenStore } from '../../src/store/codegen-store.js';
 
 // Mock model-loader.js BEFORE the store imports it. The store calls
 // loadModel(source, options) — we capture options.archiveLoader so we can
@@ -74,6 +76,8 @@ beforeEach(() => {
     loading: new Map(),
     errors: new Map()
   });
+  usePreviewStore.getState().resetPreviewState();
+  useCodegenStore.getState().resetCodegenState();
 });
 
 afterEach(() => {
@@ -233,5 +237,40 @@ describe('useModelStore — archiveLoader DI (T015)', () => {
     expect(arg.modelId).toBe('cdm');
     expect(arg.mirrorBase).toBe('https://www.daikonic.dev/curated');
     expect(arg.writeRoot).toMatch(/\/files\/cdm$/);
+  });
+
+  it('resets preview and codegen state when the last loaded model is unloaded', () => {
+    useModelStore.setState({
+      models: new Map([['cdm', FAKE_MODEL]]),
+      loading: new Map(),
+      errors: new Map()
+    });
+    usePreviewStore.setState({
+      targets: [{ id: 'cdm.Trade', namespace: 'cdm', name: 'Trade', kind: 'data' }],
+      selectedTargetId: 'cdm.Trade',
+      selectedTarget: { id: 'cdm.Trade', namespace: 'cdm', name: 'Trade', kind: 'data' },
+      schemas: new Map([
+        [
+          'cdm.Trade',
+          {
+            schemaVersion: 1,
+            targetId: 'cdm.Trade',
+            title: 'Trade',
+            status: 'ready',
+            fields: []
+          }
+        ]
+      ]),
+      samples: new Map(),
+      status: { state: 'ready', targetId: 'cdm.Trade' }
+    });
+    useCodegenStore.getState().setCodePreviewTarget('typescript');
+
+    useModelStore.getState().unload('cdm');
+
+    expect(useModelStore.getState().models.size).toBe(0);
+    expect(usePreviewStore.getState().selectedTargetId).toBeUndefined();
+    expect(usePreviewStore.getState().status).toEqual({ state: 'waiting' });
+    expect(useCodegenStore.getState().codePreviewTarget).toBe('zod');
   });
 });

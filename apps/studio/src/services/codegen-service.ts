@@ -18,6 +18,7 @@
  */
 
 import { KNOWN_GENERATORS } from '@rune-langium/codegen-legacy';
+import type { FormPreviewSchema } from '@rune-langium/codegen';
 import type {
   CodeGenerationRequest,
   CodeGenerationResult,
@@ -27,6 +28,78 @@ import type {
 
 export type { CodeGenerationRequest, CodeGenerationResult, GeneratedFile };
 export { KNOWN_GENERATORS };
+
+export interface PreviewFileEntry {
+  uri: string;
+  content: string;
+}
+
+export interface PreviewSetFilesMessage {
+  type: 'preview:setFiles';
+  files: PreviewFileEntry[];
+  requestId?: string;
+}
+
+export interface PreviewGenerateMessage {
+  type: 'preview:generate';
+  targetId: string;
+  requestId: string;
+}
+
+export interface PreviewResultMessage {
+  type: 'preview:result';
+  targetId: string;
+  requestId: string;
+  schema: FormPreviewSchema;
+}
+
+export interface PreviewStaleMessage {
+  type: 'preview:stale';
+  targetId?: string;
+  requestId: string;
+  reason: 'parse-error' | 'generation-error' | 'unsupported-target' | 'no-files';
+  message: string;
+}
+
+export type PreviewWorkerRequest = PreviewSetFilesMessage | PreviewGenerateMessage;
+export type PreviewWorkerMessage = PreviewResultMessage | PreviewStaleMessage;
+
+export function createPreviewSetFilesMessage(
+  files: PreviewFileEntry[],
+  requestId?: string
+): PreviewSetFilesMessage {
+  return { type: 'preview:setFiles', files, ...(requestId ? { requestId } : {}) };
+}
+
+export function createPreviewGenerateMessage(
+  targetId: string,
+  requestId: string
+): PreviewGenerateMessage {
+  return { type: 'preview:generate', targetId, requestId };
+}
+
+export function isPreviewWorkerMessage(message: unknown): message is PreviewWorkerMessage {
+  if (!message || typeof message !== 'object') return false;
+  const candidate = message as Record<string, unknown>;
+  const type = candidate.type;
+  if (type === 'preview:result') {
+    return (
+      typeof candidate.targetId === 'string' &&
+      typeof candidate.requestId === 'string' &&
+      !!candidate.schema &&
+      typeof candidate.schema === 'object'
+    );
+  }
+  if (type === 'preview:stale') {
+    return (
+      (candidate.targetId === undefined || typeof candidate.targetId === 'string') &&
+      typeof candidate.requestId === 'string' &&
+      typeof candidate.reason === 'string' &&
+      typeof candidate.message === 'string'
+    );
+  }
+  return false;
+}
 
 /** Default codegen service URL. Override via VITE_CODEGEN_URL env var. */
 const DEFAULT_CODEGEN_URL = 'http://localhost:8377';
@@ -128,10 +201,16 @@ export class BrowserCodegenProxy {
     if (this.isHostedService()) {
       // New contract returns languages inside the health envelope.
       const response = await fetch(`${this.baseUrl}/api/generate/health`);
+      if (!response.ok) {
+        throw new Error(`Language discovery failed (HTTP ${response.status})`);
+      }
       const data = (await response.json()) as { languages?: string[] };
       return (data.languages ?? []).map((id) => ({ id, class: '' }));
     }
     const response = await fetch(`${this.baseUrl}/api/languages`);
+    if (!response.ok) {
+      throw new Error(`Language discovery failed (HTTP ${response.status})`);
+    }
     const data = (await response.json()) as { languages: Array<{ id: string; class: string }> };
     return data.languages;
   }

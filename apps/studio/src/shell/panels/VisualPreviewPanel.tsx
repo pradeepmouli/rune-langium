@@ -11,12 +11,12 @@ export function VisualPreviewPanel({ children }: VisualPreviewPanelProps): React
   return (
     <section
       role="region"
-      aria-label="Visual preview"
+      aria-label="Visualize"
       data-testid="panel-visualPreview"
       data-component="workspace.visualPreview"
     >
-      <h2>Visual preview</h2>
-      {children ?? <p>The visual editor preview mounts here.</p>}
+      <h2>Visualize</h2>
+      {children ?? <p>The graph-focused modeling view mounts here.</p>}
     </section>
   );
 }

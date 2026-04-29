@@ -12,6 +12,7 @@ vi.mock('@codemirror/view', () => ({
     static theme = vi.fn(() => []);
     static updateListener = { of: vi.fn(() => []) };
     static domEventHandlers = vi.fn(() => []);
+    static lineWrapping = [];
     constructor({ parent }: { parent?: Element }) {
       if (parent) parent.appendChild(this.dom);
     }
@@ -61,12 +62,19 @@ describe('CodePreviewPanel — status transitions', () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Generating/i);
-    expect(w.postMessage).toHaveBeenCalledWith({ type: 'codegen:generate', target: 'zod' });
+    expect(w.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'codegen:generate',
+        target: 'zod',
+        requestId: expect.any(String)
+      })
+    );
   });
 
   it('shows "Generated (Zod)" after codegen:result with target=zod', async () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     await act(async () => {
       // Simulate the worker posting a result back
       const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
@@ -76,18 +84,25 @@ describe('CodePreviewPanel — status transitions', () => {
         data: {
           type: 'codegen:result',
           target: 'zod',
-          relativePath: 'ns.zod.ts',
-          content: 'export const X = z.object({});',
-          sourceMap: []
+          requestId,
+          files: [
+            {
+              relativePath: 'ns.zod.ts',
+              content: 'export const X = z.object({});',
+              sourceMap: []
+            }
+          ]
         }
       } as MessageEvent);
     });
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Generated \(Zod\)/i);
+    expect(screen.getByTestId('codegen-relative-path')).toHaveTextContent('ns.zod.ts');
   });
 
   it('shows "Outdated — fix errors to refresh" on codegen:outdated', async () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     await act(async () => {
       const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
         | ((e: MessageEvent) => void)
@@ -96,9 +111,8 @@ describe('CodePreviewPanel — status transitions', () => {
         data: {
           type: 'codegen:result',
           target: 'zod',
-          relativePath: 'ns.zod.ts',
-          content: 'content',
-          sourceMap: []
+          requestId,
+          files: [{ relativePath: 'ns.zod.ts', content: 'content', sourceMap: [] }]
         }
       } as MessageEvent);
     });
@@ -106,7 +120,14 @@ describe('CodePreviewPanel — status transitions', () => {
       const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
         | ((e: MessageEvent) => void)
         | undefined;
-      handler?.({ data: { type: 'codegen:outdated' } } as MessageEvent);
+      handler?.({
+        data: {
+          type: 'codegen:outdated',
+          target: 'zod',
+          requestId,
+          message: 'Fix model errors to refresh the code preview.'
+        }
+      } as MessageEvent);
     });
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Outdated.*fix errors/i);
   });
@@ -114,6 +135,7 @@ describe('CodePreviewPanel — status transitions', () => {
   it('retains content (does NOT blank) on codegen:outdated', async () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     await act(async () => {
       const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
         | ((e: MessageEvent) => void)
@@ -122,9 +144,8 @@ describe('CodePreviewPanel — status transitions', () => {
         data: {
           type: 'codegen:result',
           target: 'zod',
-          relativePath: 'ns.zod.ts',
-          content: 'last good content',
-          sourceMap: []
+          requestId,
+          files: [{ relativePath: 'ns.zod.ts', content: 'last good content', sourceMap: [] }]
         }
       } as MessageEvent);
     });
@@ -132,10 +153,68 @@ describe('CodePreviewPanel — status transitions', () => {
       const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
         | ((e: MessageEvent) => void)
         | undefined;
-      handler?.({ data: { type: 'codegen:outdated' } } as MessageEvent);
+      handler?.({
+        data: {
+          type: 'codegen:outdated',
+          target: 'zod',
+          requestId,
+          message: 'Fix model errors to refresh the code preview.'
+        }
+      } as MessageEvent);
     });
     // Not blanked back to "Generating..."
     expect(screen.getByTestId('codegen-status')).not.toHaveTextContent(/Generating…/i);
+  });
+
+  it('shows "Preview unavailable" when generation fails before any successful output', async () => {
+    const w = makeWorker();
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+    await act(async () => {
+      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
+        | ((e: MessageEvent) => void)
+        | undefined;
+      handler?.({
+        data: {
+          type: 'codegen:error',
+          target: 'zod',
+          requestId,
+          message: 'Code generation failed.'
+        }
+      } as MessageEvent);
+    });
+    expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Preview unavailable/i);
+  });
+
+  it('ignores stale responses with an older request id for the same target', async () => {
+    const w = makeWorker();
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    const currentRequestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })
+      ?.requestId;
+
+    await act(async () => {
+      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
+        | ((e: MessageEvent) => void)
+        | undefined;
+      handler?.({
+        data: {
+          type: 'codegen:result',
+          target: 'zod',
+          requestId: 'codegen:zod:older',
+          files: [{ relativePath: 'stale.zod.ts', content: 'stale', sourceMap: [] }]
+        }
+      } as MessageEvent);
+      handler?.({
+        data: {
+          type: 'codegen:result',
+          target: 'zod',
+          requestId: currentRequestId,
+          files: [{ relativePath: 'fresh.zod.ts', content: 'fresh', sourceMap: [] }]
+        }
+      } as MessageEvent);
+    });
+
+    expect(screen.getByTestId('codegen-relative-path')).toHaveTextContent('fresh.zod.ts');
   });
 
   it('shows "Preview unavailable" when the worker errors', async () => {

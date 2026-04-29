@@ -10,9 +10,9 @@
  *   - recent workspace whose
  *     OPFS handle is gone    → fall back to start page
  *
- * Strict TDD RED step: these assertions intentionally fail against the
- * current `App.tsx` (which boots straight into `<FileLoader>` whenever
- * `userFiles.length === 0`, without ever consulting the recents store).
+ * Regression coverage for the current restore flow: recent workspaces are
+ * consulted before the start page is shown, and missing OPFS handles fall
+ * back cleanly to the loader.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -143,6 +143,7 @@ describe('App workspace restore on mount (T027/US2)', () => {
     await waitFor(() => {
       expect(screen.getByText('1 file(s)')).toBeInTheDocument();
     });
+    expect(screen.getByText('Rune Studio')).toBeInTheDocument();
     expect(screen.queryByText(/Load Rune DSL Models/i)).not.toBeInTheDocument();
   });
 

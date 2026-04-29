@@ -14,38 +14,62 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useState } from 'react';
 
+interface FakeGroupSpy {
+  api: { setSize: (s: { width?: number; height?: number }) => void };
+  sizeCalls: Array<{ width?: number; height?: number }>;
+}
+
+function makeFakeGroup(): FakeGroupSpy {
+  const spy: FakeGroupSpy = {
+    sizeCalls: [],
+    api: { setSize: (s) => spy.sizeCalls.push(s) }
+  };
+  return spy;
+}
+
 interface CapturedReady {
   components: Record<string, unknown>;
   onReady: ((ev: { api: FakeApi }) => void) | undefined;
 }
 
 const captured: CapturedReady = { components: {}, onReady: undefined };
+let lastApi: FakeApi | null = null;
 
 class FakeApi {
   panels: Array<{ id: string; component: string }> = [];
   cleared = 0;
-  onDidLayoutChange() {
+  groups = new Map<string, FakeGroupSpy>();
+  onDidLayoutChange = () => {
     return { dispose: () => {} };
-  }
-  addPanel(opts: { id: string; component: string }) {
+  };
+  addPanel = (opts: { id: string; component: string }) => {
     this.panels.push(opts);
+    const group = makeFakeGroup();
+    this.groups.set(opts.id, group);
     return {
       id: opts.id,
       api: { setActive: () => {} },
-      group: { api: { setSize: () => {} } }
+      group
     };
-  }
-  fromJSON() {}
-  toJSON() {
+  };
+  fromJSON = () => {};
+  toJSON = () => {
     return { panels: this.panels.map((p) => p.id) };
-  }
-  clear() {
+  };
+  clear = () => {
     this.cleared++;
     this.panels = [];
-  }
-  getPanel(id: string) {
-    return this.panels.find((p) => p.id === id) ? { api: { setActive: () => {} } } : undefined;
-  }
+  };
+  getPanel = (id: string) => {
+    const panel = this.panels.find((p) => p.id === id);
+    if (!panel) {
+      return undefined;
+    }
+    return {
+      api: { setActive: () => {} },
+      group: this.groups.get(id)
+    };
+  };
 }
 
 vi.mock('dockview-react', () => ({
@@ -55,7 +79,10 @@ vi.mock('dockview-react', () => ({
   }) {
     captured.components = props.components;
     captured.onReady = props.onReady;
-    setTimeout(() => props.onReady({ api: new FakeApi() }), 0);
+    setTimeout(() => {
+      lastApi = new FakeApi();
+      props.onReady({ api: lastApi });
+    }, 0);
     return (
       <div data-testid="dockview-react-mock">
         {Object.entries(props.components).map(([name, Component]) => {
@@ -77,6 +104,7 @@ import { PANEL_COMPONENT_NAMES } from '../../src/shell/layout-factory.js';
 beforeEach(() => {
   captured.components = {};
   captured.onReady = undefined;
+  lastApi = null;
 });
 
 describe('DockShell — dockview integration (T065)', () => {
@@ -99,6 +127,16 @@ describe('DockShell — dockview integration (T065)', () => {
   it('exposes role=application on the shell container', () => {
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
     expect(screen.getByRole('application', { name: /studio dock shell/i })).toBeInTheDocument();
+  });
+
+  it('renders compact grouped mode headers above the dock surface', () => {
+    render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
+    const header = screen.getByRole('group', { name: /studio mode groups/i });
+    expect(header).toBeInTheDocument();
+    expect(header).toHaveTextContent('Navigate');
+    expect(header).toHaveTextContent('Edit');
+    expect(header).toHaveTextContent('Visualize');
+    expect(header).toHaveTextContent('Preview');
   });
 
   it('Reset Layout calls api.clear() then re-applies a fresh layout', async () => {
@@ -147,6 +185,60 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(screen.getByText('initial file tree')).toBeInTheDocument();
     fireEvent.click(screen.getByText('update panel'));
     expect(screen.getByText('updated file tree')).toBeInTheDocument();
+  });
+
+  it('does not remount override panel content when parent state changes', async () => {
+    const mountSpy = vi.fn();
+
+    function Harness() {
+      const [label, setLabel] = useState('initial file tree');
+      const FileTree = () => {
+        useState(() => {
+          mountSpy();
+          return 0;
+        });
+        return <div>{label}</div>;
+      };
+      return (
+        <>
+          <button type="button" onClick={() => setLabel('updated file tree')}>
+            update panel
+          </button>
+          <DockShell
+            studioVersion="0.1.0"
+            workspaceId="ws-1"
+            panelComponents={{ 'workspace.fileTree': FileTree }}
+          />
+        </>
+      );
+    }
+
+    render(<Harness />);
+    expect(screen.getByText('initial file tree')).toBeInTheDocument();
+    expect(mountSpy).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('update panel'));
+    expect(screen.getByText('updated file tree')).toBeInTheDocument();
+    expect(mountSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('collapses and restores the utility tray height when toggled', async () => {
+    render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+    const toggle = screen.getByTestId('toggle-utilities');
+    const sizeCalls = lastApi?.groups?.get('workspace.problems')?.sizeCalls ?? [];
+
+    if (toggle.textContent?.match(/show utilities/i)) {
+      fireEvent.click(toggle);
+      expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
+      fireEvent.click(toggle);
+      expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 0 });
+      return;
+    }
+
+    fireEvent.click(toggle);
+    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 0 });
+    fireEvent.click(toggle);
+    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
   });
 });
 

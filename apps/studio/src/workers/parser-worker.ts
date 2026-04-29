@@ -38,6 +38,7 @@ export interface ParseWorkspaceResponse {
   type: 'parseWorkspaceResult';
   id: string;
   models: unknown[];
+  parsedModels: Array<{ filePath: string; model: unknown }>;
   errors: Record<string, string[]>;
 }
 
@@ -108,7 +109,7 @@ async function handleParse(req: ParseRequest): Promise<ParseResponse> {
 async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWorkspaceResponse> {
   const errors: Record<string, string[]> = {};
   if (req.files.length === 0) {
-    return { type: 'parseWorkspaceResult', id: req.id, models: [], errors };
+    return { type: 'parseWorkspaceResult', id: req.id, models: [], parsedModels: [], errors };
   }
 
   const results = await parseWorkspace(
@@ -118,6 +119,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
     }))
   );
   const models: unknown[] = [];
+  const parsedModels: Array<{ filePath: string; model: unknown }> = [];
 
   for (let i = 0; i < results.length; i++) {
     const result = results[i]!;
@@ -125,13 +127,14 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
     if (result.value) {
       preserveCstText(result.value);
       models.push(result.value);
+      parsedModels.push({ filePath: file.name, model: result.value });
     }
     if (result.parserErrors.length > 0) {
       errors[file.name] = result.parserErrors.map((e) => e.message);
     }
   }
 
-  return { type: 'parseWorkspaceResult', id: req.id, models, errors };
+  return { type: 'parseWorkspaceResult', id: req.id, models, parsedModels, errors };
 }
 
 // ---------------------------------------------------------------------------

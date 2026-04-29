@@ -60,9 +60,20 @@ import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
 import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
 import { pathToUri } from '../utils/uri.js';
+import type { ParsedWorkspaceModel } from '../services/workspace.js';
+import {
+  createPreviewGenerateMessage,
+  createPreviewSetFilesMessage,
+  isPreviewWorkerMessage
+} from '../services/codegen-service.js';
+import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
+import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
+import '../test-api.js';
+import { getRuneStudioTestApi } from '../test-api.js';
 
 export interface EditorPageProps {
   models: RosettaModel[];
+  parsedModels?: ParsedWorkspaceModel[];
   files: WorkspaceFile[];
   onFilesChange?: (files: WorkspaceFile[]) => void;
   lspClient?: LspClientService;
@@ -78,8 +89,29 @@ export interface EditorPageProps {
   onClose?: () => void;
 }
 
+function matchesPreviewSourceIdentity(
+  current: FormPreviewTarget,
+  candidate: FormPreviewTarget
+): boolean {
+  if (
+    !current.sourceUri ||
+    current.sourceUri !== candidate.sourceUri ||
+    current.kind !== candidate.kind
+  ) {
+    return false;
+  }
+  if (current.sourceIndex !== undefined && candidate.sourceIndex !== undefined) {
+    return current.sourceIndex === candidate.sourceIndex;
+  }
+  return (
+    current.sourceRange?.start.line === candidate.sourceRange?.start.line &&
+    current.sourceRange?.start.character === candidate.sourceRange?.start.character
+  );
+}
+
 export function EditorPage({
   models,
+  parsedModels,
   files,
   onFilesChange,
   lspClient,
@@ -99,6 +131,8 @@ export function EditorPage({
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
   const [openedFilePaths, setOpenedFilePaths] = useState<Set<string>>(new Set<string>());
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
+  const previewRequestSequenceRef = useRef(0);
+  const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const navigationHistoryRef = useRef<string[]>([]);
   const pendingDisplayFileRef = useRef<
     Map<string, (view: import('@codemirror/view').EditorView | null) => void>
@@ -115,6 +149,12 @@ export function EditorPage({
   const storeToggleNodeVisibility = useEditorStore((s) => s.toggleNodeVisibility);
   const storeExpandAllNamespaces = useEditorStore((s) => s.expandAllNamespaces);
   const storeCollapseAllNamespaces = useEditorStore((s) => s.collapseAllNamespaces);
+  const previewSelectedTargetId = usePreviewStore((s) => s.selectedTargetId);
+  const previewSelectedTarget = usePreviewStore((s) => s.selectedTarget);
+  const setPreviewTargets = usePreviewStore((s) => s.setAvailableTargets);
+  const selectPreviewTarget = usePreviewStore((s) => s.selectTarget);
+  const receivePreviewResult = usePreviewStore((s) => s.receivePreviewResult);
+  const receivePreviewStale = usePreviewStore((s) => s.receivePreviewStale);
 
   useEffect(() => {
     if (models.length > 0) {
@@ -127,6 +167,120 @@ export function EditorPage({
     const node = storeNodes.find((n) => n.id === selectedNodeId);
     return (node?.data as unknown as AnyGraphNode) ?? null;
   }, [selectedNodeId, storeNodes]);
+
+  const previewTargets: FormPreviewTarget[] = useMemo(() => {
+    const sourceByTargetId = new Map<
+      string,
+      Pick<FormPreviewTarget, 'sourceUri' | 'sourceIndex' | 'sourceRange'>
+    >();
+    for (const model of models) {
+      const modelUriValue = (
+        model as unknown as {
+          $document?: { uri?: { path?: string; toString(): string } };
+        }
+      ).$document?.uri;
+      const modelUri = modelUriValue?.path ?? modelUriValue?.toString();
+      const namespace =
+        typeof model.name === 'string'
+          ? model.name
+          : Array.isArray((model.name as { segments?: string[] } | undefined)?.segments)
+            ? ((model.name as { segments: string[] }).segments.join('.') ?? 'unknown')
+            : 'unknown';
+      for (const [sourceIndex, element] of (model.elements ?? []).entries()) {
+        const name = (element as { name?: string }).name;
+        if (!name) {
+          continue;
+        }
+        const range = (
+          element as {
+            $cstNode?: {
+              range?: {
+                start?: { line?: number; character?: number };
+                end?: { line?: number; character?: number };
+              };
+            };
+          }
+        ).$cstNode?.range;
+        sourceByTargetId.set(`${namespace}.${name}`, {
+          sourceUri:
+            (
+              element as {
+                $document?: { uri?: { path?: string; toString(): string } };
+              }
+            ).$document?.uri?.path ??
+            (
+              element as {
+                $document?: { uri?: { path?: string; toString(): string } };
+              }
+            ).$document?.uri?.toString() ??
+            modelUri,
+          sourceIndex,
+          sourceRange:
+            range?.start?.line !== undefined &&
+            range?.start?.character !== undefined &&
+            range?.end?.line !== undefined &&
+            range?.end?.character !== undefined
+              ? {
+                  start: {
+                    line: range.start.line,
+                    character: range.start.character
+                  },
+                  end: {
+                    line: range.end.line,
+                    character: range.end.character
+                  }
+                }
+              : undefined
+        });
+      }
+    }
+
+    return storeNodes
+      .map((node) => {
+        const data = node.data as unknown as {
+          namespace?: string;
+          name?: string;
+          $type?: string;
+        };
+        if (!data.namespace || !data.name) return undefined;
+        return {
+          id: `${data.namespace}.${data.name}`,
+          namespace: data.namespace,
+          name: data.name,
+          kind: data.$type ?? 'unknown',
+          ...sourceByTargetId.get(`${data.namespace}.${data.name}`)
+        };
+      })
+      .filter((target): target is FormPreviewTarget => target !== undefined);
+  }, [models, storeNodes]);
+
+  useEffect(() => {
+    setPreviewTargets(previewTargets);
+  }, [previewTargets, setPreviewTargets]);
+
+  useEffect(() => {
+    if (!previewSelectedTargetId || !previewSelectedTarget) {
+      return;
+    }
+    if (previewTargets.some((target) => target.id === previewSelectedTargetId)) {
+      return;
+    }
+    const renamedTarget = previewTargets.find((target) =>
+      matchesPreviewSourceIdentity(previewSelectedTarget, target)
+    );
+    selectPreviewTarget(renamedTarget?.id);
+  }, [previewSelectedTarget, previewSelectedTargetId, previewTargets, selectPreviewTarget]);
+
+  useEffect(() => {
+    if (!selectedNodeId) {
+      return;
+    }
+    const data = selectedNodeData as unknown as { namespace?: string; name?: string } | null;
+    if (!data?.namespace || !data.name) {
+      return;
+    }
+    selectPreviewTarget(`${data.namespace}.${data.name}`);
+  }, [selectedNodeData, selectedNodeId, selectPreviewTarget]);
 
   // Navigate the source editor when a graph node is selected.
   const prevSelectedRef = useRef<string | null>(null);
@@ -213,9 +367,11 @@ export function EditorPage({
 
   // Initialise dedicated codegen worker once on mount.
   useEffect(() => {
-    const worker = new Worker(new URL('../workers/codegen-worker.ts', import.meta.url), {
-      type: 'module'
-    });
+    const worker =
+      getRuneStudioTestApi()?.createCodegenWorker?.() ??
+      new Worker(new URL('../workers/codegen-worker.ts', import.meta.url), {
+        type: 'module'
+      });
     setCodegenWorker(worker);
     return () => {
       worker.terminate();
@@ -223,14 +379,77 @@ export function EditorPage({
     };
   }, []);
 
-  // Keep the codegen worker in sync with the workspace file set.
+  // Keep the codegen worker in sync with the workspace file set and
+  // regenerate the selected preview whenever the backing files change.
   useEffect(() => {
     if (!codegenWorker) return;
-    codegenWorker.postMessage({
-      type: 'codegen:setFiles',
-      files: files.map((f) => ({ uri: pathToUri(f.path), content: f.content }))
-    });
-  }, [codegenWorker, files]);
+    const previewFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+    const requestId = previewSelectedTargetId
+      ? `preview:${previewSelectedTargetId}:${++previewRequestSequenceRef.current}`
+      : undefined;
+    currentPreviewRequestIdRef.current = requestId;
+    try {
+      codegenWorker.postMessage({
+        type: 'codegen:setFiles',
+        files: previewFiles,
+        requestId
+      });
+      codegenWorker.postMessage(createPreviewSetFilesMessage(previewFiles, requestId));
+    } catch (error) {
+      receivePreviewStale({
+        targetId: previewSelectedTargetId,
+        reason: 'generation-error',
+        message: 'Preview worker is unavailable — reload Studio to restore form preview.'
+      });
+      console.error('[EditorPage] Failed to sync preview worker files:', error);
+    }
+  }, [codegenWorker, files, previewSelectedTargetId]);
+
+  useEffect(() => {
+    if (!codegenWorker || !previewSelectedTargetId) return;
+    const requestId = `preview:${previewSelectedTargetId}:${++previewRequestSequenceRef.current}`;
+    currentPreviewRequestIdRef.current = requestId;
+    try {
+      codegenWorker.postMessage(createPreviewGenerateMessage(previewSelectedTargetId, requestId));
+    } catch (error) {
+      receivePreviewStale({
+        targetId: previewSelectedTargetId,
+        reason: 'generation-error',
+        message: 'Preview worker is unavailable — reload Studio to restore form preview.'
+      });
+      console.error('[EditorPage] Failed to request preview generation:', error);
+    }
+  }, [codegenWorker, previewSelectedTargetId, receivePreviewStale]);
+
+  useEffect(() => {
+    if (!codegenWorker) return;
+    function handleMessage(e: MessageEvent<unknown>) {
+      if (!isPreviewWorkerMessage(e.data)) return;
+      if (e.data.requestId !== currentPreviewRequestIdRef.current) {
+        return;
+      }
+      if (e.data.type === 'preview:result') {
+        receivePreviewResult(e.data.schema);
+      } else {
+        receivePreviewStale(e.data);
+      }
+    }
+    function handleWorkerFailure() {
+      receivePreviewStale({
+        targetId: previewSelectedTargetId,
+        reason: 'generation-error',
+        message: 'Preview worker crashed — reload Studio to restore form preview.'
+      });
+    }
+    codegenWorker.addEventListener('message', handleMessage as EventListener);
+    codegenWorker.addEventListener('error', handleWorkerFailure as EventListener);
+    codegenWorker.addEventListener('messageerror', handleWorkerFailure as EventListener);
+    return () => {
+      codegenWorker.removeEventListener('message', handleMessage as EventListener);
+      codegenWorker.removeEventListener('error', handleWorkerFailure as EventListener);
+      codegenWorker.removeEventListener('messageerror', handleWorkerFailure as EventListener);
+    };
+  }, [codegenWorker, previewSelectedTargetId, receivePreviewResult, receivePreviewStale]);
 
   const handleSourceChange = useCallback(
     (path: string, content: string) => {
@@ -242,24 +461,34 @@ export function EditorPage({
     [onFilesChange]
   );
 
+  const resolvedModelFiles = useMemo(() => {
+    if (parsedModels && parsedModels.length > 0) {
+      return parsedModels;
+    }
+    return models.flatMap((model, index) => {
+      const file = files[index];
+      return file ? [{ filePath: file.path, model }] : [];
+    });
+  }, [files, models, parsedModels]);
+
   const namespaceToFile = useMemo(() => {
     const map = new Map<string, string>();
-    for (let i = 0; i < models.length; i++) {
-      const model = models[i] as { name?: string | { segments?: string[] } };
+    for (const entry of resolvedModelFiles) {
+      const model = entry.model as { name?: string | { segments?: string[] } };
       let ns = 'unknown';
       if (typeof model.name === 'string') ns = model.name;
       else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
         ns = (model.name as { segments: string[] }).segments.join('.');
       }
-      if (i < files.length) map.set(ns, files[i]!.path);
+      map.set(ns, entry.filePath);
     }
     return map;
-  }, [models, files]);
+  }, [resolvedModelFiles]);
 
   const nodeIdToFilePath = useMemo(() => {
     const map = new Map<string, string>();
-    for (let i = 0; i < models.length && i < files.length; i++) {
-      const model = models[i] as {
+    for (const entry of resolvedModelFiles) {
+      const model = entry.model as {
         name?: string | { segments?: string[] };
         elements?: Array<{ name?: string }>;
       };
@@ -271,11 +500,11 @@ export function EditorPage({
       for (const element of model.elements ?? []) {
         const name = element.name ?? 'unknown';
         const nodeId = `${ns}::${name}`;
-        if (!map.has(nodeId)) map.set(nodeId, files[i]!.path);
+        if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
       }
     }
     return map;
-  }, [models, files]);
+  }, [resolvedModelFiles]);
 
   const resolveNodeFile = useCallback(
     (nodeData: AnyGraphNode): string | undefined => {
@@ -649,11 +878,11 @@ export function EditorPage({
     [fileDiagnostics, files, openFileInSource]
   );
 
-  // Stable adapter: SourceEditorRef (revealLine) → SourceEditorHandle (revealLineInCenter + setSelection).
+  // Stable adapter for CodePreviewPanel cross-file source-map navigation.
   const sourceEditorHandle = useMemo<SourceEditorHandle>(
     () => ({
-      revealLineInCenter: (line) => sourceEditorRef.current?.revealLine(line),
-      setSelection: (range) => sourceEditorRef.current?.revealLine(range.line)
+      revealPosition: (position, filePath) =>
+        sourceEditorRef.current?.revealPosition(position, filePath)
     }),
     // Intentionally stable — reads ref.current at call time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -664,6 +893,8 @@ export function EditorPage({
     if (!codegenWorker) return null;
     return <CodePreviewPanel worker={codegenWorker} sourceEditorRef={sourceEditorHandle} />;
   }, [codegenWorker, sourceEditorHandle]);
+
+  const FormPreviewPanelMounted = useCallback(() => <FormPreviewPanelShell />, []);
 
   const VisualPreviewPanelMounted = useCallback(
     () => (
@@ -695,6 +926,7 @@ export function EditorPage({
       'workspace.inspector': InspectorPanelMounted,
       'workspace.problems': ProblemsPanelMounted,
       'workspace.visualPreview': VisualPreviewPanelMounted,
+      'workspace.formPreview': FormPreviewPanelMounted,
       'workspace.codePreview': CodePreviewPanelMounted
     }),
     [
@@ -703,6 +935,7 @@ export function EditorPage({
       InspectorPanelMounted,
       ProblemsPanelMounted,
       VisualPreviewPanelMounted,
+      FormPreviewPanelMounted,
       CodePreviewPanelMounted
     ]
   );

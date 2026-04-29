@@ -21,7 +21,7 @@
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { buildDefaultLayout, type BuildLayoutInput } from './layout-factory.js';
-import { PANEL_COMPONENT_NAMES } from './layout-types.js';
+import { PANEL_COMPONENT_NAMES, type FactoryShape } from './layout-types.js';
 
 const CURRENT_VERSION = 1;
 const KNOWN_COMPONENTS = new Set<string>(PANEL_COMPONENT_NAMES);
@@ -37,12 +37,20 @@ export function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayo
   // so the original (persisted) record stays untouched until a new save.
   const cloned: PanelLayoutRecord = JSON.parse(JSON.stringify(input));
   let droppedAny = false;
+  let normalizedActive = false;
   walkAndDrop(cloned.dockview, () => {
     droppedAny = true;
   });
+  if (cloned.dockview?.shape === 'factory') {
+    normalizedActive = normalizeFactoryActives(cloned.dockview);
+  }
   if (droppedAny) {
     // eslint-disable-next-line no-console
     console.warn('[layout-migrations] dropped unknown component names from saved layout');
+  }
+  if (normalizedActive) {
+    // eslint-disable-next-line no-console
+    console.warn('[layout-migrations] normalized invalid active tabs in saved layout');
   }
   return cloned;
 }
@@ -84,4 +92,20 @@ function walkAndDrop(node: unknown, onDrop: () => void): void {
       walkAndDrop(value, onDrop);
     }
   }
+}
+
+function normalizeFactoryActives(shape: FactoryShape): boolean {
+  let normalized = false;
+  const groups = [shape.columns[1], shape.columns[3], shape.bottomGroup];
+  for (const group of groups) {
+    const components = group.tabs.map((tab) => tab.component);
+    if (components.includes(group.active)) continue;
+    const [first] = components;
+    if (!first) {
+      continue;
+    }
+    group.active = first;
+    normalized = true;
+  }
+  return normalized;
 }

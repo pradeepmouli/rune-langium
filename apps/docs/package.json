@@ -2,9 +2,9 @@
   "name": "@rune-langium/docs",
   "version": "0.0.0",
   "private": true,
-  "description": "Documentation site for rune-langium",
+  "description": "Documentation site and generated agent skills for rune-langium APIs",
   "scripts": {
-    "docs:api": "typedoc --options .vitepress/typedoc.json",
+    "docs:api": "typedoc --options .vitepress/typedoc.json && node scripts/postprocess-skills.mjs",
     "dev": "pnpm run docs:api && vitepress dev",
     "build": "pnpm run docs:api && vitepress build",
     "build:combined": "node scripts/build-combined.mjs",

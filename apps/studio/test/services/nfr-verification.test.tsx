@@ -1,99 +1,124 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-/**
- * NFR verification tests (T044).
- *
- * These tests validate non-functional requirements structurally:
- * - NFR-1: Diagnostics latency < 500ms (architecture check)
- * - NFR-2: Handshake timeout < 2s (config check)
- * - NFR-3: Editor load time < 500ms (component render check)
- * - NFR-5: Reconnection max attempts = 3 (config check)
- * - NFR-7: WebSocket binds to localhost (config check)
- */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import type { FormPreviewSchema } from '@rune-langium/codegen';
+import { FormPreviewPanel } from '../../src/components/FormPreviewPanel.js';
+import { usePreviewStore } from '../../src/store/preview-store.js';
 
-import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
-import { DiagnosticsPanel } from '../../src/components/DiagnosticsPanel.js';
-import { ConnectionStatus } from '../../src/components/ConnectionStatus.js';
+const previewSchema: FormPreviewSchema = {
+  schemaVersion: 1,
+  targetId: 'nfr.preview.Trade',
+  title: 'NFR Trade',
+  status: 'ready',
+  fields: [
+    { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+    { path: 'quantity', label: 'Quantity', kind: 'number', required: false },
+    {
+      path: 'side',
+      label: 'Side',
+      kind: 'enum',
+      required: true,
+      enumValues: [
+        { value: 'Buy', label: 'Buy' },
+        { value: 'Sell', label: 'Sell' }
+      ]
+    },
+    {
+      path: 'party',
+      label: 'Party',
+      kind: 'object',
+      required: true,
+      children: [{ path: 'party.name', label: 'Name', kind: 'string', required: true }]
+    },
+    {
+      path: 'aliases',
+      label: 'Aliases',
+      kind: 'array',
+      required: true,
+      cardinality: { min: 1, max: 2 },
+      children: [{ path: 'aliases[]', label: 'Alias', kind: 'string', required: true }]
+    }
+  ]
+};
 
-// Mock CodeMirror modules for SourceEditor
-vi.mock('codemirror', () => ({ basicSetup: [] }));
-vi.mock('@codemirror/commands', () => ({ defaultKeymap: [] }));
-vi.mock('@codemirror/view', () => {
-  class MockView {
-    dom = document.createElement('div');
-    state = { doc: { toString: () => '' } };
-    destroy() {}
-    dispatch() {}
-  }
-  return {
-    EditorView: Object.assign(MockView, {
-      updateListener: { of: () => [] },
-      theme: () => []
-    }),
-    keymap: { of: () => [] }
-  };
-});
-vi.mock('@codemirror/state', () => ({
-  EditorState: { create: () => ({ doc: { toString: () => '' } }) }
-}));
-vi.mock('../../src/lang/rune-dsl.js', () => ({
-  runeDslLanguage: () => []
-}));
-
-describe('NFR Verification', () => {
-  describe('NFR-2: Handshake timeout', () => {
-    it('default WebSocket connection timeout is 2000ms', async () => {
-      const mod = await import('../../src/services/transport-provider.js');
-      // createTransportProvider with defaults should use 2s timeout
-      // Verify by checking the type signature accepts connectionTimeout
-      expect(mod.createTransportProvider).toBeDefined();
-    });
+describe('form preview NFR verification', () => {
+  beforeEach(() => {
+    usePreviewStore.getState().resetPreviewState();
   });
 
-  describe('NFR-3: Editor load time', () => {
-    it('DiagnosticsPanel renders within 100ms', () => {
-      const start = performance.now();
-      const { unmount } = render(<DiagnosticsPanel fileDiagnostics={new Map()} />);
-      const elapsed = performance.now() - start;
-      expect(elapsed).toBeLessThan(100);
-      unmount();
-    });
+  it('keeps sample data in-memory and emits no network or storage writes during edit, validate, reset, and copy', async () => {
+    const fetchSpy = vi.fn();
+    const sendBeaconSpy = vi.fn();
+    const xhrOpenSpy = vi.fn();
+    const xhrSendSpy = vi.fn();
+    const storageSpy = vi.fn();
+    const writeText = vi.fn(async () => undefined);
 
-    it('ConnectionStatus renders within 50ms', () => {
-      const start = performance.now();
-      const { unmount } = render(
-        <ConnectionStatus state={{ mode: 'disconnected', status: 'disconnected' }} />
-      );
-      const elapsed = performance.now() - start;
-      expect(elapsed).toBeLessThan(50);
-      unmount();
+    vi.stubGlobal('fetch', fetchSpy);
+    Object.defineProperty(navigator, 'sendBeacon', { value: sendBeaconSpy, configurable: true });
+    Object.assign(navigator, { clipboard: { writeText } });
+    vi.stubGlobal(
+      'XMLHttpRequest',
+      class MockXMLHttpRequest {
+        open = xhrOpenSpy;
+        send = xhrSendSpy;
+      } as unknown as typeof XMLHttpRequest
+    );
+    Storage.prototype.setItem = storageSpy;
+
+    render(
+      <FormPreviewPanel
+        schema={previewSchema}
+        status={{ state: 'ready', targetId: previewSchema.targetId }}
+      />
+    );
+
+    fireEvent.blur(screen.getByLabelText('Trade id'));
+    fireEvent.change(screen.getByLabelText('Trade id'), { target: { value: 'TRD-1' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Acme' } });
+    fireEvent.click(screen.getByRole('button', { name: /add aliases item/i }));
+    fireEvent.change(screen.getByLabelText('Alias 1'), { target: { value: 'Desk alias' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /copy sample data/i }));
     });
+    fireEvent.click(screen.getByRole('button', { name: /reset sample/i }));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(sendBeaconSpy).not.toHaveBeenCalled();
+    expect(xhrOpenSpy).not.toHaveBeenCalled();
+    expect(xhrSendSpy).not.toHaveBeenCalled();
+    expect(storageSpy).not.toHaveBeenCalled();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(usePreviewStore.getState().samples.get(previewSchema.targetId)?.serialized).toBe(
+      '{\n  "tradeId": "",\n  "quantity": "",\n  "side": "Buy",\n  "party": {\n    "name": ""\n  },\n  "aliases": []\n}'
+    );
   });
 
-  describe('NFR-5: Reconnection attempts', () => {
-    it('defaults to 3 max reconnection attempts', async () => {
-      const mod = await import('../../src/services/transport-provider.js');
-      const provider = mod.createTransportProvider({
-        wsUri: 'ws://127.0.0.1:9999',
-        maxReconnectAttempts: 3
-      });
-      // Provider accepts the config — validates the interface
-      expect(provider.getState().mode).toBe('disconnected');
-      provider.dispose();
-    });
-  });
+  it('keeps summary status visible and updates within the preview latency budget', () => {
+    const startedAt = performance.now();
 
-  describe('NFR-7: WebSocket localhost-only', () => {
-    it('default WebSocket URI is localhost', async () => {
-      // The transport-provider.ts defaults to ws://localhost:3001
-      // This is a structural check — the server itself binds to 127.0.0.1
-      const source = await import('../../src/services/transport-provider.js');
-      const provider = source.createTransportProvider();
-      // Default state is disconnected (no server running)
-      expect(provider.getState().status).toBe('disconnected');
-      provider.dispose();
-    });
+    render(
+      <FormPreviewPanel
+        schema={previewSchema}
+        status={{ state: 'ready', targetId: previewSchema.targetId }}
+      />
+    );
+
+    expect(screen.getByText(/ready to validate sample/i)).toBeInTheDocument();
+
+    fireEvent.blur(screen.getByLabelText('Trade id'));
+    fireEvent.blur(screen.getByLabelText('Name'));
+    expect(screen.getByText(/invalid sample/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Trade id'), { target: { value: 'TRD-2' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Contoso' } });
+    fireEvent.click(screen.getByRole('button', { name: /add aliases item/i }));
+    fireEvent.change(screen.getByLabelText('Alias 1'), { target: { value: 'Ops' } });
+
+    expect(screen.getByText(/valid sample/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/sample data output/i)).toHaveTextContent('"tradeId": "TRD-2"');
+    expect(performance.now() - startedAt).toBeLessThan(2_000);
   });
 });

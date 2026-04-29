@@ -2,6 +2,16 @@
 
 ## types
 
+### `FormPreviewSchema`
+**Properties:**
+- `schemaVersion: 1`
+- `targetId: string`
+- `title: string`
+- `status: "ready" | "unsupported"`
+- `fields: PreviewField[]`
+- `unsupportedFeatures: string[]` (optional)
+- `sourceMap: PreviewSourceMapEntry[]` (optional)
+
 ### `GeneratorOutput`
 One emitted output file from the generator.
 FR-001 (output structure).
@@ -25,6 +35,29 @@ FR-025 (diagnostics).
 - `sourceUri: string` (optional) — Source URI where the issue was detected, if known.
 - `line: number` (optional) — Source line (one-based), if known.
 - `char: number` (optional) — Source character offset (one-based), if known.
+
+### `PreviewField`
+**Properties:**
+- `path: string`
+- `label: string`
+- `kind: PreviewFieldKind`
+- `required: boolean`
+- `cardinality: { min?: number; max?: number | "unbounded" }` (optional)
+- `enumValues: { value: string; label: string }[]` (optional)
+- `children: PreviewField[]` (optional)
+- `description: string` (optional)
+
+### `PreviewFieldKind`
+```ts
+"string" | "number" | "boolean" | "enum" | "object" | "array" | "unknown"
+```
+
+### `PreviewSourceMapEntry`
+**Properties:**
+- `fieldPath: string`
+- `sourceUri: string`
+- `sourceLine: number`
+- `sourceChar: number`
 
 ### `SourceMapEntry`
 One source-map entry: maps an output line back to a source location.

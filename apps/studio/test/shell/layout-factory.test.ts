@@ -16,23 +16,49 @@ describe('buildDefaultLayout (T061)', () => {
     expect([...names].sort()).toEqual([...PANEL_COMPONENT_NAMES].sort());
   });
 
+  it('groups Navigate, Edit, Preview, and Utilities surfaces by default', () => {
+    const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1440 });
+    if (!layout.dockview || layout.dockview.shape !== 'factory') {
+      throw new Error('factory shape expected');
+    }
+
+    expect(collectColumnComponents(layout.dockview.columns[0])).toEqual(['workspace.fileTree']);
+    expect(collectColumnComponents(layout.dockview.columns[1])).toEqual([
+      'workspace.editor',
+      'workspace.inspector'
+    ]);
+    expect(collectColumnComponents(layout.dockview.columns[2])).toEqual([
+      'workspace.visualPreview'
+    ]);
+    expect(collectColumnComponents(layout.dockview.columns[3])).toEqual([
+      'workspace.formPreview',
+      'workspace.codePreview'
+    ]);
+    expect(layout.dockview.bottomGroup.tabs.map((tab) => tab.component)).toEqual([
+      'workspace.problems',
+      'workspace.output'
+    ]);
+  });
+
   it('layout.version starts at 1', () => {
     expect(buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 }).version).toBe(1);
   });
 
-  it('inspector and bottom panel start collapsed at viewport ≤ 1280px (FR-024)', () => {
+  it('bottom utilities start collapsed at viewport ≤ 1280px (FR-024)', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1280 });
     const collapsed = collectCollapsed(layout.dockview);
-    expect(collapsed).toContain('workspace.inspector');
     expect(collapsed).toContain('workspace.problems');
     expect(collapsed).toContain('workspace.output');
-    expect(collapsed).toContain('workspace.visualPreview');
+    expect(collectColumnComponents((layout.dockview as any).columns[3])).toEqual([
+      'workspace.formPreview',
+      'workspace.codePreview'
+    ]);
   });
 
-  it('inspector starts expanded above 1280px', () => {
+  it('preview starts reachable above 1280px', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1440 });
     const collapsed = collectCollapsed(layout.dockview);
-    expect(collapsed).not.toContain('workspace.inspector');
+    expect(collapsed).not.toContain('workspace.formPreview');
   });
 
   it('writtenBy reflects the studio version', () => {
@@ -42,16 +68,18 @@ describe('buildDefaultLayout (T061)', () => {
 });
 
 describe('layout proportions at 1280×800 (SC-005, SC-006)', () => {
-  // SC-005: editor pane occupies ≥70% of horizontal area at 1280×800.
+  // SC-005: source/structure group remains the dominant horizontal area at 1280×800
+  // while Preview remains reachable on the right.
   // SC-006: Studio chrome vertical pixel budget reduced ≥25% vs the
   //   previous baseline. The layout itself doesn't measure chrome; the
   //   assertion below is on the inputs that drive it (sidebar widths +
   //   collapse default), with the recorded baseline in
   //   specs/012-studio-workspace-ux/baseline-measurements.md.
   const VIEWPORT_W = 1280;
-  const FILE_TREE_W = 200; // small-viewport size from buildDefaultLayout
-  const INSPECTOR_W = 0; // collapsed at ≤1280
-  const EXPECTED_EDITOR_MIN = Math.round(VIEWPORT_W * 0.7); // 896
+  const FILE_TREE_W = 180; // small-viewport size from buildDefaultLayout
+  const VISUALIZE_W = 220; // small-viewport Visualize column size
+  const PREVIEW_W = 280; // small-viewport preview group size from buildDefaultLayout
+  const EXPECTED_EDITOR_MIN = 560;
 
   it('editor column gets ≥70% of horizontal area at 1280px (SC-005)', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: VIEWPORT_W });
@@ -60,11 +88,13 @@ describe('layout proportions at 1280×800 (SC-005, SC-006)', () => {
     }
     const cols = layout.dockview.columns;
     const fileTree = cols[0];
-    const inspector = cols[2];
+    const visualize = cols[2];
+    const preview = cols[3];
     expect(fileTree.size).toBe(FILE_TREE_W);
-    expect(inspector.size).toBe(INSPECTOR_W);
-    expect(inspector.collapsed).toBe(true);
-    const editorAvail = VIEWPORT_W - (fileTree.size ?? 0) - (inspector.size ?? 0);
+    expect(visualize.size).toBe(VISUALIZE_W);
+    expect(preview.size).toBe(PREVIEW_W);
+    const editorAvail =
+      VIEWPORT_W - (fileTree.size ?? 0) - (visualize.size ?? 0) - (preview.size ?? 0);
     expect(editorAvail).toBeGreaterThanOrEqual(EXPECTED_EDITOR_MIN);
   });
 
@@ -106,4 +136,11 @@ function collectCollapsed(node: unknown, out: string[] = []): string[] {
     else if (v && typeof v === 'object') collectCollapsed(v, out);
   }
   return out;
+}
+
+function collectColumnComponents(node: unknown): string[] {
+  if (!node || typeof node !== 'object') return [];
+  const obj = node as { component?: string; tabs?: Array<{ component: string }> };
+  if (obj.tabs) return obj.tabs.map((tab) => tab.component);
+  return obj.component ? [obj.component] : [];
 }

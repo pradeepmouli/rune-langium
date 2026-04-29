@@ -26,8 +26,8 @@
 
 import type { DockviewApi, AddPanelOptions } from 'dockview-react';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import type { BottomGroup, DockviewPayload, LayoutNode } from './layout-types.js';
-import { buildDefaultLayout, PANEL_TITLES, type FactoryShape } from './layout-factory.js';
+import type { DockviewPayload, FactoryShape, LayoutColumn } from './layout-types.js';
+import { buildDefaultLayout, PANEL_TITLES } from './layout-factory.js';
 
 /** Re-export for callers that previously imported from this module. */
 export type { FactoryShape } from './layout-factory.js';
@@ -36,11 +36,7 @@ export type { FactoryShape } from './layout-factory.js';
  * Distinguish a factory-shape layout from a native (round-tripped)
  * layout. Kept as a typed predicate so call sites can narrow.
  */
-export function isFactoryShape(payload: DockviewPayload | null): payload is {
-  shape: 'factory';
-  columns: [LayoutNode, LayoutNode, LayoutNode];
-  bottomGroup: BottomGroup;
-} {
+export function isFactoryShape(payload: DockviewPayload | null): payload is FactoryShape {
   return !!payload && payload.shape === 'factory';
 }
 
@@ -56,7 +52,7 @@ export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
     return;
   }
   if (payload.shape === 'factory') {
-    applyFactoryShape(api, payload as FactoryShape);
+    applyFactoryShape(api, payload);
     return;
   }
   // shape === 'native'
@@ -84,42 +80,28 @@ function defaultFactoryShape(layout: PanelLayoutRecord): FactoryShape {
 }
 
 function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
-  // The 3-tuple `columns` type guarantees three entries at compile time;
+  // The 4-tuple `columns` type guarantees four entries at compile time;
   // the runtime guard is for records that round-tripped through `unknown`
   // (older persistence schemas) and ended up shorter.
   const c0 = shape.columns[0];
   const c1 = shape.columns[1];
   const c2 = shape.columns[2];
-  if (!c0 || !c1 || !c2) {
+  const c3 = shape.columns[3];
+  if (!c0 || !c1 || !c2 || !c3) {
     // eslint-disable-next-line no-console
     console.warn(
-      '[dockview-bridge] factory shape has fewer than 3 columns, falling back to default'
+      '[dockview-bridge] factory shape has fewer than 4 columns, falling back to default'
     );
+    applyFactoryShape(api, defaultFactoryShape({ version: 1, writtenBy: '0.0.0', dockview: null }));
     return;
   }
 
-  const left = api.addPanel({
-    id: c0.component,
-    component: c0.component,
-    title: PANEL_TITLES[c0.component],
-    initialWidth: c0.size ?? 240
-  } satisfies AddPanelOptions);
-
-  api.addPanel({
-    id: c1.component,
-    component: c1.component,
-    title: PANEL_TITLES[c1.component],
-    position: { referencePanel: left.id, direction: 'right' }
-  });
-
-  const inspector = api.addPanel({
-    id: c2.component,
-    component: c2.component,
-    title: PANEL_TITLES[c2.component],
-    initialWidth: c2.size ?? 320,
-    position: { referencePanel: c1.component, direction: 'right' }
-  });
-  if (c2.collapsed) inspector.group.api.setSize({ width: 0 });
+  const left = addColumn(api, c0, undefined);
+  const middle = addColumn(api, c1, { referencePanel: left.id, direction: 'right' });
+  const visualize = addColumn(api, c2, { referencePanel: middle.id, direction: 'right' });
+  const right = addColumn(api, c3, { referencePanel: visualize.id, direction: 'right' });
+  if (c2.collapsed) visualize.group.api.setSize({ width: 0 });
+  if (c3.collapsed) right.group.api.setSize({ width: 0 });
 
   // Bottom group: stack tabs in a single group below the editor.
   const firstTab = shape.bottomGroup.tabs[0];
@@ -128,7 +110,7 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
     id: firstTab.component,
     component: firstTab.component,
     title: PANEL_TITLES[firstTab.component],
-    position: { referencePanel: c1.component, direction: 'below' }
+    position: { referencePanel: middle.id, direction: 'below' }
   });
   for (let i = 1; i < shape.bottomGroup.tabs.length; i++) {
     const tab = shape.bottomGroup.tabs[i];
@@ -143,6 +125,45 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
   const active = api.getPanel(shape.bottomGroup.active);
   if (active) active.api.setActive();
   if (shape.bottomGroup.collapsed) firstBottom.group.api.setSize({ height: 0 });
+}
+
+function addColumn(
+  api: DockviewApi,
+  column: LayoutColumn,
+  position: AddPanelOptions['position'] | undefined
+) {
+  if ('tabs' in column) {
+    const firstTab = column.tabs[0];
+    if (!firstTab) throw new Error('Layout group must contain at least one tab');
+    const first = api.addPanel({
+      id: firstTab.component,
+      component: firstTab.component,
+      title: PANEL_TITLES[firstTab.component],
+      initialWidth: column.size,
+      ...(position ? { position } : {})
+    } satisfies AddPanelOptions);
+    for (let i = 1; i < column.tabs.length; i++) {
+      const tab = column.tabs[i];
+      if (!tab) continue;
+      api.addPanel({
+        id: tab.component,
+        component: tab.component,
+        title: PANEL_TITLES[tab.component],
+        position: { referenceGroup: first.group, direction: 'within' }
+      } satisfies AddPanelOptions);
+    }
+    const active = api.getPanel(column.active);
+    if (active) active.api.setActive();
+    return first;
+  }
+
+  return api.addPanel({
+    id: column.component,
+    component: column.component,
+    title: PANEL_TITLES[column.component],
+    initialWidth: column.size,
+    ...(position ? { position } : {})
+  } satisfies AddPanelOptions);
 }
 
 /**

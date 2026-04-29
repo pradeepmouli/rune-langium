@@ -108,6 +108,56 @@ export interface GeneratorOutput {
   funcs: GeneratedFunc[];
 }
 
+export type PreviewFieldKind =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'enum'
+  | 'object'
+  | 'array'
+  | 'unknown';
+
+export interface PreviewField {
+  path: string;
+  label: string;
+  kind: PreviewFieldKind;
+  required: boolean;
+  cardinality?: { min?: number; max?: number | 'unbounded' };
+  enumValues?: Array<{ value: string; label: string }>;
+  children?: PreviewField[];
+  description?: string;
+}
+
+export interface PreviewSourceMapEntry {
+  fieldPath: string;
+  sourceUri: string;
+  sourceLine: number;
+  sourceChar: number;
+}
+
+export interface FormPreviewSchema {
+  schemaVersion: 1;
+  targetId: string;
+  title: string;
+  status: 'ready' | 'unsupported';
+  fields: PreviewField[];
+  unsupportedFeatures?: string[];
+  sourceMap?: PreviewSourceMapEntry[];
+}
+
+/**
+ * Options for `generatePreviewSchemas()`.
+ *
+ * `targetId` narrows generation to a single data type / form target. When
+ * omitted, schemas are generated for every supported target in the document set.
+ */
+export interface GeneratePreviewSchemaOptions {
+  /** Generate only the schema for this fully-qualified target id. */
+  targetId?: string;
+  /** Maximum recursion depth to follow when expanding nested object fields. */
+  maxDepth?: number;
+}
+
 /**
  * Thrown when strict mode is enabled and any error diagnostic is produced.
  * FR-022.
