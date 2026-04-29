@@ -222,6 +222,11 @@
   --text-base: var(--font-size-base);
   --text-lg: var(--font-size-lg);
   --text-xl: var(--font-size-xl);
+  /* Dockview sash defaults — overridden per-theme in styles.css.
+   * Declared here so the no-undefined-vars quality gate (FR-025) can
+   * resolve every var(--dv-*) reference in apps/studio/src/styles.css. */
+  --dv-sash-color: rgba(124, 140, 172, 0.2);
+  --dv-active-sash-color: rgba(94, 234, 212, 0.9);
 }
 
 .dark {

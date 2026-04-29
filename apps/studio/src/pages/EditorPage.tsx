@@ -49,7 +49,7 @@ import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import { Maximize2, LayoutGrid, Code2, Network } from 'lucide-react';
+import { Maximize2, LayoutGrid, Code2, Network, XCircle } from 'lucide-react';
 import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { DockShell } from '../shell/DockShell.js';
 import type { WorkspaceFile } from '../services/workspace.js';
@@ -72,6 +72,12 @@ export interface EditorPageProps {
   workspaceId?: string;
   /** Studio build version threaded into layout migrations. */
   studioVersion?: string;
+  /** Workspace display name shown in the toolbar. */
+  workspaceName?: string;
+  /** Number of user files open in this workspace — displayed in the toolbar. */
+  fileCount?: number;
+  /** Called when the user wants to close the current workspace. */
+  onClose?: () => void;
 }
 
 export function EditorPage({
@@ -82,7 +88,10 @@ export function EditorPage({
   transportState,
   onReconnect,
   workspaceId = 'default',
-  studioVersion = '0.1.0'
+  studioVersion = '0.1.0',
+  workspaceName,
+  fileCount,
+  onClose
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
@@ -761,6 +770,29 @@ export function EditorPage({
             <Code2 className="w-3.5 h-3.5 mr-1" />
             Export Code
           </Button>
+          {onClose && (
+            <>
+              <Separator orientation="vertical" className="mx-1 h-5" />
+              {workspaceName && (
+                <span className="text-xs text-muted-foreground hidden sm:inline">
+                  {workspaceName}
+                </span>
+              )}
+              {fileCount !== undefined && fileCount > 0 && (
+                <span className="text-xs text-muted-foreground">{fileCount} file(s)</span>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onClose}
+                title="Close all files"
+                aria-label="Close workspace"
+              >
+                <XCircle className="w-3.5 h-3.5 mr-1" />
+                Close
+              </Button>
+            </>
+          )}
         </div>
       </nav>
 

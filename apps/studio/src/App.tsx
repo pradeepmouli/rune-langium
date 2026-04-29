@@ -8,19 +8,18 @@
  * and LSP client lifecycle.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
 import '@rune-langium/visual-editor/styles.css';
 import { FileLoader } from './components/FileLoader.js';
 import { ModelLoader } from './components/ModelLoader.js';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher.js';
 import { EditorPage } from './pages/EditorPage.js';
-import { Button } from '@rune-langium/design-system/ui/button';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
-import { FileText, AlertTriangle, XCircle } from 'lucide-react';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
+import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
@@ -81,18 +80,35 @@ export function App() {
   const lspClientRef = useRef<LspClientService | null>(null);
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Incremented before each model-merge parse; only the matching result is
+  // applied, preventing stale async results from overwriting newer state.
+  const modelParseTokenRef = useRef(0);
+  // Tracks the latest files state so the model-loading effect can read it
+  // synchronously without stale-closure issues. Starts as [] (matching the
+  // `files` initial state) and is kept in sync via the effect below.
+  const filesRef = useRef<WorkspaceFile[]>([]);
+  // Tracks the latest loaded reference models so syncWorkspaceToEditor can
+  // preserve them without calling useModelStore.getState() (which is not
+  // available in the test mock of useModelStore).
+  const loadedModelsRef = useRef<Map<string, LoadedModel>>(new Map());
 
   const syncWorkspaceToEditor = useCallback(async (workspaceFiles: WorkspaceFile[]) => {
     setLoading(true);
     try {
-      const allFiles: WorkspaceFile[] = [
+      // Start with the built-in base types and the user's workspace files.
+      let mergedFiles: WorkspaceFile[] = [
         ...BASE_TYPE_FILES.map((file) => ({ ...file })),
         ...workspaceFiles
       ];
-      setFiles(allFiles);
-      lspClientRef.current?.syncWorkspaceFiles(allFiles);
+      // Preserve any reference model files that are already loaded so that
+      // switching/restoring a workspace doesn't silently drop them.
+      for (const model of loadedModelsRef.current.values()) {
+        mergedFiles = mergeModelFiles(mergedFiles, model);
+      }
+      setFiles(mergedFiles);
+      lspClientRef.current?.syncWorkspaceFiles(mergedFiles);
 
-      const result = await parseWorkspaceFiles(allFiles);
+      const result = await parseWorkspaceFiles(mergedFiles);
       setModels(result.models);
       setErrors(result.errors);
     } finally {
@@ -183,6 +199,19 @@ export function App() {
       document.body.removeAttribute('data-studio-app');
     };
   }, []);
+
+  // Keep filesRef in sync so the model-loading effect below can read the
+  // current file list without stale-closure issues.
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  // Keep loadedModelsRef in sync so syncWorkspaceToEditor can read it
+  // without needing useModelStore.getState() (unavailable in tests).
+  const loadedModels = useModelStore((s) => s.models);
+  useEffect(() => {
+    loadedModelsRef.current = loadedModels;
+  }, [loadedModels]);
 
   useEffect(() => {
     if (bootState === 'restored') {
@@ -285,6 +314,11 @@ export function App() {
     setFiles([]);
     setModels([]);
     setErrors(new Map());
+    // Return to the start page so the user can open or create a workspace.
+    // Without this, bootState stays 'restored' and the "Workspace ready."
+    // placeholder is shown with no way to load new files.
+    setBootState('start');
+    setRestoredWorkspace(null);
   }, [restoredWorkspace]);
 
   /** Switch to a recent workspace from the start page list (T029). */
@@ -331,58 +365,67 @@ export function App() {
     [restoredWorkspace]
   );
 
-  // Merge reference model files into workspace when models change
-  const loadedModels = useModelStore((s) => s.models);
+  // Merge reference model files into workspace when models change and re-parse
+  // so the graph and explorer reflect the loaded reference types.
   useEffect(() => {
-    if (loadedModels.size === 0) return;
-    setFiles((prev) => {
-      let result = prev.filter((f) => !f.path.startsWith('['));
-      for (const model of loadedModels.values()) {
-        result = mergeModelFiles(result, model);
-      }
-      return result;
-    });
+    const prev = filesRef.current;
+    const hadModelFiles = prev.some((f) => f.path.startsWith('['));
+    // Skip the no-op case: no models loaded and none to clean up.
+    // When models are removed (size === 0 but hadModelFiles === true) we
+    // still run so their read-only entries are stripped from the file set.
+    if (loadedModels.size === 0 && !hadModelFiles) return;
+
+    let merged = prev.filter((f) => !f.path.startsWith('['));
+    for (const model of loadedModels.values()) {
+      merged = mergeModelFiles(merged, model);
+    }
+    setFiles(merged);
+    lspClientRef.current?.syncWorkspaceFiles(merged);
+    modelParseTokenRef.current += 1;
+    const token = modelParseTokenRef.current;
+    parseWorkspaceFiles(merged)
+      .then(({ models: m, errors: e }) => {
+        if (token !== modelParseTokenRef.current) return;
+        setModels(m);
+        setErrors(e);
+      })
+      .catch((err) => {
+        // Keep existing models on failure; log so it's still visible in devtools.
+        console.warn('[App] reparse after model load failed:', err);
+      });
   }, [loadedModels]);
 
-  const hasErrors = errors.size > 0;
   const userFiles = files.filter((f) => !f.readOnly);
+  // True whenever a full EditorPage is mounted — used to suppress the
+  // App-level header and its file-count/close row so the EditorPage's
+  // own toolbar is the sole header-like chrome.
+  const showEditorPage = useMemo(
+    () =>
+      (bootState === 'start' && !loading && userFiles.length > 0) ||
+      (bootState === 'restored' && userFiles.length > 0),
+    [bootState, loading, userFiles.length]
+  );
 
   return (
     <div className="studio-app flex flex-col h-full text-foreground bg-background">
-      <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
-        <div className="studio-brand">
-          <div className="studio-brand__mark">R</div>
-          <span className="studio-brand__name">Rune Studio</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <nav className="studio-links" aria-label="Studio links">
-            <a href={studioConfig.homeUrl}>Home</a>
-            <a href={studioConfig.docsUrl}>Docs</a>
-            <a href={studioConfig.githubUrl}>GitHub</a>
-          </nav>
-          {files.length > 0 && (
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <FileText className="w-3.5 h-3.5" />
-                {userFiles.length} file(s)
-              </span>
-              {hasErrors && (
-                <span
-                  className="flex items-center gap-1.5 text-sm text-destructive"
-                  title="Parse errors detected"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  {errors.size} with errors
-                </span>
-              )}
-              <Button variant="secondary" size="sm" onClick={handleReset} title="Close all files">
-                <XCircle className="w-3.5 h-3.5 mr-1" />
-                Close
-              </Button>
-            </div>
-          )}
-        </div>
-      </header>
+      {/* Global header — hidden when EditorPage is active to avoid a
+       * duplicate toolbar. The EditorPage toolbar hosts Close + workspace
+       * name in that mode. */}
+      {!showEditorPage && (
+        <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
+          <div className="studio-brand">
+            <div className="studio-brand__mark">R</div>
+            <span className="studio-brand__name">Rune Studio</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <nav className="studio-links" aria-label="Studio links">
+              <a href={studioConfig.homeUrl}>Home</a>
+              <a href={studioConfig.docsUrl}>Docs</a>
+              <a href={studioConfig.githubUrl}>GitHub</a>
+            </nav>
+          </div>
+        </header>
+      )}
 
       <main className="flex-1 overflow-hidden relative">
         {(bootState === 'checking' || bootState === 'restoring') && (
@@ -433,6 +476,9 @@ export function App() {
             transportState={transportState}
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
+            workspaceName={restoredWorkspace?.name}
+            fileCount={userFiles.length}
+            onClose={handleReset}
           />
         )}
 
@@ -464,6 +510,9 @@ export function App() {
             transportState={transportState}
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
+            workspaceName={restoredWorkspace?.name}
+            fileCount={userFiles.length}
+            onClose={handleReset}
           />
         )}
       </main>

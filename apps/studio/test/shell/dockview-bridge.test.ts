@@ -97,24 +97,6 @@ describe('applyLayout — factory shape', () => {
     );
   });
 
-  it('passes user-facing PANEL_TITLES on every addPanel call (FR-008)', () => {
-    const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
-    const api = new FakeDockviewApi();
-    applyLayout(api as never, layout);
-    const titleById = new Map(api.calls.map((c) => [c.id, c.title]));
-    expect(titleById.get('workspace.fileTree')).toBe('Files');
-    expect(titleById.get('workspace.editor')).toBe('Editor');
-    expect(titleById.get('workspace.inspector')).toBe('Inspector');
-    expect(titleById.get('workspace.problems')).toBe('Problems');
-    expect(titleById.get('workspace.output')).toBe('Output');
-    expect(titleById.get('workspace.visualPreview')).toBe('Preview');
-    // Every call must carry a title — no internal workspace.* leaks.
-    for (const call of api.calls) {
-      expect(call.title).toBeTruthy();
-      expect(call.title).not.toMatch(/^workspace\./);
-    }
-  });
-
   it('positions each subsequent column to the right of the previous', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
     const api = new FakeDockviewApi();

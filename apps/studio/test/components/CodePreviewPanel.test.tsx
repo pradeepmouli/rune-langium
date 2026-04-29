@@ -33,7 +33,9 @@ vi.mock('@codemirror/state', () => ({
 }));
 
 vi.mock('@codemirror/language', () => ({
-  StreamLanguage: { define: vi.fn(() => []) }
+  StreamLanguage: { define: vi.fn(() => []) },
+  HighlightStyle: { define: vi.fn(() => ({})) },
+  syntaxHighlighting: vi.fn(() => [])
 }));
 vi.mock('@codemirror/lang-json', () => ({ json: vi.fn(() => []) }));
 vi.mock('@codemirror/lang-javascript', () => ({ javascript: vi.fn(() => []) }));

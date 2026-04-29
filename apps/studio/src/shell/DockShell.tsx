@@ -50,14 +50,16 @@ import { Button } from '@rune-langium/design-system/ui/button';
 
 const DEFAULT_VIEWPORT_WIDTH = 1920;
 
+type ZeroArgRenderer = () => React.ReactElement | null;
+
 type PanelOverrides = Partial<{
-  'workspace.fileTree': React.FC;
-  'workspace.editor': React.FC;
-  'workspace.inspector': React.FC;
-  'workspace.problems': React.FC;
-  'workspace.output': React.FC;
-  'workspace.visualPreview': React.FC;
-  'workspace.codePreview': React.FC;
+  'workspace.fileTree': ZeroArgRenderer;
+  'workspace.editor': ZeroArgRenderer;
+  'workspace.inspector': ZeroArgRenderer;
+  'workspace.problems': ZeroArgRenderer;
+  'workspace.output': ZeroArgRenderer;
+  'workspace.visualPreview': ZeroArgRenderer;
+  'workspace.codePreview': ZeroArgRenderer;
 }>;
 
 interface DockShellProps {
@@ -77,16 +79,16 @@ interface DockShellProps {
 }
 
 type PanelComponentName = keyof PanelOverrides;
-type PanelRegistry = Record<PanelComponentName, React.FC>;
+type PanelRegistry = Record<PanelComponentName, ZeroArgRenderer>;
 
 const DEFAULT_PANEL_REGISTRY: PanelRegistry = {
-  'workspace.fileTree': FileTreePanel,
-  'workspace.editor': EditorPanel,
-  'workspace.inspector': InspectorPanel,
-  'workspace.problems': ProblemsPanel,
-  'workspace.output': OutputPanel,
-  'workspace.visualPreview': VisualPreviewPanel,
-  'workspace.codePreview': CodePreviewPanelShell
+  'workspace.fileTree': () => FileTreePanel({}),
+  'workspace.editor': () => EditorPanel({}),
+  'workspace.inspector': () => InspectorPanel({}),
+  'workspace.problems': () => ProblemsPanel({}),
+  'workspace.output': () => OutputPanel({}),
+  'workspace.visualPreview': () => VisualPreviewPanel({}),
+  'workspace.codePreview': () => CodePreviewPanelShell({})
 };
 
 const PanelRegistryContext = createContext<PanelRegistry>(DEFAULT_PANEL_REGISTRY);
@@ -101,8 +103,13 @@ function mergePanelRegistry(overrides: PanelOverrides | undefined): PanelRegistr
 function createDockviewPanelBridge(name: PanelComponentName): React.FC<IDockviewPanelProps> {
   function DockviewPanelBridge() {
     const registry = useContext(PanelRegistryContext);
-    const PanelComponent = registry[name];
-    return <PanelComponent />;
+    // Call the registry function directly (not as JSX) so React does NOT see a
+    // new component type when the function reference changes — which would
+    // unmount and remount the subtree (destroying the CodeMirror editor).
+    // Registry entries are explicitly typed as zero-arg renderers so this is
+    // safe without any cast.
+    const renderPanel = registry[name];
+    return renderPanel();
   }
 
   DockviewPanelBridge.displayName = `DockviewPanelBridge(${name})`;
