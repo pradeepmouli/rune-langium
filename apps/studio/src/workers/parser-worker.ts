@@ -9,7 +9,8 @@
  * and returns parsed results.
  */
 
-import { parse, parseWorkspace, type RosettaModel } from '@rune-langium/core';
+import { createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import { URI } from 'langium';
 
 export interface ParseRequest {
   type: 'parse';
@@ -43,6 +44,10 @@ export interface ParseWorkspaceResponse {
 }
 
 export type WorkerResponse = ParseResponse | ParseWorkspaceResponse;
+
+const { RuneDsl } = createRuneDslServices();
+const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+const builder = RuneDsl.shared.workspace.DocumentBuilder;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
@@ -127,15 +132,20 @@ function preserveCstText(model: any): void {
 
 async function handleParse(req: ParseRequest): Promise<ParseResponse> {
   try {
-    const result = await parse(req.content, req.uri);
+    const document = factory.fromString(
+      req.content,
+      URI.parse(req.uri ?? 'inmemory:///model.rosetta')
+    );
+    await builder.build([document], { validation: false });
     const errors: string[] = [];
-    if (result.parserErrors?.length) {
-      for (const err of result.parserErrors) {
+    if (document.parseResult.parserErrors.length > 0) {
+      for (const err of document.parseResult.parserErrors) {
         errors.push(err.message);
       }
     }
-    if (result.value) preserveCstText(result.value);
-    return { type: 'parseResult', id: req.id, model: result.value, errors };
+    const model = document.parseResult.value as RosettaModel;
+    if (model) preserveCstText(model);
+    return { type: 'parseResult', id: req.id, model, errors };
   } catch (e) {
     return {
       type: 'parseResult',
@@ -153,25 +163,24 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
   }
 
   try {
-    const results = await parseWorkspace(
-      req.files.map((file) => ({
-        uri: file.name,
-        content: file.content
-      }))
+    const documents = req.files.map((file) =>
+      factory.fromString(file.content, URI.parse(file.name))
     );
+    await builder.build(documents, { validation: false });
     const models: RosettaModel[] = [];
     const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
 
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i]!;
+    for (let i = 0; i < documents.length; i++) {
+      const document = documents[i]!;
       const file = req.files[i]!;
-      if (result.value) {
-        preserveCstText(result.value);
-        models.push(result.value);
-        parsedModels.push({ filePath: file.name, model: result.value });
+      const model = document.parseResult.value as RosettaModel;
+      if (model) {
+        preserveCstText(model);
+        models.push(model);
+        parsedModels.push({ filePath: file.name, model });
       }
-      if (result.parserErrors.length > 0) {
-        errors[file.name] = result.parserErrors.map((e) => e.message);
+      if (document.parseResult.parserErrors.length > 0) {
+        errors[file.name] = document.parseResult.parserErrors.map((e) => e.message);
       }
     }
 

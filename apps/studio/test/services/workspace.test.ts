@@ -163,36 +163,6 @@ type Foo:
     expect(result.fallbackMessage).toContain('Parser worker unavailable');
     expect(result.fallbackMessage).toContain('worker boot failed');
   });
-
-  it('prefers main-thread parsing for very large workspaces without surfacing a worker warning', async () => {
-    const workerSpy = vi.fn();
-    vi.stubGlobal(
-      'Worker',
-      class WorkerSpy {
-        constructor() {
-          workerSpy();
-        }
-      } as never
-    );
-
-    const files: WorkspaceFile[] = Array.from({ length: 129 }, (_, index) => ({
-      name: `file-${index}.rosetta`,
-      path: `file-${index}.rosetta`,
-      content: `namespace demo${index}
-
-type Type${index}:
-  value string (1..1)
-`,
-      dirty: false
-    }));
-
-    const result = await parseWorkspaceFiles(files);
-
-    expect(result.parseMode).toBe('main-thread-preferred');
-    expect(result.fallbackMessage).toBeUndefined();
-    expect(workerSpy).not.toHaveBeenCalled();
-    expect(result.models).toHaveLength(files.length);
-  });
 });
 
 // ---------------------------------------------------------------------------
