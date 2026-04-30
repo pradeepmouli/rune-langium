@@ -245,15 +245,15 @@ export function CodePreviewPanel({
       aria-labelledby={`codegen-tab-${target}`}
       data-testid="panel-codePreview"
       data-component="workspace.codePreview"
-      className="flex flex-col h-full overflow-hidden bg-background"
+      className="preview-panel preview-panel--code flex h-full flex-col overflow-hidden"
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-1.5 shrink-0">
+      <div className="preview-panel__toolbar flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-1.5">
         <TargetSwitcher value={target} onChange={handleTargetChange} />
         {selectableFiles && selectableFiles.length > 1 ? (
           <label className="min-w-0 text-xs text-muted-foreground">
             <span className="sr-only">Generated file</span>
             <select
-              className="max-w-[18rem] rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+              className="preview-panel__select max-w-[18rem] px-2 py-1 text-xs"
               value={activeRelativePath}
               onChange={(event) => setActiveCodePreviewFile(event.target.value)}
               data-testid="codegen-file-select"
@@ -293,7 +293,7 @@ export function CodePreviewPanel({
       <div
         ref={editorContainerRef}
         data-testid="code-preview-editor"
-        className="min-w-0 flex-1 overflow-auto"
+        className="preview-panel__editor min-w-0 flex-1 overflow-auto"
       />
     </section>
   );

@@ -158,13 +158,14 @@ vi.mock('../../src/components/GraphFilterMenu.js', () => ({
 
 vi.mock('../../src/shell/DockShell.js', () => ({
   DockShell: ({ panelComponents }: { panelComponents?: Record<string, React.ComponentType> }) =>
-    React.createElement(
-      'div',
-      { 'data-testid': 'dock-shell' },
+    React.createElement('div', { 'data-testid': 'dock-shell' }, [
       panelComponents?.['workspace.editor']
-        ? React.createElement(panelComponents['workspace.editor'])
+        ? React.createElement(panelComponents['workspace.editor'], { key: 'editor' })
+        : null,
+      panelComponents?.['workspace.visualPreview']
+        ? React.createElement(panelComponents['workspace.visualPreview'], { key: 'visual' })
         : null
-    )
+    ])
 }));
 
 vi.mock('../../src/hooks/useLspDiagnosticsBridge.js', () => ({
@@ -639,5 +640,47 @@ describe('EditorPage preview target identity', () => {
         '/workspace/beta.rosetta'
       );
     });
+  });
+});
+
+describe('EditorPage workspace chrome', () => {
+  beforeEach(() => {
+    vi.stubGlobal('Worker', MockWorker);
+    MockWorker.instances = [];
+    setRuneStudioTestApi(() => undefined);
+    usePreviewStore.getState().resetPreviewState();
+    editorStoreState.nodes = [];
+    editorStoreState.selectedNodeId = undefined;
+    vi.clearAllMocks();
+    sourceEditorMockState.latestProps = undefined;
+  });
+
+  afterEach(() => {
+    setRuneStudioTestApi(() => undefined);
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it('renders a workspace header and keeps graph controls inside the graph panel', () => {
+    render(
+      <EditorPage
+        models={[]}
+        files={[{ path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}
+        workspaceName="CDM Workspace"
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Studio workspace header')).toBeInTheDocument();
+    expect(screen.getByText('Rune Studio')).toBeInTheDocument();
+    expect(screen.getByText('CDM Workspace')).toBeInTheDocument();
+    expect(screen.getByText('1 file')).toBeInTheDocument();
+    expect(screen.getByTitle('Generate code from model')).toBeInTheDocument();
+
+    const graphToolbar = screen.getByLabelText('Graph toolbar');
+    expect(graphToolbar).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fit View' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Re-layout' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Grouped' })).toBeInTheDocument();
   });
 });

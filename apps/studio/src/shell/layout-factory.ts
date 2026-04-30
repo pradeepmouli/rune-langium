@@ -19,8 +19,14 @@
  */
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import type { FactoryShape, LayoutColumn, PanelComponentName } from './layout-types.js';
+import type {
+  FactoryShape,
+  LayoutColumn,
+  LayoutPreset,
+  PanelComponentName
+} from './layout-types.js';
 export {
+  type LayoutPreset,
   PANEL_COMPONENT_NAMES,
   type BottomGroup,
   type DockviewPayload,
@@ -37,12 +43,12 @@ export {
  * `workspace.*` IDs must never leak into the rendered chrome.
  */
 export const PANEL_TITLES: Record<PanelComponentName, string> = {
-  'workspace.fileTree': 'Files',
+  'workspace.fileTree': 'Explorer',
   'workspace.editor': 'Source',
-  'workspace.inspector': 'Structure',
+  'workspace.inspector': 'Inspector',
   'workspace.problems': 'Problems',
   'workspace.output': 'Messages',
-  'workspace.visualPreview': 'Visualize',
+  'workspace.visualPreview': 'Graph',
   'workspace.formPreview': 'Form',
   'workspace.codePreview': 'Code'
 };
@@ -52,24 +58,47 @@ const SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
 export interface BuildLayoutInput {
   studioVersion: string;
   viewportWidth: number;
+  preset?: LayoutPreset;
 }
 
 export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
   const small = input.viewportWidth <= SMALL_VIEWPORT_BREAKPOINT_PX;
+  const preset = input.preset ?? 'edit';
+
+  const navWidth = small ? (preset === 'navigate' ? 260 : 220) : preset === 'navigate' ? 320 : 260;
+  const graphHeight = small
+    ? preset === 'navigate'
+      ? 260
+      : 220
+    : preset === 'navigate'
+      ? 320
+      : 260;
+  const previewWidth = small
+    ? preset === 'preview'
+      ? 340
+      : 300
+    : preset === 'preview'
+      ? 420
+      : 360;
 
   const dockview: FactoryShape = {
     shape: 'factory',
+    preset,
     columns: [
-      { component: 'workspace.fileTree', size: small ? 180 : 220 },
       {
-        active: 'workspace.editor',
+        size: navWidth,
+        bottomSize: graphHeight,
+        top: { component: 'workspace.fileTree' },
+        bottom: { component: 'workspace.visualPreview' }
+      },
+      {
+        active: preset === 'navigate' ? 'workspace.inspector' : 'workspace.editor',
         weight: 3,
         tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
       },
-      { component: 'workspace.visualPreview', size: small ? 220 : 280 },
       {
-        active: 'workspace.formPreview',
-        size: small ? 280 : 340,
+        active: preset === 'preview' ? 'workspace.codePreview' : 'workspace.formPreview',
+        size: previewWidth,
         tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
       }
     ],
@@ -84,12 +113,15 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
   };
 
   return {
-    version: 1,
+    version: 2,
     writtenBy: input.studioVersion,
     dockview
   };
 }
 
 export function getLayoutColumnComponents(column: LayoutColumn): PanelComponentName[] {
-  return 'tabs' in column ? column.tabs.map((tab) => tab.component) : [column.component];
+  if ('tabs' in column) {
+    return column.tabs.map((tab) => tab.component);
+  }
+  return [column.top.component, column.bottom.component];
 }

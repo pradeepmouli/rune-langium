@@ -16,6 +16,7 @@ export type PanelComponentName = (typeof PANEL_COMPONENT_NAMES)[number];
 export type EditorTabName = 'workspace.editor' | 'workspace.inspector';
 export type PreviewTabName = 'workspace.formPreview' | 'workspace.codePreview';
 export type UtilityTabName = 'workspace.problems' | 'workspace.output';
+export type LayoutPreset = 'navigate' | 'edit' | 'preview';
 
 export interface LayoutNode<TComponent extends PanelComponentName = PanelComponentName> {
   component: TComponent;
@@ -32,17 +33,27 @@ export interface LayoutGroup<TTab extends PanelComponentName = PanelComponentNam
   tabs: [LayoutNode<TTab>, ...LayoutNode<TTab>[]];
 }
 
+export interface LayoutStack<
+  TTop extends PanelComponentName = PanelComponentName,
+  TBottom extends PanelComponentName = PanelComponentName
+> {
+  top: LayoutNode<TTop>;
+  bottom: LayoutNode<TBottom>;
+  size?: number;
+  bottomSize?: number;
+}
+
 export type EditorGroup = LayoutGroup<EditorTabName>;
 export type PreviewGroup = LayoutGroup<PreviewTabName>;
 export type BottomGroup = LayoutGroup<UtilityTabName> & { collapsed: boolean };
 
-export type LeftColumn = LayoutNode<'workspace.fileTree'>;
-export type VisualizeColumn = LayoutNode<'workspace.visualPreview'>;
-export type LayoutColumn = LeftColumn | EditorGroup | VisualizeColumn | PreviewGroup;
+export type NavigationColumn = LayoutStack<'workspace.fileTree', 'workspace.visualPreview'>;
+export type LayoutColumn = NavigationColumn | EditorGroup | PreviewGroup;
 
 export interface FactoryShape {
   shape: 'factory';
-  columns: [LeftColumn, EditorGroup, VisualizeColumn, PreviewGroup];
+  preset?: LayoutPreset;
+  columns: [NavigationColumn, EditorGroup, PreviewGroup];
   bottomGroup: BottomGroup;
 }
 

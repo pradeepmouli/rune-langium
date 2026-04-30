@@ -112,40 +112,38 @@
     --dv-active-sash-transition-delay: 0s;
   }
 
-  .studio-app .studio-mode-header {
-    display: grid;
-    grid-template-columns:
-      minmax(180px, 240px)
-      minmax(0, 1fr)
-      minmax(200px, 280px)
-      minmax(260px, 360px);
+  .studio-app .studio-layout-presets {
+    display: flex;
     align-items: center;
-    min-height: 24px;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 32px;
+    padding: 0.25rem 0.5rem;
     border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
     background: color-mix(in srgb, var(--background) 92%, var(--muted) 8%);
-    color: var(--muted-foreground);
-    font-size: 0.625rem;
-    font-weight: 650;
-    letter-spacing: 0;
-    text-transform: uppercase;
   }
 
-  .studio-app .studio-mode-header__item {
+  .studio-app .studio-layout-presets__group {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
     min-width: 0;
-    padding: 0.25rem 0.625rem;
-    border-right: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
-  .studio-app .studio-mode-header__item--preview {
-    border-right: 0;
+  .studio-app .studio-layout-presets__group--actions {
+    margin-left: auto;
+  }
+
+  .studio-app .studio-layout-presets__button {
+    text-transform: uppercase;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
   }
 
   @media (max-width: 1280px) {
-    .studio-app .studio-mode-header {
-      grid-template-columns: 180px minmax(0, 1fr) 220px 240px;
+    .studio-app .studio-layout-presets {
+      flex-wrap: wrap;
     }
   }
 
@@ -155,6 +153,10 @@
 
   .studio-app .dockview-theme-abyss .dv-tab .dv-tab-content {
     padding-inline: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.625rem;
+    font-weight: 700;
   }
 
   .studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
@@ -1074,6 +1076,152 @@
 
 .studio-app-header--compact .studio-brand__name {
   font-size: 12px;
+}
+
+.preview-panel {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card) 92%, transparent), transparent 32%),
+    color-mix(in srgb, var(--background) 88%, transparent);
+}
+
+.preview-panel__toolbar,
+.preview-panel__header {
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.preview-panel__editor {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--muted) 22%, transparent), transparent 18%),
+    color-mix(in srgb, var(--background) 95%, black 5%);
+}
+
+.preview-panel__editor .cm-editor {
+  height: 100%;
+  background: transparent;
+}
+
+.preview-panel__editor .cm-scroller {
+  font-family: var(--font-mono);
+}
+
+.preview-panel__target-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+}
+
+.preview-panel__target-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  background: transparent;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.preview-panel__target-button[data-state='active'] {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--background) 86%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 75%, transparent);
+}
+
+.preview-panel__target-button:hover {
+  color: var(--foreground);
+}
+
+.preview-panel__select,
+.preview-panel__input {
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 0.625rem;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  color: var(--foreground);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+}
+
+.preview-panel__input:focus,
+.preview-panel__select:focus,
+.preview-panel__target-button:focus-visible,
+.preview-panel__action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 70%, transparent);
+  outline-offset: 1px;
+}
+
+.preview-panel__body {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--muted) 12%, transparent), transparent 24%);
+}
+
+.preview-panel__group,
+.preview-panel__array-item,
+.preview-panel__sample {
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 0.875rem;
+  background: color-mix(in srgb, var(--card) 74%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, black 18%, transparent);
+}
+
+.preview-panel__array-item {
+  border-style: dashed;
+}
+
+.preview-panel__action {
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 0.625rem;
+  background: color-mix(in srgb, var(--background) 88%, transparent);
+  color: var(--foreground);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.preview-panel__action:hover {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--background));
+}
+
+.preview-panel__chip {
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 48%, transparent);
+}
+
+.preview-panel__sample-output {
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--background) 82%, black 18%);
+}
+
+.preview-panel__description {
+  max-width: 60ch;
+}
+
+.preview-panel__error {
+  color: color-mix(in srgb, var(--destructive) 90%, white 10%);
+}
+
+.preview-panel__checkbox {
+  accent-color: var(--primary);
+}
+
+.preview-panel__empty {
+  margin: auto 0;
+  padding: 1rem;
+  border: 1px dashed color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
 }
 
 /* ── Refactory Dark — Grid background ────────────────────────── */

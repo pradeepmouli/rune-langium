@@ -50,15 +50,14 @@ async function assertDockChrome(page: Page): Promise<void> {
   expect(text).not.toContain('workspace.output');
   expect(text).not.toContain('workspace.visualPreview');
 
-  await expect(page.getByTestId('studio-mode-header')).toContainText('Navigate');
-  await expect(page.getByTestId('studio-mode-header')).toContainText('Edit');
-  await expect(page.getByTestId('studio-mode-header')).toContainText('Visualize');
-  await expect(page.getByTestId('studio-mode-header')).toContainText('Preview');
+  await expect(page.getByTestId('studio-layout-presets')).toContainText('Navigate');
+  await expect(page.getByTestId('studio-layout-presets')).toContainText('Edit');
+  await expect(page.getByTestId('studio-layout-presets')).toContainText('Preview');
 
-  await expect(page.locator('.dv-tab', { hasText: 'Files' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Explorer' }).first()).toBeVisible();
   await expect(page.locator('.dv-tab', { hasText: 'Source' }).first()).toBeVisible();
-  await expect(page.locator('.dv-tab', { hasText: 'Structure' }).first()).toBeVisible();
-  await expect(page.locator('.dv-tab', { hasText: 'Visualize' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Inspector' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Graph' }).first()).toBeVisible();
   await expect(page.locator('.dv-tab', { hasText: 'Form' }).first()).toBeVisible();
   await expect(page.locator('.dv-tab', { hasText: 'Code' }).first()).toBeVisible();
   await expect(page.locator('.dv-tab', { hasText: 'Problems' }).first()).toBeVisible();

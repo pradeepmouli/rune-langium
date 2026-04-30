@@ -15,10 +15,10 @@
  *   workspace.output       ← (default stub for now; output stream wires later)
  *   workspace.visualPreview ← RuneTypeGraph
  *
- * Replaces the previous fixed two-panel resizable layout. The persistent
- * top toolbar shrinks to graph-only controls (panel toggles disappear —
- * users hide panels via dockview). The diagnostics drawer + explorer
- * sidebar merge into the dockable shell, reducing chrome (T091).
+ * Replaces the previous fixed two-panel resizable layout. Workspace-level
+ * actions live in a compact studio header, while graph-specific controls
+ * now live inside the graph panel itself. The diagnostics drawer +
+ * explorer sidebar merge into the dockable shell, reducing chrome (T091).
  */
 
 import { useRef, useCallback, useState, useMemo, useEffect, type KeyboardEvent } from 'react';
@@ -133,7 +133,6 @@ export function EditorPage({
   const [groupedLayout, setGroupedLayout] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
-  const [openedFilePaths, setOpenedFilePaths] = useState<Set<string>>(new Set<string>());
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
   const previewRequestSequenceRef = useRef(0);
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
@@ -344,24 +343,12 @@ export function EditorPage({
 
   useEffect(() => {
     if (files.length === 0) {
-      setOpenedFilePaths((prev) => (prev.size === 0 ? prev : new Set<string>()));
       setActiveEditorFile((prev) => (prev === undefined ? prev : undefined));
       return;
     }
 
     const availablePaths = new Set(files.map((file) => file.path));
     const preferredFile = files.find((file) => !file.readOnly) ?? files[0]!;
-
-    setOpenedFilePaths((prev) => {
-      const next = new Set([...prev].filter((path) => availablePaths.has(path)));
-      if (next.size === 0) {
-        next.add(preferredFile.path);
-      }
-      if (next.size === prev.size && [...next].every((path) => prev.has(path))) {
-        return prev;
-      }
-      return next;
-    });
 
     setActiveEditorFile((prev) => {
       if (prev && availablePaths.has(prev)) {
@@ -576,12 +563,6 @@ export function EditorPage({
   );
 
   const openFileInSource = useCallback((filePath: string) => {
-    setOpenedFilePaths((prev) => {
-      if (prev.has(filePath)) return prev;
-      const next = new Set(prev);
-      next.add(filePath);
-      return next;
-    });
     setActiveEditorFile(filePath);
   }, []);
 
@@ -706,10 +687,13 @@ export function EditorPage({
     []
   );
 
-  const sourceEditorFiles = useMemo(
-    () => files.filter((f) => openedFilePaths.has(f.path)),
-    [files, openedFilePaths]
-  );
+  const sourceEditorFiles = useMemo(() => {
+    const resolvedActiveFile =
+      (activeEditorFile ? files.find((file) => file.path === activeEditorFile) : undefined) ??
+      files.find((file) => !file.readOnly) ??
+      files[0];
+    return resolvedActiveFile ? [resolvedActiveFile] : [];
+  }, [activeEditorFile, files]);
 
   useEffect(() => {
     const pending = pendingRevealRef.current;
@@ -721,21 +705,6 @@ export function EditorPage({
       });
     }
   }, [sourceEditorFiles]);
-
-  const closeFileInSource = useCallback(
-    (filePath: string) => {
-      setOpenedFilePaths((prev) => {
-        const next = new Set(prev);
-        next.delete(filePath);
-        return next;
-      });
-      if (activeEditorFile === filePath) {
-        const remaining = files.filter((f) => openedFilePaths.has(f.path) && f.path !== filePath);
-        setActiveEditorFile(remaining[0]?.path);
-      }
-    },
-    [files, openedFilePaths, activeEditorFile]
-  );
 
   const getSerializedFiles = useCallback((): Map<string, string> => {
     const rosettaText = graphRef.current?.exportRosetta?.();
@@ -866,7 +835,6 @@ export function EditorPage({
         activeFile={activeEditorFile}
         lspClient={lspClient}
         onFileSelect={(path) => setActiveEditorFile(path)}
-        onFileClose={closeFileInSource}
         onContentChange={handleSourceChange}
         onNavigateToNode={navigateToNode}
         onEditorViewCreated={handleEditorViewCreated}
@@ -876,7 +844,6 @@ export function EditorPage({
       sourceEditorFiles,
       activeEditorFile,
       lspClient,
-      closeFileInSource,
       handleSourceChange,
       navigateToNode,
       handleEditorViewCreated
@@ -946,22 +913,67 @@ export function EditorPage({
 
   const VisualPreviewPanelMounted = useCallback(
     () => (
-      <RuneTypeGraph
-        ref={graphRef}
-        config={{
-          layout: { direction: 'TB', groupByInheritance: groupedLayout },
-          showControls: true,
-          showMinimap: true,
-          readOnly: false
-        }}
-        callbacks={{
-          onNodeDoubleClick: () => {},
-          onModelChanged: handleModelChanged,
-          onNavigateToType: navigateToNode
-        }}
-      />
+      <section
+        role="region"
+        aria-label="Graph"
+        data-testid="panel-visualPreview"
+        data-component="workspace.visualPreview"
+        className="flex h-full min-h-0 flex-col overflow-hidden"
+      >
+        <div
+          role="toolbar"
+          aria-label="Graph toolbar"
+          className="glass-toolbar flex flex-wrap items-center gap-1.5 border-b border-border px-2 py-1.5"
+        >
+          <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
+            <Maximize2 className="w-3.5 h-3.5 mr-1" />
+            Fit View
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleRelayout} title="Re-run auto layout">
+            <LayoutGrid className="w-3.5 h-3.5 mr-1" />
+            Re-layout
+          </Button>
+          <Separator orientation="vertical" className="mx-1 h-5" />
+          <Button
+            variant={groupedLayout ? 'default' : 'secondary'}
+            data-variant={groupedLayout ? 'default' : 'secondary'}
+            aria-pressed={groupedLayout}
+            size="sm"
+            onClick={handleToggleGroupedLayout}
+            title="Group by inheritance trees"
+          >
+            <Network className="w-3.5 h-3.5 mr-1" />
+            Grouped
+          </Button>
+          <Separator orientation="vertical" className="mx-1 h-5" />
+          <GraphFilterMenu />
+        </div>
+        <div className="min-h-0 flex-1">
+          <RuneTypeGraph
+            ref={graphRef}
+            config={{
+              layout: { direction: 'TB', groupByInheritance: groupedLayout },
+              showControls: true,
+              showMinimap: true,
+              readOnly: false
+            }}
+            callbacks={{
+              onNodeDoubleClick: () => {},
+              onModelChanged: handleModelChanged,
+              onNavigateToType: navigateToNode
+            }}
+          />
+        </div>
+      </section>
     ),
-    [groupedLayout, handleModelChanged, navigateToNode]
+    [
+      groupedLayout,
+      handleFitView,
+      handleModelChanged,
+      handleRelayout,
+      handleToggleGroupedLayout,
+      navigateToNode
+    ]
   );
 
   // Memoize the overrides object so DockShell's useMemo([panelComponents])
@@ -988,6 +1000,8 @@ export function EditorPage({
     ]
   );
 
+  const workspaceFileCount = fileCount ?? files.length;
+
   return (
     <div
       className="flex flex-col h-full overflow-hidden"
@@ -995,43 +1009,26 @@ export function EditorPage({
       onKeyDown={handleEditorPageKeyDown}
       tabIndex={-1}
     >
-      {/* Toolbar — graph-only controls. Panel toggles are gone; users
-       * collapse / rearrange via dockview. (T091 chrome reduction.)
-       * T059 (014/FR-027) — buttons grouped by category with vertical
-       * separators; toggle-style buttons (Grouped) carry aria-pressed
-       * matching their data-variant for SR users + automated audits. */}
-      <nav
-        className="glass-toolbar flex items-center justify-between px-3 py-1.5 gap-2 border-b border-border"
-        aria-label="Editor toolbar"
+      <header
+        className="glass-header studio-app-header--compact flex flex-wrap items-center justify-between gap-3 px-3 py-2"
+        aria-label="Studio workspace header"
       >
-        <div className="flex items-center gap-1.5">
-          {/* Layout actions */}
-          <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
-            <Maximize2 className="w-3.5 h-3.5 mr-1" />
-            Fit View
-          </Button>
-          <Button variant="secondary" size="sm" onClick={handleRelayout} title="Re-run auto layout">
-            <LayoutGrid className="w-3.5 h-3.5 mr-1" />
-            Re-layout
-          </Button>
-          <Separator orientation="vertical" className="mx-1 h-5" />
-          {/* Toggle controls (panel-toggle semantics: aria-pressed) */}
-          <Button
-            variant={groupedLayout ? 'default' : 'secondary'}
-            data-variant={groupedLayout ? 'default' : 'secondary'}
-            aria-pressed={groupedLayout}
-            size="sm"
-            onClick={handleToggleGroupedLayout}
-            title="Group by inheritance trees"
-          >
-            <Network className="w-3.5 h-3.5 mr-1" />
-            Grouped
-          </Button>
-          <Separator orientation="vertical" className="mx-1 h-5" />
-          {/* Filter controls */}
-          <GraphFilterMenu />
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="studio-brand">
+            <div className="studio-brand__mark">R</div>
+            <span className="studio-brand__name">Rune Studio</span>
+          </div>
+          <Separator orientation="vertical" className="hidden h-5 sm:block" />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-foreground">
+              {workspaceName || 'Untitled workspace'}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <ExportMenu
             getSerializedFiles={getSerializedFiles}
             exportImage={handleExportImage}
@@ -1051,14 +1048,6 @@ export function EditorPage({
           {onClose && (
             <>
               <Separator orientation="vertical" className="mx-1 h-5" />
-              {workspaceName && (
-                <span className="text-xs text-muted-foreground hidden sm:inline">
-                  {workspaceName}
-                </span>
-              )}
-              {fileCount !== undefined && fileCount > 0 && (
-                <span className="text-xs text-muted-foreground">{fileCount} file(s)</span>
-              )}
               <Button
                 variant="secondary"
                 size="sm"
@@ -1072,7 +1061,7 @@ export function EditorPage({
             </>
           )}
         </div>
-      </nav>
+      </header>
 
       {toastMessage && (
         <div

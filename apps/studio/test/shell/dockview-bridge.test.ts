@@ -86,14 +86,15 @@ describe('applyLayout — factory shape', () => {
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     const ids = api.calls.map((c) => c.id);
-    // First three are columns left-to-right; remaining three are bottom tabs.
-    expect(ids.slice(0, 3)).toEqual([
+    // First four are left stack + center + right; remaining two are bottom tabs.
+    expect(ids.slice(0, 4)).toEqual([
       'workspace.fileTree',
+      'workspace.visualPreview',
       'workspace.editor',
       'workspace.inspector'
     ]);
-    expect(ids.slice(3)).toEqual(
-      expect.arrayContaining(['workspace.problems', 'workspace.output', 'workspace.visualPreview'])
+    expect(ids.slice(4)).toEqual(
+      expect.arrayContaining(['workspace.problems', 'workspace.output', 'workspace.formPreview'])
     );
   });
 
@@ -102,12 +103,12 @@ describe('applyLayout — factory shape', () => {
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     const titleById = new Map(api.calls.map((c) => [c.id, c.title]));
-    expect(titleById.get('workspace.fileTree')).toBe('Files');
+    expect(titleById.get('workspace.fileTree')).toBe('Explorer');
     expect(titleById.get('workspace.editor')).toBe('Source');
-    expect(titleById.get('workspace.inspector')).toBe('Structure');
+    expect(titleById.get('workspace.inspector')).toBe('Inspector');
     expect(titleById.get('workspace.problems')).toBe('Problems');
     expect(titleById.get('workspace.output')).toBe('Messages');
-    expect(titleById.get('workspace.visualPreview')).toBe('Visualize');
+    expect(titleById.get('workspace.visualPreview')).toBe('Graph');
     expect(titleById.get('workspace.formPreview')).toBe('Form');
     expect(titleById.get('workspace.codePreview')).toBe('Code');
     // Every call must carry a title — no internal workspace.* leaks.
@@ -126,11 +127,11 @@ describe('applyLayout — factory shape', () => {
     const inspector = api.calls.find((c) => c.id === 'workspace.inspector');
     expect(inspector?.position?.direction).toBe('within');
     const visualize = api.calls.find((c) => c.id === 'workspace.visualPreview');
-    expect(visualize?.position?.direction).toBe('right');
-    expect(visualize?.position?.referencePanel).toBe('workspace.editor');
+    expect(visualize?.position?.direction).toBe('below');
+    expect(visualize?.position?.referencePanel).toBe('workspace.fileTree');
     const preview = api.calls.find((c) => c.id === 'workspace.formPreview');
     expect(preview?.position?.direction).toBe('right');
-    expect(preview?.position?.referencePanel).toBe('workspace.visualPreview');
+    expect(preview?.position?.referencePanel).toBe('workspace.editor');
   });
 
   it('positions the first bottom tab below the editor and the rest within the same group', () => {
@@ -189,8 +190,7 @@ describe('applyLayout — native shape', () => {
     expect(errSpy).toHaveBeenCalledOnce();
     const arg0 = errSpy.mock.calls[0]?.[0];
     expect(String(arg0)).toContain('api.fromJSON rejected');
-    // Fallback factory layout was applied (4 top-level columns + utility tabs).
-    expect(api.calls.length).toBeGreaterThanOrEqual(7);
+    expect(api.calls.length).toBeGreaterThanOrEqual(6);
     errSpy.mockRestore();
   });
 });

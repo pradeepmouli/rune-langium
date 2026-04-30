@@ -43,6 +43,7 @@ import { VisualPreviewPanel } from './panels/VisualPreviewPanel.js';
 import { FormPreviewPanel } from './panels/FormPreviewPanel.js';
 import { CodePreviewPanel as CodePreviewPanelShell } from './panels/CodePreviewPanel.js';
 import { buildDefaultLayout, PANEL_COMPONENT_NAMES } from './layout-factory.js';
+import type { LayoutPreset } from './layout-factory.js';
 import { sanitizeLayoutWithDiagnostics } from './layout-migrations.js';
 import { applyLayout, serializeLayout } from './dockview-bridge.js';
 import { installShellShortcuts, type ShellAction } from './keyboard.js';
@@ -52,6 +53,11 @@ import { UtilityTrayContext } from './utility-tray-context.js';
 
 const DEFAULT_VIEWPORT_WIDTH = 1920;
 const DEFAULT_UTILITY_HEIGHT = 220;
+const PRESET_OPTIONS: Array<{ id: LayoutPreset; label: string }> = [
+  { id: 'navigate', label: 'Navigate' },
+  { id: 'edit', label: 'Edit' },
+  { id: 'preview', label: 'Preview' }
+] as const;
 
 type ZeroArgRenderer = () => React.ReactElement | null;
 
@@ -154,6 +160,11 @@ export function DockShell({
   });
   const [layout, setLayout] = useState<PanelLayoutRecord>(
     () => getSanitizedLayout(initialLayout).layout
+  );
+  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>(() =>
+    layout.dockview && layout.dockview.shape === 'factory'
+      ? (layout.dockview.preset ?? 'edit')
+      : 'edit'
   );
   const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
     layout.dockview && layout.dockview.shape === 'factory'
@@ -276,17 +287,65 @@ export function DockShell({
       data-workspace-id={workspaceId}
     >
       <div
-        role="group"
-        aria-label="Studio mode groups"
-        className="studio-mode-header"
-        data-testid="studio-mode-header"
+        role="toolbar"
+        aria-label="Studio layout presets"
+        className="studio-layout-presets"
+        data-testid="studio-layout-presets"
       >
-        <div className="studio-mode-header__item studio-mode-header__item--navigate">Navigate</div>
-        <div className="studio-mode-header__item studio-mode-header__item--edit">Edit</div>
-        <div className="studio-mode-header__item studio-mode-header__item--visualize">
-          Visualize
+        <div className="studio-layout-presets__group">
+          {PRESET_OPTIONS.map((preset) => (
+            <Button
+              key={preset.id}
+              type="button"
+              size="xs"
+              variant={layoutPreset === preset.id ? 'default' : 'secondary'}
+              aria-pressed={layoutPreset === preset.id}
+              className="studio-layout-presets__button"
+              onClick={() => {
+                const next = buildDefaultLayout({
+                  studioVersion,
+                  viewportWidth: getViewportWidth(),
+                  preset: preset.id
+                });
+                setLayoutPreset(preset.id);
+                setLayout(next);
+                setUtilitiesCollapsedState(
+                  next.dockview?.shape === 'factory' ? next.dockview.bottomGroup.collapsed : false
+                );
+                if (apiRef.current) {
+                  apiRef.current.clear();
+                  applyLayout(apiRef.current, next);
+                }
+                onLayoutChangeRef.current?.(next);
+              }}
+            >
+              {preset.label}
+            </Button>
+          ))}
         </div>
-        <div className="studio-mode-header__item studio-mode-header__item--preview">Preview</div>
+        <div className="studio-layout-presets__group studio-layout-presets__group--actions">
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            onClick={toggleUtilities}
+            data-testid="toggle-utilities"
+            aria-pressed={!utilitiesCollapsed}
+            className="studio-chrome-button"
+          >
+            {utilitiesCollapsed ? 'Show utilities' : 'Hide utilities'}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            onClick={resetLayout}
+            data-testid="reset-layout"
+            className="studio-chrome-button"
+          >
+            Reset layout
+          </Button>
+        </div>
       </div>
       {layoutNotice ? (
         <div
@@ -313,27 +372,6 @@ export function DockShell({
           </div>
         </UtilityTrayContext.Provider>
       </PanelRegistryContext.Provider>
-      <Button
-        type="button"
-        variant="secondary"
-        size="xs"
-        onClick={toggleUtilities}
-        data-testid="toggle-utilities"
-        aria-pressed={!utilitiesCollapsed}
-        className="studio-chrome-button absolute right-28 bottom-3 z-10 shadow-lg"
-      >
-        {utilitiesCollapsed ? 'Show utilities' : 'Hide utilities'}
-      </Button>
-      <Button
-        type="button"
-        variant="secondary"
-        size="xs"
-        onClick={resetLayout}
-        data-testid="reset-layout"
-        className="studio-chrome-button absolute right-3 bottom-3 z-10 shadow-lg"
-      >
-        Reset layout
-      </Button>
     </div>
   );
 }

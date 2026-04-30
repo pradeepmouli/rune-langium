@@ -26,7 +26,13 @@
 
 import type { DockviewApi, AddPanelOptions } from 'dockview-react';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import type { DockviewPayload, FactoryShape, LayoutColumn } from './layout-types.js';
+import type {
+  DockviewPayload,
+  FactoryShape,
+  LayoutNode,
+  LayoutGroup,
+  PanelComponentName
+} from './layout-types.js';
 import { buildDefaultLayout, PANEL_TITLES } from './layout-factory.js';
 
 /** Re-export for callers that previously imported from this module. */
@@ -80,28 +86,28 @@ function defaultFactoryShape(layout: PanelLayoutRecord): FactoryShape {
 }
 
 function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
-  // The 4-tuple `columns` type guarantees four entries at compile time;
-  // the runtime guard is for records that round-tripped through `unknown`
-  // (older persistence schemas) and ended up shorter.
+  // The tuple guarantees three entries at compile time; the runtime guard is
+  // for records that round-tripped through `unknown` and ended up shorter.
   const c0 = shape.columns[0];
   const c1 = shape.columns[1];
   const c2 = shape.columns[2];
-  const c3 = shape.columns[3];
-  if (!c0 || !c1 || !c2 || !c3) {
+  if (!c0 || !c1 || !c2) {
     // eslint-disable-next-line no-console
     console.warn(
-      '[dockview-bridge] factory shape has fewer than 4 columns, falling back to default'
+      '[dockview-bridge] factory shape has fewer than 3 columns, falling back to default'
     );
     applyFactoryShape(api, defaultFactoryShape({ version: 1, writtenBy: '0.0.0', dockview: null }));
     return;
   }
 
-  const left = addColumn(api, c0, undefined);
-  const middle = addColumn(api, c1, { referencePanel: left.id, direction: 'right' });
-  const visualize = addColumn(api, c2, { referencePanel: middle.id, direction: 'right' });
-  const right = addColumn(api, c3, { referencePanel: visualize.id, direction: 'right' });
-  if (c2.collapsed) visualize.group.api.setSize({ width: 0 });
-  if (c3.collapsed) right.group.api.setSize({ width: 0 });
+  const left = addLeafOrGroup(api, c0.top, undefined, c0.size);
+  const visualize = addLeafOrGroup(api, c0.bottom, { referencePanel: left.id, direction: 'below' });
+  if (c0.bottomSize) {
+    visualize.group.api.setSize({ height: c0.bottomSize });
+  }
+  const middle = addLeafOrGroup(api, c1, { referencePanel: left.id, direction: 'right' });
+  const right = addLeafOrGroup(api, c2, { referencePanel: middle.id, direction: 'right' });
+  if (c2.collapsed) right.group.api.setSize({ width: 0 });
 
   // Bottom group: stack tabs in a single group below the editor.
   const firstTab = shape.bottomGroup.tabs[0];
@@ -127,10 +133,11 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
   if (shape.bottomGroup.collapsed) firstBottom.group.api.setSize({ height: 0 });
 }
 
-function addColumn(
+function addLeafOrGroup(
   api: DockviewApi,
-  column: LayoutColumn,
-  position: AddPanelOptions['position'] | undefined
+  column: LayoutNode<PanelComponentName> | LayoutGroup<PanelComponentName>,
+  position: AddPanelOptions['position'] | undefined,
+  initialWidth?: number
 ) {
   if ('tabs' in column) {
     const firstTab = column.tabs[0];
@@ -139,7 +146,7 @@ function addColumn(
       id: firstTab.component,
       component: firstTab.component,
       title: PANEL_TITLES[firstTab.component],
-      initialWidth: column.size,
+      initialWidth: initialWidth ?? column.size,
       ...(position ? { position } : {})
     } satisfies AddPanelOptions);
     for (let i = 1; i < column.tabs.length; i++) {
@@ -161,7 +168,7 @@ function addColumn(
     id: column.component,
     component: column.component,
     title: PANEL_TITLES[column.component],
-    initialWidth: column.size,
+    initialWidth: initialWidth ?? column.size,
     ...(position ? { position } : {})
   } satisfies AddPanelOptions);
 }

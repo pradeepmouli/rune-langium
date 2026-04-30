@@ -115,13 +115,13 @@ describe('DockShell — dockview integration (T065)', () => {
     }
   });
 
-  it('calls onLayoutChange on initial mount with version=1', async () => {
+  it('calls onLayoutChange on initial mount with version=2', async () => {
     const onChange = vi.fn();
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" onLayoutChange={onChange} />);
     await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
     expect(onChange).toHaveBeenCalled();
     const last = onChange.mock.calls.at(-1)?.[0];
-    expect(last.version).toBe(1);
+    expect(last.version).toBe(2);
   });
 
   it('exposes role=application on the shell container', () => {
@@ -129,13 +129,12 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(screen.getByRole('application', { name: /studio dock shell/i })).toBeInTheDocument();
   });
 
-  it('renders compact grouped mode headers above the dock surface', () => {
+  it('renders layout preset controls above the dock surface', () => {
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
-    const header = screen.getByRole('group', { name: /studio mode groups/i });
+    const header = screen.getByRole('toolbar', { name: /studio layout presets/i });
     expect(header).toBeInTheDocument();
     expect(header).toHaveTextContent('Navigate');
     expect(header).toHaveTextContent('Edit');
-    expect(header).toHaveTextContent('Visualize');
     expect(header).toHaveTextContent('Preview');
   });
 

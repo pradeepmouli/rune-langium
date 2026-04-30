@@ -16,13 +16,16 @@ afterEach(() => vi.restoreAllMocks());
 describe('sanitizeLayout (T063)', () => {
   it('rebuilds when the input is missing or malformed', () => {
     const out = sanitizeLayout(null, { studioVersion: '0.1.0', viewportWidth: 1440 });
-    expect(out.version).toBe(1);
+    expect(out.version).toBe(2);
     const dockview = out.dockview;
     if (!dockview || dockview.shape !== 'factory') {
       throw new Error('factory layout expected');
     }
-    expect(dockview.columns).toHaveLength(4);
-    expect(dockview.columns[2]).toMatchObject({ component: 'workspace.visualPreview' });
+    expect(dockview.columns).toHaveLength(3);
+    expect(dockview.columns[0]).toMatchObject({
+      top: { component: 'workspace.fileTree' },
+      bottom: { component: 'workspace.visualPreview' }
+    });
     expect(dockview.bottomGroup.tabs.map((tab) => tab.component)).toEqual([
       'workspace.problems',
       'workspace.output'
@@ -60,7 +63,7 @@ describe('sanitizeLayout (T063)', () => {
       dockview: { something: 'unknown' }
     };
     const out = sanitizeLayout(futureLayout, { studioVersion: '0.2.0', viewportWidth: 1440 });
-    expect(out.version).toBe(1);
+    expect(out.version).toBe(2);
     expect(out.writtenBy).toBe('0.2.0');
   });
 
@@ -70,9 +73,12 @@ describe('sanitizeLayout (T063)', () => {
       writtenBy: '0.1.0',
       dockview: {
         columns: [
-          { component: 'workspace.fileTree' },
+          {
+            top: { component: 'workspace.fileTree' },
+            bottom: { component: 'workspace.visualPreview' }
+          },
           { component: 'workspace.editor' },
-          { component: 'workspace.inspector' }
+          { component: 'workspace.formPreview' }
         ],
         bottomGroup: {
           active: 'workspace.problems',
@@ -93,12 +99,14 @@ describe('sanitizeLayout (T063)', () => {
       dockview: {
         shape: 'factory',
         columns: [
-          { component: 'workspace.fileTree' },
+          {
+            top: { component: 'workspace.fileTree' },
+            bottom: { component: 'workspace.visualPreview' }
+          },
           {
             active: 'workspace.visualPreview',
             tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
           },
-          { component: 'workspace.visualPreview' },
           {
             active: 'workspace.output',
             tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
@@ -118,7 +126,7 @@ describe('sanitizeLayout (T063)', () => {
     }
 
     expect(out.dockview.columns[1].active).toBe('workspace.editor');
-    expect(out.dockview.columns[3].active).toBe('workspace.formPreview');
+    expect(out.dockview.columns[2].active).toBe('workspace.formPreview');
     expect(out.dockview.bottomGroup.active).toBe('workspace.problems');
     expect(warnSpy).toHaveBeenCalledWith(
       '[layout-migrations] normalized invalid active tabs in saved layout'
@@ -133,7 +141,10 @@ describe('sanitizeLayout (T063)', () => {
       dockview: {
         shape: 'factory',
         columns: [
-          { component: 'workspace.fileTree' },
+          {
+            top: { component: 'workspace.fileTree' },
+            bottom: { component: 'workspace.visualPreview' }
+          },
           { active: 'workspace.editor', tabs: [{ component: 'workspace.editor' }] }
         ],
         bottomGroup: {
@@ -150,7 +161,7 @@ describe('sanitizeLayout (T063)', () => {
     }
 
     expect(out.writtenBy).toBe('0.2.0');
-    expect(out.dockview.columns).toHaveLength(4);
+    expect(out.dockview.columns).toHaveLength(3);
     expect(warnSpy).toHaveBeenCalledWith(
       '[layout-migrations] reset invalid saved layout to defaults'
     );
@@ -164,12 +175,14 @@ describe('sanitizeLayout (T063)', () => {
       dockview: {
         shape: 'factory',
         columns: [
-          { component: 'workspace.fileTree' },
+          {
+            top: { component: 'workspace.fileTree' },
+            bottom: { component: 'workspace.visualPreview' }
+          },
           {
             active: 'workspace.editor',
             tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
           },
-          { component: 'workspace.visualPreview' },
           {
             active: 'workspace.formPreview',
             tabs: [{ component: 'workspace.legacyFormPreview' }]
@@ -188,8 +201,8 @@ describe('sanitizeLayout (T063)', () => {
       throw new Error('factory layout expected');
     }
 
-    expect(out.dockview.columns).toHaveLength(4);
-    expect(out.dockview.columns[3].active).toBe('workspace.formPreview');
+    expect(out.dockview.columns).toHaveLength(3);
+    expect(out.dockview.columns[2].active).toBe('workspace.formPreview');
     expect(warnSpy).toHaveBeenCalledWith(
       '[layout-migrations] reset invalid saved layout to defaults'
     );

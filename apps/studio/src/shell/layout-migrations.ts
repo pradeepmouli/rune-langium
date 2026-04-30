@@ -23,7 +23,7 @@ import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { buildDefaultLayout, type BuildLayoutInput } from './layout-factory.js';
 import { PANEL_COMPONENT_NAMES, type FactoryShape } from './layout-types.js';
 
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
 const KNOWN_COMPONENTS = new Set<string>(PANEL_COMPONENT_NAMES);
 export const INVALID_LAYOUT_RESET_NOTICE =
   'Your saved layout was incompatible with this Studio version, so it was reset to the default arrangement.';
@@ -122,7 +122,20 @@ function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape'
   if (!Array.isArray(shape.columns)) {
     return 'invalid-shape';
   }
-  const groups = [shape.columns[1], shape.columns[3], shape.bottomGroup];
+  if (shape.columns.length !== 3) {
+    return 'invalid-shape';
+  }
+  const navigation = shape.columns[0];
+  if (
+    !navigation ||
+    !('top' in navigation) ||
+    !('bottom' in navigation) ||
+    navigation.top.component !== 'workspace.fileTree' ||
+    navigation.bottom.component !== 'workspace.visualPreview'
+  ) {
+    return 'invalid-shape';
+  }
+  const groups = [shape.columns[1], shape.columns[2], shape.bottomGroup];
   for (const group of groups) {
     if (!group || !('tabs' in group) || !Array.isArray(group.tabs) || group.tabs.length === 0) {
       return 'invalid-shape';

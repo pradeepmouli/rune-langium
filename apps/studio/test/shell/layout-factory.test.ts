@@ -3,7 +3,7 @@
 
 /**
  * T061 — layout-factory contract tests.
- * Asserts the v1 panel set, layout shape, and the small-viewport defaults.
+ * Asserts the layout shape and the small-viewport defaults.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -22,15 +22,15 @@ describe('buildDefaultLayout (T061)', () => {
       throw new Error('factory shape expected');
     }
 
-    expect(collectColumnComponents(layout.dockview.columns[0])).toEqual(['workspace.fileTree']);
+    expect(collectStackComponents(layout.dockview.columns[0])).toEqual([
+      'workspace.fileTree',
+      'workspace.visualPreview'
+    ]);
     expect(collectColumnComponents(layout.dockview.columns[1])).toEqual([
       'workspace.editor',
       'workspace.inspector'
     ]);
     expect(collectColumnComponents(layout.dockview.columns[2])).toEqual([
-      'workspace.visualPreview'
-    ]);
-    expect(collectColumnComponents(layout.dockview.columns[3])).toEqual([
       'workspace.formPreview',
       'workspace.codePreview'
     ]);
@@ -41,7 +41,7 @@ describe('buildDefaultLayout (T061)', () => {
   });
 
   it('layout.version starts at 1', () => {
-    expect(buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 }).version).toBe(1);
+    expect(buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 }).version).toBe(2);
   });
 
   it('bottom utilities start collapsed at viewport ≤ 1280px (FR-024)', () => {
@@ -49,7 +49,7 @@ describe('buildDefaultLayout (T061)', () => {
     const collapsed = collectCollapsed(layout.dockview);
     expect(collapsed).toContain('workspace.problems');
     expect(collapsed).toContain('workspace.output');
-    expect(collectColumnComponents((layout.dockview as any).columns[3])).toEqual([
+    expect(collectColumnComponents((layout.dockview as any).columns[2])).toEqual([
       'workspace.formPreview',
       'workspace.codePreview'
     ]);
@@ -76,9 +76,8 @@ describe('layout proportions at 1280×800 (SC-005, SC-006)', () => {
   //   collapse default), with the recorded baseline in
   //   specs/012-studio-workspace-ux/baseline-measurements.md.
   const VIEWPORT_W = 1280;
-  const FILE_TREE_W = 180; // small-viewport size from buildDefaultLayout
-  const VISUALIZE_W = 220; // small-viewport Visualize column size
-  const PREVIEW_W = 280; // small-viewport preview group size from buildDefaultLayout
+  const NAV_W = 220;
+  const PREVIEW_W = 300;
   const EXPECTED_EDITOR_MIN = 560;
 
   it('editor column gets ≥70% of horizontal area at 1280px (SC-005)', () => {
@@ -88,13 +87,10 @@ describe('layout proportions at 1280×800 (SC-005, SC-006)', () => {
     }
     const cols = layout.dockview.columns;
     const fileTree = cols[0];
-    const visualize = cols[2];
-    const preview = cols[3];
-    expect(fileTree.size).toBe(FILE_TREE_W);
-    expect(visualize.size).toBe(VISUALIZE_W);
+    const preview = cols[2];
+    expect(fileTree.size).toBe(NAV_W);
     expect(preview.size).toBe(PREVIEW_W);
-    const editorAvail =
-      VIEWPORT_W - (fileTree.size ?? 0) - (visualize.size ?? 0) - (preview.size ?? 0);
+    const editorAvail = VIEWPORT_W - (fileTree.size ?? 0) - (preview.size ?? 0);
     expect(editorAvail).toBeGreaterThanOrEqual(EXPECTED_EDITOR_MIN);
   });
 
@@ -143,4 +139,13 @@ function collectColumnComponents(node: unknown): string[] {
   const obj = node as { component?: string; tabs?: Array<{ component: string }> };
   if (obj.tabs) return obj.tabs.map((tab) => tab.component);
   return obj.component ? [obj.component] : [];
+}
+
+function collectStackComponents(node: unknown): string[] {
+  if (!node || typeof node !== 'object') return [];
+  const obj = node as {
+    top?: { component?: string };
+    bottom?: { component?: string };
+  };
+  return [obj.top?.component, obj.bottom?.component].filter((value): value is string => !!value);
 }

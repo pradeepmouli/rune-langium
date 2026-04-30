@@ -68,7 +68,9 @@ async function loadFiles(page: Page, files: { name: string; content: string }[])
     }))
   );
   await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
-  await page.locator('.react-flow__node').first().waitFor({ timeout: 10000 });
+  await page.locator('.react-flow__node:not(.react-flow__node-groupContainer)').first().waitFor({
+    timeout: 10000
+  });
   // Wait for layout animation to settle
   await page.waitForTimeout(2000);
 }
@@ -118,7 +120,9 @@ test.describe('Graph Interactions', () => {
   test('Fit View button should work', async ({ page }) => {
     await loadFiles(page, [{ name: 'model.rosetta', content: INHERITANCE_MODEL }]);
 
-    const fitViewBtn = page.locator('button', { hasText: 'Fit View' });
+    const fitViewBtn = page.locator('[aria-label="Graph toolbar"]').getByRole('button', {
+      name: 'Fit View'
+    });
     await fitViewBtn.click();
     await page.waitForTimeout(500);
 
@@ -130,7 +134,9 @@ test.describe('Graph Interactions', () => {
   test('Re-layout button should rearrange nodes', async ({ page }) => {
     await loadFiles(page, [{ name: 'model.rosetta', content: INHERITANCE_MODEL }]);
 
-    const relayoutBtn = page.locator('button', { hasText: 'Re-layout' });
+    const relayoutBtn = page.locator('[aria-label="Graph toolbar"]').getByRole('button', {
+      name: 'Re-layout'
+    });
     if (await relayoutBtn.isVisible()) {
       await relayoutBtn.click();
       await page.waitForTimeout(1000);
