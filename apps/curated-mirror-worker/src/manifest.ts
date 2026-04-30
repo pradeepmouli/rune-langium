@@ -7,7 +7,11 @@
  * conform to it.
  */
 
-import type { CuratedManifest, CuratedModelId } from '@rune-langium/curated-schema';
+import type {
+  CuratedManifest,
+  CuratedModelId,
+  LangiumJsonArtifactRef
+} from '@rune-langium/curated-schema';
 
 export type { CuratedManifest };
 
@@ -21,6 +25,7 @@ export interface BuildManifestInput {
   upstreamRef: string;
   /** Existing archive versions in R2 for this modelId, oldest-first. */
   historyVersions: string[];
+  serializedWorkspace?: LangiumJsonArtifactRef;
 }
 
 const PUBLIC_ROOT = 'https://www.daikonic.dev/curated';
@@ -39,7 +44,14 @@ export function buildManifest(input: BuildManifestInput): CuratedManifest {
     history: input.historyVersions.map((v) => ({
       version: v,
       archiveUrl: `${PUBLIC_ROOT}/${input.modelId}/archives/${v}.tar.gz`
-    }))
+    })),
+    ...(input.serializedWorkspace
+      ? {
+          artifacts: {
+            serializedWorkspace: input.serializedWorkspace
+          }
+        }
+      : {})
   };
 }
 

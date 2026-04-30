@@ -10,7 +10,8 @@
  */
 
 import { createRuneDslServices, type RosettaModel } from '@rune-langium/core';
-import { URI } from 'langium';
+import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
+import { URI, type AstNode, type LangiumDocument } from 'langium';
 
 export interface ParseRequest {
   type: 'parse';
@@ -23,7 +24,11 @@ export interface ParseRequest {
 export interface ParseWorkspaceRequest {
   type: 'parseWorkspace';
   id: string;
-  files: { name: string; content: string }[];
+  files: Array<{
+    name: string;
+    content: string;
+    serializedModelJson?: CuratedSerializedDocument['modelJson'];
+  }>;
 }
 
 export type WorkerRequest = ParseRequest | ParseWorkspaceRequest;
@@ -48,6 +53,7 @@ export type WorkerResponse = ParseResponse | ParseWorkspaceResponse;
 const { RuneDsl } = createRuneDslServices();
 const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
 const builder = RuneDsl.shared.workspace.DocumentBuilder;
+const serializer = RuneDsl.serializer.JsonSerializer;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
@@ -132,7 +138,7 @@ function preserveCstText(model: any): void {
 
 async function handleParse(req: ParseRequest): Promise<ParseResponse> {
   try {
-    const document = factory.fromString(
+    const document = await factory.fromString(
       req.content,
       URI.parse(req.uri ?? 'inmemory:///model.rosetta')
     );
@@ -163,15 +169,23 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
   }
 
   try {
-    const documents = req.files.map((file) =>
-      factory.fromString(file.content, URI.parse(file.name))
+    const hasSerializedModels = req.files.some(
+      (file) => typeof file.serializedModelJson === 'string'
     );
-    await builder.build(documents, { validation: false });
+    const workspace = hasSerializedModels
+      ? await buildWorkspaceDocumentsFromSerializedPayload(req.files)
+      : {
+          documents: await Promise.all(
+            req.files.map((file) => factory.fromString(file.content, URI.parse(file.name)))
+          ),
+          builder
+        };
+    await workspace.builder.build(workspace.documents, { validation: false });
     const models: RosettaModel[] = [];
     const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
 
-    for (let i = 0; i < documents.length; i++) {
-      const document = documents[i]!;
+    for (let i = 0; i < workspace.documents.length; i++) {
+      const document = workspace.documents[i]!;
       const file = req.files[i]!;
       const model = document.parseResult.value as RosettaModel;
       if (model) {
@@ -180,7 +194,9 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
         parsedModels.push({ filePath: file.name, model });
       }
       if (document.parseResult.parserErrors.length > 0) {
-        errors[file.name] = document.parseResult.parserErrors.map((e) => e.message);
+        errors[file.name] = document.parseResult.parserErrors.map(
+          (e: { message: string }) => e.message
+        );
       }
     }
 
@@ -205,6 +221,49 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
       }
     };
   }
+}
+
+async function buildWorkspaceDocumentsFromSerializedPayload(
+  files: ParseWorkspaceRequest['files']
+): Promise<{
+  documents: LangiumDocument<AstNode>[];
+  builder: typeof builder;
+}> {
+  const { RuneDsl: localRuneDsl } = createRuneDslServices();
+  const localFactory = localRuneDsl.shared.workspace.LangiumDocumentFactory;
+  const localDocuments = localRuneDsl.shared.workspace.LangiumDocuments;
+  const localSerializer = localRuneDsl.serializer.JsonSerializer;
+  const localBuilder = localRuneDsl.shared.workspace.DocumentBuilder;
+
+  const documents = await Promise.all(
+    files.map((file) => {
+      const uri = URI.parse(file.name);
+      if (file.serializedModelJson) {
+        const rawModel = JSON.parse(file.serializedModelJson) as RosettaModel;
+        return localFactory.fromModel(rawModel, uri);
+      }
+      return localFactory.fromString(file.content, uri);
+    })
+  );
+
+  for (const document of documents) {
+    localDocuments.addDocument(document);
+  }
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]!;
+    if (!file.serializedModelJson) continue;
+    const document = documents[i]!;
+    const model = localSerializer.deserialize<RosettaModel>(file.serializedModelJson);
+    document.parseResult.value = model;
+    Object.defineProperty(model, '$document', {
+      value: document,
+      configurable: true,
+      writable: true
+    });
+  }
+
+  return { documents, builder: localBuilder };
 }
 
 // ---------------------------------------------------------------------------

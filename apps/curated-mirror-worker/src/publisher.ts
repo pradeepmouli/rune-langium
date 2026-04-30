@@ -18,8 +18,9 @@
  */
 
 import { buildManifest, sha256Hex, type CuratedManifest } from './manifest.js';
+import { buildSerializedWorkspaceArtifact } from './serialized-artifact.js';
 import { logger, logPublish } from './log.js';
-import type { CuratedModelId } from '@rune-langium/curated-schema';
+import type { CuratedModelId, LangiumJsonArtifactRef } from '@rune-langium/curated-schema';
 
 export interface CuratedSource {
   id: CuratedModelId;
@@ -88,6 +89,8 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
 
       const archiveKey = `curated/${source.id}/archives/${version}.tar.gz`;
       const latestKey = `curated/${source.id}/latest.tar.gz`;
+      const artifactArchiveKey = `curated/${source.id}/artifacts/${version}.serialized.json.gz`;
+      const latestArtifactKey = `curated/${source.id}/latest.serialized.json.gz`;
       const manifestKey = `curated/${source.id}/manifest.json`;
 
       const sha = await sha256Hex(buf);
@@ -105,6 +108,35 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
 
       for (const v of toPrune) {
         await bucket.delete(`curated/${source.id}/archives/${v}.tar.gz`);
+        await bucket.delete(`curated/${source.id}/artifacts/${v}.serialized.json.gz`);
+      }
+
+      let serializedWorkspace: LangiumJsonArtifactRef | undefined;
+      try {
+        const artifact = await buildSerializedWorkspaceArtifact(source.id, version, buf);
+        const artifactMetadata = { contentType: 'application/gzip' };
+        await bucket.put(artifactArchiveKey, artifact.bytes, { httpMetadata: artifactMetadata });
+        await bucket.put(latestArtifactKey, artifact.bytes, { httpMetadata: artifactMetadata });
+        serializedWorkspace = {
+          schemaVersion: 1,
+          kind: 'langium-json-serializer',
+          url: `https://www.daikonic.dev/curated/${source.id}/latest.serialized.json.gz`,
+          sha256: artifact.sha256,
+          sizeBytes: artifact.sizeBytes,
+          documentCount: artifact.documentCount,
+          langiumVersion: '4.2.2'
+        };
+      } catch (err) {
+        logger.error(
+          {
+            model_id: source.id,
+            err:
+              err instanceof Error
+                ? { name: err.name, message: err.message, stack: err.stack }
+                : err
+          },
+          'curated-mirror.publish.serialized_artifact.failed'
+        );
       }
 
       const manifest = buildManifest({
@@ -115,7 +147,8 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
         generatedAt: now.toISOString(),
         upstreamCommit: '',
         upstreamRef: source.ref,
-        historyVersions
+        historyVersions,
+        serializedWorkspace
       });
       await bucket.put(manifestKey, JSON.stringify(manifest, null, 2), {
         httpMetadata: { contentType: 'application/json; charset=utf-8' }

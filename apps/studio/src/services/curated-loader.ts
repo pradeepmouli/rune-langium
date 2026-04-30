@@ -23,13 +23,16 @@ import { extractTarGz } from '../opfs/tar-untar.js';
 import type { TelemetryClient, TelemetryEvent } from './telemetry.js';
 import {
   CURATED_MODEL_IDS,
+  parseSerializedWorkspaceArtifact,
   parseManifest,
+  type CuratedSerializedWorkspaceArtifact,
   type CuratedManifest,
   type CuratedModelId,
   type ErrorCategory
 } from '@rune-langium/curated-schema';
+import { inflate } from 'pako';
 
-export type { CuratedModelId, CuratedManifest, ErrorCategory };
+export type { CuratedSerializedWorkspaceArtifact, CuratedModelId, CuratedManifest, ErrorCategory };
 
 export class CuratedLoadError extends Error {
   constructor(
@@ -57,6 +60,7 @@ export interface LoadCuratedResult {
   version: string;
   filesWritten: number;
   bytesUnpacked: number;
+  serializedWorkspace?: CuratedSerializedWorkspaceArtifact;
 }
 
 const VALID_MODEL_IDS = new Set<string>(CURATED_MODEL_IDS);
@@ -109,6 +113,54 @@ async function fetchOk(url: string, signal?: AbortSignal): Promise<Response> {
   if (res.status === 404) throw new CuratedLoadError('archive_not_found', `${url} → 404`);
   if (!res.ok) throw new CuratedLoadError('network', `${url} → ${res.status}`);
   return res;
+}
+
+async function tryLoadSerializedWorkspaceArtifact(
+  manifest: CuratedManifest,
+  mirrorBase: string,
+  modelId: CuratedModelId,
+  signal?: AbortSignal
+): Promise<CuratedSerializedWorkspaceArtifact | undefined> {
+  const artifactRef = manifest.artifacts?.serializedWorkspace;
+  if (!artifactRef) return undefined;
+
+  const artifactUrl = `${mirrorBase}/${modelId}/latest.serialized.json.gz`;
+  const response = await fetchOk(artifactUrl, signal);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const observed = await sha256Hex(bytes);
+  if (observed.toLowerCase() !== artifactRef.sha256.toLowerCase()) {
+    throw new CuratedLoadError(
+      'archive_decode',
+      `serialized artifact sha256 mismatch (manifest=${artifactRef.sha256.slice(0, 8)}…, observed=${observed.slice(0, 8)}…)`
+    );
+  }
+
+  let jsonText: string;
+  try {
+    jsonText = new TextDecoder('utf-8').decode(inflate(bytes));
+  } catch (err) {
+    throw new CuratedLoadError(
+      'archive_decode',
+      `serialized artifact gunzip failed: ${errMessage(err)}`
+    );
+  }
+
+  let rawJson: unknown;
+  try {
+    rawJson = JSON.parse(jsonText);
+  } catch {
+    throw new CuratedLoadError('archive_decode', 'serialized artifact was not valid JSON');
+  }
+
+  const parsed = parseSerializedWorkspaceArtifact(rawJson);
+  if (!parsed.ok) {
+    throw new CuratedLoadError(
+      'archive_decode',
+      `serialized artifact schema violation: ${parsed.reason}`
+    );
+  }
+
+  return parsed.artifact;
 }
 
 export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCuratedResult> {
@@ -204,11 +256,29 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
       throw new CuratedLoadError('unknown', `extract failed: ${errMessage(err)}`);
     }
 
+    let serializedWorkspace: CuratedSerializedWorkspaceArtifact | undefined;
+    if (manifest.artifacts?.serializedWorkspace) {
+      try {
+        serializedWorkspace = await tryLoadSerializedWorkspaceArtifact(
+          manifest,
+          mirrorBase,
+          modelId,
+          signal
+        );
+      } catch (err) {
+        console.warn(
+          '[curated-loader] serialized workspace artifact unavailable; falling back to source parse',
+          err
+        );
+      }
+    }
+
     const result: LoadCuratedResult = {
       modelId,
       version: manifest.version,
       filesWritten: written,
-      bytesUnpacked: unpacked
+      bytesUnpacked: unpacked,
+      serializedWorkspace
     };
     emit(telemetry, {
       event: 'curated_load_success',

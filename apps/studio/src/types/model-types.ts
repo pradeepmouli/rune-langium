@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
+import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
+
 /**
  * Types for git-based model loading, caching, and progress tracking.
  * @see specs/008-core-editor-features/data-model.md
@@ -50,6 +52,8 @@ export interface CachedFile {
   content: string;
   /** Extracted namespace from file */
   namespace: string;
+  /** Optional precomputed serialized Langium model JSON for curated artifacts. */
+  serializedModelJson?: CuratedSerializedDocument['modelJson'];
 }
 
 /** Progress events yielded during model loading. */

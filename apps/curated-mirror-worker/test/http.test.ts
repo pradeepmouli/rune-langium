@@ -90,6 +90,26 @@ describe('handleCuratedRead — latest.tar.gz', () => {
   });
 });
 
+describe('handleCuratedRead — serialized workspace artifacts', () => {
+  it('serves the latest serialized artifact with gzip content-type and short cache', async () => {
+    const bytes = new Uint8Array([7, 8, 9]);
+    await bucket.put('curated/cdm/latest.serialized.json.gz', bytes);
+    const res = await get('/curated/cdm/latest.serialized.json.gz');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toMatch(/max-age=300/);
+    expect(res.headers.get('Content-Type')).toMatch(/application\/gzip/);
+    expect(Array.from(new Uint8Array(await res.arrayBuffer()))).toEqual([7, 8, 9]);
+  });
+
+  it('serves a versioned serialized artifact with immutable cache headers', async () => {
+    await bucket.put('curated/cdm/artifacts/2026-04-30.serialized.json.gz', new Uint8Array([1]));
+    const res = await get('/curated/cdm/artifacts/2026-04-30.serialized.json.gz');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toMatch(/immutable/);
+    expect(res.headers.get('Content-Type')).toMatch(/application\/gzip/);
+  });
+});
+
 describe('handleCuratedRead — historical archives + method enforcement', () => {
   it('serves an archive at the date-stamped path', async () => {
     await bucket.put('curated/fpml/archives/2026-04-24.tar.gz', new Uint8Array([9]));

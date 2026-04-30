@@ -36,6 +36,35 @@ export const ErrorCategorySchema = z.enum([
 ]);
 export type ErrorCategory = z.infer<typeof ErrorCategorySchema>;
 
+export const LangiumJsonArtifactRefSchema = z.object({
+  schemaVersion: z.literal(1),
+  kind: z.literal('langium-json-serializer'),
+  url: z.string().url(),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  sizeBytes: z.number().int().nonnegative(),
+  documentCount: z.number().int().nonnegative(),
+  langiumVersion: z.string().min(1)
+});
+export type LangiumJsonArtifactRef = z.infer<typeof LangiumJsonArtifactRefSchema>;
+
+export const CuratedSerializedDocumentSchema = z.object({
+  path: z.string().min(1),
+  modelJson: z.string().min(1)
+});
+export type CuratedSerializedDocument = z.infer<typeof CuratedSerializedDocumentSchema>;
+
+export const CuratedSerializedWorkspaceArtifactSchema = z.object({
+  schemaVersion: z.literal(1),
+  kind: z.literal('langium-json-serializer'),
+  modelId: CuratedModelIdSchema,
+  version: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  langiumVersion: z.string().min(1),
+  documents: z.array(CuratedSerializedDocumentSchema)
+});
+export type CuratedSerializedWorkspaceArtifact = z.infer<
+  typeof CuratedSerializedWorkspaceArtifactSchema
+>;
+
 /**
  * Curated-mirror manifest. Written by the publisher Worker, fetched and
  * validated by Studio. `schemaVersion` is a literal so out-of-range values
@@ -64,7 +93,12 @@ export const CuratedManifestSchema = z.object({
       version: z.string(),
       archiveUrl: z.string().url()
     })
-  )
+  ),
+  artifacts: z
+    .object({
+      serializedWorkspace: LangiumJsonArtifactRefSchema.optional()
+    })
+    .optional()
 });
 export type CuratedManifest = z.infer<typeof CuratedManifestSchema>;
 
@@ -74,5 +108,13 @@ export function parseManifest(
 ): { ok: true; manifest: CuratedManifest } | { ok: false; reason: string } {
   const r = CuratedManifestSchema.safeParse(data);
   if (r.success) return { ok: true, manifest: r.data };
+  return { ok: false, reason: r.error.message };
+}
+
+export function parseSerializedWorkspaceArtifact(
+  data: unknown
+): { ok: true; artifact: CuratedSerializedWorkspaceArtifact } | { ok: false; reason: string } {
+  const r = CuratedSerializedWorkspaceArtifactSchema.safeParse(data);
+  if (r.success) return { ok: true, artifact: r.data };
   return { ok: false, reason: r.error.message };
 }
