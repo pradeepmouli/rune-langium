@@ -65,9 +65,13 @@ export async function handleCuratedRead(req: Request, env: Env): Promise<Respons
 
   const isManifest = rest.endsWith('manifest.json');
   const isArchive = rest.endsWith('.tar.gz');
+  const isLatestSerializedArtifact = rest.endsWith('latest.serialized.json.gz');
+  const isVersionedSerializedArtifact = /artifacts\/.+\.serialized\.json\.gz$/.test(rest);
   let cacheControl: string | null = null;
   if (isManifest) cacheControl = 'public, max-age=300';
   else if (isArchive) cacheControl = 'public, max-age=86400, immutable';
+  else if (isLatestSerializedArtifact) cacheControl = 'public, max-age=300';
+  else if (isVersionedSerializedArtifact) cacheControl = 'public, max-age=86400, immutable';
 
   // Conditional GET — return 304 with no body if If-None-Match matches.
   // Manifest probes from the studio's stale-while-revalidate path are
@@ -89,6 +93,9 @@ export async function handleCuratedRead(req: Request, env: Env): Promise<Respons
   if (cacheControl) headers.set('Cache-Control', cacheControl);
   if (isManifest) headers.set('Content-Type', 'application/json; charset=utf-8');
   else if (isArchive) headers.set('Content-Type', 'application/gzip');
+  else if (isLatestSerializedArtifact || isVersionedSerializedArtifact) {
+    headers.set('Content-Type', 'application/gzip');
+  }
   headers.set('ETag', obj.httpEtag);
 
   return done(new Response(method === 'HEAD' ? null : obj.body, { status: 200, headers }), false);

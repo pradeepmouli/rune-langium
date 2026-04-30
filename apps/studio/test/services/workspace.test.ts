@@ -13,9 +13,11 @@ import {
   updateFileContent,
   createWorkspaceFile,
   createBlankWorkspaceFile,
-  readFileList
+  readFileList,
+  mergeModelFiles
 } from '../../src/services/workspace.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
+import type { LoadedModel } from '../../src/types/model-types.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -256,6 +258,37 @@ describe('createBlankWorkspaceFile', () => {
     ];
     const file = createBlankWorkspaceFile(existing);
     expect(file.path).toBe('untitled.rosetta');
+  });
+});
+
+describe('mergeModelFiles', () => {
+  it('preserves dehydrated parse results for read-only model files', () => {
+    const model: LoadedModel = {
+      source: {
+        id: 'cdm',
+        name: 'CDM',
+        repoUrl: 'https://example.com/cdm.git',
+        ref: 'main',
+        paths: ['**/*.rosetta']
+      },
+      commitHash: '2026-04-25',
+      loadedAt: 0,
+      files: [
+        {
+          path: 'types/Trade.rosetta',
+          content: 'namespace cdm',
+          namespace: 'cdm',
+          serializedModelJson: '{"$type":"RosettaModel","elements":[]}'
+        }
+      ]
+    };
+
+    const merged = mergeModelFiles([], model);
+    expect(merged[0]).toMatchObject({
+      path: '[cdm]/types/Trade.rosetta',
+      readOnly: true,
+      serializedModelJson: '{"$type":"RosettaModel","elements":[]}'
+    });
   });
 });
 

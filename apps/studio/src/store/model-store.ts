@@ -170,10 +170,24 @@ function buildArchiveLoader(
       throw new Error(`curated archive ${source.id}@${result.version} contained no .rosetta files`);
     }
 
+    const serializedByPath = new Map(
+      result.serializedWorkspace?.documents.map((document) => [
+        document.path,
+        document.modelJson
+      ]) ?? []
+    );
+    const serializedFiles =
+      serializedByPath.size === 0
+        ? files
+        : files.map((file) => ({
+            ...file,
+            serializedModelJson: serializedByPath.get(file.path)
+          }));
+
     return {
       source,
       commitHash: result.version,
-      files,
+      files: serializedFiles,
       loadedAt: Date.now()
     };
   };

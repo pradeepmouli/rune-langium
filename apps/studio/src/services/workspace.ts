@@ -7,6 +7,7 @@
  */
 
 import { parse, parseWorkspace, type RosettaModel } from '@rune-langium/core';
+import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import type {
   WorkerRequest,
   ParseResponse,
@@ -21,6 +22,8 @@ export interface WorkspaceFile {
   dirty: boolean;
   /** When true, the file is a system/built-in file and cannot be edited. */
   readOnly?: boolean;
+  /** Optional precomputed serialized Langium model JSON used by the parser worker. */
+  serializedModelJson?: CuratedSerializedDocument['modelJson'];
 }
 
 export interface WorkspaceLoadProgress {
@@ -288,7 +291,11 @@ export async function parseWorkspaceFiles(
     const response = await workerRequest({
       type: 'parseWorkspace',
       id,
-      files: files.map((f) => ({ name: f.path, content: f.content }))
+      files: files.map((f) => ({
+        name: f.path,
+        content: f.content,
+        serializedModelJson: f.serializedModelJson
+      }))
     });
     if (response.errors.__worker__?.length) {
       throw new Error(response.errors.__worker__.join('; '));
@@ -449,7 +456,8 @@ export function mergeModelFiles(
     path: `[${model.source.id}]/${f.path}`,
     content: f.content,
     dirty: false,
-    readOnly: true
+    readOnly: true,
+    serializedModelJson: f.serializedModelJson
   }));
 
   return [...userFiles, ...modelFiles];

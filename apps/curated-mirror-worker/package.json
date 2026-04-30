@@ -13,7 +13,10 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
+    "@rune-langium/core": "workspace:*",
     "@rune-langium/curated-schema": "workspace:*",
+    "langium": "^4.2.2",
+    "pako": "^2.1.0",
     "pino": "^10.3.1"
   },
   "devDependencies": {

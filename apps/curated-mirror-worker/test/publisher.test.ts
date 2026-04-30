@@ -15,6 +15,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { gzip } from 'pako';
 import { publishCuratedMirrors, type CuratedSource } from '../src/publisher.js';
 import { createMockR2Bucket, type MockR2Bucket } from './setup/r2-mock.js';
 
@@ -27,6 +28,42 @@ function makeFakeArchive(payload: string): Uint8Array {
   // Doesn't have to be a real tar.gz — the publisher is a byte-stream
   // pass-through. We only need stable SHA-256s.
   return new TextEncoder().encode(payload);
+}
+
+function buildHeader(name: string, typeflag: string, size = 0): Uint8Array {
+  const block = new Uint8Array(512);
+  const encoder = new TextEncoder();
+  block.set(encoder.encode(name).subarray(0, Math.min(name.length, 100)), 0);
+  block.set(encoder.encode('0000644\0'), 100);
+  block.set(encoder.encode('0000000\0'), 108);
+  block.set(encoder.encode('0000000\0'), 116);
+  block.set(encoder.encode(size.toString(8).padStart(11, '0') + '\0'), 124);
+  block.set(encoder.encode('00000000000\0'), 136);
+  for (let i = 148; i < 156; i++) block[i] = 0x20;
+  block[156] = typeflag.charCodeAt(0);
+  block.set(encoder.encode('ustar\0'), 257);
+  block.set(encoder.encode('00'), 263);
+  return block;
+}
+
+function packTar(...entries: Array<{ path: string; content: string }>): Uint8Array {
+  const encoder = new TextEncoder();
+  const blocks: Uint8Array[] = [];
+  for (const entry of entries) {
+    const data = encoder.encode(entry.content);
+    blocks.push(buildHeader(entry.path, '0', data.length));
+    const padded = new Uint8Array(Math.ceil(data.length / 512) * 512);
+    padded.set(data, 0);
+    blocks.push(padded);
+  }
+  blocks.push(new Uint8Array(512), new Uint8Array(512));
+  const merged = new Uint8Array(blocks.reduce((sum, block) => sum + block.length, 0));
+  let offset = 0;
+  for (const block of blocks) {
+    merged.set(block, offset);
+    offset += block.length;
+  }
+  return gzip(merged);
 }
 
 describe('publishCuratedMirrors (T025)', () => {
@@ -110,5 +147,50 @@ describe('publishCuratedMirrors (T025)', () => {
     expect(result.failed).toContain('cdm');
     expect(bucket.has('curated/fpml/latest.tar.gz')).toBe(true);
     expect(bucket.has('curated/cdm/latest.tar.gz')).toBe(false);
+  });
+
+  it('publishes a serialized workspace artifact when the archive contains .rosetta files', async () => {
+    fetchSpy.mockImplementation(async (url: unknown) => {
+      const u = String(url);
+      if (!u.includes('rosetta-cdm')) return new Response('not found', { status: 404 });
+      return new Response(
+        packTar(
+          {
+            path: 'rosetta-cdm-master/types.rosetta',
+            content: `namespace demo
+
+type Person:
+  name string (1..1)
+`
+          },
+          {
+            path: 'rosetta-cdm-master/trade.rosetta',
+            content: `namespace demo
+
+type Trade:
+  party Person (1..1)
+`
+          }
+        ),
+        { status: 200 }
+      );
+    });
+
+    await publishCuratedMirrors({ sources: [SOURCES[0]!], bucket, retention: 14 });
+
+    expect(bucket.has('curated/cdm/latest.serialized.json.gz')).toBe(true);
+    expect(
+      bucket.has(
+        `curated/cdm/artifacts/${new Date().toISOString().slice(0, 10)}.serialized.json.gz`
+      )
+    ).toBe(true);
+    const manifest = JSON.parse(await bucket.getText('curated/cdm/manifest.json'));
+    expect(manifest.artifacts?.serializedWorkspace).toMatchObject({
+      schemaVersion: 1,
+      kind: 'langium-json-serializer',
+      url: 'https://www.daikonic.dev/curated/cdm/latest.serialized.json.gz',
+      documentCount: 2,
+      langiumVersion: '4.2.2'
+    });
   });
 });

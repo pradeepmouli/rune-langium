@@ -18,14 +18,28 @@ const fromStringMock = vi.fn((content: string, uri: string) => ({
     parserErrors: []
   }
 }));
+const fromModelMock = vi.fn((model: unknown, uri: string) => ({
+  uri,
+  parseResult: {
+    value: model,
+    lexerErrors: [],
+    parserErrors: []
+  }
+}));
+const addDocumentMock = vi.fn();
+const deserializeMock = vi.fn((json: string) => JSON.parse(json));
 
 vi.mock('@rune-langium/core', () => ({
   createRuneDslServices: () => ({
     RuneDsl: {
+      serializer: {
+        JsonSerializer: { deserialize: deserializeMock }
+      },
       shared: {
         workspace: {
-          LangiumDocumentFactory: { fromString: fromStringMock },
-          DocumentBuilder: { build: buildMock }
+          LangiumDocumentFactory: { fromString: fromStringMock, fromModel: fromModelMock },
+          DocumentBuilder: { build: buildMock },
+          LangiumDocuments: { addDocument: addDocumentMock }
         }
       }
     }
@@ -48,6 +62,9 @@ describe('parser-worker', () => {
     buildMock.mockReset();
     buildMock.mockImplementation(async () => undefined);
     fromStringMock.mockClear();
+    fromModelMock.mockClear();
+    addDocumentMock.mockClear();
+    deserializeMock.mockClear();
   });
 
   afterEach(() => {
@@ -126,5 +143,31 @@ describe('parser-worker', () => {
     expect(response.errors).toEqual({
       'bad.rosetta': ['Broken syntax']
     });
+  });
+
+  it('reuses serialized model payloads via JsonSerializer and fromModel', async () => {
+    const { handleParseWorkspace } = await loadParserWorkerModule();
+
+    const response = await handleParseWorkspace({
+      type: 'parseWorkspace',
+      id: 'workspace-3',
+      files: [
+        {
+          name: '[cdm]/types.rosetta',
+          content: 'ignored',
+          serializedModelJson: '{"$type":"RosettaModel","elements":[]}'
+        },
+        { name: 'local.rosetta', content: 'namespace local' }
+      ]
+    });
+
+    expect(deserializeMock).toHaveBeenCalledWith('{"$type":"RosettaModel","elements":[]}');
+    expect(fromModelMock).toHaveBeenCalledWith(
+      { $type: 'RosettaModel', elements: [] },
+      '[cdm]/types.rosetta'
+    );
+    expect(addDocumentMock).toHaveBeenCalledTimes(2);
+    expect(fromStringMock).toHaveBeenCalledWith('namespace local', 'local.rosetta');
+    expect(response.type).toBe('parseWorkspaceResult');
   });
 });

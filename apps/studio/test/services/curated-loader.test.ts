@@ -12,9 +12,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { gzip } from 'pako';
 import { createOpfsRoot } from '../setup/opfs-mock.js';
 import { OpfsFs } from '../../src/opfs/opfs-fs.js';
-import { loadCuratedModel, type ErrorCategory } from '../../src/services/curated-loader.js';
+import {
+  CuratedLoadError,
+  loadCuratedModel,
+  type ErrorCategory
+} from '../../src/services/curated-loader.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = resolve(__dirname, '../fixtures/curated/tiny.tar.gz');
@@ -23,6 +28,7 @@ function fixtureBytes(): Uint8Array {
 }
 
 const ARCHIVE_URL = 'https://www.daikonic.dev/curated/cdm/latest.tar.gz';
+const ARTIFACT_URL = 'https://www.daikonic.dev/curated/cdm/latest.serialized.json.gz';
 const MANIFEST_URL = 'https://www.daikonic.dev/curated/cdm/manifest.json';
 
 // Hoist sha256 of the fixture once. Cheap; avoids async handlers below.
@@ -54,6 +60,33 @@ function makeManifest(version = '2026-04-25', overrides: Record<string, unknown>
   });
 }
 
+async function makeSerializedArtifact(
+  overrides: Record<string, unknown> = {}
+): Promise<{ json: string; bytes: Uint8Array; sha256: string }> {
+  const json = JSON.stringify({
+    schemaVersion: 1,
+    kind: 'langium-json-serializer',
+    modelId: 'cdm',
+    version: '2026-04-25',
+    langiumVersion: '4.2.2',
+    documents: [
+      {
+        path: 'tiny/example.rosetta',
+        modelJson: '{"$type":"RosettaModel","elements":[]}'
+      }
+    ],
+    ...overrides
+  });
+  const bytes = gzip(new TextEncoder().encode(json));
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+  );
+  let sha256 = '';
+  for (const b of new Uint8Array(digest)) sha256 += b.toString(16).padStart(2, '0');
+  return { json, bytes, sha256 };
+}
+
 let fetchSpy: ReturnType<typeof vi.spyOn>;
 let telemetryEmit: ReturnType<typeof vi.fn>;
 
@@ -64,8 +97,12 @@ function mockNetwork(handler: (url: string) => Response | Promise<Response>) {
 beforeEach(() => {
   fetchSpy = vi.spyOn(globalThis, 'fetch');
   telemetryEmit = vi.fn().mockResolvedValue(undefined);
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
-afterEach(() => fetchSpy.mockRestore());
+afterEach(() => {
+  fetchSpy.mockRestore();
+  vi.restoreAllMocks();
+});
 
 function newFs() {
   const root = createOpfsRoot();
@@ -116,6 +153,84 @@ describe('loadCuratedModel — happy path (T030)', () => {
     );
     expect(events[0]).toBe('curated_load_attempt');
     expect(events.at(-1)).toBe('curated_load_success');
+  });
+
+  it('loads the serialized workspace artifact when the manifest advertises it', async () => {
+    const artifact = await makeSerializedArtifact();
+    mockNetwork((url) => {
+      if (url === MANIFEST_URL) {
+        return new Response(
+          makeManifest('2026-04-25', {
+            artifacts: {
+              serializedWorkspace: {
+                schemaVersion: 1,
+                kind: 'langium-json-serializer',
+                url: ARTIFACT_URL,
+                sha256: artifact.sha256,
+                sizeBytes: artifact.bytes.byteLength,
+                documentCount: 1,
+                langiumVersion: '4.2.2'
+              }
+            }
+          })
+        );
+      }
+      if (url === ARCHIVE_URL) return new Response(fixtureBytes());
+      if (url === ARTIFACT_URL) return new Response(artifact.bytes);
+      return new Response('nope', { status: 404 });
+    });
+
+    const { fs } = newFs();
+    const result = await loadCuratedModel({
+      modelId: 'cdm',
+      mirrorBase: 'https://www.daikonic.dev/curated',
+      fs,
+      writeRoot: '/cdm',
+      telemetry: { emit: telemetryEmit }
+    });
+
+    expect(result.serializedWorkspace?.documents).toHaveLength(1);
+    expect(result.serializedWorkspace?.documents[0]?.path).toBe('tiny/example.rosetta');
+  });
+
+  it('falls back to source parsing when the serialized workspace artifact is invalid', async () => {
+    mockNetwork((url) => {
+      if (url === MANIFEST_URL) {
+        return new Response(
+          makeManifest('2026-04-25', {
+            artifacts: {
+              serializedWorkspace: {
+                schemaVersion: 1,
+                kind: 'langium-json-serializer',
+                url: ARTIFACT_URL,
+                sha256: 'a'.repeat(64),
+                sizeBytes: 3,
+                documentCount: 1,
+                langiumVersion: '4.2.2'
+              }
+            }
+          })
+        );
+      }
+      if (url === ARCHIVE_URL) return new Response(fixtureBytes());
+      if (url === ARTIFACT_URL) return new Response(new Uint8Array([1, 2, 3]));
+      return new Response('nope', { status: 404 });
+    });
+
+    const { fs } = newFs();
+    const result = await loadCuratedModel({
+      modelId: 'cdm',
+      mirrorBase: 'https://www.daikonic.dev/curated',
+      fs,
+      writeRoot: '/cdm',
+      telemetry: { emit: telemetryEmit }
+    });
+
+    expect(result.serializedWorkspace).toBeUndefined();
+    expect(console.warn).toHaveBeenCalledWith(
+      '[curated-loader] serialized workspace artifact unavailable; falling back to source parse',
+      expect.any(CuratedLoadError)
+    );
   });
 });
 
