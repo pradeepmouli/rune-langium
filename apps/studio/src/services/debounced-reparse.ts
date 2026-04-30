@@ -4,7 +4,7 @@
 /**
  * Debounced re-parse hook (T035).
  *
- * After 500ms of editor idle, re-parses the current file,
+ * After a short idle window, re-parses the current file,
  * runs semantic diff against the previous parse, and only
  * triggers graph re-layout if structural changes are detected.
  */
@@ -17,7 +17,7 @@ import { semanticDiff, type TypeDeclaration } from './semantic-diff.js';
 // ────────────────────────────────────────────────────────────────────────────
 
 export interface DebouncedReparseOptions {
-  /** Debounce delay in ms (default: 500). */
+  /** Debounce delay in ms (default: 350). */
   delay?: number;
   /** Function to parse content into type declarations. */
   parseContent: (content: string) => TypeDeclaration[] | Promise<TypeDeclaration[]>;
@@ -34,12 +34,13 @@ export interface DebouncedReparseOptions {
  * only when structural changes are detected.
  */
 export function useDebouncedReparse({
-  delay = 500,
+  delay = 350,
   parseContent,
   onStructuralChange
 }: DebouncedReparseOptions): (content: string) => void {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousRef = useRef<TypeDeclaration[]>([]);
+  const runIdRef = useRef(0);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -51,18 +52,26 @@ export function useDebouncedReparse({
   const scheduleReparse = useCallback(
     (content: string) => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      const runId = ++runIdRef.current;
 
       timerRef.current = setTimeout(async () => {
         try {
           const types = await parseContent(content);
+          if (runId !== runIdRef.current) {
+            return;
+          }
           const diff = semanticDiff(previousRef.current, types);
 
           if (diff.hasStructuralChanges) {
             previousRef.current = types;
             onStructuralChange(types);
           }
-        } catch {
-          // Parse failure — skip re-layout
+        } catch (error) {
+          // Parse failure — skip re-layout, but surface the cause in devtools.
+          console.warn(
+            '[useDebouncedReparse] parseContent failed; skipping structural re-layout',
+            error
+          );
         }
       }, delay);
     },

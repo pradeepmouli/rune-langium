@@ -2,6 +2,19 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+/**
+ * @packageDocumentation
+ *
+ * Command-line entry points for parsing, validating, and generating code from
+ * Rune DSL workspaces.
+ *
+ * @remarks
+ * Use the CLI when you need batch validation in CI, ad-hoc parsing from a
+ * terminal, or code generation without embedding the libraries directly in a
+ * Node.js tool. The `generate` command delegates to the codegen toolchain while
+ * `parse` and `validate` provide lightweight syntax and diagnostics checks.
+ */
+
 import { Command } from 'commander';
 import { runParse } from './parse.js';
 import { runValidate } from './validate.js';

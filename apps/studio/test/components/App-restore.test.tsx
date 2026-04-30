@@ -10,9 +10,9 @@
  *   - recent workspace whose
  *     OPFS handle is gone    → fall back to start page
  *
- * Strict TDD RED step: these assertions intentionally fail against the
- * current `App.tsx` (which boots straight into `<FileLoader>` whenever
- * `userFiles.length === 0`, without ever consulting the recents store).
+ * Regression coverage for the current restore flow: recent workspaces are
+ * consulted before the start page is shown, and missing OPFS handles fall
+ * back cleanly to the loader.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -117,6 +117,14 @@ describe('App workspace restore on mount (T027/US2)', () => {
 
   it('restores the most-recent workspace on mount when one exists', async () => {
     await saveWorkspace(makeWorkspace('ws-restored', 'Restored Project'));
+    await saveWorkspaceFiles('ws-restored', [
+      {
+        name: 'trade.rosetta',
+        path: 'trade.rosetta',
+        content: 'namespace restored.project\n\ntype Trade:\n  tradeDate date (1..1)\n',
+        dirty: false
+      }
+    ]);
     render(<App />);
     await waitFor(
       () => {
@@ -142,8 +150,9 @@ describe('App workspace restore on mount (T027/US2)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('1 file(s)')).toBeInTheDocument();
+      expect(screen.getAllByText('1 file(s)').length).toBeGreaterThan(0);
     });
+    expect(document.body).toHaveAttribute('data-workspace-active', 'true');
     expect(screen.queryByText(/Load Rune DSL Models/i)).not.toBeInTheDocument();
   });
 
@@ -161,5 +170,17 @@ describe('App workspace restore on mount (T027/US2)', () => {
     });
     expect(document.body).not.toHaveAttribute('data-workspace-active', 'true');
     spy.mockRestore();
+  });
+
+  it('falls back to the start page when the most recent workspace has no saved files', async () => {
+    await saveWorkspace(makeWorkspace('ws-empty', 'Empty Project'));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Load Rune DSL Models/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('workspace-restored')).not.toBeInTheDocument();
+    expect(document.body).not.toHaveAttribute('data-workspace-active', 'true');
   });
 });

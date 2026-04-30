@@ -108,6 +108,84 @@ export interface GeneratorOutput {
   funcs: GeneratedFunc[];
 }
 
+export type PreviewFieldKind =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'enum'
+  | 'object'
+  | 'array'
+  | 'unknown';
+
+export interface PreviewFieldBase {
+  path: string;
+  label: string;
+  required: boolean;
+  cardinality?: { min?: number; max?: number | 'unbounded' };
+  description?: string;
+}
+
+export interface PreviewScalarField extends PreviewFieldBase {
+  kind: 'string' | 'number' | 'boolean';
+}
+
+export interface PreviewEnumField extends PreviewFieldBase {
+  kind: 'enum';
+  enumValues: Array<{ value: string; label: string }>;
+}
+
+export interface PreviewObjectField extends PreviewFieldBase {
+  kind: 'object';
+  children: PreviewField[];
+}
+
+export interface PreviewArrayField extends PreviewFieldBase {
+  kind: 'array';
+  children: [PreviewField];
+}
+
+export interface PreviewUnknownField extends PreviewFieldBase {
+  kind: 'unknown';
+}
+
+export type PreviewField =
+  | PreviewScalarField
+  | PreviewEnumField
+  | PreviewObjectField
+  | PreviewArrayField
+  | PreviewUnknownField;
+
+export interface PreviewSourceMapEntry {
+  fieldPath: string;
+  sourceUri: string;
+  sourceLine: number;
+  sourceChar: number;
+}
+
+export interface FormPreviewSchema {
+  schemaVersion: 1;
+  targetId: string;
+  title: string;
+  status: 'ready' | 'unsupported';
+  fields: PreviewField[];
+  unsupportedFeatures?: string[];
+  sourceMap?: PreviewSourceMapEntry[];
+}
+
+/**
+ * Options for `generatePreviewSchemas()`.
+ *
+ * `targetId` narrows generation to a single data type / form target. When
+ * omitted, schemas are generated for every data target in the document set;
+ * targets that cannot produce a preview schema are marked as unsupported.
+ */
+export interface GeneratePreviewSchemaOptions {
+  /** Generate only the schema for this fully-qualified target id. */
+  targetId?: string;
+  /** Maximum recursion depth to follow when expanding nested object fields. */
+  maxDepth?: number;
+}
+
 /**
  * Thrown when strict mode is enabled and any error diagnostic is produced.
  * FR-022.

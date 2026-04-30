@@ -1,11 +1,17 @@
 ---
 name: rune-langium-core
-description: "Documentation site for rune-langium Use when: Validating a single `.rosetta` file or snippet in memory."
+description: "Documentation site and generated agent skills for rune-langium APIs Use when: Validating a single `.rosetta` file or snippet in memory."
 ---
 
 # @rune-langium/core
 
-Documentation site for rune-langium
+Documentation site and generated agent skills for rune-langium APIs
+
+Use `parse()` for a single self-contained document, `parseWorkspace()` when
+files reference each other, and `createRuneDslServices()` when you need raw
+Langium services for custom tooling. The serializer exports are best for
+AST-driven workflows, tests, and code transformations that do not need to
+preserve original formatting.
 
 ## When to Use
 
@@ -59,7 +65,7 @@ implicit `[` and `]` brackets around bare expressions after `extract`,
 
 Load these on demand — do NOT read all at once:
 
-- When calling any function → read `references/functions.md` for full signatures, parameters, and return types
+- When calling any function → read `references/functions/` for full signatures, parameters, and return types
 - When using a class → read `references/classes/` for properties, methods, and inheritance
 - When defining typed variables or function parameters → read `references/types.md`
 - When using exported constants → read `references/variables.md`

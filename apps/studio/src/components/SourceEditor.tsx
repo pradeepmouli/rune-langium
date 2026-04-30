@@ -19,10 +19,11 @@ import {
   useCallback,
   useMemo,
   useImperativeHandle,
-  forwardRef
+  forwardRef,
+  type KeyboardEvent
 } from 'react';
 import { EditorView, keymap } from '@codemirror/view';
-import { EditorState, Transaction, type Extension } from '@codemirror/state';
+import { EditorState, type Extension } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
 import { defaultKeymap } from '@codemirror/commands';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
@@ -76,6 +77,8 @@ export interface SourceEditorProps {
 export interface SourceEditorRef {
   /** Scroll to a line in the specified (or current) file and highlight it. */
   revealLine(line: number, filePath?: string): void;
+  /** Scroll to a source position in the specified (or current) file and place the cursor there. */
+  revealPosition(position: { line: number; character: number }, filePath?: string): void;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -92,14 +95,18 @@ function getTabId(path: string): string {
   return `tab-${encoded}`;
 }
 
-/** Scroll to a 1-based line number and highlight it briefly. */
-function scrollToLine(view: EditorView | null, line: number): void {
+function scrollToPosition(
+  view: EditorView | null,
+  position: { line: number; character: number }
+): void {
   if (!view) return;
-  const clampedLine = Math.max(1, Math.min(line, view.state.doc.lines));
+  const clampedLine = Math.max(1, Math.min(position.line, view.state.doc.lines));
   const lineInfo = view.state.doc.line(clampedLine);
+  const lineOffset = Math.max(0, Math.min(position.character - 1, lineInfo.length));
+  const selectionAnchor = lineInfo.from + lineOffset;
   view.dispatch({
-    selection: { anchor: lineInfo.from },
-    effects: EditorView.scrollIntoView(lineInfo.from, { y: 'center' })
+    selection: { anchor: selectionAnchor },
+    effects: EditorView.scrollIntoView(selectionAnchor, { y: 'center' })
   });
   view.focus();
 }
@@ -190,30 +197,32 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
   }, [activeFile, files]);
 
   // Expose imperative handle for programmatic navigation
-  useImperativeHandle(
-    ref,
-    () => ({
-      revealLine(line: number, filePath?: string) {
-        // If a different file is specified, switch to it first
-        if (filePath && filePath !== selectedPath) {
-          const target = files.find((f) => f.path === filePath || f.name === filePath);
-          if (target) {
-            setSelectedPath(target.path);
-            onFileSelect?.(target.path);
-            // Schedule the scroll after the editor is recreated for the new file
+  useImperativeHandle(ref, () => {
+    const revealPosition = (position: { line: number; character: number }, filePath?: string) => {
+      // If a different file is specified, switch to it first
+      if (filePath && filePath !== selectedPath) {
+        const target = files.find((f) => f.path === filePath || f.name === filePath);
+        if (target) {
+          setSelectedPath(target.path);
+          onFileSelect?.(target.path);
+          // Schedule the scroll after the editor is recreated for the new file
+          requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                scrollToLine(editorViewRef.current, line);
-              });
+              scrollToPosition(editorViewRef.current, position);
             });
-            return;
-          }
+          });
+          return;
         }
-        scrollToLine(editorViewRef.current, line);
       }
-    }),
-    [files, selectedPath, onFileSelect]
-  );
+      scrollToPosition(editorViewRef.current, position);
+    };
+    return {
+      revealLine(line: number, filePath?: string) {
+        revealPosition({ line, character: 1 }, filePath);
+      },
+      revealPosition
+    };
+  }, [files, selectedPath, onFileSelect]);
 
   // Track content per file for document model
   const contentMapRef = useRef<Map<string, string>>(new Map());
@@ -278,12 +287,49 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
     [selectedPath, onFileSelect]
   );
 
+  const handleTabKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>, path: string) => {
+      const currentIndex = files.findIndex((file) => file.path === path);
+      if (currentIndex < 0 || files.length === 0) {
+        return;
+      }
+      let nextIndex: number | undefined;
+      switch (event.key) {
+        case 'ArrowRight':
+          nextIndex = (currentIndex + 1) % files.length;
+          break;
+        case 'ArrowLeft':
+          nextIndex = (currentIndex - 1 + files.length) % files.length;
+          break;
+        case 'Home':
+          nextIndex = 0;
+          break;
+        case 'End':
+          nextIndex = files.length - 1;
+          break;
+        default:
+          return;
+      }
+      event.preventDefault();
+      const nextFile = files[nextIndex];
+      if (nextFile) {
+        handleFileSelect(nextFile.path);
+        const nextTab = document.getElementById(getTabId(nextFile.path));
+        if (nextTab instanceof HTMLButtonElement) {
+          nextTab.focus();
+        }
+      }
+    },
+    [files, handleFileSelect]
+  );
+
   // Build extensions — uses refs for callbacks to keep extensions stable
   const buildExtensions = useCallback(
     (filePath: string, isReadOnly: boolean): Extension[] => {
       const exts: Extension[] = [
         basicSetup,
         keymap.of(defaultKeymap),
+        EditorView.lineWrapping,
         ...refactoryDark,
         runeDslLanguage()
       ];
@@ -407,12 +453,13 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
               aria-controls="editor-tabpanel"
               tabIndex={file.path === selectedPath ? 0 : -1}
               className={cn(
-                'pl-2.5 pr-1 py-1 text-xs bg-transparent border-none cursor-pointer whitespace-nowrap transition-[color,background-color,transform]',
+                'max-w-[16rem] truncate pl-2.5 pr-1 py-1 text-xs bg-transparent border-none cursor-pointer whitespace-nowrap transition-[color,background-color,transform]',
                 'hover:text-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
                 file.path === selectedPath ? 'text-primary' : 'text-muted-foreground'
               )}
               onClick={() => handleFileSelect(file.path)}
+              onKeyDown={(event) => handleTabKeyDown(event, file.path)}
               title={file.path}
             >
               {file.name}

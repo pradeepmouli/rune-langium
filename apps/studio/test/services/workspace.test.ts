@@ -5,8 +5,9 @@
  * Workspace service unit tests (T081, T101).
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  _resetParserWorkerForTests,
   parseFile,
   parseWorkspaceFiles,
   updateFileContent,
@@ -15,6 +16,11 @@ import {
   readFileList
 } from '../../src/services/workspace.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  _resetParserWorkerForTests();
+});
 
 // ---------------------------------------------------------------------------
 // parseFile
@@ -106,8 +112,8 @@ type Trade:
     ];
 
     const result = await parseWorkspaceFiles(files);
-    const tradeModel = result.models.find(
-      (model) => (model as { elements?: Array<{ name?: string }> }).elements?.some((el) => el.name === 'Trade')
+    const tradeModel = result.models.find((model) =>
+      (model as { elements?: Array<{ name?: string }> }).elements?.some((el) => el.name === 'Trade')
     ) as
       | {
           elements?: Array<{
@@ -127,6 +133,35 @@ type Trade:
     const result = await parseWorkspaceFiles([]);
     expect(result.models).toHaveLength(0);
     expect(result.errors.size).toBe(0);
+  });
+
+  it('surfaces when parsing falls back to the main thread', async () => {
+    _resetParserWorkerForTests();
+    vi.stubGlobal(
+      'Worker',
+      class WorkerThatFails {
+        constructor() {
+          throw new Error('worker boot failed');
+        }
+      }
+    );
+
+    const result = await parseWorkspaceFiles([
+      {
+        name: 'fallback.rosetta',
+        path: 'fallback.rosetta',
+        content: `namespace demo
+
+type Foo:
+  bar string (1..1)
+`,
+        dirty: false
+      }
+    ]);
+
+    expect(result.parseMode).toBe('main-thread-fallback');
+    expect(result.fallbackMessage).toContain('Parser worker unavailable');
+    expect(result.fallbackMessage).toContain('worker boot failed');
   });
 });
 

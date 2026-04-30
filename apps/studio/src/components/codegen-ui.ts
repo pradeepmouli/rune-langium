@@ -3,6 +3,7 @@
 import type { Target } from '@rune-langium/codegen';
 
 export const CODE_PREVIEW_PANEL_ID = 'code-preview-panel';
+export const FORM_PREVIEW_PANEL_ID = 'form-preview-panel';
 
 export const TARGET_OPTIONS = [
   { value: 'zod', label: 'Zod' },

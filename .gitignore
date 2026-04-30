@@ -9,6 +9,7 @@ coverage/
 .coverage/
 *.log
 .DS_Store
+.superpowers/
 .env
 .env.local
 .env.*.local

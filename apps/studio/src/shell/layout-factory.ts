@@ -19,12 +19,13 @@
  */
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import type { FactoryShape, PanelComponentName } from './layout-types.js';
+import type { FactoryShape, LayoutColumn, PanelComponentName } from './layout-types.js';
 export {
   PANEL_COMPONENT_NAMES,
   type BottomGroup,
   type DockviewPayload,
   type FactoryShape,
+  type LayoutColumn,
   type LayoutNode,
   type NativeShape,
   type PanelComponentName
@@ -37,12 +38,13 @@ export {
  */
 export const PANEL_TITLES: Record<PanelComponentName, string> = {
   'workspace.fileTree': 'Files',
-  'workspace.editor': 'Editor',
-  'workspace.inspector': 'Inspector',
+  'workspace.editor': 'Source',
+  'workspace.inspector': 'Structure',
   'workspace.problems': 'Problems',
-  'workspace.output': 'Output',
-  'workspace.visualPreview': 'Graph',
-  'workspace.codePreview': 'Code Preview'
+  'workspace.output': 'Messages',
+  'workspace.visualPreview': 'Visualize',
+  'workspace.formPreview': 'Form',
+  'workspace.codePreview': 'Code'
 };
 
 const SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
@@ -58,12 +60,17 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
   const dockview: FactoryShape = {
     shape: 'factory',
     columns: [
-      { component: 'workspace.fileTree', size: small ? 200 : 240 },
-      { component: 'workspace.editor', weight: 3 },
+      { component: 'workspace.fileTree', size: small ? 180 : 220 },
       {
-        component: 'workspace.inspector',
-        size: small ? 0 : 320,
-        collapsed: small
+        active: 'workspace.editor',
+        weight: 3,
+        tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
+      },
+      { component: 'workspace.visualPreview', size: small ? 220 : 280 },
+      {
+        active: 'workspace.formPreview',
+        size: small ? 280 : 340,
+        tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
       }
     ],
     bottomGroup: {
@@ -71,9 +78,7 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
       collapsed: small,
       tabs: [
         { component: 'workspace.problems', collapsed: small },
-        { component: 'workspace.output', collapsed: small },
-        { component: 'workspace.visualPreview', collapsed: small },
-        { component: 'workspace.codePreview', collapsed: small }
+        { component: 'workspace.output', collapsed: small }
       ]
     }
   };
@@ -83,4 +88,8 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
     writtenBy: input.studioVersion,
     dockview
   };
+}
+
+export function getLayoutColumnComponents(column: LayoutColumn): PanelComponentName[] {
+  return 'tabs' in column ? column.tabs.map((tab) => tab.component) : [column.component];
 }

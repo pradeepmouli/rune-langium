@@ -6,12 +6,13 @@
  * and cross-file resolution for the studio app (T083, T098, T100, T102).
  */
 
-import { parse, parseWorkspace } from '@rune-langium/core';
+import { parse, parseWorkspace, type RosettaModel } from '@rune-langium/core';
 import type {
   WorkerRequest,
   ParseResponse,
   ParseWorkspaceResponse
 } from '../workers/parser-worker.js';
+import { isParseResponse, isParseWorkspaceResponse } from '../workers/parser-worker.js';
 
 export interface WorkspaceFile {
   name: string;
@@ -30,9 +31,32 @@ export interface WorkspaceLoadProgress {
 
 export interface WorkspaceState {
   files: WorkspaceFile[];
-  models: unknown[];
+  models: RosettaModel[];
+  parsedModels: ParsedWorkspaceModel[];
   errors: Map<string, string[]>;
   loading: boolean;
+}
+
+export interface ParsedWorkspaceModel {
+  filePath: string;
+  model: RosettaModel;
+}
+
+export type ParseMode = 'worker' | 'main-thread-fallback';
+
+export interface ParseFileResult {
+  model: RosettaModel | null;
+  errors: string[];
+  parseMode: ParseMode;
+  fallbackMessage?: string;
+}
+
+export interface ParseWorkspaceFilesResult {
+  models: RosettaModel[];
+  parsedModels: ParsedWorkspaceModel[];
+  errors: Map<string, string[]>;
+  parseMode: ParseMode;
+  fallbackMessage?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,6 +65,14 @@ export interface WorkspaceState {
 
 let worker: Worker | null = null;
 let requestId = 0;
+let workerInitError: Error | null = null;
+const WORKER_FALLBACK_MESSAGE =
+  'Parser worker unavailable — using main-thread parsing, which may feel slower on large workspaces.';
+
+function formatWorkerFallbackMessage(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  return `${WORKER_FALLBACK_MESSAGE} (${detail})`;
+}
 
 function getWorker(): Worker | null {
   if (worker) return worker;
@@ -48,37 +80,108 @@ function getWorker(): Worker | null {
     worker = new Worker(new URL('../workers/parser-worker.ts', import.meta.url), {
       type: 'module'
     });
+    workerInitError = null;
     return worker;
-  } catch {
+  } catch (error) {
     // Worker not available (e.g., in test env or SSR)
+    workerInitError = error instanceof Error ? error : new Error(String(error));
     return null;
   }
 }
 
-function workerRequest<T extends ParseResponse | ParseWorkspaceResponse>(
-  msg: WorkerRequest
-): Promise<T> {
+function resetWorkerState(nextError: Error): void {
+  if (worker) {
+    worker.terminate();
+  }
+  worker = null;
+  workerInitError = nextError;
+}
+
+function workerRequest(msg: Extract<WorkerRequest, { type: 'parse' }>): Promise<ParseResponse>;
+function workerRequest(
+  msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>
+): Promise<ParseWorkspaceResponse>;
+function workerRequest(msg: WorkerRequest): Promise<ParseResponse | ParseWorkspaceResponse> {
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (!w) {
-      reject(new Error('Worker not available'));
+      reject(workerInitError ?? new Error('Worker not available'));
       return;
     }
 
     const id = msg.id;
-    const handler = (e: MessageEvent) => {
-      if (e.data?.id === id) {
-        w.removeEventListener('message', handler);
-        resolve(e.data as T);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const clearPendingTimeout = () => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
       }
     };
+    const cleanupListeners = () => {
+      w.removeEventListener('error', errorHandler);
+      w.removeEventListener('messageerror', messageErrorHandler);
+      w.removeEventListener('message', handler);
+    };
+    const handler = (e: MessageEvent) => {
+      if (e.data?.id === id) {
+        clearPendingTimeout();
+        cleanupListeners();
+        if (msg.type === 'parse') {
+          if (!isParseResponse(e.data)) {
+            const error = new Error('Worker returned an invalid parse response');
+            resetWorkerState(error);
+            reject(error);
+            return;
+          }
+          resolve(e.data);
+          return;
+        }
+        if (!isParseWorkspaceResponse(e.data)) {
+          const error = new Error('Worker returned an invalid workspace parse response');
+          resetWorkerState(error);
+          reject(error);
+          return;
+        }
+        resolve(e.data);
+      }
+    };
+    const errorHandler = (event: ErrorEvent) => {
+      clearPendingTimeout();
+      cleanupListeners();
+      const error = new Error(event.message || 'Worker error');
+      resetWorkerState(error);
+      reject(error);
+    };
+    const messageErrorHandler = () => {
+      clearPendingTimeout();
+      cleanupListeners();
+      const error = new Error('Worker message could not be deserialized');
+      resetWorkerState(error);
+      reject(error);
+    };
     w.addEventListener('message', handler);
-    w.postMessage(msg);
+    w.addEventListener('error', errorHandler);
+    w.addEventListener('messageerror', messageErrorHandler);
+    try {
+      w.postMessage(msg);
+    } catch (error) {
+      clearPendingTimeout();
+      cleanupListeners();
+      const workerError =
+        error instanceof Error
+          ? error
+          : new Error(error ? String(error) : 'Worker postMessage failed');
+      resetWorkerState(workerError);
+      reject(workerError);
+      return;
+    }
 
     // Timeout after 30s
-    setTimeout(() => {
-      w.removeEventListener('message', handler);
-      reject(new Error('Worker timeout'));
+    timeoutId = setTimeout(() => {
+      cleanupListeners();
+      const error = new Error('Worker timeout');
+      resetWorkerState(error);
+      reject(error);
     }, 30000);
   });
 }
@@ -87,22 +190,20 @@ function workerRequest<T extends ParseResponse | ParseWorkspaceResponse>(
  * Parse a single .rosetta file and return the model.
  * Tries the web worker first; falls back to main-thread parsing.
  */
-export async function parseFile(
-  content: string,
-  uri?: string
-): Promise<{ model: unknown; errors: string[] }> {
+export async function parseFile(content: string, uri?: string): Promise<ParseFileResult> {
   // Try worker first (T098)
   try {
     const id = String(++requestId);
-    const response = await workerRequest<ParseResponse>({
+    const response = await workerRequest({
       type: 'parse',
       id,
       content,
       uri
     });
-    return { model: response.model, errors: response.errors };
-  } catch {
+    return { model: response.model, errors: response.errors, parseMode: 'worker' };
+  } catch (error) {
     // Fallback to main thread
+    console.warn('[workspace] parseFile worker fallback:', error);
   }
 
   // Main-thread fallback
@@ -114,11 +215,18 @@ export async function parseFile(
         errors.push(err.message);
       }
     }
-    return { model: result.value, errors };
+    return {
+      model: result.value,
+      errors,
+      parseMode: 'main-thread-fallback',
+      fallbackMessage: WORKER_FALLBACK_MESSAGE
+    };
   } catch (e) {
     return {
       model: null,
-      errors: [(e as Error).message]
+      errors: [(e as Error).message],
+      parseMode: 'main-thread-fallback',
+      fallbackMessage: formatWorkerFallbackMessage(e)
     };
   }
 }
@@ -130,51 +238,76 @@ export async function parseFile(
  */
 export async function parseWorkspaceFiles(
   files: WorkspaceFile[]
-): Promise<{ models: unknown[]; errors: Map<string, string[]> }> {
+): Promise<ParseWorkspaceFilesResult> {
   if (files.length === 0) {
-    return { models: [], errors: new Map() };
+    return { models: [], parsedModels: [], errors: new Map(), parseMode: 'worker' };
   }
 
   // Try worker batch parse first (T098)
   try {
     const id = String(++requestId);
-    const response = await workerRequest<ParseWorkspaceResponse>({
+    const response = await workerRequest({
       type: 'parseWorkspace',
       id,
       files: files.map((f) => ({ name: f.path, content: f.content }))
     });
+    if (response.errors.__worker__?.length) {
+      throw new Error(response.errors.__worker__.join('; '));
+    }
     const errMap = new Map<string, string[]>();
     for (const [k, v] of Object.entries(response.errors)) {
       errMap.set(k, v);
     }
-    return { models: response.models, errors: errMap };
-  } catch {
+    return {
+      models: response.models,
+      parsedModels: response.parsedModels,
+      errors: errMap,
+      parseMode: 'worker'
+    };
+  } catch (error) {
     // Fallback to main thread
-  }
+    console.warn('[workspace] parseWorkspaceFiles worker fallback:', error);
+    const fallbackMessage = formatWorkerFallbackMessage(error);
+    const results = await parseWorkspace(
+      files.map((file) => ({
+        uri: file.path,
+        content: file.content
+      }))
+    );
+    const models: RosettaModel[] = [];
+    const parsedModels: ParsedWorkspaceModel[] = [];
+    const errors = new Map<string, string[]>();
 
-  // Main-thread fallback
-  const results = await parseWorkspace(
-    files.map((file) => ({
-      uri: file.path,
-      content: file.content
-    }))
-  );
-  const models: unknown[] = [];
-  const errors = new Map<string, string[]>();
-
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i]!;
-    const file = files[i]!;
-    if (result.value) {
-      models.push(result.value);
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i]!;
+      const file = files[i]!;
+      if (result.value) {
+        models.push(result.value);
+        parsedModels.push({ filePath: file.path, model: result.value });
+      }
+      const fileErrors = result.parserErrors.map((err) => err.message);
+      if (fileErrors.length > 0) {
+        errors.set(file.path, fileErrors);
+      }
     }
-    const fileErrors = result.parserErrors.map((err) => err.message);
-    if (fileErrors.length > 0) {
-      errors.set(file.path, fileErrors);
-    }
-  }
 
-  return { models, errors };
+    return {
+      models,
+      parsedModels,
+      errors,
+      parseMode: 'main-thread-fallback',
+      fallbackMessage
+    };
+  }
+}
+
+export function _resetParserWorkerForTests(): void {
+  if (worker) {
+    worker.terminate();
+  }
+  worker = null;
+  requestId = 0;
+  workerInitError = null;
 }
 
 /**

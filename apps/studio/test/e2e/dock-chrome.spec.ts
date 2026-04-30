@@ -6,10 +6,9 @@
  *
  * Verifies SC-010: at the two reference viewports (1280x800, 1440x900)
  * the dock surface renders with proper chrome — `dv-tab` elements are
- * present after dockview-react's stylesheet loads, and the rendered
- * tab strip uses user-readable titles (Files / Editor / Inspector /
- * Problems / Output / Preview) instead of the internal `workspace.*`
- * component IDs.
+ * present after dockview-react's stylesheet loads, the grouped mode header
+ * exposes Navigate / Edit / Visualize / Preview, and the rendered tab strip
+ * uses user-readable titles instead of internal `workspace.*` IDs.
  *
  * The fastest reliable way to mount the dock shell in production-like
  * conditions is the empty-workspace "New" affordance — it drops the
@@ -32,8 +31,8 @@ async function openBlankWorkspace(page: Page): Promise<void> {
 
 async function assertDockChrome(page: Page): Promise<void> {
   // dv-tab elements are emitted by dockview-react once its stylesheet
-  // is loaded AND a panel group exists. The shell creates 6 panels;
-  // each panel renders at least one tab element in the strip.
+  // is loaded AND a panel group exists. The shell creates multiple dock
+  // groups with at least one visible tab each.
   await expect
     .poll(async () => page.locator('.dv-tab').count(), { timeout: 10_000 })
     .toBeGreaterThan(0);
@@ -50,6 +49,21 @@ async function assertDockChrome(page: Page): Promise<void> {
   expect(text).not.toContain('workspace.problems');
   expect(text).not.toContain('workspace.output');
   expect(text).not.toContain('workspace.visualPreview');
+
+  await expect(page.getByTestId('studio-mode-header')).toContainText('Navigate');
+  await expect(page.getByTestId('studio-mode-header')).toContainText('Edit');
+  await expect(page.getByTestId('studio-mode-header')).toContainText('Visualize');
+  await expect(page.getByTestId('studio-mode-header')).toContainText('Preview');
+
+  await expect(page.locator('.dv-tab', { hasText: 'Files' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Source' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Structure' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Visualize' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Form' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Code' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Problems' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Messages' }).first()).toBeVisible();
+  await expect(page.getByTestId('toggle-utilities')).toBeVisible();
 }
 
 test.describe('Studio — dock chrome (T025, SC-010)', () => {
@@ -63,5 +77,14 @@ test.describe('Studio — dock chrome (T025, SC-010)', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openBlankWorkspace(page);
     await assertDockChrome(page);
+  });
+
+  test('utility tray toggle updates its label', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openBlankWorkspace(page);
+    const toggle = page.getByTestId('toggle-utilities');
+    await expect(toggle).toHaveText(/show utilities/i);
+    await toggle.click();
+    await expect(toggle).toHaveText(/hide utilities/i);
   });
 });

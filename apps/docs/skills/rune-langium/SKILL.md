@@ -1,85 +1,50 @@
 ---
 name: rune-langium
-description: "Use when working with rune-langium (core, cli, lsp-server, codegen, visual-editor)."
+description: "Router skill for the rune-langium monorepo. Use it to choose the right package skill before working in core, cli, lsp-server, codegen, or visual-editor."
+license: SEE LICENSE IN LICENSE
 ---
+
 # rune-langium
 
-**Use this skill for ANY work with rune-langium.** It routes to the correct package.
+Use this router when the task spans the monorepo or you are not yet sure which package owns the behavior.
 
-## When to Use
+## Route by task
 
-Use this router when:
-- Documentation site for rune-langium
-- Documentation site for rune-langium
-- Documentation site for rune-langium
-- Documentation site for rune-langium
-- Documentation site for rune-langium
+1. Parsing, ASTs, serializers, or `.rosetta` validation → `rune-langium-core`
+2. CLI commands or terminal workflows → `rune-langium-cli`
+3. Language-server integration, WebSocket LSP, diagnostics, hover, or completion → `rune-langium-lsp-server`
+4. Code generation, preview schemas, or exported source maps → `rune-langium-codegen`
+5. Graph rendering, React Flow nodes, layout, or visual-editor state → `rune-langium-visual-editor`
 
-## Decision Tree
-
-1. Documentation site for rune-langium? → `rune-langium-core`
-2. Documentation site for rune-langium? → `rune-langium-cli`
-3. Documentation site for rune-langium? → `rune-langium-lsp-server`
-4. Documentation site for rune-langium? → `rune-langium-codegen`
-5. Documentation site for rune-langium? → `rune-langium-visual-editor`
-
-## Routing Logic
+## Quick package guide
 
 ### core → `rune-langium-core`
 
-- Validating a single `.rosetta` file or snippet in memory
-- Building a parse pipeline in a Node.js script
-- Unit-testing grammar rules in isolation
-
-Key APIs: `RuneDslAstReflection`, `RuneDslScopeProvider`, `RuneDslValidator`, `isAnnotation`, `isAnnotationDeepPath`
+- Parse a single file or a full workspace
+- Validate cross-file references
+- Serialize models back to Rune/Rosetta text
 
 ### cli → `rune-langium-cli`
 
+- Run the `rune-dsl` command
+- Wire parser/codegen flows into shell scripts or local tooling
+
 ### lsp-server → `rune-langium-lsp-server`
 
-- Embedding a Rune DSL language server in a web application via WebSocket
-- Running a standalone LSP server process bridging to a VS Code / Theia client
-- Integration-testing LSP features (hover, completion, diagnostics)
-
-Key APIs: `createRuneLspServer`, `createConnectionAdapter`
+- Embed or host the Rune DSL language server
+- Bridge Monaco/CodeMirror/browser editors to LSP features
 
 ### codegen → `rune-langium-codegen`
 
-Key APIs: `GeneratorError`, `generate`
+- Generate derived artifacts from parsed documents
+- Build or consume form-preview schemas and code-preview source maps
 
 ### visual-editor → `rune-langium-visual-editor`
 
-- Rendering two or more `RuneTypeGraph` components simultaneously (different namespaces, split-pane editors, etc.)
-- Writing tests that need an isolated store per test case
+- Render and interact with Rune graphs in React
+- Work on node rendering, layout, or store behavior
 
-Key APIs: `DetailPanel`, `TypeSelector`, `getKindBadgeClasses`
+## Rules
 
-## Anti-Rationalization
-
-| Thought | Reality |
-|---------|---------|
-| "I'll just use core for everything" | core is for documentation site for rune-langium. Parsing files that have cross-references to other documents — unresolved references will have `ref === undefined`. Use `parseWorkspace()` instead. |
-| "I'll just use lsp-server for everything" | lsp-server is for documentation site for rune-langium. Parsing `.rosetta` files in a script — use `createRuneDslServices()` and `parse()` / `parseWorkspace()` instead (no LSP overhead). |
-| "I'll just use visual-editor for everything" | visual-editor is for documentation site for rune-langium. You only need a single graph — use the pre-created `useEditorStore` singleton. |
-
-## Example Invocations
-
-User: "I need to documentation site for rune-langium"  
-→ Load `rune-langium-core`
-
-User: "I need to documentation site for rune-langium"  
-→ Load `rune-langium-cli`
-
-User: "I need to documentation site for rune-langium"  
-→ Load `rune-langium-lsp-server`
-
-User: "I need to documentation site for rune-langium"  
-→ Load `rune-langium-codegen`
-
-User: "I need to documentation site for rune-langium"  
-→ Load `rune-langium-visual-editor`
-
-## NEVER
-
-- NEVER load all package skills simultaneously — pick the one matching your task
-- If your task spans multiple packages, load the foundational one first (typically core/shared), then the specific one
+- Do not load every package skill at once; start with the owning package.
+- If a task crosses package boundaries, begin with the foundational package and then move outward.

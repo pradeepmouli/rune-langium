@@ -8,27 +8,41 @@ export const PANEL_COMPONENT_NAMES = [
   'workspace.problems',
   'workspace.output',
   'workspace.visualPreview',
+  'workspace.formPreview',
   'workspace.codePreview'
 ] as const;
 
 export type PanelComponentName = (typeof PANEL_COMPONENT_NAMES)[number];
+export type EditorTabName = 'workspace.editor' | 'workspace.inspector';
+export type PreviewTabName = 'workspace.formPreview' | 'workspace.codePreview';
+export type UtilityTabName = 'workspace.problems' | 'workspace.output';
 
-export interface LayoutNode {
-  component: PanelComponentName;
+export interface LayoutNode<TComponent extends PanelComponentName = PanelComponentName> {
+  component: TComponent;
   collapsed?: boolean;
   size?: number;
   weight?: number;
 }
 
-export interface BottomGroup {
-  active: PanelComponentName;
-  collapsed: boolean;
-  tabs: LayoutNode[];
+export interface LayoutGroup<TTab extends PanelComponentName = PanelComponentName> {
+  active: TTab;
+  collapsed?: boolean;
+  size?: number;
+  weight?: number;
+  tabs: [LayoutNode<TTab>, ...LayoutNode<TTab>[]];
 }
+
+export type EditorGroup = LayoutGroup<EditorTabName>;
+export type PreviewGroup = LayoutGroup<PreviewTabName>;
+export type BottomGroup = LayoutGroup<UtilityTabName> & { collapsed: boolean };
+
+export type LeftColumn = LayoutNode<'workspace.fileTree'>;
+export type VisualizeColumn = LayoutNode<'workspace.visualPreview'>;
+export type LayoutColumn = LeftColumn | EditorGroup | VisualizeColumn | PreviewGroup;
 
 export interface FactoryShape {
   shape: 'factory';
-  columns: [LayoutNode, LayoutNode, LayoutNode];
+  columns: [LeftColumn, EditorGroup, VisualizeColumn, PreviewGroup];
   bottomGroup: BottomGroup;
 }
 

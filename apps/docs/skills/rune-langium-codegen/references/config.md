@@ -1,5 +1,27 @@
 # Configuration
 
+## GeneratePreviewSchemaOptions
+
+Options for `generatePreviewSchemas()`.
+
+`targetId` narrows generation to a single data type / form target. When
+omitted, schemas are generated for every data target in the document set;
+targets that cannot produce a preview schema are marked as unsupported.
+
+### Properties
+
+#### targetId
+
+Generate only the schema for this fully-qualified target id.
+
+**Type:** `string`
+
+#### maxDepth
+
+Maximum recursion depth to follow when expanding nested object fields.
+
+**Type:** `number`
+
 ## GeneratorOptions
 
 Options for a generation run.

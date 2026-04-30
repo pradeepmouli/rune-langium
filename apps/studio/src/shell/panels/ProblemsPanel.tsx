@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type React from 'react';
+import { useUtilityTrayControls } from '../utility-tray-context.js';
 
 export interface ProblemRow {
   path: string;
@@ -17,6 +18,8 @@ export interface ProblemsPanelProps {
 }
 
 export function ProblemsPanel({ problems = [], onJump }: ProblemsPanelProps): React.ReactElement {
+  const { utilitiesCollapsed, setUtilitiesCollapsed } = useUtilityTrayControls();
+
   return (
     <section
       role="region"
@@ -24,7 +27,16 @@ export function ProblemsPanel({ problems = [], onJump }: ProblemsPanelProps): Re
       data-testid="panel-problems"
       data-component="workspace.problems"
     >
-      <h2>Problems</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2>Problems</h2>
+        <button
+          type="button"
+          className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
+          onClick={() => setUtilitiesCollapsed(!utilitiesCollapsed)}
+        >
+          {utilitiesCollapsed ? 'Show utilities' : 'Hide utilities'}
+        </button>
+      </div>
       {problems.length === 0 ? (
         <p>No problems detected in the workspace.</p>
       ) : (

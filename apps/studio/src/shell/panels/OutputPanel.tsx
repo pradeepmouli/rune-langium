@@ -2,20 +2,32 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type React from 'react';
+import { useUtilityTrayControls } from '../utility-tray-context.js';
 
 export interface OutputPanelProps {
   lines?: ReadonlyArray<string>;
 }
 
 export function OutputPanel({ lines = [] }: OutputPanelProps): React.ReactElement {
+  const { utilitiesCollapsed, setUtilitiesCollapsed } = useUtilityTrayControls();
+
   return (
     <section
       role="region"
-      aria-label="Output"
+      aria-label="Messages"
       data-testid="panel-output"
       data-component="workspace.output"
     >
-      <h2>Output</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2>Messages</h2>
+        <button
+          type="button"
+          className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
+          onClick={() => setUtilitiesCollapsed(!utilitiesCollapsed)}
+        >
+          {utilitiesCollapsed ? 'Show utilities' : 'Hide utilities'}
+        </button>
+      </div>
       <pre aria-live="polite">{lines.join('\n')}</pre>
     </section>
   );

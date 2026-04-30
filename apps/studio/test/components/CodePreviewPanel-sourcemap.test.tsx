@@ -15,6 +15,7 @@ vi.mock('@codemirror/view', () => ({
     dispatch = vi.fn();
     static theme = vi.fn(() => []);
     static updateListener = { of: vi.fn(() => []) };
+    static lineWrapping = [];
     static domEventHandlers = vi.fn((handlers: { click?: (e: MouseEvent, v: object) => void }) => {
       if (handlers.click) capturedHandlers.click = handlers.click;
       return [];
@@ -77,24 +78,24 @@ function makeFakeView(outputLine: number) {
 describe('CodePreviewPanel — source-map click-to-navigate', () => {
   it('calls revealLineInCenter and setSelection on mapped line click', async () => {
     const w = makeWorker();
-    const sourceEditorRef = { revealLineInCenter: vi.fn(), setSelection: vi.fn() };
+    const sourceEditorRef = { revealPosition: vi.fn() };
     render(
       <CodePreviewPanel
         worker={w as unknown as Worker}
         sourceEditorRef={sourceEditorRef as never}
       />
     );
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     const sourceMap = [
-      { outputLine: 2, sourceUri: 'file:///trade.rune', sourceLine: 5, sourceChar: 3 }
+      { outputLine: 2, sourceUri: 'file:///workspace/trade.rune', sourceLine: 5, sourceChar: 3 }
     ];
     await act(async () => {
       getMessageHandler(w)?.({
         data: {
           type: 'codegen:result',
           target: 'zod',
-          relativePath: 'ns.zod.ts',
-          content: 'line0\nline1\nline2\n',
-          sourceMap
+          requestId,
+          files: [{ relativePath: 'ns.zod.ts', content: 'line0\nline1\nline2\n', sourceMap }]
         }
       } as MessageEvent);
     });
@@ -108,27 +109,29 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
       );
     });
 
-    expect(sourceEditorRef.revealLineInCenter).toHaveBeenCalledWith(5);
-    expect(sourceEditorRef.setSelection).toHaveBeenCalledWith({ line: 5, character: 3 });
+    expect(sourceEditorRef.revealPosition).toHaveBeenCalledWith(
+      { line: 5, character: 3 },
+      'trade.rune'
+    );
   });
 
   it('does nothing when clicking with empty source map', async () => {
     const w = makeWorker();
-    const sourceEditorRef = { revealLineInCenter: vi.fn(), setSelection: vi.fn() };
+    const sourceEditorRef = { revealPosition: vi.fn() };
     render(
       <CodePreviewPanel
         worker={w as unknown as Worker}
         sourceEditorRef={sourceEditorRef as never}
       />
     );
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     await act(async () => {
       getMessageHandler(w)?.({
         data: {
           type: 'codegen:result',
           target: 'zod',
-          relativePath: 'ns.zod.ts',
-          content: 'line0\nline1\n',
-          sourceMap: []
+          requestId,
+          files: [{ relativePath: 'ns.zod.ts', content: 'line0\nline1\n', sourceMap: [] }]
         }
       } as MessageEvent);
     });
@@ -138,22 +141,32 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
         makeFakeView(0)
       );
     });
-    expect(sourceEditorRef.revealLineInCenter).not.toHaveBeenCalled();
-    expect(sourceEditorRef.setSelection).not.toHaveBeenCalled();
+    expect(sourceEditorRef.revealPosition).not.toHaveBeenCalled();
   });
 
   it('does nothing when sourceEditorRef is null', async () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     await act(async () => {
       getMessageHandler(w)?.({
         data: {
           type: 'codegen:result',
           target: 'zod',
-          relativePath: 'ns.zod.ts',
-          content: 'line0\n',
-          sourceMap: [
-            { outputLine: 0, sourceUri: 'file:///trade.rune', sourceLine: 5, sourceChar: 3 }
+          requestId,
+          files: [
+            {
+              relativePath: 'ns.zod.ts',
+              content: 'line0\n',
+              sourceMap: [
+                {
+                  outputLine: 0,
+                  sourceUri: 'file:///workspace/trade.rune',
+                  sourceLine: 5,
+                  sourceChar: 3
+                }
+              ]
+            }
           ]
         }
       } as MessageEvent);
@@ -165,5 +178,52 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
         makeFakeView(0)
       );
     });
+  });
+
+  it('opens the mapped source file when the source map points at a different file', async () => {
+    const w = makeWorker();
+    const sourceEditorRef = { revealPosition: vi.fn() };
+    render(
+      <CodePreviewPanel
+        worker={w as unknown as Worker}
+        sourceEditorRef={sourceEditorRef as never}
+      />
+    );
+    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+    await act(async () => {
+      getMessageHandler(w)?.({
+        data: {
+          type: 'codegen:result',
+          target: 'zod',
+          requestId,
+          files: [
+            {
+              relativePath: 'ns.zod.ts',
+              content: 'line0\n',
+              sourceMap: [
+                {
+                  outputLine: 0,
+                  sourceUri: 'file:///workspace/other-file.rosetta',
+                  sourceLine: 9,
+                  sourceChar: 2
+                }
+              ]
+            }
+          ]
+        }
+      } as MessageEvent);
+    });
+
+    await act(async () => {
+      capturedHandlers.click?.(
+        new MouseEvent('click', { clientX: 0, clientY: 0 }),
+        makeFakeView(0)
+      );
+    });
+
+    expect(sourceEditorRef.revealPosition).toHaveBeenCalledWith(
+      { line: 9, character: 2 },
+      'other-file.rosetta'
+    );
   });
 });

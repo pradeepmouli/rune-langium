@@ -9,7 +9,7 @@
  * and returns parsed results.
  */
 
-import { parse, parseWorkspace } from '@rune-langium/core';
+import { parse, parseWorkspace, type RosettaModel } from '@rune-langium/core';
 
 export interface ParseRequest {
   type: 'parse';
@@ -30,18 +30,59 @@ export type WorkerRequest = ParseRequest | ParseWorkspaceRequest;
 export interface ParseResponse {
   type: 'parseResult';
   id: string;
-  model: unknown;
+  model: RosettaModel | null;
   errors: string[];
 }
 
 export interface ParseWorkspaceResponse {
   type: 'parseWorkspaceResult';
   id: string;
-  models: unknown[];
+  models: RosettaModel[];
+  parsedModels: Array<{ filePath: string; model: RosettaModel }>;
   errors: Record<string, string[]>;
 }
 
 export type WorkerResponse = ParseResponse | ParseWorkspaceResponse;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
+export function isParseResponse(value: unknown): value is ParseResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    value.type === 'parseResult' &&
+    typeof value.id === 'string' &&
+    Array.isArray(value.errors) &&
+    value.errors.every((entry) => typeof entry === 'string') &&
+    (value.model === null || isRecord(value.model))
+  );
+}
+
+export function isParseWorkspaceResponse(value: unknown): value is ParseWorkspaceResponse {
+  if (!isRecord(value) || value.type !== 'parseWorkspaceResult' || typeof value.id !== 'string') {
+    return false;
+  }
+  if (!Array.isArray(value.models) || !value.models.every((entry) => isRecord(entry))) {
+    return false;
+  }
+  if (
+    !Array.isArray(value.parsedModels) ||
+    !value.parsedModels.every(
+      (entry) => isRecord(entry) && typeof entry.filePath === 'string' && isRecord(entry.model)
+    )
+  ) {
+    return false;
+  }
+  if (!isRecord(value.errors)) {
+    return false;
+  }
+  return Object.values(value.errors).every(
+    (entry) => Array.isArray(entry) && entry.every((message) => typeof message === 'string')
+  );
+}
 
 // ---------------------------------------------------------------------------
 // CST text preservation — $cstNode is lost during postMessage serialization
@@ -108,30 +149,53 @@ async function handleParse(req: ParseRequest): Promise<ParseResponse> {
 async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWorkspaceResponse> {
   const errors: Record<string, string[]> = {};
   if (req.files.length === 0) {
-    return { type: 'parseWorkspaceResult', id: req.id, models: [], errors };
+    return { type: 'parseWorkspaceResult', id: req.id, models: [], parsedModels: [], errors };
   }
 
-  const results = await parseWorkspace(
-    req.files.map((file) => ({
-      uri: file.name,
-      content: file.content
-    }))
-  );
-  const models: unknown[] = [];
+  try {
+    const results = await parseWorkspace(
+      req.files.map((file) => ({
+        uri: file.name,
+        content: file.content
+      }))
+    );
+    const models: RosettaModel[] = [];
+    const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
 
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i]!;
-    const file = req.files[i]!;
-    if (result.value) {
-      preserveCstText(result.value);
-      models.push(result.value);
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i]!;
+      const file = req.files[i]!;
+      if (result.value) {
+        preserveCstText(result.value);
+        models.push(result.value);
+        parsedModels.push({ filePath: file.name, model: result.value });
+      }
+      if (result.parserErrors.length > 0) {
+        errors[file.name] = result.parserErrors.map((e) => e.message);
+      }
     }
-    if (result.parserErrors.length > 0) {
-      errors[file.name] = result.parserErrors.map((e) => e.message);
-    }
+
+    return { type: 'parseWorkspaceResult', id: req.id, models, parsedModels, errors };
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('[parser-worker] parseWorkspace failed', {
+      id: req.id,
+      error
+    });
+    const detail =
+      error instanceof Error
+        ? [error.message, error.stack].filter(Boolean).join('\n')
+        : 'Workspace parsing failed.';
+    return {
+      type: 'parseWorkspaceResult',
+      id: req.id,
+      models: [],
+      parsedModels: [],
+      errors: {
+        __worker__: [detail]
+      }
+    };
   }
-
-  return { type: 'parseWorkspaceResult', id: req.id, models, errors };
 }
 
 // ---------------------------------------------------------------------------

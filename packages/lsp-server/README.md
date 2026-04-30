@@ -1,29 +1,11 @@
 # @rune-langium/lsp-server
 
-Language Server Protocol (LSP) server for the Rune DSL, powered by [Langium](https://langium.org) and [@lspeasy/server](https://github.com/pradeepmouli/lspy).
+> Embed a Rune DSL language server for diagnostics, completion, hover, and navigation.
 
-Provides autocomplete, validation, go-to-definition, hover info, and diagnostics for `.rosetta` files.
+LSP server utilities for Rune DSL editor integrations.
 
-## Installation
+## Features
 
-```bash
-npm install @rune-langium/lsp-server
-```
-
-## Usage
-
-### As a standalone server
-
-```bash
-rune-lsp-server --stdio
-```
-
-### Programmatic
-
-```typescript
-import { createRuneLspServer } from '@rune-langium/lsp-server';
-```
-
-## License
-
-MIT
+- Start a Rune DSL server with `createRuneLspServer`
+- Adapt custom transports with `createConnectionAdapter`
+- Reuse the same server for browser or desktop editor clients
