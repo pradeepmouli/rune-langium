@@ -42,7 +42,7 @@ export interface ParsedWorkspaceModel {
   model: RosettaModel;
 }
 
-export type ParseMode = 'worker' | 'main-thread-fallback';
+export type ParseMode = 'worker' | 'main-thread-fallback' | 'main-thread-preferred';
 
 export interface ParseFileResult {
   model: RosettaModel | null;
@@ -68,10 +68,54 @@ let requestId = 0;
 let workerInitError: Error | null = null;
 const WORKER_FALLBACK_MESSAGE =
   'Parser worker unavailable — using main-thread parsing, which may feel slower on large workspaces.';
+const PARSER_WORKER_MAX_WORKSPACE_FILES = 128;
 
 function formatWorkerFallbackMessage(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error);
   return `${WORKER_FALLBACK_MESSAGE} (${detail})`;
+}
+
+function shouldPreferMainThreadWorkspaceParse(files: WorkspaceFile[]): boolean {
+  return files.length > PARSER_WORKER_MAX_WORKSPACE_FILES;
+}
+
+async function parseWorkspaceFilesOnMainThread(
+  files: WorkspaceFile[],
+  options: {
+    parseMode: Extract<ParseMode, 'main-thread-fallback' | 'main-thread-preferred'>;
+    fallbackMessage?: string;
+  }
+): Promise<ParseWorkspaceFilesResult> {
+  const results = await parseWorkspace(
+    files.map((file) => ({
+      uri: file.path,
+      content: file.content
+    }))
+  );
+  const models: RosettaModel[] = [];
+  const parsedModels: ParsedWorkspaceModel[] = [];
+  const errors = new Map<string, string[]>();
+
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i]!;
+    const file = files[i]!;
+    if (result.value) {
+      models.push(result.value);
+      parsedModels.push({ filePath: file.path, model: result.value });
+    }
+    const fileErrors = result.parserErrors.map((err) => err.message);
+    if (fileErrors.length > 0) {
+      errors.set(file.path, fileErrors);
+    }
+  }
+
+  return {
+    models,
+    parsedModels,
+    errors,
+    parseMode: options.parseMode,
+    fallbackMessage: options.fallbackMessage
+  };
 }
 
 function getWorker(): Worker | null {
@@ -243,6 +287,15 @@ export async function parseWorkspaceFiles(
     return { models: [], parsedModels: [], errors: new Map(), parseMode: 'worker' };
   }
 
+  // Large curated corpora can exceed browser worker stack limits while still
+  // parsing successfully on the main thread. Prefer the main thread up-front
+  // for oversized workspaces so users don't see a spurious worker failure.
+  if (shouldPreferMainThreadWorkspaceParse(files)) {
+    return parseWorkspaceFilesOnMainThread(files, {
+      parseMode: 'main-thread-preferred'
+    });
+  }
+
   // Try worker batch parse first (T098)
   try {
     const id = String(++requestId);
@@ -268,36 +321,10 @@ export async function parseWorkspaceFiles(
     // Fallback to main thread
     console.warn('[workspace] parseWorkspaceFiles worker fallback:', error);
     const fallbackMessage = formatWorkerFallbackMessage(error);
-    const results = await parseWorkspace(
-      files.map((file) => ({
-        uri: file.path,
-        content: file.content
-      }))
-    );
-    const models: RosettaModel[] = [];
-    const parsedModels: ParsedWorkspaceModel[] = [];
-    const errors = new Map<string, string[]>();
-
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i]!;
-      const file = files[i]!;
-      if (result.value) {
-        models.push(result.value);
-        parsedModels.push({ filePath: file.path, model: result.value });
-      }
-      const fileErrors = result.parserErrors.map((err) => err.message);
-      if (fileErrors.length > 0) {
-        errors.set(file.path, fileErrors);
-      }
-    }
-
-    return {
-      models,
-      parsedModels,
-      errors,
+    return parseWorkspaceFilesOnMainThread(files, {
       parseMode: 'main-thread-fallback',
       fallbackMessage
-    };
+    });
   }
 }
 
