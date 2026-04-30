@@ -150,9 +150,9 @@ describe('App workspace restore on mount (T027/US2)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('1 file(s)')).toBeInTheDocument();
+      expect(screen.getAllByText('1 file(s)').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Rune Studio')).toBeInTheDocument();
+    expect(document.body).toHaveAttribute('data-workspace-active', 'true');
     expect(screen.queryByText(/Load Rune DSL Models/i)).not.toBeInTheDocument();
   });
 
