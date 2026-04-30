@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { create } from 'zustand';
-import type { FormPreviewSchema, PreviewSourceMapEntry } from '@rune-langium/codegen';
+import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen';
 
 export interface FormPreviewTarget {
   id: string;
@@ -91,6 +91,105 @@ const initialState: PreviewStoreState = {
 
 function serializeSampleValues(values: Record<string, unknown>): string {
   return JSON.stringify(values, null, 2);
+}
+
+function fieldRootKey(path: string): string {
+  return path.split('.')[0]!.split('[]').join('');
+}
+
+function fieldLeafKey(path: string): string {
+  const parts = path.split('.');
+  return parts[parts.length - 1]!.split('[]').join('');
+}
+
+function buildDefaultValue(field: PreviewField): unknown {
+  switch (field.kind) {
+    case 'boolean':
+      return false;
+    case 'enum':
+      return field.required ? (field.enumValues?.[0]?.value ?? '') : '';
+    case 'object':
+      return field.required
+        ? Object.fromEntries(
+            (field.children ?? []).map((child) => [
+              fieldLeafKey(child.path),
+              buildDefaultValue(child)
+            ])
+          )
+        : undefined;
+    case 'array':
+      return [];
+    default:
+      return '';
+  }
+}
+
+function buildDefaultValues(fields: PreviewField[]): Record<string, unknown> {
+  return Object.fromEntries(
+    fields.map((field) => [fieldRootKey(field.path), buildDefaultValue(field)])
+  );
+}
+
+function reconcileScalarValue(field: PreviewField, current: unknown): unknown {
+  switch (field.kind) {
+    case 'boolean':
+      return typeof current === 'boolean' ? current : false;
+    case 'number':
+      if (typeof current === 'number') {
+        return current;
+      }
+      if (typeof current === 'string' && current.trim() !== '') {
+        const parsed = Number(current);
+        return Number.isFinite(parsed) ? parsed : '';
+      }
+      return '';
+    case 'enum':
+      return typeof current === 'string' ? current : buildDefaultValue(field);
+    case 'unknown':
+    case 'string':
+      return typeof current === 'string' ? current : '';
+    case 'object':
+    case 'array':
+      return buildDefaultValue(field);
+  }
+}
+
+function reconcileFieldValue(field: PreviewField, current: unknown): unknown {
+  switch (field.kind) {
+    case 'object': {
+      if (current === undefined && !field.required) {
+        return undefined;
+      }
+      const record =
+        current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+      return Object.fromEntries(
+        (field.children ?? []).map((child) => [
+          fieldLeafKey(child.path),
+          reconcileFieldValue(child, (record as Record<string, unknown>)[fieldLeafKey(child.path)])
+        ])
+      );
+    }
+    case 'array': {
+      const items = Array.isArray(current) ? current : [];
+      const [child] = field.children ?? [];
+      return child ? items.map((item) => reconcileFieldValue(child, item)) : [];
+    }
+    default:
+      return reconcileScalarValue(field, current);
+  }
+}
+
+function reconcileSampleValues(
+  fields: PreviewField[],
+  values: Record<string, unknown> | undefined
+): Record<string, unknown> {
+  const current = values ?? {};
+  return Object.fromEntries(
+    fields.map((field) => [
+      fieldRootKey(field.path),
+      reconcileFieldValue(field, current[fieldRootKey(field.path)])
+    ])
+  );
 }
 
 function sameSourceRange(
@@ -258,13 +357,24 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
   receivePreviewResult(schema) {
     const schemas = new Map(get().schemas);
     schemas.set(schema.targetId, schema);
-    const sample = get().samples.get(schema.targetId);
+    const existingSample = get().samples.get(schema.targetId);
+    const samples = new Map(get().samples);
+    const sampleValues = existingSample
+      ? reconcileSampleValues(schema.fields, existingSample.values)
+      : buildDefaultValues(schema.fields);
+    samples.set(schema.targetId, {
+      targetId: schema.targetId,
+      values: sampleValues,
+      serialized: serializeSampleValues(sampleValues),
+      errors: {},
+      valid: true,
+      validated: false,
+      updatedAt: Date.now()
+    });
     set({
       schemas,
-      status:
-        sample?.validated && !sample.valid
-          ? { state: 'invalid', targetId: schema.targetId }
-          : { state: 'ready', targetId: schema.targetId }
+      samples,
+      status: { state: 'ready', targetId: schema.targetId }
     });
   },
 

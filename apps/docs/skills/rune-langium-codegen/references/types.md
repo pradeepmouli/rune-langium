@@ -37,15 +37,9 @@ FR-025 (diagnostics).
 - `char: number` (optional) — Source character offset (one-based), if known.
 
 ### `PreviewField`
-**Properties:**
-- `path: string`
-- `label: string`
-- `kind: PreviewFieldKind`
-- `required: boolean`
-- `cardinality: { min?: number; max?: number | "unbounded" }` (optional)
-- `enumValues: { value: string; label: string }[]` (optional)
-- `children: PreviewField[]` (optional)
-- `description: string` (optional)
+```ts
+PreviewScalarField | PreviewEnumField | PreviewObjectField | PreviewArrayField | PreviewUnknownField
+```
 
 ### `PreviewFieldKind`
 ```ts

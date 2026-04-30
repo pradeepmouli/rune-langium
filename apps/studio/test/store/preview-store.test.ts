@@ -404,4 +404,47 @@ describe('usePreviewStore', () => {
     expect(usePreviewStore.getState().samples.has('alpha.Trade')).toBe(false);
     expect(usePreviewStore.getState().schemas.has('alpha.Trade')).toBe(false);
   });
+
+  it('reconciles cached sample values when a schema refresh removes and adds fields', () => {
+    usePreviewStore.getState().receivePreviewResult({
+      schemaVersion: 1,
+      targetId: 'alpha.Trade',
+      title: 'Trade',
+      status: 'ready',
+      fields: [
+        { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+        {
+          path: 'counterparty',
+          label: 'Counterparty',
+          kind: 'object',
+          required: false,
+          children: [{ path: 'counterparty.name', label: 'Name', kind: 'string', required: true }]
+        }
+      ]
+    });
+    usePreviewStore.getState().setSampleValues('alpha.Trade', {
+      tradeId: 'T-1',
+      obsolete: 'drop me',
+      counterparty: { name: 'Acme' }
+    });
+
+    usePreviewStore.getState().receivePreviewResult({
+      schemaVersion: 1,
+      targetId: 'alpha.Trade',
+      title: 'Trade',
+      status: 'ready',
+      fields: [
+        { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+        { path: 'quantity', label: 'Quantity', kind: 'number', required: false }
+      ]
+    });
+
+    expect(usePreviewStore.getState().samples.get('alpha.Trade')).toMatchObject({
+      values: {
+        tradeId: 'T-1',
+        quantity: ''
+      },
+      serialized: '{\n  "tradeId": "T-1",\n  "quantity": ""\n}'
+    });
+  });
 });

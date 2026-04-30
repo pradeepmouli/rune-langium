@@ -234,6 +234,12 @@ describe('SourceEditor', () => {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       expect(onFileSelect).toHaveBeenCalledWith('/workspace/types.rosetta');
+      const typesTab = screen.getByText('types.rosetta').closest('button')!;
+      expect(typesTab.getAttribute('aria-selected')).toBe('true');
+      expect(lastEditorView?.dispatch).toHaveBeenCalledWith({
+        selection: { anchor: 12 },
+        effects: { anchor: 12 }
+      });
       expect(lastEditorView?.focus).toHaveBeenCalled();
     });
   });

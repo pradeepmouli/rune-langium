@@ -25,13 +25,27 @@ import { PANEL_COMPONENT_NAMES, type FactoryShape } from './layout-types.js';
 
 const CURRENT_VERSION = 1;
 const KNOWN_COMPONENTS = new Set<string>(PANEL_COMPONENT_NAMES);
+export const INVALID_LAYOUT_RESET_NOTICE =
+  'Your saved layout was incompatible with this Studio version, so it was reset to the default arrangement.';
+
+export interface LayoutSanitizationResult {
+  layout: PanelLayoutRecord;
+  notice?: string;
+}
 
 export function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayoutRecord {
+  return sanitizeLayoutWithDiagnostics(input, ctx).layout;
+}
+
+export function sanitizeLayoutWithDiagnostics(
+  input: unknown,
+  ctx: BuildLayoutInput
+): LayoutSanitizationResult {
   if (!isPlausibleLayout(input)) {
-    return buildDefaultLayout(ctx);
+    return { layout: buildDefaultLayout(ctx) };
   }
   if (input.version > CURRENT_VERSION) {
-    return buildDefaultLayout(ctx);
+    return { layout: buildDefaultLayout(ctx) };
   }
   // Walk + drop unknown component names. Mutation happens on a deep clone
   // so the original (persisted) record stays untouched until a new save.
@@ -46,7 +60,10 @@ export function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayo
     if (activeResult === 'invalid-shape') {
       // eslint-disable-next-line no-console
       console.warn('[layout-migrations] reset invalid saved layout to defaults');
-      return buildDefaultLayout(ctx);
+      return {
+        layout: buildDefaultLayout(ctx),
+        notice: INVALID_LAYOUT_RESET_NOTICE
+      };
     }
     normalizedActive = activeResult;
   }
@@ -58,7 +75,7 @@ export function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayo
     // eslint-disable-next-line no-console
     console.warn('[layout-migrations] normalized invalid active tabs in saved layout');
   }
-  return cloned;
+  return { layout: cloned };
 }
 
 function isPlausibleLayout(input: unknown): input is PanelLayoutRecord {
@@ -102,6 +119,9 @@ function walkAndDrop(node: unknown, onDrop: () => void): void {
 
 function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape' {
   let normalized = false;
+  if (!Array.isArray(shape.columns)) {
+    return 'invalid-shape';
+  }
   const groups = [shape.columns[1], shape.columns[3], shape.bottomGroup];
   for (const group of groups) {
     if (!group || !('tabs' in group) || !Array.isArray(group.tabs) || group.tabs.length === 0) {

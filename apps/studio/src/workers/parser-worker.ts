@@ -44,6 +44,46 @@ export interface ParseWorkspaceResponse {
 
 export type WorkerResponse = ParseResponse | ParseWorkspaceResponse;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
+export function isParseResponse(value: unknown): value is ParseResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    value.type === 'parseResult' &&
+    typeof value.id === 'string' &&
+    Array.isArray(value.errors) &&
+    value.errors.every((entry) => typeof entry === 'string') &&
+    (value.model === null || isRecord(value.model))
+  );
+}
+
+export function isParseWorkspaceResponse(value: unknown): value is ParseWorkspaceResponse {
+  if (!isRecord(value) || value.type !== 'parseWorkspaceResult' || typeof value.id !== 'string') {
+    return false;
+  }
+  if (!Array.isArray(value.models) || !value.models.every((entry) => isRecord(entry))) {
+    return false;
+  }
+  if (
+    !Array.isArray(value.parsedModels) ||
+    !value.parsedModels.every(
+      (entry) => isRecord(entry) && typeof entry.filePath === 'string' && isRecord(entry.model)
+    )
+  ) {
+    return false;
+  }
+  if (!isRecord(value.errors)) {
+    return false;
+  }
+  return Object.values(value.errors).every(
+    (entry) => Array.isArray(entry) && entry.every((message) => typeof message === 'string')
+  );
+}
+
 // ---------------------------------------------------------------------------
 // CST text preservation — $cstNode is lost during postMessage serialization
 // (structured clone can't handle circular refs). Save the text as $cstText.
@@ -137,13 +177,22 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
 
     return { type: 'parseWorkspaceResult', id: req.id, models, parsedModels, errors };
   } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('[parser-worker] parseWorkspace failed', {
+      id: req.id,
+      error
+    });
+    const detail =
+      error instanceof Error
+        ? [error.message, error.stack].filter(Boolean).join('\n')
+        : 'Workspace parsing failed.';
     return {
       type: 'parseWorkspaceResult',
       id: req.id,
       models: [],
       parsedModels: [],
       errors: {
-        __worker__: [error instanceof Error ? error.message : 'Workspace parsing failed.']
+        __worker__: [detail]
       }
     };
   }

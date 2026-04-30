@@ -12,6 +12,7 @@ import type {
   ParseResponse,
   ParseWorkspaceResponse
 } from '../workers/parser-worker.js';
+import { isParseResponse, isParseWorkspaceResponse } from '../workers/parser-worker.js';
 
 export interface WorkspaceFile {
   name: string;
@@ -88,9 +89,19 @@ function getWorker(): Worker | null {
   }
 }
 
-function workerRequest<T extends ParseResponse | ParseWorkspaceResponse>(
-  msg: WorkerRequest
-): Promise<T> {
+function resetWorkerState(nextError: Error): void {
+  if (worker) {
+    worker.terminate();
+  }
+  worker = null;
+  workerInitError = nextError;
+}
+
+function workerRequest(msg: Extract<WorkerRequest, { type: 'parse' }>): Promise<ParseResponse>;
+function workerRequest(
+  msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>
+): Promise<ParseWorkspaceResponse>;
+function workerRequest(msg: WorkerRequest): Promise<ParseResponse | ParseWorkspaceResponse> {
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (!w) {
@@ -106,40 +117,71 @@ function workerRequest<T extends ParseResponse | ParseWorkspaceResponse>(
         timeoutId = undefined;
       }
     };
+    const cleanupListeners = () => {
+      w.removeEventListener('error', errorHandler);
+      w.removeEventListener('messageerror', messageErrorHandler);
+      w.removeEventListener('message', handler);
+    };
     const handler = (e: MessageEvent) => {
       if (e.data?.id === id) {
         clearPendingTimeout();
-        w.removeEventListener('error', errorHandler);
-        w.removeEventListener('messageerror', messageErrorHandler);
-        w.removeEventListener('message', handler);
-        resolve(e.data as T);
+        cleanupListeners();
+        if (msg.type === 'parse') {
+          if (!isParseResponse(e.data)) {
+            const error = new Error('Worker returned an invalid parse response');
+            resetWorkerState(error);
+            reject(error);
+            return;
+          }
+          resolve(e.data);
+          return;
+        }
+        if (!isParseWorkspaceResponse(e.data)) {
+          const error = new Error('Worker returned an invalid workspace parse response');
+          resetWorkerState(error);
+          reject(error);
+          return;
+        }
+        resolve(e.data);
       }
     };
     const errorHandler = (event: ErrorEvent) => {
       clearPendingTimeout();
-      w.removeEventListener('message', handler);
-      w.removeEventListener('error', errorHandler);
-      w.removeEventListener('messageerror', messageErrorHandler);
-      reject(new Error(event.message || 'Worker error'));
+      cleanupListeners();
+      const error = new Error(event.message || 'Worker error');
+      resetWorkerState(error);
+      reject(error);
     };
     const messageErrorHandler = () => {
       clearPendingTimeout();
-      w.removeEventListener('message', handler);
-      w.removeEventListener('error', errorHandler);
-      w.removeEventListener('messageerror', messageErrorHandler);
-      reject(new Error('Worker message could not be deserialized'));
+      cleanupListeners();
+      const error = new Error('Worker message could not be deserialized');
+      resetWorkerState(error);
+      reject(error);
     };
     w.addEventListener('message', handler);
     w.addEventListener('error', errorHandler);
     w.addEventListener('messageerror', messageErrorHandler);
-    w.postMessage(msg);
+    try {
+      w.postMessage(msg);
+    } catch (error) {
+      clearPendingTimeout();
+      cleanupListeners();
+      const workerError =
+        error instanceof Error
+          ? error
+          : new Error(error ? String(error) : 'Worker postMessage failed');
+      resetWorkerState(workerError);
+      reject(workerError);
+      return;
+    }
 
     // Timeout after 30s
     timeoutId = setTimeout(() => {
-      w.removeEventListener('message', handler);
-      w.removeEventListener('error', errorHandler);
-      w.removeEventListener('messageerror', messageErrorHandler);
-      reject(new Error('Worker timeout'));
+      cleanupListeners();
+      const error = new Error('Worker timeout');
+      resetWorkerState(error);
+      reject(error);
     }, 30000);
   });
 }
@@ -152,7 +194,7 @@ export async function parseFile(content: string, uri?: string): Promise<ParseFil
   // Try worker first (T098)
   try {
     const id = String(++requestId);
-    const response = await workerRequest<ParseResponse>({
+    const response = await workerRequest({
       type: 'parse',
       id,
       content,
@@ -204,7 +246,7 @@ export async function parseWorkspaceFiles(
   // Try worker batch parse first (T098)
   try {
     const id = String(++requestId);
-    const response = await workerRequest<ParseWorkspaceResponse>({
+    const response = await workerRequest({
       type: 'parseWorkspace',
       id,
       files: files.map((f) => ({ name: f.path, content: f.content }))
@@ -260,6 +302,9 @@ export async function parseWorkspaceFiles(
 }
 
 export function _resetParserWorkerForTests(): void {
+  if (worker) {
+    worker.terminate();
+  }
   worker = null;
   requestId = 0;
   workerInitError = null;

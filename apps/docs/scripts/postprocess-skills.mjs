@@ -30,6 +30,13 @@ for (const entry of readdirSync(skillsRoot, { withFileTypes: true })) {
 
   content = rewriteReferenceLink(content, skillDir, 'functions');
   content = rewriteReferenceLink(content, skillDir, 'classes');
+  content = pruneMissingReferenceInstructions(content, skillDir, [
+    'functions',
+    'classes',
+    'types',
+    'variables',
+    'config'
+  ]);
 
   writeFileSync(skillPath, content);
 }
@@ -41,4 +48,16 @@ function rewriteReferenceLink(content, skillDir, section) {
   const preferredRef = hasMarkdownRef ? markdownRef : directoryRef;
   const alternateRef = hasMarkdownRef ? directoryRef : markdownRef;
   return content.replaceAll(alternateRef, preferredRef);
+}
+
+function pruneMissingReferenceInstructions(content, skillDir, sections) {
+  return sections.reduce((nextContent, section) => {
+    const hasMarkdownRef = existsSync(join(skillDir, `references/${section}.md`));
+    const hasDirectoryRef = existsSync(join(skillDir, `references/${section}`));
+    if (hasMarkdownRef || hasDirectoryRef) {
+      return nextContent;
+    }
+    const pattern = new RegExp(`^- .*?\\breferences\\/${section}(?:\\.md|\\/)\\b.*\\n?`, 'gm');
+    return nextContent.replace(pattern, '');
+  }, content);
 }

@@ -163,6 +163,32 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(last.dockview).toHaveProperty('columns');
   });
 
+  it('surfaces a user-visible notice when an invalid saved factory layout is reset', () => {
+    render(
+      <DockShell
+        studioVersion="0.1.0"
+        workspaceId="ws-1"
+        initialLayout={{
+          version: 1,
+          writtenBy: '0.0.1',
+          dockview: {
+            shape: 'factory',
+            columns: null as never,
+            bottomGroup: {
+              active: 'workspace.problems',
+              collapsed: false,
+              tabs: [{ component: 'workspace.problems' }]
+            }
+          }
+        }}
+      />
+    );
+
+    expect(screen.getByTestId('layout-reset-notice')).toHaveTextContent(
+      /saved layout was incompatible/i
+    );
+  });
+
   it('updates override panel content when parent state changes', async () => {
     function Harness() {
       const [label, setLabel] = useState('initial file tree');

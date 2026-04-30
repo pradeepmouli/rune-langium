@@ -87,11 +87,11 @@ export function FormPreviewPanel({
   }, [activeSample, applyValidation, schema]);
 
   const handleFieldChange = useCallback(
-    (fieldPath: string, value: unknown, arrayIndex?: number) => {
+    (fieldPath: string, value: unknown, arrayIndices?: number[]) => {
       if (!schema || !activeSample) return;
       const nextValues = setValueAtPath(
         activeSample.values,
-        pathToSegments(fieldPath, arrayIndex),
+        pathToSegments(fieldPath, arrayIndices),
         value
       ) as Record<string, unknown>;
       applyValidation(nextValues, activeSample.validated);
@@ -100,13 +100,19 @@ export function FormPreviewPanel({
   );
 
   const handleArrayAdd = useCallback(
-    (field: PreviewField) => {
+    (field: PreviewField, arrayIndices?: number[]) => {
       if (!schema || !activeSample) return;
-      const segments = pathToSegments(field.path);
+      const segments = pathToSegments(field.path, arrayIndices);
       const current = getValueAtPath(activeSample.values, segments);
       const items = Array.isArray(current) ? [...current] : [];
-      const child = field.children?.[0];
-      items.push(child ? buildDefaultValue(child) : '');
+      if (field.kind !== 'array') {
+        return;
+      }
+      const [child] = field.children ?? [];
+      if (!child) {
+        return;
+      }
+      items.push(buildDefaultValue(child));
       const nextValues = setValueAtPath(activeSample.values, segments, items) as Record<
         string,
         unknown
@@ -117,9 +123,9 @@ export function FormPreviewPanel({
   );
 
   const handleArrayRemove = useCallback(
-    (field: PreviewField, index: number) => {
+    (field: PreviewField, index: number, arrayIndices?: number[]) => {
       if (!schema || !activeSample) return;
-      const segments = pathToSegments(field.path);
+      const segments = pathToSegments(field.path, arrayIndices);
       const current = getValueAtPath(activeSample.values, segments);
       const items = Array.isArray(current) ? [...current] : [];
       items.splice(index, 1);
@@ -133,9 +139,9 @@ export function FormPreviewPanel({
   );
 
   const handleObjectToggle = useCallback(
-    (field: PreviewField, present: boolean, arrayIndex?: number) => {
+    (field: PreviewField, present: boolean, arrayIndices?: number[]) => {
       if (!schema || !activeSample) return;
-      const segments = pathToSegments(field.path, arrayIndex);
+      const segments = pathToSegments(field.path, arrayIndices);
       const nextValues = (
         present
           ? setValueAtPath(activeSample.values, segments, buildDefaultObjectValue(field))
@@ -278,11 +284,11 @@ interface PreviewFieldControlProps {
   sample?: PreviewSampleState;
   lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
   onFieldBlur: () => void;
-  onFieldChange: (fieldPath: string, value: unknown, arrayIndex?: number) => void;
-  onArrayAdd: (field: PreviewField) => void;
-  onArrayRemove: (field: PreviewField, index: number) => void;
-  onObjectToggle: (field: PreviewField, present: boolean, arrayIndex?: number) => void;
-  arrayIndex?: number;
+  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
+  onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
+  onArrayRemove: (field: PreviewField, index: number, arrayIndices?: number[]) => void;
+  onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
+  arrayIndices?: number[];
 }
 
 function PreviewFieldControl({
@@ -294,31 +300,35 @@ function PreviewFieldControl({
   onArrayAdd,
   onArrayRemove,
   onObjectToggle,
-  arrayIndex
+  arrayIndices
 }: PreviewFieldControlProps): ReactElement {
-  const fieldPath = formatFieldPath(field.path, arrayIndex);
+  const fieldPath = formatFieldPath(field.path, arrayIndices);
   const fieldError = sample?.validated ? sample.errors[fieldPath] : undefined;
 
   if (field.kind === 'object') {
-    const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndex));
+    const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
     const isPresent = value !== undefined;
     return (
       <fieldset className="space-y-1.5 border border-border p-1.5">
         <legend className="px-1 text-xs font-medium text-muted-foreground">
-          {resolvedFieldLabel(field, arrayIndex)}
+          {resolvedFieldLabel(field, arrayIndices)}
         </legend>
-        <FieldMeta field={field} lookupFieldSource={lookupFieldSource} arrayIndex={arrayIndex} />
+        <FieldMeta
+          field={field}
+          lookupFieldSource={lookupFieldSource}
+          arrayIndices={arrayIndices}
+        />
         <FieldDescription description={field.description} />
         {!field.required ? (
           <div className="flex items-center gap-2">
             <button
               type="button"
               className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
-              onClick={() => onObjectToggle(field, !isPresent, arrayIndex)}
+              onClick={() => onObjectToggle(field, !isPresent, arrayIndices)}
             >
               {isPresent
-                ? `Remove ${resolvedFieldLabel(field, arrayIndex)}`
-                : `Add ${resolvedFieldLabel(field, arrayIndex)}`}
+                ? `Remove ${resolvedFieldLabel(field, arrayIndices)}`
+                : `Add ${resolvedFieldLabel(field, arrayIndices)}`}
             </button>
             {!isPresent ? (
               <span className="text-[11px] text-muted-foreground">
@@ -328,9 +338,9 @@ function PreviewFieldControl({
           </div>
         ) : null}
         {(field.required || isPresent) &&
-          field.children?.map((child) => (
+          (field.children ?? []).map((child) => (
             <PreviewFieldControl
-              key={`${child.path}-${arrayIndex ?? 'root'}`}
+              key={`${child.path}-${arrayIndices?.join('-') ?? 'root'}`}
               field={child}
               sample={sample}
               lookupFieldSource={lookupFieldSource}
@@ -339,7 +349,7 @@ function PreviewFieldControl({
               onArrayAdd={onArrayAdd}
               onArrayRemove={onArrayRemove}
               onObjectToggle={onObjectToggle}
-              arrayIndex={arrayIndex}
+              arrayIndices={arrayIndices}
             />
           ))}
         {fieldError ? <FieldError message={fieldError} /> : null}
@@ -348,20 +358,26 @@ function PreviewFieldControl({
   }
 
   if (field.kind === 'array') {
-    const values = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path));
+    const values = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
     const items = Array.isArray(values) ? values : [];
-    const arrayError = sample?.validated ? sample.errors[field.path] : undefined;
-    const child = field.children?.[0];
+    const arrayError = sample?.validated
+      ? sample.errors[formatFieldPath(field.path, arrayIndices)]
+      : undefined;
+    const [child] = field.children ?? [];
 
     return (
       <fieldset className="space-y-1.5 border border-border p-1.5">
         <legend className="px-1 text-xs font-medium text-muted-foreground">{field.label}</legend>
-        <FieldMeta field={field} lookupFieldSource={lookupFieldSource} />
+        <FieldMeta
+          field={field}
+          lookupFieldSource={lookupFieldSource}
+          arrayIndices={arrayIndices}
+        />
         <FieldDescription description={field.description} />
         <button
           type="button"
           className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
-          onClick={() => onArrayAdd(field)}
+          onClick={() => onArrayAdd(field, arrayIndices)}
         >
           Add {field.label} item
         </button>
@@ -379,7 +395,7 @@ function PreviewFieldControl({
                   <button
                     type="button"
                     className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
-                    onClick={() => onArrayRemove(field, index)}
+                    onClick={() => onArrayRemove(field, index, arrayIndices)}
                   >
                     Remove {child.label} {index + 1}
                   </button>
@@ -393,7 +409,7 @@ function PreviewFieldControl({
                   onArrayAdd={onArrayAdd}
                   onArrayRemove={onArrayRemove}
                   onObjectToggle={onObjectToggle}
-                  arrayIndex={index}
+                  arrayIndices={[...(arrayIndices ?? []), index]}
                 />
               </div>
             ))
@@ -403,21 +419,25 @@ function PreviewFieldControl({
   }
 
   if (field.kind === 'enum') {
-    const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndex));
+    const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
     return (
       <label className="block text-xs font-medium">
-        <span>{resolvedFieldLabel(field, arrayIndex)}</span>
-        <FieldMeta field={field} lookupFieldSource={lookupFieldSource} arrayIndex={arrayIndex} />
+        <span>{resolvedFieldLabel(field, arrayIndices)}</span>
+        <FieldMeta
+          field={field}
+          lookupFieldSource={lookupFieldSource}
+          arrayIndices={arrayIndices}
+        />
         <FieldDescription description={field.description} />
         <select
-          aria-label={resolvedFieldLabel(field, arrayIndex)}
+          aria-label={resolvedFieldLabel(field, arrayIndices)}
           value={typeof value === 'string' ? value : ''}
           className="mt-0.5 block h-7 w-full border border-input bg-background px-2 py-0.5 text-xs"
-          onChange={(event) => onFieldChange(field.path, event.target.value, arrayIndex)}
+          onChange={(event) => onFieldChange(field.path, event.target.value, arrayIndices)}
           onBlur={onFieldBlur}
         >
           {!field.required ? <option value="">Select…</option> : null}
-          {field.enumValues?.map((option) => (
+          {(field.enumValues ?? []).map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -436,7 +456,7 @@ function PreviewFieldControl({
     );
   }
 
-  const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndex));
+  const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
   const inputType =
     field.kind === 'number' ? 'number' : field.kind === 'boolean' ? 'checkbox' : 'text';
 
@@ -444,14 +464,18 @@ function PreviewFieldControl({
     return (
       <label className="flex items-center gap-2 text-xs font-medium">
         <input
-          aria-label={resolvedFieldLabel(field, arrayIndex)}
+          aria-label={resolvedFieldLabel(field, arrayIndices)}
           type="checkbox"
           checked={Boolean(value)}
-          onChange={(event) => onFieldChange(field.path, event.target.checked, arrayIndex)}
+          onChange={(event) => onFieldChange(field.path, event.target.checked, arrayIndices)}
           onBlur={onFieldBlur}
         />
-        <span>{resolvedFieldLabel(field, arrayIndex)}</span>
-        <FieldMeta field={field} lookupFieldSource={lookupFieldSource} arrayIndex={arrayIndex} />
+        <span>{resolvedFieldLabel(field, arrayIndices)}</span>
+        <FieldMeta
+          field={field}
+          lookupFieldSource={lookupFieldSource}
+          arrayIndices={arrayIndices}
+        />
         {fieldError ? <FieldError message={fieldError} /> : null}
       </label>
     );
@@ -459,15 +483,15 @@ function PreviewFieldControl({
 
   return (
     <label className="block text-xs font-medium">
-      <span>{resolvedFieldLabel(field, arrayIndex)}</span>
-      <FieldMeta field={field} lookupFieldSource={lookupFieldSource} arrayIndex={arrayIndex} />
+      <span>{resolvedFieldLabel(field, arrayIndices)}</span>
+      <FieldMeta field={field} lookupFieldSource={lookupFieldSource} arrayIndices={arrayIndices} />
       <FieldDescription description={field.description} />
       <input
-        aria-label={resolvedFieldLabel(field, arrayIndex)}
+        aria-label={resolvedFieldLabel(field, arrayIndices)}
         type={inputType}
         value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''}
         className="mt-0.5 block h-7 w-full border border-input bg-background px-2 py-0.5 text-xs"
-        onChange={(event) => onFieldChange(field.path, getInputValue(field, event), arrayIndex)}
+        onChange={(event) => onFieldChange(field.path, getInputValue(field, event), arrayIndices)}
         onBlur={onFieldBlur}
       />
       {fieldError ? <FieldError message={fieldError} /> : null}
@@ -478,14 +502,14 @@ function PreviewFieldControl({
 function FieldMeta({
   field,
   lookupFieldSource,
-  arrayIndex
+  arrayIndices
 }: {
   field: PreviewField;
   lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
-  arrayIndex?: number;
+  arrayIndices?: number[];
 }): ReactElement | null {
   const chips = getFieldMetaChips(field);
-  const source = lookupFieldSource(formatFieldPath(field.path, arrayIndex));
+  const source = lookupFieldSource(formatFieldPath(field.path, arrayIndices));
 
   if (chips.length === 0 && !source) {
     return null;
@@ -592,6 +616,9 @@ function buildDefaultValue(field: PreviewField): unknown {
 }
 
 function buildDefaultObjectValue(field: PreviewField): Record<string, unknown> {
+  if (field.kind !== 'object') {
+    return {};
+  }
   return Object.fromEntries(
     (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildDefaultValue(child)])
   );
@@ -624,13 +651,18 @@ function basenameFromUri(uri: string): string {
   return segments.length > 0 ? segments[segments.length - 1]! : normalized;
 }
 
-function resolvedFieldLabel(field: PreviewField, arrayIndex?: number): string {
+function resolvedFieldLabel(field: PreviewField, arrayIndices?: number[]): string {
+  const arrayIndex =
+    arrayIndices && arrayIndices.length > 0 ? arrayIndices[arrayIndices.length - 1] : undefined;
   return arrayIndex === undefined ? field.label : `${field.label} ${arrayIndex + 1}`;
 }
 
 function getInputValue(field: PreviewField, event: ChangeEvent<HTMLInputElement>): unknown {
   if (field.kind === 'number') {
-    return event.target.value;
+    if (event.target.value === '') {
+      return undefined;
+    }
+    return Number.isNaN(event.target.valueAsNumber) ? undefined : event.target.valueAsNumber;
   }
   return event.target.value;
 }
@@ -644,11 +676,14 @@ function fieldLeafKey(path: string): string {
   return parts[parts.length - 1]!.split('[]').join('');
 }
 
-function pathToSegments(path: string, arrayIndex?: number): Array<string | number> {
+function pathToSegments(path: string, arrayIndices: number[] = []): Array<string | number> {
   const segments: Array<string | number> = [];
+  let nextArrayIndex = 0;
   for (const part of path.split('.')) {
     if (part.endsWith('[]')) {
       segments.push(part.slice(0, -2));
+      const arrayIndex = arrayIndices[nextArrayIndex];
+      nextArrayIndex += 1;
       if (arrayIndex !== undefined) {
         segments.push(arrayIndex);
       }
@@ -659,8 +694,13 @@ function pathToSegments(path: string, arrayIndex?: number): Array<string | numbe
   return segments;
 }
 
-function formatFieldPath(path: string, arrayIndex?: number): string {
-  return arrayIndex === undefined ? path : path.replace('[]', `[${arrayIndex}]`);
+function formatFieldPath(path: string, arrayIndices: number[] = []): string {
+  let nextArrayIndex = 0;
+  return path.replace(/\[\]/g, () => {
+    const index = arrayIndices[nextArrayIndex];
+    nextArrayIndex += 1;
+    return index === undefined ? '[]' : `[${index}]`;
+  });
 }
 
 function getValueAtPath(value: unknown, segments: Array<string | number>): unknown {
@@ -781,7 +821,7 @@ function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
     case 'boolean':
       return field.required ? z.boolean() : z.boolean().optional();
     case 'enum': {
-      const values = field.enumValues?.map((value) => value.value) ?? [];
+      const values = (field.enumValues ?? []).map((value) => value.value);
       if (values.length === 0) return z.string();
       const schema = z.enum(values as [string, ...string[]]);
       return field.required
@@ -799,7 +839,8 @@ function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
       return field.required ? objectSchema : objectSchema.optional();
     }
     case 'array': {
-      const item = field.children?.[0] ? buildFieldValidator(field.children[0]) : z.string();
+      const [child] = field.children ?? [];
+      const item = child ? buildFieldValidator(child) : z.string();
       let arraySchema = z.array(item);
       if (field.cardinality?.min !== undefined) {
         arraySchema = arraySchema.min(

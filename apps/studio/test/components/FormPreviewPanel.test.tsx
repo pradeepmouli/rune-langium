@@ -125,6 +125,14 @@ const optionalSectionSchema: FormPreviewSchema = {
   ]
 };
 
+const numericSchema: FormPreviewSchema = {
+  schemaVersion: 1,
+  targetId: 'test.preview.NumericTrade',
+  title: 'Numeric Trade',
+  status: 'ready',
+  fields: [{ path: 'quantity', label: 'Quantity', kind: 'number', required: false }]
+};
+
 describe('FormPreviewPanel', () => {
   beforeEach(() => {
     usePreviewStore.getState().resetPreviewState();
@@ -298,9 +306,11 @@ describe('FormPreviewPanel', () => {
 
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
     expect(screen.getByText(/section omitted from the sample/i)).toBeInTheDocument();
+    expect(screen.getByTestId('sample-data-output')).not.toHaveTextContent('counterparty');
 
     fireEvent.click(screen.getByRole('button', { name: /add counterparty/i }));
     expect(screen.getByLabelText('Name')).toBeInTheDocument();
+    expect(screen.getByTestId('sample-data-output')).toHaveTextContent('"counterparty": {');
 
     fireEvent.blur(screen.getByLabelText('Name'));
     expect(screen.getByText(/name is required/i)).toBeInTheDocument();
@@ -308,6 +318,22 @@ describe('FormPreviewPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /remove counterparty/i }));
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
     expect(screen.queryByText(/name is required/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('sample-data-output')).not.toHaveTextContent('counterparty');
+  });
+
+  it('stores numeric sample values as numbers instead of strings', () => {
+    render(
+      <FormPreviewPanel
+        schema={numericSchema}
+        status={{ state: 'ready', targetId: numericSchema.targetId }}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Quantity'), {
+      target: { value: '42', valueAsNumber: 42 }
+    });
+
+    expect(screen.getByTestId('sample-data-output')).toHaveTextContent('"quantity": 42');
   });
 
   it('renders synchronized sample data and copies it through the clipboard action', async () => {

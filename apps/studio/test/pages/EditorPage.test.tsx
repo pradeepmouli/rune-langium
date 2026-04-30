@@ -5,6 +5,7 @@ import React, { useEffect, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, cleanup, waitFor, screen, act } from '@testing-library/react';
 import { usePreviewStore } from '../../src/store/preview-store.js';
+import { setRuneStudioTestApi } from '../../src/test-api.js';
 
 const { editorStoreState, useEditorStore, useDiagnosticsStore } = vi.hoisted(() => {
   const editorStoreState = {
@@ -215,6 +216,7 @@ describe('EditorPage preview target identity', () => {
   beforeEach(() => {
     vi.stubGlobal('Worker', MockWorker);
     MockWorker.instances = [];
+    setRuneStudioTestApi(() => undefined);
     usePreviewStore.getState().resetPreviewState();
     editorStoreState.nodes = [];
     editorStoreState.selectedNodeId = undefined;
@@ -223,6 +225,7 @@ describe('EditorPage preview target identity', () => {
   });
 
   afterEach(() => {
+    setRuneStudioTestApi(() => undefined);
     vi.unstubAllGlobals();
     cleanup();
   });
@@ -473,6 +476,115 @@ describe('EditorPage preview target identity', () => {
     });
 
     expect(usePreviewStore.getState().schemas.get('preview.alpha.Trade')?.title).toBe('Trade');
+  });
+
+  it('marks preview stale when a cached schema exists and the worker later crashes', async () => {
+    editorStoreState.nodes = [
+      {
+        id: 'preview.alpha::Trade',
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+
+    render(
+      <EditorPage
+        models={[modelWithType('Trade') as never]}
+        files={[
+          { path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(MockWorker.instances).toHaveLength(1);
+    });
+
+    const worker = MockWorker.instances[0]!;
+    const requestId = worker.postMessage.mock.calls
+      .map(([message]) => message as { type?: string; requestId?: string })
+      .find((message) => message.type === 'preview:generate')?.requestId;
+
+    await act(async () => {
+      worker.dispatch('message', {
+        data: {
+          type: 'preview:result',
+          targetId: 'preview.alpha.Trade',
+          requestId,
+          schema: {
+            schemaVersion: 1,
+            targetId: 'preview.alpha.Trade',
+            title: 'Trade',
+            status: 'ready',
+            fields: []
+          }
+        }
+      });
+    });
+
+    await act(async () => {
+      worker.dispatch('error', { type: 'error', message: 'worker crashed' });
+    });
+
+    expect(usePreviewStore.getState().status).toEqual({
+      state: 'stale',
+      targetId: 'preview.alpha.Trade',
+      reason: 'generation-error',
+      message: 'Preview worker crashed. worker crashed'
+    });
+  });
+
+  it('marks preview unavailable when the worker rejects a message before any schema is cached', async () => {
+    editorStoreState.nodes = [
+      {
+        id: 'preview.alpha::Trade',
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+
+    render(
+      <EditorPage
+        models={[modelWithType('Trade') as never]}
+        files={[
+          { path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(MockWorker.instances).toHaveLength(1);
+    });
+
+    await act(async () => {
+      MockWorker.instances[0]!.dispatch('messageerror', { type: 'messageerror' });
+    });
+
+    expect(usePreviewStore.getState().status).toEqual({
+      state: 'unavailable',
+      targetId: 'preview.alpha.Trade',
+      reason: 'generation-error',
+      message:
+        'Preview worker rejected a message. A preview worker message could not be deserialized.'
+    });
+  });
+
+  it('surfaces worker boot failures without crashing the page', async () => {
+    setRuneStudioTestApi(() => ({
+      createCodegenWorker() {
+        throw new Error('worker boot failed');
+      }
+    }));
+
+    render(<EditorPage models={[]} files={[]} />);
+
+    await waitFor(() => {
+      expect(usePreviewStore.getState().status).toEqual({
+        state: 'unavailable',
+        reason: 'generation-error',
+        message: 'Preview worker could not start. worker boot failed'
+      });
+    });
   });
 
   it('resolves displayFile by opening the matching source file and returning its editor view', async () => {

@@ -34,7 +34,7 @@ Serializable description of a generated form for one preview target.
 - `fields` must preserve generated-schema field order.
 - Required, optional, array, enum, and nested object semantics must match generated Zod behavior.
 - Optional object fields must be omittable from the sample state instead of always materializing child defaults.
-- Recursive references must be represented with depth controls instead of expanding infinitely.
+- Recursive references must remain explicitly unsupported in the preview and must not expand infinitely.
 
 ## PreviewField
 
@@ -96,7 +96,7 @@ Panel-level state for the active preview.
 Default arrangement of Studio surfaces.
 
 **Fields**
-- `navigate`: left group containing Files and Model Tree
+- `navigate`: left group containing the Files navigation surface
 - `edit`: middle group containing Source and Structure
 - `visualize`: top-level graph mode
 - `preview`: right group containing Form and Code

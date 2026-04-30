@@ -43,7 +43,7 @@ import { VisualPreviewPanel } from './panels/VisualPreviewPanel.js';
 import { FormPreviewPanel } from './panels/FormPreviewPanel.js';
 import { CodePreviewPanel as CodePreviewPanelShell } from './panels/CodePreviewPanel.js';
 import { buildDefaultLayout, PANEL_COMPONENT_NAMES } from './layout-factory.js';
-import { sanitizeLayout } from './layout-migrations.js';
+import { sanitizeLayoutWithDiagnostics } from './layout-migrations.js';
 import { applyLayout, serializeLayout } from './dockview-bridge.js';
 import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
@@ -92,7 +92,7 @@ const DEFAULT_PANEL_REGISTRY: PanelRegistry = {
   'workspace.problems': () => ProblemsPanel({}),
   'workspace.output': () => OutputPanel({}),
   'workspace.visualPreview': () => VisualPreviewPanel({}),
-  'workspace.formPreview': () => FormPreviewPanel({}),
+  'workspace.formPreview': () => FormPreviewPanel(),
   'workspace.codePreview': () => CodePreviewPanelShell({})
 };
 
@@ -135,13 +135,25 @@ export function DockShell({
 }: DockShellProps): React.ReactElement {
   const getViewportWidth = () =>
     typeof window !== 'undefined' ? window.innerWidth : DEFAULT_VIEWPORT_WIDTH;
+  const getSanitizedLayout = useCallback(
+    (candidate: PanelLayoutRecord | null | undefined) =>
+      sanitizeLayoutWithDiagnostics(candidate ?? null, {
+        studioVersion,
+        viewportWidth: getViewportWidth()
+      }),
+    [studioVersion]
+  );
   const apiRef = useRef<DockviewApi | null>(null);
   const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
   const onLayoutChangeRef = useRef(onLayoutChange);
   onLayoutChangeRef.current = onLayoutChange;
 
-  const [layout, setLayout] = useState<PanelLayoutRecord>(() =>
-    sanitizeLayout(initialLayout ?? null, { studioVersion, viewportWidth: getViewportWidth() })
+  const [layoutNotice, setLayoutNotice] = useState<string | null>(() => {
+    const sanitized = getSanitizedLayout(initialLayout);
+    return sanitized.notice ?? null;
+  });
+  const [layout, setLayout] = useState<PanelLayoutRecord>(
+    () => getSanitizedLayout(initialLayout).layout
   );
   const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
     layout.dockview && layout.dockview.shape === 'factory'
@@ -276,6 +288,18 @@ export function DockShell({
         </div>
         <div className="studio-mode-header__item studio-mode-header__item--preview">Preview</div>
       </div>
+      {layoutNotice ? (
+        <div
+          role="alert"
+          className="flex items-center justify-between border-b border-border bg-muted/60 px-3 py-1.5 text-xs text-foreground"
+          data-testid="layout-reset-notice"
+        >
+          <span>{layoutNotice}</span>
+          <button type="button" className="font-medium" onClick={() => setLayoutNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <PanelRegistryContext.Provider value={panelRegistry}>
         <UtilityTrayContext.Provider
           value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}

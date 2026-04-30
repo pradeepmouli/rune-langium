@@ -117,16 +117,43 @@ export type PreviewFieldKind =
   | 'array'
   | 'unknown';
 
-export interface PreviewField {
+export interface PreviewFieldBase {
   path: string;
   label: string;
-  kind: PreviewFieldKind;
   required: boolean;
   cardinality?: { min?: number; max?: number | 'unbounded' };
-  enumValues?: Array<{ value: string; label: string }>;
-  children?: PreviewField[];
   description?: string;
 }
+
+export interface PreviewScalarField extends PreviewFieldBase {
+  kind: 'string' | 'number' | 'boolean';
+}
+
+export interface PreviewEnumField extends PreviewFieldBase {
+  kind: 'enum';
+  enumValues: Array<{ value: string; label: string }>;
+}
+
+export interface PreviewObjectField extends PreviewFieldBase {
+  kind: 'object';
+  children: PreviewField[];
+}
+
+export interface PreviewArrayField extends PreviewFieldBase {
+  kind: 'array';
+  children: [PreviewField];
+}
+
+export interface PreviewUnknownField extends PreviewFieldBase {
+  kind: 'unknown';
+}
+
+export type PreviewField =
+  | PreviewScalarField
+  | PreviewEnumField
+  | PreviewObjectField
+  | PreviewArrayField
+  | PreviewUnknownField;
 
 export interface PreviewSourceMapEntry {
   fieldPath: string;

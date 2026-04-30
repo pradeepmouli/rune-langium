@@ -71,6 +71,10 @@ const PREVIEW_STALE_REASONS = new Set<PreviewStaleMessage['reason']>([
   'no-files'
 ]);
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
 export function createPreviewSetFilesMessage(
   files: PreviewFileEntry[],
   requestId?: string
@@ -109,8 +113,8 @@ export function isPreviewWorkerMessage(message: unknown): message is PreviewWork
 }
 
 function isFormPreviewSchema(value: unknown): value is FormPreviewSchema {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
+  const candidate = value;
   if (
     candidate.schemaVersion !== 1 ||
     typeof candidate.targetId !== 'string' ||
@@ -138,8 +142,8 @@ function isFormPreviewSchema(value: unknown): value is FormPreviewSchema {
 }
 
 function isPreviewField(value: unknown): boolean {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
+  const candidate = value;
   if (
     typeof candidate.path !== 'string' ||
     typeof candidate.label !== 'string' ||
@@ -154,19 +158,23 @@ function isPreviewField(value: unknown): boolean {
   ) {
     return false;
   }
-  if (
-    candidate.enumValues !== undefined &&
-    (!Array.isArray(candidate.enumValues) || !candidate.enumValues.every(isEnumValue))
-  ) {
+  if (candidate.description !== undefined && typeof candidate.description !== 'string') {
     return false;
   }
-  if (
-    candidate.children !== undefined &&
-    (!Array.isArray(candidate.children) || !candidate.children.every(isPreviewField))
-  ) {
-    return false;
+  switch (candidate.kind) {
+    case 'enum':
+      return Array.isArray(candidate.enumValues) && candidate.enumValues.every(isEnumValue);
+    case 'object':
+      return Array.isArray(candidate.children) && candidate.children.every(isPreviewField);
+    case 'array':
+      return (
+        Array.isArray(candidate.children) &&
+        candidate.children.length === 1 &&
+        candidate.children.every(isPreviewField)
+      );
+    default:
+      return candidate.enumValues === undefined && candidate.children === undefined;
   }
-  return candidate.description === undefined || typeof candidate.description === 'string';
 }
 
 function isPreviewFieldKind(value: unknown): boolean {
@@ -189,19 +197,74 @@ function isPreviewCardinality(value: Record<string, unknown>): boolean {
 }
 
 function isEnumValue(value: unknown): boolean {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
+  const candidate = value;
   return typeof candidate.value === 'string' && typeof candidate.label === 'string';
 }
 
 function isPreviewSourceMapEntry(value: unknown): boolean {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
+  const candidate = value;
   return (
     typeof candidate.fieldPath === 'string' &&
     typeof candidate.sourceUri === 'string' &&
     typeof candidate.sourceLine === 'number' &&
     typeof candidate.sourceChar === 'number'
+  );
+}
+
+function isGeneratedFile(value: unknown): value is GeneratedFile {
+  return isRecord(value) && typeof value.path === 'string' && typeof value.content === 'string';
+}
+
+function isGenerationError(value: unknown): value is GenerationError {
+  return (
+    isRecord(value) &&
+    typeof value.sourceFile === 'string' &&
+    typeof value.construct === 'string' &&
+    typeof value.message === 'string'
+  );
+}
+
+function parseCodeGenerationResultBody(
+  value: unknown
+): Omit<CodeGenerationResult, 'language'> | null {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.files) ||
+    !value.files.every(isGeneratedFile) ||
+    !Array.isArray(value.errors) ||
+    !value.errors.every(isGenerationError) ||
+    (value.warnings !== undefined &&
+      (!Array.isArray(value.warnings) ||
+        !value.warnings.every((warning) => typeof warning === 'string')))
+  ) {
+    return null;
+  }
+  return {
+    files: value.files,
+    errors: value.errors,
+    warnings: Array.isArray(value.warnings) ? value.warnings : []
+  };
+}
+
+function isHostedLanguagesEnvelope(value: unknown): value is { languages?: string[] } {
+  return (
+    isRecord(value) &&
+    (value.languages === undefined ||
+      (Array.isArray(value.languages) && value.languages.every((item) => typeof item === 'string')))
+  );
+}
+
+function isLocalLanguagesEnvelope(
+  value: unknown
+): value is { languages: Array<{ id: string; class: string }> } {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.languages) &&
+    value.languages.every(
+      (item) => isRecord(item) && typeof item.id === 'string' && typeof item.class === 'string'
+    )
   );
 }
 
@@ -275,13 +338,20 @@ export class BrowserCodegenProxy {
 
     if (!response.ok) {
       if (response.status === 422) {
-        const body = (await response.json()) as { errors?: GenerationError[] };
+        const body = await response.json();
         return {
           language: request.language,
           files: [],
-          errors: body.errors ?? [
-            { sourceFile: '', construct: '', message: 'Validation errors in input model' }
-          ],
+          errors:
+            isRecord(body) && Array.isArray(body.errors) && body.errors.every(isGenerationError)
+              ? body.errors
+              : [
+                  {
+                    sourceFile: '',
+                    construct: '',
+                    message: 'Validation errors in input model'
+                  }
+                ],
           warnings: []
         };
       }
@@ -297,7 +367,10 @@ export class BrowserCodegenProxy {
       throw err;
     }
 
-    const result = (await response.json()) as Omit<CodeGenerationResult, 'language'>;
+    const result = parseCodeGenerationResultBody(await response.json());
+    if (!result) {
+      throw new Error('Code generation returned an invalid response payload');
+    }
     return { language: request.language, ...result };
   }
 
@@ -308,14 +381,20 @@ export class BrowserCodegenProxy {
       if (!response.ok) {
         throw new Error(`Language discovery failed (HTTP ${response.status})`);
       }
-      const data = (await response.json()) as { languages?: string[] };
+      const data = await response.json();
+      if (!isHostedLanguagesEnvelope(data)) {
+        throw new Error('Language discovery returned an invalid hosted response payload');
+      }
       return (data.languages ?? []).map((id) => ({ id, class: '' }));
     }
     const response = await fetch(`${this.baseUrl}/api/languages`);
     if (!response.ok) {
       throw new Error(`Language discovery failed (HTTP ${response.status})`);
     }
-    const data = (await response.json()) as { languages: Array<{ id: string; class: string }> };
+    const data = await response.json();
+    if (!isLocalLanguagesEnvelope(data)) {
+      throw new Error('Language discovery returned an invalid local response payload');
+    }
     return data.languages;
   }
 

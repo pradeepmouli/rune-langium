@@ -6,7 +6,8 @@
 /**
  * Dedicated worker for running @rune-langium/codegen off the main thread.
  * Accepts code-preview and form-preview messages, tracks the latest request
- * identity per surface, and only emits results tagged with that request id.
+ * identity per surface, and echoes request ids back so the UI can discard
+ * stale replies after files or selections change.
  *
  *   codegen:setFiles  — Update the workspace file set and trigger generation.
  *   codegen:generate  — (Re-)generate using the current file set.
@@ -66,6 +67,15 @@ let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 
+function hasDocumentErrors(document: LangiumDocument): boolean {
+  const hasDiagnostics = (document.diagnostics ?? []).some(
+    (diagnostic) => diagnostic.severity === 1
+  );
+  const hasLexerErrors = document.parseResult.lexerErrors.length > 0;
+  const hasParserErrors = document.parseResult.parserErrors.length > 0;
+  return hasDiagnostics || hasLexerErrors || hasParserErrors;
+}
+
 // ---------------------------------------------------------------------------
 // Generation logic
 // ---------------------------------------------------------------------------
@@ -90,9 +100,7 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
 
     await builder.build(documents, { validation: false });
 
-    const hasErrors = documents.some((doc) =>
-      (doc.diagnostics ?? []).some((d) => d.severity === 1)
-    );
+    const hasErrors = documents.some(hasDocumentErrors);
 
     if (hasErrors) {
       scope.postMessage({
@@ -138,7 +146,7 @@ async function buildDocuments(): Promise<LangiumDocument[] | null> {
 
   await builder.build(documents, { validation: false });
 
-  const hasErrors = documents.some((doc) => (doc.diagnostics ?? []).some((d) => d.severity === 1));
+  const hasErrors = documents.some(hasDocumentErrors);
   return hasErrors ? null : documents;
 }
 
@@ -222,10 +230,9 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       if (msg.requestId) {
         lastPreviewRequestId = msg.requestId;
       }
-      if (lastPreviewTargetId) {
-        runPreview(lastPreviewTargetId, lastPreviewRequestId ?? 'preview:stale').catch(
-          console.error
-        );
+      const requestId = msg.requestId ?? lastPreviewRequestId;
+      if (lastPreviewTargetId && requestId) {
+        runPreview(lastPreviewTargetId, requestId).catch(console.error);
       }
     } else if (msg.type === 'preview:generate') {
       lastPreviewTargetId = msg.targetId;

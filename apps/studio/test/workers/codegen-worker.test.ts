@@ -8,7 +8,7 @@ const fromStringMock = vi.fn((content: string, uri: string) => ({
   uri,
   content,
   diagnostics: [],
-  parseResult: { value: { uri, content } }
+  parseResult: { value: { uri, content }, lexerErrors: [], parserErrors: [] }
 }));
 const generateMock = vi.fn(() => []);
 const generatePreviewSchemasMock = vi.fn(() => []);
@@ -204,6 +204,38 @@ describe('codegen-worker preview messages', () => {
     });
   });
 
+  it('posts preview:stale with parse-error when preview files contain parser errors', async () => {
+    buildMock.mockImplementation(
+      async (documents: Array<{ parseResult: { parserErrors: Array<{ message: string }> } }>) => {
+        documents[0]!.parseResult.parserErrors = [{ message: 'Unexpected token' }];
+      }
+    );
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'broken syntax' }],
+      requestId: 'preview:beta.Trade:parser-error'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'beta.Trade',
+      requestId: 'preview:beta.Trade:parser-error:generate'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:stale',
+      targetId: 'beta.Trade',
+      requestId: 'preview:beta.Trade:parser-error:generate',
+      reason: 'parse-error',
+      message: 'Fix model errors to refresh the form preview.'
+    });
+  });
+
   it('posts preview:stale with generation-error when preview schema generation throws', async () => {
     generatePreviewSchemasMock.mockImplementation(() => {
       throw new Error('Preview schema generation failed.');
@@ -232,6 +264,36 @@ describe('codegen-worker preview messages', () => {
       reason: 'generation-error',
       message: 'Preview schema generation failed.'
     });
+  });
+
+  it('does not rerun preview:setFiles when no consumable preview request id exists', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'beta.Trade'
+    } as never);
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:stale',
+      targetId: 'beta.Trade',
+      requestId: undefined,
+      reason: 'no-files',
+      message: 'No files are loaded for form preview.'
+    });
+
+    scope.postMessage.mockClear();
+    generatePreviewSchemasMock.mockClear();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }]
+    });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).not.toHaveBeenCalled();
+    expect(scope.postMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -329,6 +391,44 @@ describe('codegen-worker code preview messages', () => {
           sourceMap: []
         }
       ]
+    });
+  });
+
+  it('posts codegen:outdated when code preview files contain lexer or parser errors', async () => {
+    buildMock.mockImplementation(
+      async (
+        documents: Array<{
+          parseResult: {
+            lexerErrors: Array<{ message: string }>;
+            parserErrors: Array<{ message: string }>;
+          };
+        }>
+      ) => {
+        documents[0]!.parseResult.lexerErrors = [{ message: 'Bad token' }];
+      }
+    );
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'broken syntax' }]
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'codegen:generate',
+      target: 'zod',
+      requestId: 'codegen:zod:syntax-error'
+    });
+    await flushWorker();
+
+    expect(generateMock).not.toHaveBeenCalled();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'codegen:outdated',
+      target: 'zod',
+      requestId: 'codegen:zod:syntax-error',
+      message: 'Fix model errors to refresh the code preview.'
     });
   });
 });

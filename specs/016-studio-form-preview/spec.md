@@ -97,7 +97,7 @@ A modeller can view the sample data represented by the form preview, copy it, an
 
 - A preview schema cannot be produced for the selected type because the model has errors: keep the last successful preview if available and mark it stale; otherwise show a clear unavailable state.
 - The selected type has unsupported schema features: render all supported fields, list unsupported features in the preview status, and avoid presenting the sample as fully valid.
-- The selected type has recursive references: prevent infinite rendering and provide a controlled way to add nested items up to a reasonable depth.
+- The selected type has recursive references: prevent infinite rendering, keep supported siblings interactive, and surface the recursive field as unsupported.
 - The model contains multiple types with the same display name in different namespaces: identify the preview target by its fully-qualified model identity, not by display name alone.
 - The selected type or one of its nested fields uses unsupported preview metadata: keep supported fields interactive, mark the preview as limited, and list unsupported features instead of flattening or silently discarding them.
 - A workspace has no generated schemas yet: show a waiting state during generation, then either render the preview or show a specific generation failure.
@@ -119,7 +119,7 @@ A modeller can view the sample data represented by the form preview, copy it, an
 - **FR-009**: The preview MUST allow users to reset the sample values for the selected type without changing the model.
 - **FR-010**: The preview MUST provide a structured sample data view for the current form values and a copy action for that sample.
 - **FR-011**: Studio MUST organize primary workspace surfaces into user-facing modes: Navigate, Edit, Visualize, and Preview.
-- **FR-012**: Navigate MUST include Files and Model Tree surfaces and occupy the full left side in the default desktop arrangement.
+- **FR-012**: Navigate MUST include the Files navigation surface and occupy the full left side in the default desktop arrangement.
 - **FR-013**: Edit MUST include Source and Structure surfaces and occupy the primary middle editing area in the default desktop arrangement.
 - **FR-014**: Preview MUST include Form and Code generated-artifact surfaces and occupy the full right side in the default desktop arrangement.
 - **FR-015**: Visualize MUST be a separate graph-focused mode, not a generated preview surface.

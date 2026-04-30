@@ -588,12 +588,6 @@ export function App() {
         )}
 
         {bootState === 'restored' && userFiles.length === 0 && (
-          // Workspace metadata is restored from IndexedDB; file content is
-          // re-hydrated from OPFS / curated bindings in a follow-up phase.
-          // This placeholder keeps the surface usable in the meantime; it
-          // intentionally does NOT mount the start-page `<FileLoader>` so
-          // the empty-state copy ("Load Rune DSL Models") cannot leak into
-          // a restored session.
           <div
             className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md"
             data-testid="workspace-restored"

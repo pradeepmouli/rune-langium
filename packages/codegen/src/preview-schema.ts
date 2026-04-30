@@ -43,7 +43,10 @@ interface FieldContext {
   seenTypes: Set<string>;
 }
 
-const BUILTIN_KIND_MAP: Record<string, PreviewFieldKind> = {
+const BUILTIN_KIND_MAP: Record<
+  string,
+  Extract<PreviewFieldKind, 'string' | 'number' | 'boolean'>
+> = {
   string: 'string',
   int: 'number',
   number: 'number',
@@ -127,7 +130,18 @@ function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[] {
 }
 
 function normalizeNamespace(name: unknown): string {
-  return typeof name === 'string' ? name.replace(/^"|"$/g, '') : String(name ?? '');
+  if (typeof name === 'string') {
+    return name.replace(/^"|"$/g, '');
+  }
+  if (
+    name &&
+    typeof name === 'object' &&
+    'segments' in name &&
+    Array.isArray((name as { segments?: unknown }).segments)
+  ) {
+    return (name as { segments: string[] }).segments.join('.');
+  }
+  return String(name ?? '');
 }
 
 function buildDataSchema(
@@ -206,7 +220,8 @@ function buildBaseField(attr: Attribute, ctx: FieldContext): PreviewField {
   const refText = attr.typeCall?.type?.$refText;
 
   if (typeRef && isRosettaBasicType(typeRef)) {
-    return scalarField(ctx, BUILTIN_KIND_MAP[typeRef.name] ?? 'unknown');
+    const builtinKind = BUILTIN_KIND_MAP[typeRef.name];
+    return builtinKind ? scalarField(ctx, builtinKind) : unsupportedField(ctx, typeRef.name);
   }
 
   if (!typeRef && refText && BUILTIN_KIND_MAP[refText]) {
@@ -235,18 +250,26 @@ function buildBaseField(attr: Attribute, ctx: FieldContext): PreviewField {
   }
 
   ctx.unsupportedFeatures.add(`unresolved-reference:${refText ?? attr.name}`);
+  return unsupportedField(
+    ctx,
+    refText ? `Type reference ${refText} could not be resolved for form preview.` : undefined
+  );
+}
+
+function unsupportedField(ctx: FieldContext, description?: string): PreviewField {
   return {
     path: ctx.path,
     label: ctx.label,
     kind: 'unknown',
     required: true,
-    description: refText
-      ? `Type reference ${refText} could not be resolved for form preview.`
-      : 'Unresolved type reference is not supported in form preview.'
+    description: description ?? 'Unresolved type reference is not supported in form preview.'
   };
 }
 
-function scalarField(ctx: FieldContext, kind: PreviewFieldKind): PreviewField {
+function scalarField(
+  ctx: FieldContext,
+  kind: Extract<PreviewFieldKind, 'string' | 'number' | 'boolean'>
+): PreviewField {
   return {
     path: ctx.path,
     label: ctx.label,

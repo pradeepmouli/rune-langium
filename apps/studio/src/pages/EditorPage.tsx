@@ -371,20 +371,6 @@ export function EditorPage({
     });
   }, [files]);
 
-  // Initialise dedicated codegen worker once on mount.
-  useEffect(() => {
-    const worker =
-      getRuneStudioTestApi()?.createCodegenWorker?.() ??
-      new Worker(new URL('../workers/codegen-worker.ts', import.meta.url), {
-        type: 'module'
-      });
-    setCodegenWorker(worker);
-    return () => {
-      worker.terminate();
-      setCodegenWorker(null);
-    };
-  }, []);
-
   const handlePreviewWorkerFailure = useCallback(
     (baseMessage: string, error: unknown, targetId?: string) => {
       const detail =
@@ -407,6 +393,27 @@ export function EditorPage({
     },
     [receivePreviewStale]
   );
+
+  // Initialise dedicated codegen worker once on mount.
+  useEffect(() => {
+    let worker: Worker | null = null;
+    try {
+      worker =
+        getRuneStudioTestApi()?.createCodegenWorker?.() ??
+        new Worker(new URL('../workers/codegen-worker.ts', import.meta.url), {
+          type: 'module'
+        });
+      setCodegenWorker(worker);
+    } catch (error) {
+      setCodegenWorker(null);
+      handlePreviewWorkerFailure('Preview worker could not start.', error);
+      return;
+    }
+    return () => {
+      worker?.terminate();
+      setCodegenWorker(null);
+    };
+  }, [handlePreviewWorkerFailure]);
 
   // Keep the codegen worker in sync with the workspace file set and
   // regenerate the selected preview whenever the backing files change.

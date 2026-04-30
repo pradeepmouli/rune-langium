@@ -114,7 +114,11 @@
 
   .studio-app .studio-mode-header {
     display: grid;
-    grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) minmax(260px, 360px);
+    grid-template-columns:
+      minmax(180px, 240px)
+      minmax(0, 1fr)
+      minmax(200px, 280px)
+      minmax(260px, 360px);
     align-items: center;
     min-height: 24px;
     border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
@@ -141,7 +145,7 @@
 
   @media (max-width: 1280px) {
     .studio-app .studio-mode-header {
-      grid-template-columns: 200px minmax(0, 1fr) 280px;
+      grid-template-columns: 180px minmax(0, 1fr) 220px 240px;
     }
   }
 

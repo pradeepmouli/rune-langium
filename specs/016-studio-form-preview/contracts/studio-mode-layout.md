@@ -8,7 +8,7 @@ Defines the user-facing Studio surface groups introduced by this feature. Intern
 
 | Mode | Position | Surfaces | Notes |
 |------|----------|----------|-------|
-| Navigate | Full left side | Files, Model Tree | Workspace and model navigation |
+| Navigate | Full left side | Files | Workspace and model navigation inside a single left navigation surface |
 | Edit | Middle | Source, Structure | Primary authoring surfaces |
 | Visualize | Top-level mode | Graph, relationship filters, graph layout controls | Must not be labelled as generated preview |
 | Preview | Full right side | Form, Code | Generated artifacts for selected model/type |
