@@ -116,7 +116,6 @@ describe('applyLayout — factory shape', () => {
       expect(call.title).not.toMatch(/^workspace\./);
     }
   });
-
   it('positions each subsequent column to the right of the previous', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
     const api = new FakeDockviewApi();

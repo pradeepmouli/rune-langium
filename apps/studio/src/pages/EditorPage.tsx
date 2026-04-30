@@ -86,6 +86,8 @@ export interface EditorPageProps {
   studioVersion?: string;
   /** Workspace display name shown in the toolbar. */
   workspaceName?: string;
+  /** Number of user files open in this workspace — displayed in the toolbar. */
+  fileCount?: number;
   /** Called when the user wants to close the current workspace. */
   onClose?: () => void;
 }
@@ -121,6 +123,7 @@ export function EditorPage({
   workspaceId = 'default',
   studioVersion = '0.1.0',
   workspaceName,
+  fileCount,
   onClose
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
@@ -1046,7 +1049,16 @@ export function EditorPage({
                   {workspaceName}
                 </span>
               )}
-              <Button variant="secondary" size="sm" onClick={onClose} title="Close workspace">
+              {fileCount !== undefined && fileCount > 0 && (
+                <span className="text-xs text-muted-foreground">{fileCount} file(s)</span>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onClose}
+                title="Close all files"
+                aria-label="Close workspace"
+              >
                 <XCircle className="w-3.5 h-3.5 mr-1" />
                 Close
               </Button>

@@ -33,7 +33,8 @@ vi.mock('../../src/components/ModelLoader.js', () => ({
 }));
 
 vi.mock('../../src/pages/EditorPage.js', () => ({
-  EditorPage: () => null
+  EditorPage: ({ fileCount }: { fileCount?: number }) =>
+    fileCount != null ? <span>{fileCount} file(s)</span> : null
 }));
 
 vi.mock('../../src/store/model-store.js', () => ({

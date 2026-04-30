@@ -88,6 +88,9 @@ export function App() {
   const lspClientRef = useRef<LspClientService | null>(null);
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Incremented before each model-merge parse; only the matching result is
+  // applied, preventing stale async results from overwriting newer state.
+  const modelParseTokenRef = useRef(0);
   // Tracks the latest files state so the model-loading effect can read it
   // synchronously without stale-closure issues. Starts as [] (matching the
   // `files` initial state) and is kept in sync via the effect below.
@@ -458,8 +461,13 @@ export function App() {
     }
     setFiles(merged);
     lspClientRef.current?.syncWorkspaceFiles(merged);
+    modelParseTokenRef.current += 1;
+    const token = modelParseTokenRef.current;
     parseWorkspaceFiles(merged)
-      .then((result) => applyParseResult(result))
+      .then((result) => {
+        if (token !== modelParseTokenRef.current) return;
+        applyParseResult(result);
+      })
       .catch((err) => {
         reportWorkspaceError(
           'Failed to re-parse the workspace after loading reference models; keeping the last valid graph',
@@ -485,24 +493,24 @@ export function App() {
           {userFiles.length} file(s)
         </span>
       )}
-
-      <header
-        className={`glass-header studio-app-header flex items-center justify-between px-3 ${
-          showEditorPage ? 'studio-app-header--compact' : ''
-        }`}
-      >
-        <div className="studio-brand">
-          <div className="studio-brand__mark">R</div>
-          <span className="studio-brand__name">Rune Studio</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <nav className="studio-links" aria-label="Studio links">
-            <a href={studioConfig.homeUrl}>Home</a>
-            <a href={studioConfig.docsUrl}>Docs</a>
-            <a href={studioConfig.githubUrl}>GitHub</a>
-          </nav>
-        </div>
-      </header>
+      {/* Global header — hidden when EditorPage is active to avoid a
+       * duplicate toolbar. The EditorPage toolbar hosts Close + workspace
+       * name in that mode. */}
+      {!showEditorPage && (
+        <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
+          <div className="studio-brand">
+            <div className="studio-brand__mark">R</div>
+            <span className="studio-brand__name">Rune Studio</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <nav className="studio-links" aria-label="Studio links">
+              <a href={studioConfig.homeUrl}>Home</a>
+              <a href={studioConfig.docsUrl}>Docs</a>
+              <a href={studioConfig.githubUrl}>GitHub</a>
+            </nav>
+          </div>
+        </header>
+      )}
 
       <main className="flex-1 overflow-hidden relative">
         {workspaceError ? (
@@ -574,6 +582,7 @@ export function App() {
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
             workspaceName={restoredWorkspace?.name}
+            fileCount={userFiles.length}
             onClose={handleReset}
           />
         )}
@@ -608,6 +617,7 @@ export function App() {
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
             workspaceName={restoredWorkspace?.name}
+            fileCount={userFiles.length}
             onClose={handleReset}
           />
         )}
