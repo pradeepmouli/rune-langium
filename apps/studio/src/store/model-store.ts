@@ -89,7 +89,7 @@ let deps: ModelStoreDeps = {
   },
   telemetry: createTelemetryClient({
     endpoint: config.telemetryEndpoint,
-    enabled: !config.devMode,
+    enabled: config.telemetryEnabled && !config.devMode,
     studioVersion: '0.1.0',
     uaClass: 'browser'
   }),

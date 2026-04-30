@@ -95,7 +95,7 @@ The studio will connect to `ws://localhost:3001` automatically. If no server is 
 
 ### Environment Variables
 
-Studio loads its build-time configuration from `import.meta.env` and validates the result with Zod in `src/config.ts`; a malformed value crashes the bundle at module-init rather than degrading silently. Copy `.env.example` to `.env.local` and uncomment the fields you want to override. The five 014-introduced vars are `VITE_LSP_WS_URL` (LSP host base, defaults to `ws://localhost:3001` in dev / `wss://www.daikonic.dev/rune-studio/api/lsp` in prod), `VITE_LSP_SESSION_URL` (token-mint endpoint, derived from the WS URL when unset), `VITE_TELEMETRY_ENDPOINT` (defaults to `${location.origin}/api/telemetry/v1/event`), `VITE_DEV_MODE` (gates dev-only status copy; defaults to `import.meta.env.DEV`), and `VITE_LEGACY_GIT_PATH` (re-enables the legacy `cors.isomorphic-git.org` clone fallback per FR-019; production defaults `false`). See [`specs/014-studio-prod-ready/contracts/studio-config.md`](../../specs/014-studio-prod-ready/contracts/studio-config.md) for the full contract.
+Studio loads its build-time configuration from `import.meta.env` and validates the result with Zod in `src/config.ts`; a malformed value crashes the bundle at module-init rather than degrading silently. Copy `.env.example` to `.env.local` and uncomment the fields you want to override. The deployment-facing vars are `VITE_LSP_WS_URL` (LSP host base, defaults to `ws://localhost:3001` in dev / `wss://www.daikonic.dev/rune-studio/api/lsp` in prod), `VITE_LSP_SESSION_URL` (token-mint endpoint, derived from the WS URL when unset), `VITE_ENABLE_LSP` (deployment-level switch for remote language services; defaults `true`), `VITE_TELEMETRY_ENDPOINT` (defaults to `${location.origin}/api/telemetry/v1/event`), `VITE_ENABLE_TELEMETRY` (deployment-level telemetry switch; defaults `false`), `VITE_ENABLE_GITHUB_AUTH` (deployment-level switch for the GitHub Device Flow-backed workspace flow; defaults `true`), `VITE_ENABLE_CURATED_MIRROR` (deployment-level switch for built-in curated reference models; defaults `true`), `VITE_DEV_MODE` (gates dev-only status copy; defaults to `import.meta.env.DEV`), and `VITE_LEGACY_GIT_PATH` (re-enables the legacy `cors.isomorphic-git.org` clone fallback per FR-019; production defaults `false`). See [`specs/014-studio-prod-ready/contracts/studio-config.md`](../../specs/014-studio-prod-ready/contracts/studio-config.md) for the full contract.
 
 ## Export Code
 
@@ -156,7 +156,7 @@ Studio emits closed-schema events (see `specs/012-studio-workspace-ux/contracts/
 - Studio's `services/telemetry.ts` no-ops on `localhost` and when the user has set `telemetry-enabled=false` in Settings.
 - A single `429` response from the server drops the event silently — telemetry never blocks the user.
 
-Settings → **Diagnostics** has a single toggle. Off by default in dev builds; on by default in production builds. Either way, the user can flip it.
+Settings → **Diagnostics** has a single toggle. Builds also expose `VITE_ENABLE_TELEMETRY` so production can be hard-disabled until the telemetry worker is actually deployed.
 
 ## Key Files
 

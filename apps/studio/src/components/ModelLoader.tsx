@@ -15,6 +15,7 @@ import { useModelStore } from '../store/model-store.js';
 import type { ModelSource, LoadProgress, ModelLoadErrorCode } from '../types/model-types.js';
 import { CuratedLoadErrorPanel } from './CuratedLoadErrorPanel.js';
 import { ErrorCategorySchema, type ErrorCategory } from '@rune-langium/curated-schema';
+import { config } from '../config.js';
 
 /**
  * Map either a legacy `ModelLoadErrorCode` (git-clone path) or an already-
@@ -172,29 +173,30 @@ export function ModelLoader() {
         );
       })}
 
-      {/* Curated model buttons */}
-      <div className="space-y-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Reference Models
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {registry.map((source) => {
-            const isLoaded = models.has(source.id);
-            const isLoading = loading.has(source.id);
-            return (
-              <Button
-                key={source.id}
-                variant={isLoaded ? 'secondary' : 'outline'}
-                size="sm"
-                disabled={isLoaded || isLoading}
-                onClick={() => handleLoadCurated(source)}
-              >
-                {isLoaded ? `✓ ${source.name}` : source.name}
-              </Button>
-            );
-          })}
+      {config.curatedMirrorEnabled && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Reference Models
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {registry.map((source) => {
+              const isLoaded = models.has(source.id);
+              const isLoading = loading.has(source.id);
+              return (
+                <Button
+                  key={source.id}
+                  variant={isLoaded ? 'secondary' : 'outline'}
+                  size="sm"
+                  disabled={isLoaded || isLoading}
+                  onClick={() => handleLoadCurated(source)}
+                >
+                  {isLoaded ? `✓ ${source.name}` : source.name}
+                </Button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Custom URL input */}
       <div className="space-y-2">

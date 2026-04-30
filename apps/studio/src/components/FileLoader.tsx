@@ -13,6 +13,7 @@ import { createBlankWorkspaceFile, readFileList } from '../services/workspace.js
 import { Button } from '@rune-langium/design-system/ui/button';
 import { cn } from '@rune-langium/design-system/utils';
 import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
+import { config } from '../config.js';
 
 export interface FileLoaderProps {
   onFilesLoaded: (files: WorkspaceFile[]) => void;
@@ -179,7 +180,7 @@ export function FileLoader({
               <Button variant="secondary" size="lg" onClick={() => dirInputRef.current?.click()}>
                 Select Folder
               </Button>
-              {createGitBackedWorkspace && (
+              {config.githubAuthEnabled && createGitBackedWorkspace && (
                 <Button variant="secondary" size="lg" onClick={() => setIsGitHubOpen(true)}>
                   Open from GitHub repository…
                 </Button>
@@ -188,7 +189,7 @@ export function FileLoader({
           </div>
         )}
 
-        {isGitHubOpen && createGitBackedWorkspace && (
+        {config.githubAuthEnabled && isGitHubOpen && createGitBackedWorkspace && (
           // T031 visible affordance + T032e end-to-end clone wiring.
           // The CTA only renders when `createGitBackedWorkspace` is wired,
           // so reaching here means the full flow is available. App.tsx

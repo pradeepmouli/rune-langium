@@ -101,7 +101,7 @@ If you want non-admin access blocked at the edge, in CF dashboard:
 ```bash
 # Curated mirror first — its R2 bucket binding must resolve before
 # Studio tries to fetch /curated/* in production.
-pnpm --filter @rune-langium/curated-mirror-worker exec wrangler deploy
+pnpm run deploy:curated-mirror
 
 # GitHub auth mediator.
 pnpm --filter @rune-langium/github-auth-worker exec wrangler deploy

@@ -23,7 +23,7 @@ pnpm --filter @rune-langium/curated-mirror-worker exec wrangler whoami
 pnpm --filter @rune-langium/codegen-worker exec wrangler deploy
 
 # 3. Deploy the three feature-012 Workers.
-pnpm --filter @rune-langium/curated-mirror-worker exec wrangler deploy
+pnpm run deploy:curated-mirror
 pnpm --filter @rune-langium/github-auth-worker exec wrangler deploy
 pnpm --filter @rune-langium/telemetry-worker exec wrangler deploy
 

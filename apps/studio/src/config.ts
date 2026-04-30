@@ -15,6 +15,10 @@
  *   - `VITE_LSP_WS_URL`         WebSocket base for the LSP host (FR-021)
  *   - `VITE_LSP_SESSION_URL`    HTTP endpoint for `POST /lsp/session`
  *   - `VITE_TELEMETRY_ENDPOINT` (already shipped in 012)
+ *   - `VITE_ENABLE_LSP`         deployment-level switch for remote LSP
+ *   - `VITE_ENABLE_TELEMETRY`   deployment-level switch for telemetry emits
+ *   - `VITE_ENABLE_GITHUB_AUTH` deployment-level switch for GitHub auth flow
+ *   - `VITE_ENABLE_CURATED_MIRROR` deployment-level switch for curated mirror UI
  *   - `VITE_DEV_MODE`           gates dev-only status copy (FR-014)
  *   - `VITE_LEGACY_GIT_PATH`    re-enables the legacy isomorphic-git fallback
  *                               (FR-019; production builds default `false`)
@@ -72,6 +76,10 @@ const lspSessionUrl = env.VITE_LSP_SESSION_URL ?? deriveSessionUrl(lspWsUrl);
 
 const origin = typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin;
 const telemetryEndpoint = env.VITE_TELEMETRY_ENDPOINT ?? `${origin}/api/telemetry/v1/event`;
+const lspEnabled = boolFromEnv(env.VITE_ENABLE_LSP, true);
+const telemetryEnabled = boolFromEnv(env.VITE_ENABLE_TELEMETRY, false);
+const githubAuthEnabled = boolFromEnv(env.VITE_ENABLE_GITHUB_AUTH, true);
+const curatedMirrorEnabled = boolFromEnv(env.VITE_ENABLE_CURATED_MIRROR, true);
 
 // VITE_DEV_MODE override; otherwise mirror import.meta.env.DEV.
 const devMode = env.VITE_DEV_MODE !== undefined ? boolFromEnv(env.VITE_DEV_MODE, isDev) : isDev;
@@ -87,6 +95,10 @@ const ConfigSchema = z
     lspWsUrl: wsUrl,
     lspSessionUrl: httpUrl,
     telemetryEndpoint: httpUrl,
+    lspEnabled: z.boolean(),
+    telemetryEnabled: z.boolean(),
+    githubAuthEnabled: z.boolean(),
+    curatedMirrorEnabled: z.boolean(),
     devMode: z.boolean(),
     legacyGitPathEnabled: z.boolean()
   })
@@ -102,6 +114,10 @@ export const config: StudioRuntimeConfig = ConfigSchema.parse({
   lspWsUrl,
   lspSessionUrl,
   telemetryEndpoint,
+  lspEnabled,
+  telemetryEnabled,
+  githubAuthEnabled,
+  curatedMirrorEnabled,
   devMode,
   legacyGitPathEnabled
 });

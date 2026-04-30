@@ -22,7 +22,11 @@ interface StudioEnv {
   readonly MODE?: string;
   readonly VITE_LSP_WS_URL?: string;
   readonly VITE_LSP_SESSION_URL?: string;
+  readonly VITE_ENABLE_LSP?: string;
   readonly VITE_TELEMETRY_ENDPOINT?: string;
+  readonly VITE_ENABLE_TELEMETRY?: string;
+  readonly VITE_ENABLE_GITHUB_AUTH?: string;
+  readonly VITE_ENABLE_CURATED_MIRROR?: string;
   readonly VITE_DEV_MODE?: string;
   readonly VITE_LEGACY_GIT_PATH?: string;
   readonly VITE_HOME_URL?: string;
@@ -71,6 +75,7 @@ describe('studio config singleton (014 T009/T011)', () => {
       MODE: 'production'
     });
     expect(config.lspWsUrl).toBe('wss://www.daikonic.dev/rune-studio/api/lsp');
+    expect(config.lspEnabled).toBe(true);
     expect(config.devMode).toBe(false);
   });
 
@@ -81,6 +86,7 @@ describe('studio config singleton (014 T009/T011)', () => {
       MODE: 'development'
     });
     expect(config.lspWsUrl).toBe('ws://localhost:3001');
+    expect(config.lspEnabled).toBe(true);
     expect(config.devMode).toBe(true);
   });
 
@@ -112,5 +118,40 @@ describe('studio config singleton (014 T009/T011)', () => {
       MODE: 'production'
     });
     expect(config.legacyGitPathEnabled).toBe(false);
+    expect(config.telemetryEnabled).toBe(false);
+    expect(config.githubAuthEnabled).toBe(true);
+    expect(config.curatedMirrorEnabled).toBe(true);
+  });
+
+  it('(f) VITE_ENABLE_TELEMETRY toggles telemetry emits for the build', async () => {
+    const { config } = await loadConfig({
+      DEV: false,
+      PROD: true,
+      MODE: 'production',
+      VITE_ENABLE_TELEMETRY: 'true'
+    });
+    expect(config.telemetryEnabled).toBe(true);
+  });
+
+  it('(g) VITE_ENABLE_LSP=false disables remote language services', async () => {
+    const { config } = await loadConfig({
+      DEV: false,
+      PROD: true,
+      MODE: 'production',
+      VITE_ENABLE_LSP: 'false'
+    });
+    expect(config.lspEnabled).toBe(false);
+  });
+
+  it('(h) service switches can disable GitHub auth and curated mirror independently', async () => {
+    const { config } = await loadConfig({
+      DEV: false,
+      PROD: true,
+      MODE: 'production',
+      VITE_ENABLE_GITHUB_AUTH: 'false',
+      VITE_ENABLE_CURATED_MIRROR: 'false'
+    });
+    expect(config.githubAuthEnabled).toBe(false);
+    expect(config.curatedMirrorEnabled).toBe(false);
   });
 });

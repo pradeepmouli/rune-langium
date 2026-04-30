@@ -24,7 +24,7 @@ import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
-import { studioConfig } from './config.js';
+import { config, studioConfig } from './config.js';
 import * as persistence from './workspace/persistence.js';
 import type { WorkspaceRecord } from './workspace/persistence.js';
 import {
@@ -263,6 +263,16 @@ export function App() {
 
   // Initialise LSP on mount
   useEffect(() => {
+    if (!config.lspEnabled) {
+      setTransportState({
+        mode: 'disconnected',
+        status: 'disconnected'
+      });
+      providerRef.current = null;
+      lspClientRef.current = null;
+      return undefined;
+    }
+
     const provider = createTransportProvider();
     providerRef.current = provider;
 

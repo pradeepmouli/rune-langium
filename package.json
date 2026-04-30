@@ -40,6 +40,7 @@
     "build:cloudflare": "pnpm --filter @rune-langium/docs run build:combined",
     "build:container": "pnpm --filter @rune-langium/codegen-container run build",
     "deploy:worker": "pnpm --filter @rune-langium/codegen-worker run deploy",
+    "deploy:curated-mirror": "pnpm --filter @rune-langium/curated-mirror-worker run deploy",
     "deploy:container": "pnpm --filter @rune-langium/codegen-container run publish",
     "clean": "pnpm -r run clean && rm -rf node_modules/.cache",
     "clean:all": "pnpm -r exec rm -rf dist node_modules && rm -rf node_modules",
