@@ -314,6 +314,8 @@ describe('createTransportProvider', () => {
 
     await provider.getTransport();
 
+    // unsub() was called before getTransport(), so the listener must never
+    // have been invoked for any of the connecting → connected state transitions.
     expect(listener).not.toHaveBeenCalled();
 
     provider.dispose();

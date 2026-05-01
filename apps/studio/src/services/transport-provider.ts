@@ -198,7 +198,7 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
   }
 
   /**
-   * CF Worker LSP path via session token. On 401 from the mint, refreshes the token
+   * Step 3 — CF Worker LSP via session token. On 401 from the mint, refreshes the token
    * once and retries; on 429 / 5xx surfaces the documented "language
    * services unavailable" copy from FR-014 and falls through to the
    * disconnected error state.
