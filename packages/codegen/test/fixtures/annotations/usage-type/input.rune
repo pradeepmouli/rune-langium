@@ -1,0 +1,10 @@
+namespace "test.annotations"
+version "1"
+
+annotation source:
+    system string (1..1)
+
+type Trade:
+    [source system]
+    tradeDate date (1..1)
+    notional number (1..1)

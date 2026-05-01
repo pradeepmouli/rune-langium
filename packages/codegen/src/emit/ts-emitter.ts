@@ -678,6 +678,35 @@ function emitValidateMethods(data: Data, ctx: EmissionContext): string {
 }
 
 // ---------------------------------------------------------------------------
+// Report metadata emission (Phase 9, US5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a `runeReportRules` const object summarising all rules in this namespace.
+ * Since Rune report declarations require full regulatory-body infrastructure that
+ * may not be present in isolated fixtures, this simplified form aggregates the
+ * rules themselves and annotates them with kind + input type so downstream
+ * tooling can identify eligibility vs. reporting rules and the type they operate
+ * on.  A namespace with no rules produces an empty string.
+ */
+function emitReportMetadata(ctx: EmissionContext): string {
+  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
+  if (ruleNames.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('export const runeReportRules = {');
+  for (const name of ruleNames) {
+    const rule = ctx.rulesByName.get(name)!;
+    const kind = rule.eligibility ? 'eligibility' : 'reporting';
+    const inputRef = rule.input?.type?.ref;
+    const inputName = inputRef ? inputRef.name : 'unknown';
+    lines.push(`  ${name}: { kind: '${kind}' as const, inputType: '${inputName}' },`);
+  }
+  lines.push('} as const;');
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Rule emission
 // ---------------------------------------------------------------------------
 
@@ -969,6 +998,56 @@ function emitFunc(func: RuneFunc, ctx: FuncBodyContext, _isHoisted: boolean): st
 }
 
 // ---------------------------------------------------------------------------
+// Library function emission (Phase 10, US6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a TypeScript callable-type alias for a Rune library function declaration.
+ *
+ * Library functions are external (native) implementations — we emit a *type*
+ * rather than a function body so consumers can type-check call sites without
+ * requiring an implementation stub at codegen time.
+ *
+ * e.g.:
+ *   library function Sum(values number[]) number
+ * becomes:
+ *   export type Sum = (values: number[]) => number;
+ */
+function emitLibraryFunc(func: RosettaExternalFunction, ctx: EmissionContext): string {
+  const name = func.name;
+
+  const params = (func.parameters ?? []).map((p) => {
+    const typeRef = p.typeCall?.type?.ref;
+    const refText = p.typeCall?.type?.$refText;
+
+    let typeName = 'unknown';
+    if (typeRef && isRosettaBasicType(typeRef)) {
+      typeName = TS_TYPE_MAP[typeRef.name] ?? 'unknown';
+    } else if (refText) {
+      typeName = TS_TYPE_MAP[refText] ?? refText;
+    }
+
+    const arraySuffix = p.isArray ? '[]' : '';
+    return `${p.name}: ${typeName}${arraySuffix}`;
+  });
+
+  const returnTypeRef = func.typeCall?.type?.ref;
+  const returnRefText = func.typeCall?.type?.$refText;
+  let returnType = 'unknown';
+  if (returnTypeRef && isRosettaBasicType(returnTypeRef)) {
+    returnType = TS_TYPE_MAP[returnTypeRef.name] ?? 'unknown';
+  } else if (returnRefText) {
+    returnType = TS_TYPE_MAP[returnRefText] ?? returnRefText;
+  }
+
+  // Suppress unused-variable warning: ctx is kept for future cross-namespace
+  // type resolution parity with other emitters.
+  void ctx;
+
+  return `export type ${name} = (${params.join(', ')}) => ${returnType};`;
+}
+
+// ---------------------------------------------------------------------------
 // T104: emitNamespace
 // ---------------------------------------------------------------------------
 
@@ -1089,6 +1168,17 @@ export function emitNamespace(
     sections.push('');
   }
 
+  // Emit annotation decorator factories (before enums and data types)
+  const annotationNames = Array.from(ctx.annotationsByName.keys()).sort();
+  for (const name of annotationNames) {
+    const ann = ctx.annotationsByName.get(name)!;
+    sections.push('');
+    sections.push(emitAnnotationDeclaration(ann, ctx));
+  }
+  if (annotationNames.length > 0) {
+    sections.push('');
+  }
+
   // Emit enum types (no class — just a const object + type alias for union)
   const enumNames = Array.from(ctx.enumByName.keys()).sort();
   for (const name of enumNames) {
@@ -1145,6 +1235,21 @@ export function emitNamespace(
     const rule = ctx.rulesByName.get(name)!;
     sections.push('');
     sections.push(emitRule(rule, ctx));
+  }
+
+  // Emit report metadata (Phase 9, US5) — one const object summarising all rules
+  const reportMeta = emitReportMetadata(ctx);
+  if (reportMeta !== '') {
+    sections.push('');
+    sections.push(reportMeta);
+  }
+
+  // Emit library function type aliases (Phase 10, US6)
+  const libraryFuncNames = Array.from(ctx.libraryFuncsByName.keys()).sort();
+  for (const name of libraryFuncNames) {
+    const func = ctx.libraryFuncsByName.get(name)!;
+    sections.push('');
+    sections.push(emitLibraryFunc(func, ctx));
   }
 
   // ---------------------------------------------------------------------------
@@ -1238,6 +1343,51 @@ function emitEnumDeclaration(enumNode: RosettaEnumeration, _ctx: EmissionContext
   }
 
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// T065: Annotation declaration emitter
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a typed decorator factory for an annotation declaration.
+ *
+ * Annotations with no attributes emit a zero-argument decorator factory.
+ * Annotations with attributes emit an `Args` interface and a factory that
+ * accepts it. Both return `ClassDecorator & PropertyDecorator` so they can
+ * be applied to either a class or a property.
+ *
+ * T065, US11.
+ */
+function emitAnnotationDeclaration(annotation: Annotation, ctx: EmissionContext): string {
+  const name = annotation.name;
+  const attrs = annotation.attributes ?? [];
+
+  if (attrs.length === 0) {
+    return [
+      `export function ${name}(): ClassDecorator & PropertyDecorator {`,
+      `  return (target: any, propertyKey?: any) => {};`,
+      `}`
+    ].join('\n');
+  }
+
+  const paramFields = attrs
+    .map((attr) => {
+      const typeName = resolveTypeExprAsTs(attr, ctx);
+      const optional = attr.card && attr.card.inf === 0 ? '?' : '';
+      return `  ${attr.name}${optional}: ${typeName};`;
+    })
+    .join('\n');
+
+  return [
+    `export interface ${name}Args {`,
+    paramFields,
+    `}`,
+    ``,
+    `export function ${name}(args: ${name}Args): ClassDecorator & PropertyDecorator {`,
+    `  return (target: any, propertyKey?: any) => {};`,
+    `}`
+  ].join('\n');
 }
 
 // ---------------------------------------------------------------------------

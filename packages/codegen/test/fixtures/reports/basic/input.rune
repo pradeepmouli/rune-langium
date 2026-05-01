@@ -1,0 +1,16 @@
+namespace "test.reports"
+version "1"
+
+type Trade:
+    tradeDate date (1..1)
+    notional number (1..1)
+
+type TradeReport:
+    date date (1..1)
+    amount number (1..1)
+
+eligibility rule IsLargeTrade from Trade:
+    Trade -> notional > 1000000
+
+reporting rule ExtractDate from Trade:
+    Trade -> tradeDate

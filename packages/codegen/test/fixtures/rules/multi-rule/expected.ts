@@ -52,4 +52,9 @@ export function validateIsActive(account: AccountShape): boolean {
 export function validateIsPremium(account: AccountShape): boolean {
   return Account.Account?.tier === 'premium';
 }
+
+export const runeReportRules = {
+  IsActive: { kind: 'eligibility' as const, inputType: 'Account' },
+  IsPremium: { kind: 'eligibility' as const, inputType: 'Account' }
+} as const;
 // (functions emitted by Phase 8b appear below this line)

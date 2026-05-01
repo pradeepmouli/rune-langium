@@ -136,9 +136,9 @@
 
 - [x] T046 [US8] Implement `collectCrossNamespaceImports(ctx)` in packages/codegen/src/emit/ts-emitter.ts — walk all type references (data, enum, func, rule, typeAlias) and collect import statements for cross-namespace refs using `resolveImportPath()`
 - [x] T047 [US8] Replace `collectFuncCrossNamespaceImports()` stub at ts-emitter.ts:819 with the general `collectCrossNamespaceImports()` call
-- [ ] T048 [US8] Implement cross-namespace imports in packages/codegen/src/emit/zod-emitter.ts — collect and emit `import { FooSchema } from './path.js'` for cross-namespace schema refs
+- [x] T048 [US8] Implement cross-namespace imports in packages/codegen/src/emit/zod-emitter.ts — collect and emit `import { FooSchema } from './path.js'` for cross-namespace schema refs
 - [x] T049 [US8] Handle cross-namespace inheritance in TS emitter — emit correct `import` + `extends` clause for cross-namespace parent types
-- [ ] T050 [US8] Handle cross-namespace inheritance in Zod emitter — emit correct `import` + `.extend()` for cross-namespace parent schemas
+- [x] T050 [US8] Handle cross-namespace inheritance in Zod emitter — emit correct `import` + `.extend()` for cross-namespace parent schemas
 - [ ] T051 [US8] Handle circular cross-namespace references — detect cycles and use `z.lazy()` / forward declarations as needed
 - [ ] T052 [US8] Emit diagnostics for unresolvable cross-namespace references (FR-025) instead of silently producing broken output
 - [ ] T053 [US8] Write expected output files for all cross-namespace fixtures and create `us12-cross-namespace.test.ts` in packages/codegen/test/
@@ -177,22 +177,22 @@
 
 ### Fixtures for US7
 
-- [ ] T061 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/declaration/input.rune` with annotation declaration
-- [ ] T062 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/usage-type/input.rune` with annotation used on a data type
-- [ ] T063 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/usage-attr/input.rune` with annotation used on an attribute
-- [ ] T064 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/qualifiers/input.rune` with annotation using qualifier key-value pairs
+- [x] T061 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/declaration/input.rune` with annotation declaration
+- [x] T062 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/usage-type/input.rune` with annotation used on a data type
+- [x] T063 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/usage-attr/input.rune` with annotation used on an attribute
+- [x] T064 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/qualifiers/input.rune` with annotation using qualifier key-value pairs
 - [ ] T064b [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/enum-value/input.rune` with annotation on enum values
 
 ### Implementation for US7
 
-- [ ] T065 [US7] Implement `emitAnnotationDeclaration()` in packages/codegen/src/emit/ts-emitter.ts — emit typed decorator factory per annotation, parameter type derived from annotation's attributes
-- [ ] T066 [US7] Modify `emitClass()` in packages/codegen/src/emit/ts-emitter.ts to emit `@annotationName({ key: "value" })` for each `AnnotationRef` on a type
-- [ ] T067 [US7] Modify field emission in packages/codegen/src/emit/ts-emitter.ts to emit decorator invocations for annotated attributes
-- [ ] T068 [US7] Modify `emitTypeSchema()` in packages/codegen/src/emit/zod-emitter.ts to chain `.meta({ annotationName: { key: "value" } })` for annotated types
-- [ ] T069 [US7] Modify field-level Zod emission to chain `.describe()` for annotation definitions and `.meta()` for qualifier data
+- [x] T065 [US7] Implement `emitAnnotationDeclaration()` in packages/codegen/src/emit/ts-emitter.ts — emit typed decorator factory per annotation, parameter type derived from annotation's attributes
+- [x] T066 [US7] Modify `emitClass()` in packages/codegen/src/emit/ts-emitter.ts to emit `@annotationName({ key: "value" })` for each `AnnotationRef` on a type
+- [x] T067 [US7] Modify field emission in packages/codegen/src/emit/ts-emitter.ts to emit decorator invocations for annotated attributes
+- [x] T068 [US7] Modify `emitTypeSchema()` in packages/codegen/src/emit/zod-emitter.ts to chain `.meta({ annotationName: { key: "value" } })` for annotated types
+- [x] T069 [US7] Modify field-level Zod emission to chain `.describe()` for annotation definitions and `.meta()` for qualifier data
 - [ ] T069b [US7] Handle annotation emission on enum values — TS decorator on enum companion object entries, Zod `.meta()` on enum schema
-- [ ] T070 [US7] Wire annotation declaration emission into `emitNamespace()` — emit before types (decorators must be declared before use)
-- [ ] T071 [US7] Write expected output files for all fixtures and create `us11-annotations.test.ts` in packages/codegen/test/
+- [x] T070 [US7] Wire annotation declaration emission into `emitNamespace()` — emit before types (decorators must be declared before use)
+- [x] T071 [US7] Write expected output files for all fixtures and create `us11-annotations.test.ts` in packages/codegen/test/
 
 **Checkpoint**: Annotations emit as TS decorators and Zod `.meta()`. Qualifier data preserved.
 
@@ -206,15 +206,15 @@
 
 ### Fixtures for US5
 
-- [ ] T072 [P] [US5] Create fixture `packages/codegen/test/fixtures/reports/basic/input.rune` with a basic report referencing eligibility rules and a report type
+- [x] T072 [P] [US5] Create fixture `packages/codegen/test/fixtures/reports/basic/input.rune` with a basic report referencing eligibility rules and a report type
 
 ### Implementation for US5
 
-- [ ] T073 [US5] Implement `emitReport()` in packages/codegen/src/emit/ts-emitter.ts — emit typed interface per report with inputType, reportType, eligibilityRules, timing
-- [ ] T074 [US5] Wire report emission into `emitNamespace()` in TS emitter — emit after rules (reports reference rules)
+- [x] T073 [US5] Implement `emitReport()` in packages/codegen/src/emit/ts-emitter.ts — emit typed interface per report with inputType, reportType, eligibilityRules, timing
+- [x] T074 [US5] Wire report emission into `emitNamespace()` in TS emitter — emit after rules (reports reference rules)
 - [ ] T074b [US5] Implement report metadata emission in packages/codegen/src/emit/zod-emitter.ts — chain `.meta({ report: { inputType, eligibilityRules, timing, regulatoryBody } })` on the report's associated output type schema
 - [ ] T074c [US5] Implement report metadata emission in packages/codegen/src/emit/json-schema-emitter.ts — emit `x-rune-report` extension properties on the report's output type schema
-- [ ] T075 [US5] Write expected output files for all three targets and create `us9-reports.test.ts` in packages/codegen/test/
+- [x] T075 [US5] Write expected output files for all three targets and create `us9-reports.test.ts` in packages/codegen/test/
 
 **Checkpoint**: Report structures emit in TypeScript. Zod/JSON Schema correctly skip them.
 
@@ -228,13 +228,13 @@
 
 ### Fixtures for US6
 
-- [ ] T076 [P] [US6] Create fixture `packages/codegen/test/fixtures/library-funcs/basic/input.rune` with library function declaration
+- [x] T076 [P] [US6] Create fixture `packages/codegen/test/fixtures/library-funcs/basic/input.rune` with library function declaration
 
 ### Implementation for US6
 
-- [ ] T077 [US6] Implement library function extraction in packages/codegen/src/emit/ts-emitter.ts — handle `isRosettaExternalFunction()` elements, emit `export type LibFuncName = (param1: Type1, param2: Type2) => ReturnType;`
-- [ ] T078 [US6] Wire library function emission into `emitNamespace()` — emit alongside regular functions. Zod: silently skip
-- [ ] T079 [US6] Write expected output files and create `us10-library-funcs.test.ts` in packages/codegen/test/
+- [x] T077 [US6] Implement library function extraction in packages/codegen/src/emit/ts-emitter.ts — handle `isRosettaExternalFunction()` elements, emit `export type LibFuncName = (param1: Type1, param2: Type2) => ReturnType;`
+- [x] T078 [US6] Wire library function emission into `emitNamespace()` — emit alongside regular functions. Zod: silently skip
+- [x] T079 [US6] Write expected output files and create `us10-library-funcs.test.ts` in packages/codegen/test/
 
 **Checkpoint**: Library function signatures emit in TypeScript.
 

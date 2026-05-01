@@ -1,0 +1,8 @@
+namespace "test.libfuncs"
+version "1"
+
+library function Sum(values number[]) number
+    <"Computes the sum of a list of numbers.">
+
+library function Concat(a string, b string) string
+    <"Concatenates two strings.">

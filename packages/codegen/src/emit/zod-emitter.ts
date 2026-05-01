@@ -11,6 +11,7 @@
 
 import type { LangiumDocument } from 'langium';
 import type { NamespaceRegistry } from './namespace-registry.js';
+import { resolveImportPath } from './namespace-registry.js';
 import {
   isData,
   isRosettaModel,
@@ -152,6 +153,88 @@ const BUILTIN_TYPE_MAP: Record<string, string> = {
   productType: 'z.string()',
   eventType: 'z.string()'
 };
+
+/**
+ * Get the namespace string for an AST element by inspecting its $container.
+ * Returns undefined when the element is not directly inside a RosettaModel.
+ */
+function getElementNamespace(element: { $container?: unknown }): string | undefined {
+  const container = element.$container;
+  if (!container || typeof container !== 'object') return undefined;
+  const model = container as { name?: unknown; $type?: string };
+  if (model.$type !== 'RosettaModel') return undefined;
+  const name = model.name;
+  if (typeof name === 'string') return name.replace(/^"|"$/g, '');
+  if (name && typeof name === 'object' && 'segments' in name) {
+    return (name as { segments: string[] }).segments.join('.');
+  }
+  return String(name ?? '');
+}
+
+/**
+ * Collect cross-namespace import statements needed for the schemas and type aliases
+ * defined in this emission context.
+ *
+ * Walks all Data superType references and attribute type references, plus
+ * TypeAlias type references. Any resolved reference whose namespace differs
+ * from `ctx.namespace` is recorded and emitted as an ES import statement
+ * importing Schema names (e.g. FooSchema) from the corresponding .zod.js file.
+ */
+function collectCrossNamespaceImports(ctx: EmissionContext): string[] {
+  const imports = new Map<string, Set<string>>(); // namespace -> schema symbol names
+
+  function trackRef(typeRef: unknown, schemaName: string): void {
+    if (!typeRef || typeof typeRef !== 'object') return;
+    const ns = getElementNamespace(typeRef as { $container?: unknown });
+    if (!ns || ns === ctx.namespace) return;
+
+    let symbols = imports.get(ns);
+    if (!symbols) {
+      symbols = new Set();
+      imports.set(ns, symbols);
+    }
+    symbols.add(schemaName);
+  }
+
+  // Check data type inheritance and attribute references
+  for (const data of ctx.dataByName.values()) {
+    // Check superType
+    const parentRef = data.superType?.ref;
+    if (parentRef) {
+      trackRef(parentRef, `${parentRef.name}Schema`);
+    }
+    // Check attribute types
+    for (const attr of data.attributes) {
+      const attrTypeRef = attr.typeCall?.type?.ref;
+      if (attrTypeRef && isData(attrTypeRef)) {
+        trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
+      } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
+        trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
+      }
+    }
+  }
+
+  // Check type alias references
+  for (const alias of ctx.typeAliasByName.values()) {
+    const typeRef = alias.typeCall?.type?.ref;
+    if (typeRef && isData(typeRef)) {
+      trackRef(typeRef, `${typeRef.name}Schema`);
+    } else if (typeRef && isRosettaEnumeration(typeRef)) {
+      trackRef(typeRef, `${typeRef.name}Schema`);
+    }
+  }
+
+  // Build import statements
+  const lines: string[] = [];
+  const sortedNamespaces = Array.from(imports.keys()).sort();
+  for (const ns of sortedNamespaces) {
+    const symbols = Array.from(imports.get(ns)!).sort();
+    const importPath = resolveImportPath(ctx.namespace, ns, ctx.registry);
+    lines.push(`import { ${symbols.join(', ')} } from '${importPath}.zod.js';`);
+  }
+
+  return lines;
+}
 
 /**
  * Return a property key expression for a Zod object literal.
@@ -419,6 +502,13 @@ function emitTypeSchema(data: Data, ctx: EmissionContext): string {
         .join('\n');
       return `export const ${schemaName} = z\n  ${objectBody}\n${condIndented};`;
     }
+  }
+
+  // Append .meta() for type-level annotations (T068, T069).
+  // Only supported for non-lazy, non-condition schemas (the common case).
+  const metaSuffix = buildMetaSuffix(data);
+  if (metaSuffix) {
+    return `export const ${schemaName} = ${schemaExpr}${metaSuffix};`;
   }
 
   return `export const ${schemaName} = ${schemaExpr};`;
@@ -694,6 +784,41 @@ function emitTypeAliasSchema(alias: RosettaTypeAlias, ctx: EmissionContext): str
 }
 
 /**
+ * Build a `.meta(...)` suffix for a Data node's type-level annotations.
+ *
+ * Each AnnotationRef contributes one key to the meta object whose value is an
+ * object with:
+ *   - `attribute`: the referenced attribute name (if any)
+ *   - one entry per qualifier: qualName → qualValue
+ *
+ * Returns an empty string when the data node has no type-level annotations.
+ * T068, T069, US11.
+ */
+function buildMetaSuffix(data: Data): string {
+  const annotations = data.annotations ?? [];
+  if (annotations.length === 0) return '';
+
+  const metaEntries = annotations.map((annRef) => {
+    const annName = annRef.annotation?.$refText ?? annRef.annotation?.ref?.name ?? 'unknown';
+    const parts: string[] = [];
+    const attrName = annRef.attribute?.$refText ?? annRef.attribute?.ref?.name;
+    if (attrName) {
+      parts.push(`attribute: '${attrName}'`);
+    }
+    for (const q of annRef.qualifiers ?? []) {
+      if (q.qualName && q.qualValue !== undefined) {
+        const escapedValue = q.qualValue.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        parts.push(`${q.qualName}: '${escapedValue}'`);
+      }
+    }
+    const body = parts.length > 0 ? `{ ${parts.join(', ')} }` : '{}';
+    return `    ${annName}: ${body}`;
+  });
+
+  return `.meta({\n${metaEntries.join(',\n')}\n  })`;
+}
+
+/**
  * Emit a Zod refine validator for a RosettaRule.
  * Only emitted when the rule has a resolvable input type with a known schema.
  */
@@ -831,6 +956,13 @@ export function emitNamespace(
   const sections: string[] = [];
 
   sections.push(emitFileHeader(namespace, ctx));
+
+  // Collect and emit cross-namespace import statements at the top of the file
+  const crossNsImports = collectCrossNamespaceImports(ctx);
+  if (crossNsImports.length > 0) {
+    sections.push(crossNsImports.join('\n'));
+    sections.push('');
+  }
 
   // Emit in topological order: enums first (they don't have dependencies on data types),
   // then data types in topo-sorted order.
