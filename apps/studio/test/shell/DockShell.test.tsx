@@ -19,6 +19,12 @@ interface FakeGroupSpy {
   sizeCalls: Array<{ width?: number; height?: number }>;
 }
 
+interface FakePanelSpy {
+  api: { setActive: () => void };
+  activeCalls: number;
+  group: FakeGroupSpy;
+}
+
 function makeFakeGroup(): FakeGroupSpy {
   const spy: FakeGroupSpy = {
     sizeCalls: [],
@@ -39,16 +45,27 @@ class FakeApi {
   panels: Array<{ id: string; component: string }> = [];
   cleared = 0;
   groups = new Map<string, FakeGroupSpy>();
+  panelStates = new Map<string, FakePanelSpy>();
   onDidLayoutChange = () => {
     return { dispose: () => {} };
   };
   addPanel = (opts: { id: string; component: string }) => {
     this.panels.push(opts);
     const group = makeFakeGroup();
+    const panelSpy: FakePanelSpy = {
+      activeCalls: 0,
+      api: {
+        setActive: () => {
+          panelSpy.activeCalls++;
+        }
+      },
+      group
+    };
     this.groups.set(opts.id, group);
+    this.panelStates.set(opts.id, panelSpy);
     return {
       id: opts.id,
-      api: { setActive: () => {} },
+      api: panelSpy.api,
       group
     };
   };
@@ -61,14 +78,11 @@ class FakeApi {
     this.panels = [];
   };
   getPanel = (id: string) => {
-    const panel = this.panels.find((p) => p.id === id);
+    const panel = this.panelStates.get(id);
     if (!panel) {
       return undefined;
     }
-    return {
-      api: { setActive: () => {} },
-      group: this.groups.get(id)
-    };
+    return panel;
   };
 }
 
@@ -160,6 +174,34 @@ describe('DockShell — dockview integration (T065)', () => {
     const last = onChange.mock.calls.at(-1)?.[0];
     expect(last.writtenBy).toBe('9.9.9');
     expect(last.dockview).toHaveProperty('columns');
+  });
+
+  it('activates a requested panel when focusPanel changes', async () => {
+    function Harness() {
+      const [focusPanel, setFocusPanel] = useState<{
+        component: 'workspace.inspector';
+        nonce: number;
+      } | null>(null);
+
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => setFocusPanel({ component: 'workspace.inspector', nonce: 1 })}
+          >
+            focus inspector
+          </button>
+          <DockShell studioVersion="0.1.0" workspaceId="ws-1" focusPanel={focusPanel} />
+        </>
+      );
+    }
+
+    render(<Harness />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    fireEvent.click(screen.getByText('focus inspector'));
+
+    expect(lastApi?.panelStates.get('workspace.inspector')?.activeCalls).toBe(1);
   });
 
   it('surfaces a user-visible notice when an invalid saved factory layout is reset', () => {

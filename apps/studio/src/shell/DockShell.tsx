@@ -76,6 +76,7 @@ interface DockShellProps {
   studioVersion: string;
   workspaceId: string;
   initialLayout?: PanelLayoutRecord | null;
+  focusPanel?: { component: PanelComponentName; nonce: number } | null;
   /**
    * Override one or more panels with real content. Components are
    * rendered as the body of their named dockview panel. Tests omit this
@@ -135,6 +136,7 @@ export function DockShell({
   studioVersion,
   workspaceId,
   initialLayout,
+  focusPanel,
   panelComponents,
   onLayoutChange,
   onAction
@@ -260,6 +262,14 @@ export function DockShell({
     },
     []
   );
+
+  useEffect(() => {
+    if (!focusPanel) {
+      return;
+    }
+    const panel = apiRef.current?.getPanel(focusPanel.component);
+    panel?.api.setActive();
+  }, [focusPanel]);
 
   function resetLayout(): void {
     const fresh = buildDefaultLayout({ studioVersion, viewportWidth: getViewportWidth() });

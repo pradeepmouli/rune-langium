@@ -133,6 +133,7 @@ export function EditorPage({
   const [groupedLayout, setGroupedLayout] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
+  const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
   const previewRequestSequenceRef = useRef(0);
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
@@ -286,6 +287,13 @@ export function EditorPage({
     }
     selectPreviewTarget(`${data.namespace}.${data.name}`);
   }, [selectedNodeData, selectedNodeId, selectPreviewTarget]);
+
+  useEffect(() => {
+    if (!selectedNodeId) {
+      return;
+    }
+    setInspectorFocusNonce((current) => current + 1);
+  }, [selectedNodeId]);
 
   // Navigate the source editor when a graph node is selected.
   const prevSelectedRef = useRef<string | null>(null);
@@ -1001,6 +1009,13 @@ export function EditorPage({
   );
 
   const workspaceFileCount = fileCount ?? files.length;
+  const focusPanelRequest = useMemo(
+    () =>
+      inspectorFocusNonce > 0
+        ? { component: 'workspace.inspector' as const, nonce: inspectorFocusNonce }
+        : null,
+    [inspectorFocusNonce]
+  );
 
   return (
     <div
@@ -1084,6 +1099,7 @@ export function EditorPage({
         <DockShell
           studioVersion={studioVersion}
           workspaceId={workspaceId}
+          focusPanel={focusPanelRequest}
           panelComponents={panelComponents}
         />
       </div>

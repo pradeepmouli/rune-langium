@@ -5,7 +5,7 @@
  * Playwright E2E test — Editor Form Panel.
  *
  * Validates the right-side property editing panel:
- * 1. Opens when a graph node is clicked
+ * 1. Opens when a type is selected from the explorer
  * 2. Shows correct form for each node kind (Enum, Data, Choice)
  * 3. Edits propagate to graph node labels
  * 4. Panel closes and shows empty state when no node selected
@@ -46,9 +46,13 @@ async function loadModel(page: Page) {
     buffer: Buffer.from(MODEL_WITH_ALL_KINDS)
   });
   await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
-  await page.locator('.react-flow__node').first().waitFor({ timeout: 10000 });
-  // Wait for layout animation to settle
-  await page.waitForTimeout(1500);
+  await page.getByTestId('namespace-explorer').waitFor({ timeout: 10000 });
+  await page.getByTestId('ns-type-editor.panel::Customer').waitFor({ timeout: 10000 });
+}
+
+async function selectType(page: Page, nodeId: string) {
+  await page.getByTestId(`ns-type-${nodeId}`).click();
+  await page.waitForTimeout(1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -63,30 +67,24 @@ test.describe('Editor Form Panel', () => {
   });
 
   test('should keep panel visible when switching from one node to another', async ({ page }) => {
-    // Click on Customer to open the panel
-    await page.getByTestId('rf__node-editor.panel::Customer').click({ force: true });
-    await page.waitForTimeout(1500);
+    await selectType(page, 'editor.panel::Customer');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
 
-    // Click Priority — panel should remain visible
-    await page.getByTestId('rf__node-editor.panel::Priority').click({ force: true });
-    await page.waitForTimeout(1000);
+    await selectType(page, 'editor.panel::Priority');
     await expect(panel).toBeVisible();
   });
 
   test('should open editor panel when clicking a data type node', async ({ page }) => {
-    await page.getByTestId('rf__node-editor.panel::Customer').click({ force: true });
-    await page.waitForTimeout(1000);
+    await selectType(page, 'editor.panel::Customer');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
   });
 
   test('should show enum form when clicking an enum node', async ({ page }) => {
-    await page.getByTestId('rf__node-editor.panel::Priority').click({ force: true });
-    await page.waitForTimeout(1000);
+    await selectType(page, 'editor.panel::Priority');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
@@ -100,8 +98,7 @@ test.describe('Editor Form Panel', () => {
   });
 
   test('should show choice form when clicking a choice node', async ({ page }) => {
-    await page.getByTestId('rf__node-editor.panel::ItemKind').click({ force: true });
-    await page.waitForTimeout(1000);
+    await selectType(page, 'editor.panel::ItemKind');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
@@ -110,28 +107,17 @@ test.describe('Editor Form Panel', () => {
   test('should switch forms when clicking different nodes', async ({ page }) => {
     const panel = page.locator('[data-slot="editor-form-panel"]');
 
-    // Click Customer (data type) — use evaluate to bypass viewport issues
-    await page.evaluate(() => {
-      const node = document.querySelector('[data-testid="rf__node-editor.panel::Customer"]');
-      if (node) node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await page.waitForTimeout(1500);
+    await selectType(page, 'editor.panel::Customer');
     await expect(panel).toBeVisible({ timeout: 5000 });
 
-    // Click Priority (enum) — use evaluate to bypass viewport issues
-    await page.evaluate(() => {
-      const node = document.querySelector('[data-testid="rf__node-editor.panel::Priority"]');
-      if (node) node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await page.waitForTimeout(1500);
+    await selectType(page, 'editor.panel::Priority');
     await expect(panel.getByRole('textbox', { name: /value name for active/i })).toBeVisible({
       timeout: 5000
     });
   });
 
   test('should show kind badge in panel header', async ({ page }) => {
-    await page.getByTestId('rf__node-editor.panel::Customer').click({ force: true });
-    await page.waitForTimeout(1000);
+    await selectType(page, 'editor.panel::Customer');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
@@ -140,8 +126,7 @@ test.describe('Editor Form Panel', () => {
   });
 
   test('should display attributes for data type node', async ({ page }) => {
-    await page.getByTestId('rf__node-editor.panel::Customer').click({ force: true });
-    await page.waitForTimeout(1000);
+    await selectType(page, 'editor.panel::Customer');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
