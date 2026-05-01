@@ -1,0 +1,9 @@
+namespace "test.rules"
+version "1"
+
+type Trade:
+    notional number (1..1)
+    active boolean (1..1)
+
+eligibility rule IsLargeTrade from Trade:
+    Trade -> notional > 1000000

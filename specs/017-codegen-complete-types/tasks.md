@@ -84,18 +84,18 @@
 
 ### Fixtures for US2
 
-- [ ] T028 [P] [US2] Create fixture `packages/codegen/test/fixtures/rules/eligibility/input.rune` with an eligibility rule
-- [ ] T029 [P] [US2] Create fixture `packages/codegen/test/fixtures/rules/reporting/input.rune` with a reporting rule
-- [ ] T030 [P] [US2] Create fixture `packages/codegen/test/fixtures/rules/complex-expr/input.rune` with a rule using complex expressions (navigation, filter, arithmetic)
-- [ ] T031 [P] [US2] Create fixture `packages/codegen/test/fixtures/rules/multi-rule/input.rune` with multiple rules targeting the same type
+- [x] T028 [P] [US2] Create fixture `packages/codegen/test/fixtures/rules/eligibility/input.rune` with an eligibility rule
+- [x] T029 [P] [US2] Create fixture `packages/codegen/test/fixtures/rules/reporting/input.rune` with a reporting rule
+- [x] T030 [P] [US2] Create fixture `packages/codegen/test/fixtures/rules/complex-expr/input.rune` with a rule using complex expressions (navigation, filter, arithmetic)
+- [x] T031 [P] [US2] Create fixture `packages/codegen/test/fixtures/rules/multi-rule/input.rune` with multiple rules targeting the same type
 
 ### Implementation for US2
 
-- [ ] T032 [US2] Implement `extractRules()` in packages/codegen/src/emit/ts-emitter.ts — walk AST `isRosettaRule()` elements, build `RuneRule` representations
-- [ ] T033 [US2] Implement `emitRule()` in packages/codegen/src/emit/ts-emitter.ts — emit `export function validateRuleName(input: InputType): boolean { return <transpiled expression>; }` for eligibility rules, return extracted value for reporting rules
-- [ ] T034 [US2] Implement `emitRuleValidator()` in packages/codegen/src/emit/zod-emitter.ts — emit standalone `export const RuleNameValidator = InputTypeSchema.refine(...)` for rules with a Zod-compatible expression
-- [ ] T035 [US2] Wire rule emission into `emitNamespace()` in both emitters — emit after types and type aliases
-- [ ] T036 [US2] Write expected output files for all fixtures and create `us8-rules.test.ts` in packages/codegen/test/
+- [x] T032 [US2] Implement `extractRules()` in packages/codegen/src/emit/ts-emitter.ts — walk AST `isRosettaRule()` elements, build `RuneRule` representations
+- [x] T033 [US2] Implement `emitRule()` in packages/codegen/src/emit/ts-emitter.ts — emit `export function validateRuleName(input: InputType): boolean { return <transpiled expression>; }` for eligibility rules, return extracted value for reporting rules
+- [x] T034 [US2] Implement `emitRuleValidator()` in packages/codegen/src/emit/zod-emitter.ts — emit standalone `export const RuleNameValidator = InputTypeSchema.refine(...)` for rules with a Zod-compatible expression
+- [x] T035 [US2] Wire rule emission into `emitNamespace()` in both emitters — emit after types and type aliases
+- [x] T036 [US2] Write expected output files for all fixtures and create `us8-rules.test.ts` in packages/codegen/test/
 
 **Checkpoint**: Rule codegen works for TS and Zod. Eligibility and reporting rules both emit correctly.
 

@@ -45,6 +45,7 @@ import { topoSort } from '../topo-sort.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import {
   transpileCondition,
+  transpileExpression,
   buildConditionMessage,
   type ExpressionTranspilerContext
 } from '../expr/transpiler.js';
@@ -693,6 +694,40 @@ function emitTypeAliasSchema(alias: RosettaTypeAlias, ctx: EmissionContext): str
 }
 
 /**
+ * Emit a Zod refine validator for a RosettaRule.
+ * Only emitted when the rule has a resolvable input type with a known schema.
+ */
+function emitRuleValidator(rule: RosettaRule, ctx: EmissionContext): string {
+  const name = rule.name;
+  const inputTypeRef = rule.input?.type?.ref;
+  const inputTypeName = inputTypeRef ? inputTypeRef.name : undefined;
+
+  if (!inputTypeName || !ctx.dataByName.has(inputTypeName)) {
+    // Can't emit a Zod validator without a known input schema
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'rule-no-input-type',
+      message: `Rule '${name}' has no resolvable input type; skipping Zod validator`
+    });
+    return '';
+  }
+
+  const schemaName = `${inputTypeName}Schema`;
+  const transpilerCtx: ExpressionTranspilerContext = {
+    selfName: 'data',
+    emitMode: 'zod-refine',
+    conditionName: name,
+    typeName: inputTypeName,
+    attributeTypes: new Map(),
+    diagnostics: ctx.diagnostics
+  };
+
+  const exprStr = transpileExpression(rule.expression as any, transpilerCtx);
+
+  return `export const validate${name} = ${schemaName}.refine(\n  (data) => ${exprStr},\n  '${name}'\n);`;
+}
+
+/**
  * Emit the file header: SPDX, generated comment, imports, runtime helpers.
  * FR-021 (inlined helpers), T038.
  */
@@ -853,6 +888,17 @@ export function emitNamespace(
     const alias = emitTypeAlias(data, ctx);
     if (alias) sections.push(alias);
     sections.push('');
+  }
+
+  // Emit rule validators (after data types)
+  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
+  for (const name of ruleNames) {
+    const rule = ctx.rulesByName.get(name)!;
+    const result = emitRuleValidator(rule, ctx);
+    if (result) {
+      sections.push('');
+      sections.push(result);
+    }
   }
 
   // Remove trailing empty section

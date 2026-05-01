@@ -595,6 +595,43 @@ function emitValidateMethods(data: Data, ctx: EmissionContext): string {
 }
 
 // ---------------------------------------------------------------------------
+// Rule emission
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a standalone rule function for a RosettaRule.
+ *
+ * Eligibility rules → `export function validate<Name>(...): boolean`
+ * Extraction rules → `export function extract<Name>(...): unknown`
+ */
+function emitRule(rule: RosettaRule, ctx: EmissionContext): string {
+  const name = rule.name;
+  const inputTypeRef = rule.input?.type?.ref;
+  const inputTypeName = inputTypeRef ? inputTypeRef.name : undefined;
+  const paramType = inputTypeName ? `${inputTypeName}Shape` : 'Record<string, unknown>';
+  const paramName = inputTypeName
+    ? inputTypeName.charAt(0).toLowerCase() + inputTypeName.slice(1)
+    : 'input';
+
+  const transpilerCtx: ExpressionTranspilerContext = {
+    selfName: inputTypeName ?? 'input',
+    emitMode: 'ts-method',
+    conditionName: name,
+    typeName: inputTypeName ?? name,
+    attributeTypes: new Map(),
+    diagnostics: ctx.diagnostics
+  };
+
+  const exprStr = transpileExpression(rule.expression as any, transpilerCtx);
+
+  if (rule.eligibility) {
+    return `export function validate${name}(${paramName}: ${paramType}): boolean {\n  return ${exprStr};\n}`;
+  } else {
+    return `export function extract${name}(${paramName}: ${paramType}): unknown {\n  return ${exprStr};\n}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 8b: Func emission helpers (T120–T126)
 // ---------------------------------------------------------------------------
 
@@ -1020,6 +1057,14 @@ export function emitNamespace(
   for (const typeName of remainingData) {
     const data = ctx.dataByName.get(typeName)!;
     emitDataType(data);
+  }
+
+  // Emit rules (after types, before Phase 8b funcs)
+  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
+  for (const name of ruleNames) {
+    const rule = ctx.rulesByName.get(name)!;
+    sections.push('');
+    sections.push(emitRule(rule, ctx));
   }
 
   // ---------------------------------------------------------------------------
