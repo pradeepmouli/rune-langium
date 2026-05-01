@@ -111,8 +111,8 @@
 
 - [x] T037 [US3] Extend `generatePreviewSchemas()` in packages/codegen/src/preview-schema.ts to iterate `isRosettaTypeAlias()` elements and produce `FormPreviewSchema` entries with `kind: 'typeAlias'`
 - [x] T038 [US3] Extend `generatePreviewSchemas()` to handle `choice` types with `kind: 'choice'` — represent the one-of constraint as a selectable option with nested fields per option
-- [ ] T039 [US3] Extend `FormPreviewPanel` in apps/studio/src/components/FormPreviewPanel.tsx to render `kind: 'choice'` schemas with radio/select for the choice option
-- [ ] T040 [US3] Extend `FormPreviewPanel` to display inline validation errors from conditions/refinements on type aliases and choices
+- [x] T039 [US3] Extend `FormPreviewPanel` in apps/studio/src/components/FormPreviewPanel.tsx to render `kind: 'choice'` schemas with radio/select for the choice option
+- [x] T040 [US3] Extend `FormPreviewPanel` to display inline validation errors from conditions/refinements on type aliases and choices
 - [x] T041 [US3] Extend preview schema test fixtures in packages/codegen/test/ for type aliases and choices
 
 **Checkpoint**: Form preview shows type aliases and choices with validation. Existing data type previews unaffected.
@@ -156,13 +156,13 @@
 ### Implementation for US4
 
 - [x] T054 [US4] Extend `generatePreviewSchemas()` in packages/codegen/src/preview-schema.ts to iterate `isRosettaFunction()` elements and produce `FormPreviewSchema` with `kind: 'function'`, input fields from function inputs, and pre/post-condition metadata
-- [ ] T055 [US4] Add `preview:execute` message type to apps/studio/src/workers/codegen-worker.ts — receive function name + input values, transpile and execute function body in worker scope, return output or error
-- [ ] T056 [US4] Add message factories for `preview:execute` in apps/studio/src/services/codegen-service.ts
-- [ ] T057 [US4] Add `executionResult`, `executionError`, and `executeFunction()` action to apps/studio/src/store/preview-store.ts
-- [ ] T058a [US4] Extend `FormPreviewPanel` in apps/studio/src/components/FormPreviewPanel.tsx — when `kind === 'function'`, render input fields matching function inputs and a "Run" button
-- [ ] T058b [US4] Wire "Run" button in `FormPreviewPanel` to dispatch `preview:execute` via codegen worker and display computed output below inputs in apps/studio/src/components/FormPreviewPanel.tsx
-- [ ] T058c [US4] Display pre-condition violations inline on input fields and post-condition violations alongside output in apps/studio/src/components/FormPreviewPanel.tsx
-- [ ] T059 [US4] Add worker test for `preview:execute` in apps/studio/test/workers/codegen-worker.test.ts
+- [x] T055 [US4] Add `preview:execute` message type to apps/studio/src/workers/codegen-worker.ts — receive function name + input values, transpile and execute function body in worker scope, return output or error
+- [x] T056 [US4] Add message factories for `preview:execute` in apps/studio/src/services/codegen-service.ts
+- [x] T057 [US4] Add `executionResult`, `executionError`, and `executeFunction()` action to apps/studio/src/store/preview-store.ts
+- [x] T058a [US4] Extend `FormPreviewPanel` in apps/studio/src/components/FormPreviewPanel.tsx — when `kind === 'function'`, render input fields matching function inputs and a "Run" button
+- [x] T058b [US4] Wire "Run" button in `FormPreviewPanel` to dispatch `preview:execute` via codegen worker and display computed output below inputs in apps/studio/src/components/FormPreviewPanel.tsx
+- [x] T058c [US4] Display pre-condition violations inline on input fields and post-condition violations alongside output in apps/studio/src/components/FormPreviewPanel.tsx
+- [x] T059 [US4] Add worker test for `preview:execute` in apps/studio/test/workers/codegen-worker.test.ts
 - [x] T060 [US4] Add preview schema test fixtures for function preview in packages/codegen/test/
 
 **Checkpoint**: Functions appear in form preview. Execution works end-to-end in Studio.
@@ -244,8 +244,8 @@
 
 **Purpose**: Integration validation, regression, fixture completeness
 
-- [ ] T080 Run full codegen against CDM corpus fixtures — verify no regressions in existing output (SC-006)
-- [ ] T081 Verify all pre-existing fixture tests pass unchanged
+- [x] T080 Run full codegen against CDM corpus fixtures — verify no regressions in existing output (SC-006)
+- [x] T081 Verify all pre-existing fixture tests pass unchanged
 - [ ] T082 [P] Add cross-namespace fixtures using real CDM inheritance patterns
 - [ ] T083 [P] Verify Studio form preview renders all new types correctly end-to-end
 - [ ] T084 Verify function execution works end-to-end in Studio with a real function from fixtures

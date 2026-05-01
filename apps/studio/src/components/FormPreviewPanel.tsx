@@ -4,6 +4,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useState,
   type ChangeEvent,
@@ -36,6 +37,9 @@ export function FormPreviewPanel({
   const resetSample = usePreviewStore((s) => s.resetSample);
   const sample = usePreviewStore((s) => (schema ? s.samples.get(schema.targetId) : undefined));
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
+  const [executionResult, setExecutionResult] = useState<unknown>(undefined);
+  const [executionError, setExecutionError] = useState<string | null>(null);
 
   const defaultValues = useMemo(
     () => (schema ? (buildDefaultValues(schema.fields) as Record<string, unknown>) : {}),
@@ -152,6 +156,19 @@ export function FormPreviewPanel({
     [activeSample, applyValidation, schema]
   );
 
+  const handleRun = useCallback(() => {
+    if (!schema || !activeSample) return;
+    setExecutionState('running');
+    setExecutionResult(undefined);
+    setExecutionError(null);
+    // TODO: dispatch preview:execute to codegen worker
+    console.info('[FormPreviewPanel] preview:execute', activeSample.values);
+    // Placeholder — resolve immediately with logged inputs
+    Promise.resolve().then(() => {
+      setExecutionState('idle');
+    });
+  }, [activeSample, schema]);
+
   const handleReset = useCallback(() => {
     if (!schema) return;
     resetSample(schema.targetId, defaultValues);
@@ -239,10 +256,9 @@ export function FormPreviewPanel({
         </div>
       </header>
       <form className="preview-panel__body space-y-3 overflow-auto p-3">
-        {schema.fields.map((field) => (
-          <PreviewFieldControl
-            key={field.path}
-            field={field}
+        {schema.kind === 'choice' ? (
+          <ChoiceFieldGroup
+            fields={schema.fields}
             sample={activeSample}
             lookupFieldSource={lookupFieldSource}
             onFieldBlur={handleFieldBlur}
@@ -251,10 +267,50 @@ export function FormPreviewPanel({
             onArrayRemove={handleArrayRemove}
             onObjectToggle={handleObjectToggle}
           />
-        ))}
+        ) : (
+          schema.fields.map((field) => (
+            <PreviewFieldControl
+              key={field.path}
+              field={field}
+              sample={activeSample}
+              lookupFieldSource={lookupFieldSource}
+              onFieldBlur={handleFieldBlur}
+              onFieldChange={handleFieldChange}
+              onArrayAdd={handleArrayAdd}
+              onArrayRemove={handleArrayRemove}
+              onObjectToggle={handleObjectToggle}
+            />
+          ))
+        )}
         {schema.unsupportedFeatures?.length ? (
           <div role="status" className="text-xs text-muted-foreground">
             Unsupported preview features: {schema.unsupportedFeatures.join(', ')}
+          </div>
+        ) : null}
+        {schema.kind === 'function' ? (
+          <div className="preview-panel__function-controls border-t border-border pt-3">
+            <button
+              type="button"
+              className="preview-panel__action px-3 py-1.5 text-xs font-medium"
+              disabled={executionState === 'running'}
+              onClick={handleRun}
+            >
+              {executionState === 'running' ? 'Executing…' : 'Run'}
+            </button>
+            {executionError ? (
+              <div className="execution-error mt-2 text-xs">
+                <span className="preview-panel__error font-medium">Error:</span>{' '}
+                <span className="preview-panel__error">{executionError}</span>
+              </div>
+            ) : null}
+            {executionResult !== undefined ? (
+              <div className="execution-result mt-2">
+                <span className="text-[11px] font-medium text-muted-foreground">Output:</span>
+                <pre className="preview-panel__sample-output mt-0.5 overflow-auto p-2 text-[11px] leading-5 text-foreground">
+                  {JSON.stringify(executionResult, null, 2)}
+                </pre>
+              </div>
+            ) : null}
           </div>
         ) : null}
         <details className="preview-panel__sample" data-testid="sample-data-view" open>
@@ -276,6 +332,102 @@ export function FormPreviewPanel({
         </details>
       </form>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ChoiceFieldGroup — renders choice schemas as a radio group
+// ---------------------------------------------------------------------------
+
+interface ChoiceFieldGroupProps {
+  fields: PreviewField[];
+  sample?: PreviewSampleState;
+  lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
+  onFieldBlur: () => void;
+  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
+  onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
+  onArrayRemove: (field: PreviewField, index: number, arrayIndices?: number[]) => void;
+  onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
+}
+
+function ChoiceFieldGroup({
+  fields,
+  sample,
+  lookupFieldSource,
+  onFieldBlur,
+  onFieldChange,
+  onArrayAdd,
+  onArrayRemove,
+  onObjectToggle
+}: ChoiceFieldGroupProps): ReactElement {
+  const groupId = useId();
+  // Determine which option is currently active by checking which field has a
+  // value present in the sample.  Default to the first option.
+  const activeField =
+    fields.find((f) => {
+      const v = getValueAtPath(sample?.values ?? {}, pathToSegments(f.path));
+      return v !== undefined;
+    }) ?? fields[0];
+
+  const handleOptionChange = (field: PreviewField) => {
+    // Remove all other options' values, then ensure this one is present.
+    for (const other of fields) {
+      if (other.path !== field.path) {
+        onObjectToggle(other, false);
+      }
+    }
+    if (field.kind === 'object') {
+      onObjectToggle(field, true);
+    } else {
+      onFieldChange(field.path, '');
+    }
+    onFieldBlur();
+  };
+
+  return (
+    <fieldset className="preview-panel__group space-y-2 p-2">
+      <legend className="px-1 text-xs font-medium text-muted-foreground">Choose one option</legend>
+      <div className="space-y-1">
+        {fields.map((field) => {
+          const radioId = `${groupId}-${field.path}`;
+          const isActive = activeField?.path === field.path;
+          return (
+            <div key={field.path} className="space-y-1">
+              <label className="flex items-center gap-2 text-xs font-medium">
+                <input
+                  type="radio"
+                  name={groupId}
+                  id={radioId}
+                  className="preview-panel__checkbox"
+                  checked={isActive}
+                  onChange={() => handleOptionChange(field)}
+                />
+                {field.label}
+              </label>
+              {isActive &&
+              (field.kind === 'object' || field.kind === 'array') &&
+              field.children.length > 0 ? (
+                <div className="ml-5 space-y-1.5 border-l border-border pl-3">
+                  {field.children.map((child) => (
+                    <PreviewFieldControl
+                      key={child.path}
+                      field={child}
+                      sample={sample}
+                      lookupFieldSource={lookupFieldSource}
+                      onFieldBlur={onFieldBlur}
+                      onFieldChange={onFieldChange}
+                      onArrayAdd={onArrayAdd}
+                      onArrayRemove={onArrayRemove}
+                      onObjectToggle={onObjectToggle}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

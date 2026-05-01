@@ -48,6 +48,7 @@ interface PreviewStoreState {
   schemas: Map<string, FormPreviewSchema>;
   samples: Map<string, PreviewSampleState>;
   status: PreviewStatus;
+  executionResults: Map<string, { output: unknown; error?: string }>;
 }
 
 interface PreviewStoreActions {
@@ -75,6 +76,9 @@ interface PreviewStoreActions {
   setSampleValues(targetId: string, values: Record<string, unknown>): void;
   clearSample(targetId: string): void;
   resetPreviewState(): void;
+  receiveExecutionResult(funcName: string, output: unknown): void;
+  receiveExecutionError(funcName: string, error: string): void;
+  clearExecutionResult(funcName: string): void;
 }
 
 type PreviewStore = PreviewStoreState & PreviewStoreActions;
@@ -86,7 +90,8 @@ const initialState: PreviewStoreState = {
   lastResolvedTarget: undefined,
   schemas: new Map(),
   samples: new Map(),
-  status: { state: 'waiting' }
+  status: { state: 'waiting' },
+  executionResults: new Map()
 };
 
 function serializeSampleValues(values: Record<string, unknown>): string {
@@ -476,6 +481,24 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     set({ samples });
   },
 
+  receiveExecutionResult(funcName, output) {
+    const executionResults = new Map(get().executionResults);
+    executionResults.set(funcName, { output });
+    set({ executionResults });
+  },
+
+  receiveExecutionError(funcName, error) {
+    const executionResults = new Map(get().executionResults);
+    executionResults.set(funcName, { output: undefined, error });
+    set({ executionResults });
+  },
+
+  clearExecutionResult(funcName) {
+    const executionResults = new Map(get().executionResults);
+    executionResults.delete(funcName);
+    set({ executionResults });
+  },
+
   resetPreviewState() {
     set({
       targets: [],
@@ -484,7 +507,8 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
       lastResolvedTarget: undefined,
       schemas: new Map(),
       samples: new Map(),
-      status: { state: 'waiting' }
+      status: { state: 'waiting' },
+      executionResults: new Map()
     });
   }
 }));

@@ -61,6 +61,47 @@ export interface PreviewStaleMessage {
   message: string;
 }
 
+export interface PreviewExecuteMessage {
+  type: 'preview:execute';
+  funcName: string;
+  inputs: Record<string, unknown>;
+  requestId: string;
+}
+
+export function createPreviewExecuteMessage(
+  funcName: string,
+  inputs: Record<string, unknown>,
+  requestId: string
+): PreviewExecuteMessage {
+  return { type: 'preview:execute', funcName, inputs, requestId };
+}
+
+export function isPreviewExecuteResultMessage(msg: unknown): msg is {
+  type: 'preview:execute-result';
+  requestId: string;
+  funcName: string;
+  output: unknown;
+} {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as Record<string, unknown>).type === 'preview:execute-result'
+  );
+}
+
+export function isPreviewExecuteErrorMessage(msg: unknown): msg is {
+  type: 'preview:execute-error';
+  requestId: string;
+  funcName: string;
+  error: string;
+} {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as Record<string, unknown>).type === 'preview:execute-error'
+  );
+}
+
 export type PreviewWorkerRequest = PreviewSetFilesMessage | PreviewGenerateMessage;
 export type PreviewWorkerMessage = PreviewResultMessage | PreviewStaleMessage;
 

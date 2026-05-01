@@ -50,8 +50,15 @@ interface GenerateMessage {
   requestId?: string;
 }
 
+interface PreviewExecuteMessage {
+  type: 'preview:execute';
+  funcName: string;
+  inputs: Record<string, unknown>;
+  requestId: string;
+}
+
 type InboundMessage = SetFilesMessage | GenerateMessage;
-type WorkerInboundMessage = InboundMessage | PreviewWorkerRequest;
+type WorkerInboundMessage = InboundMessage | PreviewWorkerRequest | PreviewExecuteMessage;
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -238,6 +245,25 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       lastPreviewTargetId = msg.targetId;
       lastPreviewRequestId = msg.requestId;
       runPreview(msg.targetId, msg.requestId).catch(console.error);
+    } else if (msg.type === 'preview:execute') {
+      const { funcName, inputs, requestId } = msg;
+      try {
+        // TODO: Full implementation will transpile and eval the function
+        // For now, return the inputs as a passthrough to validate the message pipeline
+        self.postMessage({
+          type: 'preview:execute-result',
+          requestId,
+          funcName,
+          output: { ...inputs, _executed: true }
+        });
+      } catch (e) {
+        self.postMessage({
+          type: 'preview:execute-error',
+          requestId,
+          funcName,
+          error: e instanceof Error ? e.message : String(e)
+        });
+      }
     }
   }
 );

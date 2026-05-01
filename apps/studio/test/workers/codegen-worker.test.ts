@@ -297,6 +297,48 @@ describe('codegen-worker preview messages', () => {
   });
 });
 
+describe('codegen-worker execute messages', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('posts preview:execute-result with inputs passed through when preview:execute is received', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'beta.Trade',
+      inputs: { symbol: 'AAPL', quantity: 10 },
+      requestId: 'exec:beta.Trade:1'
+    });
+
+    expect(scope.postMessage).toHaveBeenCalledWith({
+      type: 'preview:execute-result',
+      requestId: 'exec:beta.Trade:1',
+      funcName: 'beta.Trade',
+      output: { symbol: 'AAPL', quantity: 10, _executed: true }
+    });
+  });
+
+  it('posts preview:execute-result for an empty inputs object', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'alpha.Foo',
+      inputs: {},
+      requestId: 'exec:alpha.Foo:1'
+    });
+
+    expect(scope.postMessage).toHaveBeenCalledWith({
+      type: 'preview:execute-result',
+      requestId: 'exec:alpha.Foo:1',
+      funcName: 'alpha.Foo',
+      output: { _executed: true }
+    });
+  });
+});
+
 describe('codegen-worker code preview messages', () => {
   beforeEach(() => {
     buildMock.mockReset();
