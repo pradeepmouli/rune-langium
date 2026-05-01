@@ -4,8 +4,9 @@
 /**
  * Unit tests for transport provider / failover logic (T011 + T044).
  *
- * Step 1 = direct dev WebSocket (legacy ws://localhost:3001 path).
- * Step 3 = CF Worker LSP — POST /api/lsp/session for a token, then open
+ * Step 1 = embedded browser worker transport.
+ * Step 2 = direct dev WebSocket (legacy ws://localhost:3001 path).
+ * Step 4 = CF Worker LSP — POST /api/lsp/session for a token, then open
  *          WebSocket(${cfWsBase}/ws/${token}). On 401 from the mint we
  *          retry once; on 429 / 5xx we surface "language services
  *          unavailable" with the dev-mode-gated copy from FR-014.
@@ -19,9 +20,15 @@ vi.mock('../../src/services/ws-transport.js', () => ({
   createWebSocketTransport: vi.fn()
 }));
 
+vi.mock('../../src/services/worker-transport.js', () => ({
+  createWorkerTransport: vi.fn()
+}));
+
 import { createWebSocketTransport } from '../../src/services/ws-transport.js';
+import { createWorkerTransport } from '../../src/services/worker-transport.js';
 
 const mockWsTransport = vi.mocked(createWebSocketTransport);
+const mockEmbeddedTransport = vi.mocked(createWorkerTransport);
 
 function makeFakeTransport() {
   return {
@@ -97,6 +104,9 @@ describe('createTransportProvider', () => {
 
   it('uses WebSocket when connection succeeds', async () => {
     const wsTransport = makeFakeTransport();
+    mockEmbeddedTransport.mockImplementationOnce(() => {
+      throw new Error('embedded unavailable');
+    });
     mockWsTransport.mockResolvedValueOnce(wsTransport);
 
     const provider = createTransportProvider({ wsUri: 'ws://localhost:3001' });
@@ -104,6 +114,21 @@ describe('createTransportProvider', () => {
 
     expect(transport).toBe(wsTransport);
     expect(provider.getState().mode).toBe('websocket');
+    expect(provider.getState().status).toBe('connected');
+
+    provider.dispose();
+  });
+
+  it('uses the embedded worker transport by default when available', async () => {
+    const embeddedTransport = makeFakeTransport();
+    mockEmbeddedTransport.mockReturnValueOnce(embeddedTransport);
+
+    const provider = createTransportProvider();
+    const transport = await provider.getTransport();
+
+    expect(transport).toBe(embeddedTransport);
+    expect(mockWsTransport).not.toHaveBeenCalled();
+    expect(provider.getState().mode).toBe('embedded');
     expect(provider.getState().status).toBe('connected');
 
     provider.dispose();
@@ -117,6 +142,7 @@ describe('createTransportProvider', () => {
     mint.next({ status: 200, body: { token: 'cf-token', expiresAt: Date.now() + 60_000 } });
 
     const provider = createTransportProvider({
+      preferEmbedded: false,
       sessionUrl: '/api/lsp/session',
       cfWsBase: 'ws://localhost/api/lsp'
     });
@@ -130,17 +156,18 @@ describe('createTransportProvider', () => {
     provider.dispose();
   });
 
-  it('falls back to CF Worker (Step 3) when dev WS fails — happy path', async () => {
+  it('falls back to CF Worker (Step 4) when dev WS fails — happy path', async () => {
     const cfTransport = makeFakeTransport();
-    // Step 1: dev WS rejects
+    // Step 2: dev WS rejects
     mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
-    // Step 3: CF Worker WS resolves after the mint
+    // Step 4: CF Worker WS resolves after the mint
     mockWsTransport.mockResolvedValueOnce(cfTransport);
 
     const mint = installMintMock();
     mint.next({ status: 200, body: { token: 'cf-token', expiresAt: Date.now() + 60_000 } });
 
     const provider = createTransportProvider({
+      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -169,6 +196,7 @@ describe('createTransportProvider', () => {
     mint.next({ status: 200, body: { token: 'fresh', expiresAt: Date.now() + 60_000 } });
 
     const provider = createTransportProvider({
+      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -190,6 +218,7 @@ describe('createTransportProvider', () => {
     mint.next({ status: 429, body: { error: 'rate_limited', retry_after_s: 60 } });
 
     const provider = createTransportProvider({
+      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -211,6 +240,7 @@ describe('createTransportProvider', () => {
     mint.next({ status: 500, body: { error: 'internal_error' } });
 
     const provider = createTransportProvider({
+      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -236,6 +266,7 @@ describe('createTransportProvider', () => {
     mint.next({ status: 200, body: { token: 'second', expiresAt: Date.now() + 60_000 } });
 
     const provider = createTransportProvider({
+      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -252,6 +283,9 @@ describe('createTransportProvider', () => {
 
   it('notifies state change listeners', async () => {
     const wsTransport = makeFakeTransport();
+    mockEmbeddedTransport.mockImplementationOnce(() => {
+      throw new Error('embedded unavailable');
+    });
     mockWsTransport.mockResolvedValueOnce(wsTransport);
 
     const provider = createTransportProvider({ wsUri: 'ws://localhost:3001' });
@@ -269,6 +303,9 @@ describe('createTransportProvider', () => {
 
   it('unsubscribes state change listeners on dispose return', async () => {
     const wsTransport = makeFakeTransport();
+    mockEmbeddedTransport.mockImplementationOnce(() => {
+      throw new Error('embedded unavailable');
+    });
     mockWsTransport.mockResolvedValueOnce(wsTransport);
 
     const provider = createTransportProvider({ wsUri: 'ws://localhost:3001' });
@@ -296,6 +333,7 @@ describe('createTransportProvider', () => {
     mint.next({ status: 500, body: { error: 'internal_error' } });
 
     const provider = createTransportProvider({
+      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
