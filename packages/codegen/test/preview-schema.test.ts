@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { generatePreviewSchemas } from '../src/index.js';
@@ -18,6 +19,11 @@ async function parseModel(source: string) {
   const parseErrors = doc.parseResult.parserErrors.map((error) => error.message);
   expect(parseErrors).toEqual([]);
   return doc;
+}
+
+async function parseFixture(relativePath: string) {
+  const source = await readFile(new URL(relativePath, import.meta.url), 'utf8');
+  return parseModel(source);
 }
 
 describe('FormPreviewSchema generation', () => {
@@ -240,6 +246,34 @@ describe('FormPreviewSchema generation', () => {
         status: 'unsupported',
         fields: [],
         unsupportedFeatures: ['duplicate-target:test.preview.Trade']
+      });
+    }
+  );
+
+  skipIfNodeLt22(
+    'generates a stable preview schema for the real CDM AdjustableDate type',
+    async () => {
+      const enumDoc = await parseFixture('../../../.resources/cdm/base-datetime-enum.rosetta');
+      const typeDoc = await parseFixture('../../../.resources/cdm/base-datetime-type.rosetta');
+
+      const [adjustableDate] = generatePreviewSchemas([enumDoc, typeDoc], {
+        targetId: 'cdm.base.datetime.AdjustableDate'
+      });
+
+      expect(adjustableDate).toMatchObject({
+        targetId: 'cdm.base.datetime.AdjustableDate',
+        title: 'AdjustableDate'
+      });
+      expect(adjustableDate?.fields.map((field) => field.path)).toEqual([
+        'unadjustedDate',
+        'dateAdjustments',
+        'dateAdjustmentsReference',
+        'adjustedDate'
+      ]);
+      expect(
+        adjustableDate?.fields.find((field) => field.path === 'dateAdjustments')
+      ).toMatchObject({
+        kind: 'object'
       });
     }
   );

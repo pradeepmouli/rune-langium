@@ -495,6 +495,39 @@ describe('EditorPage preview target identity', () => {
     expect(usePreviewStore.getState().schemas.get('preview.alpha.Trade')?.title).toBe('Trade');
   });
 
+  it('derives preview target source identity from parsedModels when worker-cloned models lack document metadata', async () => {
+    editorStoreState.nodes = [
+      {
+        id: 'preview.alpha::Trade',
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+
+    const parsedModel = {
+      name: 'preview.alpha',
+      elements: [{ name: 'Trade' }]
+    };
+
+    render(
+      <EditorPage
+        models={[parsedModel as never]}
+        parsedModels={[{ filePath: '/preview-alpha.rosetta', model: parsedModel as never }]}
+        files={[
+          { path: '/preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(usePreviewStore.getState().selectedTarget).toMatchObject({
+        id: 'preview.alpha.Trade',
+        sourceUri: 'file:///preview-alpha.rosetta',
+        sourceIndex: 0
+      });
+    });
+  });
+
   it('marks preview stale when a cached schema exists and the worker later crashes', async () => {
     editorStoreState.nodes = [
       {

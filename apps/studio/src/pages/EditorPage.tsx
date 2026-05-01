@@ -162,6 +162,16 @@ export function EditorPage({
   const codePreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
   const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
 
+  const resolvedModelFiles = useMemo(() => {
+    if (parsedModels && parsedModels.length > 0) {
+      return parsedModels;
+    }
+    return models.flatMap((model, index) => {
+      const file = files[index];
+      return file ? [{ filePath: file.path, model }] : [];
+    });
+  }, [files, models, parsedModels]);
+
   useEffect(() => {
     if (models.length > 0) {
       useEditorStore.getState().loadModels(models as unknown[]);
@@ -179,13 +189,16 @@ export function EditorPage({
       string,
       Pick<FormPreviewTarget, 'sourceUri' | 'sourceIndex' | 'sourceRange'>
     >();
-    for (const model of models) {
+    for (const entry of resolvedModelFiles) {
+      const model = entry.model;
       const modelUriValue = (
         model as unknown as {
           $document?: { uri?: { path?: string; toString(): string } };
         }
       ).$document?.uri;
-      const modelUri = modelUriValue?.path ?? modelUriValue?.toString();
+      const sourceUri = pathToUri(
+        modelUriValue?.path ?? modelUriValue?.toString() ?? entry.filePath
+      );
       const namespace =
         typeof model.name === 'string'
           ? model.name
@@ -208,18 +221,7 @@ export function EditorPage({
           }
         ).$cstNode?.range;
         sourceByTargetId.set(`${namespace}.${name}`, {
-          sourceUri:
-            (
-              element as {
-                $document?: { uri?: { path?: string; toString(): string } };
-              }
-            ).$document?.uri?.path ??
-            (
-              element as {
-                $document?: { uri?: { path?: string; toString(): string } };
-              }
-            ).$document?.uri?.toString() ??
-            modelUri,
+          sourceUri,
           sourceIndex,
           sourceRange:
             range?.start?.line !== undefined &&
@@ -258,7 +260,7 @@ export function EditorPage({
         };
       })
       .filter((target): target is FormPreviewTarget => target !== undefined);
-  }, [models, storeNodes]);
+  }, [resolvedModelFiles, storeNodes]);
 
   useEffect(() => {
     setPreviewTargets(previewTargets);
@@ -503,16 +505,6 @@ export function EditorPage({
     },
     [onFilesChange]
   );
-
-  const resolvedModelFiles = useMemo(() => {
-    if (parsedModels && parsedModels.length > 0) {
-      return parsedModels;
-    }
-    return models.flatMap((model, index) => {
-      const file = files[index];
-      return file ? [{ filePath: file.path, model }] : [];
-    });
-  }, [files, models, parsedModels]);
 
   const namespaceToFile = useMemo(() => {
     const map = new Map<string, string>();

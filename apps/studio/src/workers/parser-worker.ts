@@ -53,7 +53,6 @@ export type WorkerResponse = ParseResponse | ParseWorkspaceResponse;
 const { RuneDsl } = createRuneDslServices();
 const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
 const builder = RuneDsl.shared.workspace.DocumentBuilder;
-const serializer = RuneDsl.serializer.JsonSerializer;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
@@ -239,8 +238,8 @@ async function buildWorkspaceDocumentsFromSerializedPayload(
     files.map((file) => {
       const uri = URI.parse(file.name);
       if (file.serializedModelJson) {
-        const rawModel = JSON.parse(file.serializedModelJson) as RosettaModel;
-        return localFactory.fromModel(rawModel, uri);
+        const model = localSerializer.deserialize<RosettaModel>(file.serializedModelJson);
+        return localFactory.fromModel(model, uri);
       }
       return localFactory.fromString(file.content, uri);
     })
@@ -248,19 +247,6 @@ async function buildWorkspaceDocumentsFromSerializedPayload(
 
   for (const document of documents) {
     localDocuments.addDocument(document);
-  }
-
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i]!;
-    if (!file.serializedModelJson) continue;
-    const document = documents[i]!;
-    const model = localSerializer.deserialize<RosettaModel>(file.serializedModelJson);
-    document.parseResult.value = model;
-    Object.defineProperty(model, '$document', {
-      value: document,
-      configurable: true,
-      writable: true
-    });
   }
 
   return { documents, builder: localBuilder };
