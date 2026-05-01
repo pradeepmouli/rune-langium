@@ -106,7 +106,7 @@ A language designer has declared `library function` constructs (external functio
 
 ### User Story 7 - Annotation metadata on generated classes (Priority: P2)
 
-A language designer has annotated data types, attributes, and enum values with Rune annotations (e.g., `[metadata key "value"]`, `[synonym source ...]`). Today, annotations are parsed but completely ignored by codegen. Since the TypeScript emitter already produces classes for data types, the designer expects annotations to appear as TypeScript decorators on the class and its fields — or, if decorators are not suitable, as static metadata properties — so that downstream consumers can introspect model metadata at runtime (e.g., for serialization mapping, regulatory tagging, or documentation generation).
+A language designer has annotated data types, attributes, and enum values with Rune annotations (e.g., `[metadata key "value"]`, `[synonym source ...]`). Today, annotations are parsed but completely ignored by codegen. Since the TypeScript emitter already produces classes for data types, the designer expects annotations to appear as TypeScript decorators on the class and its fields. In the Zod target, annotations should appear as native Zod metadata (`.describe()` for descriptions, `.meta()` for structured data). This lets downstream consumers introspect model metadata at runtime (e.g., for serialization mapping, regulatory tagging, or documentation generation).
 
 **Why this priority**: Annotations carry semantic meaning that is lost in today's codegen output. Classes are already emitted, so the infrastructure to receive decorators/metadata exists.
 
@@ -114,10 +114,12 @@ A language designer has annotated data types, attributes, and enum values with R
 
 **Acceptance Scenarios**:
 
-1. **Given** a data type with an annotation (e.g., `[metadata key "value"]`), **When** the TypeScript target generates code, **Then** the generated class includes the annotation as a decorator or static metadata property.
-2. **Given** an attribute with an annotation, **When** codegen runs, **Then** the annotation appears on the corresponding class field.
-3. **Given** an enum value with an annotation, **When** codegen runs, **Then** the annotation metadata is accessible on the generated enum representation.
-4. **Given** annotations with qualifiers (key-value pairs), **When** codegen runs, **Then** the qualifier values are preserved in the generated metadata.
+1. **Given** a data type with an annotation (e.g., `[metadata key "value"]`), **When** the TypeScript target generates code, **Then** the generated class includes a TypeScript decorator reflecting the annotation.
+2. **Given** an attribute with an annotation, **When** the TypeScript target generates code, **Then** the annotation appears as a decorator on the corresponding class field.
+3. **Given** a data type with an annotation, **When** the Zod target generates code, **Then** the generated schema includes `.meta()` with the annotation data.
+4. **Given** an attribute with an annotation, **When** the Zod target generates code, **Then** the field schema includes `.describe()` or `.meta()` with the annotation data.
+5. **Given** annotations with qualifiers (key-value pairs), **When** codegen runs, **Then** the qualifier values are preserved in decorator arguments (TypeScript) and metadata objects (Zod).
+6. **Given** an enum value with an annotation, **When** codegen runs, **Then** the annotation metadata is accessible on the generated enum representation in both targets.
 
 ---
 
@@ -185,10 +187,10 @@ A language designer's model spans multiple namespaces (e.g., `cdm.base`, `cdm.ev
 - **FR-017**: The form preview panel MUST display pre-condition and post-condition violations with clear messaging.
 
 **Codegen — Annotations**
-- **FR-026**: Codegen MUST emit annotation metadata on generated TypeScript classes, either as decorators or as static metadata properties accessible at runtime.
-- **FR-027**: Codegen MUST emit annotation metadata on class fields corresponding to annotated attributes.
-- **FR-028**: Codegen MUST preserve annotation qualifier key-value pairs in the generated metadata.
-- **FR-029**: Codegen SHOULD emit annotation metadata on generated enum representations where annotations are present on enum values.
+- **FR-026**: The TypeScript target MUST emit Rune annotations as TypeScript decorators on generated classes and class fields.
+- **FR-027**: The Zod target MUST emit Rune annotations as native Zod metadata (`.describe()` for descriptions, `.meta()` for structured annotation data) on generated schemas and schema fields.
+- **FR-028**: Codegen MUST preserve annotation qualifier key-value pairs in both decorator arguments (TypeScript) and metadata objects (Zod).
+- **FR-029**: Codegen SHOULD emit annotation metadata on generated enum representations where annotations are present on enum values — as decorators in TypeScript and `.meta()` in Zod.
 
 **Cross-Namespace Resolution**
 - **FR-021**: Codegen MUST resolve cross-namespace type references (inheritance, attribute types, function input/output types, rule targets) and emit correct import statements in the generated output.
