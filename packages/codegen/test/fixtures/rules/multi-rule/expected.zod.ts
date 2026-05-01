@@ -30,3 +30,8 @@ export const validateIsPremium = AccountSchema.refine(
   (data) => data.Account?.tier === 'premium',
   'IsPremium'
 );
+
+export const runeReportRules = {
+  IsActive: { kind: 'eligibility' as const, inputType: 'Account' },
+  IsPremium: { kind: 'eligibility' as const, inputType: 'Account' }
+} as const;

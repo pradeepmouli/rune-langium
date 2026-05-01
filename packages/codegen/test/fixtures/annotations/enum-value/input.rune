@@ -1,0 +1,12 @@
+namespace "test.annotations.enum"
+version "1"
+
+annotation source:
+    system string (1..1)
+
+enum Currency:
+    USD
+        [source system]
+    EUR
+    GBP
+        [source system]

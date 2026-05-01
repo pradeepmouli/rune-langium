@@ -345,6 +345,33 @@ describe('FormPreviewSchema generation', () => {
 
   // ── T038: Choice Preview ─────────────────────────────────────────────────
 
+  // ── T054: Function Preview ───────────────────────────────────────────────
+
+  skipIfNodeLt22('generates a function schema with input fields (T054)', async () => {
+    const doc = await parseModel(`
+      namespace "test.funcpreview"
+      version "1"
+
+      func AddTwo:
+        inputs:
+          a number (1..1)
+          b number (1..1)
+        output:
+          result number (1..1)
+    `);
+
+    const schemas = generatePreviewSchemas(doc);
+    const funcSchema = schemas.find((s) => s.kind === 'function');
+
+    expect(funcSchema).toBeDefined();
+    expect(funcSchema!.title).toBe('AddTwo');
+    expect(funcSchema!.targetId).toBe('test.funcpreview.AddTwo');
+    expect(funcSchema!.status).toBe('ready');
+    expect(funcSchema!.fields).toHaveLength(2);
+    expect(funcSchema!.fields[0].label).toBe('a');
+    expect(funcSchema!.fields[1].label).toBe('b');
+  });
+
   skipIfNodeLt22('generates a choice schema with one field per option', async () => {
     const doc = await parseModel(`
       namespace "test.preview"

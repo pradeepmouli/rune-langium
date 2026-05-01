@@ -580,6 +580,21 @@ export function emitNamespace(
     $defs
   };
 
+  // T074c: Emit x-rune-rules extension when there are rules in this namespace.
+  // Provides rule metadata (kind + input type) for downstream tooling.
+  const sortedRuleNames = Array.from(ctx.rulesByName.keys()).sort();
+  if (sortedRuleNames.length > 0) {
+    const rulesMetadata: Record<string, { kind: string; inputType: string }> = {};
+    for (const name of sortedRuleNames) {
+      const rule = ctx.rulesByName.get(name)!;
+      const kind = rule.eligibility ? 'eligibility' : 'reporting';
+      const inputRef = rule.input?.type?.ref;
+      const inputName = inputRef ? inputRef.name : 'unknown';
+      rulesMetadata[name] = { kind, inputType: inputName };
+    }
+    schema['x-rune-rules'] = rulesMetadata;
+  }
+
   const content = serializeJson(schema) + '\n';
 
   return {

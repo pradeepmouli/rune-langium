@@ -139,9 +139,9 @@
 - [x] T048 [US8] Implement cross-namespace imports in packages/codegen/src/emit/zod-emitter.ts — collect and emit `import { FooSchema } from './path.js'` for cross-namespace schema refs
 - [x] T049 [US8] Handle cross-namespace inheritance in TS emitter — emit correct `import` + `extends` clause for cross-namespace parent types
 - [x] T050 [US8] Handle cross-namespace inheritance in Zod emitter — emit correct `import` + `.extend()` for cross-namespace parent schemas
-- [ ] T051 [US8] Handle circular cross-namespace references — detect cycles and use `z.lazy()` / forward declarations as needed
-- [ ] T052 [US8] Emit diagnostics for unresolvable cross-namespace references (FR-025) instead of silently producing broken output
-- [ ] T053 [US8] Write expected output files for all cross-namespace fixtures and create `us12-cross-namespace.test.ts` in packages/codegen/test/
+- [x] T051 [US8] Handle circular cross-namespace references — detect cycles and use `z.lazy()` / forward declarations as needed
+- [x] T052 [US8] Emit diagnostics for unresolvable cross-namespace references (FR-025) instead of silently producing broken output
+- [x] T053 [US8] Write expected output files for all cross-namespace fixtures and create `us12-cross-namespace.test.ts` in packages/codegen/test/
 
 **Checkpoint**: Multi-namespace models produce compilable output with correct imports. Circular references handled gracefully.
 
@@ -155,7 +155,7 @@
 
 ### Implementation for US4
 
-- [ ] T054 [US4] Extend `generatePreviewSchemas()` in packages/codegen/src/preview-schema.ts to iterate `isRosettaFunction()` elements and produce `FormPreviewSchema` with `kind: 'function'`, input fields from function inputs, and pre/post-condition metadata
+- [x] T054 [US4] Extend `generatePreviewSchemas()` in packages/codegen/src/preview-schema.ts to iterate `isRosettaFunction()` elements and produce `FormPreviewSchema` with `kind: 'function'`, input fields from function inputs, and pre/post-condition metadata
 - [ ] T055 [US4] Add `preview:execute` message type to apps/studio/src/workers/codegen-worker.ts — receive function name + input values, transpile and execute function body in worker scope, return output or error
 - [ ] T056 [US4] Add message factories for `preview:execute` in apps/studio/src/services/codegen-service.ts
 - [ ] T057 [US4] Add `executionResult`, `executionError`, and `executeFunction()` action to apps/studio/src/store/preview-store.ts
@@ -163,7 +163,7 @@
 - [ ] T058b [US4] Wire "Run" button in `FormPreviewPanel` to dispatch `preview:execute` via codegen worker and display computed output below inputs in apps/studio/src/components/FormPreviewPanel.tsx
 - [ ] T058c [US4] Display pre-condition violations inline on input fields and post-condition violations alongside output in apps/studio/src/components/FormPreviewPanel.tsx
 - [ ] T059 [US4] Add worker test for `preview:execute` in apps/studio/test/workers/codegen-worker.test.ts
-- [ ] T060 [US4] Add preview schema test fixtures for function preview in packages/codegen/test/
+- [x] T060 [US4] Add preview schema test fixtures for function preview in packages/codegen/test/
 
 **Checkpoint**: Functions appear in form preview. Execution works end-to-end in Studio.
 
@@ -181,7 +181,7 @@
 - [x] T062 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/usage-type/input.rune` with annotation used on a data type
 - [x] T063 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/usage-attr/input.rune` with annotation used on an attribute
 - [x] T064 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/qualifiers/input.rune` with annotation using qualifier key-value pairs
-- [ ] T064b [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/enum-value/input.rune` with annotation on enum values
+- [x] T064b [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/enum-value/input.rune` with annotation on enum values
 
 ### Implementation for US7
 
@@ -190,7 +190,7 @@
 - [x] T067 [US7] Modify field emission in packages/codegen/src/emit/ts-emitter.ts to emit decorator invocations for annotated attributes
 - [x] T068 [US7] Modify `emitTypeSchema()` in packages/codegen/src/emit/zod-emitter.ts to chain `.meta({ annotationName: { key: "value" } })` for annotated types
 - [x] T069 [US7] Modify field-level Zod emission to chain `.describe()` for annotation definitions and `.meta()` for qualifier data
-- [ ] T069b [US7] Handle annotation emission on enum values — TS decorator on enum companion object entries, Zod `.meta()` on enum schema
+- [x] T069b [US7] Handle annotation emission on enum values — TS decorator on enum companion object entries, Zod `.meta()` on enum schema
 - [x] T070 [US7] Wire annotation declaration emission into `emitNamespace()` — emit before types (decorators must be declared before use)
 - [x] T071 [US7] Write expected output files for all fixtures and create `us11-annotations.test.ts` in packages/codegen/test/
 
@@ -212,8 +212,8 @@
 
 - [x] T073 [US5] Implement `emitReport()` in packages/codegen/src/emit/ts-emitter.ts — emit typed interface per report with inputType, reportType, eligibilityRules, timing
 - [x] T074 [US5] Wire report emission into `emitNamespace()` in TS emitter — emit after rules (reports reference rules)
-- [ ] T074b [US5] Implement report metadata emission in packages/codegen/src/emit/zod-emitter.ts — chain `.meta({ report: { inputType, eligibilityRules, timing, regulatoryBody } })` on the report's associated output type schema
-- [ ] T074c [US5] Implement report metadata emission in packages/codegen/src/emit/json-schema-emitter.ts — emit `x-rune-report` extension properties on the report's output type schema
+- [x] T074b [US5] Implement report metadata emission in packages/codegen/src/emit/zod-emitter.ts — chain `.meta({ report: { inputType, eligibilityRules, timing, regulatoryBody } })` on the report's associated output type schema
+- [x] T074c [US5] Implement report metadata emission in packages/codegen/src/emit/json-schema-emitter.ts — emit `x-rune-report` extension properties on the report's output type schema
 - [x] T075 [US5] Write expected output files for all three targets and create `us9-reports.test.ts` in packages/codegen/test/
 
 **Checkpoint**: Report structures emit in TypeScript. Zod/JSON Schema correctly skip them.

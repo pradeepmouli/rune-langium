@@ -7,6 +7,7 @@ import {
   isData,
   isRosettaBasicType,
   isRosettaEnumeration,
+  isRosettaFunction,
   isRosettaModel,
   isRosettaTypeAlias,
   type Attribute,
@@ -15,6 +16,7 @@ import {
   type Data,
   type RosettaCardinality,
   type RosettaEnumeration,
+  type RosettaFunction,
   type RosettaModel,
   type RosettaTypeAlias
 } from '@rune-langium/core';
@@ -35,6 +37,7 @@ interface NamespaceIndex {
   enumByName: Map<string, { node: RosettaEnumeration; sourceUri: string }>;
   typeAliasByName: Map<string, { node: RosettaTypeAlias; sourceUri: string }>;
   choiceByName: Map<string, { node: Choice; sourceUri: string }>;
+  funcByName: Map<string, { node: RosettaFunction; sourceUri: string }>;
   duplicateDataNames: Set<string>;
 }
 
@@ -113,6 +116,15 @@ export function generatePreviewSchemas(
       if (options.targetId && options.targetId !== targetId) continue;
       schemas.push(buildChoiceSchema(choice.node, choice.sourceUri, namespace, targetId));
     }
+
+    // Functions
+    const funcNames = Array.from(namespace.funcByName.keys()).sort();
+    for (const name of funcNames) {
+      const func = namespace.funcByName.get(name)!;
+      const targetId = `${namespace.namespace}.${name}`;
+      if (options.targetId && options.targetId !== targetId) continue;
+      schemas.push(buildFunctionSchema(func.node, func.sourceUri, namespace, targetId));
+    }
   }
 
   // TODO(T039-T040): The Studio FormPreviewPanel needs updating to render
@@ -140,6 +152,7 @@ function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[] {
         enumByName: new Map(),
         typeAliasByName: new Map(),
         choiceByName: new Map(),
+        funcByName: new Map(),
         duplicateDataNames: new Set()
       };
       byNamespace.set(namespace, index);
@@ -158,6 +171,8 @@ function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[] {
         index.typeAliasByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
       } else if (isChoice(element)) {
         index.choiceByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
+      } else if (isRosettaFunction(element)) {
+        index.funcByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
       }
     }
   }
@@ -436,6 +451,43 @@ function buildChoiceOptionField(
     kind: 'unknown',
     required: false,
     description: `Type reference ${refText ?? label} could not be resolved for form preview.`
+  };
+}
+
+function buildFunctionSchema(
+  func: RosettaFunction,
+  sourceUri: string,
+  namespace: NamespaceIndex,
+  targetId: string
+): FormPreviewSchema {
+  const unsupportedFeatures = new Set<string>();
+  const sourceMap: PreviewSourceMapEntry[] = [];
+
+  const inputFields = (func.inputs ?? []).map((attr) =>
+    buildField(attr, {
+      namespace,
+      unsupportedFeatures,
+      sourceMap,
+      sourceUri,
+      maxDepth: DEFAULT_MAX_DEPTH,
+      depth: 0,
+      path: attr.name,
+      label: attr.name,
+      seenTypes: new Set()
+    })
+  );
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    targetId,
+    title: func.name,
+    kind: 'function',
+    status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
+    fields: inputFields,
+    ...(sourceMap.length > 0 ? { sourceMap } : {}),
+    ...(unsupportedFeatures.size > 0
+      ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() }
+      : {})
   };
 }
 

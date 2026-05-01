@@ -819,6 +819,29 @@ function buildMetaSuffix(data: Data): string {
 }
 
 /**
+ * Emit a `runeReportRules` const object summarising all rules in this namespace.
+ * Mirrors the equivalent in the TS emitter (T074b).
+ *
+ * Returns an empty string when there are no rules in the namespace.
+ */
+function emitReportMetadata(ctx: EmissionContext): string {
+  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
+  if (ruleNames.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('export const runeReportRules = {');
+  for (const name of ruleNames) {
+    const rule = ctx.rulesByName.get(name)!;
+    const kind = rule.eligibility ? 'eligibility' : 'reporting';
+    const inputRef = rule.input?.type?.ref;
+    const inputName = inputRef ? inputRef.name : 'unknown';
+    lines.push(`  ${name}: { kind: '${kind}' as const, inputType: '${inputName}' },`);
+  }
+  lines.push('} as const;');
+  return lines.join('\n');
+}
+
+/**
  * Emit a Zod refine validator for a RosettaRule.
  * Only emitted when the rule has a resolvable input type with a known schema.
  */
@@ -1031,6 +1054,13 @@ export function emitNamespace(
       sections.push('');
       sections.push(result);
     }
+  }
+
+  // Emit report metadata (T074b) — one const object summarising all rules
+  const reportMeta = emitReportMetadata(ctx);
+  if (reportMeta !== '') {
+    sections.push('');
+    sections.push(reportMeta);
   }
 
   // Remove trailing empty section
