@@ -104,6 +104,24 @@ A language designer has declared `library function` constructs (external functio
 
 ---
 
+### User Story 7 - Cross-namespace codegen with import resolution (Priority: P1)
+
+A language designer's model spans multiple namespaces (e.g., `cdm.base`, `cdm.event`, `cdm.product`). Types in one namespace routinely extend types from another, functions reference types across namespaces, and rules validate types defined elsewhere. Today, cross-namespace references produce broken output — the emitter cannot resolve imports across namespace boundaries. The designer expects the generated code for each namespace to include correct import statements referencing the generated output of other namespaces, so that the full model compiles as a coherent set of modules.
+
+**Why this priority**: Cross-namespace references are pervasive in real-world Rune models. Without this, none of the other codegen improvements (type aliases, rules, functions) work correctly in multi-namespace models, which are the norm rather than the exception.
+
+**Independent Test**: Run codegen against a multi-namespace model where namespace A extends a type from namespace B, and verify the generated output for A includes a correct import statement referencing B's generated output.
+
+**Acceptance Scenarios**:
+
+1. **Given** a type in namespace A that extends a type in namespace B, **When** the TypeScript target generates code, **Then** namespace A's output includes an import for namespace B's type.
+2. **Given** a type in namespace A that extends a type in namespace B, **When** the Zod target generates code, **Then** namespace A's output includes an import for namespace B's schema.
+3. **Given** a function in namespace A that references types from namespace B in its inputs/output, **When** codegen runs, **Then** the generated function includes correct cross-namespace imports.
+4. **Given** a rule in namespace A that validates a type from namespace B, **When** codegen runs, **Then** the generated rule includes correct cross-namespace imports.
+5. **Given** a multi-namespace model, **When** codegen runs for all namespaces, **Then** the emitter produces outputs in an order (or via a cache) that ensures all cross-namespace references resolve without circular dependency errors.
+
+---
+
 ### Edge Cases
 
 - What happens when a type alias references another type alias (chained aliases)? The system must resolve the chain to the underlying type.
@@ -113,6 +131,8 @@ A language designer has declared `library function` constructs (external functio
 - How does the form preview handle a function with no inputs (zero-parameter function)? The form should show an empty state with only a "Run" button.
 - What happens when multiple rules target the same data type — do their form preview refinements compose? Yes, they should compose as independent validations.
 - What happens when a type alias has unresolvable type parameters? The system should emit a diagnostic and produce an `unknown` / `z.unknown()` fallback.
+- What happens when two namespaces have circular cross-references (A extends B, B references A)? The emitter should detect the cycle and use lazy references or forward declarations.
+- What happens when a referenced namespace has codegen errors? The referencing namespace should emit with diagnostics noting the unresolvable import, not silently produce broken output.
 
 ## Requirements *(mandatory)*
 
@@ -147,6 +167,13 @@ A language designer has declared `library function` constructs (external functio
 - **FR-016**: The form preview panel MUST display the computed output after function execution.
 - **FR-017**: The form preview panel MUST display pre-condition and post-condition violations with clear messaging.
 
+**Cross-Namespace Resolution**
+- **FR-021**: Codegen MUST resolve cross-namespace type references (inheritance, attribute types, function input/output types, rule targets) and emit correct import statements in the generated output.
+- **FR-022**: Codegen MUST maintain a codegen cache or intermediate artifact layer so that when emitting one namespace, previously generated namespace outputs can be referenced for import path resolution and type lookup.
+- **FR-023**: Codegen MUST handle cross-namespace inheritance — when a type extends a type from another namespace, the generated output includes the correct import and extends/`.extend()` clause.
+- **FR-024**: Codegen MUST handle circular cross-namespace references (namespace A references B and B references A) using lazy references, forward declarations, or multi-pass emission without producing broken output.
+- **FR-025**: Codegen MUST emit a diagnostic when a cross-namespace reference cannot be resolved (e.g., the referenced namespace has errors), rather than silently producing broken output.
+
 **General**
 - **FR-018**: All newly emitted constructs MUST follow deterministic output ordering, consistent with existing codegen (topological sort, alphabetical within kind).
 - **FR-019**: All newly emitted constructs MUST have byte-identical fixture tests, consistent with the existing testing strategy.
@@ -159,6 +186,7 @@ A language designer has declared `library function` constructs (external functio
 - **Report**: A named reporting definition with column/field structure. Maps to the `report` grammar rule.
 - **LibraryFunction**: An external function signature declaration without a body. Maps to the `library function` grammar rule.
 - **FunctionPreview**: A form-based representation of a function's inputs, with execution capability and output display.
+- **CodegenCache**: An intermediate artifact layer that stores generated output per namespace, enabling cross-namespace import resolution during multi-namespace codegen runs.
 
 ## Success Criteria *(mandatory)*
 
@@ -170,6 +198,7 @@ A language designer has declared `library function` constructs (external functio
 - **SC-004**: Function declarations appear in the form preview with input forms, and executing a function with valid inputs produces correct output in under 2 seconds.
 - **SC-005**: All new codegen output is covered by byte-identical fixture tests, maintaining the existing >=99% parity standard.
 - **SC-006**: No regressions in existing codegen output; all pre-existing fixture tests continue to pass.
+- **SC-007**: Cross-namespace type references (inheritance, attribute types, function parameters) produce compilable output with correct imports across all targets.
 
 ## Assumptions
 
@@ -179,3 +208,4 @@ A language designer has declared `library function` constructs (external functio
 - Report codegen scope is limited to structural/type definitions; actual report rendering (tables, charts) is out of scope.
 - Constructs not listed (corpus, segment, meta type, synonym source, qualifiable configuration, scope, annotations) remain out of codegen scope for this feature.
 - The existing `preview-schema.ts` generator will be extended (not replaced) to handle the new construct types.
+- The codegen cache is an in-memory or file-based artifact that lives behind the scenes; it is not user-facing. The cache stores enough information per namespace (exported type names, schema names, import paths) to resolve cross-namespace references without re-parsing source files.
