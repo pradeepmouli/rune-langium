@@ -286,4 +286,99 @@ describe('FormPreviewSchema generation', () => {
       });
     }
   );
+
+  // ── T037: Type Alias Preview ─────────────────────────────────────────────
+
+  skipIfNodeLt22('generates a scalar field for a primitive type alias (typeAlias)', async () => {
+    const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        typeAlias ProductCode:
+          string
+      `);
+
+    const schemas = generatePreviewSchemas([doc]);
+    const alias = schemas.find((s) => s.targetId === 'test.preview.ProductCode');
+
+    expect(alias).toMatchObject({
+      schemaVersion: 1,
+      kind: 'typeAlias',
+      targetId: 'test.preview.ProductCode',
+      title: 'ProductCode',
+      status: 'ready'
+    });
+    expect(alias?.fields).toEqual([
+      { path: 'value', label: 'ProductCode', kind: 'string', required: true }
+    ]);
+  });
+
+  skipIfNodeLt22(
+    'generates object fields for a data-type alias (typeAlias referencing a type)',
+    async () => {
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        type Address:
+          street string (1..1)
+          city string (1..1)
+
+        typeAlias BillingAddress:
+          Address
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const alias = schemas.find((s) => s.targetId === 'test.preview.BillingAddress');
+
+      expect(alias).toMatchObject({
+        schemaVersion: 1,
+        kind: 'typeAlias',
+        targetId: 'test.preview.BillingAddress',
+        title: 'BillingAddress',
+        status: 'ready'
+      });
+      expect(alias?.fields.map((f) => f.path)).toEqual(['street', 'city']);
+      expect(alias?.fields[0]).toMatchObject({ kind: 'string', required: true });
+    }
+  );
+
+  // ── T038: Choice Preview ─────────────────────────────────────────────────
+
+  skipIfNodeLt22('generates a choice schema with one field per option', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Cash:
+        amount number (1..1)
+
+      type Securities:
+        isin string (1..1)
+
+      choice Collateral:
+        Cash
+        Securities
+    `);
+
+    const schemas = generatePreviewSchemas([doc]);
+    const choice = schemas.find((s) => s.targetId === 'test.preview.Collateral');
+
+    expect(choice).toMatchObject({
+      schemaVersion: 1,
+      kind: 'choice',
+      targetId: 'test.preview.Collateral',
+      title: 'Collateral',
+      status: 'ready'
+    });
+    expect(choice?.fields.map((f) => f.path)).toEqual(['Cash', 'Securities']);
+    // Each option is required: false because only one may be chosen
+    expect(choice?.fields.every((f) => f.required === false)).toBe(true);
+    expect(choice?.fields.find((f) => f.path === 'Cash')).toMatchObject({
+      kind: 'object'
+    });
+    expect(choice?.fields.find((f) => f.path === 'Securities')).toMatchObject({
+      kind: 'object'
+    });
+  });
 });

@@ -52,6 +52,7 @@ import type {
   GeneratedFunc
 } from '../types.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
+import { resolveImportPath } from './namespace-registry.js';
 import { buildTypeReferenceGraph, findCyclicTypes } from '../cycle-detector.js';
 import { topoSort } from '../topo-sort.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
@@ -134,6 +135,88 @@ const JS_TYPEOF_MAP: Record<string, string> = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Get the namespace string for an AST element by inspecting its $container.
+ * Returns undefined when the element is not directly inside a RosettaModel.
+ */
+function getElementNamespace(element: { $container?: unknown }): string | undefined {
+  const container = element.$container;
+  if (!container || typeof container !== 'object') return undefined;
+  const model = container as { name?: unknown; $type?: string };
+  if (model.$type !== 'RosettaModel') return undefined;
+  const name = model.name;
+  if (typeof name === 'string') return name.replace(/^"|"$/g, '');
+  if (name && typeof name === 'object' && 'segments' in name) {
+    return (name as { segments: string[] }).segments.join('.');
+  }
+  return String(name ?? '');
+}
+
+/**
+ * Collect cross-namespace import statements needed for the types and aliases
+ * defined in this emission context.
+ *
+ * Walks all Data superType references and attribute type references, plus
+ * TypeAlias type references. Any resolved reference whose namespace differs
+ * from `ctx.namespace` is recorded and emitted as an ES import statement.
+ */
+function collectCrossNamespaceImports(ctx: EmissionContext): string[] {
+  const imports = new Map<string, Set<string>>(); // namespace -> symbol names
+
+  function trackRef(typeRef: unknown, symbolName: string): void {
+    if (!typeRef || typeof typeRef !== 'object') return;
+    const ns = getElementNamespace(typeRef as { $container?: unknown });
+    if (!ns || ns === ctx.namespace) return;
+
+    let symbols = imports.get(ns);
+    if (!symbols) {
+      symbols = new Set();
+      imports.set(ns, symbols);
+    }
+    symbols.add(symbolName);
+  }
+
+  // Check data type inheritance and attribute references
+  for (const data of ctx.dataByName.values()) {
+    // Check superType
+    const parentRef = data.superType?.ref;
+    if (parentRef) {
+      trackRef(parentRef, `${parentRef.name}Shape`);
+      trackRef(parentRef, parentRef.name);
+    }
+    // Check attribute types
+    for (const attr of data.attributes) {
+      const attrTypeRef = attr.typeCall?.type?.ref;
+      if (attrTypeRef && isData(attrTypeRef)) {
+        trackRef(attrTypeRef, attrTypeRef.name);
+      } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
+        trackRef(attrTypeRef, attrTypeRef.name);
+      }
+    }
+  }
+
+  // Check type alias references
+  for (const alias of ctx.typeAliasByName.values()) {
+    const typeRef = alias.typeCall?.type?.ref;
+    if (typeRef && isData(typeRef)) {
+      trackRef(typeRef, `${typeRef.name}Shape`);
+    } else if (typeRef && isRosettaEnumeration(typeRef)) {
+      trackRef(typeRef, typeRef.name);
+    }
+  }
+
+  // Build import statements
+  const lines: string[] = [];
+  const sortedNamespaces = Array.from(imports.keys()).sort();
+  for (const ns of sortedNamespaces) {
+    const symbols = Array.from(imports.get(ns)!).sort();
+    const importPath = resolveImportPath(ctx.namespace, ns, ctx.registry);
+    lines.push(`import { ${symbols.join(', ')} } from '${importPath}.js';`);
+  }
+
+  return lines;
+}
 
 /**
  * Resolve the TypeScript type expression for an attribute.
@@ -866,18 +949,6 @@ function emitFuncBody(func: RuneFunc, ctx: FuncBodyContext): string[] {
 }
 
 /**
- * T125: Scan func bodies for cross-namespace calls and emit import statements.
- * Currently a stub — cross-namespace func calls are a future enhancement.
- * The function signature is present for FR-030 compliance.
- */
-function collectFuncCrossNamespaceImports(_funcs: RuneFunc[], _namespace: string): string[] {
-  // TODO: Walk func expression trees for cross-namespace RosettaFunction refs
-  // and emit `import { G } from '../base/math/index.js'` statements.
-  // For Phase 8b, all funcs are assumed to be in the same namespace.
-  return [];
-}
-
-/**
  * Emit a single func as a TypeScript function declaration.
  *
  * For non-cyclic funcs: `export function F(input: {...}): T { ... }`
@@ -1009,6 +1080,15 @@ export function emitNamespace(
 
   sections.push(emitFileHeader(namespace, ctx));
 
+  // Collect and emit cross-namespace import statements at the top of the file
+  const crossNsImports = collectCrossNamespaceImports(ctx);
+  for (const importLine of crossNsImports) {
+    sections.push(importLine);
+  }
+  if (crossNsImports.length > 0) {
+    sections.push('');
+  }
+
   // Emit enum types (no class — just a const object + type alias for union)
   const enumNames = Array.from(ctx.enumByName.keys()).sort();
   for (const name of enumNames) {
@@ -1074,9 +1154,6 @@ export function emitNamespace(
   // Extract funcs from the documents
   const runeFuncs = extractFuncs(docs, namespace, ctx.diagnostics);
 
-  // Collect any cross-namespace imports (currently stub — Phase 8b only handles same-namespace)
-  const crossNsImports = collectFuncCrossNamespaceImports(runeFuncs, namespace);
-
   // Build call graph and determine topological order
   const callGraph = buildFuncCallGraph(runeFuncs);
   const cyclicNames = findCyclicFuncs(callGraph);
@@ -1084,11 +1161,6 @@ export function emitNamespace(
 
   // Emit the Phase 8b marker
   sections.push('// (functions emitted by Phase 8b appear below this line)');
-
-  // Emit cross-namespace imports before func declarations
-  for (const importLine of crossNsImports) {
-    sections.push(importLine);
-  }
 
   // Track GeneratedFunc metadata for the output
   const generatedFuncs: GeneratedFunc[] = [];

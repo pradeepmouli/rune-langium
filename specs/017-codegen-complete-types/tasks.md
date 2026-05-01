@@ -109,11 +109,11 @@
 
 ### Implementation for US3
 
-- [ ] T037 [US3] Extend `generatePreviewSchemas()` in packages/codegen/src/preview-schema.ts to iterate `isRosettaTypeAlias()` elements and produce `FormPreviewSchema` entries with `kind: 'typeAlias'`
-- [ ] T038 [US3] Extend `generatePreviewSchemas()` to handle `choice` types with `kind: 'choice'` — represent the one-of constraint as a selectable option with nested fields per option
+- [x] T037 [US3] Extend `generatePreviewSchemas()` in packages/codegen/src/preview-schema.ts to iterate `isRosettaTypeAlias()` elements and produce `FormPreviewSchema` entries with `kind: 'typeAlias'`
+- [x] T038 [US3] Extend `generatePreviewSchemas()` to handle `choice` types with `kind: 'choice'` — represent the one-of constraint as a selectable option with nested fields per option
 - [ ] T039 [US3] Extend `FormPreviewPanel` in apps/studio/src/components/FormPreviewPanel.tsx to render `kind: 'choice'` schemas with radio/select for the choice option
 - [ ] T040 [US3] Extend `FormPreviewPanel` to display inline validation errors from conditions/refinements on type aliases and choices
-- [ ] T041 [US3] Extend preview schema test fixtures in packages/codegen/test/ for type aliases and choices
+- [x] T041 [US3] Extend preview schema test fixtures in packages/codegen/test/ for type aliases and choices
 
 **Checkpoint**: Form preview shows type aliases and choices with validation. Existing data type previews unaffected.
 
@@ -127,17 +127,17 @@
 
 ### Fixtures for US8
 
-- [ ] T042 [P] [US8] Create multi-file fixture `packages/codegen/test/fixtures/cross-namespace/inheritance/` with type extending a type from another namespace
-- [ ] T043 [P] [US8] Create multi-file fixture `packages/codegen/test/fixtures/cross-namespace/attribute-ref/` with attribute referencing a type from another namespace
-- [ ] T044 [P] [US8] Create multi-file fixture `packages/codegen/test/fixtures/cross-namespace/func-params/` with function referencing types from another namespace
-- [ ] T045 [P] [US8] Create multi-file fixture `packages/codegen/test/fixtures/cross-namespace/circular/` with circular cross-namespace references (A→B, B→A)
+- [x] T042 [P] [US8] Create multi-file fixture `packages/codegen/test/fixtures/cross-namespace/inheritance/` with type extending a type from another namespace
+- [x] T043 [P] [US8] Create multi-file fixture `packages/codegen/test/fixtures/cross-namespace/attribute-ref/` with attribute referencing a type from another namespace
+- [x] T044 [P] [US8] Create multi-file fixture `packages/codegen/test/fixtures/cross-namespace/func-params/` with function referencing types from another namespace
+- [x] T045 [P] [US8] Create multi-file fixture `packages/codegen/test/fixtures/cross-namespace/circular/` with circular cross-namespace references (A→B, B→A)
 
 ### Implementation for US8
 
-- [ ] T046 [US8] Implement `collectCrossNamespaceImports(ctx)` in packages/codegen/src/emit/ts-emitter.ts — walk all type references (data, enum, func, rule, typeAlias) and collect import statements for cross-namespace refs using `resolveImportPath()`
-- [ ] T047 [US8] Replace `collectFuncCrossNamespaceImports()` stub at ts-emitter.ts:819 with the general `collectCrossNamespaceImports()` call
+- [x] T046 [US8] Implement `collectCrossNamespaceImports(ctx)` in packages/codegen/src/emit/ts-emitter.ts — walk all type references (data, enum, func, rule, typeAlias) and collect import statements for cross-namespace refs using `resolveImportPath()`
+- [x] T047 [US8] Replace `collectFuncCrossNamespaceImports()` stub at ts-emitter.ts:819 with the general `collectCrossNamespaceImports()` call
 - [ ] T048 [US8] Implement cross-namespace imports in packages/codegen/src/emit/zod-emitter.ts — collect and emit `import { FooSchema } from './path.js'` for cross-namespace schema refs
-- [ ] T049 [US8] Handle cross-namespace inheritance in TS emitter — emit correct `import` + `extends` clause for cross-namespace parent types
+- [x] T049 [US8] Handle cross-namespace inheritance in TS emitter — emit correct `import` + `extends` clause for cross-namespace parent types
 - [ ] T050 [US8] Handle cross-namespace inheritance in Zod emitter — emit correct `import` + `.extend()` for cross-namespace parent schemas
 - [ ] T051 [US8] Handle circular cross-namespace references — detect cycles and use `z.lazy()` / forward declarations as needed
 - [ ] T052 [US8] Emit diagnostics for unresolvable cross-namespace references (FR-025) instead of silently producing broken output

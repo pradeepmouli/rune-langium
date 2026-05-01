@@ -1,0 +1,8 @@
+namespace "test.beta"
+version "1"
+
+import test.alpha.*
+
+type BetaNode:
+    label string (1..1)
+    alphaRef AlphaNode (0..1)
