@@ -159,7 +159,9 @@
 - [ ] T055 [US4] Add `preview:execute` message type to apps/studio/src/workers/codegen-worker.ts — receive function name + input values, transpile and execute function body in worker scope, return output or error
 - [ ] T056 [US4] Add message factories for `preview:execute` in apps/studio/src/services/codegen-service.ts
 - [ ] T057 [US4] Add `executionResult`, `executionError`, and `executeFunction()` action to apps/studio/src/store/preview-store.ts
-- [ ] T058 [US4] Extend `FormPreviewPanel` in apps/studio/src/components/FormPreviewPanel.tsx — when `kind === 'function'`, render input fields + "Run" button, dispatch `preview:execute`, display output, show pre/post-condition violations
+- [ ] T058a [US4] Extend `FormPreviewPanel` in apps/studio/src/components/FormPreviewPanel.tsx — when `kind === 'function'`, render input fields matching function inputs and a "Run" button
+- [ ] T058b [US4] Wire "Run" button in `FormPreviewPanel` to dispatch `preview:execute` via codegen worker and display computed output below inputs in apps/studio/src/components/FormPreviewPanel.tsx
+- [ ] T058c [US4] Display pre-condition violations inline on input fields and post-condition violations alongside output in apps/studio/src/components/FormPreviewPanel.tsx
 - [ ] T059 [US4] Add worker test for `preview:execute` in apps/studio/test/workers/codegen-worker.test.ts
 - [ ] T060 [US4] Add preview schema test fixtures for function preview in packages/codegen/test/
 
@@ -179,6 +181,7 @@
 - [ ] T062 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/usage-type/input.rune` with annotation used on a data type
 - [ ] T063 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/usage-attr/input.rune` with annotation used on an attribute
 - [ ] T064 [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/qualifiers/input.rune` with annotation using qualifier key-value pairs
+- [ ] T064b [P] [US7] Create fixture `packages/codegen/test/fixtures/annotations/enum-value/input.rune` with annotation on enum values
 
 ### Implementation for US7
 
@@ -187,6 +190,7 @@
 - [ ] T067 [US7] Modify field emission in packages/codegen/src/emit/ts-emitter.ts to emit decorator invocations for annotated attributes
 - [ ] T068 [US7] Modify `emitTypeSchema()` in packages/codegen/src/emit/zod-emitter.ts to chain `.meta({ annotationName: { key: "value" } })` for annotated types
 - [ ] T069 [US7] Modify field-level Zod emission to chain `.describe()` for annotation definitions and `.meta()` for qualifier data
+- [ ] T069b [US7] Handle annotation emission on enum values — TS decorator on enum companion object entries, Zod `.meta()` on enum schema
 - [ ] T070 [US7] Wire annotation declaration emission into `emitNamespace()` — emit before types (decorators must be declared before use)
 - [ ] T071 [US7] Write expected output files for all fixtures and create `us11-annotations.test.ts` in packages/codegen/test/
 
