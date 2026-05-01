@@ -5,12 +5,16 @@
  * Transport provider with automatic failover (T011 + T044).
  *
  * Connection strategy:
- *   1. Try WebSocket (external dev server — full Langium + OS access).
- *   2. On failure, retry up to `maxReconnectAttempts` with exponential backoff.
- *   3. Fall back to the **CF Worker LSP** (T044) — POST a same-origin token
- *      mint to `${config.lspSessionUrl}`, then open
- *      `WebSocket(\`${config.lspWsUrl}/ws/${token}\`)`. On 401 from the mint
- *      we retry once with a fresh token; on 429 / 5xx we surface
+ *   1. Try the embedded browser worker transport (primary Studio path).
+ *   2. If embedded is disabled/unavailable and direct WebSocket is preferred,
+ *      try WebSocket (external dev server — full Langium + OS access) with
+ *      retry/backoff up to `maxReconnectAttempts`.
+ *   3. Otherwise fall back to the **CF Worker LSP** (T044) — POST a
+ *      same-origin token mint to `${config.lspSessionUrl}`, then open
+ *      `WebSocket(\`${config.lspWsUrl}/ws/${token}\`)`. This path may be
+ *      chosen immediately after embedded fails when the session endpoint is
+ *      same-origin and no explicit `wsUri` override is provided. On 401 from
+ *      the mint we retry once with a fresh token; on 429 / 5xx we surface
  *      "language services unavailable" with the dev-mode-gated copy from FR-014.
  *
  * The provider exposes a reactive state so UI components can show
@@ -19,6 +23,7 @@
 
 import type { Transport } from '@codemirror/lsp-client';
 import { config } from '../config.js';
+import { createWorkerTransport } from './worker-transport.js';
 import { createWebSocketTransport } from './ws-transport.js';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -35,6 +40,8 @@ export interface TransportState {
 }
 
 export interface TransportProviderOptions {
+  /** Whether to try the in-browser worker transport first when wsUri is not explicitly set. */
+  preferEmbedded?: boolean;
   /** WebSocket URI for the external LSP server. */
   wsUri?: string;
   /** Connection timeout in ms (default: 2000). */
@@ -66,7 +73,7 @@ export interface TransportProvider {
   getTransport(): Promise<Transport>;
   /** Current connection state. */
   getState(): TransportState;
-  /** Force reconnection (tries WebSocket first). */
+  /** Force reconnection using the same embedded/network fallback order. */
   reconnect(): Promise<Transport>;
   /** Subscribe to state changes. Returns unsubscribe function. */
   onStateChange(listener: (state: TransportState) => void): () => void;
@@ -83,10 +90,13 @@ const DEFAULT_WS_URI = config.lspWsUrl;
 const DEFAULT_TIMEOUT = 2000;
 const DEFAULT_MAX_RECONNECT = 3;
 const DEFAULT_BACKOFF_BASE = 500;
+const DEFAULT_PREFER_EMBEDDED = true;
 /** Default workspaceId for the session mint until the active workspace is wired in. */
 const DEFAULT_WORKSPACE_ID = '01J7M8AAAAAAAAAAAAAAAAAAAA';
 
 export function createTransportProvider(opts?: TransportProviderOptions): TransportProvider {
+  const hasExplicitWsUri = opts?.wsUri !== undefined;
+  const preferEmbedded = !hasExplicitWsUri && (opts?.preferEmbedded ?? DEFAULT_PREFER_EMBEDDED);
   const wsUri = opts?.wsUri ?? DEFAULT_WS_URI;
   const connectionTimeout = opts?.connectionTimeout ?? DEFAULT_TIMEOUT;
   const maxReconnectAttempts = opts?.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT;
@@ -109,6 +119,23 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
   /** Pause for `ms` milliseconds. */
   function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /** Attempt the embedded browser-worker transport. */
+  async function tryEmbedded(): Promise<Transport> {
+    setState({ mode: 'embedded', status: 'connecting' });
+    try {
+      const transport = createWorkerTransport();
+      setState({ mode: 'embedded', status: 'connected' });
+      currentTransport = transport;
+      return transport;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (config.devMode) {
+        console.warn('[TransportProvider] Embedded LSP worker unavailable:', error);
+      }
+      throw error;
+    }
   }
 
   /** Attempt a WebSocket connection with retries. */
@@ -171,8 +198,7 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
   }
 
   /**
-   * Step 3 — CF Worker LSP via session token. Replaces the legacy
-   * embedded-Worker fallback. On 401 from the mint, refreshes the token
+   * Step 3 — CF Worker LSP via session token. On 401 from the mint, refreshes the token
    * once and retries; on 429 / 5xx surfaces the documented "language
    * services unavailable" copy from FR-014 and falls through to the
    * disconnected error state.
@@ -245,8 +271,15 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
     return String(err);
   }
 
-  /** Main connection flow: WS first → CF Worker fallback. */
+  /** Main connection flow: embedded first unless wsUri explicitly selects WS, then CF fallback. */
   async function connect(): Promise<Transport> {
+    if (preferEmbedded) {
+      try {
+        return await tryEmbedded();
+      } catch {
+        // Fall through to remote transports.
+      }
+    }
     if (!preferDirectWebSocket) {
       return tryCfWorker();
     }

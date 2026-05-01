@@ -146,6 +146,9 @@ describe('parser-worker', () => {
   });
 
   it('reuses serialized model payloads via JsonSerializer and fromModel', async () => {
+    const hydratedModel = { $type: 'RosettaModel', elements: [], hydrated: true };
+    deserializeMock.mockReturnValue(hydratedModel);
+
     const { handleParseWorkspace } = await loadParserWorkerModule();
 
     const response = await handleParseWorkspace({
@@ -162,12 +165,10 @@ describe('parser-worker', () => {
     });
 
     expect(deserializeMock).toHaveBeenCalledWith('{"$type":"RosettaModel","elements":[]}');
-    expect(fromModelMock).toHaveBeenCalledWith(
-      { $type: 'RosettaModel', elements: [] },
-      '[cdm]/types.rosetta'
-    );
+    expect(fromModelMock).toHaveBeenCalledWith(hydratedModel, '[cdm]/types.rosetta');
     expect(addDocumentMock).toHaveBeenCalledTimes(2);
     expect(fromStringMock).toHaveBeenCalledWith('namespace local', 'local.rosetta');
     expect(response.type).toBe('parseWorkspaceResult');
+    expect(response.models[0]).toBe(hydratedModel);
   });
 });
