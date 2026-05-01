@@ -53,6 +53,8 @@ export const PANEL_TITLES: Record<PanelComponentName, string> = {
   'workspace.codePreview': 'Code'
 };
 
+export const LAYOUT_SCHEMA_VERSION = 2;
+
 const SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
 
 export interface BuildLayoutInput {
@@ -113,7 +115,7 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
   };
 
   return {
-    version: 2,
+    version: LAYOUT_SCHEMA_VERSION,
     writtenBy: input.studioVersion,
     dockview
   };

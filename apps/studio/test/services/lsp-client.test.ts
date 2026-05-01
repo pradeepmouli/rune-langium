@@ -219,6 +219,20 @@ describe('createLspClientService', () => {
     expect(service.isInitialized()).toBe(true);
     expect(mockCreateProvider).not.toHaveBeenCalled();
   });
+
+  it('stays uninitialized when transport acquisition fails', async () => {
+    const provider = {
+      ...makeFakeProvider(),
+      getTransport: vi.fn().mockRejectedValue(new Error('language services unavailable'))
+    };
+    mockCreateProvider.mockReturnValue(provider as never);
+
+    const service = createLspClientService();
+    await expect(service.connect()).rejects.toThrow('language services unavailable');
+
+    expect(service.isInitialized()).toBe(false);
+    expect(mockLspConnect).not.toHaveBeenCalled();
+  });
 });
 
 describe('syncWorkspaceFiles', () => {

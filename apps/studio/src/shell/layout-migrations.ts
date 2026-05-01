@@ -20,10 +20,13 @@
  */
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import { buildDefaultLayout, type BuildLayoutInput } from './layout-factory.js';
+import {
+  buildDefaultLayout,
+  LAYOUT_SCHEMA_VERSION,
+  type BuildLayoutInput
+} from './layout-factory.js';
 import { PANEL_COMPONENT_NAMES, type FactoryShape } from './layout-types.js';
 
-const CURRENT_VERSION = 2;
 const KNOWN_COMPONENTS = new Set<string>(PANEL_COMPONENT_NAMES);
 export const INVALID_LAYOUT_RESET_NOTICE =
   'Your saved layout was incompatible with this Studio version, so it was reset to the default arrangement.';
@@ -44,12 +47,24 @@ export function sanitizeLayoutWithDiagnostics(
   if (!isPlausibleLayout(input)) {
     return { layout: buildDefaultLayout(ctx) };
   }
-  if (input.version > CURRENT_VERSION) {
-    return { layout: buildDefaultLayout(ctx) };
+  if (input.version > LAYOUT_SCHEMA_VERSION) {
+    return {
+      layout: buildDefaultLayout(ctx),
+      notice: INVALID_LAYOUT_RESET_NOTICE
+    };
+  }
+  if (!hasKnownDockviewShape(input.dockview)) {
+    return {
+      layout: buildDefaultLayout(ctx),
+      notice: INVALID_LAYOUT_RESET_NOTICE
+    };
   }
   // Walk + drop unknown component names. Mutation happens on a deep clone
   // so the original (persisted) record stays untouched until a new save.
   const cloned: PanelLayoutRecord = JSON.parse(JSON.stringify(input));
+  if (cloned.version < LAYOUT_SCHEMA_VERSION) {
+    cloned.version = LAYOUT_SCHEMA_VERSION;
+  }
   let droppedAny = false;
   let normalizedActive = false;
   walkAndDrop(cloned.dockview, () => {
@@ -87,6 +102,16 @@ function isPlausibleLayout(input: unknown): input is PanelLayoutRecord {
     obj['dockview'] !== undefined &&
     obj['dockview'] !== null
   );
+}
+
+function hasKnownDockviewShape(
+  payload: unknown
+): payload is NonNullable<PanelLayoutRecord['dockview']> {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+  const shape = (payload as { shape?: unknown }).shape;
+  return shape === 'factory' || shape === 'native';
 }
 
 /**
@@ -127,9 +152,7 @@ function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape'
   }
   const navigation = shape.columns[0];
   if (
-    !navigation ||
-    !('top' in navigation) ||
-    !('bottom' in navigation) ||
+    !isNavigationColumn(navigation) ||
     navigation.top.component !== 'workspace.fileTree' ||
     navigation.bottom.component !== 'workspace.visualPreview'
   ) {
@@ -156,4 +179,25 @@ function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape'
     normalized = true;
   }
   return normalized;
+}
+
+function isNavigationColumn(value: unknown): value is FactoryShape['columns'][0] & {
+  top: { component: string };
+  bottom: { component: string };
+} {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const record = value as {
+    top?: { component?: unknown } | null;
+    bottom?: { component?: unknown } | null;
+  };
+  return (
+    !!record.top &&
+    typeof record.top === 'object' &&
+    typeof record.top.component === 'string' &&
+    !!record.bottom &&
+    typeof record.bottom === 'object' &&
+    typeof record.bottom.component === 'string'
+  );
 }

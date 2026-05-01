@@ -94,6 +94,8 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
   const sessionUrl = opts?.sessionUrl ?? config.lspSessionUrl;
   const cfWsBase = opts?.cfWsBase ?? config.lspWsUrl;
   const workspaceId = opts?.workspaceId ?? DEFAULT_WORKSPACE_ID;
+  const preferDirectWebSocket =
+    opts?.wsUri !== undefined || !isSameOriginSessionEndpoint(sessionUrl);
 
   let state: TransportState = { mode: 'disconnected', status: 'disconnected' };
   let currentTransport: Transport | undefined;
@@ -173,7 +175,7 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
    * embedded-Worker fallback. On 401 from the mint, refreshes the token
    * once and retries; on 429 / 5xx surfaces the documented "language
    * services unavailable" copy from FR-014 and falls through to the
-   * disconnected no-op transport.
+   * disconnected error state.
    */
   async function tryCfWorker(): Promise<Transport> {
     setState({ mode: 'cf-worker', status: 'connecting' });
@@ -190,10 +192,10 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
         try {
           token = await mintSessionToken();
         } catch (err2) {
-          return cfWorkerUnavailable(err2);
+          throw createCfWorkerUnavailableError(err2);
         }
       } else {
-        return cfWorkerUnavailable(err);
+        throw createCfWorkerUnavailableError(err);
       }
     }
     try {
@@ -212,40 +214,30 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
         currentTransport = transport;
         return transport;
       } catch (err2) {
-        return cfWorkerUnavailable(err2 ?? err);
+        throw createCfWorkerUnavailableError(err2 ?? err);
       }
     }
   }
 
   /**
-   * Surface the "language services unavailable" terminal state. Mirrors
-   * the legacy fallback's no-op Transport so callers don't crash, but
-   * sets `status: 'error'` with the documented copy.
+   * Surface the "language services unavailable" terminal state and reject
+   * transport acquisition so the LSP client stays disconnected instead of
+   * timing out on a no-op channel.
    */
-  function cfWorkerUnavailable(cause: unknown): Transport {
+  function createCfWorkerUnavailableError(cause: unknown): Error {
     const errorMessage = config.devMode
       ? `CF LSP worker unreachable (${describeCause(cause)}) — verify ${config.lspSessionUrl} is deployed and CORS allows ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
       : 'Editor running offline — language services unavailable';
     if (config.devMode) {
       console.warn('[TransportProvider] CF LSP worker step failed:', cause);
     }
+    const error = new Error(errorMessage);
     setState({
       mode: 'disconnected',
       status: 'error',
-      error: new Error(errorMessage)
+      error
     });
-    // No-op transport so callers don't crash on send/subscribe.
-    return {
-      send() {
-        /* no-op */
-      },
-      subscribe() {
-        /* no-op */
-      },
-      unsubscribe() {
-        /* no-op */
-      }
-    };
+    return error;
   }
 
   function describeCause(err: unknown): string {
@@ -255,6 +247,9 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
 
   /** Main connection flow: WS first → CF Worker fallback. */
   async function connect(): Promise<Transport> {
+    if (!preferDirectWebSocket) {
+      return tryCfWorker();
+    }
     try {
       return await tryWebSocket();
     } catch {
@@ -291,4 +286,15 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
       setState({ mode: 'disconnected', status: 'disconnected' });
     }
   };
+}
+
+function isSameOriginSessionEndpoint(sessionUrl: string): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  try {
+    return new URL(sessionUrl, window.location.href).origin === window.location.origin;
+  } catch {
+    return false;
+  }
 }

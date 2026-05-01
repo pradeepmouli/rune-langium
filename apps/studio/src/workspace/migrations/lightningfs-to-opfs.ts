@@ -26,6 +26,7 @@
 
 import { OpfsFs } from '../../opfs/opfs-fs.js';
 import { saveSetting, saveWorkspace, type WorkspaceRecord } from '../persistence.js';
+import { LAYOUT_SCHEMA_VERSION } from '../../shell/layout-factory.js';
 
 export const LEGACY_DB_NAMES = ['fs', 'lightning-fs-cache'] as const;
 
@@ -110,7 +111,11 @@ export async function migrateLightningFsToOpfs(input: MigrationInput): Promise<M
       createdAt: now,
       lastOpenedAt: now,
       kind: 'browser-only',
-      layout: { version: 1, writtenBy: input.studioVersion, dockview: null },
+      layout: {
+        version: LAYOUT_SCHEMA_VERSION,
+        writtenBy: input.studioVersion,
+        dockview: null
+      },
       tabs: [],
       activeTabPath: null,
       curatedModels: [],

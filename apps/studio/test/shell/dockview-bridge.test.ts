@@ -86,7 +86,7 @@ describe('applyLayout — factory shape', () => {
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     const ids = api.calls.map((c) => c.id);
-    // First four are left stack + center + right; remaining two are bottom tabs.
+    // First four are left stack + center group; remaining calls include preview + bottom tabs.
     expect(ids.slice(0, 4)).toEqual([
       'workspace.fileTree',
       'workspace.visualPreview',

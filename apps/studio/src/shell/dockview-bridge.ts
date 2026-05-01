@@ -33,7 +33,7 @@ import type {
   LayoutGroup,
   PanelComponentName
 } from './layout-types.js';
-import { buildDefaultLayout, PANEL_TITLES } from './layout-factory.js';
+import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_TITLES } from './layout-factory.js';
 
 /** Re-export for callers that previously imported from this module. */
 export type { FactoryShape } from './layout-factory.js';
@@ -96,7 +96,10 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
     console.warn(
       '[dockview-bridge] factory shape has fewer than 3 columns, falling back to default'
     );
-    applyFactoryShape(api, defaultFactoryShape({ version: 1, writtenBy: '0.0.0', dockview: null }));
+    applyFactoryShape(
+      api,
+      defaultFactoryShape({ version: LAYOUT_SCHEMA_VERSION, writtenBy: '0.0.0', dockview: null })
+    );
     return;
   }
 

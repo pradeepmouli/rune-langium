@@ -29,6 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
 const MODE_LABELS: Record<string, string> = {
   disconnected: '',
   websocket: 'WebSocket',
+  'cf-worker': 'Cloudflare Worker',
   embedded: 'Embedded'
 };
 

@@ -109,6 +109,27 @@ describe('createTransportProvider', () => {
     provider.dispose();
   });
 
+  it('skips the direct WebSocket step when the session endpoint is same-origin', async () => {
+    const cfTransport = makeFakeTransport();
+    mockWsTransport.mockResolvedValueOnce(cfTransport);
+
+    const mint = installMintMock();
+    mint.next({ status: 200, body: { token: 'cf-token', expiresAt: Date.now() + 60_000 } });
+
+    const provider = createTransportProvider({
+      sessionUrl: '/api/lsp/session',
+      cfWsBase: 'ws://localhost/api/lsp'
+    });
+    const transport = await provider.getTransport();
+
+    expect(transport).toBe(cfTransport);
+    expect(mockWsTransport).toHaveBeenCalledTimes(1);
+    expect(mockWsTransport).toHaveBeenCalledWith('ws://localhost/api/lsp/ws/cf-token', 2000);
+    expect(mint.callCount()).toBe(1);
+
+    provider.dispose();
+  });
+
   it('falls back to CF Worker (Step 3) when dev WS fails — happy path', async () => {
     const cfTransport = makeFakeTransport();
     // Step 1: dev WS rejects
@@ -175,10 +196,9 @@ describe('createTransportProvider', () => {
       sessionUrl: SESSION_URL,
       cfWsBase: CF_WS_BASE
     });
-    const transport = await provider.getTransport();
-
-    // No-op transport so callers don't crash.
-    expect(typeof transport.send).toBe('function');
+    await expect(provider.getTransport()).rejects.toThrow(
+      /language services unavailable|CF LSP worker unreachable/i
+    );
     expect(provider.getState().mode).toBe('disconnected');
     expect(provider.getState().status).toBe('error');
     provider.dispose();
@@ -197,8 +217,9 @@ describe('createTransportProvider', () => {
       sessionUrl: SESSION_URL,
       cfWsBase: CF_WS_BASE
     });
-    const transport = await provider.getTransport();
-    expect(typeof transport.send).toBe('function');
+    await expect(provider.getTransport()).rejects.toThrow(
+      /language services unavailable|CF LSP worker unreachable/i
+    );
     expect(provider.getState().mode).toBe('disconnected');
     expect(provider.getState().status).toBe('error');
     provider.dispose();
@@ -281,7 +302,9 @@ describe('createTransportProvider', () => {
       sessionUrl: SESSION_URL,
       cfWsBase: CF_WS_BASE
     });
-    await provider.getTransport();
+    await expect(provider.getTransport()).rejects.toThrow(
+      /language services unavailable|CF LSP worker unreachable/i
+    );
     expect(provider.getState().mode).toBe('disconnected');
     expect(provider.getState().status).toBe('error');
 

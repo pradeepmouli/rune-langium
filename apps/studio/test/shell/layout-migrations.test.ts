@@ -10,6 +10,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { sanitizeLayout } from '../../src/shell/layout-migrations.js';
+import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION } from '../../src/shell/layout-factory.js';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -34,22 +35,15 @@ describe('sanitizeLayout (T063)', () => {
 
   it('drops unknown component names with a console warning, keeping the known ones', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const stale = {
-      version: 1,
-      writtenBy: '0.0.5',
-      dockview: {
-        columns: [
-          { component: 'workspace.fileTree' },
-          { component: 'workspace.editor' },
-          { component: 'workspace.GHOST' }
-        ],
-        bottomGroup: {
-          active: 'workspace.problems',
-          collapsed: false,
-          tabs: [{ component: 'workspace.problems' }]
-        }
-      }
-    };
+    const stale = buildDefaultLayout({ studioVersion: '0.0.5', viewportWidth: 1440 });
+    stale.version = 1;
+    if (!stale.dockview || stale.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected');
+    }
+    stale.dockview.columns[2].tabs = [
+      { component: 'workspace.formPreview' },
+      { component: 'workspace.GHOST' as never }
+    ];
     const out = sanitizeLayout(stale, { studioVersion: '0.2.0', viewportWidth: 1440 });
     const flat = JSON.stringify(out);
     expect(flat).not.toContain('workspace.GHOST');
@@ -68,27 +62,19 @@ describe('sanitizeLayout (T063)', () => {
   });
 
   it('preserves the input when every component name is known and version matches', () => {
-    const valid = {
-      version: 1,
-      writtenBy: '0.1.0',
-      dockview: {
-        columns: [
-          {
-            top: { component: 'workspace.fileTree' },
-            bottom: { component: 'workspace.visualPreview' }
-          },
-          { component: 'workspace.editor' },
-          { component: 'workspace.formPreview' }
-        ],
-        bottomGroup: {
-          active: 'workspace.problems',
-          collapsed: false,
-          tabs: [{ component: 'workspace.problems' }]
-        }
-      }
-    };
+    const valid = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1440 });
     const out = sanitizeLayout(valid, { studioVersion: '0.1.0', viewportWidth: 1440 });
     expect(out.dockview).toEqual(valid.dockview);
+  });
+
+  it('upgrades a compatible older layout record to the current schema version', () => {
+    const older = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1440 });
+    older.version = 1;
+
+    const out = sanitizeLayout(older, { studioVersion: '0.2.0', viewportWidth: 1440 });
+
+    expect(out.version).toBe(LAYOUT_SCHEMA_VERSION);
+    expect(out.dockview).toEqual(older.dockview);
   });
 
   it('normalizes invalid active tabs back to surviving tabs', () => {
@@ -142,7 +128,7 @@ describe('sanitizeLayout (T063)', () => {
         shape: 'factory',
         columns: [
           {
-            top: { component: 'workspace.fileTree' },
+            top: null,
             bottom: { component: 'workspace.visualPreview' }
           },
           { active: 'workspace.editor', tabs: [{ component: 'workspace.editor' }] }

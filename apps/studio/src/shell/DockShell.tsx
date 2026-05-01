@@ -42,7 +42,11 @@ import { OutputPanel } from './panels/OutputPanel.js';
 import { VisualPreviewPanel } from './panels/VisualPreviewPanel.js';
 import { FormPreviewPanel } from './panels/FormPreviewPanel.js';
 import { CodePreviewPanel as CodePreviewPanelShell } from './panels/CodePreviewPanel.js';
-import { buildDefaultLayout, PANEL_COMPONENT_NAMES } from './layout-factory.js';
+import {
+  buildDefaultLayout,
+  LAYOUT_SCHEMA_VERSION,
+  PANEL_COMPONENT_NAMES
+} from './layout-factory.js';
 import type { LayoutPreset } from './layout-factory.js';
 import { sanitizeLayoutWithDiagnostics } from './layout-migrations.js';
 import { applyLayout, serializeLayout } from './dockview-bridge.js';
@@ -207,6 +211,9 @@ export function DockShell({
         console.error('[DockShell] Failed to apply layout, falling back to default layout', err);
         appliedLayout = fallback;
         setLayout(fallback);
+        setLayoutPreset(
+          fallback.dockview?.shape === 'factory' ? (fallback.dockview.preset ?? 'edit') : 'edit'
+        );
         setUtilitiesCollapsedState(
           fallback.dockview?.shape === 'factory' ? fallback.dockview.bottomGroup.collapsed : false
         );
@@ -221,7 +228,7 @@ export function DockShell({
         try {
           const dockviewJson = serializeLayout(event.api);
           onLayoutChangeRef.current({
-            version: 1,
+            version: LAYOUT_SCHEMA_VERSION,
             writtenBy: studioVersionRef.current,
             dockview: dockviewJson as PanelLayoutRecord['dockview']
           });
@@ -274,6 +281,9 @@ export function DockShell({
   function resetLayout(): void {
     const fresh = buildDefaultLayout({ studioVersion, viewportWidth: getViewportWidth() });
     setLayout(fresh);
+    setLayoutPreset(
+      fresh.dockview?.shape === 'factory' ? (fresh.dockview.preset ?? 'edit') : 'edit'
+    );
     setUtilitiesCollapsedState(
       fresh.dockview?.shape === 'factory' ? fresh.dockview.bottomGroup.collapsed : false
     );

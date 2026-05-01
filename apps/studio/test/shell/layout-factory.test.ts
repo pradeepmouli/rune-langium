@@ -40,7 +40,7 @@ describe('buildDefaultLayout (T061)', () => {
     ]);
   });
 
-  it('layout.version starts at 1', () => {
+  it('layout.version starts at 2', () => {
     expect(buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 }).version).toBe(2);
   });
 
