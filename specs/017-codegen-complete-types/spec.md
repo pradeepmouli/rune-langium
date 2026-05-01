@@ -104,7 +104,24 @@ A language designer has declared `library function` constructs (external functio
 
 ---
 
-### User Story 7 - Cross-namespace codegen with import resolution (Priority: P1)
+### User Story 7 - Annotation metadata on generated classes (Priority: P2)
+
+A language designer has annotated data types, attributes, and enum values with Rune annotations (e.g., `[metadata key "value"]`, `[synonym source ...]`). Today, annotations are parsed but completely ignored by codegen. Since the TypeScript emitter already produces classes for data types, the designer expects annotations to appear as TypeScript decorators on the class and its fields — or, if decorators are not suitable, as static metadata properties — so that downstream consumers can introspect model metadata at runtime (e.g., for serialization mapping, regulatory tagging, or documentation generation).
+
+**Why this priority**: Annotations carry semantic meaning that is lost in today's codegen output. Classes are already emitted, so the infrastructure to receive decorators/metadata exists.
+
+**Independent Test**: Run codegen against a `.rune` file containing annotated types and verify the TypeScript output includes decorator or metadata output reflecting the annotations.
+
+**Acceptance Scenarios**:
+
+1. **Given** a data type with an annotation (e.g., `[metadata key "value"]`), **When** the TypeScript target generates code, **Then** the generated class includes the annotation as a decorator or static metadata property.
+2. **Given** an attribute with an annotation, **When** codegen runs, **Then** the annotation appears on the corresponding class field.
+3. **Given** an enum value with an annotation, **When** codegen runs, **Then** the annotation metadata is accessible on the generated enum representation.
+4. **Given** annotations with qualifiers (key-value pairs), **When** codegen runs, **Then** the qualifier values are preserved in the generated metadata.
+
+---
+
+### User Story 8 - Cross-namespace codegen with import resolution (Priority: P1)
 
 A language designer's model spans multiple namespaces (e.g., `cdm.base`, `cdm.event`, `cdm.product`). Types in one namespace routinely extend types from another, functions reference types across namespaces, and rules validate types defined elsewhere. Today, cross-namespace references produce broken output — the emitter cannot resolve imports across namespace boundaries. The designer expects the generated code for each namespace to include correct import statements referencing the generated output of other namespaces, so that the full model compiles as a coherent set of modules.
 
@@ -167,6 +184,12 @@ A language designer's model spans multiple namespaces (e.g., `cdm.base`, `cdm.ev
 - **FR-016**: The form preview panel MUST display the computed output after function execution.
 - **FR-017**: The form preview panel MUST display pre-condition and post-condition violations with clear messaging.
 
+**Codegen — Annotations**
+- **FR-026**: Codegen MUST emit annotation metadata on generated TypeScript classes, either as decorators or as static metadata properties accessible at runtime.
+- **FR-027**: Codegen MUST emit annotation metadata on class fields corresponding to annotated attributes.
+- **FR-028**: Codegen MUST preserve annotation qualifier key-value pairs in the generated metadata.
+- **FR-029**: Codegen SHOULD emit annotation metadata on generated enum representations where annotations are present on enum values.
+
 **Cross-Namespace Resolution**
 - **FR-021**: Codegen MUST resolve cross-namespace type references (inheritance, attribute types, function input/output types, rule targets) and emit correct import statements in the generated output.
 - **FR-022**: Codegen MUST maintain a codegen cache or intermediate artifact layer so that when emitting one namespace, previously generated namespace outputs can be referenced for import path resolution and type lookup.
@@ -186,6 +209,7 @@ A language designer's model spans multiple namespaces (e.g., `cdm.base`, `cdm.ev
 - **Report**: A named reporting definition with column/field structure. Maps to the `report` grammar rule.
 - **LibraryFunction**: An external function signature declaration without a body. Maps to the `library function` grammar rule.
 - **FunctionPreview**: A form-based representation of a function's inputs, with execution capability and output display.
+- **AnnotationMetadata**: Runtime-accessible metadata on generated classes and fields, representing Rune annotations and their qualifier key-value pairs.
 - **CodegenCache**: An intermediate artifact layer that stores generated output per namespace, enabling cross-namespace import resolution during multi-namespace codegen runs.
 
 ## Success Criteria *(mandatory)*
