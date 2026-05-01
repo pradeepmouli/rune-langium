@@ -150,6 +150,9 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(header).toHaveTextContent('Navigate');
     expect(header).toHaveTextContent('Edit');
     expect(header).toHaveTextContent('Preview');
+    expect(screen.getByTestId('layout-resize-hint')).toHaveTextContent(
+      'Drag panel dividers to resize'
+    );
   });
 
   it('Reset Layout calls api.clear() then re-applies a fresh layout', async () => {

@@ -89,6 +89,8 @@ describe('NamespaceExplorerPanel', () => {
   it('renders the explorer container', () => {
     renderPanel();
     expect(screen.getByTestId('namespace-explorer')).toBeTruthy();
+    expect(screen.getByText('Type explorer')).toBeTruthy();
+    expect(screen.getByText('Browse namespaces and types in the active source.')).toBeTruthy();
   });
 
   it('renders all namespaces', () => {
@@ -150,6 +152,7 @@ describe('NamespaceExplorerPanel', () => {
   it('filters types when search query entered', () => {
     renderPanel();
     const searchInput = screen.getByTestId('namespace-search');
+    expect(searchInput).toHaveAttribute('placeholder', 'Filter types or namespaces...');
     fireEvent.change(searchInput, { target: { value: 'Trade' } });
 
     // Trade should be visible
@@ -158,11 +161,11 @@ describe('NamespaceExplorerPanel', () => {
     expect(screen.queryByText('Asset')).toBeNull();
   });
 
-  it('shows "No matching namespaces" when search has no results', () => {
+  it('shows "No matching types or namespaces" when search has no results', () => {
     renderPanel();
     const searchInput = screen.getByTestId('namespace-search');
     fireEvent.change(searchInput, { target: { value: 'zzzznonexistent' } });
-    expect(screen.getByText('No matching namespaces')).toBeTruthy();
+    expect(screen.getByText('No matching types or namespaces')).toBeTruthy();
   });
 
   it('highlights selected node', () => {

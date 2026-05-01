@@ -54,7 +54,7 @@ async function assertDockChrome(page: Page): Promise<void> {
   await expect(page.getByTestId('studio-layout-presets')).toContainText('Edit');
   await expect(page.getByTestId('studio-layout-presets')).toContainText('Preview');
 
-  await expect(page.locator('.dv-tab', { hasText: 'Explorer' }).first()).toBeVisible();
+  await expect(page.locator('.dv-tab', { hasText: 'Types' }).first()).toBeVisible();
   await expect(page.locator('.dv-tab', { hasText: 'Source' }).first()).toBeVisible();
   await expect(page.locator('.dv-tab', { hasText: 'Inspector' }).first()).toBeVisible();
   await expect(page.locator('.dv-tab', { hasText: 'Graph' }).first()).toBeVisible();

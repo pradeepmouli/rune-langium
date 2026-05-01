@@ -43,7 +43,7 @@ export {
  * `workspace.*` IDs must never leak into the rendered chrome.
  */
 export const PANEL_TITLES: Record<PanelComponentName, string> = {
-  'workspace.fileTree': 'Explorer',
+  'workspace.fileTree': 'Types',
   'workspace.editor': 'Source',
   'workspace.inspector': 'Inspector',
   'workspace.problems': 'Problems',

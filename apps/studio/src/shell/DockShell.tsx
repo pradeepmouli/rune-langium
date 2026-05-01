@@ -343,6 +343,9 @@ export function DockShell({
             </Button>
           ))}
         </div>
+        <p className="studio-layout-presets__hint" data-testid="layout-resize-hint">
+          Drag panel dividers to resize
+        </p>
         <div className="studio-layout-presets__group studio-layout-presets__group--actions">
           <Button
             type="button"
