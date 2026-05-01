@@ -211,8 +211,10 @@
 ### Implementation for US5
 
 - [ ] T073 [US5] Implement `emitReport()` in packages/codegen/src/emit/ts-emitter.ts — emit typed interface per report with inputType, reportType, eligibilityRules, timing
-- [ ] T074 [US5] Wire report emission into `emitNamespace()` — emit after rules (reports reference rules). Zod/JSON Schema: silently skip (FR-020)
-- [ ] T075 [US5] Write expected output files and create `us9-reports.test.ts` in packages/codegen/test/
+- [ ] T074 [US5] Wire report emission into `emitNamespace()` in TS emitter — emit after rules (reports reference rules)
+- [ ] T074b [US5] Implement report metadata emission in packages/codegen/src/emit/zod-emitter.ts — chain `.meta({ report: { inputType, eligibilityRules, timing, regulatoryBody } })` on the report's associated output type schema
+- [ ] T074c [US5] Implement report metadata emission in packages/codegen/src/emit/json-schema-emitter.ts — emit `x-rune-report` extension properties on the report's output type schema
+- [ ] T075 [US5] Write expected output files for all three targets and create `us9-reports.test.ts` in packages/codegen/test/
 
 **Checkpoint**: Report structures emit in TypeScript. Zod/JSON Schema correctly skip them.
 

@@ -170,7 +170,7 @@ A language designer's model spans multiple namespaces (e.g., `cdm.base`, `cdm.ev
 
 **Codegen — Reports**
 - **FR-008**: Codegen MUST emit typed reporting structures (column definitions, field mappings) for every `report` declaration in the TypeScript target.
-- **FR-009**: Codegen SHOULD emit JSON Schema representations for report structures where applicable.
+- **FR-009**: The Zod target MUST emit report metadata as `.meta()` on the report's associated output type schema, capturing input type, eligibility rules, timing, and regulatory body references. JSON Schema SHOULD emit report metadata as `x-rune-report` extension properties where applicable.
 
 **Codegen — Library Functions**
 - **FR-010**: Codegen MUST emit type-safe function signatures (without bodies) for `library function` declarations in the TypeScript target.
