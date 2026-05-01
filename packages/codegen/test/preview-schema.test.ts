@@ -2,12 +2,21 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { generatePreviewSchemas } from '../src/index.js';
 
 const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
+const REAL_CDM_ADJUSTABLE_DATE_FIXTURES = [
+  new URL('../../../.resources/cdm/base-datetime-enum.rosetta', import.meta.url),
+  new URL('../../../.resources/cdm/base-datetime-type.rosetta', import.meta.url)
+] as const;
+const skipIfAdjustableDateFixturesUnavailable = it.skipIf(
+  Number(process.versions.node.split('.')[0]) < 22 ||
+    !REAL_CDM_ADJUSTABLE_DATE_FIXTURES.every((fixtureUrl) => existsSync(fixtureUrl))
+);
 
 async function parseModel(source: string) {
   const { RuneDsl } = createRuneDslServices();
@@ -250,7 +259,7 @@ describe('FormPreviewSchema generation', () => {
     }
   );
 
-  skipIfNodeLt22(
+  skipIfAdjustableDateFixturesUnavailable(
     'generates a stable preview schema for the real CDM AdjustableDate type',
     async () => {
       const enumDoc = await parseFixture('../../../.resources/cdm/base-datetime-enum.rosetta');

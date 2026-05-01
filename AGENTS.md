@@ -29,6 +29,9 @@ This repository is designed for multi-agent collaboration (Copilot, Claude, Gemi
 - Coordinate with other agents by updating docs (README, specs) when workflows change.
 - When modifying scripts, explain any new prompts or defaults in relevant documentation.
 - If adding hooks, prefer simple-git-hooks and lint-staged already in package.json.
+- For Studio, the primary LSP path is the embedded browser worker transport; direct WebSocket and Cloudflare Worker LSP are fallbacks, and an explicit `wsUri` selects the direct WebSocket path.
+- Real corpus fixtures live under the hidden `.resources/` tree. Prefer those files for repros, and guard/skip tests that rely on them when the corpus is unavailable in the checkout.
+- In Studio Playwright tests, avoid `waitForLoadState('networkidle')` on routes with persistent worker/LSP traffic; wait for visible UI readiness signals instead.
 
 ## Deliverables Expectation
 - Summaries should include what changed, where, and how to verify.

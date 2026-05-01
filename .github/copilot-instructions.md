@@ -19,6 +19,11 @@ This ensures skills are discoverable from both `.agents/skills/` and `.github/sk
 ## Recent Changes
 - 002-reactflow-visual-editor: Added TypeScript 5.9+ (strict mode, ESM)
 
+## Current Repo-Wide Notes
+- Studio prefers the embedded browser LSP worker transport first; direct WebSocket and Cloudflare Worker LSP are fallbacks, and an explicit `wsUri` should select the direct WebSocket path.
+- Real corpus fixtures live under the hidden `.resources/` tree. Prefer those files for runtime repros, and guard/skip tests that rely on them when the corpus is not present.
+- Studio Playwright tests should wait for visible UI readiness instead of `networkidle` on routes with persistent worker/LSP traffic.
+
 ## Licensing Boundary
 
 This repo uses split licensing:

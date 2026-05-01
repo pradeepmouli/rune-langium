@@ -5,8 +5,8 @@
  * Unit tests for transport provider / failover logic (T011 + T044).
  *
  * Step 1 = embedded browser worker transport.
- * Step 2 = direct dev WebSocket (legacy ws://localhost:3001 path).
- * Step 4 = CF Worker LSP — POST /api/lsp/session for a token, then open
+ * Step 2 = direct dev WebSocket when explicitly configured/preferred.
+ * Step 3 = CF Worker LSP — POST /api/lsp/session for a token, then open
  *          WebSocket(${cfWsBase}/ws/${token}). On 401 from the mint we
  *          retry once; on 429 / 5xx we surface "language services
  *          unavailable" with the dev-mode-gated copy from FR-014.
@@ -102,17 +102,16 @@ describe('createTransportProvider', () => {
     expect(state.status).toBe('disconnected');
   });
 
-  it('uses WebSocket when connection succeeds', async () => {
+  it('uses WebSocket when wsUri is explicitly configured', async () => {
     const wsTransport = makeFakeTransport();
-    mockEmbeddedTransport.mockImplementationOnce(() => {
-      throw new Error('embedded unavailable');
-    });
+    mockEmbeddedTransport.mockReturnValueOnce(makeFakeTransport());
     mockWsTransport.mockResolvedValueOnce(wsTransport);
 
     const provider = createTransportProvider({ wsUri: 'ws://localhost:3001' });
     const transport = await provider.getTransport();
 
     expect(transport).toBe(wsTransport);
+    expect(mockEmbeddedTransport).not.toHaveBeenCalled();
     expect(provider.getState().mode).toBe('websocket');
     expect(provider.getState().status).toBe('connected');
 
@@ -124,9 +123,9 @@ describe('createTransportProvider', () => {
     mockEmbeddedTransport.mockReturnValueOnce(embeddedTransport);
 
     const provider = createTransportProvider();
-    const transport = await provider.getTransport();
+    await provider.getTransport();
 
-    expect(transport).toBe(embeddedTransport);
+    expect(mockEmbeddedTransport).toHaveBeenCalledTimes(1);
     expect(mockWsTransport).not.toHaveBeenCalled();
     expect(provider.getState().mode).toBe('embedded');
     expect(provider.getState().status).toBe('connected');
@@ -156,11 +155,11 @@ describe('createTransportProvider', () => {
     provider.dispose();
   });
 
-  it('falls back to CF Worker (Step 4) when dev WS fails — happy path', async () => {
+  it('falls back to CF Worker (Step 3) when dev WS fails — happy path', async () => {
     const cfTransport = makeFakeTransport();
     // Step 2: dev WS rejects
     mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
-    // Step 4: CF Worker WS resolves after the mint
+    // Step 3: CF Worker WS resolves after the mint
     mockWsTransport.mockResolvedValueOnce(cfTransport);
 
     const mint = installMintMock();
@@ -315,11 +314,7 @@ describe('createTransportProvider', () => {
 
     await provider.getTransport();
 
-    // Listener should have been called during getTransport (connecting → connected)
-    // but after unsub, no more calls
-    const callCount = listener.mock.calls.length;
-    // No additional calls after unsub
-    expect(callCount).toBeGreaterThanOrEqual(0);
+    expect(listener).not.toHaveBeenCalled();
 
     provider.dispose();
   });
