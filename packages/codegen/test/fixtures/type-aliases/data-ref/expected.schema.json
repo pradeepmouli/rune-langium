@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "test/aliases.schema.json",
+  "title": "test.aliases",
+  "$defs": {
+    "HomeAddress": {
+      "$ref": "#/$defs/Address"
+    },
+    "Address": {
+      "type": "object",
+      "properties": {
+        "street": {
+          "type": "string"
+        },
+        "city": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": ["street", "city"]
+    }
+  }
+}

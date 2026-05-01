@@ -1,0 +1,4 @@
+namespace "test.aliases"
+version "1"
+
+typeAlias Label: string

@@ -658,6 +658,41 @@ function emitEnum(enumNode: RosettaEnumeration, ctx: EmissionContext): string {
 }
 
 /**
+ * Emit a Zod schema and type alias for a RosettaTypeAlias node.
+ * NOTE: not named `emitTypeAlias` — that name is taken by the z.infer helper for Data types.
+ */
+function emitTypeAliasSchema(alias: RosettaTypeAlias, ctx: EmissionContext): string {
+  const name = alias.name;
+  const schemaName = `${name}Schema`;
+  const typeRef = alias.typeCall?.type?.ref;
+  const refText = alias.typeCall?.type?.$refText;
+
+  // Resolve to a Zod schema expression
+  let zodExpr = 'z.unknown()';
+
+  if (typeRef && isRosettaBasicType(typeRef)) {
+    zodExpr = BUILTIN_TYPE_MAP[typeRef.name] ?? 'z.unknown()';
+  } else if (typeRef && isRosettaEnumeration(typeRef)) {
+    zodExpr = `${typeRef.name}Schema`;
+  } else if (typeRef && isData(typeRef)) {
+    zodExpr = `${typeRef.name}Schema`;
+  } else if (refText) {
+    const builtinZod = BUILTIN_TYPE_MAP[refText];
+    if (builtinZod) zodExpr = builtinZod;
+    else if (ctx.enumByName.has(refText)) zodExpr = `${refText}Schema`;
+    else if (ctx.dataByName.has(refText)) zodExpr = `${refText}Schema`;
+    else zodExpr = 'z.unknown()';
+  }
+
+  const lines: string[] = [
+    `export const ${schemaName} = ${zodExpr};`,
+    `export type ${name} = z.infer<typeof ${schemaName}>;`
+  ];
+
+  return lines.join('\n');
+}
+
+/**
  * Emit the file header: SPDX, generated comment, imports, runtime helpers.
  * FR-021 (inlined helpers), T038.
  */
@@ -771,6 +806,14 @@ export function emitNamespace(
     const enumNode = ctx.enumByName.get(name)!;
     sections.push(emitEnum(enumNode, ctx));
     sections.push('');
+  }
+
+  // Emit type alias schemas (after enums, before data types)
+  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
+  for (const name of typeAliasNames) {
+    const alias = ctx.typeAliasByName.get(name)!;
+    sections.push('');
+    sections.push(emitTypeAliasSchema(alias, ctx));
   }
 
   // For cyclic types: emit interface declarations first so that

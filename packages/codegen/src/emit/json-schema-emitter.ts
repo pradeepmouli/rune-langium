@@ -357,6 +357,45 @@ function emitTypeDef(data: Data, ctx: EmissionContext): object {
 }
 
 /**
+ * Emit the JSON Schema definition for a type alias.
+ */
+function emitTypeAliasDef(alias: RosettaTypeAlias, ctx: EmissionContext): object {
+  const typeRef = alias.typeCall?.type?.ref;
+  const refText = alias.typeCall?.type?.$refText;
+
+  // Resolve to a JSON Schema type
+  if (typeRef && isRosettaBasicType(typeRef)) {
+    const typeMap: Record<string, object> = {
+      string: { type: 'string' },
+      int: { type: 'integer' },
+      number: { type: 'number' },
+      boolean: { type: 'boolean' },
+      date: { type: 'string', format: 'date' },
+      dateTime: { type: 'string', format: 'date-time' },
+      zonedDateTime: { type: 'string', format: 'date-time' },
+      time: { type: 'string', format: 'time' }
+    };
+    return typeMap[typeRef.name] ?? { type: 'string' };
+  }
+
+  if (typeRef && isRosettaEnumeration(typeRef)) {
+    return { $ref: `#/$defs/${typeRef.name}` };
+  }
+
+  if (typeRef && isData(typeRef)) {
+    return { $ref: `#/$defs/${typeRef.name}` };
+  }
+
+  if (refText) {
+    if (ctx.enumByName.has(refText) || ctx.dataByName.has(refText)) {
+      return { $ref: `#/$defs/${refText}` };
+    }
+  }
+
+  return { type: 'string' };
+}
+
+/**
  * Emit the JSON Schema definition for an enumeration.
  * T095.
  *
@@ -489,6 +528,13 @@ export function emitNamespace(
       sourceLine: 1,
       sourceChar: 1
     });
+  }
+
+  // Emit type alias definitions (after enums, before data types)
+  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
+  for (const name of typeAliasNames) {
+    const alias = ctx.typeAliasByName.get(name)!;
+    $defs[name] = emitTypeAliasDef(alias, ctx);
   }
 
   // Emit data types in topological order

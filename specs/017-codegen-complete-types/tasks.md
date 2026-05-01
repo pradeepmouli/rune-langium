@@ -56,21 +56,21 @@
 
 ### Fixtures for US1
 
-- [ ] T016 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/primitive/input.rune` with primitive type alias (e.g., `typeAlias Price: number`)
-- [ ] T017 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/data-ref/input.rune` with type alias referencing a data type
-- [ ] T018 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/with-condition/input.rune` with type alias carrying a condition
-- [ ] T019 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/chained/input.rune` with chained type aliases (alias → alias → underlying)
-- [ ] T020 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/parameterized/input.rune` with parameterized type alias
+- [x] T016 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/primitive/input.rune` with primitive type alias (e.g., `typeAlias Price: number`)
+- [x] T017 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/data-ref/input.rune` with type alias referencing a data type
+- [x] T018 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/with-condition/input.rune` with type alias carrying a condition
+- [x] T019 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/chained/input.rune` with chained type aliases (alias → alias → underlying)
+- [x] T020 [P] [US1] Create fixture `packages/codegen/test/fixtures/type-aliases/parameterized/input.rune` with parameterized type alias
 
 ### Implementation for US1
 
-- [ ] T021 [US1] Implement `emitTypeAlias()` in packages/codegen/src/emit/ts-emitter.ts — resolve aliased type, emit `export type Price = number;` for primitives, `export type Foo = BarShape;` for data refs
-- [ ] T022 [US1] Implement `emitTypeAlias()` in packages/codegen/src/emit/zod-emitter.ts — emit `export const PriceSchema = z.number()` with `.refine()` for conditions
-- [ ] T023 [US1] Implement type alias support in packages/codegen/src/emit/json-schema-emitter.ts
-- [ ] T024 [US1] Handle chained alias resolution (alias → alias → underlying) in both emitters
-- [ ] T025 [US1] Handle parameterized type aliases — TS generics, Zod inlines concrete types
-- [ ] T026 [US1] Wire type alias emission into `emitNamespace()` in all three emitters — emit after enums, before data types
-- [ ] T027 [US1] Write expected output files for all fixtures and create `us7-type-aliases.test.ts` in packages/codegen/test/
+- [x] T021 [US1] Implement `emitTypeAlias()` in packages/codegen/src/emit/ts-emitter.ts — resolve aliased type, emit `export type Price = number;` for primitives, `export type Foo = BarShape;` for data refs
+- [x] T022 [US1] Implement `emitTypeAlias()` in packages/codegen/src/emit/zod-emitter.ts — emit `export const PriceSchema = z.number()` with `.refine()` for conditions
+- [x] T023 [US1] Implement type alias support in packages/codegen/src/emit/json-schema-emitter.ts
+- [x] T024 [US1] Handle chained alias resolution (alias → alias → underlying) in both emitters
+- [x] T025 [US1] Handle parameterized type aliases — TS generics, Zod inlines concrete types
+- [x] T026 [US1] Wire type alias emission into `emitNamespace()` in all three emitters — emit after enums, before data types
+- [x] T027 [US1] Write expected output files for all fixtures and create `us7-type-aliases.test.ts` in packages/codegen/test/
 
 **Checkpoint**: Type alias codegen works for all three targets. Fixture tests pass byte-identical.
 

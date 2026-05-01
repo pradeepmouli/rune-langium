@@ -980,6 +980,14 @@ export function emitNamespace(
     sections.push('');
   }
 
+  // Emit type aliases (after enums, before data types)
+  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
+  for (const name of typeAliasNames) {
+    const alias = ctx.typeAliasByName.get(name)!;
+    sections.push('');
+    sections.push(emitTypeAlias(alias, ctx));
+  }
+
   // Emit data types in topological order
   const emittedData = new Set<string>();
 
@@ -1113,4 +1121,55 @@ function emitEnumDeclaration(enumNode: RosettaEnumeration, _ctx: EmissionContext
   }
 
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Type alias declaration for TS target
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a TypeScript type alias declaration.
+ * Maps a Rune typeAlias to `export type <Name> = <TsType>;`.
+ */
+function emitTypeAlias(alias: RosettaTypeAlias, ctx: EmissionContext): string {
+  const name = alias.name;
+  const typeRef = alias.typeCall?.type?.ref;
+  const refText = alias.typeCall?.type?.$refText;
+
+  // Resolve the target type to a TypeScript type name
+  let tsType = 'unknown';
+  if (typeRef && isRosettaBasicType(typeRef)) {
+    const builtinMap: Record<string, string> = {
+      string: 'string',
+      int: 'number',
+      number: 'number',
+      boolean: 'boolean',
+      date: 'string',
+      dateTime: 'string',
+      zonedDateTime: 'string',
+      time: 'string',
+      productType: 'string',
+      eventType: 'string'
+    };
+    tsType = builtinMap[typeRef.name] ?? 'unknown';
+  } else if (typeRef && isData(typeRef)) {
+    tsType = `${typeRef.name}Shape`;
+  } else if (typeRef && isRosettaEnumeration(typeRef)) {
+    tsType = typeRef.name;
+  } else if (refText) {
+    // Try builtin by refText
+    const builtinMap: Record<string, string> = {
+      string: 'string',
+      int: 'number',
+      number: 'number',
+      boolean: 'boolean',
+      date: 'string',
+      dateTime: 'string',
+      zonedDateTime: 'string',
+      time: 'string'
+    };
+    tsType = builtinMap[refText] ?? refText;
+  }
+
+  return `export type ${name} = ${tsType};`;
 }

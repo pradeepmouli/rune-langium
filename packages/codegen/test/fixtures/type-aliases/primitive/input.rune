@@ -1,0 +1,6 @@
+namespace "test.aliases"
+version "1"
+
+typeAlias Price: number
+
+typeAlias Name: string
