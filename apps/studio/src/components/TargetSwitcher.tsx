@@ -36,6 +36,7 @@ export function TargetSwitcher({ value, onChange }: TargetSwitcherProps): React.
       role="tablist"
       aria-label="Code generation target"
       data-testid="target-switcher"
+      className="preview-panel__target-switcher"
       onKeyDown={handleKeyDown}
     >
       {TARGET_OPTIONS.map((t) => (
@@ -49,6 +50,7 @@ export function TargetSwitcher({ value, onChange }: TargetSwitcherProps): React.
           tabIndex={value === t.value ? 0 : -1}
           onClick={() => onChange(t.value)}
           data-state={value === t.value ? 'active' : 'inactive'}
+          className="preview-panel__target-button"
         >
           {t.label}
         </button>

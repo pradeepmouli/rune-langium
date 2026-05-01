@@ -19,6 +19,12 @@ interface FakeGroupSpy {
   sizeCalls: Array<{ width?: number; height?: number }>;
 }
 
+interface FakePanelSpy {
+  api: { setActive: () => void };
+  activeCalls: number;
+  group: FakeGroupSpy;
+}
+
 function makeFakeGroup(): FakeGroupSpy {
   const spy: FakeGroupSpy = {
     sizeCalls: [],
@@ -39,16 +45,27 @@ class FakeApi {
   panels: Array<{ id: string; component: string }> = [];
   cleared = 0;
   groups = new Map<string, FakeGroupSpy>();
+  panelStates = new Map<string, FakePanelSpy>();
   onDidLayoutChange = () => {
     return { dispose: () => {} };
   };
   addPanel = (opts: { id: string; component: string }) => {
     this.panels.push(opts);
     const group = makeFakeGroup();
+    const panelSpy: FakePanelSpy = {
+      activeCalls: 0,
+      api: {
+        setActive: () => {
+          panelSpy.activeCalls++;
+        }
+      },
+      group
+    };
     this.groups.set(opts.id, group);
+    this.panelStates.set(opts.id, panelSpy);
     return {
       id: opts.id,
-      api: { setActive: () => {} },
+      api: panelSpy.api,
       group
     };
   };
@@ -61,14 +78,11 @@ class FakeApi {
     this.panels = [];
   };
   getPanel = (id: string) => {
-    const panel = this.panels.find((p) => p.id === id);
+    const panel = this.panelStates.get(id);
     if (!panel) {
       return undefined;
     }
-    return {
-      api: { setActive: () => {} },
-      group: this.groups.get(id)
-    };
+    return panel;
   };
 }
 
@@ -115,13 +129,13 @@ describe('DockShell — dockview integration (T065)', () => {
     }
   });
 
-  it('calls onLayoutChange on initial mount with version=1', async () => {
+  it('calls onLayoutChange on initial mount with version=2', async () => {
     const onChange = vi.fn();
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" onLayoutChange={onChange} />);
     await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
     expect(onChange).toHaveBeenCalled();
     const last = onChange.mock.calls.at(-1)?.[0];
-    expect(last.version).toBe(1);
+    expect(last.version).toBe(2);
   });
 
   it('exposes role=application on the shell container', () => {
@@ -129,13 +143,12 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(screen.getByRole('application', { name: /studio dock shell/i })).toBeInTheDocument();
   });
 
-  it('renders compact grouped mode headers above the dock surface', () => {
+  it('renders layout preset controls above the dock surface', () => {
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
-    const header = screen.getByRole('group', { name: /studio mode groups/i });
+    const header = screen.getByRole('toolbar', { name: /studio layout presets/i });
     expect(header).toBeInTheDocument();
     expect(header).toHaveTextContent('Navigate');
     expect(header).toHaveTextContent('Edit');
-    expect(header).toHaveTextContent('Visualize');
     expect(header).toHaveTextContent('Preview');
   });
 
@@ -161,6 +174,34 @@ describe('DockShell — dockview integration (T065)', () => {
     const last = onChange.mock.calls.at(-1)?.[0];
     expect(last.writtenBy).toBe('9.9.9');
     expect(last.dockview).toHaveProperty('columns');
+  });
+
+  it('activates a requested panel when focusPanel changes', async () => {
+    function Harness() {
+      const [focusPanel, setFocusPanel] = useState<{
+        component: 'workspace.inspector';
+        nonce: number;
+      } | null>(null);
+
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => setFocusPanel({ component: 'workspace.inspector', nonce: 1 })}
+          >
+            focus inspector
+          </button>
+          <DockShell studioVersion="0.1.0" workspaceId="ws-1" focusPanel={focusPanel} />
+        </>
+      );
+    }
+
+    render(<Harness />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    fireEvent.click(screen.getByText('focus inspector'));
+
+    expect(lastApi?.panelStates.get('workspace.inspector')?.activeCalls).toBe(1);
   });
 
   it('surfaces a user-visible notice when an invalid saved factory layout is reset', () => {

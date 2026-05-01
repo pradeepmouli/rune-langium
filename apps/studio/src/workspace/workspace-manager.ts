@@ -26,6 +26,7 @@ import {
 import { WorkspaceOwnership } from '../services/multi-tab-broadcast.js';
 import { cloneRepository } from '../services/git-backing.js';
 import { storeWorkspaceToken } from '../services/github-auth.js';
+import { LAYOUT_SCHEMA_VERSION } from '../shell/layout-factory.js';
 
 export interface WorkspaceManagerOptions {
   opfsRoot: FileSystemDirectoryHandle;
@@ -114,7 +115,11 @@ export class WorkspaceManager {
         syncState: 'clean',
         lastSyncedSha: null
       },
-      layout: { version: 1, writtenBy: this.opts.studioVersion, dockview: null },
+      layout: {
+        version: LAYOUT_SCHEMA_VERSION,
+        writtenBy: this.opts.studioVersion,
+        dockview: null
+      },
       tabs: [],
       activeTabPath: null,
       curatedModels: [],
@@ -135,7 +140,11 @@ export class WorkspaceManager {
       createdAt: now,
       lastOpenedAt: now,
       kind: 'browser-only',
-      layout: { version: 1, writtenBy: this.opts.studioVersion, dockview: null },
+      layout: {
+        version: LAYOUT_SCHEMA_VERSION,
+        writtenBy: this.opts.studioVersion,
+        dockview: null
+      },
       tabs: [],
       activeTabPath: null,
       curatedModels: [],

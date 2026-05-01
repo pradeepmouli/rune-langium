@@ -183,9 +183,13 @@ export function FormPreviewPanel({
         role="region"
         aria-label="Form preview"
         data-testid="panel-formPreview"
-        className="flex h-full flex-col overflow-auto bg-background p-2"
+        className="preview-panel preview-panel--form flex h-full flex-col overflow-auto p-3"
       >
-        <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
+        <p
+          role="status"
+          aria-live="polite"
+          className="preview-panel__empty text-sm text-muted-foreground"
+        >
           {getStatusOnlyMessage(schema, status)}
         </p>
       </section>
@@ -197,14 +201,14 @@ export function FormPreviewPanel({
       role="region"
       aria-label="Form preview"
       data-testid="panel-formPreview"
-      className="flex h-full flex-col overflow-auto bg-background"
+      className="preview-panel preview-panel--form flex h-full flex-col overflow-auto"
     >
-      <header className="border-b border-border px-2 py-1.5">
+      <header className="preview-panel__header border-b border-border px-3 py-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-xs font-semibold">{schema.title}</h2>
+            <h2 className="text-sm font-semibold">{schema.title}</h2>
             {target ? (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {target.id} [{target.kind}]
               </p>
             ) : null}
@@ -219,14 +223,14 @@ export function FormPreviewPanel({
           <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
-              className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
+              className="preview-panel__action px-2 py-1 text-[11px]"
               onClick={handleCopySample}
             >
               Copy sample data
             </button>
             <button
               type="button"
-              className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
+              className="preview-panel__action px-2 py-1 text-[11px]"
               onClick={handleReset}
             >
               Reset sample
@@ -234,7 +238,7 @@ export function FormPreviewPanel({
           </div>
         </div>
       </header>
-      <form className="space-y-2 overflow-auto p-2">
+      <form className="preview-panel__body space-y-3 overflow-auto p-3">
         {schema.fields.map((field) => (
           <PreviewFieldControl
             key={field.path}
@@ -253,18 +257,14 @@ export function FormPreviewPanel({
             Unsupported preview features: {schema.unsupportedFeatures.join(', ')}
           </div>
         ) : null}
-        <details
-          className="rounded border border-border bg-card/50"
-          data-testid="sample-data-view"
-          open
-        >
+        <details className="preview-panel__sample" data-testid="sample-data-view" open>
           <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">
             Sample data
           </summary>
           <div className="space-y-2 border-t border-border p-2">
             <pre
               aria-label="Sample data output"
-              className="max-h-56 overflow-auto rounded bg-muted/40 p-2 text-[11px] leading-5 text-foreground"
+              className="preview-panel__sample-output max-h-56 overflow-auto p-2 text-[11px] leading-5 text-foreground"
               data-testid="sample-data-output"
             >
               {activeSample?.serialized ?? '{}'}
@@ -309,7 +309,7 @@ function PreviewFieldControl({
     const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
     const isPresent = value !== undefined;
     return (
-      <fieldset className="space-y-1.5 border border-border p-1.5">
+      <fieldset className="preview-panel__group space-y-1.5 p-2">
         <legend className="px-1 text-xs font-medium text-muted-foreground">
           {resolvedFieldLabel(field, arrayIndices)}
         </legend>
@@ -323,7 +323,7 @@ function PreviewFieldControl({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
+              className="preview-panel__action px-2 py-1 text-[11px]"
               onClick={() => onObjectToggle(field, !isPresent, arrayIndices)}
             >
               {isPresent
@@ -366,7 +366,7 @@ function PreviewFieldControl({
     const [child] = field.children ?? [];
 
     return (
-      <fieldset className="space-y-1.5 border border-border p-1.5">
+      <fieldset className="preview-panel__group space-y-1.5 p-2">
         <legend className="px-1 text-xs font-medium text-muted-foreground">{field.label}</legend>
         <FieldMeta
           field={field}
@@ -376,7 +376,7 @@ function PreviewFieldControl({
         <FieldDescription description={field.description} />
         <button
           type="button"
-          className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
+          className="preview-panel__action px-2 py-1 text-[11px]"
           onClick={() => onArrayAdd(field, arrayIndices)}
         >
           Add {field.label} item
@@ -386,7 +386,7 @@ function PreviewFieldControl({
           ? items.map((_, index) => (
               <div
                 key={`${field.path}-${index}`}
-                className="space-y-1 border border-dashed border-border p-2"
+                className="preview-panel__array-item space-y-1 p-2"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] text-muted-foreground">
@@ -394,7 +394,7 @@ function PreviewFieldControl({
                   </span>
                   <button
                     type="button"
-                    className="rounded border border-border px-2 py-1 text-[11px] text-foreground"
+                    className="preview-panel__action px-2 py-1 text-[11px]"
                     onClick={() => onArrayRemove(field, index, arrayIndices)}
                   >
                     Remove {child.label} {index + 1}
@@ -432,7 +432,7 @@ function PreviewFieldControl({
         <select
           aria-label={resolvedFieldLabel(field, arrayIndices)}
           value={typeof value === 'string' ? value : ''}
-          className="mt-0.5 block h-7 w-full border border-input bg-background px-2 py-0.5 text-xs"
+          className="preview-panel__input mt-0.5 block h-8 w-full px-2 py-1 text-xs"
           onChange={(event) => onFieldChange(field.path, event.target.value, arrayIndices)}
           onBlur={onFieldBlur}
         >
@@ -467,6 +467,7 @@ function PreviewFieldControl({
           aria-label={resolvedFieldLabel(field, arrayIndices)}
           type="checkbox"
           checked={Boolean(value)}
+          className="preview-panel__checkbox"
           onChange={(event) => onFieldChange(field.path, event.target.checked, arrayIndices)}
           onBlur={onFieldBlur}
         />
@@ -490,7 +491,7 @@ function PreviewFieldControl({
         aria-label={resolvedFieldLabel(field, arrayIndices)}
         type={inputType}
         value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''}
-        className="mt-0.5 block h-7 w-full border border-input bg-background px-2 py-0.5 text-xs"
+        className="preview-panel__input mt-0.5 block h-8 w-full px-2 py-1 text-xs"
         onChange={(event) => onFieldChange(field.path, getInputValue(field, event), arrayIndices)}
         onBlur={onFieldBlur}
       />
@@ -518,9 +519,13 @@ function FieldMeta({
   return (
     <div className="mt-0.5 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
       {chips.map((chip) => (
-        <span key={chip}>{chip}</span>
+        <span key={chip} className="preview-panel__chip">
+          {chip}
+        </span>
       ))}
-      {source ? <span>Source: {formatSourceLocation(source)}</span> : null}
+      {source ? (
+        <span className="preview-panel__chip">Source: {formatSourceLocation(source)}</span>
+      ) : null}
     </div>
   );
 }
@@ -530,12 +535,14 @@ function FieldDescription({ description }: { description?: string }): ReactEleme
     return null;
   }
 
-  return <p className="text-[11px] text-muted-foreground">{description}</p>;
+  return (
+    <p className="preview-panel__description text-[11px] text-muted-foreground">{description}</p>
+  );
 }
 
 function FieldError({ message }: { message: string }): ReactElement {
   return (
-    <p role="alert" className="mt-1 text-[11px] text-red-600">
+    <p role="alert" className="preview-panel__error mt-1 text-[11px]">
       {message}
     </p>
   );

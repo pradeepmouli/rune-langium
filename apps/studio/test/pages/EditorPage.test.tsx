@@ -39,12 +39,19 @@ const { editorStoreState, useEditorStore, useDiagnosticsStore } = vi.hoisted(() 
   return { editorStoreState, useEditorStore, diagnosticsState, useDiagnosticsStore };
 });
 
-const { sourceEditorMockState } = vi.hoisted(() => ({
+const { sourceEditorMockState, dockShellMockState } = vi.hoisted(() => ({
   sourceEditorMockState: {
     latestProps: undefined as
       | {
           activeFile?: string;
           onEditorViewCreated?: (filePath: string, view: { id: string }) => void;
+        }
+      | undefined
+  },
+  dockShellMockState: {
+    latestProps: undefined as
+      | {
+          focusPanel?: { component: string; nonce: number } | null;
         }
       | undefined
   }
@@ -157,14 +164,23 @@ vi.mock('../../src/components/GraphFilterMenu.js', () => ({
 }));
 
 vi.mock('../../src/shell/DockShell.js', () => ({
-  DockShell: ({ panelComponents }: { panelComponents?: Record<string, React.ComponentType> }) =>
-    React.createElement(
-      'div',
-      { 'data-testid': 'dock-shell' },
+  DockShell: ({
+    panelComponents,
+    focusPanel
+  }: {
+    panelComponents?: Record<string, React.ComponentType>;
+    focusPanel?: { component: string; nonce: number } | null;
+  }) => {
+    dockShellMockState.latestProps = { focusPanel };
+    return React.createElement('div', { 'data-testid': 'dock-shell' }, [
       panelComponents?.['workspace.editor']
-        ? React.createElement(panelComponents['workspace.editor'])
+        ? React.createElement(panelComponents['workspace.editor'], { key: 'editor' })
+        : null,
+      panelComponents?.['workspace.visualPreview']
+        ? React.createElement(panelComponents['workspace.visualPreview'], { key: 'visual' })
         : null
-    )
+    ]);
+  }
 }));
 
 vi.mock('../../src/hooks/useLspDiagnosticsBridge.js', () => ({
@@ -222,6 +238,7 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.selectedNodeId = undefined;
     vi.clearAllMocks();
     sourceEditorMockState.latestProps = undefined;
+    dockShellMockState.latestProps = undefined;
   });
 
   afterEach(() => {
@@ -638,6 +655,79 @@ describe('EditorPage preview target identity', () => {
         'data-active-file',
         '/workspace/beta.rosetta'
       );
+    });
+  });
+});
+
+describe('EditorPage workspace chrome', () => {
+  beforeEach(() => {
+    vi.stubGlobal('Worker', MockWorker);
+    MockWorker.instances = [];
+    setRuneStudioTestApi(() => undefined);
+    usePreviewStore.getState().resetPreviewState();
+    editorStoreState.nodes = [];
+    editorStoreState.selectedNodeId = undefined;
+    vi.clearAllMocks();
+    sourceEditorMockState.latestProps = undefined;
+    dockShellMockState.latestProps = undefined;
+  });
+
+  afterEach(() => {
+    setRuneStudioTestApi(() => undefined);
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it('renders a workspace header and keeps graph controls inside the graph panel', () => {
+    render(
+      <EditorPage
+        models={[]}
+        files={[{ path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}
+        workspaceName="CDM Workspace"
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Studio workspace header')).toBeInTheDocument();
+    expect(screen.getByText('Rune Studio')).toBeInTheDocument();
+    expect(screen.getByText('CDM Workspace')).toBeInTheDocument();
+    expect(screen.getByText('1 file')).toBeInTheDocument();
+    expect(screen.getByTitle('Generate code from model')).toBeInTheDocument();
+
+    const graphToolbar = screen.getByLabelText('Graph toolbar');
+    expect(graphToolbar).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fit View' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Re-layout' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Grouped' })).toBeInTheDocument();
+  });
+
+  it('requests inspector focus when a node is selected', async () => {
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
+
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(dockShellMockState.latestProps?.focusPanel).toEqual({
+        component: 'workspace.inspector',
+        nonce: 1
+      });
     });
   });
 });

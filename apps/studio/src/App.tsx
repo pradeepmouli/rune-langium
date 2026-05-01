@@ -27,6 +27,7 @@ import { BASE_TYPE_FILES } from './resources/base-types.js';
 import { config, studioConfig } from './config.js';
 import * as persistence from './workspace/persistence.js';
 import type { WorkspaceRecord } from './workspace/persistence.js';
+import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
 import {
   deleteWorkspaceFiles,
   loadWorkspaceFiles,
@@ -152,7 +153,11 @@ export function App() {
       kind: 'browser-only',
       createdAt: now,
       lastOpenedAt: now,
-      layout: { version: 1, writtenBy: STUDIO_VERSION, dockview: null },
+      layout: {
+        version: LAYOUT_SCHEMA_VERSION,
+        writtenBy: STUDIO_VERSION,
+        dockview: null
+      },
       tabs: [],
       activeTabPath: null,
       curatedModels: [],

@@ -15,29 +15,21 @@ import { buildDefaultLayout } from '../../src/shell/layout-factory.js';
 describe('default layout vs viewport (T080)', () => {
   it('at 1280px the editor area is the dominant slot', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1280 });
-    const dock = layout.dockview as unknown as {
-      columns: Array<{
-        component?: string;
-        tabs?: Array<{ component: string }>;
-        size?: number;
-        weight?: number;
-        collapsed?: boolean;
-      }>;
-    };
-    const editor = dock.columns.find((c) =>
-      c.tabs?.some((tab) => tab.component === 'workspace.editor')
-    );
-    const fileTree = dock.columns.find((c) => c.component === 'workspace.fileTree');
-    const preview = dock.columns.find((c) =>
-      c.tabs?.some((tab) => tab.component === 'workspace.formPreview')
-    );
-    const visualize = dock.columns.find((c) => c.component === 'workspace.visualPreview');
+    if (!layout.dockview || layout.dockview.shape !== 'factory') {
+      throw new Error('factory shape expected');
+    }
+
+    const navigation = layout.dockview.columns[0];
+    const editor = layout.dockview.columns[1];
+    const preview = layout.dockview.columns[2];
 
     expect(editor).toBeDefined();
     expect((editor!.weight ?? 0) >= 3).toBe(true);
-    expect(fileTree!.size).toBeLessThanOrEqual(220);
-    expect(visualize!.size).toBeLessThanOrEqual(220);
-    expect(preview!.size).toBeLessThanOrEqual(280);
+    expect(navigation.size).toBeLessThanOrEqual(220);
+    expect(navigation.bottomSize).toBeLessThanOrEqual(220);
+    expect(navigation.top.component).toBe('workspace.fileTree');
+    expect(navigation.bottom.component).toBe('workspace.visualPreview');
+    expect(preview!.size).toBeLessThanOrEqual(300);
   });
 });
 

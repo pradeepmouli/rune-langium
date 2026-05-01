@@ -20,10 +20,13 @@
  */
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import { buildDefaultLayout, type BuildLayoutInput } from './layout-factory.js';
+import {
+  buildDefaultLayout,
+  LAYOUT_SCHEMA_VERSION,
+  type BuildLayoutInput
+} from './layout-factory.js';
 import { PANEL_COMPONENT_NAMES, type FactoryShape } from './layout-types.js';
 
-const CURRENT_VERSION = 1;
 const KNOWN_COMPONENTS = new Set<string>(PANEL_COMPONENT_NAMES);
 export const INVALID_LAYOUT_RESET_NOTICE =
   'Your saved layout was incompatible with this Studio version, so it was reset to the default arrangement.';
@@ -44,12 +47,24 @@ export function sanitizeLayoutWithDiagnostics(
   if (!isPlausibleLayout(input)) {
     return { layout: buildDefaultLayout(ctx) };
   }
-  if (input.version > CURRENT_VERSION) {
-    return { layout: buildDefaultLayout(ctx) };
+  if (input.version > LAYOUT_SCHEMA_VERSION) {
+    return {
+      layout: buildDefaultLayout(ctx),
+      notice: INVALID_LAYOUT_RESET_NOTICE
+    };
+  }
+  if (!hasKnownDockviewShape(input.dockview)) {
+    return {
+      layout: buildDefaultLayout(ctx),
+      notice: INVALID_LAYOUT_RESET_NOTICE
+    };
   }
   // Walk + drop unknown component names. Mutation happens on a deep clone
   // so the original (persisted) record stays untouched until a new save.
   const cloned: PanelLayoutRecord = JSON.parse(JSON.stringify(input));
+  if (cloned.version < LAYOUT_SCHEMA_VERSION) {
+    cloned.version = LAYOUT_SCHEMA_VERSION;
+  }
   let droppedAny = false;
   let normalizedActive = false;
   walkAndDrop(cloned.dockview, () => {
@@ -89,6 +104,16 @@ function isPlausibleLayout(input: unknown): input is PanelLayoutRecord {
   );
 }
 
+function hasKnownDockviewShape(
+  payload: unknown
+): payload is NonNullable<PanelLayoutRecord['dockview']> {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+  const shape = (payload as { shape?: unknown }).shape;
+  return shape === 'factory' || shape === 'native';
+}
+
 /**
  * Walk the dockview tree and remove any node whose `component` field names
  * a panel that's no longer in the registry. Mutates in place.
@@ -122,7 +147,18 @@ function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape'
   if (!Array.isArray(shape.columns)) {
     return 'invalid-shape';
   }
-  const groups = [shape.columns[1], shape.columns[3], shape.bottomGroup];
+  if (shape.columns.length !== 3) {
+    return 'invalid-shape';
+  }
+  const navigation = shape.columns[0];
+  if (
+    !isNavigationColumn(navigation) ||
+    navigation.top.component !== 'workspace.fileTree' ||
+    navigation.bottom.component !== 'workspace.visualPreview'
+  ) {
+    return 'invalid-shape';
+  }
+  const groups = [shape.columns[1], shape.columns[2], shape.bottomGroup];
   for (const group of groups) {
     if (!group || !('tabs' in group) || !Array.isArray(group.tabs) || group.tabs.length === 0) {
       return 'invalid-shape';
@@ -143,4 +179,25 @@ function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape'
     normalized = true;
   }
   return normalized;
+}
+
+function isNavigationColumn(value: unknown): value is FactoryShape['columns'][0] & {
+  top: { component: string };
+  bottom: { component: string };
+} {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const record = value as {
+    top?: { component?: unknown } | null;
+    bottom?: { component?: unknown } | null;
+  };
+  return (
+    !!record.top &&
+    typeof record.top === 'object' &&
+    typeof record.top.component === 'string' &&
+    !!record.bottom &&
+    typeof record.bottom === 'object' &&
+    typeof record.bottom.component === 'string'
+  );
 }
