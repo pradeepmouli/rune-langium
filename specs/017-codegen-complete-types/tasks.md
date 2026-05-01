@@ -249,7 +249,7 @@
 - [ ] T082 [P] Add cross-namespace fixtures using real CDM inheritance patterns
 - [ ] T083 [P] Verify Studio form preview renders all new types correctly end-to-end
 - [ ] T084 Verify function execution works end-to-end in Studio with a real function from fixtures
-- [ ] T085 Run quickstart.md validation — build, test, verify all targets
+- [x] T085 Run quickstart.md validation — build, test, verify all targets
 
 ---
 
