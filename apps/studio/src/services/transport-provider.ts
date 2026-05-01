@@ -6,10 +6,15 @@
  *
  * Connection strategy:
  *   1. Try the embedded browser worker transport (primary Studio path).
- *   2. If that fails, try WebSocket (external dev server — full Langium + OS access).
- *   3. On failure, retry up to `maxReconnectAttempts` with exponential backoff.
- *   4. Fall back to the **CF Worker LSP** (T044) — POST a same-origin token
- *      mint to `${config.lspSessionUrl}`, then open
+ *   2. If that fails and direct WebSocket is preferred/configured, try
+ *      WebSocket (external dev server — full Langium + OS access). This step
+ *      is skipped when `sessionUrl` is same-origin and no explicit `wsUri` is
+ *      provided — in that case the provider moves directly to step 3.
+ *   3. On WebSocket failure, retry up to `maxReconnectAttempts` with
+ *      exponential backoff, then fall back to the **CF Worker LSP** (T044).
+ *      When the WebSocket step is skipped, the CF Worker fallback is attempted
+ *      immediately after the embedded transport fails. POST a same-origin
+ *      token mint to `${config.lspSessionUrl}`, then open
  *      `WebSocket(\`${config.lspWsUrl}/ws/${token}\`)`. On 401 from the mint
  *      we retry once with a fresh token; on 429 / 5xx we surface
  *      "language services unavailable" with the dev-mode-gated copy from FR-014.
@@ -194,7 +199,7 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
   }
 
   /**
-   * Step 4 — CF Worker LSP via session token. On 401 from the mint, refreshes the token
+   * Step 3 — CF Worker LSP via session token. On 401 from the mint, refreshes the token
    * once and retries; on 429 / 5xx surfaces the documented "language
    * services unavailable" copy from FR-014 and falls through to the
    * disconnected error state.

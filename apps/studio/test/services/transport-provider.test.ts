@@ -6,7 +6,7 @@
  *
  * Step 1 = embedded browser worker transport.
  * Step 2 = direct dev WebSocket (legacy ws://localhost:3001 path).
- * Step 4 = CF Worker LSP — POST /api/lsp/session for a token, then open
+ * Step 3 = CF Worker LSP — POST /api/lsp/session for a token, then open
  *          WebSocket(${cfWsBase}/ws/${token}). On 401 from the mint we
  *          retry once; on 429 / 5xx we surface "language services
  *          unavailable" with the dev-mode-gated copy from FR-014.
@@ -315,11 +315,9 @@ describe('createTransportProvider', () => {
 
     await provider.getTransport();
 
-    // Listener should have been called during getTransport (connecting → connected)
-    // but after unsub, no more calls
-    const callCount = listener.mock.calls.length;
-    // No additional calls after unsub
-    expect(callCount).toBeGreaterThanOrEqual(0);
+    // unsub() was called before getTransport(), so the listener must never
+    // have been invoked for any of the connecting → connected state transitions.
+    expect(listener).not.toHaveBeenCalled();
 
     provider.dispose();
   });
