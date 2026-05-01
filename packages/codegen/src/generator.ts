@@ -9,6 +9,7 @@ import { createDiagnostic, hasFatalDiagnostics } from './diagnostics.js';
 import { emitNamespace as emitZodNamespace } from './emit/zod-emitter.js';
 import { emitNamespace as emitJsonSchemaNamespace } from './emit/json-schema-emitter.js';
 import { emitNamespace as emitTsNamespace } from './emit/ts-emitter.js';
+import { buildNamespaceRegistry, type NamespaceRegistry } from './emit/namespace-registry.js';
 
 /**
  * Group Langium documents by their namespace name.
@@ -64,17 +65,20 @@ export function runGenerate(docs: LangiumDocument[], options: GeneratorOptions):
     return [];
   }
 
+  // Build cross-namespace registry before per-namespace emission
+  const registry = buildNamespaceRegistry(byNamespace);
+
   const outputs: GeneratorOutput[] = [];
 
   for (const [namespace, namespaceDocs] of byNamespace) {
     let output: GeneratorOutput;
 
     if (target === 'zod') {
-      output = emitZodNamespace(namespaceDocs, namespace, options);
+      output = emitZodNamespace(namespaceDocs, namespace, options, registry);
     } else if (target === 'json-schema') {
-      output = emitJsonSchemaNamespace(namespaceDocs, namespace, options);
+      output = emitJsonSchemaNamespace(namespaceDocs, namespace, options, registry);
     } else if (target === 'typescript') {
-      output = emitTsNamespace(namespaceDocs, namespace, options);
+      output = emitTsNamespace(namespaceDocs, namespace, options, [], registry);
     } else {
       // Unknown target — should be unreachable given the Target union, but
       // emit a structured diagnostic rather than crashing.

@@ -19,13 +19,13 @@
 
 **Purpose**: Scaffolding and shared infrastructure for all new codegen constructs
 
-- [ ] T001 Create `RuneTypeAlias` type representation in packages/codegen/src/types/type-alias.ts
-- [ ] T002 [P] Create `RuneRule` type representation in packages/codegen/src/types/rule.ts
-- [ ] T003 [P] Create `RuneReport` type representation in packages/codegen/src/types/report.ts
-- [ ] T004 [P] Create `RuneAnnotationDecl` type representation in packages/codegen/src/types/annotation.ts
-- [ ] T005 [P] Create `RuneLibraryFunc` type representation in packages/codegen/src/types/library-func.ts
-- [ ] T006 Export all new types from packages/codegen/src/index.ts
-- [ ] T007 Add `kind` discriminator field (`'data' | 'typeAlias' | 'choice' | 'function'`) to `FormPreviewSchema` in packages/codegen/src/types.ts
+- [x] T001 Create `RuneTypeAlias` type representation in packages/codegen/src/types/type-alias.ts
+- [x] T002 [P] Create `RuneRule` type representation in packages/codegen/src/types/rule.ts
+- [x] T003 [P] Create `RuneReport` type representation in packages/codegen/src/types/report.ts
+- [x] T004 [P] Create `RuneAnnotationDecl` type representation in packages/codegen/src/types/annotation.ts
+- [x] T005 [P] Create `RuneLibraryFunc` type representation in packages/codegen/src/types/library-func.ts
+- [x] T006 Export all new types from packages/codegen/src/index.ts
+- [x] T007 Add `kind` discriminator field (`'data' | 'typeAlias' | 'choice' | 'function'`) to `FormPreviewSchema` in packages/codegen/src/types.ts
 
 ---
 
@@ -35,14 +35,14 @@
 
 **CRITICAL**: No cross-namespace codegen can work without this phase
 
-- [ ] T008 Create `NamespaceRegistry` and `NamespaceManifest` types in packages/codegen/src/emit/namespace-registry.ts
-- [ ] T009 Implement `buildNamespaceRegistry()` that scans all grouped documents and builds per-namespace manifests (exported data/enum/func/rule/typeAlias/annotation names + relative output path) in packages/codegen/src/emit/namespace-registry.ts
-- [ ] T010 Implement `resolveImportPath(fromNamespace, toNamespace, registry)` utility in packages/codegen/src/emit/namespace-registry.ts
-- [ ] T011 Modify `runGenerate()` in packages/codegen/src/generator.ts to call `buildNamespaceRegistry()` after `groupByNamespace()` and pass registry to each per-namespace emitter call
-- [ ] T012 Add `registry: NamespaceRegistry` field to `EmissionContext` in packages/codegen/src/emit/zod-emitter.ts and accept it in `buildEmissionContext()`
-- [ ] T013 [P] Add `registry: NamespaceRegistry` field to `EmissionContext` in packages/codegen/src/emit/ts-emitter.ts and accept it in `buildEmissionContext()`
-- [ ] T014 [P] Add `registry: NamespaceRegistry` field to `EmissionContext` in packages/codegen/src/emit/json-schema-emitter.ts and accept it in `buildEmissionContext()`
-- [ ] T015 Extend `buildEmissionContext()` in all three emitters to collect `isRosettaTypeAlias()`, `isRosettaRule()`, `isRosettaReport()`, `isAnnotation()`, `isRosettaExternalFunction()` elements into new context maps (`typeAliasByName`, `rulesByName`, `reportsByName`, `annotationsByName`, `libraryFuncsByName`)
+- [x] T008 Create `NamespaceRegistry` and `NamespaceManifest` types in packages/codegen/src/emit/namespace-registry.ts
+- [x] T009 Implement `buildNamespaceRegistry()` that scans all grouped documents and builds per-namespace manifests (exported data/enum/func/rule/typeAlias/annotation names + relative output path) in packages/codegen/src/emit/namespace-registry.ts
+- [x] T010 Implement `resolveImportPath(fromNamespace, toNamespace, registry)` utility in packages/codegen/src/emit/namespace-registry.ts
+- [x] T011 Modify `runGenerate()` in packages/codegen/src/generator.ts to call `buildNamespaceRegistry()` after `groupByNamespace()` and pass registry to each per-namespace emitter call
+- [x] T012 Add `registry: NamespaceRegistry` field to `EmissionContext` in packages/codegen/src/emit/zod-emitter.ts and accept it in `buildEmissionContext()`
+- [x] T013 [P] Add `registry: NamespaceRegistry` field to `EmissionContext` in packages/codegen/src/emit/ts-emitter.ts and accept it in `buildEmissionContext()`
+- [x] T014 [P] Add `registry: NamespaceRegistry` field to `EmissionContext` in packages/codegen/src/emit/json-schema-emitter.ts and accept it in `buildEmissionContext()`
+- [x] T015 Extend `buildEmissionContext()` in all three emitters to collect `isRosettaTypeAlias()`, `isRosettaRule()`, `isRosettaReport()`, `isAnnotation()`, `isRosettaExternalFunction()` elements into new context maps (`typeAliasByName`, `rulesByName`, `reportsByName`, `annotationsByName`, `libraryFuncsByName`)
 
 **Checkpoint**: Registry infrastructure ready. All emitters receive cross-namespace context. No output changes yet — existing tests must still pass.
 

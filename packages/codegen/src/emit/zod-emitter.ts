@@ -10,18 +10,29 @@
  */
 
 import type { LangiumDocument } from 'langium';
+import type { NamespaceRegistry } from './namespace-registry.js';
 import {
   isData,
   isRosettaModel,
   isRosettaEnumeration,
   isRosettaBasicType,
+  isRosettaTypeAlias,
+  isRosettaRule,
+  isRosettaReport,
+  isAnnotation,
+  isRosettaExternalFunction,
   isData as _isData,
   type Data,
   type Attribute,
   type Condition,
   type RosettaEnumeration,
   type RosettaModel,
-  type RosettaCardinality
+  type RosettaCardinality,
+  type RosettaTypeAlias,
+  type RosettaRule,
+  type RosettaReport,
+  type Annotation,
+  type RosettaExternalFunction
 } from '@rune-langium/core';
 import type {
   GeneratorOptions,
@@ -59,6 +70,18 @@ interface EmissionContext {
   dataByName: Map<string, Data>;
   /** All Enumeration nodes keyed by name for lookup. */
   enumByName: Map<string, RosettaEnumeration>;
+  /** All RosettaTypeAlias nodes keyed by name for lookup. */
+  typeAliasByName: Map<string, RosettaTypeAlias>;
+  /** All RosettaRule nodes keyed by name for lookup. */
+  rulesByName: Map<string, RosettaRule>;
+  /** All RosettaReport nodes keyed by name for lookup. */
+  reportsByName: Map<string, RosettaReport>;
+  /** All Annotation nodes keyed by name for lookup. */
+  annotationsByName: Map<string, Annotation>;
+  /** All RosettaExternalFunction nodes keyed by name for lookup. */
+  libraryFuncsByName: Map<string, RosettaExternalFunction>;
+  /** Namespace registry for cross-namespace lookups. */
+  registry: NamespaceRegistry;
 }
 
 /**
@@ -663,9 +686,18 @@ function namespaceToPath(namespace: string): string {
 /**
  * Build the EmissionContext for a set of documents sharing a namespace.
  */
-function buildEmissionContext(docs: LangiumDocument[], namespace: string): EmissionContext {
+function buildEmissionContext(
+  docs: LangiumDocument[],
+  namespace: string,
+  registry: NamespaceRegistry
+): EmissionContext {
   const dataByName = new Map<string, Data>();
   const enumByName = new Map<string, RosettaEnumeration>();
+  const typeAliasByName = new Map<string, RosettaTypeAlias>();
+  const rulesByName = new Map<string, RosettaRule>();
+  const reportsByName = new Map<string, RosettaReport>();
+  const annotationsByName = new Map<string, Annotation>();
+  const libraryFuncsByName = new Map<string, RosettaExternalFunction>();
 
   for (const doc of docs) {
     const model = doc.parseResult?.value;
@@ -676,6 +708,16 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
         dataByName.set(element.name, element);
       } else if (isRosettaEnumeration(element)) {
         enumByName.set(element.name, element);
+      } else if (isRosettaTypeAlias(element)) {
+        typeAliasByName.set(element.name, element);
+      } else if (isRosettaRule(element)) {
+        rulesByName.set(element.name, element);
+      } else if (isRosettaReport(element)) {
+        // Reports don't have simple names — derive from context
+      } else if (isAnnotation(element)) {
+        annotationsByName.set(element.name, element);
+      } else if (isRosettaExternalFunction(element)) {
+        libraryFuncsByName.set(element.name, element);
       }
     }
   }
@@ -693,7 +735,13 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
     diagnostics: [],
     namespace,
     dataByName,
-    enumByName
+    enumByName,
+    typeAliasByName,
+    rulesByName,
+    reportsByName,
+    annotationsByName,
+    libraryFuncsByName,
+    registry
   };
 }
 
@@ -706,9 +754,10 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
 export function emitNamespace(
   docs: LangiumDocument[],
   namespace: string,
-  _options: GeneratorOptions
+  _options: GeneratorOptions,
+  registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(docs, namespace);
+  const ctx = buildEmissionContext(docs, namespace, registry);
   const sections: string[] = [];
 
   sections.push(emitFileHeader(namespace, ctx));
