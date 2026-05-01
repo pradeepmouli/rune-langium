@@ -175,7 +175,12 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b">
-          <span className="text-sm font-semibold">Explorer</span>
+          <div className="min-w-0">
+            <span className="text-sm font-semibold">Type explorer</span>
+            <p className="text-[11px] text-muted-foreground">
+              Browse namespaces and types in the active source.
+            </p>
+          </div>
           <Badge variant="secondary">
             {visibleCount}/{totalTypes}
           </Badge>
@@ -185,7 +190,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
         <div className="flex items-center gap-1.5 px-3 py-2 border-b">
           <Input
             type="text"
-            placeholder="Filter namespaces..."
+            placeholder="Filter types or namespaces..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="h-7 text-xs"
@@ -220,7 +225,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
         <div ref={scrollRef} className="flex-1 overflow-auto" data-testid="namespace-tree">
           {flatRows.length === 0 && (
             <p className="px-3 py-4 text-xs text-center text-muted-foreground">
-              {searchQuery ? 'No matching namespaces' : 'No types loaded'}
+              {searchQuery ? 'No matching types or namespaces' : 'No types loaded'}
             </p>
           )}
           {flatRows.length > 0 && (

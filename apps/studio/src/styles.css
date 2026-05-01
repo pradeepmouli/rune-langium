@@ -106,7 +106,7 @@
   .studio-app .dockview-theme-abyss {
     --dv-tabs-and-actions-container-font-size: 11px;
     --dv-tabs-and-actions-container-height: 24px;
-    --dv-sash-color: rgba(124, 140, 172, 0.2);
+    --dv-sash-color: rgba(148, 163, 184, 0.42);
     --dv-active-sash-color: rgba(94, 234, 212, 0.9);
     --dv-active-sash-transition-duration: 0.12s;
     --dv-active-sash-transition-delay: 0s;
@@ -134,6 +134,13 @@
     margin-left: auto;
   }
 
+  .studio-app .studio-layout-presets__hint {
+    margin: 0;
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
   .studio-app .studio-layout-presets__button {
     text-transform: uppercase;
     font-size: 0.625rem;
@@ -144,6 +151,15 @@
   @media (max-width: 1280px) {
     .studio-app .studio-layout-presets {
       flex-wrap: wrap;
+    }
+
+    .studio-app .studio-layout-presets__hint {
+      flex-basis: 100%;
+      order: 1;
+    }
+
+    .studio-app .studio-layout-presets__group--actions {
+      margin-left: 0;
     }
   }
 
@@ -187,10 +203,11 @@
     top: 10px;
     bottom: 10px;
     left: 50%;
-    width: 2px;
+    width: 3px;
     transform: translateX(-50%);
     border-radius: 999px;
     background: var(--dv-sash-color);
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22);
     transition:
       background-color 120ms ease,
       box-shadow 120ms ease,
@@ -207,10 +224,11 @@
     left: 10px;
     right: 10px;
     top: 50%;
-    height: 2px;
+    height: 3px;
     transform: translateY(-50%);
     border-radius: 999px;
     background: var(--dv-sash-color);
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22);
     transition:
       background-color 120ms ease,
       box-shadow 120ms ease,

@@ -103,7 +103,7 @@ describe('applyLayout — factory shape', () => {
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     const titleById = new Map(api.calls.map((c) => [c.id, c.title]));
-    expect(titleById.get('workspace.fileTree')).toBe('Explorer');
+    expect(titleById.get('workspace.fileTree')).toBe('Types');
     expect(titleById.get('workspace.editor')).toBe('Source');
     expect(titleById.get('workspace.inspector')).toBe('Inspector');
     expect(titleById.get('workspace.problems')).toBe('Problems');

@@ -37,8 +37,8 @@ test.describe('Studio — New start-page option', () => {
     // Header file count reflects the new untitled file.
     await expect(page.getByText(/1 file\(s\)/)).toBeVisible();
 
-    // The editor's toolbar (Explorer / Editor / Source / Problems) is visible.
-    await expect(page.getByRole('button', { name: 'Explorer' })).toBeVisible();
+    // The editor's toolbar (Types / Edit / Preview) is visible.
+    await expect(page.getByRole('button', { name: 'Types' })).toBeVisible();
   });
 
   test('clicking New twice creates distinct untitled files', async ({ page }) => {
