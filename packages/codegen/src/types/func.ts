@@ -202,10 +202,22 @@ export interface FuncBodyContext extends ExpressionTranspilerContext {
  * feature.ref is a RosettaFunction. We walk all recursive sub-expressions
  * to find them.
  *
+ * The `visited` WeakSet breaks cycles that occur when cross-reference `.ref`
+ * objects point back into the broader AST graph (e.g. via `$container` chains
+ * in large CDM namespaces). Without this guard the generic walker can produce
+ * a stack overflow on deeply interconnected models.
+ *
  * T119.
  */
-function collectCallees(expr: unknown, callees: Set<string>): void {
+function collectCallees(
+  expr: unknown,
+  callees: Set<string>,
+  visited: WeakSet<object> = new WeakSet()
+): void {
   if (!expr || typeof expr !== 'object') return;
+  if (visited.has(expr as object)) return;
+  visited.add(expr as object);
+
   const node = expr as Record<string, unknown>;
 
   // Direct symbol reference to a function
@@ -232,7 +244,7 @@ function collectCallees(expr: unknown, callees: Set<string>): void {
       }
     }
     // Also recurse into receiver
-    collectCallees(node['receiver'], callees);
+    collectCallees(node['receiver'], callees, visited);
     return;
   }
 
@@ -243,7 +255,7 @@ function collectCallees(expr: unknown, callees: Set<string>): void {
     if (Array.isArray(values)) {
       for (const kv of values) {
         const kvNode = kv as Record<string, unknown>;
-        collectCallees(kvNode['value'], callees);
+        collectCallees(kvNode['value'], callees, visited);
       }
     }
     return;
@@ -256,10 +268,10 @@ function collectCallees(expr: unknown, callees: Set<string>): void {
     if (child && typeof child === 'object') {
       if (Array.isArray(child)) {
         for (const item of child) {
-          collectCallees(item, callees);
+          collectCallees(item, callees, visited);
         }
       } else {
-        collectCallees(child, callees);
+        collectCallees(child, callees, visited);
       }
     }
   }

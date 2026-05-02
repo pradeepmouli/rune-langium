@@ -246,9 +246,9 @@
 
 - [x] T080 Run full codegen against CDM corpus fixtures — verify no regressions in existing output (SC-006)
 - [x] T081 Verify all pre-existing fixture tests pass unchanged
-- [ ] T082 [P] Add cross-namespace fixtures using real CDM inheritance patterns
-- [ ] T083 [P] Verify Studio form preview renders all new types correctly end-to-end
-- [ ] T084 Verify function execution works end-to-end in Studio with a real function from fixtures
+- [x] T082 [P] Add cross-namespace fixtures using real CDM inheritance patterns
+- [x] T083 [P] Verify Studio form preview renders all new types correctly end-to-end
+- [x] T084 Verify function execution works end-to-end in Studio with a real function from fixtures
 - [x] T085 Run quickstart.md validation — build, test, verify all targets
 
 ---
