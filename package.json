@@ -102,16 +102,14 @@
   "pnpm": {
     "overrides": {
       "x-to-zod": "^0.8.0",
-      "@zod-to-form/core": "^0.8.0",
-      "@zod-to-form/react": "^0.8.0",
-      "@zod-to-form/vite": "^0.2.3",
+      "@zod-to-form/core": "^0.8.1",
+      "@zod-to-form/react": "^0.8.1",
+      "@zod-to-form/vite": "^0.3.0",
       "codemirror": "6.0.2",
       "react": "19.2.5",
       "react-dom": "19.2.5"
     },
-    "patchedDependencies": {
-      "@zod-to-form/core@0.8.0": "patches/@zod-to-form__core@0.8.0.patch"
-    }
+    "patchedDependencies": {}
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged",
