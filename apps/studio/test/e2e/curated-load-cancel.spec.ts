@@ -78,8 +78,8 @@ test.describe('Curated load cancel-mid-flight (T019b, EC-2)', () => {
   test('cancel before archive completes leaves no orphaned workspace', async ({ page }) => {
     await mockMirrorWithDelayedArchive(page, 3000);
 
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
 
     // Wait for the curated card and click it.
     const cdmButton = page
@@ -102,12 +102,12 @@ test.describe('Curated load cancel-mid-flight (T019b, EC-2)', () => {
       await cancelButton.click();
     } else {
       // Fallback: navigate away mid-flight, which aborts via React unmount.
-      await page.goto('/');
+      await page.goto('./');
     }
 
     // Reload the page — EC-2's "next launch" probe.
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // (a) No error banner referencing CDM (no `archive_*` failure visible).
     await expect(page.getByText(/Loading CDM.*failed/i)).not.toBeVisible({ timeout: 1_000 });

@@ -400,8 +400,8 @@ async function selectTypeFromNavigate(page: Page, nodeId: string): Promise<void>
 test.describe('Form Preview', () => {
   test.beforeEach(async ({ page }) => {
     await installPreviewWorkerMock(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('renders the selected type in Preview → Form with nested mapped fields', async ({

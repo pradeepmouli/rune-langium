@@ -15,8 +15,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Studio Load → Edit → Export', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('should show file loader on initial load', async ({ page }) => {

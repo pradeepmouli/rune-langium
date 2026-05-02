@@ -29,8 +29,8 @@ test.describe('Cross-surface UX consistency (T063 / US7)', () => {
       page
     }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto('/');
-      await page.waitForLoadState('networkidle');
+      await page.goto('./');
+      await page.waitForLoadState('domcontentloaded');
 
       // 1. body font-family includes Outfit (FR-022)
       const bodyFont = await page.evaluate(() => getComputedStyle(document.body).fontFamily);

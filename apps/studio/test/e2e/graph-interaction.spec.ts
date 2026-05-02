@@ -81,8 +81,8 @@ async function loadFiles(page: Page, files: { name: string; content: string }[])
 
 test.describe('Graph Interactions', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('should render all nodes from the model', async ({ page }) => {

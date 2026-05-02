@@ -64,8 +64,8 @@ async function openSourceViaDoubleClick(page: Page, nodeTestId: string) {
 
 test.describe('Source Editor', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('should show source editor panel when toggled via toolbar', async ({ page }) => {

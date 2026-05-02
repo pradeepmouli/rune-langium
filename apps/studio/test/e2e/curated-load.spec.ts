@@ -99,8 +99,8 @@ test.describe('Curated load happy path (T013, US1)', () => {
   test('CDM card → manifest + archive fetched, editor shows .rosetta', async ({ page }) => {
     const { requested } = await mockCuratedMirror(page);
 
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click the CDM curated card. ModelLoader renders the source.name as the
     // visible button label (model-registry.ts).

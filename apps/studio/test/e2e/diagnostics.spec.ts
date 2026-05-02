@@ -59,8 +59,8 @@ async function openDiagnostics(page: Page) {
 
 test.describe('Diagnostics Panel', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('should show no problems for a valid model', async ({ page }) => {

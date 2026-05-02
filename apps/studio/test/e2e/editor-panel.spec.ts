@@ -61,8 +61,8 @@ async function selectType(page: Page, nodeId: string) {
 
 test.describe('Editor Form Panel', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
     await loadModel(page);
   });
 

@@ -26,7 +26,7 @@ const SELECTORS_TO_EXCLUDE = [
 ];
 
 async function openBlankWorkspace(page: import('@playwright/test').Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('./');
   // Wait for the file-loader directly instead of networkidle — the embedded
   // LSP worker keeps background network connections alive indefinitely.
   const loader = page.getByTestId('file-loader');
@@ -37,7 +37,7 @@ async function openBlankWorkspace(page: import('@playwright/test').Page): Promis
 
 test.describe('Studio a11y (T088)', () => {
   test('home / start page passes axe-core (no serious/critical)', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     await expect(page.getByTestId('file-loader')).toBeVisible();
     const builder = new AxeBuilder({ page });
     for (const sel of SELECTORS_TO_EXCLUDE) builder.exclude(sel);

@@ -53,8 +53,8 @@ async function loadModel(page: Page) {
 
 test.describe('Workspace chrome & graph panel', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
     await loadModel(page);
   });
 

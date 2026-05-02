@@ -20,8 +20,8 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 async function openBlankWorkspace(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.goto('./');
+  await page.waitForLoadState('domcontentloaded');
   const loader = page.getByTestId('file-loader');
   await expect(loader).toBeVisible();
   await loader.getByRole('button', { name: /^New/i }).click();

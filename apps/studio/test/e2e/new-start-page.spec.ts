@@ -13,8 +13,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Studio — New start-page option', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('shows a New button as the primary action on the empty workspace', async ({ page }) => {

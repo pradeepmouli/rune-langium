@@ -70,7 +70,7 @@ export type FormKind = keyof typeof NODES_BY_KIND;
  * by `apps/studio/test/e2e/visual-regression.spec.ts` (file-input upload).
  */
 export async function loadFormsBaseline(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('./');
   await page.waitForLoadState('domcontentloaded');
   const fileInput = page.locator('input[type="file"][accept=".rosetta"]');
   await fileInput.setInputFiles({

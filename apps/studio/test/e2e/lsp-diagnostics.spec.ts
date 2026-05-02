@@ -207,7 +207,7 @@ test.describe('LSP diagnostics latency (T045)', () => {
 
   test('diagnostic appears within 2s of typing a typo (SC-005)', async ({ page }) => {
     const state = await installLspMocks(page);
-    await page.goto('/');
+    await page.goto('./');
     // Drive the workspace into the editor, type "tradse Trade:", then:
     const start = Date.now();
     await page.waitForSelector('[data-testid="problems-panel"] [role="row"]', {
@@ -219,7 +219,7 @@ test.describe('LSP diagnostics latency (T045)', () => {
 
   test('hover tooltip appears within 1s', async ({ page }) => {
     await installLspMocks(page);
-    await page.goto('/');
+    await page.goto('./');
     const start = Date.now();
     await page.locator('[data-testid="hover-tooltip"]').waitFor({ timeout: 1000 });
     expect(Date.now() - start).toBeLessThanOrEqual(1000);
@@ -227,7 +227,7 @@ test.describe('LSP diagnostics latency (T045)', () => {
 
   test('completion list appears within 1s of Ctrl-Space', async ({ page }) => {
     await installLspMocks(page);
-    await page.goto('/');
+    await page.goto('./');
     const start = Date.now();
     await page.keyboard.press('Control+Space');
     await page.locator('[data-testid="completion-list"]').waitFor({ timeout: 1000 });

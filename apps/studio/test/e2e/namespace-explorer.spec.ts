@@ -82,8 +82,8 @@ async function loadFiles(
 
 test.describe('Namespace Explorer', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('should show explorer panel after loading a model', async ({ page }) => {

@@ -258,8 +258,8 @@ async function selectTypeFromNavigate(page: Page, nodeId: string): Promise<void>
 test.describe('Form Preview — Extended Types', () => {
   test.beforeEach(async ({ page }) => {
     await installExtendedPreviewWorkerMock(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.goto('./');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('T083: type alias model renders Order type in the preview panel without errors', async ({

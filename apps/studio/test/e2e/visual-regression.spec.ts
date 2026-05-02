@@ -271,7 +271,7 @@ test.describe('Visual Regression', () => {
   test.setTimeout(60_000);
 
   test('01 — file loader screen', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(500);
     await expect(page.getByTestId('file-loader')).toBeVisible();
@@ -308,7 +308,7 @@ test.describe('Visual Regression', () => {
   });
 
   test('02 — editor page layout', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(300);
 
@@ -345,7 +345,7 @@ test.describe('Visual Regression', () => {
   });
 
   test('03 — namespace explorer', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(300);
 
@@ -393,7 +393,7 @@ test.describe('Visual Regression', () => {
   });
 
   test('04 — source editor panel', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(300);
 
@@ -437,7 +437,7 @@ test.describe('Visual Regression', () => {
   });
 
   test('05 — diagnostics panel', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(300);
 
