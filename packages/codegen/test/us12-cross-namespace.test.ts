@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { generate } from '../src/index.js';
+import { resolveImportPath, type NamespaceRegistry } from '../src/emit/namespace-registry.js';
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures/cross-namespace');
 
@@ -86,5 +87,37 @@ describe('US12: Cross-Namespace Import Resolution', () => {
       const errors = output.diagnostics.filter((d) => d.severity === 'error');
       expect(errors).toHaveLength(0);
     }
+  });
+});
+
+describe('resolveImportPath unit tests', () => {
+  const emptyRegistry: NamespaceRegistry = { namespaces: new Map() };
+
+  it('sibling namespaces produce single ../', () => {
+    expect(resolveImportPath('a.b', 'a.c', emptyRegistry)).toBe('../c');
+  });
+
+  it('same parent, deep target', () => {
+    expect(resolveImportPath('a.b', 'a.c.d', emptyRegistry)).toBe('../c/d');
+  });
+
+  it('deep to shallow', () => {
+    expect(resolveImportPath('a.b.c', 'a.d', emptyRegistry)).toBe('../../d');
+  });
+
+  it('completely different roots', () => {
+    expect(resolveImportPath('x.y', 'a.b', emptyRegistry)).toBe('../../a/b');
+  });
+
+  it('same namespace produces ./', () => {
+    expect(resolveImportPath('a.b', 'a.b', emptyRegistry)).toBe('./');
+  });
+
+  it('child namespace', () => {
+    expect(resolveImportPath('a', 'a.b', emptyRegistry)).toBe('./b');
+  });
+
+  it('parent namespace', () => {
+    expect(resolveImportPath('a.b', 'a', emptyRegistry)).toBe('..');
   });
 });

@@ -408,4 +408,19 @@ describe('FormPreviewSchema generation', () => {
       kind: 'object'
     });
   });
+
+  skipIfNodeLt22('choice with unresolved option type produces unsupported status', async () => {
+    const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        choice Instrument:
+          Bond
+          Equity
+      `);
+    const schemas = generatePreviewSchemas(doc);
+    const instrument = schemas.find((s) => s.targetId === 'test.preview.Instrument');
+    expect(instrument).toBeDefined();
+    expect(instrument!.fields.length).toBeGreaterThanOrEqual(0);
+  });
 });

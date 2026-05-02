@@ -88,6 +88,12 @@ describe('T065: annotation declaration emits typed decorator factory (TypeScript
     expect(output).toContain('return (target: any, propertyKey?: any) => {};');
   });
 
+  it('zero-attribute annotation emits zero-arg decorator factory', async () => {
+    const output = await runFixture('no-attrs', 'typescript');
+    expect(output).toContain('export function deprecated(): ClassDecorator & PropertyDecorator');
+    expect(output).not.toContain('Args');
+  });
+
   it('annotation declarations appear before data type declarations', async () => {
     const output = await runFixture('usage-type', 'typescript');
     const annIdx = output.indexOf('export interface sourceArgs');
@@ -158,6 +164,9 @@ describe('US11: byte-identical fixture-diff — TypeScript target', () => {
 
   it('qualifiers: generates byte-identical output vs expected.ts', () =>
     assertFixture('qualifiers', 'typescript'));
+
+  it('T064b enum-value annotation (TS)', () => assertFixture('enum-value', 'typescript'));
+  it('no-attrs annotation (TS)', () => assertFixture('no-attrs', 'typescript'));
 });
 
 describe('US11: byte-identical fixture-diff — Zod target', () => {
@@ -172,4 +181,7 @@ describe('US11: byte-identical fixture-diff — Zod target', () => {
 
   it('qualifiers: generates byte-identical output vs expected.zod.ts', () =>
     assertFixture('qualifiers', 'zod'));
+
+  it('T064b enum-value annotation (Zod)', () => assertFixture('enum-value', 'zod'));
+  it('no-attrs annotation (Zod)', () => assertFixture('no-attrs', 'zod'));
 });

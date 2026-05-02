@@ -48,6 +48,7 @@ async function assertFixture(
 describe('US7: Type Alias Codegen — Zod', () => {
   it('T016 primitive type alias', () => assertFixture('primitive', 'zod'));
   it('T017 data-ref type alias', () => assertFixture('data-ref', 'zod'));
+  it('T018 with-condition type alias', () => assertFixture('with-condition', 'zod'));
   it('T019 chained type alias', () => assertFixture('chained', 'zod'));
   it('T020 parameterized type alias', () => assertFixture('parameterized', 'zod'));
 });
@@ -55,6 +56,7 @@ describe('US7: Type Alias Codegen — Zod', () => {
 describe('US7: Type Alias Codegen — TypeScript', () => {
   it('T016 primitive type alias', () => assertFixture('primitive', 'typescript'));
   it('T017 data-ref type alias', () => assertFixture('data-ref', 'typescript'));
+  it('T018 with-condition type alias', () => assertFixture('with-condition', 'typescript'));
   it('T019 chained type alias', () => assertFixture('chained', 'typescript'));
   it('T020 parameterized type alias', () => assertFixture('parameterized', 'typescript'));
 });
@@ -62,6 +64,7 @@ describe('US7: Type Alias Codegen — TypeScript', () => {
 describe('US7: Type Alias Codegen — JSON Schema', () => {
   it('T016 primitive type alias', () => assertFixture('primitive', 'json-schema'));
   it('T017 data-ref type alias', () => assertFixture('data-ref', 'json-schema'));
+  it('T018 with-condition type alias', () => assertFixture('with-condition', 'json-schema'));
   it('T019 chained type alias', () => assertFixture('chained', 'json-schema'));
   it('T020 parameterized type alias', () => assertFixture('parameterized', 'json-schema'));
 });

@@ -98,8 +98,12 @@ export function resolveImportPath(
   }
 
   const ups = fromParts.length - commonLen;
-  const upSegment = ups > 0 ? '../'.repeat(ups) : './';
-  return upSegment + toParts.slice(commonLen).join('/');
+  const downParts = toParts.slice(commonLen);
+  if (ups > 0) {
+    const upSegment = '../'.repeat(ups);
+    return downParts.length > 0 ? upSegment + downParts.join('/') : upSegment.slice(0, -1);
+  }
+  return './' + downParts.join('/');
 }
 
 export function findNamespaceForSymbol(
