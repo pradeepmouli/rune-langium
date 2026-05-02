@@ -27,12 +27,22 @@ import {
   isRosettaEnumeration,
   isRosettaBasicType,
   isData as _isData,
+  isRosettaTypeAlias,
+  isRosettaRule,
+  isRosettaReport,
+  isAnnotation,
+  isRosettaExternalFunction,
   type Data,
   type Attribute,
   type Condition,
   type RosettaEnumeration,
   type RosettaModel,
-  type RosettaCardinality
+  type RosettaCardinality,
+  type RosettaTypeAlias,
+  type RosettaRule,
+  type RosettaReport,
+  type Annotation,
+  type RosettaExternalFunction
 } from '@rune-langium/core';
 import type {
   GeneratorOptions,
@@ -41,6 +51,8 @@ import type {
   GeneratorDiagnostic,
   GeneratedFunc
 } from '../types.js';
+import type { NamespaceRegistry } from './namespace-registry.js';
+import { resolveImportPath } from './namespace-registry.js';
 import { buildTypeReferenceGraph, findCyclicTypes } from '../cycle-detector.js';
 import { topoSort } from '../topo-sort.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
@@ -74,6 +86,12 @@ interface EmissionContext {
   namespace: string;
   dataByName: Map<string, Data>;
   enumByName: Map<string, RosettaEnumeration>;
+  typeAliasByName: Map<string, RosettaTypeAlias>;
+  rulesByName: Map<string, RosettaRule>;
+  reportsByName: Map<string, RosettaReport>;
+  annotationsByName: Map<string, Annotation>;
+  libraryFuncsByName: Map<string, RosettaExternalFunction>;
+  registry: NamespaceRegistry;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +135,99 @@ const JS_TYPEOF_MAP: Record<string, string> = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Get the namespace string for an AST element by inspecting its $container.
+ * Returns undefined when the element is not directly inside a RosettaModel.
+ */
+function getElementNamespace(element: { $container?: unknown }): string | undefined {
+  const container = element.$container;
+  if (!container || typeof container !== 'object') return undefined;
+  const model = container as { name?: unknown; $type?: string };
+  if (model.$type !== 'RosettaModel') return undefined;
+  const name = model.name;
+  if (typeof name === 'string') return name.replace(/^"|"$/g, '');
+  if (name && typeof name === 'object' && 'segments' in name) {
+    return (name as { segments: string[] }).segments.join('.');
+  }
+  return String(name ?? '');
+}
+
+/**
+ * Collect cross-namespace import statements needed for the types and aliases
+ * defined in this emission context.
+ *
+ * Walks all Data superType references and attribute type references, plus
+ * TypeAlias type references. Any resolved reference whose namespace differs
+ * from `ctx.namespace` is recorded and emitted as an ES import statement.
+ */
+function collectCrossNamespaceImports(ctx: EmissionContext): string[] {
+  const imports = new Map<string, Set<string>>(); // namespace -> symbol names
+
+  function trackRef(typeRef: unknown, symbolName: string): void {
+    if (!typeRef || typeof typeRef !== 'object') return;
+    const ns = getElementNamespace(typeRef as { $container?: unknown });
+    if (!ns || ns === ctx.namespace) return;
+
+    let symbols = imports.get(ns);
+    if (!symbols) {
+      symbols = new Set();
+      imports.set(ns, symbols);
+    }
+    symbols.add(symbolName);
+  }
+
+  // Check data type inheritance and attribute references
+  for (const data of ctx.dataByName.values()) {
+    // Check superType
+    const parentRef = data.superType?.ref;
+    if (parentRef) {
+      trackRef(parentRef, `${parentRef.name}Shape`);
+      trackRef(parentRef, parentRef.name);
+    }
+    // Check attribute types
+    for (const attr of data.attributes) {
+      const attrTypeRef = attr.typeCall?.type?.ref;
+      if (attrTypeRef && isData(attrTypeRef)) {
+        trackRef(attrTypeRef, attrTypeRef.name);
+      } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
+        trackRef(attrTypeRef, attrTypeRef.name);
+      }
+    }
+  }
+
+  // Check type alias references
+  for (const alias of ctx.typeAliasByName.values()) {
+    const typeRef = alias.typeCall?.type?.ref;
+    if (typeRef && isData(typeRef)) {
+      trackRef(typeRef, `${typeRef.name}Shape`);
+    } else if (typeRef && isRosettaEnumeration(typeRef)) {
+      trackRef(typeRef, typeRef.name);
+    } else if (typeRef && isRosettaTypeAlias(typeRef)) {
+      trackRef(typeRef, typeRef.name);
+    }
+  }
+
+  // Check rule input types
+  for (const rule of ctx.rulesByName.values()) {
+    const inputRef = rule.input?.type?.ref;
+    if (inputRef && isData(inputRef)) {
+      trackRef(inputRef, `${inputRef.name}Shape`);
+      trackRef(inputRef, inputRef.name);
+    }
+  }
+
+  // Build import statements
+  const lines: string[] = [];
+  const sortedNamespaces = Array.from(imports.keys()).sort();
+  for (const ns of sortedNamespaces) {
+    const symbols = Array.from(imports.get(ns)!).sort();
+    const importPath = resolveImportPath(ctx.namespace, ns, ctx.registry);
+    lines.push(`import { ${symbols.join(', ')} } from '${importPath}.js';`);
+  }
+
+  return lines;
+}
 
 /**
  * Resolve the TypeScript type expression for an attribute.
@@ -578,6 +689,80 @@ function emitValidateMethods(data: Data, ctx: EmissionContext): string {
 }
 
 // ---------------------------------------------------------------------------
+// Report metadata emission (Phase 9, US5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a `runeReportRules` const object summarising all rules in this namespace.
+ * Since Rune report declarations require full regulatory-body infrastructure that
+ * may not be present in isolated fixtures, this simplified form aggregates the
+ * rules themselves and annotates them with kind + input type so downstream
+ * tooling can identify eligibility vs. reporting rules and the type they operate
+ * on.  A namespace with no rules produces an empty string.
+ */
+function emitReportMetadata(ctx: EmissionContext): string {
+  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
+  if (ruleNames.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('export const runeReportRules = {');
+  for (const name of ruleNames) {
+    const rule = ctx.rulesByName.get(name)!;
+    const kind = rule.eligibility ? 'eligibility' : 'reporting';
+    const inputRef = rule.input?.type?.ref;
+    const inputName = inputRef ? inputRef.name : 'unknown';
+    lines.push(`  '${name}': { kind: '${kind}' as const, inputType: '${inputName}' },`);
+  }
+  lines.push('} as const;');
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Rule emission
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a standalone rule function for a RosettaRule.
+ *
+ * Eligibility rules → `export function validate<Name>(...): boolean`
+ * Extraction rules → `export function extract<Name>(...): unknown`
+ */
+function emitRule(rule: RosettaRule, ctx: EmissionContext): string {
+  const name = rule.name;
+  const inputTypeRef = rule.input?.type?.ref;
+  const inputTypeName = inputTypeRef ? inputTypeRef.name : undefined;
+  const paramType = inputTypeName ? `${inputTypeName}Shape` : 'Record<string, unknown>';
+  const paramName = inputTypeName
+    ? inputTypeName.charAt(0).toLowerCase() + inputTypeName.slice(1)
+    : 'input';
+
+  const attributeTypes = new Map<string, string>();
+  if (inputTypeRef && isData(inputTypeRef)) {
+    for (const attr of inputTypeRef.attributes) {
+      const attrType = resolveTypeExprAsTs(attr, ctx);
+      attributeTypes.set(attr.name, attrType);
+    }
+  }
+
+  const transpilerCtx: ExpressionTranspilerContext = {
+    selfName: paramName,
+    emitMode: 'ts-method',
+    conditionName: name,
+    typeName: inputTypeName ?? name,
+    attributeTypes,
+    diagnostics: ctx.diagnostics
+  };
+
+  const exprStr = transpileExpression(rule.expression as any, transpilerCtx);
+
+  if (rule.eligibility) {
+    return `export function validate${name}(${paramName}: ${paramType}): boolean {\n  return ${exprStr};\n}`;
+  } else {
+    return `export function extract${name}(${paramName}: ${paramType}): unknown {\n  return ${exprStr};\n}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Phase 8b: Func emission helpers (T120–T126)
 // ---------------------------------------------------------------------------
 
@@ -812,18 +997,6 @@ function emitFuncBody(func: RuneFunc, ctx: FuncBodyContext): string[] {
 }
 
 /**
- * T125: Scan func bodies for cross-namespace calls and emit import statements.
- * Currently a stub — cross-namespace func calls are a future enhancement.
- * The function signature is present for FR-030 compliance.
- */
-function collectFuncCrossNamespaceImports(_funcs: RuneFunc[], _namespace: string): string[] {
-  // TODO: Walk func expression trees for cross-namespace RosettaFunction refs
-  // and emit `import { G } from '../base/math/index.js'` statements.
-  // For Phase 8b, all funcs are assumed to be in the same namespace.
-  return [];
-}
-
-/**
  * Emit a single func as a TypeScript function declaration.
  *
  * For non-cyclic funcs: `export function F(input: {...}): T { ... }`
@@ -844,6 +1017,56 @@ function emitFunc(func: RuneFunc, ctx: FuncBodyContext, _isHoisted: boolean): st
 }
 
 // ---------------------------------------------------------------------------
+// Library function emission (Phase 10, US6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a TypeScript callable-type alias for a Rune library function declaration.
+ *
+ * Library functions are external (native) implementations — we emit a *type*
+ * rather than a function body so consumers can type-check call sites without
+ * requiring an implementation stub at codegen time.
+ *
+ * e.g.:
+ *   library function Sum(values number[]) number
+ * becomes:
+ *   export type Sum = (values: number[]) => number;
+ */
+function emitLibraryFunc(func: RosettaExternalFunction, ctx: EmissionContext): string {
+  const name = func.name;
+
+  const params = (func.parameters ?? []).map((p) => {
+    const typeRef = p.typeCall?.type?.ref;
+    const refText = p.typeCall?.type?.$refText;
+
+    let typeName = 'unknown';
+    if (typeRef && isRosettaBasicType(typeRef)) {
+      typeName = TS_TYPE_MAP[typeRef.name] ?? 'unknown';
+    } else if (refText) {
+      typeName = TS_TYPE_MAP[refText] ?? refText;
+    }
+
+    const arraySuffix = p.isArray ? '[]' : '';
+    return `${p.name}: ${typeName}${arraySuffix}`;
+  });
+
+  const returnTypeRef = func.typeCall?.type?.ref;
+  const returnRefText = func.typeCall?.type?.$refText;
+  let returnType = 'unknown';
+  if (returnTypeRef && isRosettaBasicType(returnTypeRef)) {
+    returnType = TS_TYPE_MAP[returnTypeRef.name] ?? 'unknown';
+  } else if (returnRefText) {
+    returnType = TS_TYPE_MAP[returnRefText] ?? returnRefText;
+  }
+
+  // Suppress unused-variable warning: ctx is kept for future cross-namespace
+  // type resolution parity with other emitters.
+  void ctx;
+
+  return `export type ${name} = (${params.join(', ')}) => ${returnType};`;
+}
+
+// ---------------------------------------------------------------------------
 // T104: emitNamespace
 // ---------------------------------------------------------------------------
 
@@ -858,9 +1081,18 @@ function namespaceToPath(namespace: string): string {
 /**
  * Build the EmissionContext for a set of documents sharing a namespace.
  */
-function buildEmissionContext(docs: LangiumDocument[], namespace: string): EmissionContext {
+function buildEmissionContext(
+  docs: LangiumDocument[],
+  namespace: string,
+  registry: NamespaceRegistry
+): EmissionContext {
   const dataByName = new Map<string, Data>();
   const enumByName = new Map<string, RosettaEnumeration>();
+  const typeAliasByName = new Map<string, RosettaTypeAlias>();
+  const rulesByName = new Map<string, RosettaRule>();
+  const reportsByName = new Map<string, RosettaReport>();
+  const annotationsByName = new Map<string, Annotation>();
+  const libraryFuncsByName = new Map<string, RosettaExternalFunction>();
 
   for (const doc of docs) {
     const model = doc.parseResult?.value;
@@ -871,6 +1103,16 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
         dataByName.set(element.name, element);
       } else if (isRosettaEnumeration(element)) {
         enumByName.set(element.name, element);
+      } else if (isRosettaTypeAlias(element)) {
+        typeAliasByName.set(element.name, element);
+      } else if (isRosettaRule(element)) {
+        rulesByName.set(element.name, element);
+      } else if (isRosettaReport(element)) {
+        // Reports don't have simple names — skip for now
+      } else if (isAnnotation(element)) {
+        annotationsByName.set(element.name, element);
+      } else if (isRosettaExternalFunction(element)) {
+        libraryFuncsByName.set(element.name, element);
       }
     }
   }
@@ -887,7 +1129,13 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
     diagnostics: [],
     namespace,
     dataByName,
-    enumByName
+    enumByName,
+    typeAliasByName,
+    rulesByName,
+    reportsByName,
+    annotationsByName,
+    libraryFuncsByName,
+    registry
   };
 }
 
@@ -922,12 +1170,33 @@ export function emitNamespace(
   docs: LangiumDocument[],
   namespace: string,
   _options: GeneratorOptions,
-  _funcs: GeneratedFunc[] = []
+  _funcs: GeneratedFunc[] = [],
+  registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(docs, namespace);
+  const ctx = buildEmissionContext(docs, namespace, registry);
   const sections: string[] = [];
 
   sections.push(emitFileHeader(namespace, ctx));
+
+  // Collect and emit cross-namespace import statements at the top of the file
+  const crossNsImports = collectCrossNamespaceImports(ctx);
+  for (const importLine of crossNsImports) {
+    sections.push(importLine);
+  }
+  if (crossNsImports.length > 0) {
+    sections.push('');
+  }
+
+  // Emit annotation decorator factories (before enums and data types)
+  const annotationNames = Array.from(ctx.annotationsByName.keys()).sort();
+  for (const name of annotationNames) {
+    const ann = ctx.annotationsByName.get(name)!;
+    sections.push('');
+    sections.push(emitAnnotationDeclaration(ann, ctx));
+  }
+  if (annotationNames.length > 0) {
+    sections.push('');
+  }
 
   // Emit enum types (no class — just a const object + type alias for union)
   const enumNames = Array.from(ctx.enumByName.keys()).sort();
@@ -935,6 +1204,14 @@ export function emitNamespace(
     const enumNode = ctx.enumByName.get(name)!;
     sections.push(emitEnumDeclaration(enumNode, ctx));
     sections.push('');
+  }
+
+  // Emit type aliases (after enums, before data types)
+  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
+  for (const name of typeAliasNames) {
+    const alias = ctx.typeAliasByName.get(name)!;
+    sections.push('');
+    sections.push(emitTypeAlias(alias, ctx));
   }
 
   // Emit data types in topological order
@@ -971,15 +1248,35 @@ export function emitNamespace(
     emitDataType(data);
   }
 
+  // Emit rules (after types, before Phase 8b funcs)
+  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
+  for (const name of ruleNames) {
+    const rule = ctx.rulesByName.get(name)!;
+    sections.push('');
+    sections.push(emitRule(rule, ctx));
+  }
+
+  // Emit report metadata (Phase 9, US5) — one const object summarising all rules
+  const reportMeta = emitReportMetadata(ctx);
+  if (reportMeta !== '') {
+    sections.push('');
+    sections.push(reportMeta);
+  }
+
+  // Emit library function type aliases (Phase 10, US6)
+  const libraryFuncNames = Array.from(ctx.libraryFuncsByName.keys()).sort();
+  for (const name of libraryFuncNames) {
+    const func = ctx.libraryFuncsByName.get(name)!;
+    sections.push('');
+    sections.push(emitLibraryFunc(func, ctx));
+  }
+
   // ---------------------------------------------------------------------------
   // T126: Phase 8b func emission (TypeScript target only)
   // ---------------------------------------------------------------------------
 
   // Extract funcs from the documents
   const runeFuncs = extractFuncs(docs, namespace, ctx.diagnostics);
-
-  // Collect any cross-namespace imports (currently stub — Phase 8b only handles same-namespace)
-  const crossNsImports = collectFuncCrossNamespaceImports(runeFuncs, namespace);
 
   // Build call graph and determine topological order
   const callGraph = buildFuncCallGraph(runeFuncs);
@@ -988,11 +1285,6 @@ export function emitNamespace(
 
   // Emit the Phase 8b marker
   sections.push('// (functions emitted by Phase 8b appear below this line)');
-
-  // Emit cross-namespace imports before func declarations
-  for (const importLine of crossNsImports) {
-    sections.push(importLine);
-  }
 
   // Track GeneratedFunc metadata for the output
   const generatedFuncs: GeneratedFunc[] = [];
@@ -1070,4 +1362,100 @@ function emitEnumDeclaration(enumNode: RosettaEnumeration, _ctx: EmissionContext
   }
 
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// T065: Annotation declaration emitter
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a typed decorator factory for an annotation declaration.
+ *
+ * Annotations with no attributes emit a zero-argument decorator factory.
+ * Annotations with attributes emit an `Args` interface and a factory that
+ * accepts it. Both return `ClassDecorator & PropertyDecorator` so they can
+ * be applied to either a class or a property.
+ *
+ * T065, US11.
+ */
+function emitAnnotationDeclaration(annotation: Annotation, ctx: EmissionContext): string {
+  const name = annotation.name;
+  const attrs = annotation.attributes ?? [];
+
+  if (attrs.length === 0) {
+    return [
+      `export function ${name}(): ClassDecorator & PropertyDecorator {`,
+      `  return (target: any, propertyKey?: any) => {};`,
+      `}`
+    ].join('\n');
+  }
+
+  const paramFields = attrs
+    .map((attr) => {
+      const typeName = resolveTypeExprAsTs(attr, ctx);
+      const optional = attr.card && attr.card.inf === 0 ? '?' : '';
+      return `  ${attr.name}${optional}: ${typeName};`;
+    })
+    .join('\n');
+
+  return [
+    `export interface ${name}Args {`,
+    paramFields,
+    `}`,
+    ``,
+    `export function ${name}(args: ${name}Args): ClassDecorator & PropertyDecorator {`,
+    `  return (target: any, propertyKey?: any) => {};`,
+    `}`
+  ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Type alias declaration for TS target
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a TypeScript type alias declaration.
+ * Maps a Rune typeAlias to `export type <Name> = <TsType>;`.
+ */
+function emitTypeAlias(alias: RosettaTypeAlias, ctx: EmissionContext): string {
+  const name = alias.name;
+  const typeRef = alias.typeCall?.type?.ref;
+  const refText = alias.typeCall?.type?.$refText;
+
+  // Resolve the target type to a TypeScript type name
+  let tsType = 'unknown';
+  if (typeRef && isRosettaBasicType(typeRef)) {
+    const builtinMap: Record<string, string> = {
+      string: 'string',
+      int: 'number',
+      number: 'number',
+      boolean: 'boolean',
+      date: 'string',
+      dateTime: 'string',
+      zonedDateTime: 'string',
+      time: 'string',
+      productType: 'string',
+      eventType: 'string'
+    };
+    tsType = builtinMap[typeRef.name] ?? 'unknown';
+  } else if (typeRef && isData(typeRef)) {
+    tsType = `${typeRef.name}Shape`;
+  } else if (typeRef && isRosettaEnumeration(typeRef)) {
+    tsType = typeRef.name;
+  } else if (refText) {
+    // Try builtin by refText
+    const builtinMap: Record<string, string> = {
+      string: 'string',
+      int: 'number',
+      number: 'number',
+      boolean: 'boolean',
+      date: 'string',
+      dateTime: 'string',
+      zonedDateTime: 'string',
+      time: 'string'
+    };
+    tsType = builtinMap[refText] ?? refText;
+  }
+
+  return `export type ${name} = ${tsType};`;
 }

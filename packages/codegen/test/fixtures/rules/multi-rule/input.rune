@@ -1,0 +1,13 @@
+namespace "test.rules"
+version "1"
+
+type Account:
+    balance number (1..1)
+    status string (1..1)
+    tier string (1..1)
+
+eligibility rule IsActive from Account:
+    Account -> balance > 0
+
+eligibility rule IsPremium from Account:
+    Account -> tier = "premium"

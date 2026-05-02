@@ -10,18 +10,30 @@
  */
 
 import type { LangiumDocument } from 'langium';
+import type { NamespaceRegistry } from './namespace-registry.js';
+import { resolveImportPath } from './namespace-registry.js';
 import {
   isData,
   isRosettaModel,
   isRosettaEnumeration,
   isRosettaBasicType,
+  isRosettaTypeAlias,
+  isRosettaRule,
+  isRosettaReport,
+  isAnnotation,
+  isRosettaExternalFunction,
   isData as _isData,
   type Data,
   type Attribute,
   type Condition,
   type RosettaEnumeration,
   type RosettaModel,
-  type RosettaCardinality
+  type RosettaCardinality,
+  type RosettaTypeAlias,
+  type RosettaRule,
+  type RosettaReport,
+  type Annotation,
+  type RosettaExternalFunction
 } from '@rune-langium/core';
 import type {
   GeneratorOptions,
@@ -34,6 +46,7 @@ import { topoSort } from '../topo-sort.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import {
   transpileCondition,
+  transpileExpression,
   buildConditionMessage,
   type ExpressionTranspilerContext
 } from '../expr/transpiler.js';
@@ -59,6 +72,18 @@ interface EmissionContext {
   dataByName: Map<string, Data>;
   /** All Enumeration nodes keyed by name for lookup. */
   enumByName: Map<string, RosettaEnumeration>;
+  /** All RosettaTypeAlias nodes keyed by name for lookup. */
+  typeAliasByName: Map<string, RosettaTypeAlias>;
+  /** All RosettaRule nodes keyed by name for lookup. */
+  rulesByName: Map<string, RosettaRule>;
+  /** All RosettaReport nodes keyed by name for lookup. */
+  reportsByName: Map<string, RosettaReport>;
+  /** All Annotation nodes keyed by name for lookup. */
+  annotationsByName: Map<string, Annotation>;
+  /** All RosettaExternalFunction nodes keyed by name for lookup. */
+  libraryFuncsByName: Map<string, RosettaExternalFunction>;
+  /** Namespace registry for cross-namespace lookups. */
+  registry: NamespaceRegistry;
 }
 
 /**
@@ -128,6 +153,88 @@ const BUILTIN_TYPE_MAP: Record<string, string> = {
   productType: 'z.string()',
   eventType: 'z.string()'
 };
+
+/**
+ * Get the namespace string for an AST element by inspecting its $container.
+ * Returns undefined when the element is not directly inside a RosettaModel.
+ */
+function getElementNamespace(element: { $container?: unknown }): string | undefined {
+  const container = element.$container;
+  if (!container || typeof container !== 'object') return undefined;
+  const model = container as { name?: unknown; $type?: string };
+  if (model.$type !== 'RosettaModel') return undefined;
+  const name = model.name;
+  if (typeof name === 'string') return name.replace(/^"|"$/g, '');
+  if (name && typeof name === 'object' && 'segments' in name) {
+    return (name as { segments: string[] }).segments.join('.');
+  }
+  return String(name ?? '');
+}
+
+/**
+ * Collect cross-namespace import statements needed for the schemas and type aliases
+ * defined in this emission context.
+ *
+ * Walks all Data superType references and attribute type references, plus
+ * TypeAlias type references. Any resolved reference whose namespace differs
+ * from `ctx.namespace` is recorded and emitted as an ES import statement
+ * importing Schema names (e.g. FooSchema) from the corresponding .zod.js file.
+ */
+function collectCrossNamespaceImports(ctx: EmissionContext): string[] {
+  const imports = new Map<string, Set<string>>(); // namespace -> schema symbol names
+
+  function trackRef(typeRef: unknown, schemaName: string): void {
+    if (!typeRef || typeof typeRef !== 'object') return;
+    const ns = getElementNamespace(typeRef as { $container?: unknown });
+    if (!ns || ns === ctx.namespace) return;
+
+    let symbols = imports.get(ns);
+    if (!symbols) {
+      symbols = new Set();
+      imports.set(ns, symbols);
+    }
+    symbols.add(schemaName);
+  }
+
+  // Check data type inheritance and attribute references
+  for (const data of ctx.dataByName.values()) {
+    // Check superType
+    const parentRef = data.superType?.ref;
+    if (parentRef) {
+      trackRef(parentRef, `${parentRef.name}Schema`);
+    }
+    // Check attribute types
+    for (const attr of data.attributes) {
+      const attrTypeRef = attr.typeCall?.type?.ref;
+      if (attrTypeRef && isData(attrTypeRef)) {
+        trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
+      } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
+        trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
+      }
+    }
+  }
+
+  // Check type alias references
+  for (const alias of ctx.typeAliasByName.values()) {
+    const typeRef = alias.typeCall?.type?.ref;
+    if (typeRef && isData(typeRef)) {
+      trackRef(typeRef, `${typeRef.name}Schema`);
+    } else if (typeRef && isRosettaEnumeration(typeRef)) {
+      trackRef(typeRef, `${typeRef.name}Schema`);
+    }
+  }
+
+  // Build import statements
+  const lines: string[] = [];
+  const sortedNamespaces = Array.from(imports.keys()).sort();
+  for (const ns of sortedNamespaces) {
+    const symbols = Array.from(imports.get(ns)!).sort();
+    const importPath = resolveImportPath(ctx.namespace, ns, ctx.registry);
+    lines.push(`import { ${symbols.join(', ')} } from '${importPath}.zod.js';`);
+  }
+
+  return lines;
+}
 
 /**
  * Return a property key expression for a Zod object literal.
@@ -397,6 +504,13 @@ function emitTypeSchema(data: Data, ctx: EmissionContext): string {
     }
   }
 
+  // Append .meta() for type-level annotations (T068, T069).
+  // Only supported for non-lazy, non-condition schemas (the common case).
+  const metaSuffix = buildMetaSuffix(data);
+  if (metaSuffix) {
+    return `export const ${schemaName} = ${schemaExpr}${metaSuffix};`;
+  }
+
   return `export const ${schemaName} = ${schemaExpr};`;
 }
 
@@ -635,6 +749,157 @@ function emitEnum(enumNode: RosettaEnumeration, ctx: EmissionContext): string {
 }
 
 /**
+ * Emit a Zod schema and type alias for a RosettaTypeAlias node.
+ * NOTE: not named `emitTypeAlias` — that name is taken by the z.infer helper for Data types.
+ */
+function emitTypeAliasSchema(alias: RosettaTypeAlias, ctx: EmissionContext): string {
+  const name = alias.name;
+  const schemaName = `${name}Schema`;
+  const typeRef = alias.typeCall?.type?.ref;
+  const refText = alias.typeCall?.type?.$refText;
+
+  // Resolve to a Zod schema expression
+  let zodExpr = 'z.unknown()';
+
+  if (typeRef && isRosettaBasicType(typeRef)) {
+    zodExpr = BUILTIN_TYPE_MAP[typeRef.name] ?? 'z.unknown()';
+  } else if (typeRef && isRosettaEnumeration(typeRef)) {
+    zodExpr = `${typeRef.name}Schema`;
+  } else if (typeRef && isData(typeRef)) {
+    zodExpr = `${typeRef.name}Schema`;
+  } else if (refText) {
+    const builtinZod = BUILTIN_TYPE_MAP[refText];
+    if (builtinZod) zodExpr = builtinZod;
+    else if (ctx.enumByName.has(refText)) zodExpr = `${refText}Schema`;
+    else if (ctx.dataByName.has(refText)) zodExpr = `${refText}Schema`;
+    else zodExpr = 'z.unknown()';
+  }
+
+  const lines: string[] = [
+    `export const ${schemaName} = ${zodExpr};`,
+    `export type ${name} = z.infer<typeof ${schemaName}>;`
+  ];
+
+  return lines.join('\n');
+}
+
+/**
+ * Build a `.meta(...)` suffix for a Data node's type-level annotations.
+ *
+ * Each AnnotationRef contributes one key to the meta object whose value is an
+ * object with:
+ *   - `attribute`: the referenced attribute name (if any)
+ *   - one entry per qualifier: qualName → qualValue
+ *
+ * Returns an empty string when the data node has no type-level annotations.
+ * T068, T069, US11.
+ */
+function buildMetaSuffix(data: Data): string {
+  const annotations = data.annotations ?? [];
+  if (annotations.length === 0) return '';
+
+  const metaEntries = annotations.map((annRef) => {
+    const annName = annRef.annotation?.$refText ?? annRef.annotation?.ref?.name ?? 'unknown';
+    const parts: string[] = [];
+    const attrName = annRef.attribute?.$refText ?? annRef.attribute?.ref?.name;
+    if (attrName) {
+      parts.push(`attribute: '${attrName}'`);
+    }
+    for (const q of annRef.qualifiers ?? []) {
+      if (q.qualName && q.qualValue !== undefined) {
+        const escapedValue = q.qualValue.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        parts.push(`${q.qualName}: '${escapedValue}'`);
+      }
+    }
+    const body = parts.length > 0 ? `{ ${parts.join(', ')} }` : '{}';
+    return `    ${annName}: ${body}`;
+  });
+
+  return `.meta({\n${metaEntries.join(',\n')}\n  })`;
+}
+
+/**
+ * Emit a `runeReportRules` const object summarising all rules in this namespace.
+ * Mirrors the equivalent in the TS emitter (T074b).
+ *
+ * Returns an empty string when there are no rules in the namespace.
+ */
+function emitReportMetadata(ctx: EmissionContext): string {
+  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
+  if (ruleNames.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('export const runeReportRules = {');
+  for (const name of ruleNames) {
+    const rule = ctx.rulesByName.get(name)!;
+    const kind = rule.eligibility ? 'eligibility' : 'reporting';
+    const inputRef = rule.input?.type?.ref;
+    const inputName = inputRef ? inputRef.name : 'unknown';
+    lines.push(`  '${name}': { kind: '${kind}' as const, inputType: '${inputName}' },`);
+  }
+  lines.push('} as const;');
+  return lines.join('\n');
+}
+
+/**
+ * Emit a Zod refine validator for a RosettaRule.
+ * Only emitted when the rule has a resolvable input type with a known schema.
+ */
+function emitRuleValidator(rule: RosettaRule, ctx: EmissionContext): string {
+  const name = rule.name;
+  const inputTypeRef = rule.input?.type?.ref;
+  const inputTypeName = inputTypeRef ? inputTypeRef.name : undefined;
+
+  if (!inputTypeName) {
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'rule-no-input-type',
+      message: `Rule '${name}' has no resolvable input type; skipping Zod validator`
+    });
+    return '';
+  }
+
+  const isLocal = ctx.dataByName.has(inputTypeName);
+  const isCrossNs = !isLocal && inputTypeRef && getElementNamespace(inputTypeRef) !== ctx.namespace;
+  if (!isLocal && !isCrossNs) {
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'rule-no-input-type',
+      message: `Rule '${name}': input type '${inputTypeName}' not found; skipping Zod validator`
+    });
+    return '';
+  }
+
+  const schemaName = `${inputTypeName}Schema`;
+  const attributeTypes = new Map<string, string>();
+  const inputData =
+    ctx.dataByName.get(inputTypeName) ??
+    (inputTypeRef && isData(inputTypeRef) ? inputTypeRef : undefined);
+  if (inputData && 'attributes' in inputData) {
+    for (const attr of (
+      inputData as {
+        attributes: Array<{ name: string; typeCall?: { type?: { $refText?: string } } }>;
+      }
+    ).attributes) {
+      attributeTypes.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
+    }
+  }
+
+  const transpilerCtx: ExpressionTranspilerContext = {
+    selfName: 'data',
+    emitMode: 'zod-refine',
+    conditionName: name,
+    typeName: inputTypeName,
+    attributeTypes,
+    diagnostics: ctx.diagnostics
+  };
+
+  const exprStr = transpileExpression(rule.expression as any, transpilerCtx);
+
+  return `export const validate${name} = ${schemaName}.refine(\n  (data) => ${exprStr},\n  '${name}'\n);`;
+}
+
+/**
  * Emit the file header: SPDX, generated comment, imports, runtime helpers.
  * FR-021 (inlined helpers), T038.
  */
@@ -663,9 +928,18 @@ function namespaceToPath(namespace: string): string {
 /**
  * Build the EmissionContext for a set of documents sharing a namespace.
  */
-function buildEmissionContext(docs: LangiumDocument[], namespace: string): EmissionContext {
+function buildEmissionContext(
+  docs: LangiumDocument[],
+  namespace: string,
+  registry: NamespaceRegistry
+): EmissionContext {
   const dataByName = new Map<string, Data>();
   const enumByName = new Map<string, RosettaEnumeration>();
+  const typeAliasByName = new Map<string, RosettaTypeAlias>();
+  const rulesByName = new Map<string, RosettaRule>();
+  const reportsByName = new Map<string, RosettaReport>();
+  const annotationsByName = new Map<string, Annotation>();
+  const libraryFuncsByName = new Map<string, RosettaExternalFunction>();
 
   for (const doc of docs) {
     const model = doc.parseResult?.value;
@@ -676,6 +950,16 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
         dataByName.set(element.name, element);
       } else if (isRosettaEnumeration(element)) {
         enumByName.set(element.name, element);
+      } else if (isRosettaTypeAlias(element)) {
+        typeAliasByName.set(element.name, element);
+      } else if (isRosettaRule(element)) {
+        rulesByName.set(element.name, element);
+      } else if (isRosettaReport(element)) {
+        // Reports don't have simple names — derive from context
+      } else if (isAnnotation(element)) {
+        annotationsByName.set(element.name, element);
+      } else if (isRosettaExternalFunction(element)) {
+        libraryFuncsByName.set(element.name, element);
       }
     }
   }
@@ -693,7 +977,13 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
     diagnostics: [],
     namespace,
     dataByName,
-    enumByName
+    enumByName,
+    typeAliasByName,
+    rulesByName,
+    reportsByName,
+    annotationsByName,
+    libraryFuncsByName,
+    registry
   };
 }
 
@@ -706,12 +996,20 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
 export function emitNamespace(
   docs: LangiumDocument[],
   namespace: string,
-  _options: GeneratorOptions
+  _options: GeneratorOptions,
+  registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(docs, namespace);
+  const ctx = buildEmissionContext(docs, namespace, registry);
   const sections: string[] = [];
 
   sections.push(emitFileHeader(namespace, ctx));
+
+  // Collect and emit cross-namespace import statements at the top of the file
+  const crossNsImports = collectCrossNamespaceImports(ctx);
+  if (crossNsImports.length > 0) {
+    sections.push(crossNsImports.join('\n'));
+    sections.push('');
+  }
 
   // Emit in topological order: enums first (they don't have dependencies on data types),
   // then data types in topo-sorted order.
@@ -722,6 +1020,14 @@ export function emitNamespace(
     const enumNode = ctx.enumByName.get(name)!;
     sections.push(emitEnum(enumNode, ctx));
     sections.push('');
+  }
+
+  // Emit type alias schemas (after enums, before data types)
+  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
+  for (const name of typeAliasNames) {
+    const alias = ctx.typeAliasByName.get(name)!;
+    sections.push('');
+    sections.push(emitTypeAliasSchema(alias, ctx));
   }
 
   // For cyclic types: emit interface declarations first so that
@@ -761,6 +1067,24 @@ export function emitNamespace(
     const alias = emitTypeAlias(data, ctx);
     if (alias) sections.push(alias);
     sections.push('');
+  }
+
+  // Emit rule validators (after data types)
+  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
+  for (const name of ruleNames) {
+    const rule = ctx.rulesByName.get(name)!;
+    const result = emitRuleValidator(rule, ctx);
+    if (result) {
+      sections.push('');
+      sections.push(result);
+    }
+  }
+
+  // Emit report metadata (T074b) — one const object summarising all rules
+  const reportMeta = emitReportMetadata(ctx);
+  if (reportMeta !== '') {
+    sections.push('');
+    sections.push(reportMeta);
   }
 
   // Remove trailing empty section

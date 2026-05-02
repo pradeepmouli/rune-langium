@@ -4,6 +4,9 @@ package.json
 # Build outputs / generated
 **/dist/**
 **/build/**
+
+# Codegen test fixtures (byte-identical with generator output — must not be reformatted)
+packages/codegen/test/fixtures/**/expected.*
 **/node_modules/**
 **/coverage/**
 **/.turbo/**

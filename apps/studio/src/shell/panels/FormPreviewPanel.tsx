@@ -11,6 +11,7 @@ export function FormPreviewPanel(): React.ReactElement {
   const schemas = usePreviewStore((s) => s.schemas);
   const status = usePreviewStore((s) => s.status);
   const getFieldSource = usePreviewStore((s) => s.getFieldSource);
+  const dispatchExecute = usePreviewStore((s) => s.dispatchExecute);
 
   const schema = selectedTargetId ? schemas.get(selectedTargetId) : undefined;
 
@@ -20,6 +21,7 @@ export function FormPreviewPanel(): React.ReactElement {
       status={status}
       target={selectedTarget}
       getFieldSource={(fieldPath) => getFieldSource(selectedTargetId, fieldPath)}
+      onExecute={dispatchExecute}
     />
   );
 }

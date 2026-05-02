@@ -1,0 +1,10 @@
+namespace "test.rules"
+version "1"
+
+type Position:
+    quantity number (1..1)
+    price number (1..1)
+    currency string (1..1)
+
+eligibility rule IsSignificant from Position:
+    Position -> quantity * Position -> price > 10000

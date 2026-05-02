@@ -30,6 +30,7 @@ import { runGenerate } from './generator.js';
 import { generatePreviewSchemas as runGeneratePreviewSchemas } from './preview-schema.js';
 
 export type {
+  FormPreviewKind,
   FormPreviewSchema,
   GeneratePreviewSchemaOptions,
   GeneratorOptions,
@@ -43,6 +44,13 @@ export type {
   GeneratedFunc
 } from './types.js';
 export { GeneratorError } from './types.js';
+
+export type { RuneTypeAlias, Condition, TypeParam } from './types/type-alias.js';
+export type { RuneRule } from './types/rule.js';
+export type { RuneReport } from './types/report.js';
+export type { RuneAnnotationDecl, AnnotationAttribute } from './types/annotation.js';
+export type { RuneLibraryFunc, LibraryFuncParam } from './types/library-func.js';
+export type { NamespaceManifest, NamespaceRegistry } from './emit/namespace-registry.js';
 
 /**
  * Generate code from one or more parsed Langium documents.

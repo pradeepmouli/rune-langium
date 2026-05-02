@@ -22,7 +22,7 @@ export type Address = z.infer<typeof AddressSchema>;
 
 export const TradeSchema = z.object({
   tradeId: z.string(),
-  tags: z.array(z.string()).optional(),
+  tags: z.array(z.string()),
   address: AddressSchema
 });
 export type Trade = z.infer<typeof TradeSchema>;

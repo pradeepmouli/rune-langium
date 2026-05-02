@@ -1,0 +1,6 @@
+namespace "test.annotations"
+version "1"
+
+annotation source:
+    system string (1..1)
+    version string (0..1)

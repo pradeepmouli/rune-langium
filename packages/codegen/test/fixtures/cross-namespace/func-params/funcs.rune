@@ -1,0 +1,14 @@
+namespace "test.funcs"
+version "1"
+
+import test.models.*
+
+func AddAmounts:
+    inputs:
+        a Amount (1..1)
+        b Amount (1..1)
+    output:
+        result number (1..1)
+
+    set result:
+        a -> value + b -> value

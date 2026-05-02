@@ -64,7 +64,9 @@ import type { ParsedWorkspaceModel } from '../services/workspace.js';
 import {
   createPreviewGenerateMessage,
   createPreviewSetFilesMessage,
-  isPreviewWorkerMessage
+  isPreviewWorkerMessage,
+  isPreviewExecuteResultMessage,
+  isPreviewExecuteErrorMessage
 } from '../services/codegen-service.js';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
@@ -159,6 +161,9 @@ export function EditorPage({
   const selectPreviewTarget = usePreviewStore((s) => s.selectTarget);
   const receivePreviewResult = usePreviewStore((s) => s.receivePreviewResult);
   const receivePreviewStale = usePreviewStore((s) => s.receivePreviewStale);
+  const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
+  const receiveExecutionError = usePreviewStore((s) => s.receiveExecutionError);
+  const setWorkerRef = usePreviewStore((s) => s.setWorkerRef);
   const codePreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
   const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
 
@@ -462,7 +467,19 @@ export function EditorPage({
 
   useEffect(() => {
     if (!codegenWorker) return;
+    setWorkerRef(codegenWorker);
     function handleMessage(e: MessageEvent<unknown>) {
+      const msg = e.data;
+      if (isPreviewExecuteResultMessage(msg)) {
+        receiveExecutionResult(msg.funcName, msg.output);
+        return;
+      }
+      if (isPreviewExecuteErrorMessage(msg)) {
+        receiveExecutionError(msg.funcName, msg.error);
+        return;
+      }
+      // Preview messages below — execution messages above bypass stale-check
+      // since they carry their own funcName-based keying
       if (!isPreviewWorkerMessage(e.data)) return;
       if (e.data.requestId !== currentPreviewRequestIdRef.current) {
         return;
@@ -493,7 +510,10 @@ export function EditorPage({
     handlePreviewWorkerFailure,
     previewSelectedTargetId,
     receivePreviewResult,
-    receivePreviewStale
+    receivePreviewStale,
+    receiveExecutionResult,
+    receiveExecutionError,
+    setWorkerRef
   ]);
 
   const handleSourceChange = useCallback(

@@ -39,11 +39,21 @@ import {
   isRosettaModel,
   isRosettaEnumeration,
   isRosettaBasicType,
+  isRosettaTypeAlias,
+  isRosettaRule,
+  isRosettaReport,
+  isAnnotation,
+  isRosettaExternalFunction,
   type Data,
   type Attribute,
   type RosettaEnumeration,
   type RosettaModel,
-  type RosettaCardinality
+  type RosettaCardinality,
+  type RosettaTypeAlias,
+  type RosettaRule,
+  type RosettaReport,
+  type Annotation,
+  type RosettaExternalFunction
 } from '@rune-langium/core';
 import type {
   GeneratorOptions,
@@ -53,6 +63,7 @@ import type {
 } from '../types.js';
 import { buildTypeReferenceGraph, findCyclicTypes } from '../cycle-detector.js';
 import { topoSort } from '../topo-sort.js';
+import type { NamespaceRegistry } from './namespace-registry.js';
 
 /** JSON Schema 2020-12 meta-schema URI. */
 const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
@@ -132,12 +143,18 @@ interface EmissionContext {
   dataByName: Map<string, Data>;
   /** All Enumeration nodes keyed by name. */
   enumByName: Map<string, RosettaEnumeration>;
+  typeAliasByName: Map<string, RosettaTypeAlias>;
+  rulesByName: Map<string, RosettaRule>;
+  reportsByName: Map<string, RosettaReport>;
+  annotationsByName: Map<string, Annotation>;
+  libraryFuncsByName: Map<string, RosettaExternalFunction>;
   /** Types in emission order (topo-sorted). */
   emitOrder: string[];
   /** Source-map entries collected during emission. */
   sourceMap: SourceMapEntry[];
   /** Generator-time diagnostics accumulated during emission. */
   diagnostics: GeneratorDiagnostic[];
+  registry: NamespaceRegistry;
 }
 
 /**
@@ -340,6 +357,56 @@ function emitTypeDef(data: Data, ctx: EmissionContext): object {
 }
 
 /**
+ * Emit the JSON Schema definition for a type alias.
+ */
+function emitTypeAliasDef(alias: RosettaTypeAlias, ctx: EmissionContext): object {
+  const typeRef = alias.typeCall?.type?.ref;
+  const refText = alias.typeCall?.type?.$refText;
+
+  // Resolve to a JSON Schema type
+  if (typeRef && isRosettaBasicType(typeRef)) {
+    const typeMap: Record<string, object> = {
+      string: { type: 'string' },
+      int: { type: 'integer' },
+      number: { type: 'number' },
+      boolean: { type: 'boolean' },
+      date: { type: 'string', format: 'date' },
+      dateTime: { type: 'string', format: 'date-time' },
+      zonedDateTime: { type: 'string', format: 'date-time' },
+      time: { type: 'string', format: 'time' }
+    };
+    return typeMap[typeRef.name] ?? { type: 'string' };
+  }
+
+  if (typeRef && isRosettaEnumeration(typeRef)) {
+    return { $ref: `#/$defs/${typeRef.name}` };
+  }
+
+  if (typeRef && isData(typeRef)) {
+    return { $ref: `#/$defs/${typeRef.name}` };
+  }
+
+  if (refText) {
+    const builtinMap: Record<string, object> = {
+      string: { type: 'string' },
+      int: { type: 'integer' },
+      number: { type: 'number' },
+      boolean: { type: 'boolean' },
+      date: { type: 'string', format: 'date' },
+      dateTime: { type: 'string', format: 'date-time' },
+      zonedDateTime: { type: 'string', format: 'date-time' },
+      time: { type: 'string', format: 'time' }
+    };
+    if (builtinMap[refText]) return builtinMap[refText];
+    if (ctx.enumByName.has(refText) || ctx.dataByName.has(refText)) {
+      return { $ref: `#/$defs/${refText}` };
+    }
+  }
+
+  return { type: 'string' };
+}
+
+/**
  * Emit the JSON Schema definition for an enumeration.
  * T095.
  *
@@ -373,9 +440,18 @@ function emitEnumDef(enumNode: RosettaEnumeration): object {
 /**
  * Build the EmissionContext for a set of documents sharing a namespace.
  */
-function buildEmissionContext(docs: LangiumDocument[], namespace: string): EmissionContext {
+function buildEmissionContext(
+  docs: LangiumDocument[],
+  namespace: string,
+  registry: NamespaceRegistry
+): EmissionContext {
   const dataByName = new Map<string, Data>();
   const enumByName = new Map<string, RosettaEnumeration>();
+  const typeAliasByName = new Map<string, RosettaTypeAlias>();
+  const rulesByName = new Map<string, RosettaRule>();
+  const reportsByName = new Map<string, RosettaReport>();
+  const annotationsByName = new Map<string, Annotation>();
+  const libraryFuncsByName = new Map<string, RosettaExternalFunction>();
 
   for (const doc of docs) {
     const model = doc.parseResult?.value;
@@ -386,6 +462,16 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
         dataByName.set(element.name, element);
       } else if (isRosettaEnumeration(element)) {
         enumByName.set(element.name, element);
+      } else if (isRosettaTypeAlias(element)) {
+        typeAliasByName.set(element.name, element);
+      } else if (isRosettaRule(element)) {
+        rulesByName.set(element.name, element);
+      } else if (isRosettaReport(element)) {
+        // Reports skip in json-schema for now
+      } else if (isAnnotation(element)) {
+        annotationsByName.set(element.name, element);
+      } else if (isRosettaExternalFunction(element)) {
+        libraryFuncsByName.set(element.name, element);
       }
     }
   }
@@ -399,9 +485,15 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
     relativePath: namespaceToPath(namespace),
     dataByName,
     enumByName,
+    typeAliasByName,
+    rulesByName,
+    reportsByName,
+    annotationsByName,
+    libraryFuncsByName,
     emitOrder,
     sourceMap: [],
-    diagnostics: []
+    diagnostics: [],
+    registry
   };
 }
 
@@ -425,9 +517,10 @@ function buildEmissionContext(docs: LangiumDocument[], namespace: string): Emiss
 export function emitNamespace(
   docs: LangiumDocument[],
   namespace: string,
-  _options: GeneratorOptions
+  _options: GeneratorOptions,
+  registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(docs, namespace);
+  const ctx = buildEmissionContext(docs, namespace, registry);
   const $defs: Record<string, object> = {};
 
   // Emit enums first (alphabetically)
@@ -446,6 +539,13 @@ export function emitNamespace(
       sourceLine: 1,
       sourceChar: 1
     });
+  }
+
+  // Emit type alias definitions (after enums, before data types)
+  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
+  for (const name of typeAliasNames) {
+    const alias = ctx.typeAliasByName.get(name)!;
+    $defs[name] = emitTypeAliasDef(alias, ctx);
   }
 
   // Emit data types in topological order
@@ -490,6 +590,21 @@ export function emitNamespace(
     title: namespace,
     $defs
   };
+
+  // T074c: Emit x-rune-rules extension when there are rules in this namespace.
+  // Provides rule metadata (kind + input type) for downstream tooling.
+  const sortedRuleNames = Array.from(ctx.rulesByName.keys()).sort();
+  if (sortedRuleNames.length > 0) {
+    const rulesMetadata: Record<string, { kind: string; inputType: string }> = {};
+    for (const name of sortedRuleNames) {
+      const rule = ctx.rulesByName.get(name)!;
+      const kind = rule.eligibility ? 'eligibility' : 'reporting';
+      const inputRef = rule.input?.type?.ref;
+      const inputName = inputRef ? inputRef.name : 'unknown';
+      rulesMetadata[name] = { kind, inputType: inputName };
+    }
+    schema['x-rune-rules'] = rulesMetadata;
+  }
 
   const content = serializeJson(schema) + '\n';
 

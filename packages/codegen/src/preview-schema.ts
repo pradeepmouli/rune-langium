@@ -3,15 +3,22 @@
 
 import type { LangiumDocument } from 'langium';
 import {
+  isChoice,
   isData,
   isRosettaBasicType,
   isRosettaEnumeration,
+  isRosettaFunction,
   isRosettaModel,
+  isRosettaTypeAlias,
   type Attribute,
+  type Choice,
+  type ChoiceOption,
   type Data,
   type RosettaCardinality,
   type RosettaEnumeration,
-  type RosettaModel
+  type RosettaFunction,
+  type RosettaModel,
+  type RosettaTypeAlias
 } from '@rune-langium/core';
 import type {
   FormPreviewSchema,
@@ -28,6 +35,9 @@ interface NamespaceIndex {
   namespace: string;
   dataByName: Map<string, { node: Data; sourceUri: string }>;
   enumByName: Map<string, { node: RosettaEnumeration; sourceUri: string }>;
+  typeAliasByName: Map<string, { node: RosettaTypeAlias; sourceUri: string }>;
+  choiceByName: Map<string, { node: Choice; sourceUri: string }>;
+  funcByName: Map<string, { node: RosettaFunction; sourceUri: string }>;
   duplicateDataNames: Set<string>;
 }
 
@@ -68,8 +78,9 @@ export function generatePreviewSchemas(
   const schemas: FormPreviewSchema[] = [];
 
   for (const namespace of namespaces) {
-    const names = Array.from(namespace.dataByName.keys()).sort();
-    for (const name of names) {
+    // Data types
+    const dataNames = Array.from(namespace.dataByName.keys()).sort();
+    for (const name of dataNames) {
       const data = namespace.dataByName.get(name)!;
       const targetId = `${namespace.namespace}.${name}`;
       if (options.targetId && options.targetId !== targetId) continue;
@@ -86,6 +97,33 @@ export function generatePreviewSchemas(
           options.maxDepth ?? DEFAULT_MAX_DEPTH
         )
       );
+    }
+
+    // Type aliases
+    const aliasNames = Array.from(namespace.typeAliasByName.keys()).sort();
+    for (const name of aliasNames) {
+      const alias = namespace.typeAliasByName.get(name)!;
+      const targetId = `${namespace.namespace}.${name}`;
+      if (options.targetId && options.targetId !== targetId) continue;
+      schemas.push(buildTypeAliasSchema(alias.node, alias.sourceUri, namespace, targetId));
+    }
+
+    // Choice types
+    const choiceNames = Array.from(namespace.choiceByName.keys()).sort();
+    for (const name of choiceNames) {
+      const choice = namespace.choiceByName.get(name)!;
+      const targetId = `${namespace.namespace}.${name}`;
+      if (options.targetId && options.targetId !== targetId) continue;
+      schemas.push(buildChoiceSchema(choice.node, choice.sourceUri, namespace, targetId));
+    }
+
+    // Functions
+    const funcNames = Array.from(namespace.funcByName.keys()).sort();
+    for (const name of funcNames) {
+      const func = namespace.funcByName.get(name)!;
+      const targetId = `${namespace.namespace}.${name}`;
+      if (options.targetId && options.targetId !== targetId) continue;
+      schemas.push(buildFunctionSchema(func.node, func.sourceUri, namespace, targetId));
     }
   }
 
@@ -108,6 +146,9 @@ function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[] {
         namespace,
         dataByName: new Map(),
         enumByName: new Map(),
+        typeAliasByName: new Map(),
+        choiceByName: new Map(),
+        funcByName: new Map(),
         duplicateDataNames: new Set()
       };
       byNamespace.set(namespace, index);
@@ -122,6 +163,12 @@ function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[] {
         index.dataByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
       } else if (isRosettaEnumeration(element)) {
         index.enumByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
+      } else if (isRosettaTypeAlias(element)) {
+        index.typeAliasByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
+      } else if (isChoice(element)) {
+        index.choiceByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
+      } else if (isRosettaFunction(element)) {
+        index.funcByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
       }
     }
   }
@@ -188,6 +235,255 @@ function buildDuplicateTargetSchema(data: Data, targetId: string): FormPreviewSc
     status: 'unsupported',
     fields: [],
     unsupportedFeatures: [`duplicate-target:${targetId}`]
+  };
+}
+
+/**
+ * Builds a FormPreviewSchema for a RosettaTypeAlias.
+ *
+ * - If the alias resolves directly to a primitive type (string, int, number,
+ *   boolean, etc.), a single scalar field is emitted.
+ * - If the alias resolves to another Data type, the object's fields are
+ *   expanded inline (same as buildDataSchema).
+ * - Otherwise the schema is marked unsupported.
+ */
+function buildTypeAliasSchema(
+  alias: RosettaTypeAlias,
+  sourceUri: string,
+  namespace: NamespaceIndex,
+  targetId: string
+): FormPreviewSchema {
+  const typeRef = alias.typeCall?.type?.ref;
+  const refText = alias.typeCall?.type?.$refText;
+  const unsupportedFeatures = new Set<string>();
+
+  // Primitive alias (e.g. `typeAlias productType: string`)
+  const builtinKind =
+    (typeRef && isRosettaBasicType(typeRef) ? BUILTIN_KIND_MAP[typeRef.name] : undefined) ??
+    (refText ? BUILTIN_KIND_MAP[refText] : undefined);
+
+  if (builtinKind) {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      kind: 'typeAlias',
+      targetId,
+      title: alias.name,
+      status: 'ready',
+      fields: [{ path: 'value', label: alias.name, kind: builtinKind, required: true }]
+    };
+  }
+
+  // Data-type alias — delegate field expansion to the underlying data type
+  const resolvedData =
+    (typeRef && isData(typeRef) ? typeRef : undefined) ??
+    (refText ? namespace.dataByName.get(refText)?.node : undefined);
+
+  if (resolvedData) {
+    const sourceMap: PreviewSourceMapEntry[] = [];
+    const fields = resolvedData.attributes.map((attr) =>
+      buildField(attr, {
+        namespace,
+        unsupportedFeatures,
+        sourceMap,
+        sourceUri,
+        maxDepth: DEFAULT_MAX_DEPTH,
+        depth: 0,
+        path: attr.name,
+        label: attr.name,
+        seenTypes: new Set([resolvedData.name])
+      })
+    );
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      kind: 'typeAlias',
+      targetId,
+      title: alias.name,
+      status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
+      fields,
+      ...(sourceMap.length > 0 ? { sourceMap } : {}),
+      ...(unsupportedFeatures.size > 0
+        ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() }
+        : {})
+    };
+  }
+
+  // Unresolvable alias reference
+  unsupportedFeatures.add(`unresolved-reference:${refText ?? alias.name}`);
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    kind: 'typeAlias',
+    targetId,
+    title: alias.name,
+    status: 'unsupported',
+    fields: [
+      {
+        path: 'value',
+        label: alias.name,
+        kind: 'unknown',
+        required: true,
+        description: `Type reference ${refText ?? alias.name} could not be resolved for form preview.`
+      }
+    ],
+    unsupportedFeatures: Array.from(unsupportedFeatures).sort()
+  };
+}
+
+/**
+ * Builds a FormPreviewSchema for a grammar-level Choice type.
+ *
+ * Each ChoiceOption becomes an 'object' or scalar field representing one
+ * possible selection. The schema conveys that exactly one option must be
+ * chosen (discriminated union).
+ */
+function buildChoiceSchema(
+  choice: Choice,
+  sourceUri: string,
+  namespace: NamespaceIndex,
+  targetId: string
+): FormPreviewSchema {
+  const unsupportedFeatures = new Set<string>();
+  const fields: PreviewField[] = choice.attributes.map((option: ChoiceOption) =>
+    buildChoiceOptionField(option, { namespace, unsupportedFeatures, sourceUri })
+  );
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    kind: 'choice',
+    targetId,
+    title: choice.name,
+    status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
+    fields,
+    ...(unsupportedFeatures.size > 0
+      ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() }
+      : {})
+  };
+}
+
+function buildChoiceOptionField(
+  option: ChoiceOption,
+  ctx: {
+    namespace: NamespaceIndex;
+    unsupportedFeatures: Set<string>;
+    sourceUri: string;
+  }
+): PreviewField {
+  const typeRef = option.typeCall?.type?.ref;
+  const refText = option.typeCall?.type?.$refText;
+
+  // Resolve the option's label from the referenced type name
+  const label = refText ?? 'unknown';
+  const path = label;
+
+  // Primitive type option
+  const builtinKind =
+    (typeRef && isRosettaBasicType(typeRef) ? BUILTIN_KIND_MAP[typeRef.name] : undefined) ??
+    (refText ? BUILTIN_KIND_MAP[refText] : undefined);
+
+  if (builtinKind) {
+    return { path, label, kind: builtinKind, required: false };
+  }
+
+  // Enumeration option
+  if (typeRef && isRosettaEnumeration(typeRef)) {
+    return {
+      path,
+      label,
+      kind: 'enum',
+      required: false,
+      enumValues: typeRef.enumValues.map((v) => ({ value: v.name, label: v.display ?? v.name }))
+    };
+  }
+  if (!typeRef && refText && ctx.namespace.enumByName.has(refText)) {
+    const enumNode = ctx.namespace.enumByName.get(refText)!.node;
+    return {
+      path,
+      label,
+      kind: 'enum',
+      required: false,
+      enumValues: enumNode.enumValues.map((v) => ({ value: v.name, label: v.display ?? v.name }))
+    };
+  }
+
+  // Data type option — emit as object with expanded children
+  const resolvedData =
+    (typeRef && isData(typeRef) ? typeRef : undefined) ??
+    (refText ? ctx.namespace.dataByName.get(refText)?.node : undefined);
+  const resolvedSourceUri =
+    (typeRef && isData(typeRef)
+      ? (typeRef.$container?.$document?.uri?.toString() ?? ctx.sourceUri)
+      : ctx.namespace.dataByName.get(refText ?? '')?.sourceUri) ?? ctx.sourceUri;
+
+  if (resolvedData) {
+    const childCtx: FieldContext = {
+      namespace: ctx.namespace,
+      unsupportedFeatures: ctx.unsupportedFeatures,
+      sourceMap: [],
+      sourceUri: resolvedSourceUri,
+      maxDepth: DEFAULT_MAX_DEPTH,
+      depth: 0,
+      path,
+      label,
+      seenTypes: new Set([resolvedData.name])
+    };
+    return {
+      path,
+      label,
+      kind: 'object',
+      required: false,
+      children: resolvedData.attributes.map((child) =>
+        buildField(child, {
+          ...childCtx,
+          path: `${path}.${child.name}`,
+          label: child.name
+        })
+      )
+    };
+  }
+
+  ctx.unsupportedFeatures.add(`unresolved-reference:${refText ?? label}`);
+  return {
+    path,
+    label,
+    kind: 'unknown',
+    required: false,
+    description: `Type reference ${refText ?? label} could not be resolved for form preview.`
+  };
+}
+
+function buildFunctionSchema(
+  func: RosettaFunction,
+  sourceUri: string,
+  namespace: NamespaceIndex,
+  targetId: string
+): FormPreviewSchema {
+  const unsupportedFeatures = new Set<string>();
+  const sourceMap: PreviewSourceMapEntry[] = [];
+
+  const inputFields = (func.inputs ?? []).map((attr) =>
+    buildField(attr, {
+      namespace,
+      unsupportedFeatures,
+      sourceMap,
+      sourceUri,
+      maxDepth: DEFAULT_MAX_DEPTH,
+      depth: 0,
+      path: attr.name,
+      label: attr.name,
+      seenTypes: new Set()
+    })
+  );
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    targetId,
+    title: func.name,
+    kind: 'function',
+    status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
+    fields: inputFields,
+    ...(sourceMap.length > 0 ? { sourceMap } : {}),
+    ...(unsupportedFeatures.size > 0
+      ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() }
+      : {})
   };
 }
 

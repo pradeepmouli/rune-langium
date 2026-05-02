@@ -1,0 +1,4 @@
+namespace "test.annotations"
+version "1"
+
+annotation deprecated:

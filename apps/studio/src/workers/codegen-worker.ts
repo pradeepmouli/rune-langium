@@ -50,8 +50,15 @@ interface GenerateMessage {
   requestId?: string;
 }
 
+interface PreviewExecuteMessage {
+  type: 'preview:execute';
+  funcName: string;
+  inputs: Record<string, unknown>;
+  requestId: string;
+}
+
 type InboundMessage = SetFilesMessage | GenerateMessage;
-type WorkerInboundMessage = InboundMessage | PreviewWorkerRequest;
+type WorkerInboundMessage = InboundMessage | PreviewWorkerRequest | PreviewExecuteMessage;
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -66,6 +73,7 @@ let lastTarget: Target = 'zod';
 let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
+let cachedFuncCode = new Map<string, string>();
 
 function hasDocumentErrors(document: LangiumDocument): boolean {
   const hasDiagnostics = (document.diagnostics ?? []).some(
@@ -113,6 +121,18 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
     }
 
     const results = generate(documents, { target });
+
+    // Cache generated function code for preview:execute, keyed by namespace.funcName
+    if (target === 'typescript') {
+      cachedFuncCode = new Map();
+      for (const result of results) {
+        const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
+        for (const func of result.funcs) {
+          cachedFuncCode.set(func.name, result.content);
+          cachedFuncCode.set(`${ns}.${func.name}`, result.content);
+        }
+      }
+    }
 
     scope.postMessage({
       type: 'codegen:result',
@@ -203,6 +223,121 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// TS → JS stripping for @rune-langium/codegen output
+// ---------------------------------------------------------------------------
+
+function stripTypeAnnotations(tsCode: string): string {
+  const lines = tsCode.split('\n');
+  const output: string[] = [];
+  let braceDepth = 0;
+  let skipping = false;
+
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+
+    if (!skipping) {
+      if (/^(?:export\s+)?(?:interface|abstract\s+class|class)\s+\w+/.test(trimmed)) {
+        skipping = true;
+        braceDepth = (trimmed.match(/\{/g) || []).length - (trimmed.match(/\}/g) || []).length;
+        if (braceDepth <= 0) skipping = false;
+        continue;
+      }
+      if (/^(?:export\s+)?type\s+\w+\s*=/.test(trimmed)) continue;
+    }
+
+    if (skipping) {
+      braceDepth += (trimmed.match(/\{/g) || []).length;
+      braceDepth -= (trimmed.match(/\}/g) || []).length;
+      if (braceDepth <= 0) skipping = false;
+      continue;
+    }
+
+    let cleaned = line.replace(/^export\s+/, '');
+    cleaned = cleaned.replace(/(\w+)\s*:\s*[\w.]+(?:Shape)?(?:\[\])?\s*(?=[,)])/g, '$1');
+    cleaned = cleaned.replace(/\)\s*:\s*[\w.|& [\]]+\s*\{/g, ') {');
+    cleaned = cleaned.replace(/\)\s*:\s*\w+\s+is\s+\w+\s*\{/g, ') {');
+    cleaned = cleaned.replace(/\s+as\s+typeof\s+this\.\w+/g, '');
+    cleaned = cleaned.replace(/\s+as\s+const/g, '');
+    cleaned = cleaned.replace(/\s+as\s+\w+/g, '');
+    output.push(cleaned);
+  }
+
+  return output.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Function execution
+// ---------------------------------------------------------------------------
+
+async function executeFunction(
+  funcName: string,
+  inputs: Record<string, unknown>,
+  requestId: string
+): Promise<void> {
+  const scope = self as unknown as DedicatedWorkerGlobalScope;
+
+  if (!cachedFuncCode.has(funcName)) {
+    const documents = await buildDocuments();
+    if (documents) {
+      const results = generate(documents, { target: 'typescript' });
+      cachedFuncCode = new Map();
+      for (const result of results) {
+        for (const func of result.funcs) {
+          cachedFuncCode.set(func.name, result.content);
+        }
+      }
+    }
+  }
+
+  if (!cachedFuncCode.has(funcName)) {
+    scope.postMessage({
+      type: 'preview:execute-error',
+      requestId,
+      funcName,
+      error: `Function '${funcName}' not found in generated code. Ensure the model has a valid func declaration and no parse errors.`
+    });
+    return;
+  }
+
+  const code = cachedFuncCode.get(funcName)!;
+
+  try {
+    // Strip TS type annotations from the controlled @rune-langium/codegen output.
+    // Uses a line-by-line parser with brace-depth tracking — safe for our known
+    // output format (interfaces, classes, type aliases, function signatures).
+    // Security: execution runs in a dedicated web worker (no DOM/network/FS).
+    const jsCode = stripTypeAnnotations(code);
+
+    // Shadow globals that could exfiltrate data from the worker sandbox
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const wrapper = new Function(
+      'input',
+      'fetch',
+      'WebSocket',
+      'XMLHttpRequest',
+      'importScripts',
+      `${jsCode}\nreturn typeof ${funcName} === 'function' ? ${funcName}(input) : undefined;`
+    );
+
+    const output = wrapper(inputs, undefined, undefined, undefined, undefined);
+
+    scope.postMessage({
+      type: 'preview:execute-result',
+      requestId,
+      funcName,
+      output
+    });
+  } catch (e) {
+    scope.postMessage({
+      type: 'preview:execute-error',
+      requestId,
+      funcName,
+      error: e instanceof Error ? e.message : String(e)
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Message handler
 // ---------------------------------------------------------------------------
 
@@ -238,6 +373,9 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       lastPreviewTargetId = msg.targetId;
       lastPreviewRequestId = msg.requestId;
       runPreview(msg.targetId, msg.requestId).catch(console.error);
+    } else if (msg.type === 'preview:execute') {
+      const { funcName, inputs, requestId } = msg;
+      executeFunction(funcName, inputs, requestId).catch(console.error);
     }
   }
 );

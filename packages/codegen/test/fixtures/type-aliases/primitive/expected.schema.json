@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "test/aliases.schema.json",
+  "title": "test.aliases",
+  "$defs": {
+    "Name": {
+      "type": "string"
+    },
+    "Price": {
+      "type": "number"
+    }
+  }
+}

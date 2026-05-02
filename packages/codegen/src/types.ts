@@ -162,10 +162,13 @@ export interface PreviewSourceMapEntry {
   sourceChar: number;
 }
 
+export type FormPreviewKind = 'data' | 'typeAlias' | 'choice' | 'function';
+
 export interface FormPreviewSchema {
   schemaVersion: 1;
   targetId: string;
   title: string;
+  kind?: FormPreviewKind;
   status: 'ready' | 'unsupported';
   fields: PreviewField[];
   unsupportedFeatures?: string[];

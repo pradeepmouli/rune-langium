@@ -297,6 +297,54 @@ describe('codegen-worker preview messages', () => {
   });
 });
 
+describe('codegen-worker execute messages', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('posts preview:execute-error when function is not in cache', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'beta.Trade',
+      inputs: { symbol: 'AAPL', quantity: 10 },
+      requestId: 'exec:beta.Trade:1'
+    });
+
+    await vi.waitFor(() => {
+      expect(scope.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'preview:execute-error',
+          requestId: 'exec:beta.Trade:1',
+          funcName: 'beta.Trade'
+        })
+      );
+    });
+  });
+
+  it('error message indicates function not found', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'alpha.Foo',
+      inputs: {},
+      requestId: 'exec:alpha.Foo:1'
+    });
+
+    await vi.waitFor(() => {
+      expect(scope.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'preview:execute-error',
+          funcName: 'alpha.Foo',
+          error: expect.stringContaining('not found')
+        })
+      );
+    });
+  });
+});
+
 describe('codegen-worker code preview messages', () => {
   beforeEach(() => {
     buildMock.mockReset();

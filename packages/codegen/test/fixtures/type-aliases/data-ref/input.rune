@@ -1,0 +1,8 @@
+namespace "test.aliases"
+version "1"
+
+type Address:
+    street string (1..1)
+    city string (1..1)
+
+typeAlias HomeAddress: Address

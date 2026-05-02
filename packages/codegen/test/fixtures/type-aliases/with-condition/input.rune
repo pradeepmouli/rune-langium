@@ -1,0 +1,6 @@
+namespace "test.aliases"
+version "1"
+
+typeAlias PositivePrice: number
+    condition Positive:
+        PositivePrice > 0

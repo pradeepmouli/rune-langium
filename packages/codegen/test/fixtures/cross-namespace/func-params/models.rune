@@ -1,0 +1,6 @@
+namespace "test.models"
+version "1"
+
+type Amount:
+    value number (1..1)
+    currency string (1..1)
