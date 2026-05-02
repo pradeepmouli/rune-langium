@@ -250,14 +250,14 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       try {
         // TODO: Full implementation will transpile and eval the function
         // For now, return the inputs as a passthrough to validate the message pipeline
-        self.postMessage({
+        scope.postMessage({
           type: 'preview:execute-result',
           requestId,
           funcName,
           output: { ...inputs, _executed: true }
         });
       } catch (e) {
-        self.postMessage({
+        scope.postMessage({
           type: 'preview:execute-error',
           requestId,
           funcName,

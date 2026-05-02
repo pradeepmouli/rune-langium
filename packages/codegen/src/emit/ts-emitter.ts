@@ -700,7 +700,7 @@ function emitReportMetadata(ctx: EmissionContext): string {
     const kind = rule.eligibility ? 'eligibility' : 'reporting';
     const inputRef = rule.input?.type?.ref;
     const inputName = inputRef ? inputRef.name : 'unknown';
-    lines.push(`  ${name}: { kind: '${kind}' as const, inputType: '${inputName}' },`);
+    lines.push(`  '${name}': { kind: '${kind}' as const, inputType: '${inputName}' },`);
   }
   lines.push('} as const;');
   return lines.join('\n');

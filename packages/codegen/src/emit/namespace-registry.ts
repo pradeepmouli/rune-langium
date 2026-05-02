@@ -88,12 +88,18 @@ export function resolveImportPath(
   const fromParts = fromNamespace.split('.');
   const toParts = toNamespace.split('.');
 
-  // Compute relative path from fromNamespace directory to toNamespace file
-  // Each namespace maps to a directory: a.b.c → a/b/c/
-  // Output file is at: a/b/c.zod.ts or a/b/c.ts (suffix added by caller)
-  const ups = fromParts.length;
-  const upSegment = '../'.repeat(ups);
-  return upSegment + toParts.join('/');
+  let commonLen = 0;
+  while (
+    commonLen < fromParts.length &&
+    commonLen < toParts.length &&
+    fromParts[commonLen] === toParts[commonLen]
+  ) {
+    commonLen++;
+  }
+
+  const ups = fromParts.length - commonLen;
+  const upSegment = ups > 0 ? '../'.repeat(ups) : './';
+  return upSegment + toParts.slice(commonLen).join('/');
 }
 
 export function findNamespaceForSymbol(

@@ -44,10 +44,12 @@ describe('US9: Report Codegen — TypeScript', () => {
     assertFixture('basic', 'typescript'));
   it('T074 runeReportRules contains eligibility entry', async () => {
     const content = await runFixture('basic', 'typescript');
-    expect(content).toContain("IsLargeTrade: { kind: 'eligibility' as const, inputType: 'Trade' }");
+    expect(content).toContain(
+      "'IsLargeTrade': { kind: 'eligibility' as const, inputType: 'Trade' }"
+    );
   });
   it('T075 runeReportRules contains reporting entry', async () => {
     const content = await runFixture('basic', 'typescript');
-    expect(content).toContain("ExtractDate: { kind: 'reporting' as const, inputType: 'Trade' }");
+    expect(content).toContain("'ExtractDate': { kind: 'reporting' as const, inputType: 'Trade' }");
   });
 });
