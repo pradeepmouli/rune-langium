@@ -28,6 +28,7 @@ import { createRuneDslServices } from '@rune-langium/core';
 import { generate, generatePreviewSchemas } from '@rune-langium/codegen';
 import type { Target } from '@rune-langium/codegen';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
+import { transform as oxcTransform } from 'oxc-transform';
 
 // ---------------------------------------------------------------------------
 // Message types (inbound)
@@ -257,18 +258,19 @@ async function executeFunction(
   const code = cachedFuncCode.get(funcName)!;
 
   try {
-    // Strip TS-only syntax to get evaluable JS.
-    // The generated code is close to valid JS — type annotations are the main difference.
-    // Security: this runs in a dedicated web worker with no DOM/network/FS access.
-    const jsCode = code
-      .replace(/^export /gm, '')
-      .replace(/(\w+)\s*:\s*[A-Z]\w*(?:Shape)?(?:\[\])?\s*(?=[,)])/g, '$1')
-      .replace(/\)\s*:\s*[A-Za-z]\w*(?:\[\])?\s*\{/g, ') {')
-      .replace(/\s+as\s+typeof\s+this\.\w+/g, '')
-      .replace(/\s+as\s+const/g, '')
-      .replace(/^(?:interface|type)\s+\w+[^{]*\{[^}]*\}/gm, '')
-      .replace(/^type\s+\w+\s*=\s*[^;]+;/gm, '')
-      .replace(/^class\s+\w+[\s\S]*?^}/gm, '');
+    // Transpile TS → JS using oxc-transform (wasm-based, runs in worker).
+    // Security: execution runs in a dedicated web worker (no DOM/network/FS).
+    const { code: jsCode, errors } = await oxcTransform('generated.ts', code);
+
+    if (errors.length > 0) {
+      scope.postMessage({
+        type: 'preview:execute-error',
+        requestId,
+        funcName,
+        error: `Transpilation failed: ${errors.map((e: { message: string }) => e.message).join('; ')}`
+      });
+      return;
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
     const wrapper = new Function(

@@ -49,7 +49,6 @@ interface PreviewStoreState {
   samples: Map<string, PreviewSampleState>;
   status: PreviewStatus;
   executionResults: Map<string, { output: unknown; error?: string }>;
-  workerRef: Worker | null;
 }
 
 interface PreviewStoreActions {
@@ -94,12 +93,12 @@ const initialState: PreviewStoreState = {
   schemas: new Map(),
   samples: new Map(),
   status: { state: 'waiting' },
-  executionResults: new Map(),
-  workerRef: null
+  executionResults: new Map()
 };
 
 let dispatchExecuteCounter = 0;
 let lastExecuteRequestId = '';
+let workerRef: Worker | null = null;
 
 function serializeSampleValues(values: Record<string, unknown>): string {
   return JSON.stringify(values, null, 2);
@@ -507,12 +506,12 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
   },
 
   setWorkerRef(worker) {
-    set({ workerRef: worker });
+    workerRef = worker;
   },
 
   dispatchExecute(funcName, inputs) {
-    const worker = get().workerRef;
-    if (!worker) return;
+    if (!workerRef) return;
+    const worker = workerRef;
     dispatchExecuteCounter++;
     const requestId = `exec:${funcName}:${dispatchExecuteCounter}`;
     lastExecuteRequestId = requestId;
@@ -533,8 +532,8 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
       schemas: new Map(),
       samples: new Map(),
       status: { state: 'waiting' },
-      executionResults: new Map(),
-      workerRef: null
+      executionResults: new Map()
     });
+    workerRef = null;
   }
 }));
