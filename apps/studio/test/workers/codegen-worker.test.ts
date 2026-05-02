@@ -302,7 +302,7 @@ describe('codegen-worker execute messages', () => {
     vi.unstubAllGlobals();
   });
 
-  it('posts preview:execute-result with inputs passed through when preview:execute is received', async () => {
+  it('posts preview:execute-error when function is not in cache', async () => {
     const { scope, dispatch } = await loadWorkerModule();
 
     dispatch({
@@ -312,15 +312,18 @@ describe('codegen-worker execute messages', () => {
       requestId: 'exec:beta.Trade:1'
     });
 
-    expect(scope.postMessage).toHaveBeenCalledWith({
-      type: 'preview:execute-result',
-      requestId: 'exec:beta.Trade:1',
-      funcName: 'beta.Trade',
-      output: { symbol: 'AAPL', quantity: 10, _executed: true }
+    await vi.waitFor(() => {
+      expect(scope.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'preview:execute-error',
+          requestId: 'exec:beta.Trade:1',
+          funcName: 'beta.Trade'
+        })
+      );
     });
   });
 
-  it('posts preview:execute-result for an empty inputs object', async () => {
+  it('error message indicates function not found', async () => {
     const { scope, dispatch } = await loadWorkerModule();
 
     dispatch({
@@ -330,11 +333,14 @@ describe('codegen-worker execute messages', () => {
       requestId: 'exec:alpha.Foo:1'
     });
 
-    expect(scope.postMessage).toHaveBeenCalledWith({
-      type: 'preview:execute-result',
-      requestId: 'exec:alpha.Foo:1',
-      funcName: 'alpha.Foo',
-      output: { _executed: true }
+    await vi.waitFor(() => {
+      expect(scope.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'preview:execute-error',
+          funcName: 'alpha.Foo',
+          error: expect.stringContaining('not found')
+        })
+      );
     });
   });
 });
