@@ -12,6 +12,7 @@ const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
 // --- end runtime helpers ---
 
+
 export type HomeAddress = AddressShape;
 export interface AddressShape {
   street: string;

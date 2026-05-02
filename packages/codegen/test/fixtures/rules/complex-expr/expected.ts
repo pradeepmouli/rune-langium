@@ -45,11 +45,12 @@ export function isPosition(x: unknown): x is Position {
   return true;
 }
 
+
 export function validateIsSignificant(position: PositionShape): boolean {
   return position.Position?.quantity * position.Position?.price > 10000;
 }
 
 export const runeReportRules = {
-  IsSignificant: { kind: 'eligibility' as const, inputType: 'Position' }
+  'IsSignificant': { kind: 'eligibility' as const, inputType: 'Position' },
 } as const;
 // (functions emitted by Phase 8b appear below this line)

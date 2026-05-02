@@ -20,11 +20,12 @@ export const TradeSchema = z.object({
 });
 export type Trade = z.infer<typeof TradeSchema>;
 
+
 export const validateExtractTradeDate = TradeSchema.refine(
   (data) => data.Trade?.tradeDate,
   'ExtractTradeDate'
 );
 
 export const runeReportRules = {
-  ExtractTradeDate: { kind: 'reporting' as const, inputType: 'Trade' }
+  'ExtractTradeDate': { kind: 'reporting' as const, inputType: 'Trade' },
 } as const;

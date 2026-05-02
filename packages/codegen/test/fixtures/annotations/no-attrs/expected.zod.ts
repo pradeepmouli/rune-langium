@@ -13,3 +13,4 @@ const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 
 const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
 // --- end runtime helpers ---
+

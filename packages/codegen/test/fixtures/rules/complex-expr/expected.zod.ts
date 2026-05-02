@@ -21,11 +21,12 @@ export const PositionSchema = z.object({
 });
 export type Position = z.infer<typeof PositionSchema>;
 
+
 export const validateIsSignificant = PositionSchema.refine(
   (data) => data.Position?.quantity * data.Position?.price > 10000,
   'IsSignificant'
 );
 
 export const runeReportRules = {
-  IsSignificant: { kind: 'eligibility' as const, inputType: 'Position' }
+  'IsSignificant': { kind: 'eligibility' as const, inputType: 'Position' },
 } as const;

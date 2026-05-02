@@ -14,12 +14,10 @@ const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
 // --- end runtime helpers ---
 
-export const TradeSchema = z
-  .object({
-    tradeDate: z.string(),
-    notional: z.number()
-  })
-  .meta({
+export const TradeSchema = z.object({
+  tradeDate: z.string(),
+  notional: z.number()
+}).meta({
     source: { attribute: 'system' }
   });
 export type Trade = z.infer<typeof TradeSchema>;

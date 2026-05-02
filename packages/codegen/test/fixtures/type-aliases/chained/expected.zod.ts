@@ -14,6 +14,7 @@ const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
 // --- end runtime helpers ---
 
+
 export const AmountSchema = z.number();
 export type Amount = z.infer<typeof AmountSchema>;
 

@@ -45,6 +45,7 @@ export function isAccount(x: unknown): x is Account {
   return true;
 }
 
+
 export function validateIsActive(account: AccountShape): boolean {
   return account.Account?.balance > 0;
 }
@@ -54,7 +55,7 @@ export function validateIsPremium(account: AccountShape): boolean {
 }
 
 export const runeReportRules = {
-  IsActive: { kind: 'eligibility' as const, inputType: 'Account' },
-  IsPremium: { kind: 'eligibility' as const, inputType: 'Account' }
+  'IsActive': { kind: 'eligibility' as const, inputType: 'Account' },
+  'IsPremium': { kind: 'eligibility' as const, inputType: 'Account' },
 } as const;
 // (functions emitted by Phase 8b appear below this line)

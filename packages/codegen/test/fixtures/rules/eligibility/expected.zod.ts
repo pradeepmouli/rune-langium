@@ -20,11 +20,12 @@ export const TradeSchema = z.object({
 });
 export type Trade = z.infer<typeof TradeSchema>;
 
+
 export const validateIsLargeTrade = TradeSchema.refine(
   (data) => data.Trade?.notional > 1000000,
   'IsLargeTrade'
 );
 
 export const runeReportRules = {
-  IsLargeTrade: { kind: 'eligibility' as const, inputType: 'Trade' }
+  'IsLargeTrade': { kind: 'eligibility' as const, inputType: 'Trade' },
 } as const;

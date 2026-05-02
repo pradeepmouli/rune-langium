@@ -12,6 +12,7 @@ const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
 // --- end runtime helpers ---
 
+
 export type Concat = (a: string, b: string) => string;
 
 export type Sum = (values: number[]) => number;

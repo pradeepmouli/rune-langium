@@ -70,6 +70,7 @@ export function isTradeReport(x: unknown): x is TradeReport {
   return true;
 }
 
+
 export function extractExtractDate(trade: TradeShape): unknown {
   return trade.Trade?.tradeDate;
 }
@@ -79,7 +80,7 @@ export function validateIsLargeTrade(trade: TradeShape): boolean {
 }
 
 export const runeReportRules = {
-  ExtractDate: { kind: 'reporting' as const, inputType: 'Trade' },
-  IsLargeTrade: { kind: 'eligibility' as const, inputType: 'Trade' }
+  'ExtractDate': { kind: 'reporting' as const, inputType: 'Trade' },
+  'IsLargeTrade': { kind: 'eligibility' as const, inputType: 'Trade' },
 } as const;
 // (functions emitted by Phase 8b appear below this line)

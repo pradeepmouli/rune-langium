@@ -41,11 +41,12 @@ export function isTrade(x: unknown): x is Trade {
   return true;
 }
 
+
 export function extractExtractTradeDate(trade: TradeShape): unknown {
   return trade.Trade?.tradeDate;
 }
 
 export const runeReportRules = {
-  ExtractTradeDate: { kind: 'reporting' as const, inputType: 'Trade' }
+  'ExtractTradeDate': { kind: 'reporting' as const, inputType: 'Trade' },
 } as const;
 // (functions emitted by Phase 8b appear below this line)

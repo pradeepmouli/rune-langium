@@ -41,11 +41,12 @@ export function isTrade(x: unknown): x is Trade {
   return true;
 }
 
+
 export function validateIsLargeTrade(trade: TradeShape): boolean {
   return trade.Trade?.notional > 1000000;
 }
 
 export const runeReportRules = {
-  IsLargeTrade: { kind: 'eligibility' as const, inputType: 'Trade' }
+  'IsLargeTrade': { kind: 'eligibility' as const, inputType: 'Trade' },
 } as const;
 // (functions emitted by Phase 8b appear below this line)

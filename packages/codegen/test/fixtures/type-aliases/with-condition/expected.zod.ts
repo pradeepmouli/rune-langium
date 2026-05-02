@@ -14,5 +14,6 @@ const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
 // --- end runtime helpers ---
 
+
 export const PositivePriceSchema = z.number();
 export type PositivePrice = z.infer<typeof PositivePriceSchema>;

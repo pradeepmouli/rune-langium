@@ -21,6 +21,7 @@ export const AccountSchema = z.object({
 });
 export type Account = z.infer<typeof AccountSchema>;
 
+
 export const validateIsActive = AccountSchema.refine(
   (data) => data.Account?.balance > 0,
   'IsActive'
@@ -32,6 +33,6 @@ export const validateIsPremium = AccountSchema.refine(
 );
 
 export const runeReportRules = {
-  IsActive: { kind: 'eligibility' as const, inputType: 'Account' },
-  IsPremium: { kind: 'eligibility' as const, inputType: 'Account' }
+  'IsActive': { kind: 'eligibility' as const, inputType: 'Account' },
+  'IsPremium': { kind: 'eligibility' as const, inputType: 'Account' },
 } as const;
