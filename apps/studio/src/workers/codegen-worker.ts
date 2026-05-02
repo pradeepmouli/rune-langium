@@ -28,7 +28,6 @@ import { createRuneDslServices } from '@rune-langium/core';
 import { generate, generatePreviewSchemas } from '@rune-langium/codegen';
 import type { Target } from '@rune-langium/codegen';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
-import { transform as oxcTransform } from 'oxc-transform';
 
 // ---------------------------------------------------------------------------
 // Message types (inbound)
@@ -224,6 +223,49 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// TS → JS stripping for @rune-langium/codegen output
+// ---------------------------------------------------------------------------
+
+function stripTypeAnnotations(tsCode: string): string {
+  const lines = tsCode.split('\n');
+  const output: string[] = [];
+  let braceDepth = 0;
+  let skipping = false;
+
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+
+    if (!skipping) {
+      if (/^(?:export\s+)?(?:interface|abstract\s+class|class)\s+\w+/.test(trimmed)) {
+        skipping = true;
+        braceDepth = (trimmed.match(/\{/g) || []).length - (trimmed.match(/\}/g) || []).length;
+        if (braceDepth <= 0) skipping = false;
+        continue;
+      }
+      if (/^(?:export\s+)?type\s+\w+\s*=/.test(trimmed)) continue;
+    }
+
+    if (skipping) {
+      braceDepth += (trimmed.match(/\{/g) || []).length;
+      braceDepth -= (trimmed.match(/\}/g) || []).length;
+      if (braceDepth <= 0) skipping = false;
+      continue;
+    }
+
+    let cleaned = line.replace(/^export\s+/, '');
+    cleaned = cleaned.replace(/(\w+)\s*:\s*[\w.]+(?:Shape)?(?:\[\])?\s*(?=[,)])/g, '$1');
+    cleaned = cleaned.replace(/\)\s*:\s*[\w.|& [\]]+\s*\{/g, ') {');
+    cleaned = cleaned.replace(/\)\s*:\s*\w+\s+is\s+\w+\s*\{/g, ') {');
+    cleaned = cleaned.replace(/\s+as\s+typeof\s+this\.\w+/g, '');
+    cleaned = cleaned.replace(/\s+as\s+const/g, '');
+    cleaned = cleaned.replace(/\s+as\s+\w+/g, '');
+    output.push(cleaned);
+  }
+
+  return output.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Function execution
 // ---------------------------------------------------------------------------
 
@@ -260,19 +302,11 @@ async function executeFunction(
   const code = cachedFuncCode.get(funcName)!;
 
   try {
-    // Transpile TS → JS using oxc-transform (wasm-based, runs in worker).
+    // Strip TS type annotations from the controlled @rune-langium/codegen output.
+    // Uses a line-by-line parser with brace-depth tracking — safe for our known
+    // output format (interfaces, classes, type aliases, function signatures).
     // Security: execution runs in a dedicated web worker (no DOM/network/FS).
-    const { code: jsCode, errors } = await oxcTransform('generated.ts', code);
-
-    if (errors.length > 0) {
-      scope.postMessage({
-        type: 'preview:execute-error',
-        requestId,
-        funcName,
-        error: `Transpilation failed: ${errors.map((e: { message: string }) => e.message).join('; ')}`
-      });
-      return;
-    }
+    const jsCode = stripTypeAnnotations(code);
 
     // Shadow globals that could exfiltrate data from the worker sandbox
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
