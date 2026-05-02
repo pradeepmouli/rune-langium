@@ -24,13 +24,15 @@ export interface FormPreviewPanelProps {
   status: PreviewStatus;
   target?: FormPreviewTarget;
   getFieldSource?: (fieldPath: string) => PreviewSourceMapEntry | undefined;
+  onExecute?: (funcName: string, inputs: Record<string, unknown>) => void;
 }
 
 export function FormPreviewPanel({
   schema,
   status,
   target,
-  getFieldSource
+  getFieldSource,
+  onExecute
 }: FormPreviewPanelProps): ReactElement {
   const ensureSample = usePreviewStore((s) => s.ensureSample);
   const updateSample = usePreviewStore((s) => s.updateSample);
@@ -40,6 +42,20 @@ export function FormPreviewPanel({
   const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
   const [executionResult, setExecutionResult] = useState<unknown>(undefined);
   const [executionError, setExecutionError] = useState<string | null>(null);
+
+  const storeExecResult = usePreviewStore((s) =>
+    schema ? s.executionResults.get(schema.title) : undefined
+  );
+
+  useEffect(() => {
+    if (!storeExecResult) return;
+    if (storeExecResult.error) {
+      setExecutionError(storeExecResult.error);
+    } else {
+      setExecutionResult(storeExecResult.output);
+    }
+    setExecutionState('idle');
+  }, [storeExecResult]);
 
   const defaultValues = useMemo(
     () => (schema ? (buildDefaultValues(schema.fields) as Record<string, unknown>) : {}),
@@ -157,17 +173,12 @@ export function FormPreviewPanel({
   );
 
   const handleRun = useCallback(() => {
-    if (!schema || !activeSample) return;
+    if (!schema || !activeSample || !onExecute) return;
     setExecutionState('running');
     setExecutionResult(undefined);
     setExecutionError(null);
-    // TODO: dispatch preview:execute to codegen worker
-    console.info('[FormPreviewPanel] preview:execute', activeSample.values);
-    // Placeholder — resolve immediately with logged inputs
-    Promise.resolve().then(() => {
-      setExecutionState('idle');
-    });
-  }, [activeSample, schema]);
+    onExecute(schema.title, activeSample.values);
+  }, [activeSample, onExecute, schema]);
 
   const handleReset = useCallback(() => {
     if (!schema) return;

@@ -49,6 +49,7 @@ interface PreviewStoreState {
   samples: Map<string, PreviewSampleState>;
   status: PreviewStatus;
   executionResults: Map<string, { output: unknown; error?: string }>;
+  workerRef: Worker | null;
 }
 
 interface PreviewStoreActions {
@@ -79,6 +80,8 @@ interface PreviewStoreActions {
   receiveExecutionResult(funcName: string, output: unknown): void;
   receiveExecutionError(funcName: string, error: string): void;
   clearExecutionResult(funcName: string): void;
+  setWorkerRef(worker: Worker | null): void;
+  dispatchExecute(funcName: string, inputs: Record<string, unknown>): void;
 }
 
 type PreviewStore = PreviewStoreState & PreviewStoreActions;
@@ -91,7 +94,8 @@ const initialState: PreviewStoreState = {
   schemas: new Map(),
   samples: new Map(),
   status: { state: 'waiting' },
-  executionResults: new Map()
+  executionResults: new Map(),
+  workerRef: null
 };
 
 function serializeSampleValues(values: Record<string, unknown>): string {
@@ -499,6 +503,22 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     set({ executionResults });
   },
 
+  setWorkerRef(worker) {
+    set({ workerRef: worker });
+  },
+
+  dispatchExecute(funcName, inputs) {
+    const worker = get().workerRef;
+    if (!worker) return;
+    const requestId = `exec:${funcName}:${Date.now()}`;
+    worker.postMessage({
+      type: 'preview:execute',
+      funcName,
+      inputs,
+      requestId
+    });
+  },
+
   resetPreviewState() {
     set({
       targets: [],
@@ -508,7 +528,8 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
       schemas: new Map(),
       samples: new Map(),
       status: { state: 'waiting' },
-      executionResults: new Map()
+      executionResults: new Map(),
+      workerRef: null
     });
   }
 }));

@@ -73,6 +73,7 @@ let lastTarget: Target = 'zod';
 let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
+let cachedFuncCode = new Map<string, string>();
 
 function hasDocumentErrors(document: LangiumDocument): boolean {
   const hasDiagnostics = (document.diagnostics ?? []).some(
@@ -120,6 +121,16 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
     }
 
     const results = generate(documents, { target });
+
+    // Cache generated function code for preview:execute
+    if (target === 'typescript') {
+      cachedFuncCode = new Map();
+      for (const result of results) {
+        for (const func of result.funcs) {
+          cachedFuncCode.set(func.name, result.content);
+        }
+      }
+    }
 
     scope.postMessage({
       type: 'codegen:result',
@@ -210,6 +221,80 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Function execution
+// ---------------------------------------------------------------------------
+
+async function executeFunction(
+  funcName: string,
+  inputs: Record<string, unknown>,
+  requestId: string
+): Promise<void> {
+  const scope = self as unknown as DedicatedWorkerGlobalScope;
+
+  if (!cachedFuncCode.has(funcName)) {
+    const documents = await buildDocuments();
+    if (documents) {
+      const results = generate(documents, { target: 'typescript' });
+      cachedFuncCode = new Map();
+      for (const result of results) {
+        for (const func of result.funcs) {
+          cachedFuncCode.set(func.name, result.content);
+        }
+      }
+    }
+  }
+
+  if (!cachedFuncCode.has(funcName)) {
+    scope.postMessage({
+      type: 'preview:execute-error',
+      requestId,
+      funcName,
+      error: `Function '${funcName}' not found in generated code. Ensure the model has a valid func declaration and no parse errors.`
+    });
+    return;
+  }
+
+  const code = cachedFuncCode.get(funcName)!;
+
+  try {
+    // Strip TS-only syntax to get evaluable JS.
+    // The generated code is close to valid JS — type annotations are the main difference.
+    // Security: this runs in a dedicated web worker with no DOM/network/FS access.
+    const jsCode = code
+      .replace(/^export /gm, '')
+      .replace(/(\w+)\s*:\s*[A-Z]\w*(?:Shape)?(?:\[\])?\s*(?=[,)])/g, '$1')
+      .replace(/\)\s*:\s*[A-Za-z]\w*(?:\[\])?\s*\{/g, ') {')
+      .replace(/\s+as\s+typeof\s+this\.\w+/g, '')
+      .replace(/\s+as\s+const/g, '')
+      .replace(/^(?:interface|type)\s+\w+[^{]*\{[^}]*\}/gm, '')
+      .replace(/^type\s+\w+\s*=\s*[^;]+;/gm, '')
+      .replace(/^class\s+\w+[\s\S]*?^}/gm, '');
+
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const wrapper = new Function(
+      'input',
+      `${jsCode}\nreturn typeof ${funcName} === 'function' ? ${funcName}(input) : undefined;`
+    );
+
+    const output = wrapper(inputs);
+
+    scope.postMessage({
+      type: 'preview:execute-result',
+      requestId,
+      funcName,
+      output
+    });
+  } catch (e) {
+    scope.postMessage({
+      type: 'preview:execute-error',
+      requestId,
+      funcName,
+      error: e instanceof Error ? e.message : String(e)
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Message handler
 // ---------------------------------------------------------------------------
 
@@ -247,23 +332,7 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       runPreview(msg.targetId, msg.requestId).catch(console.error);
     } else if (msg.type === 'preview:execute') {
       const { funcName, inputs, requestId } = msg;
-      try {
-        // TODO: Full implementation will transpile and eval the function
-        // For now, return the inputs as a passthrough to validate the message pipeline
-        scope.postMessage({
-          type: 'preview:execute-result',
-          requestId,
-          funcName,
-          output: { ...inputs, _executed: true }
-        });
-      } catch (e) {
-        scope.postMessage({
-          type: 'preview:execute-error',
-          requestId,
-          funcName,
-          error: e instanceof Error ? e.message : String(e)
-        });
-      }
+      executeFunction(funcName, inputs, requestId).catch(console.error);
     }
   }
 );
