@@ -42,7 +42,7 @@ export function isTrade(x: unknown): x is Trade {
 }
 
 export function validateIsLargeTrade(trade: TradeShape): boolean {
-  return Trade.Trade?.notional > 1000000;
+  return trade.Trade?.notional > 1000000;
 }
 
 export const runeReportRules = {

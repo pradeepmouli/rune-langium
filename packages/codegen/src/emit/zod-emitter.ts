@@ -861,12 +861,20 @@ function emitRuleValidator(rule: RosettaRule, ctx: EmissionContext): string {
   }
 
   const schemaName = `${inputTypeName}Schema`;
+  const attributeTypes = new Map<string, string>();
+  const inputData = ctx.dataByName.get(inputTypeName);
+  if (inputData) {
+    for (const attr of inputData.attributes) {
+      attributeTypes.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
+    }
+  }
+
   const transpilerCtx: ExpressionTranspilerContext = {
     selfName: 'data',
     emitMode: 'zod-refine',
     conditionName: name,
     typeName: inputTypeName,
-    attributeTypes: new Map(),
+    attributeTypes,
     diagnostics: ctx.diagnostics
   };
 

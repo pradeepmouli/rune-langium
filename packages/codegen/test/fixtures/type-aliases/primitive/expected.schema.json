@@ -7,7 +7,7 @@
       "type": "string"
     },
     "Price": {
-      "type": "string"
+      "type": "number"
     }
   }
 }

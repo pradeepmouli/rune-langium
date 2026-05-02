@@ -4,7 +4,7 @@
   "title": "test.aliases",
   "$defs": {
     "PositivePrice": {
-      "type": "string"
+      "type": "number"
     }
   }
 }

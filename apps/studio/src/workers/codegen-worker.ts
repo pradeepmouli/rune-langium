@@ -123,12 +123,14 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
 
     const results = generate(documents, { target });
 
-    // Cache generated function code for preview:execute
+    // Cache generated function code for preview:execute, keyed by namespace.funcName
     if (target === 'typescript') {
       cachedFuncCode = new Map();
       for (const result of results) {
+        const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
         for (const func of result.funcs) {
           cachedFuncCode.set(func.name, result.content);
+          cachedFuncCode.set(`${ns}.${func.name}`, result.content);
         }
       }
     }
@@ -272,13 +274,18 @@ async function executeFunction(
       return;
     }
 
+    // Shadow globals that could exfiltrate data from the worker sandbox
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
     const wrapper = new Function(
       'input',
+      'fetch',
+      'WebSocket',
+      'XMLHttpRequest',
+      'importScripts',
       `${jsCode}\nreturn typeof ${funcName} === 'function' ? ${funcName}(input) : undefined;`
     );
 
-    const output = wrapper(inputs);
+    const output = wrapper(inputs, undefined, undefined, undefined, undefined);
 
     scope.postMessage({
       type: 'preview:execute-result',

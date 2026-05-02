@@ -4,7 +4,7 @@
   "title": "test.aliases",
   "$defs": {
     "Amount": {
-      "type": "string"
+      "type": "number"
     },
     "Price": {
       "type": "string"

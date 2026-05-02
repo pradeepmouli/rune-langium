@@ -71,11 +71,11 @@ export function isTradeReport(x: unknown): x is TradeReport {
 }
 
 export function extractExtractDate(trade: TradeShape): unknown {
-  return Trade.Trade?.tradeDate;
+  return trade.Trade?.tradeDate;
 }
 
 export function validateIsLargeTrade(trade: TradeShape): boolean {
-  return Trade.Trade?.notional > 1000000;
+  return trade.Trade?.notional > 1000000;
 }
 
 export const runeReportRules = {

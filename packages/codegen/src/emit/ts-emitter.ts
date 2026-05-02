@@ -725,12 +725,20 @@ function emitRule(rule: RosettaRule, ctx: EmissionContext): string {
     ? inputTypeName.charAt(0).toLowerCase() + inputTypeName.slice(1)
     : 'input';
 
+  const attributeTypes = new Map<string, string>();
+  if (inputTypeRef && isData(inputTypeRef)) {
+    for (const attr of inputTypeRef.attributes) {
+      const attrType = resolveTypeExprAsTs(attr, ctx);
+      attributeTypes.set(attr.name, attrType);
+    }
+  }
+
   const transpilerCtx: ExpressionTranspilerContext = {
-    selfName: inputTypeName ?? 'input',
+    selfName: paramName,
     emitMode: 'ts-method',
     conditionName: name,
     typeName: inputTypeName ?? name,
-    attributeTypes: new Map(),
+    attributeTypes,
     diagnostics: ctx.diagnostics
   };
 

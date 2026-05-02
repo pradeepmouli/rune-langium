@@ -387,6 +387,17 @@ function emitTypeAliasDef(alias: RosettaTypeAlias, ctx: EmissionContext): object
   }
 
   if (refText) {
+    const builtinMap: Record<string, object> = {
+      string: { type: 'string' },
+      int: { type: 'integer' },
+      number: { type: 'number' },
+      boolean: { type: 'boolean' },
+      date: { type: 'string', format: 'date' },
+      dateTime: { type: 'string', format: 'date-time' },
+      zonedDateTime: { type: 'string', format: 'date-time' },
+      time: { type: 'string', format: 'time' }
+    };
+    if (builtinMap[refText]) return builtinMap[refText];
     if (ctx.enumByName.has(refText) || ctx.dataByName.has(refText)) {
       return { $ref: `#/$defs/${refText}` };
     }

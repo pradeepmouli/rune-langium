@@ -127,10 +127,6 @@ export function generatePreviewSchemas(
     }
   }
 
-  // TODO(T039-T040): The Studio FormPreviewPanel needs updating to render
-  // 'typeAlias' and 'choice' kind schemas. Currently only 'data' schemas
-  // are rendered in the panel UI.
-
   return schemas;
 }
 

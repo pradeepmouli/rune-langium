@@ -46,11 +46,11 @@ export function isAccount(x: unknown): x is Account {
 }
 
 export function validateIsActive(account: AccountShape): boolean {
-  return Account.Account?.balance > 0;
+  return account.Account?.balance > 0;
 }
 
 export function validateIsPremium(account: AccountShape): boolean {
-  return Account.Account?.tier === 'premium';
+  return account.Account?.tier === 'premium';
 }
 
 export const runeReportRules = {

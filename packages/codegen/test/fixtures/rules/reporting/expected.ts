@@ -42,7 +42,7 @@ export function isTrade(x: unknown): x is Trade {
 }
 
 export function extractExtractTradeDate(trade: TradeShape): unknown {
-  return Trade.Trade?.tradeDate;
+  return trade.Trade?.tradeDate;
 }
 
 export const runeReportRules = {

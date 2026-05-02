@@ -46,7 +46,7 @@ export function isPosition(x: unknown): x is Position {
 }
 
 export function validateIsSignificant(position: PositionShape): boolean {
-  return Position.Position?.quantity * Position.Position?.price > 10000;
+  return position.Position?.quantity * position.Position?.price > 10000;
 }
 
 export const runeReportRules = {
