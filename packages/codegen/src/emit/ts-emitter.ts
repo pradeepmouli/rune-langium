@@ -203,6 +203,17 @@ function collectCrossNamespaceImports(ctx: EmissionContext): string[] {
       trackRef(typeRef, `${typeRef.name}Shape`);
     } else if (typeRef && isRosettaEnumeration(typeRef)) {
       trackRef(typeRef, typeRef.name);
+    } else if (typeRef && isRosettaTypeAlias(typeRef)) {
+      trackRef(typeRef, typeRef.name);
+    }
+  }
+
+  // Check rule input types
+  for (const rule of ctx.rulesByName.values()) {
+    const inputRef = rule.input?.type?.ref;
+    if (inputRef && isData(inputRef)) {
+      trackRef(inputRef, `${inputRef.name}Shape`);
+      trackRef(inputRef, inputRef.name);
     }
   }
 

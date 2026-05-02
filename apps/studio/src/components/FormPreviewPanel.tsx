@@ -424,6 +424,7 @@ function ChoiceFieldGroup({
               </label>
               {isActive &&
               (field.kind === 'object' || field.kind === 'array') &&
+              field.children &&
               field.children.length > 0 ? (
                 <div className="ml-5 space-y-1.5 border-l border-border pl-3">
                   {field.children.map((child) => (
@@ -439,6 +440,19 @@ function ChoiceFieldGroup({
                       onObjectToggle={onObjectToggle}
                     />
                   ))}
+                </div>
+              ) : isActive && field.kind !== 'object' && field.kind !== 'array' ? (
+                <div className="ml-5 border-l border-border pl-3">
+                  <PreviewFieldControl
+                    field={field}
+                    sample={sample}
+                    lookupFieldSource={lookupFieldSource}
+                    onFieldBlur={onFieldBlur}
+                    onFieldChange={onFieldChange}
+                    onArrayAdd={onArrayAdd}
+                    onArrayRemove={onArrayRemove}
+                    onObjectToggle={onObjectToggle}
+                  />
                 </div>
               ) : null}
             </div>

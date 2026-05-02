@@ -850,8 +850,7 @@ function emitRuleValidator(rule: RosettaRule, ctx: EmissionContext): string {
   const inputTypeRef = rule.input?.type?.ref;
   const inputTypeName = inputTypeRef ? inputTypeRef.name : undefined;
 
-  if (!inputTypeName || !ctx.dataByName.has(inputTypeName)) {
-    // Can't emit a Zod validator without a known input schema
+  if (!inputTypeName) {
     ctx.diagnostics.push({
       severity: 'warning',
       code: 'rule-no-input-type',
@@ -860,11 +859,28 @@ function emitRuleValidator(rule: RosettaRule, ctx: EmissionContext): string {
     return '';
   }
 
+  const isLocal = ctx.dataByName.has(inputTypeName);
+  const isCrossNs = !isLocal && inputTypeRef && getElementNamespace(inputTypeRef) !== ctx.namespace;
+  if (!isLocal && !isCrossNs) {
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'rule-no-input-type',
+      message: `Rule '${name}': input type '${inputTypeName}' not found; skipping Zod validator`
+    });
+    return '';
+  }
+
   const schemaName = `${inputTypeName}Schema`;
   const attributeTypes = new Map<string, string>();
-  const inputData = ctx.dataByName.get(inputTypeName);
-  if (inputData) {
-    for (const attr of inputData.attributes) {
+  const inputData =
+    ctx.dataByName.get(inputTypeName) ??
+    (inputTypeRef && isData(inputTypeRef) ? inputTypeRef : undefined);
+  if (inputData && 'attributes' in inputData) {
+    for (const attr of (
+      inputData as {
+        attributes: Array<{ name: string; typeCall?: { type?: { $refText?: string } } }>;
+      }
+    ).attributes) {
       attributeTypes.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
     }
   }
