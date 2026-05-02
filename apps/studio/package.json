@@ -1,6 +1,6 @@
 {
   "name": "@rune-langium/studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Standalone web application for visual editing of Rune DSL models",
   "type": "module",
