@@ -478,6 +478,8 @@ export function EditorPage({
         receiveExecutionError(msg.funcName, msg.error);
         return;
       }
+      // Preview messages below — execution messages above bypass stale-check
+      // since they carry their own funcName-based keying
       if (!isPreviewWorkerMessage(e.data)) return;
       if (e.data.requestId !== currentPreviewRequestIdRef.current) {
         return;

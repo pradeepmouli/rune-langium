@@ -43,8 +43,9 @@ export function FormPreviewPanel({
   const [executionResult, setExecutionResult] = useState<unknown>(undefined);
   const [executionError, setExecutionError] = useState<string | null>(null);
 
+  const funcName = schema?.kind === 'function' ? schema.title : undefined;
   const storeExecResult = usePreviewStore((s) =>
-    schema ? s.executionResults.get(schema.title) : undefined
+    funcName ? s.executionResults.get(funcName) : undefined
   );
 
   useEffect(() => {
@@ -56,6 +57,12 @@ export function FormPreviewPanel({
     }
     setExecutionState('idle');
   }, [storeExecResult]);
+
+  useEffect(() => {
+    setExecutionState('idle');
+    setExecutionResult(undefined);
+    setExecutionError(null);
+  }, [funcName]);
 
   const defaultValues = useMemo(
     () => (schema ? (buildDefaultValues(schema.fields) as Record<string, unknown>) : {}),
@@ -173,12 +180,12 @@ export function FormPreviewPanel({
   );
 
   const handleRun = useCallback(() => {
-    if (!schema || !activeSample || !onExecute) return;
+    if (!funcName || !activeSample || !onExecute) return;
     setExecutionState('running');
     setExecutionResult(undefined);
     setExecutionError(null);
-    onExecute(schema.title, activeSample.values);
-  }, [activeSample, onExecute, schema]);
+    onExecute(funcName, activeSample.values);
+  }, [activeSample, funcName, onExecute]);
 
   const handleReset = useCallback(() => {
     if (!schema) return;

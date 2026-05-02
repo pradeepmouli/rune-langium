@@ -98,6 +98,9 @@ const initialState: PreviewStoreState = {
   workerRef: null
 };
 
+let dispatchExecuteCounter = 0;
+let lastExecuteRequestId = '';
+
 function serializeSampleValues(values: Record<string, unknown>): string {
   return JSON.stringify(values, null, 2);
 }
@@ -510,7 +513,9 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
   dispatchExecute(funcName, inputs) {
     const worker = get().workerRef;
     if (!worker) return;
-    const requestId = `exec:${funcName}:${Date.now()}`;
+    dispatchExecuteCounter++;
+    const requestId = `exec:${funcName}:${dispatchExecuteCounter}`;
+    lastExecuteRequestId = requestId;
     worker.postMessage({
       type: 'preview:execute',
       funcName,
