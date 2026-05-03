@@ -11,10 +11,9 @@ import { describe, it, expect } from 'vitest';
 import { getModelRegistry, getModelSource } from '../../src/services/model-registry.js';
 
 describe('model-registry — curated entries (T032)', () => {
-  it('still exposes the two curated ids', () => {
+  it('exposes all curated model ids', () => {
     const ids = getModelRegistry().map((m) => m.id);
-    expect(ids).toEqual(expect.arrayContaining(['cdm', 'rune-dsl']));
-    expect(ids).not.toContain('fpml');
+    expect(ids).toEqual(expect.arrayContaining(['cdm', 'fpml', 'rune-dsl']));
   });
 
   it('CDM has an archiveUrl pointing at the production mirror', () => {
@@ -27,6 +26,17 @@ describe('model-registry — curated entries (T032)', () => {
     const cdm = getModelSource('cdm');
     expect(cdm!.repoUrl).toMatch(/REGnosys\/rosetta-cdm/);
     expect(cdm!.ref).toBe('master');
+  });
+
+  it('CDM declares fpml as a dependency', () => {
+    const cdm = getModelSource('cdm');
+    expect(cdm!.depends).toContain('fpml');
+  });
+
+  it('FpML has an archiveUrl pointing at the production mirror', () => {
+    const fpml = getModelSource('fpml');
+    expect(fpml).toBeDefined();
+    expect(fpml!.archiveUrl).toBe('https://www.daikonic.dev/curated/fpml/latest.tar.gz');
   });
 
   it('returns undefined for unknown ids', () => {

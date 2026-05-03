@@ -16,6 +16,7 @@ import type {
   CachedFile
 } from '../types/model-types.js';
 import { loadModel } from '../services/model-loader.js';
+import { getModelSource } from '../services/model-registry.js';
 import { clearCache } from '../services/model-cache.js';
 import { loadCuratedModel, type LoadCuratedInput } from '../services/curated-loader.js';
 import { OpfsFs } from '../opfs/opfs-fs.js';
@@ -309,6 +310,15 @@ export const useModelStore = create<ModelStore>((set, get) => ({
       currentLoading.delete(source.id);
 
       set({ models: currentModels, loading: currentLoading });
+
+      // Auto-load declared dependencies that aren't already loaded or loading.
+      if (source.depends?.length) {
+        for (const depId of source.depends) {
+          if (get().models.has(depId) || get().loading.has(depId)) continue;
+          const dep = getModelSource(depId);
+          if (dep) void get().load(dep);
+        }
+      }
     } catch (e) {
       const currentLoading = new Map(get().loading);
       currentLoading.delete(source.id);
