@@ -111,13 +111,31 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
         await bucket.delete(`curated/${source.id}/artifacts/${v}.serialized.json.gz`);
       }
 
-      let serializedWorkspace: LangiumJsonArtifactRef | undefined;
+      // Write the manifest BEFORE the serialized artifact build.
+      // The artifact build parses the full corpus through Langium and
+      // can OOM on large models (CDM). Writing the manifest first
+      // ensures latest.tar.gz and manifest.json stay in sync even
+      // if the worker is killed during artifact generation.
+      let manifest = buildManifest({
+        modelId: source.id,
+        version,
+        sha256: sha,
+        sizeBytes: buf.byteLength,
+        generatedAt: now.toISOString(),
+        upstreamCommit: '',
+        upstreamRef: source.ref,
+        historyVersions
+      });
+      await bucket.put(manifestKey, JSON.stringify(manifest, null, 2), {
+        httpMetadata: { contentType: 'application/json; charset=utf-8' }
+      });
+
       try {
         const artifact = await buildSerializedWorkspaceArtifact(source.id, version, buf);
         const artifactMetadata = { contentType: 'application/gzip' };
         await bucket.put(artifactArchiveKey, artifact.bytes, { httpMetadata: artifactMetadata });
         await bucket.put(latestArtifactKey, artifact.bytes, { httpMetadata: artifactMetadata });
-        serializedWorkspace = {
+        const serializedWorkspace: LangiumJsonArtifactRef = {
           schemaVersion: 1,
           kind: 'langium-json-serializer',
           url: `https://www.daikonic.dev/curated/${source.id}/latest.serialized.json.gz`,
@@ -126,6 +144,20 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
           documentCount: artifact.documentCount,
           langiumVersion: '4.2.2'
         };
+        manifest = buildManifest({
+          modelId: source.id,
+          version,
+          sha256: sha,
+          sizeBytes: buf.byteLength,
+          generatedAt: now.toISOString(),
+          upstreamCommit: '',
+          upstreamRef: source.ref,
+          historyVersions,
+          serializedWorkspace
+        });
+        await bucket.put(manifestKey, JSON.stringify(manifest, null, 2), {
+          httpMetadata: { contentType: 'application/json; charset=utf-8' }
+        });
       } catch (err) {
         logger.error(
           {
@@ -138,21 +170,6 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
           'curated-mirror.publish.serialized_artifact.failed'
         );
       }
-
-      const manifest = buildManifest({
-        modelId: source.id,
-        version,
-        sha256: sha,
-        sizeBytes: buf.byteLength,
-        generatedAt: now.toISOString(),
-        upstreamCommit: '',
-        upstreamRef: source.ref,
-        historyVersions,
-        serializedWorkspace
-      });
-      await bucket.put(manifestKey, JSON.stringify(manifest, null, 2), {
-        httpMetadata: { contentType: 'application/json; charset=utf-8' }
-      });
 
       result.published.push(source.id);
       result.manifests[source.id] = manifest;
