@@ -312,36 +312,42 @@ export function DockShell({
         className="studio-layout-presets"
         data-testid="studio-layout-presets"
       >
-        <div className="studio-layout-presets__group">
-          {PRESET_OPTIONS.map((preset) => (
-            <Button
-              key={preset.id}
-              type="button"
-              size="xs"
-              variant={layoutPreset === preset.id ? 'default' : 'secondary'}
-              aria-pressed={layoutPreset === preset.id}
-              className="studio-layout-presets__button"
-              onClick={() => {
-                const next = buildDefaultLayout({
-                  studioVersion,
-                  viewportWidth: getViewportWidth(),
-                  preset: preset.id
-                });
-                setLayoutPreset(preset.id);
-                setLayout(next);
-                setUtilitiesCollapsedState(
-                  next.dockview?.shape === 'factory' ? next.dockview.bottomGroup.collapsed : false
-                );
-                if (apiRef.current) {
-                  apiRef.current.clear();
-                  applyLayout(apiRef.current, next);
-                }
-                onLayoutChangeRef.current?.(next);
-              }}
-            >
-              {preset.label}
-            </Button>
-          ))}
+        <div
+          className="studio-paneswitch"
+          role="group"
+          aria-label="Layout preset"
+          data-testid="studio-paneswitch"
+        >
+          {PRESET_OPTIONS.map((preset) => {
+            const isActive = layoutPreset === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                aria-pressed={isActive}
+                className={isActive ? 'studio-paneswitch__seg is-active' : 'studio-paneswitch__seg'}
+                onClick={() => {
+                  const next = buildDefaultLayout({
+                    studioVersion,
+                    viewportWidth: getViewportWidth(),
+                    preset: preset.id
+                  });
+                  setLayoutPreset(preset.id);
+                  setLayout(next);
+                  setUtilitiesCollapsedState(
+                    next.dockview?.shape === 'factory' ? next.dockview.bottomGroup.collapsed : false
+                  );
+                  if (apiRef.current) {
+                    apiRef.current.clear();
+                    applyLayout(apiRef.current, next);
+                  }
+                  onLayoutChangeRef.current?.(next);
+                }}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
         </div>
         <p className="studio-layout-presets__hint" data-testid="layout-resize-hint">
           Drag panel dividers to resize
