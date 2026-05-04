@@ -74,7 +74,8 @@ Current header is a simple `brand + workspace name + export buttons`. The design
 This is the biggest structural change. Currently the graph lives in column 1 (below the explorer). In the design, it's the primary content of the center area, switchable with Source and Inspector via the 3-segment pill.
 
 **Structure:**
-- **Stack header bar (38px):** contains the paneswitch pill (Graph · Source · Inspector) centered, with utility buttons at the right (currently: Fit View, Re-layout, Focus, Grouped, Filter — these become an overflow `···` menu or a toolbar row below the pill when graph is active)
+- **Stack header bar (38px):** contains the paneswitch pill (Graph · Source · Inspector) **left-aligned**, with utility buttons at the right (currently: Fit View, Re-layout, Focus, Grouped, Filter — these become an overflow `···` menu or a toolbar row below the pill when graph is active)
+- **Pill font:** `var(--font-sans)` (Inter), not Outfit. Outfit is reserved for the brand wordmark only.
 - **Active pane(s):** fills the remaining space. Only one pane active at a time (single-select pill, not multi-select)
 
 **Graph pane:**
@@ -126,7 +127,23 @@ Existing `StatusBar.tsx` already shows workspace, git state, LSP, and telemetry 
 
 We augment the existing component with the additional fields. Font switches to `var(--font-mono)` at 11px.
 
-## 8. Panel Styling
+## 8. Explorer Type Row Redesign
+
+Current type rows use a lucide icon + plain text name. The design uses a **colored single-letter glyph** in a tinted rounded square plus a **kind label text pill** at the right.
+
+**New type row layout:**
+```
+[visibility toggle] [D] TradableProduct              Record
+                    ↑ colored letter glyph            ↑ kind label (plain text pill)
+```
+
+- **Glyph:** 18×18px rounded square (`border-radius: 5px`), tinted background using the kind color at 12% opacity, letter in the kind color at full saturation. Letters: `D` (data), `C` (choice), `E` (enum), `F` (func), `R` (record), `A` (annotation/alias), `B` (basic type).
+- **Name:** 12px, truncated, clickable (navigates to node).
+- **No kind label text** — the colored letter glyph already conveys the kind. Removing the right-aligned label keeps rows compact.
+- **Selected row:** Highlighted with accent wash background + accent pip on the left edge (matching the design's `rs-type-row.is-focus` treatment).
+- The colored glyph is **explorer-only** — the existing text-pill `ENUM`/`TYPE`/etc. badges used elsewhere in the graph and inspector are retained as-is.
+
+## 9. Panel Group Styling
 
 All panel groups in dockview get:
 - `border-radius: var(--rs-r-lg)` (12px)
@@ -136,7 +153,7 @@ All panel groups in dockview get:
 
 The dockview theme variables already partially support this. We extend the `.dockview-theme-abyss` overrides in `styles.css`.
 
-## 9. Test Cleanup
+## 10. Test Cleanup
 
 Remove these tests that assert rigid viewport-specific layout proportions which will break with the new layout and aren't meaningful behavioral guarantees:
 
@@ -151,24 +168,24 @@ Remove these tests that assert rigid viewport-specific layout proportions which 
 
 **Keep** all non-viewport tests: panel registration, layout serialization, migration, keyboard shortcuts, ARIA roles, dirty markers.
 
-## 10. What's NOT Changing
+## 11. What's NOT Changing
 
 - **Form preview content** — too many issues to address now; layout shell changes only
-- **Multiple open file tabs** — future enhancement, shipped as a stub in the top bar
+- **Multiple open file tabs** — include if implementation is straightforward. The top bar shows open `.rosetta` files as tabs with dirty indicator, error/warning badge, and close-on-hover. The `activeEditorFile` state and `openFileInSource()` mechanism already exist; the tab strip is pure UI over existing state.
 - **⌘K command palette** — future enhancement, trigger button is decorative
 - **Activity rail panel switching** — clicking rail icons will eventually switch the explorer panel content; for now they're visual-only
 - **Terminal tab** — listed in design but non-functional
-- **Graph node visual redesign** — existing `RuneTypeNode` component keeps its current look
+- **Graph node visual redesign** — existing `RuneTypeNode` component keeps its current look; the prototype's `rs-gnode` styling is for reference only, not ported
 - **Tweaks panel** — dev-only feature from the prototype, not ported
 
-## 11. Font & Color Tokens
+## 12. Font & Color Tokens
 
 No new tokens. The redesign uses the existing design-system tokens:
-- `--font-display` (Outfit) for headings and the wordmark
+- `--font-display` (Outfit) for the brand wordmark **only**
 - `--font-sans` (Inter) for body text
 - `--font-mono` (JetBrains Mono) for code, metadata, and status bar
 - All color tokens from `theme.css` / `daikonic.css` — no new values
 
-## 12. Migration Path
+## 13. Migration Path
 
 The layout version (`LAYOUT_SCHEMA_VERSION`) bumps from 2 → 3. Existing users with saved layouts get a migration notice ("Layout has been updated") and their layout is rebuilt from the new factory shape. The migration sanitizer already handles this case (it rebuilds when the version doesn't match).
