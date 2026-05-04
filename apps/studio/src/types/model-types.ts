@@ -26,6 +26,8 @@ export interface ModelSource {
    * clone path — feature 012-studio-workspace-ux, FR-006.
    */
   archiveUrl?: string;
+  /** IDs of other curated models that must be co-loaded for cross-reference resolution. */
+  depends?: readonly string[];
 }
 
 /** A locally cached model with version tracking. */

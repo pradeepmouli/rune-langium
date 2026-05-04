@@ -22,7 +22,16 @@ const CURATED_MODELS: readonly ModelSource[] = [
     repoUrl: 'https://github.com/REGnosys/rosetta-cdm.git',
     ref: 'master',
     paths: ['rosetta-source/src/main/rosetta/**/*.rosetta'],
-    archiveUrl: `${MIRROR_BASE}/cdm/latest.tar.gz`
+    archiveUrl: `${MIRROR_BASE}/cdm/latest.tar.gz`,
+    depends: ['fpml']
+  },
+  {
+    id: 'fpml',
+    name: 'FpML (Rune)',
+    repoUrl: 'https://github.com/rosetta-models/rune-fpml.git',
+    ref: 'master',
+    paths: ['rosetta-source/src/main/rosetta/**/*.rosetta'],
+    archiveUrl: `${MIRROR_BASE}/fpml/latest.tar.gz`
   },
   {
     id: 'rune-dsl',

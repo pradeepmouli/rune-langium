@@ -42,8 +42,9 @@ enabled = true
 # to publish a new archive. Keep in sync with the curated registry in
 # apps/studio/src/services/model-registry.ts.
 CURATED_SOURCES = """[
-  { "id": "cdm",      "owner": "REGnosys", "repo": "rosetta-cdm", "ref": "master" },
-  { "id": "rune-dsl", "owner": "finos",    "repo": "rune-dsl",    "ref": "main"   }
+  { "id": "cdm",      "owner": "REGnosys",      "repo": "rosetta-cdm", "ref": "master" },
+  { "id": "fpml",     "owner": "rosetta-models", "repo": "rune-fpml",  "ref": "master" },
+  { "id": "rune-dsl", "owner": "finos",          "repo": "rune-dsl",   "ref": "main"   }
 ]"""
 
 # Same-origin allowlist for read responses. Override per environment via
