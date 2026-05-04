@@ -29,8 +29,7 @@
  * @module
  */
 
-import { useCallback, useMemo, useRef } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
 import {
   Field,
@@ -310,7 +309,7 @@ function EnumForm({
               </button>
             </FieldLegend>
 
-            <VirtualizedEnumValues
+            <PaginatedEnumValues
               effectiveValues={effectiveValues}
               committedRef={committedRef}
               nodeId={nodeId}
@@ -334,10 +333,14 @@ function EnumForm({
   );
 }
 
-const ENUM_VALUE_ROW_HEIGHT = 32;
-const VIRTUAL_THRESHOLD = 50;
+// Pagination threshold — render rows incrementally to avoid mounting
+// 600+ Controller-bound form rows at once. Can't use @tanstack/react-virtual
+// here because EnumValueRow uses useFormContext + Controller with index-based
+// paths — unmounting rows would unregister fields from react-hook-form state
+// even with shouldUnregister: false, and drag-reorder indices would break.
+const PAGE_SIZE = 50;
 
-interface VirtualizedEnumValuesProps {
+interface PaginatedEnumValuesProps {
   effectiveValues: Array<{
     id: string;
     source: 'local' | 'inherited';
@@ -356,7 +359,7 @@ interface VirtualizedEnumValuesProps {
   onOverrideInherited: (name: string, displayName: string) => void;
 }
 
-function VirtualizedEnumValues({
+function PaginatedEnumValues({
   effectiveValues,
   committedRef,
   nodeId,
@@ -365,15 +368,8 @@ function VirtualizedEnumValues({
   onReorder,
   onRevertOverride,
   onOverrideInherited
-}: VirtualizedEnumValuesProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const virtualizer = useVirtualizer({
-    count: effectiveValues.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => ENUM_VALUE_ROW_HEIGHT,
-    overscan: 10
-  });
+}: PaginatedEnumValuesProps) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   if (effectiveValues.length === 0) {
     return (
@@ -383,92 +379,47 @@ function VirtualizedEnumValues({
     );
   }
 
-  if (effectiveValues.length < VIRTUAL_THRESHOLD) {
-    return (
-      <FieldGroup className="gap-0.5">
-        {effectiveValues.map((entry) =>
-          entry.source === 'local' ? (
-            <EnumValueRow
-              key={entry.id}
-              index={entry.fieldIndex!}
-              name={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''}
-              displayName={
-                ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ?? ''
-              }
-              nodeId={nodeId}
-              onUpdate={onUpdate}
-              onRemove={() => onRemove(entry.fieldIndex!)}
-              onReorder={onReorder}
-              isOverride={entry.isOverride}
-              onRevert={entry.isOverride ? () => onRevertOverride(entry.name) : undefined}
-            />
-          ) : (
-            <InheritedEnumValueRow
-              key={entry.id}
-              name={entry.name}
-              displayName={entry.displayName}
-              ancestorName={entry.ancestorName!}
-              onOverride={() => onOverrideInherited(entry.name, entry.displayName ?? '')}
-            />
-          )
-        )}
-      </FieldGroup>
-    );
-  }
+  const visible = effectiveValues.slice(0, visibleCount);
+  const remaining = effectiveValues.length - visibleCount;
 
   return (
-    <div
-      ref={scrollRef}
-      className="overflow-y-auto"
-      style={{ maxHeight: 400 }}
-      role="list"
-      aria-label="Enum values"
-    >
-      <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const entry = effectiveValues[virtualRow.index]!;
-          return (
-            <div
-              key={entry.id}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start}px)`
-              }}
-            >
-              {entry.source === 'local' ? (
-                <EnumValueRow
-                  index={entry.fieldIndex!}
-                  name={
-                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''
-                  }
-                  displayName={
-                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ??
-                    ''
-                  }
-                  nodeId={nodeId}
-                  onUpdate={onUpdate}
-                  onRemove={() => onRemove(entry.fieldIndex!)}
-                  onReorder={onReorder}
-                  isOverride={entry.isOverride}
-                  onRevert={entry.isOverride ? () => onRevertOverride(entry.name) : undefined}
-                />
-              ) : (
-                <InheritedEnumValueRow
-                  name={entry.name}
-                  displayName={entry.displayName}
-                  ancestorName={entry.ancestorName!}
-                  onOverride={() => onOverrideInherited(entry.name, entry.displayName ?? '')}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <FieldGroup className="gap-0.5">
+      {visible.map((entry) =>
+        entry.source === 'local' ? (
+          <EnumValueRow
+            key={entry.id}
+            index={entry.fieldIndex!}
+            name={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''}
+            displayName={
+              ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ?? ''
+            }
+            nodeId={nodeId}
+            onUpdate={onUpdate}
+            onRemove={() => onRemove(entry.fieldIndex!)}
+            onReorder={onReorder}
+            isOverride={entry.isOverride}
+            onRevert={entry.isOverride ? () => onRevertOverride(entry.name) : undefined}
+          />
+        ) : (
+          <InheritedEnumValueRow
+            key={entry.id}
+            name={entry.name}
+            displayName={entry.displayName}
+            ancestorName={entry.ancestorName!}
+            onOverride={() => onOverrideInherited(entry.name, entry.displayName ?? '')}
+          />
+        )
+      )}
+      {remaining > 0 && (
+        <button
+          type="button"
+          className="text-xs text-primary hover:underline py-1 text-center w-full"
+          onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+        >
+          Show more ({remaining} remaining)
+        </button>
+      )}
+    </FieldGroup>
   );
 }
 
