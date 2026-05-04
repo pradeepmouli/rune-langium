@@ -149,48 +149,11 @@ describe('publishCuratedMirrors (T025)', () => {
     expect(bucket.has('curated/cdm/latest.tar.gz')).toBe(false);
   });
 
-  it('publishes a serialized workspace artifact when the archive contains .rosetta files', async () => {
-    fetchSpy.mockImplementation(async (url: unknown) => {
-      const u = String(url);
-      if (!u.includes('rosetta-cdm')) return new Response('not found', { status: 404 });
-      return new Response(
-        packTar(
-          {
-            path: 'rosetta-cdm-master/types.rosetta',
-            content: `namespace demo
-
-type Person:
-  name string (1..1)
-`
-          },
-          {
-            path: 'rosetta-cdm-master/trade.rosetta',
-            content: `namespace demo
-
-type Trade:
-  party Person (1..1)
-`
-          }
-        ),
-        { status: 200 }
-      );
-    });
-
+  it('does not build serialized artifacts (delegated to CI workflow)', async () => {
     await publishCuratedMirrors({ sources: [SOURCES[0]!], bucket, retention: 14 });
 
-    expect(bucket.has('curated/cdm/latest.serialized.json.gz')).toBe(true);
-    expect(
-      bucket.has(
-        `curated/cdm/artifacts/${new Date().toISOString().slice(0, 10)}.serialized.json.gz`
-      )
-    ).toBe(true);
+    expect(bucket.has('curated/cdm/latest.serialized.json.gz')).toBe(false);
     const manifest = JSON.parse(await bucket.getText('curated/cdm/manifest.json'));
-    expect(manifest.artifacts?.serializedWorkspace).toMatchObject({
-      schemaVersion: 1,
-      kind: 'langium-json-serializer',
-      url: 'https://www.daikonic.dev/curated/cdm/latest.serialized.json.gz',
-      documentCount: 2,
-      langiumVersion: '4.2.2'
-    });
+    expect(manifest.artifacts).toBeUndefined();
   });
 });

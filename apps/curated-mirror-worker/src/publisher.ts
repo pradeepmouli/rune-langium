@@ -18,9 +18,8 @@
  */
 
 import { buildManifest, sha256Hex, type CuratedManifest } from './manifest.js';
-import { buildSerializedWorkspaceArtifact } from './serialized-artifact.js';
 import { logger, logPublish } from './log.js';
-import type { CuratedModelId, LangiumJsonArtifactRef } from '@rune-langium/curated-schema';
+import type { CuratedModelId } from '@rune-langium/curated-schema';
 
 export interface CuratedSource {
   id: CuratedModelId;
@@ -89,8 +88,6 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
 
       const archiveKey = `curated/${source.id}/archives/${version}.tar.gz`;
       const latestKey = `curated/${source.id}/latest.tar.gz`;
-      const artifactArchiveKey = `curated/${source.id}/artifacts/${version}.serialized.json.gz`;
-      const latestArtifactKey = `curated/${source.id}/latest.serialized.json.gz`;
       const manifestKey = `curated/${source.id}/manifest.json`;
 
       const sha = await sha256Hex(buf);
@@ -130,52 +127,10 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
         httpMetadata: { contentType: 'application/json; charset=utf-8' }
       });
 
-      try {
-        const artifact = await buildSerializedWorkspaceArtifact(source.id, version, buf);
-        const artifactMetadata = { contentType: 'application/gzip' };
-        await bucket.put(artifactArchiveKey, artifact.bytes, { httpMetadata: artifactMetadata });
-        await bucket.put(latestArtifactKey, artifact.bytes, { httpMetadata: artifactMetadata });
-        const serializedWorkspace: LangiumJsonArtifactRef = {
-          schemaVersion: 1,
-          kind: 'langium-json-serializer',
-          url: `https://www.daikonic.dev/curated/${source.id}/latest.serialized.json.gz`,
-          sha256: artifact.sha256,
-          sizeBytes: artifact.sizeBytes,
-          documentCount: artifact.documentCount,
-          langiumVersion: '4.2.2'
-        };
-        const enrichedManifest = buildManifest({
-          modelId: source.id,
-          version,
-          sha256: sha,
-          sizeBytes: buf.byteLength,
-          generatedAt: now.toISOString(),
-          upstreamCommit: '',
-          upstreamRef: source.ref,
-          historyVersions,
-          serializedWorkspace
-        });
-        await bucket.put(manifestKey, JSON.stringify(enrichedManifest, null, 2), {
-          httpMetadata: { contentType: 'application/json; charset=utf-8' }
-        });
-        manifest = enrichedManifest;
-      } catch (err) {
-        const phase =
-          err instanceof Error && err.message.includes('manifest')
-            ? 'manifest_update'
-            : 'serialized_artifact';
-        logger.error(
-          {
-            model_id: source.id,
-            phase,
-            err:
-              err instanceof Error
-                ? { name: err.name, message: err.message, stack: err.stack }
-                : err
-          },
-          `curated-mirror.publish.${phase}.failed`
-        );
-      }
+      // Serialized artifact build is handled by the CI workflow
+      // (curated-artifacts.yml) which has enough memory for CDM.
+      // The Worker OOMs on large models; CI runs at 04:00 UTC and
+      // patches the manifest with the artifact reference afterward.
 
       result.published.push(source.id);
       result.manifests[source.id] = manifest;
