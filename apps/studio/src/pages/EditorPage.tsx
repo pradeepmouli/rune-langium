@@ -94,6 +94,20 @@ export interface EditorPageProps {
   onClose?: () => void;
 }
 
+const DECL_KEYWORDS =
+  /^(type|enum|func|choice|annotation|metaType|typeAlias|library\s+function|reporting\s+rule)\s+/;
+
+function findDeclarationLine(content: string, name: string): number {
+  const lines = content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i]!.trimStart();
+    if (DECL_KEYWORDS.test(trimmed) && trimmed.includes(name)) {
+      return i + 1;
+    }
+  }
+  return 0;
+}
+
 function matchesPreviewSourceIdentity(
   current: FormPreviewTarget,
   candidate: FormPreviewTarget
@@ -319,6 +333,17 @@ export function EditorPage({
     const range = cstNode?._rangeCache ?? cstNode?.range;
     if (range?.start?.line !== undefined && filePath) {
       pendingRevealRef.current = { line: range.start.line + 1, filePath };
+    } else if (filePath) {
+      const typeName = (nodeData as { name?: string }).name;
+      if (typeName) {
+        const file = files.find((f) => f.path === filePath);
+        if (file) {
+          const line = findDeclarationLine(file.content, typeName);
+          if (line > 0) {
+            pendingRevealRef.current = { line, filePath };
+          }
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);

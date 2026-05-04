@@ -12,6 +12,7 @@ import {
   type CodePreviewFile,
   type CodePreviewSnapshot
 } from '../store/codegen-store.js';
+import { usePreviewStore } from '../store/preview-store.js';
 import { CODE_PREVIEW_PANEL_ID, TARGET_LABELS } from './codegen-ui.js';
 import { uriToPath } from '../utils/uri.js';
 
@@ -227,6 +228,28 @@ export function CodePreviewPanel({
       changes: { from: 0, to: current.length, insert: nextContent }
     });
   }, [activeFile]);
+
+  const selectedTargetId = usePreviewStore((s) => s.selectedTargetId);
+  useEffect(() => {
+    const view = editorViewRef.current;
+    if (!view || !selectedTargetId || !activeFile) return;
+    const typeName = selectedTargetId.split('.').pop();
+    if (!typeName) return;
+    const lines = activeFile.content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i]!.trimStart();
+      if (
+        trimmed.includes(typeName) &&
+        /^(export |const |class |interface |type |function )/.test(trimmed)
+      ) {
+        const lineInfo = view.state.doc.line(i + 1);
+        view.dispatch({
+          effects: EditorView.scrollIntoView(lineInfo.from, { y: 'start', yMargin: 40 })
+        });
+        return;
+      }
+    }
+  }, [selectedTargetId, activeFile]);
 
   const statusMessage =
     snapshot.status === 'stale' || snapshot.status === 'unavailable' ? snapshot.message : undefined;
