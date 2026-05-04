@@ -11,7 +11,7 @@ describe('Shell FormPreviewPanel', () => {
     usePreviewStore.getState().resetPreviewState();
   });
 
-  it('renders the selected fully-qualified target and source-backed field metadata from the preview store', () => {
+  it('renders the selected target form without raw source metadata', () => {
     usePreviewStore.getState().setAvailableTargets([
       {
         id: 'preview.alpha.Trade',
@@ -46,7 +46,8 @@ describe('Shell FormPreviewPanel', () => {
 
     render(<FormPreviewPanel />);
 
-    expect(screen.getByText(/preview\.alpha\.Trade \[data\]/i)).toBeInTheDocument();
-    expect(screen.getByText(/preview-alpha\.rosetta:7:2/i)).toBeInTheDocument();
+    expect(screen.getByText('Trade')).toBeInTheDocument();
+    expect(screen.getByLabelText('Trade id')).toBeInTheDocument();
+    expect(screen.queryByText(/preview-alpha\.rosetta:7:2/i)).not.toBeInTheDocument();
   });
 });

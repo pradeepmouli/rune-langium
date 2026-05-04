@@ -242,11 +242,6 @@ export function FormPreviewPanel({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold">{schema.title}</h2>
-            {target ? (
-              <p className="text-xs text-muted-foreground">
-                {target.id} [{target.kind}]
-              </p>
-            ) : null}
             <p
               role={status.state === 'invalid' ? 'alert' : 'status'}
               aria-live="polite"
@@ -497,11 +492,7 @@ function PreviewFieldControl({
         <legend className="px-1 text-xs font-medium text-muted-foreground">
           {resolvedFieldLabel(field, arrayIndices)}
         </legend>
-        <FieldMeta
-          field={field}
-          lookupFieldSource={lookupFieldSource}
-          arrayIndices={arrayIndices}
-        />
+        <FieldMeta field={field} />
         <FieldDescription description={field.description} />
         {!field.required ? (
           <div className="flex items-center gap-2">
@@ -552,11 +543,7 @@ function PreviewFieldControl({
     return (
       <fieldset className="preview-panel__group space-y-1.5 p-2">
         <legend className="px-1 text-xs font-medium text-muted-foreground">{field.label}</legend>
-        <FieldMeta
-          field={field}
-          lookupFieldSource={lookupFieldSource}
-          arrayIndices={arrayIndices}
-        />
+        <FieldMeta field={field} />
         <FieldDescription description={field.description} />
         <button
           type="button"
@@ -607,11 +594,7 @@ function PreviewFieldControl({
     return (
       <label className="block text-xs font-medium">
         <span>{resolvedFieldLabel(field, arrayIndices)}</span>
-        <FieldMeta
-          field={field}
-          lookupFieldSource={lookupFieldSource}
-          arrayIndices={arrayIndices}
-        />
+        <FieldMeta field={field} />
         <FieldDescription description={field.description} />
         <select
           aria-label={resolvedFieldLabel(field, arrayIndices)}
@@ -656,11 +639,7 @@ function PreviewFieldControl({
           onBlur={onFieldBlur}
         />
         <span>{resolvedFieldLabel(field, arrayIndices)}</span>
-        <FieldMeta
-          field={field}
-          lookupFieldSource={lookupFieldSource}
-          arrayIndices={arrayIndices}
-        />
+        <FieldMeta field={field} />
         {fieldError ? <FieldError message={fieldError} /> : null}
       </label>
     );
@@ -669,7 +648,7 @@ function PreviewFieldControl({
   return (
     <label className="block text-xs font-medium">
       <span>{resolvedFieldLabel(field, arrayIndices)}</span>
-      <FieldMeta field={field} lookupFieldSource={lookupFieldSource} arrayIndices={arrayIndices} />
+      <FieldMeta field={field} />
       <FieldDescription description={field.description} />
       <input
         aria-label={resolvedFieldLabel(field, arrayIndices)}
@@ -684,21 +663,9 @@ function PreviewFieldControl({
   );
 }
 
-function FieldMeta({
-  field,
-  lookupFieldSource,
-  arrayIndices
-}: {
-  field: PreviewField;
-  lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
-  arrayIndices?: number[];
-}): ReactElement | null {
+function FieldMeta({ field }: { field: PreviewField }): ReactElement | null {
   const chips = getFieldMetaChips(field);
-  const source = lookupFieldSource(formatFieldPath(field.path, arrayIndices));
-
-  if (chips.length === 0 && !source) {
-    return null;
-  }
+  if (chips.length === 0) return null;
 
   return (
     <div className="mt-0.5 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
@@ -707,9 +674,6 @@ function FieldMeta({
           {chip}
         </span>
       ))}
-      {source ? (
-        <span className="preview-panel__chip">Source: {formatSourceLocation(source)}</span>
-      ) : null}
     </div>
   );
 }

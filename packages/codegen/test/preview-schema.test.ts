@@ -104,25 +104,25 @@ describe('FormPreviewSchema generation', () => {
       }
     ]);
     expect(trade?.fields).toEqual([
-      { path: 'id', label: 'id', kind: 'string', required: true },
+      { path: 'id', label: 'Id', kind: 'string', required: true },
       {
         path: 'quantity',
-        label: 'quantity',
+        label: 'Quantity',
         kind: 'number',
         required: false,
         cardinality: { min: 0, max: 1 }
       },
       {
         path: 'tags',
-        label: 'tags',
+        label: 'Tags',
         kind: 'array',
         required: false,
         cardinality: { min: 0, max: 'unbounded' },
-        children: [{ path: 'tags[]', label: 'tags item', kind: 'string', required: true }]
+        children: [{ path: 'tags[]', label: 'Tags item', kind: 'string', required: true }]
       },
       {
         path: 'side',
-        label: 'side',
+        label: 'Side',
         kind: 'enum',
         required: true,
         enumValues: [
@@ -132,10 +132,10 @@ describe('FormPreviewSchema generation', () => {
       },
       {
         path: 'party',
-        label: 'party',
+        label: 'Party',
         kind: 'object',
         required: true,
-        children: [{ path: 'party.name', label: 'name', kind: 'string', required: true }]
+        children: [{ path: 'party.name', label: 'Name', kind: 'string', required: true }]
       }
     ]);
   });
@@ -157,10 +157,10 @@ describe('FormPreviewSchema generation', () => {
       expect(node?.targetId).toBe('test.preview.Node');
       expect(node?.unsupportedFeatures).toContain('recursive-reference:Node');
       expect(node?.fields).toEqual([
-        { path: 'value', label: 'value', kind: 'string', required: true },
+        { path: 'value', label: 'Value', kind: 'string', required: true },
         {
           path: 'child',
-          label: 'child',
+          label: 'Child',
           kind: 'unknown',
           required: false,
           cardinality: { min: 0, max: 1 },
@@ -309,7 +309,7 @@ describe('FormPreviewSchema generation', () => {
       status: 'ready'
     });
     expect(alias?.fields).toEqual([
-      { path: 'value', label: 'ProductCode', kind: 'string', required: true }
+      { path: 'value', label: 'Product Code', kind: 'string', required: true }
     ]);
   });
 
@@ -368,8 +368,8 @@ describe('FormPreviewSchema generation', () => {
     expect(funcSchema!.targetId).toBe('test.funcpreview.AddTwo');
     expect(funcSchema!.status).toBe('ready');
     expect(funcSchema!.fields).toHaveLength(2);
-    expect(funcSchema!.fields[0].label).toBe('a');
-    expect(funcSchema!.fields[1].label).toBe('b');
+    expect(funcSchema!.fields[0].label).toBe('A');
+    expect(funcSchema!.fields[1].label).toBe('B');
   });
 
   skipIfNodeLt22('generates a choice schema with one field per option', async () => {

@@ -28,6 +28,13 @@ import type {
   PreviewSourceMapEntry
 } from './types.js';
 
+function humanizeLabel(name: string): string {
+  return name
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
 const SCHEMA_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 3;
 
@@ -209,7 +216,7 @@ function buildDataSchema(
       maxDepth,
       depth: 0,
       path: attr.name,
-      label: attr.name,
+      label: humanizeLabel(attr.name),
       seenTypes: new Set([data.name])
     })
   );
@@ -269,7 +276,9 @@ function buildTypeAliasSchema(
       targetId,
       title: alias.name,
       status: 'ready',
-      fields: [{ path: 'value', label: alias.name, kind: builtinKind, required: true }]
+      fields: [
+        { path: 'value', label: humanizeLabel(alias.name), kind: builtinKind, required: true }
+      ]
     };
   }
 
@@ -289,7 +298,7 @@ function buildTypeAliasSchema(
         maxDepth: DEFAULT_MAX_DEPTH,
         depth: 0,
         path: attr.name,
-        label: attr.name,
+        label: humanizeLabel(attr.name),
         seenTypes: new Set([resolvedData.name])
       })
     );
@@ -318,7 +327,7 @@ function buildTypeAliasSchema(
     fields: [
       {
         path: 'value',
-        label: alias.name,
+        label: humanizeLabel(alias.name),
         kind: 'unknown',
         required: true,
         description: `Type reference ${refText ?? alias.name} could not be resolved for form preview.`
@@ -390,7 +399,10 @@ function buildChoiceOptionField(
       label,
       kind: 'enum',
       required: false,
-      enumValues: typeRef.enumValues.map((v) => ({ value: v.name, label: v.display ?? v.name }))
+      enumValues: typeRef.enumValues.map((v) => ({
+        value: v.name,
+        label: v.display ?? humanizeLabel(v.name)
+      }))
     };
   }
   if (!typeRef && refText && ctx.namespace.enumByName.has(refText)) {
@@ -400,7 +412,10 @@ function buildChoiceOptionField(
       label,
       kind: 'enum',
       required: false,
-      enumValues: enumNode.enumValues.map((v) => ({ value: v.name, label: v.display ?? v.name }))
+      enumValues: enumNode.enumValues.map((v) => ({
+        value: v.name,
+        label: v.display ?? humanizeLabel(v.name)
+      }))
     };
   }
 
@@ -434,7 +449,7 @@ function buildChoiceOptionField(
         buildField(child, {
           ...childCtx,
           path: `${path}.${child.name}`,
-          label: child.name
+          label: humanizeLabel(child.name)
         })
       )
     };
@@ -468,7 +483,7 @@ function buildFunctionSchema(
       maxDepth: DEFAULT_MAX_DEPTH,
       depth: 0,
       path: attr.name,
-      label: attr.name,
+      label: humanizeLabel(attr.name),
       seenTypes: new Set()
     })
   );
@@ -582,7 +597,7 @@ function enumField(ctx: FieldContext, enumNode: RosettaEnumeration): PreviewFiel
     required: true,
     enumValues: enumNode.enumValues.map((value) => ({
       value: value.name,
-      label: value.display ?? value.name
+      label: value.display ?? humanizeLabel(value.name)
     }))
   };
 }
@@ -612,7 +627,7 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
         sourceUri,
         depth: ctx.depth + 1,
         path: `${ctx.path}.${child.name}`,
-        label: child.name,
+        label: humanizeLabel(child.name),
         seenTypes: nextSeen
       })
     )

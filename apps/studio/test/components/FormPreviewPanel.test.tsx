@@ -233,7 +233,7 @@ describe('FormPreviewPanel', () => {
     expect(screen.getByText(/uses partydefaults\.name component mapping/i)).toBeInTheDocument();
   });
 
-  it('surfaces source-backed field metadata when the preview schema provides source locations', () => {
+  it('does not surface raw source locations in the form UI', () => {
     render(
       <FormPreviewPanel
         schema={tradeSchema}
@@ -241,7 +241,7 @@ describe('FormPreviewPanel', () => {
       />
     );
 
-    expect(screen.getByText(/preview\.rosetta:12:5/i)).toBeInTheDocument();
+    expect(screen.queryByText(/preview\.rosetta:12:5/i)).not.toBeInTheDocument();
     expect(screen.getByText(/legal entity name/i)).toBeInTheDocument();
   });
 
