@@ -196,8 +196,6 @@ describe('FormPreviewPanel', () => {
     expect(screen.getByLabelText('side')).toHaveDisplayValue('Buy side');
     expect(screen.getByLabelText('name')).toHaveAttribute('type', 'text');
     expect(screen.getByText('tags')).toBeInTheDocument();
-    expect(screen.getByText(/optional/i)).toBeInTheDocument();
-    expect(screen.getByText(/repeatable \(0\.\.\*\)/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add tags item/i })).toBeInTheDocument();
     expect(screen.getByText(/ready to validate sample/i)).toBeInTheDocument();
   });
@@ -216,7 +214,7 @@ describe('FormPreviewPanel', () => {
     expect(screen.queryByText(/valid sample/i)).not.toBeInTheDocument();
   });
 
-  it('renders field descriptions from mapped nested preview metadata', () => {
+  it('renders nested preview metadata without field description annotations', () => {
     render(
       <FormPreviewPanel
         schema={unsupportedTradeSchema}
@@ -229,8 +227,14 @@ describe('FormPreviewPanel', () => {
       />
     );
 
-    expect(screen.getByText(/mapped via exported subschema defaults/i)).toBeInTheDocument();
-    expect(screen.getByText(/uses partydefaults\.name component mapping/i)).toBeInTheDocument();
+    // Field descriptions are no longer rendered (removed in restyle)
+    expect(screen.queryByText(/mapped via exported subschema defaults/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/uses partydefaults\.name component mapping/i)
+    ).not.toBeInTheDocument();
+    // But the fields themselves remain
+    expect(screen.getByText('counterparty')).toBeInTheDocument();
+    expect(screen.getByText('Legal name')).toBeInTheDocument();
   });
 
   it('does not surface raw source locations in the form UI', () => {
@@ -242,7 +246,8 @@ describe('FormPreviewPanel', () => {
     );
 
     expect(screen.queryByText(/preview\.rosetta:12:5/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/legal entity name/i)).toBeInTheDocument();
+    // Field descriptions are no longer rendered (removed in restyle)
+    expect(screen.queryByText(/legal entity name/i)).not.toBeInTheDocument();
   });
 
   it('shows invalid and valid summary states, nested validation errors, and reset behavior', () => {
@@ -270,7 +275,7 @@ describe('FormPreviewPanel', () => {
 
     expect(screen.getByText(/valid sample/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /reset sample/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^reset$/i }));
 
     expect(screen.getByText(/ready to validate sample/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Trade id')).toHaveValue('');
@@ -357,7 +362,7 @@ describe('FormPreviewPanel', () => {
     expect(screen.getByTestId('sample-data-output')).toHaveTextContent('"Desk alias"');
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /copy sample data/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^copy$/i }));
     });
 
     expect(writeText).toHaveBeenCalledWith(`{

@@ -81,9 +81,9 @@ describe('form preview NFR verification', () => {
     fireEvent.click(screen.getByRole('button', { name: /add aliases item/i }));
     fireEvent.change(screen.getByLabelText('Alias 1'), { target: { value: 'Desk alias' } });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /copy sample data/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^copy$/i }));
     });
-    fireEvent.click(screen.getByRole('button', { name: /reset sample/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^reset$/i }));
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(sendBeaconSpy).not.toHaveBeenCalled();
