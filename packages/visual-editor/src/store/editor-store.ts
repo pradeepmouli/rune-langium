@@ -89,6 +89,10 @@ export interface EditorState {
   // --- Layout options ---
   layoutOptions: LayoutOptions;
 
+  // --- Focus mode ---
+  /** When true, selecting a node auto-isolates it + direct neighbors. */
+  focusMode: boolean;
+
   // --- Namespace visibility ---
   visibility: VisibilityState;
 }
@@ -135,6 +139,8 @@ export interface EditorActions {
   showOnly(nodeIds: Set<string>): void;
   /** Unhide all nodes (reset hiddenNodeIds). */
   showAllNodes(): void;
+  /** Toggle focus mode (auto-isolate selected node + neighbors). */
+  toggleFocusMode(): void;
 
   // --- Editing (P2) ---
   createType(kind: TypeKind, name: string, namespace: string): string;
@@ -370,7 +376,8 @@ const initialState: EditorState = {
   activeFilters: {},
   detailPanelOpen: false,
   validationErrors: [],
-  layoutOptions: { direction: 'TB', nodeSeparation: 50, rankSeparation: 100 },
+  layoutOptions: { direction: 'LR', nodeSeparation: 50, rankSeparation: 100 },
+  focusMode: true,
   visibility: {
     expandedNamespaces: new Set<string>(),
     hiddenNodeIds: new Set<string>(),
@@ -467,6 +474,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         selectNode(nodeId) {
           set({ selectedNodeId: nodeId, detailPanelOpen: nodeId !== null });
+          if (nodeId && get().focusMode) {
+            get().isolateNode(nodeId);
+          }
         },
 
         setSearchQuery(query) {
@@ -1655,6 +1665,17 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               hiddenNodeIds: new Set<string>()
             }
           }));
+        },
+
+        toggleFocusMode() {
+          const next = !get().focusMode;
+          set({ focusMode: next });
+          if (next) {
+            const { selectedNodeId } = get();
+            if (selectedNodeId) get().isolateNode(selectedNodeId);
+          } else {
+            get().showAllNodes();
+          }
         }
       }),
       {

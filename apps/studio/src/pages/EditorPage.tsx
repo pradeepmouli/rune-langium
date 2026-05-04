@@ -146,7 +146,9 @@ export function EditorPage({
   const sourceEditorRef = useRef<SourceEditorRef>(null);
   const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [groupedLayout, setGroupedLayout] = useState(true);
+  const [groupedLayout, setGroupedLayout] = useState(false);
+  const focusMode = useEditorStore((s) => s.focusMode);
+  const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
   const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
@@ -834,6 +836,9 @@ export function EditorPage({
   const handleRelayout = useCallback(() => {
     graphRef.current?.relayout({ groupByInheritance: groupedLayout });
   }, [groupedLayout]);
+  const handleToggleFocusMode = useCallback(() => {
+    storeToggleFocusMode();
+  }, [storeToggleFocusMode]);
   const handleToggleGroupedLayout = useCallback(() => {
     setGroupedLayout((prev) => {
       const next = !prev;
@@ -983,6 +988,17 @@ export function EditorPage({
           </Button>
           <Separator orientation="vertical" className="mx-1 h-5" />
           <Button
+            variant={focusMode ? 'default' : 'secondary'}
+            data-variant={focusMode ? 'default' : 'secondary'}
+            aria-pressed={focusMode}
+            size="sm"
+            onClick={handleToggleFocusMode}
+            title="Show selected node and its direct connections only"
+          >
+            <Network className="w-3.5 h-3.5 mr-1" />
+            Focus
+          </Button>
+          <Button
             variant={groupedLayout ? 'default' : 'secondary'}
             data-variant={groupedLayout ? 'default' : 'secondary'}
             aria-pressed={groupedLayout}
@@ -990,7 +1006,7 @@ export function EditorPage({
             onClick={handleToggleGroupedLayout}
             title="Group by inheritance trees"
           >
-            <Network className="w-3.5 h-3.5 mr-1" />
+            <LayoutGrid className="w-3.5 h-3.5 mr-1" />
             Grouped
           </Button>
           <Separator orientation="vertical" className="mx-1 h-5" />
@@ -1000,7 +1016,7 @@ export function EditorPage({
           <RuneTypeGraph
             ref={graphRef}
             config={{
-              layout: { direction: 'TB', groupByInheritance: groupedLayout },
+              layout: { direction: focusMode ? 'LR' : 'TB', groupByInheritance: groupedLayout },
               showControls: true,
               showMinimap: true,
               readOnly: false
