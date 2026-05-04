@@ -311,6 +311,12 @@
     background: var(--accent);
   }
 
+  .studio-app .studio-rail__btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
   .studio-app .studio-rail__pip {
     position: absolute;
     left: -8px;

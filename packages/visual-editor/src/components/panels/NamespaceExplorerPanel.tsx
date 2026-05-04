@@ -78,7 +78,7 @@ const KIND_LETTER: Record<TypeKind, string> = {
   record: 'R',
   typeAlias: 'A',
   basicType: 'B',
-  annotation: 'A'
+  annotation: '@'
 };
 
 const KIND_COLOR_VAR: Record<TypeKind, string> = {

@@ -150,12 +150,9 @@ function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape'
   if (shape.columns.length !== 3) {
     return 'invalid-shape';
   }
-  const navigation = shape.columns[0];
-  if (
-    !isNavigationColumn(navigation) ||
-    navigation.top.component !== 'workspace.fileTree' ||
-    navigation.bottom.component !== 'workspace.visualPreview'
-  ) {
+  // v3 layout: columns[0] is an ExplorerColumn (single `component` field, no top/bottom).
+  const explorerCol = shape.columns[0];
+  if (!isExplorerColumn(explorerCol) || explorerCol.component !== 'workspace.fileTree') {
     return 'invalid-shape';
   }
   const groups = [shape.columns[1], shape.columns[2], shape.bottomGroup];
@@ -181,23 +178,13 @@ function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape'
   return normalized;
 }
 
-function isNavigationColumn(value: unknown): value is FactoryShape['columns'][0] & {
-  top: { component: string };
-  bottom: { component: string };
+/** Guard for the v3 ExplorerColumn shape: a single `component` string, no top/bottom. */
+function isExplorerColumn(value: unknown): value is FactoryShape['columns'][0] & {
+  component: string;
 } {
   if (!value || typeof value !== 'object') {
     return false;
   }
-  const record = value as {
-    top?: { component?: unknown } | null;
-    bottom?: { component?: unknown } | null;
-  };
-  return (
-    !!record.top &&
-    typeof record.top === 'object' &&
-    typeof record.top.component === 'string' &&
-    !!record.bottom &&
-    typeof record.bottom === 'object' &&
-    typeof record.bottom.component === 'string'
-  );
+  const record = value as { component?: unknown };
+  return typeof record.component === 'string';
 }

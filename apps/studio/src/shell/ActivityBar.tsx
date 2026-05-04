@@ -40,10 +40,10 @@ export function ActivityBar({
           <span className="studio-rail__pip" />
           <Layers className="size-4" />
         </button>
-        <button type="button" className="studio-rail__btn" aria-label="Graph">
+        <button type="button" disabled className="studio-rail__btn" aria-label="Graph">
           <Network className="size-4" />
         </button>
-        <button type="button" className="studio-rail__btn" aria-label="Search">
+        <button type="button" disabled className="studio-rail__btn" aria-label="Search">
           <Search className="size-4" />
         </button>
         <button
@@ -57,7 +57,7 @@ export function ActivityBar({
       </div>
       <div className="studio-rail__spacer" />
       <div className="studio-rail__group">
-        <button type="button" className="studio-rail__btn" aria-label="Notifications">
+        <button type="button" disabled className="studio-rail__btn" aria-label="Notifications">
           <Bell className="size-4" />
         </button>
         <button

@@ -190,6 +190,9 @@ export function EditorPage({
   const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [groupedLayout, setGroupedLayout] = useState(false);
+  // Ref so ResizeObserver callbacks always see the latest value without stale closures.
+  const groupedLayoutRef = useRef(groupedLayout);
+  groupedLayoutRef.current = groupedLayout;
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -233,7 +236,7 @@ export function EditorPage({
       if (!entry) return;
       const { width, height } = entry.contentRect;
       const direction = width >= height ? 'LR' : 'TB';
-      graphRef.current?.relayout({ direction });
+      graphRef.current?.relayout({ direction, groupByInheritance: groupedLayoutRef.current });
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -1072,6 +1075,8 @@ export function EditorPage({
           <RuneTypeGraph
             ref={graphRef}
             config={{
+              // 'LR' is a safe default — the ResizeObserver corrects direction on the first frame
+              // once the container is measured. The container dimensions aren't available yet here.
               layout: { direction: 'LR', groupByInheritance: groupedLayout },
               showControls: true,
               showMinimap: true,
@@ -1162,13 +1167,22 @@ export function EditorPage({
           <button type="button" className="studio-topbar__icon-btn" aria-label="Validate">
             <Check className="size-4" />
           </button>
-          <button type="button" className="studio-topbar__icon-btn" aria-label="Export code">
+          <button
+            type="button"
+            className="studio-topbar__icon-btn"
+            aria-label="Export code"
+            onClick={() => setShowExportDialog(true)}
+          >
             <Download className="size-4" />
           </button>
           <button type="button" className="studio-topbar__icon-btn" aria-label="Share">
             <Share2 className="size-4" />
           </button>
-          <button type="button" className="studio-topbar__generate">
+          <button
+            type="button"
+            className="studio-topbar__generate"
+            onClick={() => setShowExportDialog(true)}
+          >
             <Zap className="size-3.5" />
             Generate
           </button>

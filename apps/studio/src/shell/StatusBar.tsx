@@ -55,6 +55,7 @@ export function StatusBar({
         </span>
       </div>
       <div className="studio-statusbar__right">
+        {/* Static placeholders — real values require editor state that doesn't exist yet. */}
         <span>utf-8</span>
         <span>spaces: 2</span>
         <span>rosetta</span>

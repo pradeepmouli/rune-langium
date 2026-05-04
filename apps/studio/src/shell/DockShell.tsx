@@ -344,11 +344,12 @@ export function DockShell({
                       next.delete(pane.id);
                     } else {
                       next.add(pane.id);
+                      // Only activate the panel when adding it to the active set.
+                      const panel = apiRef.current?.getPanel(pane.panel);
+                      if (panel) panel.api.setActive();
                     }
                     return next;
                   });
-                  const panel = apiRef.current?.getPanel(pane.panel);
-                  if (panel) panel.api.setActive();
                 }}
               >
                 {pane.label}

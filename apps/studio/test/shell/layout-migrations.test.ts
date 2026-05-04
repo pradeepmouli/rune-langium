@@ -76,18 +76,16 @@ describe('sanitizeLayout (T063)', () => {
     expect(out.dockview).toEqual(older.dockview);
   });
 
-  it('normalizes invalid active tabs back to surviving tabs', () => {
+  it('normalizes invalid active tabs back to surviving tabs (v3 ExplorerColumn shape)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // v3 factory layout: columns[0] is an ExplorerColumn (single `component`, no top/bottom).
     const stale = {
       version: 1,
       writtenBy: '0.1.0',
       dockview: {
         shape: 'factory',
         columns: [
-          {
-            top: { component: 'workspace.fileTree' },
-            bottom: { component: 'workspace.visualPreview' }
-          },
+          { component: 'workspace.fileTree' },
           {
             active: 'workspace.visualPreview',
             tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
@@ -115,6 +113,50 @@ describe('sanitizeLayout (T063)', () => {
     expect(out.dockview.bottomGroup.active).toBe('workspace.problems');
     expect(warnSpy).toHaveBeenCalledWith(
       '[layout-migrations] normalized invalid active tabs in saved layout'
+    );
+  });
+
+  it('rebuilds old NavigationColumn (top/bottom) layout as incompatible v1 shape', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Pre-v3 layouts used NavigationColumn with top/bottom — these are now incompatible
+    // and should be rebuilt from defaults rather than migrated in-place.
+    const oldShape = {
+      version: 1,
+      writtenBy: '0.1.0',
+      dockview: {
+        shape: 'factory',
+        columns: [
+          {
+            top: { component: 'workspace.fileTree' },
+            bottom: { component: 'workspace.visualPreview' }
+          },
+          {
+            active: 'workspace.visualPreview',
+            tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
+          },
+          {
+            active: 'workspace.output',
+            tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
+          }
+        ],
+        bottomGroup: {
+          active: 'workspace.editor',
+          collapsed: false,
+          tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
+        }
+      }
+    };
+
+    const out = sanitizeLayout(oldShape, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    if (!out.dockview || out.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected');
+    }
+
+    // Rebuilt to defaults — v3 ExplorerColumn shape.
+    expect(out.dockview.columns[0]).toMatchObject({ component: 'workspace.fileTree' });
+    expect(out.dockview.columns).toHaveLength(3);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[layout-migrations] reset invalid saved layout to defaults'
     );
   });
 
