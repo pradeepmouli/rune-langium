@@ -155,6 +155,7 @@ export function EditorPage({
   onClose
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
+  const graphContainerRef = useRef<HTMLDivElement>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
   const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -194,6 +195,19 @@ export function EditorPage({
   const setWorkerRef = usePreviewStore((s) => s.setWorkerRef);
   const codePreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
   const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
+
+  useEffect(() => {
+    const el = graphContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      const direction = width >= height ? 'LR' : 'TB';
+      graphRef.current?.relayout({ direction });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const resolvedModelFiles = useMemo(() => {
     if (parsedModels && parsedModels.length > 0) {
@@ -1024,11 +1038,11 @@ export function EditorPage({
           <Separator orientation="vertical" className="mx-1 h-5" />
           <GraphFilterMenu />
         </div>
-        <div className="min-h-0 flex-1">
+        <div ref={graphContainerRef} className="min-h-0 flex-1 relative studio-graph-canvas">
           <RuneTypeGraph
             ref={graphRef}
             config={{
-              layout: { direction: focusMode ? 'LR' : 'TB', groupByInheritance: groupedLayout },
+              layout: { direction: 'LR', groupByInheritance: groupedLayout },
               showControls: true,
               showMinimap: true,
               readOnly: false

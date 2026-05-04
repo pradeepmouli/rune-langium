@@ -568,6 +568,20 @@
     cursor: pointer;
     letter-spacing: 0.02em;
   }
+
+  .studio-app .studio-graph-canvas {
+    background:
+      radial-gradient(ellipse at 50% 30%, var(--card), var(--background));
+  }
+
+  .studio-app .studio-graph-canvas::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1.5px);
+    background-size: 22px 22px;
+    pointer-events: none;
+  }
 }
 
 /* ---------- Namespace Explorer ---------- */
