@@ -50,9 +50,9 @@ async function assertDockChrome(page: Page): Promise<void> {
   expect(text).not.toContain('workspace.output');
   expect(text).not.toContain('workspace.visualPreview');
 
-  await expect(page.getByTestId('studio-layout-presets')).toContainText('Navigate');
-  await expect(page.getByTestId('studio-layout-presets')).toContainText('Edit');
-  await expect(page.getByTestId('studio-layout-presets')).toContainText('Preview');
+  await expect(page.getByTestId('studio-layout-presets')).toContainText('Graph');
+  await expect(page.getByTestId('studio-layout-presets')).toContainText('Source');
+  await expect(page.getByTestId('studio-layout-presets')).toContainText('Inspector');
 
   await expect(page.locator('.dv-tab', { hasText: 'Types' }).first()).toBeVisible();
   await expect(page.locator('.dv-tab', { hasText: 'Source' }).first()).toBeVisible();
