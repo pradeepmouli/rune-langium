@@ -569,6 +569,29 @@
     letter-spacing: 0.02em;
   }
 
+  .studio-app .studio-type-glyph {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    border: 0.5px solid;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-type-pip {
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+
   .studio-app .studio-graph-canvas {
     background:
       radial-gradient(ellipse at 50% 30%, var(--card), var(--background));

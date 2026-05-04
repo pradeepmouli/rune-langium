@@ -22,15 +22,7 @@ import {
   Circle,
   PlusSquare,
   MinusSquare,
-  Package,
-  GitBranch,
-  Tag,
-  FunctionSquare,
-  Link,
-  Layers,
-  ArrowRightLeft,
-  Atom,
-  StickyNote
+  Link
 } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -75,18 +67,29 @@ export interface NamespaceExplorerPanelProps {
 }
 
 // ---------------------------------------------------------------------------
-// Kind icon components
+// Kind glyph components
 // ---------------------------------------------------------------------------
 
-const KIND_ICON_MAP: Record<TypeKind, React.ElementType> = {
-  data: Package,
-  choice: GitBranch,
-  enum: Tag,
-  func: FunctionSquare,
-  record: Layers,
-  typeAlias: ArrowRightLeft,
-  basicType: Atom,
-  annotation: StickyNote
+const KIND_LETTER: Record<TypeKind, string> = {
+  data: 'D',
+  choice: 'C',
+  enum: 'E',
+  func: 'F',
+  record: 'R',
+  typeAlias: 'A',
+  basicType: 'B',
+  annotation: 'A'
+};
+
+const KIND_COLOR_VAR: Record<TypeKind, string> = {
+  data: 'var(--color-data)',
+  choice: 'var(--color-choice)',
+  enum: 'var(--color-enum)',
+  func: 'var(--color-func)',
+  record: 'var(--color-data)',
+  typeAlias: 'var(--color-data)',
+  basicType: 'var(--muted-foreground)',
+  annotation: 'var(--color-enum)'
 };
 
 const KIND_LABELS: Record<TypeKind, string> = {
@@ -369,11 +372,10 @@ function TypeItemRow({
   onSelectNode
 }: TypeItemRowProps): JSX.Element {
   const isVisible = isGraphVisible && !row.hidden;
-  const KindIcon = KIND_ICON_MAP[row.typeKind];
 
   return (
     <div
-      className={`flex items-center gap-1.5 px-2 py-0.5 ml-4 text-xs hover:bg-accent/50 ${
+      className={`flex items-center gap-1.5 px-2 py-0.5 ml-4 text-xs hover:bg-accent/50 relative ${
         isSelected
           ? 'bg-accent text-accent-foreground'
           : isVisible
@@ -382,6 +384,7 @@ function TypeItemRow({
       }`}
       data-testid={`ns-type-${row.nodeId}`}
     >
+      {isSelected && <span className="studio-type-pip" />}
       <Button
         variant="ghost"
         size="icon-xs"
@@ -393,7 +396,16 @@ function TypeItemRow({
         {isVisible ? <CircleDot className="size-3" /> : <Circle className="size-3" />}
       </Button>
 
-      <KindIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      <span
+        className="studio-type-glyph"
+        style={{
+          color: KIND_COLOR_VAR[row.typeKind],
+          background: `color-mix(in oklch, ${KIND_COLOR_VAR[row.typeKind]}, transparent 82%)`,
+          borderColor: `color-mix(in oklch, ${KIND_COLOR_VAR[row.typeKind]}, transparent 60%)`
+        }}
+      >
+        {KIND_LETTER[row.typeKind]}
+      </span>
 
       <span
         className="flex-1 truncate cursor-pointer hover:underline"
