@@ -116,12 +116,11 @@
   .studio-app .studio-layout-presets {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 0.5rem;
-    min-height: 32px;
-    padding: 0.25rem 0.5rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-    background: color-mix(in srgb, var(--background) 92%, var(--muted) 8%);
+    min-height: 38px;
+    padding: 0 0.5rem;
+    background: transparent;
+    border-bottom: none;
   }
 
   .studio-app .studio-layout-presets__group {
@@ -233,15 +232,6 @@
   }
 
   @media (max-width: 1280px) {
-    .studio-app .studio-layout-presets {
-      flex-wrap: wrap;
-    }
-
-    .studio-app .studio-layout-presets__hint {
-      flex-basis: 100%;
-      order: 1;
-    }
-
     .studio-app .studio-layout-presets__group--actions {
       margin-left: 0;
     }
