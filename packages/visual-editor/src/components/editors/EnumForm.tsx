@@ -30,6 +30,7 @@
  */
 
 import { useCallback, useMemo, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
 import {
   Field,
@@ -309,48 +310,16 @@ function EnumForm({
               </button>
             </FieldLegend>
 
-            <FieldGroup className="gap-0.5">
-              {effectiveValues.map((entry) =>
-                entry.source === 'local' ? (
-                  <EnumValueRow
-                    key={entry.id}
-                    index={entry.fieldIndex!}
-                    name={
-                      ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ??
-                      ''
-                    }
-                    displayName={
-                      ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]
-                        ?.display ?? ''
-                    }
-                    nodeId={nodeId}
-                    onUpdate={handleUpdateValue}
-                    onRemove={() => handleRemoveValue(entry.fieldIndex!)}
-                    onReorder={handleReorderValue}
-                    isOverride={entry.isOverride}
-                    onRevert={
-                      entry.isOverride ? () => handleRevertEnumOverride(entry.name) : undefined
-                    }
-                  />
-                ) : (
-                  <InheritedEnumValueRow
-                    key={entry.id}
-                    name={entry.name}
-                    displayName={entry.displayName}
-                    ancestorName={entry.ancestorName!}
-                    onOverride={() =>
-                      handleOverrideInheritedValue(entry.name, entry.displayName ?? '')
-                    }
-                  />
-                )
-              )}
-
-              {effectiveValues.length === 0 && (
-                <p className="text-xs text-muted-foreground italic py-2 text-center">
-                  No values defined. Click &quot;+ Add Value&quot; to create one.
-                </p>
-              )}
-            </FieldGroup>
+            <VirtualizedEnumValues
+              effectiveValues={effectiveValues}
+              committedRef={committedRef}
+              nodeId={nodeId}
+              onUpdate={handleUpdateValue}
+              onRemove={handleRemoveValue}
+              onReorder={handleReorderValue}
+              onRevertOverride={handleRevertEnumOverride}
+              onOverrideInherited={handleOverrideInheritedValue}
+            />
           </FieldSet>
 
           {/* Annotations + Metadata sections — declarative path (Phase 7).
@@ -362,6 +331,144 @@ function EnumForm({
         </div>
       </EditorActionsProvider>
     </FormProvider>
+  );
+}
+
+const ENUM_VALUE_ROW_HEIGHT = 32;
+const VIRTUAL_THRESHOLD = 50;
+
+interface VirtualizedEnumValuesProps {
+  effectiveValues: Array<{
+    id: string;
+    source: 'local' | 'inherited';
+    name: string;
+    displayName?: string;
+    fieldIndex?: number;
+    isOverride?: boolean;
+    ancestorName?: string;
+  }>;
+  committedRef: React.RefObject<unknown>;
+  nodeId: string;
+  onUpdate: (nodeId: string, oldName: string, newName: string, displayName?: string) => void;
+  onRemove: (index: number) => void;
+  onReorder: (from: number, to: number) => void;
+  onRevertOverride: (name: string) => void;
+  onOverrideInherited: (name: string, displayName: string) => void;
+}
+
+function VirtualizedEnumValues({
+  effectiveValues,
+  committedRef,
+  nodeId,
+  onUpdate,
+  onRemove,
+  onReorder,
+  onRevertOverride,
+  onOverrideInherited
+}: VirtualizedEnumValuesProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: effectiveValues.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ENUM_VALUE_ROW_HEIGHT,
+    overscan: 10
+  });
+
+  if (effectiveValues.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground italic py-2 text-center">
+        No values defined. Click &quot;+ Add Value&quot; to create one.
+      </p>
+    );
+  }
+
+  if (effectiveValues.length < VIRTUAL_THRESHOLD) {
+    return (
+      <FieldGroup className="gap-0.5">
+        {effectiveValues.map((entry) =>
+          entry.source === 'local' ? (
+            <EnumValueRow
+              key={entry.id}
+              index={entry.fieldIndex!}
+              name={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''}
+              displayName={
+                ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ?? ''
+              }
+              nodeId={nodeId}
+              onUpdate={onUpdate}
+              onRemove={() => onRemove(entry.fieldIndex!)}
+              onReorder={onReorder}
+              isOverride={entry.isOverride}
+              onRevert={entry.isOverride ? () => onRevertOverride(entry.name) : undefined}
+            />
+          ) : (
+            <InheritedEnumValueRow
+              key={entry.id}
+              name={entry.name}
+              displayName={entry.displayName}
+              ancestorName={entry.ancestorName!}
+              onOverride={() => onOverrideInherited(entry.name, entry.displayName ?? '')}
+            />
+          )
+        )}
+      </FieldGroup>
+    );
+  }
+
+  return (
+    <div
+      ref={scrollRef}
+      className="overflow-y-auto"
+      style={{ maxHeight: 400 }}
+      role="list"
+      aria-label="Enum values"
+    >
+      <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const entry = effectiveValues[virtualRow.index]!;
+          return (
+            <div
+              key={entry.id}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`
+              }}
+            >
+              {entry.source === 'local' ? (
+                <EnumValueRow
+                  index={entry.fieldIndex!}
+                  name={
+                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''
+                  }
+                  displayName={
+                    ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ??
+                    ''
+                  }
+                  nodeId={nodeId}
+                  onUpdate={onUpdate}
+                  onRemove={() => onRemove(entry.fieldIndex!)}
+                  onReorder={onReorder}
+                  isOverride={entry.isOverride}
+                  onRevert={entry.isOverride ? () => onRevertOverride(entry.name) : undefined}
+                />
+              ) : (
+                <InheritedEnumValueRow
+                  name={entry.name}
+                  displayName={entry.displayName}
+                  ancestorName={entry.ancestorName!}
+                  onOverride={() => onOverrideInherited(entry.name, entry.displayName ?? '')}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
