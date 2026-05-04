@@ -1091,7 +1091,8 @@ export const RosettaTypeSchema = z.discriminatedUnion('$type', [
 
 export const RosettaTypedFeatureSchema = z.discriminatedUnion('$type', [
   AttributeSchema,
-  RosettaRecordFeatureSchema
+  RosettaRecordFeatureSchema,
+  RosettaMetaTypeSchema
 ]);
 
 export const SwitchCaseTargetSchema = z.discriminatedUnion('$type', [

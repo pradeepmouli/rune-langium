@@ -30,7 +30,7 @@ type RosettaCallableWithArgs = RosettaFunction
 type RosettaFeature = Attribute | RosettaRecordFeature
     | RosettaEnumValue | RosettaMetaType | ChoiceOption;
 
-type RosettaTypedFeature = Attribute | RosettaRecordFeature;
+type RosettaTypedFeature = Attribute | RosettaRecordFeature | RosettaMetaType;
 
 type AssignPathRoot = Attribute | ShortcutDeclaration;
 

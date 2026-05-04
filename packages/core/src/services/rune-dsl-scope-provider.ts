@@ -56,7 +56,8 @@ import {
   isAnnotationDeepPath,
   isAnnotationPathAttributeReference,
   isChoiceOperation,
-  isSwitchOperation
+  isSwitchOperation,
+  isRosettaMetaType
 } from '../generated/ast.js';
 import type {
   Data,
@@ -713,6 +714,20 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     return this._metadataAnnotationAttrs.get(name);
   }
 
+  private _metaTypeDescs: AstNodeDescription[] | undefined;
+  private getMetaTypeDescriptions(): AstNodeDescription[] {
+    if (!this._metaTypeDescs) {
+      this._metaTypeDescs = [];
+      for (const desc of this.indexManager.allElements('RosettaMetaType')) {
+        const node = desc.node;
+        if (node && isRosettaMetaType(node)) {
+          this._metaTypeDescs.push(this.createDescription(node, node.name));
+        }
+      }
+    }
+    return this._metaTypeDescs;
+  }
+
   /**
    * Extract the last Attribute that was directly navigated via an expression.
    * Used to determine if meta-attributes (reference, key, scheme) are in scope.
@@ -950,10 +965,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     // This must be checked even when currentType is undefined (e.g., enum-typed attrs).
     if (lastAttribute) {
       const metaAttrs = this.getMetaAttributeRefs(lastAttribute);
-      if (metaAttrs.length > 0) {
-        const metaDescs = metaAttrs.map((a) => this.createDescription(a, a.name));
+      const metaDescs = metaAttrs.map((a) => this.createDescription(a, a.name));
+      const metaTypeDescs = this.getMetaTypeDescriptions();
+      if (metaDescs.length > 0 || metaTypeDescs.length > 0) {
         const baseScope = this.buildTypedScope(currentType, node);
-        return new MapScope(metaDescs, baseScope);
+        return new MapScope([...metaDescs, ...metaTypeDescs], baseScope);
       }
     }
 
@@ -1181,7 +1197,12 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       }
     }
 
-    return this.buildTypedScope(constructedType, node);
+    const baseScope = this.buildTypedScope(constructedType, node);
+    const metaDescs = this.getMetaTypeDescriptions();
+    if (metaDescs.length > 0) {
+      return new MapScope(metaDescs, baseScope);
+    }
+    return baseScope;
   }
 
   /**
