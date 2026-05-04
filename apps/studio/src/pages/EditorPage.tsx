@@ -330,7 +330,10 @@ export function EditorPage({
     const cstNode = nodeData['$cstNode'] as
       | { range?: { start?: { line?: number } }; _rangeCache?: { start?: { line?: number } } }
       | undefined;
-    const range = cstNode?._rangeCache ?? cstNode?.range;
+    const textRegion = nodeData['$textRegion'] as
+      | { range?: { start?: { line?: number } } }
+      | undefined;
+    const range = cstNode?._rangeCache ?? cstNode?.range ?? textRegion?.range;
     if (range?.start?.line !== undefined && filePath) {
       pendingRevealRef.current = { line: range.start.line + 1, filePath };
     } else if (filePath) {

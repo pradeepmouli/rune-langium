@@ -55,7 +55,10 @@ export async function buildSerializedWorkspaceArtifact(
     langiumVersion: LANGIUM_VERSION,
     documents: documents.map((document, index) => ({
       path: rosettaFiles[index]!.path,
-      modelJson: serializer.serialize(document.parseResult.value, { refText: true })
+      modelJson: serializer.serialize(document.parseResult.value, {
+        refText: true,
+        textRegions: true
+      })
     }))
   };
 
