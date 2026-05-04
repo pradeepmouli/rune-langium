@@ -144,7 +144,7 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
           documentCount: artifact.documentCount,
           langiumVersion: '4.2.2'
         };
-        manifest = buildManifest({
+        const enrichedManifest = buildManifest({
           modelId: source.id,
           version,
           sha256: sha,
@@ -155,19 +155,25 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
           historyVersions,
           serializedWorkspace
         });
-        await bucket.put(manifestKey, JSON.stringify(manifest, null, 2), {
+        await bucket.put(manifestKey, JSON.stringify(enrichedManifest, null, 2), {
           httpMetadata: { contentType: 'application/json; charset=utf-8' }
         });
+        manifest = enrichedManifest;
       } catch (err) {
+        const phase =
+          err instanceof Error && err.message.includes('manifest')
+            ? 'manifest_update'
+            : 'serialized_artifact';
         logger.error(
           {
             model_id: source.id,
+            phase,
             err:
               err instanceof Error
                 ? { name: err.name, message: err.message, stack: err.stack }
                 : err
           },
-          'curated-mirror.publish.serialized_artifact.failed'
+          `curated-mirror.publish.${phase}.failed`
         );
       }
 
