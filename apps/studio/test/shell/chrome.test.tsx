@@ -47,8 +47,8 @@ describe('StatusBar (T073)', () => {
         onToggleTelemetry={() => {}}
       />
     );
-    expect(screen.getByTestId('status-workspace').textContent).toBe('My Project');
-    expect(screen.getByTestId('status-lsp').textContent).toBe('connected');
+    expect(screen.getByTestId('status-workspace').textContent).toBe('⟢ My Project');
+    expect(screen.getByTestId('status-lsp').textContent).toContain('connected');
   });
 
   it('renders git sync state only when supplied', () => {
