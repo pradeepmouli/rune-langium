@@ -11,13 +11,14 @@ import { ActivityBar } from '../../src/shell/ActivityBar.js';
 import { StatusBar } from '../../src/shell/StatusBar.js';
 
 describe('ActivityBar (T072)', () => {
-  it('renders three nav buttons and routes clicks to the right callback', () => {
+  it('renders six nav buttons and routes clicks to the right callback', () => {
     const ws = vi.fn();
     const m = vi.fn();
     const s = vi.fn();
     render(<ActivityBar onWorkspaceClick={ws} onModelsClick={m} onSettingsClick={s} />);
-    fireEvent.click(screen.getByRole('button', { name: /workspaces/i }));
-    fireEvent.click(screen.getByRole('button', { name: /models/i }));
+    expect(screen.getAllByRole('button').length).toBe(6);
+    fireEvent.click(screen.getByRole('button', { name: /explorer/i }));
+    fireEvent.click(screen.getByRole('button', { name: /curated models/i }));
     fireEvent.click(screen.getByRole('button', { name: /settings/i }));
     expect(ws).toHaveBeenCalled();
     expect(m).toHaveBeenCalled();

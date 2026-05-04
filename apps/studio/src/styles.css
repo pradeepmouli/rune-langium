@@ -259,6 +259,72 @@
     font-weight: 700;
   }
 
+  /* ─── Activity Rail ────────────────────────────────────────────
+   * Narrow 52px left column with icon-only buttons, an active-state
+   * pip on the left edge, and a spacer that pushes the bottom group
+   * (Notifications + Settings) to the foot of the rail.
+   */
+  .studio-app .studio-rail {
+    width: 52px;
+    background: var(--background);
+    border-right: 0.5px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 0;
+    gap: 4px;
+  }
+
+  .studio-app .studio-rail__group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: center;
+  }
+
+  .studio-app .studio-rail__spacer {
+    flex: 1;
+  }
+
+  .studio-app .studio-rail__btn {
+    position: relative;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius);
+    color: var(--muted-foreground);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .studio-app .studio-rail__btn:hover {
+    color: var(--foreground);
+    background: var(--accent);
+  }
+
+  .studio-app .studio-rail__btn[aria-pressed='true'] {
+    color: var(--foreground);
+    background: var(--accent);
+  }
+
+  .studio-app .studio-rail__pip {
+    position: absolute;
+    left: -8px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+
+  .studio-app .studio-rail > .studio-brand__mark {
+    margin-bottom: 8px;
+  }
+
   .studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
     width: 12px;
     margin-left: -6px;
