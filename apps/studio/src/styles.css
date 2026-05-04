@@ -249,6 +249,16 @@
     font-weight: 700;
   }
 
+  .studio-app .dockview-theme-abyss .dv-group-panel {
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+    overflow: hidden;
+  }
+
+  .studio-app .dockview-theme-abyss .dv-group-panel .dv-tabs-container {
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
   /* ─── Activity Rail ────────────────────────────────────────────
    * Narrow 52px left column with icon-only buttons, an active-state
    * pip on the left edge, and a spacer that pushes the bottom group
