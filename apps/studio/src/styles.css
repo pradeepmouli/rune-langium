@@ -7,6 +7,7 @@
  * landing surface. */
 @import '@rune-langium/design-tokens/tokens.css';
 @import '../../../packages/design-system/src/theme.css';
+@import './styles/daikonic.css';
 
 /* Ensure Tailwind scans workspace packages for utility classes */
 @source "../../../packages/design-system/src";
@@ -1079,11 +1080,11 @@
 }
 
 .studio-brand__name {
-  font-family: var(--font-sans);
-  font-weight: 650;
-  font-size: 13px;
+  font-family: var(--font-display, 'Outfit'), var(--font-sans), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
   color: var(--foreground);
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
 }
 
 .studio-app-header--compact .studio-brand__mark {
@@ -1282,4 +1283,71 @@
   color: var(--color-info);
   background: oklch(from var(--color-info) l c h / 0.06);
   border-left: 2px solid var(--color-info);
+}
+
+/* ─── Number chiclet ─────────────────────────────────────────────────
+ * Tabular-numeral count pill. Stable width across digit counts so
+ * neighboring rows align to the right edge. Used in the namespace
+ * explorer to display visible-of-total counts and per-row member
+ * counts (replaces the generic shadcn Badge for numeric data).
+ */
+.studio-app .number-chiclet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  border: 0.5px solid var(--border);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ─── Kind chip ──────────────────────────────────────────────────────
+ * Compact "5 data" / "2 choice" pill with a colored dot, count, and
+ * label. Tabular numerals on the count, label slightly de-emphasized.
+ * Tinted by the kind palette via --kind-color (set inline).
+ */
+.studio-app .kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  padding: 0 8px 0 6px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: color-mix(in oklch, var(--kind-color, var(--muted)) 14%, transparent);
+  color: var(--kind-color, var(--muted-foreground));
+  border: 0.5px solid color-mix(in oklch, var(--kind-color, var(--border)) 35%, transparent);
+}
+
+.studio-app .kind-chip__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--kind-color, currentColor);
+  flex-shrink: 0;
+}
+
+.studio-app .kind-chip__count {
+  font-weight: 700;
+}
+
+.studio-app .kind-chip__label {
+  opacity: 0.78;
 }

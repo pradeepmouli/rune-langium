@@ -47,6 +47,12 @@ const ALLOWED_RUNTIME_DEFINED = new Set<string>([
   // block, but the parser expects them at column 0 (`:root` scope) — so
   // we whitelist defensively. (If a typo like `--color-data-bgg` slips
   // in, it'd still fail because no rule would define the typo'd name.)
+
+  // Consumer-provided inline style — `.kind-chip` reads `--kind-color`
+  // from `style={{ '--kind-color': 'var(--color-data)' }}` so a single
+  // class definition serves all four type-kind colors. Intentionally
+  // not defined in tokens.css or theme.css.
+  'kind-color'
 ]);
 
 function readDefinedNames(): Set<string> {

@@ -34,7 +34,6 @@ import {
 } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { Badge } from '@rune-langium/design-system/ui/badge';
 import {
   Tooltip,
   TooltipContent,
@@ -181,9 +180,9 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
               Browse namespaces and types in the active source.
             </p>
           </div>
-          <Badge variant="secondary">
+          <span className="number-chiclet" data-testid="namespace-explorer-count">
             {visibleCount}/{totalTypes}
-          </Badge>
+          </span>
         </div>
 
         {/* Toolbar */}
@@ -342,9 +341,7 @@ function NamespaceHeaderRow({
           {row.namespace}
         </span>
 
-        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-          {row.typeCount}
-        </Badge>
+        <span className="number-chiclet">{row.typeCount}</span>
       </div>
     </div>
   );

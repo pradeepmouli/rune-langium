@@ -1,0 +1,135 @@
+/* SPDX-License-Identifier: FSL-1.1-ALv2
+ * Copyright (c) 2026 Pradeep Mouli
+ *
+ * Daikonic theme — palette overlay for Rune Studio.
+ *
+ * Brand:
+ *   • Midnight green   #194454   surface base
+ *   • Keppel teal      #41B8AA   secondary / data type
+ *   • Sandy brown      #FA994A   primary accent / func type
+ *   • Vermilion        #F03630   destructive / urgent
+ *
+ * Activates via `data-theme="daikonic"` on the `<html>` or `.studio-app`
+ * element. Loaded LAST so it overrides theme-tokens.css.
+ *
+ * Strategy: retune the canonical design-system tokens (--primary, --ring,
+ * --background, --card, …) so every shadcn component picks up the new
+ * palette without code changes. Type-kind colors map onto brand swatches
+ * where possible (data → keppel, choice → sandy, func → soft-blue, enum
+ * → soft-violet kept for hue separation).
+ */
+
+[data-theme='daikonic'] {
+  /* Surfaces — deep midnight-green */
+  --background: oklch(0.215 0.04 220);
+  --card: oklch(0.255 0.04 220);
+  --popover: oklch(0.235 0.04 220);
+  --muted: oklch(0.255 0.04 220);
+  --accent: oklch(0.3 0.04 220);
+
+  --foreground: oklch(0.97 0.005 200);
+  --card-foreground: oklch(0.97 0.005 200);
+  --popover-foreground: oklch(0.97 0.005 200);
+  --muted-foreground: oklch(0.7 0.03 220);
+  --accent-foreground: oklch(0.97 0.005 200);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 18%);
+
+  /* Primary = Sandy brown; ring matches so focus halos read warm */
+  --primary: #fa994a;
+  --primary-foreground: oklch(0.18 0.04 220);
+  --ring: #fa994a;
+
+  /* Secondary = Keppel teal */
+  --secondary: #41b8aa;
+  --secondary-foreground: oklch(0.18 0.04 220);
+
+  /* Destructive = Vermilion */
+  --destructive: #f03630;
+  --destructive-foreground: oklch(0.97 0.005 200);
+
+  /* Sidebar */
+  --sidebar: oklch(0.235 0.04 220);
+  --sidebar-foreground: oklch(0.97 0.005 200);
+  --sidebar-border: oklch(1 0 0 / 10%);
+
+  /* Type-kind palette — remap onto brand swatches where possible */
+  --color-data: #41b8aa;
+  --color-data-bg: rgba(65, 184, 170, 0.12);
+  --color-data-text: #41b8aa;
+  --color-data-badge: rgba(65, 184, 170, 0.22);
+
+  --color-choice: #fa994a;
+  --color-choice-bg: rgba(250, 153, 74, 0.12);
+  --color-choice-text: #fa994a;
+  --color-choice-badge: rgba(250, 153, 74, 0.22);
+
+  --color-enum: #b89de0;
+  --color-enum-bg: rgba(184, 157, 224, 0.12);
+  --color-enum-text: #b89de0;
+  --color-enum-badge: rgba(184, 157, 224, 0.22);
+
+  --color-func: #6bb8dd;
+  --color-func-bg: rgba(107, 184, 221, 0.12);
+  --color-func-text: #6bb8dd;
+  --color-func-badge: rgba(107, 184, 221, 0.22);
+
+  --color-error: #f03630;
+  --color-warning: #e8b25a;
+  --color-success: #41b8aa;
+  --color-info: #6bb8dd;
+}
+
+/* ─── Brand mark — banded daikon stripes when Daikonic is active ─── */
+[data-theme='daikonic'] .studio-brand__mark {
+  background: linear-gradient(
+    180deg,
+    #194454 0 18%,
+    #41b8aa 18% 42%,
+    #fa994a 42% 66%,
+    #f03630 66% 100%
+  );
+  color: transparent;
+  border-color: transparent;
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+[data-theme='daikonic'] .studio-brand__mark::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 5px;
+  height: 5px;
+  background: #1f6b3a;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  transform: translateX(-50%) rotate(-12deg);
+}
+
+/* ─── Variant tag next to the wordmark ─── */
+[data-theme='daikonic'] .studio-brand__name::after {
+  content: 'Daikonic';
+  display: inline-block;
+  margin-left: 8px;
+  font-family: var(--font-display, 'Outfit'), system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary), transparent 86%);
+  border: 0.5px solid color-mix(in oklch, var(--primary), transparent 65%);
+  vertical-align: middle;
+  line-height: 1;
+}
+
+/* ─── Soft brand glow on primary buttons ─── */
+[data-theme='daikonic'] [data-slot='button'][data-variant='default'] {
+  box-shadow:
+    0 0 0 0.5px color-mix(in oklch, var(--primary), transparent 60%),
+    0 6px 18px -6px color-mix(in oklch, var(--primary), transparent 50%);
+}
