@@ -129,13 +129,13 @@ describe('DockShell — dockview integration (T065)', () => {
     }
   });
 
-  it('calls onLayoutChange on initial mount with version=2', async () => {
+  it('calls onLayoutChange on initial mount with version=3', async () => {
     const onChange = vi.fn();
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" onLayoutChange={onChange} />);
     await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
     expect(onChange).toHaveBeenCalled();
     const last = onChange.mock.calls.at(-1)?.[0];
-    expect(last.version).toBe(2);
+    expect(last.version).toBe(3);
   });
 
   it('exposes role=application on the shell container', () => {

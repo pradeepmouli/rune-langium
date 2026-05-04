@@ -22,11 +22,9 @@ describe('buildDefaultLayout (T061)', () => {
       throw new Error('factory shape expected');
     }
 
-    expect(collectStackComponents(layout.dockview.columns[0])).toEqual([
-      'workspace.fileTree',
-      'workspace.visualPreview'
-    ]);
+    expect(collectColumnComponents(layout.dockview.columns[0])).toEqual(['workspace.fileTree']);
     expect(collectColumnComponents(layout.dockview.columns[1])).toEqual([
+      'workspace.visualPreview',
       'workspace.editor',
       'workspace.inspector'
     ]);
@@ -40,8 +38,8 @@ describe('buildDefaultLayout (T061)', () => {
     ]);
   });
 
-  it('layout.version starts at 2', () => {
-    expect(buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 }).version).toBe(2);
+  it('layout.version starts at 3', () => {
+    expect(buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 }).version).toBe(3);
   });
 
   it('preview starts reachable above 1280px', () => {

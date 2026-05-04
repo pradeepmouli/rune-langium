@@ -20,6 +20,8 @@
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import type {
+  CenterStackTabName,
+  ExplorerColumn,
   FactoryShape,
   LayoutColumn,
   LayoutPreset,
@@ -29,7 +31,11 @@ export {
   type LayoutPreset,
   PANEL_COMPONENT_NAMES,
   type BottomGroup,
+  type CenterGroup,
+  type CenterStackTabName,
   type DockviewPayload,
+  type EditorGroup,
+  type ExplorerColumn,
   type FactoryShape,
   type LayoutColumn,
   type LayoutNode,
@@ -53,7 +59,7 @@ export const PANEL_TITLES: Record<PanelComponentName, string> = {
   'workspace.codePreview': 'Code'
 };
 
-export const LAYOUT_SCHEMA_VERSION = 2;
+export const LAYOUT_SCHEMA_VERSION = 3;
 
 const SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
 
@@ -64,53 +70,39 @@ export interface BuildLayoutInput {
 }
 
 export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
-  const small = input.viewportWidth <= SMALL_VIEWPORT_BREAKPOINT_PX;
   const preset = input.preset ?? 'edit';
 
-  const navWidth = small ? (preset === 'navigate' ? 260 : 220) : preset === 'navigate' ? 320 : 260;
-  const graphHeight = small
-    ? preset === 'navigate'
-      ? 260
-      : 220
-    : preset === 'navigate'
-      ? 320
-      : 260;
-  const previewWidth = small
-    ? preset === 'preview'
-      ? 340
-      : 300
-    : preset === 'preview'
-      ? 420
-      : 360;
+  const centerActive: CenterStackTabName =
+    preset === 'navigate' ? 'workspace.visualPreview' : 'workspace.editor';
+
+  const previewActive = preset === 'preview' ? 'workspace.codePreview' : 'workspace.formPreview';
+
+  const explorerColumn: ExplorerColumn = { component: 'workspace.fileTree', size: 248 };
 
   const dockview: FactoryShape = {
     shape: 'factory',
     preset,
     columns: [
+      explorerColumn,
       {
-        size: navWidth,
-        bottomSize: graphHeight,
-        top: { component: 'workspace.fileTree' },
-        bottom: { component: 'workspace.visualPreview' }
-      },
-      {
-        active: preset === 'navigate' ? 'workspace.inspector' : 'workspace.editor',
+        active: centerActive,
         weight: 3,
-        tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
+        tabs: [
+          { component: 'workspace.visualPreview' },
+          { component: 'workspace.editor' },
+          { component: 'workspace.inspector' }
+        ]
       },
       {
-        active: preset === 'preview' ? 'workspace.codePreview' : 'workspace.formPreview',
-        size: previewWidth,
+        active: previewActive,
+        size: 360,
         tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
       }
     ],
     bottomGroup: {
       active: 'workspace.problems',
-      collapsed: small,
-      tabs: [
-        { component: 'workspace.problems', collapsed: small },
-        { component: 'workspace.output', collapsed: small }
-      ]
+      collapsed: false,
+      tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
     }
   };
 
@@ -122,8 +114,6 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
 }
 
 export function getLayoutColumnComponents(column: LayoutColumn): PanelComponentName[] {
-  if ('tabs' in column) {
-    return column.tabs.map((tab) => tab.component);
-  }
-  return [column.top.component, column.bottom.component];
+  if ('tabs' in column) return column.tabs.map((tab) => tab.component);
+  return [column.component];
 }

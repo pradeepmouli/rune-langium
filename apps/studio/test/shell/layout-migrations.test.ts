@@ -17,15 +17,14 @@ afterEach(() => vi.restoreAllMocks());
 describe('sanitizeLayout (T063)', () => {
   it('rebuilds when the input is missing or malformed', () => {
     const out = sanitizeLayout(null, { studioVersion: '0.1.0', viewportWidth: 1440 });
-    expect(out.version).toBe(2);
+    expect(out.version).toBe(3);
     const dockview = out.dockview;
     if (!dockview || dockview.shape !== 'factory') {
       throw new Error('factory layout expected');
     }
     expect(dockview.columns).toHaveLength(3);
     expect(dockview.columns[0]).toMatchObject({
-      top: { component: 'workspace.fileTree' },
-      bottom: { component: 'workspace.visualPreview' }
+      component: 'workspace.fileTree'
     });
     expect(dockview.bottomGroup.tabs.map((tab) => tab.component)).toEqual([
       'workspace.problems',
@@ -57,7 +56,7 @@ describe('sanitizeLayout (T063)', () => {
       dockview: { something: 'unknown' }
     };
     const out = sanitizeLayout(futureLayout, { studioVersion: '0.2.0', viewportWidth: 1440 });
-    expect(out.version).toBe(2);
+    expect(out.version).toBe(3);
     expect(out.writtenBy).toBe('0.2.0');
   });
 

@@ -121,17 +121,22 @@ describe('applyLayout — factory shape', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
+    // Column 0: fileTree is a single panel (no position / undefined direction for first panel)
+    const fileTree = api.calls.find((c) => c.id === 'workspace.fileTree');
+    expect(fileTree?.position).toBeUndefined();
+    // Column 1: visualPreview is first tab in the center group, positioned right of fileTree
+    const visualize = api.calls.find((c) => c.id === 'workspace.visualPreview');
+    expect(visualize?.position?.direction).toBe('right');
+    expect(visualize?.position?.referencePanel).toBe('workspace.fileTree');
+    // editor and inspector are subsequent tabs within the center group
     const editor = api.calls.find((c) => c.id === 'workspace.editor');
-    expect(editor?.position?.direction).toBe('right');
-    expect(editor?.position?.referencePanel).toBe('workspace.fileTree');
+    expect(editor?.position?.direction).toBe('within');
     const inspector = api.calls.find((c) => c.id === 'workspace.inspector');
     expect(inspector?.position?.direction).toBe('within');
-    const visualize = api.calls.find((c) => c.id === 'workspace.visualPreview');
-    expect(visualize?.position?.direction).toBe('below');
-    expect(visualize?.position?.referencePanel).toBe('workspace.fileTree');
+    // Column 2: formPreview is first tab in the right group, positioned right of visualPreview
     const preview = api.calls.find((c) => c.id === 'workspace.formPreview');
     expect(preview?.position?.direction).toBe('right');
-    expect(preview?.position?.referencePanel).toBe('workspace.editor');
+    expect(preview?.position?.referencePanel).toBe('workspace.visualPreview');
   });
 
   it('positions the first bottom tab below the editor and the rest within the same group', () => {

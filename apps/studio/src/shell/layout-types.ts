@@ -47,13 +47,25 @@ export type EditorGroup = LayoutGroup<EditorTabName>;
 export type PreviewGroup = LayoutGroup<PreviewTabName>;
 export type BottomGroup = LayoutGroup<UtilityTabName> & { collapsed: boolean };
 
+/** @deprecated Use ExplorerColumn. */
 export type NavigationColumn = LayoutStack<'workspace.fileTree', 'workspace.visualPreview'>;
-export type LayoutColumn = NavigationColumn | EditorGroup | PreviewGroup;
+
+// Explorer-only column (single panel, no bottom stack)
+export type ExplorerColumn = LayoutNode<'workspace.fileTree'>;
+
+// Center workspace stack — graph, source, inspector as switchable panes
+export type CenterStackTabName =
+  | 'workspace.visualPreview'
+  | 'workspace.editor'
+  | 'workspace.inspector';
+export type CenterGroup = LayoutGroup<CenterStackTabName>;
+
+export type LayoutColumn = ExplorerColumn | CenterGroup | PreviewGroup;
 
 export interface FactoryShape {
   shape: 'factory';
   preset?: LayoutPreset;
-  columns: [NavigationColumn, EditorGroup, PreviewGroup];
+  columns: [ExplorerColumn, CenterGroup, PreviewGroup];
   bottomGroup: BottomGroup;
 }
 
