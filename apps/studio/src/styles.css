@@ -1756,3 +1756,31 @@
 .studio-app .kind-chip__label {
   opacity: 0.78;
 }
+
+/* Inspector panel — tabbed subsections (Members / Conditions / Doc / Meta) */
+.studio-app .studio-insp-tabs {
+  height: 34px;
+  border-bottom: 0.5px solid var(--border);
+  background: transparent;
+  border-radius: 0;
+  padding: 0 8px;
+  gap: 2px;
+}
+
+.studio-app .studio-insp-tabs [data-slot='tabs-trigger'] {
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  height: 28px;
+  position: relative;
+}
+
+.studio-app .studio-insp-tabs [data-slot='tabs-trigger'][data-state='active']::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -0.5px;
+  height: 1.5px;
+  background: var(--primary);
+  border-radius: 1.5px;
+}
