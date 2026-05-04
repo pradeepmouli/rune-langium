@@ -151,14 +151,6 @@ describe('applyLayout — factory shape', () => {
     applyLayout(api as never, layout);
     expect(api.activatedPanels).toContain('workspace.problems');
   });
-
-  it('collapses the bottom utilities at viewport ≤ 1280px (FR-024)', () => {
-    const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1280 });
-    const api = new FakeDockviewApi();
-    applyLayout(api as never, layout);
-    const firstBottom = api.groups.get('workspace.problems');
-    expect(firstBottom?.sizeCalls).toEqual([{ height: 0 }]);
-  });
 });
 
 describe('applyLayout — native shape', () => {

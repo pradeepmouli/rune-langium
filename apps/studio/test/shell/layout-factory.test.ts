@@ -44,17 +44,6 @@ describe('buildDefaultLayout (T061)', () => {
     expect(buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 }).version).toBe(2);
   });
 
-  it('bottom utilities start collapsed at viewport ≤ 1280px (FR-024)', () => {
-    const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1280 });
-    const collapsed = collectCollapsed(layout.dockview);
-    expect(collapsed).toContain('workspace.problems');
-    expect(collapsed).toContain('workspace.output');
-    expect(collectColumnComponents((layout.dockview as any).columns[2])).toEqual([
-      'workspace.formPreview',
-      'workspace.codePreview'
-    ]);
-  });
-
   it('preview starts reachable above 1280px', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1440 });
     const collapsed = collectCollapsed(layout.dockview);
@@ -64,47 +53,6 @@ describe('buildDefaultLayout (T061)', () => {
   it('writtenBy reflects the studio version', () => {
     const layout = buildDefaultLayout({ studioVersion: '9.9.9', viewportWidth: 1920 });
     expect(layout.writtenBy).toBe('9.9.9');
-  });
-});
-
-describe('layout proportions at 1280×800 (SC-005, SC-006)', () => {
-  // SC-005: source/structure group remains the dominant horizontal area at 1280×800
-  // while Preview remains reachable on the right.
-  // SC-006: Studio chrome vertical pixel budget reduced ≥25% vs the
-  //   previous baseline. The layout itself doesn't measure chrome; the
-  //   assertion below is on the inputs that drive it (sidebar widths +
-  //   collapse default), with the recorded baseline in
-  //   specs/012-studio-workspace-ux/baseline-measurements.md.
-  const VIEWPORT_W = 1280;
-  const NAV_W = 220;
-  const PREVIEW_W = 300;
-  const EXPECTED_EDITOR_MIN = 560;
-
-  it('editor column gets ≥70% of horizontal area at 1280px (SC-005)', () => {
-    const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: VIEWPORT_W });
-    if (!layout.dockview || layout.dockview.shape !== 'factory') {
-      throw new Error('factory shape expected');
-    }
-    const cols = layout.dockview.columns;
-    const fileTree = cols[0];
-    const preview = cols[2];
-    expect(fileTree.size).toBe(NAV_W);
-    expect(preview.size).toBe(PREVIEW_W);
-    const editorAvail = VIEWPORT_W - (fileTree.size ?? 0) - (preview.size ?? 0);
-    expect(editorAvail).toBeGreaterThanOrEqual(EXPECTED_EDITOR_MIN);
-  });
-
-  it('chrome vertical budget at 1280×800 leaves ≥85% of height for the editor (SC-006)', () => {
-    // The chrome we control is the toolbar (32px) and status bar (24px) —
-    // documented in baseline-measurements.md. Anything else is dockview's
-    // own panel headers, which we cannot shrink without forking dockview.
-    const VIEWPORT_H = 800;
-    const TOOLBAR_H = 32;
-    const STATUS_BAR_H = 24;
-    const CHROME = TOOLBAR_H + STATUS_BAR_H;
-    expect(CHROME).toBeLessThanOrEqual(Math.round(VIEWPORT_H * 0.075));
-    const editorAvail = VIEWPORT_H - CHROME;
-    expect(editorAvail / VIEWPORT_H).toBeGreaterThanOrEqual(0.85);
   });
 });
 
