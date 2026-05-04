@@ -579,6 +579,56 @@
     letter-spacing: 0.02em;
   }
 
+  .studio-app .studio-topbar__tabs {
+    display: flex;
+    gap: 1px;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    flex: 1;
+  }
+
+  .studio-app .studio-topbar__tab {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: var(--radius);
+    color: var(--muted-foreground);
+    max-width: 200px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .studio-app .studio-topbar__tab:hover,
+  .studio-app .studio-topbar__tab.is-active {
+    background: var(--card);
+    color: var(--foreground);
+  }
+
+  .studio-app .studio-topbar__tab-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid var(--muted-foreground);
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-topbar__tab-dot.is-dirty {
+    background: var(--color-warning);
+    border-color: var(--color-warning);
+  }
+
+  .studio-app .studio-topbar__tab-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .studio-app .studio-type-glyph {
     width: 18px;
     height: 18px;

@@ -140,6 +140,36 @@ function matchesPreviewSourceIdentity(
   );
 }
 
+function FileTabStrip({
+  files,
+  activeFile,
+  onSelectFile
+}: {
+  files: WorkspaceFile[];
+  activeFile: string | undefined;
+  onSelectFile: (path: string) => void;
+}) {
+  const userFiles = files.filter((f) => !f.readOnly);
+  if (userFiles.length === 0) return null;
+
+  return (
+    <div className="studio-topbar__tabs">
+      {userFiles.map((f) => (
+        <button
+          key={f.path}
+          type="button"
+          className={`studio-topbar__tab ${f.path === activeFile ? 'is-active' : ''}`}
+          onClick={() => onSelectFile(f.path)}
+          title={f.path}
+        >
+          <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
+          <span className="studio-topbar__tab-name">{f.name}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function EditorPage({
   models,
   parsedModels,
@@ -1121,6 +1151,7 @@ export function EditorPage({
             <ChevronDown className="size-3" />
           </button>
         </div>
+        <FileTabStrip files={files} activeFile={activeEditorFile} onSelectFile={openFileInSource} />
         <div className="studio-topbar__right">
           <button type="button" className="studio-topbar__cmdk" aria-label="Search">
             <Search className="size-3.5" />
