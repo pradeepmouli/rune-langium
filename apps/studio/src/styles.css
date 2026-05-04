@@ -424,6 +424,160 @@
     > .dv-sash:not(.disabled):active::after {
     transform: translateY(-50%) scaleY(1.35);
   }
+
+  /* ─── Top bar ────────────────────────────────────────────────────── */
+
+  .studio-app .studio-topbar {
+    height: 44px;
+    background: var(--background);
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px 0 8px;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-topbar__left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .studio-app .studio-topbar__right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-topbar__divider {
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+    margin: 0 2px;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-topbar__ws-btn {
+    appearance: none;
+    border: 0.5px solid var(--border);
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 8px 0 10px;
+    border-radius: var(--radius);
+    color: var(--foreground);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .studio-app .studio-topbar__ws-btn:hover {
+    background: var(--accent);
+  }
+
+  .studio-app .studio-topbar__ws-sub {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-family: var(--font-mono);
+  }
+
+  .studio-app .studio-topbar__cmdk {
+    appearance: none;
+    border: 0.5px solid var(--border);
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 6px 0 9px;
+    border-radius: var(--radius);
+    color: var(--muted-foreground);
+    width: 260px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .studio-app .studio-topbar__cmdk:hover {
+    border-color: var(--ring);
+  }
+
+  .studio-app .studio-topbar__cmdk span {
+    flex: 1;
+    text-align: left;
+  }
+
+  .studio-app .studio-topbar__cmdk kbd {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 0.5px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--muted-foreground);
+  }
+
+  .studio-app .studio-topbar__icon-btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+
+  .studio-app .studio-topbar__icon-btn:hover {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+
+  .studio-app .studio-topbar__generate {
+    appearance: none;
+    border: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    cursor: pointer;
+    box-shadow:
+      0 0 0 0.5px color-mix(in oklch, var(--primary), transparent 60%),
+      0 6px 18px -6px color-mix(in oklch, var(--primary), transparent 50%);
+  }
+
+  .studio-app .studio-topbar__generate:hover {
+    filter: brightness(1.1);
+  }
+
+  .studio-app .studio-topbar__avatar {
+    appearance: none;
+    border: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--color-enum), var(--color-data));
+    color: var(--primary-foreground);
+    font-weight: 700;
+    font-size: 11px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+  }
 }
 
 /* ---------- Namespace Explorer ---------- */

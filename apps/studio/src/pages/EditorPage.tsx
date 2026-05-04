@@ -49,7 +49,19 @@ import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import { Maximize2, LayoutGrid, Code2, Network, XCircle } from 'lucide-react';
+import {
+  Maximize2,
+  LayoutGrid,
+  Code2,
+  Network,
+  XCircle,
+  Check,
+  Download,
+  Share2,
+  Zap,
+  Search,
+  ChevronDown
+} from 'lucide-react';
 import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { DockShell } from '../shell/DockShell.js';
 import type { WorkspaceFile } from '../services/workspace.js';
@@ -1080,57 +1092,45 @@ export function EditorPage({
       onKeyDown={handleEditorPageKeyDown}
       tabIndex={-1}
     >
-      <header
-        className="glass-header studio-app-header--compact flex flex-wrap items-center justify-between gap-3 px-3 py-2"
-        aria-label="Studio workspace header"
-      >
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="studio-topbar" aria-label="Studio workspace header">
+        <div className="studio-topbar__left">
           <div className="studio-brand">
             <div className="studio-brand__mark">R</div>
             <span className="studio-brand__name">Rune Studio</span>
           </div>
-          <Separator orientation="vertical" className="hidden h-5 sm:block" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-foreground">
-              {workspaceName || 'Untitled workspace'}
-            </div>
-            <div className="text-xs text-muted-foreground">
+          <span className="studio-topbar__divider" />
+          <button type="button" className="studio-topbar__ws-btn">
+            <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
+            <span className="studio-topbar__ws-sub">
               {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
-            </div>
-          </div>
+            </span>
+            <ChevronDown className="size-3" />
+          </button>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <ExportMenu
-            getSerializedFiles={getSerializedFiles}
-            exportImage={handleExportImage}
-            hasModels={models.length > 0}
-          />
-          <Separator orientation="vertical" className="mx-1 h-5" />
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowExportDialog(true)}
-            disabled={models.length === 0}
-            title="Generate code from model"
-          >
-            <Code2 className="w-3.5 h-3.5 mr-1" />
-            Export Code
-          </Button>
-          {onClose && (
-            <>
-              <Separator orientation="vertical" className="mx-1 h-5" />
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={onClose}
-                title="Close all files"
-                aria-label="Close workspace"
-              >
-                <XCircle className="w-3.5 h-3.5 mr-1" />
-                Close
-              </Button>
-            </>
-          )}
+        <div className="studio-topbar__right">
+          <button type="button" className="studio-topbar__cmdk" aria-label="Search">
+            <Search className="size-3.5" />
+            <span>Search types, files, commands…</span>
+            <kbd>⌘K</kbd>
+          </button>
+          <span className="studio-topbar__divider" />
+          <button type="button" className="studio-topbar__icon-btn" aria-label="Validate">
+            <Check className="size-4" />
+          </button>
+          <button type="button" className="studio-topbar__icon-btn" aria-label="Export code">
+            <Download className="size-4" />
+          </button>
+          <button type="button" className="studio-topbar__icon-btn" aria-label="Share">
+            <Share2 className="size-4" />
+          </button>
+          <button type="button" className="studio-topbar__generate">
+            <Zap className="size-3.5" />
+            Generate
+          </button>
+          <span className="studio-topbar__divider" />
+          <button type="button" className="studio-topbar__avatar" aria-label="Account">
+            PM
+          </button>
         </div>
       </header>
 
