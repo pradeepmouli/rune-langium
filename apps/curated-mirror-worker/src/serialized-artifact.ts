@@ -57,7 +57,9 @@ export async function buildSerializedWorkspaceArtifact(
       path: rosettaFiles[index]!.path,
       modelJson: serializer.serialize(document.parseResult.value, {
         refText: true,
-        textRegions: true
+        textRegions: true,
+        replacer: (key, value, defaultReplacer) =>
+          typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value)
       })
     }))
   };

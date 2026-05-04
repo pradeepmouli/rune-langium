@@ -1,0 +1,58 @@
+name: Curated Serialized Artifacts
+
+# Build pre-parsed Langium artifacts for curated models (CDM, FpML, rune-dsl).
+#
+# The curated-mirror Worker's nightly cron handles archive mirroring but OOMs
+# when parsing CDM through Langium for the serialized artifact. This workflow
+# runs with 4GB+ heap in CI and uploads the artifacts to R2 afterward.
+#
+# Triggers:
+#   - Nightly at 04:00 UTC (1 hour after the archive mirror cron at 03:00)
+#   - Manual dispatch
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.32.0
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build core (required for Langium services)
+        run: pnpm --filter '@rune-langium/core...' run build
+
+      - name: Build serialized artifacts
+        run: node --max-old-space-size=4096 scripts/build-serialized-artifacts.mjs
+
+      - name: Upload artifacts to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/upload-serialized-artifacts.sh
+
+      - name: Upload build output as workflow artifact (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: curated-artifacts-meta
+          path: dist/curated-artifacts/*/artifact-meta.json
+          retention-days: 7
