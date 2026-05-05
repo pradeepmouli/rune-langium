@@ -413,10 +413,10 @@ export function EditorPage({
       }
     }
 
-    // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2)
-    const docUri = (nodeData as any)?.$container?.$document?.uri?.toString();
-    if (docUri) {
-      void linkDocument(docUri);
+    // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
+    // Use the resolved file path (not $container.$document which is stripped by postMessage).
+    if (filePath) {
+      void linkDocument(pathToUri(filePath));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);

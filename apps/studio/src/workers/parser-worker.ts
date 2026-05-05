@@ -67,6 +67,12 @@ const { RuneDsl } = createRuneDslServices();
 const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
 const builder = RuneDsl.shared.workspace.DocumentBuilder;
 
+// Track the active Langium services used by the most recent parseWorkspace.
+// When serialized payloads are used, a fresh services instance is created —
+// linkDocument must use the same instance to find its documents.
+let activeBuilder: typeof builder = builder;
+let activeLangiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
@@ -190,9 +196,13 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
           documents: await Promise.all(
             req.files.map((file) => factory.fromString(file.content, URI.parse(file.name)))
           ),
-          builder
+          builder,
+          langiumDocs: RuneDsl.shared.workspace.LangiumDocuments
         };
     await workspace.builder.build(workspace.documents, { validation: false, eagerLinking: false });
+    // Track the active services so linkDocument can find documents from this parse.
+    activeBuilder = workspace.builder;
+    activeLangiumDocs = workspace.langiumDocs;
     const models: RosettaModel[] = [];
     const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
 
@@ -238,17 +248,16 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
 async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumentResponse> {
   try {
     const targetUri = URI.parse(req.uri);
-    const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
 
-    if (!langiumDocs.hasDocument(targetUri)) {
+    if (!activeLangiumDocs.hasDocument(targetUri)) {
       return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [] };
     }
 
-    const doc = langiumDocs.getDocument(targetUri);
+    const doc = activeLangiumDocs.getDocument(targetUri);
     if (!doc) {
       return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [] };
     }
-    await builder.build([doc], { validation: false, eagerLinking: true });
+    await activeBuilder.build([doc], { validation: false, eagerLinking: true });
 
     const errors: string[] = [];
     for (const diag of doc.diagnostics ?? []) {
@@ -270,6 +279,7 @@ async function buildWorkspaceDocumentsFromSerializedPayload(
 ): Promise<{
   documents: LangiumDocument<AstNode>[];
   builder: typeof builder;
+  langiumDocs: typeof RuneDsl.shared.workspace.LangiumDocuments;
 }> {
   const { RuneDsl: localRuneDsl } = createRuneDslServices();
   const localFactory = localRuneDsl.shared.workspace.LangiumDocumentFactory;
@@ -292,7 +302,7 @@ async function buildWorkspaceDocumentsFromSerializedPayload(
     localDocuments.addDocument(document);
   }
 
-  return { documents, builder: localBuilder };
+  return { documents, builder: localBuilder, langiumDocs: localDocuments };
 }
 
 // ---------------------------------------------------------------------------
