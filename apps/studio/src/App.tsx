@@ -20,6 +20,7 @@ import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
+import { useEditorStore } from '@rune-langium/visual-editor';
 import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
@@ -116,6 +117,14 @@ export function App() {
       setWorkspaceNotice(
         result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null
       );
+      // Register deferred corpus types as graph nodes via the editor store.
+      // These are index-only entries — no full AST, just { type, name, namespace }.
+      if (result.deferredExports?.length) {
+        // Defer to next tick so loadModels (triggered by setModels) runs first.
+        setTimeout(() => {
+          useEditorStore.getState().loadDeferredExports(result.deferredExports!);
+        }, 0);
+      }
     },
     []
   );

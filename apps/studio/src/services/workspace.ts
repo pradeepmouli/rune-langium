@@ -72,6 +72,11 @@ export interface ParseWorkspaceFilesResult {
   errors: Map<string, string[]>;
   parseMode: ParseMode;
   fallbackMessage?: string;
+  deferredExports?: Array<{
+    filePath: string;
+    namespace: string;
+    exports: Array<{ type: string; name: string }>;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -334,7 +339,8 @@ export async function parseWorkspaceFiles(
       models: response.models,
       parsedModels: response.parsedModels,
       errors: errMap,
-      parseMode: 'worker'
+      parseMode: 'worker',
+      deferredExports: response.deferredExports
     };
   } catch (error) {
     // Fallback to main thread

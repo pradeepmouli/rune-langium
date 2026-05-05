@@ -97,9 +97,17 @@ export interface EditorState {
   visibility: VisibilityState;
 }
 
+export interface DeferredExportEntry {
+  filePath: string;
+  namespace: string;
+  exports: Array<{ type: string; name: string }>;
+}
+
 export interface EditorActions {
   // --- Data loading ---
   loadModels(models: unknown | unknown[], layoutOpts?: LayoutOptions): void;
+  /** Register deferred corpus types as graph nodes without full AST models. */
+  loadDeferredExports(entries: DeferredExportEntry[]): void;
 
   // --- Navigation ---
   selectNode(nodeId: string | null): void;
@@ -466,6 +474,50 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
             }
           });
+        },
+
+        loadDeferredExports(entries) {
+          if (entries.length === 0) return;
+          const existing = get().nodes;
+          const existingIds = new Set(existing.map((n) => n.id));
+          const newNodes: TypeGraphNode[] = [];
+
+          for (const entry of entries) {
+            for (const exp of entry.exports) {
+              const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type] ?? 'data';
+              const nodeId = `${entry.namespace}::${exp.name}`;
+              if (existingIds.has(nodeId)) continue;
+              newNodes.push({
+                id: nodeId,
+                type: nodeType,
+                position: { x: 0, y: 0 },
+                data: {
+                  $type: exp.type,
+                  name: exp.name,
+                  namespace: entry.namespace,
+                  position: { x: 0, y: 0 },
+                  errors: [],
+                  isReadOnly: true,
+                  hasExternalRefs: false
+                } as unknown as AnyGraphNode
+              });
+            }
+          }
+
+          if (newNodes.length > 0) {
+            const allNodes = [...existing, ...newNodes];
+            const allNamespaces = new Set(allNodes.map((n) => n.data.namespace));
+            const shouldCollapse = allNodes.length > LARGE_MODEL_THRESHOLD;
+            set((state) => ({
+              nodes: allNodes,
+              visibility: {
+                ...state.visibility,
+                expandedNamespaces: shouldCollapse
+                  ? state.visibility.expandedNamespaces
+                  : new Set([...state.visibility.expandedNamespaces, ...allNamespaces])
+              }
+            }));
+          }
         },
 
         // -----------------------------------------------------------------------

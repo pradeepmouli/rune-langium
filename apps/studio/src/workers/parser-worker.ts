@@ -54,12 +54,19 @@ export interface ParseResponse {
   errors: string[];
 }
 
+export interface DeferredExportEntry {
+  filePath: string;
+  namespace: string;
+  exports: Array<{ type: string; name: string }>;
+}
+
 export interface ParseWorkspaceResponse {
   type: 'parseWorkspaceResult';
   id: string;
   models: RosettaModel[];
   parsedModels: Array<{ filePath: string; model: RosettaModel }>;
   errors: Record<string, string[]>;
+  deferredExports: DeferredExportEntry[];
 }
 
 export type WorkerResponse = ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse;
@@ -122,9 +129,17 @@ export function isParseWorkspaceResponse(value: unknown): value is ParseWorkspac
   if (!isRecord(value.errors)) {
     return false;
   }
-  return Object.values(value.errors).every(
-    (entry) => Array.isArray(entry) && entry.every((message) => typeof message === 'string')
-  );
+  if (
+    !Object.values(value.errors).every(
+      (entry) => Array.isArray(entry) && entry.every((message) => typeof message === 'string')
+    )
+  ) {
+    return false;
+  }
+  if (!Array.isArray(value.deferredExports)) {
+    return false;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +212,14 @@ async function handleParse(req: ParseRequest): Promise<ParseResponse> {
 async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWorkspaceResponse> {
   const errors: Record<string, string[]> = {};
   if (req.files.length === 0) {
-    return { type: 'parseWorkspaceResult', id: req.id, models: [], parsedModels: [], errors };
+    return {
+      type: 'parseWorkspaceResult',
+      id: req.id,
+      models: [],
+      parsedModels: [],
+      errors,
+      deferredExports: []
+    };
   }
 
   try {
@@ -207,6 +229,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
     const documents: LangiumDocument<AstNode>[] = [];
     const models: RosettaModel[] = [];
     const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+    const deferredExports: DeferredExportEntry[] = [];
 
     // Clear stale state from previous workspace load — both deferred blobs
     // and index entries registered via registerExports. Without this, symbols
@@ -221,8 +244,6 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
 
       if (file.serializedModelJson && file.exports?.length) {
         // Corpus file with exports manifest — register index only, defer AST deserialization.
-        // Build a skeleton RosettaModel with just element stubs so the UI can
-        // render graph nodes and explorer rows without full deserialization.
         const descriptions = file.exports.map((exp) => ({
           type: exp.type,
           name: exp.name,
@@ -232,15 +253,15 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
         indexManager.registerExports(uri, descriptions);
         deferredModelJson.set(uri.toString(), file.serializedModelJson);
 
-        // Emit a skeleton model so the graph/explorer can render nodes.
-        // astToModel only needs { $type, name } per element.
-        const skeleton = {
-          $type: 'RosettaModel',
-          name: file.content.match(/^\s*namespace\s+([\w.]+)/m)?.[1] ?? '',
-          elements: file.exports.map((exp) => ({ $type: exp.type, name: exp.name }))
-        } as unknown as RosettaModel;
-        models.push(skeleton);
-        parsedModels.push({ filePath: file.name, model: skeleton });
+        // Emit deferred exports so the UI can populate the graph/explorer
+        // without a full RosettaModel. The editor store creates nodes
+        // directly from these entries.
+        const ns = file.content.match(/^\s*namespace\s+([\w.]+)/m)?.[1] ?? '';
+        deferredExports.push({
+          filePath: file.name,
+          namespace: ns,
+          exports: file.exports.map((exp) => ({ type: exp.type, name: exp.name }))
+        });
       } else if (file.serializedModelJson) {
         // Corpus file WITHOUT exports (old artifact format) — deserialize fully
         const model = serializer.deserialize<RosettaModel>(file.serializedModelJson);
@@ -289,7 +310,14 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
       }
     }
 
-    return { type: 'parseWorkspaceResult', id: req.id, models, parsedModels, errors };
+    return {
+      type: 'parseWorkspaceResult',
+      id: req.id,
+      models,
+      parsedModels,
+      errors,
+      deferredExports
+    };
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('[parser-worker] parseWorkspace failed', {
@@ -307,7 +335,8 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
       parsedModels: [],
       errors: {
         __worker__: [detail]
-      }
+      },
+      deferredExports: []
     };
   }
 }

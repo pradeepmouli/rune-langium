@@ -222,12 +222,12 @@ describe('parser-worker', () => {
     // User file must be parsed normally
     expect(fromStringMock).toHaveBeenCalledWith('namespace local', 'local.rosetta');
 
-    // Both corpus skeleton and user file appear in parsedModels
+    // Only user file appears in parsedModels — corpus is index-only
     expect(response.type).toBe('parseWorkspaceResult');
-    expect(response.parsedModels.map((m) => m.filePath)).toEqual([
-      '[cdm]/types.rosetta',
-      'local.rosetta'
-    ]);
+    expect(response.parsedModels.map((m) => m.filePath)).toEqual(['local.rosetta']);
+    // Deferred exports carry the corpus type info for the graph/explorer
+    expect(response.deferredExports).toHaveLength(1);
+    expect(response.deferredExports[0]!.exports[0]!.name).toBe('Party');
   });
 
   it('on-demand deserializes a deferred corpus document when linkDocument is called', async () => {
