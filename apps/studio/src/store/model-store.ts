@@ -172,18 +172,20 @@ function buildArchiveLoader(
     }
 
     const serializedByPath = new Map(
-      result.serializedWorkspace?.documents.map((document) => [
-        document.path,
-        document.modelJson
-      ]) ?? []
+      result.serializedWorkspace?.documents.map((document) => [document.path, document]) ?? []
     );
     const serializedFiles =
       serializedByPath.size === 0
         ? files
-        : files.map((file) => ({
-            ...file,
-            serializedModelJson: serializedByPath.get(file.path)
-          }));
+        : files.map((file) => {
+            const doc = serializedByPath.get(file.path);
+            if (!doc) return file;
+            return {
+              ...file,
+              serializedModelJson: doc.modelJson,
+              exports: doc.exports
+            };
+          });
 
     return {
       source,

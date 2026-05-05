@@ -33,8 +33,10 @@ const getDocumentMock = vi.fn((_uri: unknown) => ({
   diagnostics: [],
   parseResult: { value: { $type: 'RosettaModel', elements: [] }, parserErrors: [] }
 }));
+const registerExportsMock = vi.fn();
 
 vi.mock('@rune-langium/core', () => ({
+  RuneDslIndexManager: class {},
   createRuneDslServices: () => ({
     RuneDsl: {
       serializer: {
@@ -48,7 +50,8 @@ vi.mock('@rune-langium/core', () => ({
             addDocument: addDocumentMock,
             hasDocument: hasDocumentMock,
             getDocument: getDocumentMock
-          }
+          },
+          IndexManager: { registerExports: registerExportsMock }
         }
       }
     }
@@ -77,6 +80,7 @@ describe('parser-worker', () => {
     hasDocumentMock.mockReset();
     hasDocumentMock.mockReturnValue(false);
     getDocumentMock.mockClear();
+    registerExportsMock.mockClear();
   });
 
   afterEach(() => {
@@ -157,7 +161,7 @@ describe('parser-worker', () => {
     });
   });
 
-  it('reuses serialized model payloads via JsonSerializer and fromModel', async () => {
+  it('deserializes corpus files without exports via JsonSerializer and fromModel (old artifact format)', async () => {
     const hydratedModel = { $type: 'RosettaModel', elements: [], hydrated: true };
     deserializeMock.mockReturnValue(hydratedModel);
 
@@ -171,6 +175,7 @@ describe('parser-worker', () => {
           name: '[cdm]/types.rosetta',
           content: 'ignored',
           serializedModelJson: '{"$type":"RosettaModel","elements":[]}'
+          // No exports — old artifact format, deserialize fully
         },
         { name: 'local.rosetta', content: 'namespace local' }
       ]
@@ -178,10 +183,131 @@ describe('parser-worker', () => {
 
     expect(deserializeMock).toHaveBeenCalledWith('{"$type":"RosettaModel","elements":[]}');
     expect(fromModelMock).toHaveBeenCalledWith(hydratedModel, '[cdm]/types.rosetta');
-    expect(addDocumentMock).toHaveBeenCalledTimes(2);
+    expect(addDocumentMock).toHaveBeenCalledTimes(1);
     expect(fromStringMock).toHaveBeenCalledWith('namespace local', 'local.rosetta');
+    expect(registerExportsMock).not.toHaveBeenCalled();
     expect(response.type).toBe('parseWorkspaceResult');
     expect(response.models[0]).toBe(hydratedModel);
+  });
+
+  it('defers AST deserialization for corpus files that carry an exports manifest', async () => {
+    const { handleParseWorkspace } = await loadParserWorkerModule();
+
+    const response = await handleParseWorkspace({
+      type: 'parseWorkspace',
+      id: 'workspace-deferred',
+      files: [
+        {
+          name: '[cdm]/types.rosetta',
+          content: 'ignored',
+          serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
+          exports: [{ type: 'RosettaType', name: 'Party', path: '/elements/0' }]
+        },
+        { name: 'local.rosetta', content: 'namespace local' }
+      ]
+    });
+
+    // Corpus file with exports — must NOT deserialize, must register exports
+    expect(deserializeMock).not.toHaveBeenCalled();
+    expect(fromModelMock).not.toHaveBeenCalled();
+    expect(registerExportsMock).toHaveBeenCalledWith('[cdm]/types.rosetta', [
+      {
+        type: 'RosettaType',
+        name: 'Party',
+        documentUri: '[cdm]/types.rosetta',
+        path: '/elements/0'
+      }
+    ]);
+
+    // User file must be parsed normally
+    expect(fromStringMock).toHaveBeenCalledWith('namespace local', 'local.rosetta');
+
+    // Only user file ends up in models (corpus deferred)
+    expect(response.type).toBe('parseWorkspaceResult');
+    expect(response.parsedModels.map((m) => m.filePath)).toEqual(['local.rosetta']);
+  });
+
+  it('on-demand deserializes a deferred corpus document when linkDocument is called', async () => {
+    const hydratedModel = { $type: 'RosettaModel', elements: [], hydrated: true };
+    deserializeMock.mockReturnValue(hydratedModel);
+
+    const { handleParseWorkspace, handleLinkDocument } = await loadParserWorkerModule();
+
+    // First load workspace with a deferred corpus file
+    await handleParseWorkspace({
+      type: 'parseWorkspace',
+      id: 'ws-deferred',
+      files: [
+        {
+          name: '[cdm]/types.rosetta',
+          content: 'ignored',
+          serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
+          exports: [{ type: 'RosettaType', name: 'Party', path: '/elements/0' }]
+        }
+      ]
+    });
+
+    // Deserialize should not have been called yet
+    expect(deserializeMock).not.toHaveBeenCalled();
+    expect(fromModelMock).not.toHaveBeenCalled();
+
+    // Now link the deferred document — triggers on-demand deserialization
+    const linkResult = await handleLinkDocument({
+      type: 'linkDocument',
+      id: 'link-deferred',
+      uri: '[cdm]/types.rosetta'
+    });
+
+    expect(deserializeMock).toHaveBeenCalledWith('{"$type":"RosettaModel","elements":[]}');
+    expect(fromModelMock).toHaveBeenCalledWith(hydratedModel, '[cdm]/types.rosetta');
+    expect(addDocumentMock).toHaveBeenCalledTimes(1);
+    expect(buildMock).toHaveBeenLastCalledWith(
+      [
+        expect.objectContaining({
+          parseResult: { value: hydratedModel, lexerErrors: [], parserErrors: [] }
+        })
+      ],
+      { validation: false, eagerLinking: true }
+    );
+    expect(linkResult.linked).toBe(true);
+    expect(linkResult.type).toBe('linkDocumentResult');
+  });
+
+  it('does not deserialize a deferred document twice if linkDocument is called again', async () => {
+    const hydratedModel = { $type: 'RosettaModel', elements: [] };
+    deserializeMock.mockReturnValue(hydratedModel);
+
+    const fakeDoc = {
+      diagnostics: [],
+      parseResult: { value: hydratedModel, lexerErrors: [], parserErrors: [] }
+    };
+    fromModelMock.mockReturnValue(fakeDoc);
+
+    const { handleParseWorkspace, handleLinkDocument } = await loadParserWorkerModule();
+
+    await handleParseWorkspace({
+      type: 'parseWorkspace',
+      id: 'ws-once',
+      files: [
+        {
+          name: '[cdm]/types.rosetta',
+          content: 'ignored',
+          serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
+          exports: [{ type: 'RosettaType', name: 'Party', path: '/elements/0' }]
+        }
+      ]
+    });
+
+    // First linkDocument — triggers deserialization and removes from deferred map
+    await handleLinkDocument({ type: 'linkDocument', id: 'link-1', uri: '[cdm]/types.rosetta' });
+    expect(deserializeMock).toHaveBeenCalledTimes(1);
+
+    // Second call — document is now in activeLangiumDocs (or returns linked:false if not tracked)
+    // Either way, deserialize must NOT be called again
+    hasDocumentMock.mockReturnValue(true);
+    getDocumentMock.mockReturnValue(fakeDoc);
+    await handleLinkDocument({ type: 'linkDocument', id: 'link-2', uri: '[cdm]/types.rosetta' });
+    expect(deserializeMock).toHaveBeenCalledTimes(1);
   });
 
   it('links a single document on demand after lazy workspace parse', async () => {

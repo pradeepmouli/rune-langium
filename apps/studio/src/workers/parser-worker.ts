@@ -9,7 +9,7 @@
  * and returns parsed results.
  */
 
-import { createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import { createRuneDslServices, RuneDslIndexManager, type RosettaModel } from '@rune-langium/core';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { URI, type AstNode, type LangiumDocument } from 'langium';
 
@@ -28,6 +28,7 @@ export interface ParseWorkspaceRequest {
     name: string;
     content: string;
     serializedModelJson?: CuratedSerializedDocument['modelJson'];
+    exports?: Array<{ type: string; name: string; path: string }>;
   }>;
 }
 
@@ -68,10 +69,19 @@ const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
 const builder = RuneDsl.shared.workspace.DocumentBuilder;
 
 // Track the active Langium services used by the most recent parseWorkspace.
-// When serialized payloads are used, a fresh services instance is created —
-// linkDocument must use the same instance to find its documents.
+// Both corpus and user files now share the same RuneDsl services instance so
+// cross-references between them resolve through a unified IndexManager.
 let activeBuilder: typeof builder = builder;
 let activeLangiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
+
+// Module-level map: URI string → modelJson blob for on-demand deserialization.
+// Populated during parseWorkspace for corpus files that have an exports manifest;
+// cleared at the start of each workspace load.
+const deferredModelJson = new Map<string, string>();
+
+function getIndexManager(): RuneDslIndexManager {
+  return RuneDsl.shared.workspace.IndexManager as RuneDslIndexManager;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
@@ -187,36 +197,68 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
   }
 
   try {
-    const hasSerializedModels = req.files.some(
-      (file) => typeof file.serializedModelJson === 'string'
-    );
-    const workspace = hasSerializedModels
-      ? await buildWorkspaceDocumentsFromSerializedPayload(req.files)
-      : {
-          documents: await Promise.all(
-            req.files.map((file) => factory.fromString(file.content, URI.parse(file.name)))
-          ),
-          builder,
-          langiumDocs: RuneDsl.shared.workspace.LangiumDocuments
-        };
-    await workspace.builder.build(workspace.documents, { validation: false, eagerLinking: false });
-    // Track the active services so linkDocument can find documents from this parse.
-    activeBuilder = workspace.builder;
-    activeLangiumDocs = workspace.langiumDocs;
+    const indexManager = getIndexManager();
+    const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
+    const serializer = RuneDsl.serializer.JsonSerializer;
+    const documents: LangiumDocument<AstNode>[] = [];
     const models: RosettaModel[] = [];
     const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
 
-    for (let i = 0; i < workspace.documents.length; i++) {
-      const document = workspace.documents[i]!;
-      const file = req.files[i]!;
+    // Clear deferred blobs from previous workspace load
+    deferredModelJson.clear();
+
+    for (const file of req.files) {
+      const uri = URI.parse(file.name);
+
+      if (file.serializedModelJson && file.exports?.length) {
+        // Corpus file with exports manifest — register index only, defer AST deserialization
+        const descriptions = file.exports.map((exp) => ({
+          type: exp.type,
+          name: exp.name,
+          documentUri: uri,
+          path: exp.path
+        }));
+        indexManager.registerExports(uri, descriptions);
+        deferredModelJson.set(uri.toString(), file.serializedModelJson);
+        // Do not create a document or add to documents array
+      } else if (file.serializedModelJson) {
+        // Corpus file WITHOUT exports (old artifact format) — deserialize fully
+        const model = serializer.deserialize<RosettaModel>(file.serializedModelJson);
+        const doc = factory.fromModel(model, uri);
+        langiumDocs.addDocument(doc);
+        documents.push(doc);
+      } else {
+        // User file — parse from source text
+        const doc = factory.fromString(file.content, uri);
+        documents.push(doc);
+      }
+    }
+
+    // Build all parsed/deserialized documents with lazy linking
+    if (documents.length > 0) {
+      await builder.build(documents, { validation: false, eagerLinking: false });
+    }
+
+    // Track the active services so linkDocument can find documents from this parse
+    activeBuilder = builder;
+    activeLangiumDocs = langiumDocs;
+
+    // Collect models from built documents
+    for (const document of documents) {
       const model = document.parseResult.value as RosettaModel;
       if (model) {
         preserveCstText(model);
         models.push(model);
-        parsedModels.push({ filePath: file.name, model });
+        const docUri = document.uri?.toString();
+        const matchingFile = req.files.find((f) => URI.parse(f.name).toString() === docUri);
+        if (matchingFile) {
+          parsedModels.push({ filePath: matchingFile.name, model });
+        }
       }
       if (document.parseResult.parserErrors.length > 0) {
-        errors[file.name] = document.parseResult.parserErrors.map(
+        const docUri = document.uri?.toString() ?? '';
+        const matchingFile = req.files.find((f) => URI.parse(f.name).toString() === docUri);
+        errors[matchingFile?.name ?? docUri] = document.parseResult.parserErrors.map(
           (e: { message: string }) => e.message
         );
       }
@@ -249,6 +291,25 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
   try {
     const targetUri = URI.parse(req.uri);
 
+    // Check if this is a deferred corpus document that has not been deserialized yet
+    const deferredJson = deferredModelJson.get(targetUri.toString());
+    if (deferredJson) {
+      // On-demand deserialization — first access of this corpus document
+      const serializer = RuneDsl.serializer.JsonSerializer;
+      const model = serializer.deserialize<RosettaModel>(deferredJson);
+      const doc = factory.fromModel(model, targetUri);
+      activeLangiumDocs.addDocument(doc);
+      deferredModelJson.delete(targetUri.toString()); // Prevent re-deserialization
+      await activeBuilder.build([doc], { validation: false, eagerLinking: true });
+
+      const errors: string[] = [];
+      for (const diag of doc.diagnostics ?? []) {
+        errors.push(diag.message);
+      }
+      return { type: 'linkDocumentResult', id: req.id, linked: true, errors };
+    }
+
+    // Regular document (already parsed and registered during workspace load)
     if (!activeLangiumDocs.hasDocument(targetUri)) {
       return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [] };
     }
@@ -272,37 +333,6 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
       errors: [(error as Error).message]
     };
   }
-}
-
-async function buildWorkspaceDocumentsFromSerializedPayload(
-  files: ParseWorkspaceRequest['files']
-): Promise<{
-  documents: LangiumDocument<AstNode>[];
-  builder: typeof builder;
-  langiumDocs: typeof RuneDsl.shared.workspace.LangiumDocuments;
-}> {
-  const { RuneDsl: localRuneDsl } = createRuneDslServices();
-  const localFactory = localRuneDsl.shared.workspace.LangiumDocumentFactory;
-  const localDocuments = localRuneDsl.shared.workspace.LangiumDocuments;
-  const localSerializer = localRuneDsl.serializer.JsonSerializer;
-  const localBuilder = localRuneDsl.shared.workspace.DocumentBuilder;
-
-  const documents = await Promise.all(
-    files.map((file) => {
-      const uri = URI.parse(file.name);
-      if (file.serializedModelJson) {
-        const model = localSerializer.deserialize<RosettaModel>(file.serializedModelJson);
-        return localFactory.fromModel(model, uri);
-      }
-      return localFactory.fromString(file.content, uri);
-    })
-  );
-
-  for (const document of documents) {
-    localDocuments.addDocument(document);
-  }
-
-  return { documents, builder: localBuilder, langiumDocs: localDocuments };
 }
 
 // ---------------------------------------------------------------------------

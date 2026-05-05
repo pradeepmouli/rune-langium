@@ -30,6 +30,12 @@ export interface WorkspaceFile {
   readOnly?: boolean;
   /** Optional precomputed serialized Langium model JSON used by the parser worker. */
   serializedModelJson?: CuratedSerializedDocument['modelJson'];
+  /**
+   * Optional exports manifest for deferred deserialization (ADR 007 Phase 4).
+   * When present alongside serializedModelJson, the parser worker registers
+   * these symbols in the IndexManager without deserializing the full AST.
+   */
+  exports?: Array<{ type: string; name: string; path: string }>;
 }
 
 export interface WorkspaceLoadProgress {
@@ -313,7 +319,8 @@ export async function parseWorkspaceFiles(
       files: files.map((f) => ({
         name: f.path,
         content: f.content,
-        serializedModelJson: f.serializedModelJson
+        serializedModelJson: f.serializedModelJson,
+        exports: f.exports
       }))
     });
     if (response.errors.__worker__?.length) {
@@ -498,7 +505,8 @@ export function mergeModelFiles(
     content: f.content,
     dirty: false,
     readOnly: true,
-    serializedModelJson: f.serializedModelJson
+    serializedModelJson: f.serializedModelJson,
+    exports: f.exports
   }));
 
   return [...userFiles, ...modelFiles];

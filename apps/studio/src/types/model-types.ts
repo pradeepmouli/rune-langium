@@ -56,6 +56,12 @@ export interface CachedFile {
   namespace: string;
   /** Optional precomputed serialized Langium model JSON for curated artifacts. */
   serializedModelJson?: CuratedSerializedDocument['modelJson'];
+  /**
+   * Optional exports manifest for deferred deserialization (ADR 007 Phase 4).
+   * When present alongside serializedModelJson, the worker registers these
+   * symbols in the IndexManager without deserializing the full AST.
+   */
+  exports?: Array<{ type: string; name: string; path: string }>;
 }
 
 /** Progress events yielded during model loading. */
