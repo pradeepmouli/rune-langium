@@ -49,6 +49,7 @@ export function SourceView({ files, activeFile, onFileSelect }: SourceViewProps)
             }`}
             onClick={() => handleFileSelect(file.path)}
             title={file.path}
+            type="button"
           >
             {file.name}
             {file.dirty && <span className="studio-source-view__dirty"> ●</span>}

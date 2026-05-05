@@ -21,6 +21,8 @@ import { RuneDslScopeComputation } from './rune-dsl-scope-computation.js';
 import { RuneDslValidator } from './rune-dsl-validator.js';
 import { createRuneDslParser } from './rune-dsl-parser.js';
 import { RuneDslIndexManager } from './rune-dsl-index-manager.js';
+import { RuneDslLinker, type DeferredModelProvider } from './rune-dsl-linker.js';
+export type { DeferredModelProvider } from './rune-dsl-linker.js';
 
 /**
  * Shared services module that overrides Langium's default IndexManager with
@@ -140,7 +142,10 @@ export const RuneDslModule: Module<LangiumCoreServices, PartialLangiumCoreServic
  *
  * @category Core
  */
-export function createRuneDslServices(context: DefaultSharedCoreModuleContext = EmptyFileSystem): {
+export function createRuneDslServices(
+  context: DefaultSharedCoreModuleContext = EmptyFileSystem,
+  deferredProvider?: DeferredModelProvider
+): {
   shared: LangiumSharedCoreServices;
   RuneDsl: LangiumCoreServices;
 } {
@@ -152,7 +157,12 @@ export function createRuneDslServices(context: DefaultSharedCoreModuleContext = 
   const RuneDsl = inject(
     createDefaultCoreModule({ shared }),
     RuneDslGeneratedModule,
-    RuneDslModule
+    RuneDslModule,
+    {
+      references: {
+        Linker: (services: LangiumCoreServices) => new RuneDslLinker(services, deferredProvider)
+      }
+    }
   );
   shared.ServiceRegistry.register(RuneDsl);
 

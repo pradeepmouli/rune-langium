@@ -155,7 +155,7 @@ vi.mock('../../src/services/workspace.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/services/workspace.js')>();
   return {
     ...actual,
-    linkDocument: vi.fn().mockResolvedValue({ linked: false, errors: [] })
+    linkDocument: vi.fn().mockResolvedValue({ linked: false, errors: [], newModels: [] })
   };
 });
 

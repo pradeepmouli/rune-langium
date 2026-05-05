@@ -30,6 +30,8 @@ export {
 } from './services/rune-dsl-module.js';
 export type { RuneDslServices } from './services/rune-dsl-module.js';
 export { RuneDslIndexManager } from './services/rune-dsl-index-manager.js';
+export { RuneDslLinker } from './services/rune-dsl-linker.js';
+export type { DeferredModelProvider } from './services/rune-dsl-linker.js';
 export { RuneDslScopeProvider } from './services/rune-dsl-scope-provider.js';
 export { RuneDslValidator } from './services/rune-dsl-validator.js';
 export {
