@@ -82,6 +82,7 @@ import {
 } from '../services/codegen-service.js';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
+import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
 import { useCodegenStore } from '../store/codegen-store.js';
 import '../test-api.js';
 import { getRuneStudioTestApi } from '../test-api.js';
@@ -939,54 +940,12 @@ export function EditorPage({
     ]
   );
 
-  const SourceEditorPanelMounted = useCallback(
-    () => (
-      <SourceEditor
-        ref={sourceEditorRef}
-        files={sourceEditorFiles}
-        activeFile={activeEditorFile}
-        lspClient={lspClient}
-        onFileSelect={(path) => setActiveEditorFile(path)}
-        onContentChange={handleSourceChange}
-        onNavigateToNode={navigateToNode}
-        onEditorViewCreated={handleEditorViewCreated}
-      />
-    ),
-    [
-      sourceEditorFiles,
-      activeEditorFile,
-      lspClient,
-      handleSourceChange,
-      navigateToNode,
-      handleEditorViewCreated
-    ]
-  );
+  // workspace.editor and workspace.inspector are rendered inside CenterStackPanel.
+  // These stubs are kept so the dockview component registry remains complete,
+  // but they are not part of the active layout.
+  const SourceEditorPanelMounted = useCallback(() => <div data-testid="panel-editor" />, []);
 
-  const InspectorPanelMounted = useCallback(
-    () => (
-      <EditorFormPanel
-        nodeData={selectedNodeData}
-        nodeId={selectedNodeId}
-        availableTypes={availableTypes}
-        actions={editorActions}
-        allNodes={storeNodes}
-        renderExpressionEditor={renderExpressionEditor}
-        onClose={() => {
-          /* dock collapse handled by dockview */
-        }}
-        onNavigateToNode={navigateToNode}
-      />
-    ),
-    [
-      selectedNodeData,
-      selectedNodeId,
-      availableTypes,
-      editorActions,
-      storeNodes,
-      renderExpressionEditor,
-      navigateToNode
-    ]
-  );
+  const InspectorPanelMounted = useCallback(() => <div data-testid="panel-inspector" />, []);
 
   const ProblemsPanelMounted = useCallback(
     () => (
@@ -1023,7 +982,7 @@ export function EditorPage({
 
   const FormPreviewPanelMounted = useCallback(() => <FormPreviewPanelShell />, []);
 
-  const VisualPreviewPanelMounted = useCallback(
+  const renderGraphPane = useCallback(
     () => (
       <section
         role="region"
@@ -1092,13 +1051,79 @@ export function EditorPage({
       </section>
     ),
     [
+      focusMode,
       groupedLayout,
       handleFitView,
       handleModelChanged,
       handleRelayout,
+      handleToggleFocusMode,
       handleToggleGroupedLayout,
       navigateToNode
     ]
+  );
+
+  const renderSourcePane = useCallback(
+    () => (
+      <div className="flex flex-col min-h-0 h-full">
+        <SourceEditor
+          ref={sourceEditorRef}
+          files={sourceEditorFiles}
+          activeFile={activeEditorFile}
+          lspClient={lspClient}
+          onFileSelect={(path) => setActiveEditorFile(path)}
+          onContentChange={handleSourceChange}
+          onNavigateToNode={navigateToNode}
+          onEditorViewCreated={handleEditorViewCreated}
+        />
+      </div>
+    ),
+    [
+      sourceEditorFiles,
+      activeEditorFile,
+      lspClient,
+      handleSourceChange,
+      navigateToNode,
+      handleEditorViewCreated
+    ]
+  );
+
+  const renderInspectorPane = useCallback(
+    () => (
+      <div className="flex flex-col min-h-0 h-full overflow-auto">
+        <EditorFormPanel
+          nodeData={selectedNodeData}
+          nodeId={selectedNodeId}
+          availableTypes={availableTypes}
+          actions={editorActions}
+          allNodes={storeNodes}
+          renderExpressionEditor={renderExpressionEditor}
+          onClose={() => {
+            /* pane visibility handled by paneswitch */
+          }}
+          onNavigateToNode={navigateToNode}
+        />
+      </div>
+    ),
+    [
+      selectedNodeData,
+      selectedNodeId,
+      availableTypes,
+      editorActions,
+      storeNodes,
+      renderExpressionEditor,
+      navigateToNode
+    ]
+  );
+
+  const VisualPreviewPanelMounted = useCallback(
+    () => (
+      <CenterStackPanel
+        renderGraph={renderGraphPane}
+        renderSource={renderSourcePane}
+        renderInspector={renderInspectorPane}
+      />
+    ),
+    [renderGraphPane, renderSourcePane, renderInspectorPane]
   );
 
   // Memoize the overrides object so DockShell's useMemo([panelComponents])

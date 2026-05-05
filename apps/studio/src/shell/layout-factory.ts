@@ -20,7 +20,6 @@
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import type {
-  CenterStackTabName,
   ExplorerColumn,
   FactoryShape,
   LayoutColumn,
@@ -72,9 +71,6 @@ export interface BuildLayoutInput {
 export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
   const preset = input.preset ?? 'edit';
 
-  const centerActive: CenterStackTabName =
-    preset === 'navigate' ? 'workspace.visualPreview' : 'workspace.editor';
-
   const previewActive = preset === 'preview' ? 'workspace.codePreview' : 'workspace.formPreview';
 
   const explorerColumn: ExplorerColumn = { component: 'workspace.fileTree', size: 248 };
@@ -85,13 +81,9 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
     columns: [
       explorerColumn,
       {
-        active: centerActive,
+        active: 'workspace.visualPreview',
         weight: 3,
-        tabs: [
-          { component: 'workspace.visualPreview' },
-          { component: 'workspace.editor' },
-          { component: 'workspace.inspector' }
-        ]
+        tabs: [{ component: 'workspace.visualPreview' }]
       },
       {
         active: previewActive,

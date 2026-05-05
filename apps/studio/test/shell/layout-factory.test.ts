@@ -10,10 +10,15 @@ import { describe, it, expect } from 'vitest';
 import { buildDefaultLayout, PANEL_COMPONENT_NAMES } from '../../src/shell/layout-factory.js';
 
 describe('buildDefaultLayout (T061)', () => {
-  it('emits all six locked component names', () => {
+  it('emits the layout component names present in the factory shape', () => {
+    // workspace.editor and workspace.inspector are rendered inside CenterStackPanel,
+    // not as separate dockview tabs — so they do not appear in the layout object.
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
     const names = collectComponentNames(layout.dockview);
-    expect([...names].sort()).toEqual([...PANEL_COMPONENT_NAMES].sort());
+    const expectedInLayout = PANEL_COMPONENT_NAMES.filter(
+      (n) => n !== 'workspace.editor' && n !== 'workspace.inspector'
+    );
+    expect([...names].sort()).toEqual([...expectedInLayout].sort());
   });
 
   it('groups Navigate, Edit, Preview, and Utilities surfaces by default', () => {
@@ -23,10 +28,9 @@ describe('buildDefaultLayout (T061)', () => {
     }
 
     expect(collectColumnComponents(layout.dockview.columns[0])).toEqual(['workspace.fileTree']);
+    // Center column is a single-tab group; source and inspector render inside CenterStackPanel
     expect(collectColumnComponents(layout.dockview.columns[1])).toEqual([
-      'workspace.visualPreview',
-      'workspace.editor',
-      'workspace.inspector'
+      'workspace.visualPreview'
     ]);
     expect(collectColumnComponents(layout.dockview.columns[2])).toEqual([
       'workspace.formPreview',
