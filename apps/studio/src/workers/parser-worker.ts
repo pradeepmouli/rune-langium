@@ -231,13 +231,19 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
     const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
     const deferredExports: DeferredExportEntry[] = [];
 
-    // Clear stale state from previous workspace load — both deferred blobs
-    // and index entries registered via registerExports. Without this, symbols
-    // from an unloaded curated model remain globally resolvable.
+    // Clear ALL stale state from previous workspace load:
+    // 1. Deferred index entries registered via registerExports
+    // 2. Deferred modelJson blobs
+    // 3. Previously registered LangiumDocuments (prevents "already present" collision)
     for (const uriStr of deferredModelJson.keys()) {
       indexManager.clearExports(URI.parse(uriStr));
     }
     deferredModelJson.clear();
+    if (langiumDocs.all) {
+      for (const doc of langiumDocs.all.toArray()) {
+        langiumDocs.deleteDocument(doc.uri);
+      }
+    }
 
     for (const file of req.files) {
       const uri = URI.parse(file.name);
