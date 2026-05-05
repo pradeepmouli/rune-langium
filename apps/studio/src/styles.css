@@ -116,12 +116,11 @@
   .studio-app .studio-layout-presets {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 0.5rem;
-    min-height: 32px;
-    padding: 0.25rem 0.5rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-    background: color-mix(in srgb, var(--background) 92%, var(--muted) 8%);
+    min-height: 38px;
+    padding: 0 0.5rem;
+    background: transparent;
+    border-bottom: none;
   }
 
   .studio-app .studio-layout-presets__group {
@@ -233,15 +232,6 @@
   }
 
   @media (max-width: 1280px) {
-    .studio-app .studio-layout-presets {
-      flex-wrap: wrap;
-    }
-
-    .studio-app .studio-layout-presets__hint {
-      flex-basis: 100%;
-      order: 1;
-    }
-
     .studio-app .studio-layout-presets__group--actions {
       margin-left: 0;
     }
@@ -257,6 +247,88 @@
     letter-spacing: 0.08em;
     font-size: 0.625rem;
     font-weight: 700;
+  }
+
+  .studio-app .dockview-theme-abyss .dv-group-panel {
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+    overflow: hidden;
+  }
+
+  .studio-app .dockview-theme-abyss .dv-group-panel .dv-tabs-container {
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  /* ─── Activity Rail ────────────────────────────────────────────
+   * Narrow 52px left column with icon-only buttons, an active-state
+   * pip on the left edge, and a spacer that pushes the bottom group
+   * (Notifications + Settings) to the foot of the rail.
+   */
+  .studio-app .studio-rail {
+    width: 52px;
+    background: var(--background);
+    border-right: 0.5px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 0;
+    gap: 4px;
+  }
+
+  .studio-app .studio-rail__group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: center;
+  }
+
+  .studio-app .studio-rail__spacer {
+    flex: 1;
+  }
+
+  .studio-app .studio-rail__btn {
+    position: relative;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius);
+    color: var(--muted-foreground);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .studio-app .studio-rail__btn:hover {
+    color: var(--foreground);
+    background: var(--accent);
+  }
+
+  .studio-app .studio-rail__btn[aria-pressed='true'] {
+    color: var(--foreground);
+    background: var(--accent);
+  }
+
+  .studio-app .studio-rail__btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .studio-app .studio-rail__pip {
+    position: absolute;
+    left: -8px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+
+  .studio-app .studio-rail > .studio-brand__mark {
+    margin-bottom: 8px;
   }
 
   .studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
@@ -357,6 +429,312 @@
     > .dv-sash-container
     > .dv-sash:not(.disabled):active::after {
     transform: translateY(-50%) scaleY(1.35);
+  }
+
+  /* ─── Top bar ────────────────────────────────────────────────────── */
+
+  .studio-app .studio-topbar {
+    height: 44px;
+    background: var(--background);
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px 0 8px;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-topbar__left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .studio-app .studio-topbar__right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-topbar__divider {
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+    margin: 0 2px;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-topbar__ws-btn {
+    appearance: none;
+    border: 0.5px solid var(--border);
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 8px 0 10px;
+    border-radius: var(--radius);
+    color: var(--foreground);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .studio-app .studio-topbar__ws-btn:hover {
+    background: var(--accent);
+  }
+
+  .studio-app .studio-topbar__ws-sub {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-family: var(--font-mono);
+  }
+
+  .studio-app .studio-topbar__cmdk {
+    appearance: none;
+    border: 0.5px solid var(--border);
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 6px 0 9px;
+    border-radius: var(--radius);
+    color: var(--muted-foreground);
+    width: 260px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .studio-app .studio-topbar__cmdk:hover {
+    border-color: var(--ring);
+  }
+
+  .studio-app .studio-topbar__cmdk span {
+    flex: 1;
+    text-align: left;
+  }
+
+  .studio-app .studio-topbar__cmdk kbd {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 0.5px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--muted-foreground);
+  }
+
+  .studio-app .studio-topbar__icon-btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+
+  .studio-app .studio-topbar__icon-btn:hover {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+
+  .studio-app .studio-topbar__generate {
+    appearance: none;
+    border: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    cursor: pointer;
+    box-shadow:
+      0 0 0 0.5px color-mix(in oklch, var(--primary), transparent 60%),
+      0 6px 18px -6px color-mix(in oklch, var(--primary), transparent 50%);
+  }
+
+  .studio-app .studio-topbar__generate:hover {
+    filter: brightness(1.1);
+  }
+
+  .studio-app .studio-topbar__avatar {
+    appearance: none;
+    border: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--color-enum), var(--color-data));
+    color: var(--primary-foreground);
+    font-weight: 700;
+    font-size: 11px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+  }
+
+  .studio-app .studio-topbar__tabs {
+    display: flex;
+    gap: 1px;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    flex: 1;
+  }
+
+  .studio-app .studio-topbar__tab {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: var(--radius);
+    color: var(--muted-foreground);
+    max-width: 200px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .studio-app .studio-topbar__tab:hover,
+  .studio-app .studio-topbar__tab.is-active {
+    background: var(--card);
+    color: var(--foreground);
+  }
+
+  .studio-app .studio-topbar__tab-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid var(--muted-foreground);
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-topbar__tab-dot.is-dirty {
+    background: var(--color-warning);
+    border-color: var(--color-warning);
+  }
+
+  .studio-app .studio-topbar__tab-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .studio-app .studio-type-glyph {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    border: 0.5px solid;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-type-pip {
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+
+  .studio-app .studio-graph-canvas {
+    background:
+      radial-gradient(ellipse at 50% 30%, var(--card), var(--background));
+  }
+
+  .studio-app .studio-graph-canvas::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1.5px);
+    background-size: 22px 22px;
+    pointer-events: none;
+  }
+
+  .studio-app .studio-statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted-foreground);
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-statusbar__left,
+  .studio-app .studio-statusbar__right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .studio-app .studio-statusbar__right {
+    gap: 10px;
+  }
+
+  .studio-app .studio-statusbar__sep {
+    width: 1px;
+    height: 11px;
+    background: var(--border);
+  }
+
+  .studio-app .studio-statusbar__lsp {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .studio-app .studio-statusbar__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted-foreground);
+  }
+
+  .studio-app .studio-statusbar__dot.is-ok {
+    background: var(--color-data);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-data), transparent 82%);
+  }
+
+  .studio-app .studio-statusbar__btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .studio-app .studio-statusbar__btn:hover {
+    background: var(--accent);
+    color: var(--foreground);
   }
 }
 
@@ -1433,4 +1811,70 @@
 
 .studio-app .kind-chip__label {
   opacity: 0.78;
+}
+
+/* Inspector panel — tabbed subsections (Members / Conditions / Doc / Meta) */
+.studio-app .studio-insp-tabs {
+  height: 34px;
+  border-bottom: 0.5px solid var(--border);
+  background: transparent;
+  border-radius: 0;
+  padding: 0 8px;
+  gap: 2px;
+}
+
+.studio-app .studio-insp-tabs [data-slot='tabs-trigger'] {
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  height: 28px;
+  position: relative;
+}
+
+.studio-app .studio-insp-tabs [data-slot='tabs-trigger'][data-state='active']::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -0.5px;
+  height: 1.5px;
+  background: var(--primary);
+  border-radius: 1.5px;
+}
+
+/* ─── Center stack — panes split side-by-side via paneswitch pill ────────── */
+
+.studio-app .studio-center-stack {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.studio-app .studio-center-stack__pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.studio-app .studio-center-stack__split {
+  width: 5px;
+  margin: 0 -2px;
+  background: transparent;
+  border-left: 1px solid var(--border);
+  flex-shrink: 0;
+  cursor: col-resize;
+  z-index: 1;
+  transition: background 0.15s;
+}
+
+.studio-app .studio-center-stack__split:hover {
+  background: color-mix(in oklch, var(--primary), transparent 70%);
+}
+
+/* Hide dockview's tab strip for the center stack when it has only one tab.
+ * The paneswitch pill in the layout-presets toolbar replaces it. */
+.studio-app .dockview-theme-abyss .dv-tabs-container:has(.dv-tab:only-child) {
+  display: none;
 }

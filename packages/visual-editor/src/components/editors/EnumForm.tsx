@@ -29,7 +29,7 @@
  * @module
  */
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
 import {
   Field,
@@ -309,48 +309,16 @@ function EnumForm({
               </button>
             </FieldLegend>
 
-            <FieldGroup className="gap-0.5">
-              {effectiveValues.map((entry) =>
-                entry.source === 'local' ? (
-                  <EnumValueRow
-                    key={entry.id}
-                    index={entry.fieldIndex!}
-                    name={
-                      ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ??
-                      ''
-                    }
-                    displayName={
-                      ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]
-                        ?.display ?? ''
-                    }
-                    nodeId={nodeId}
-                    onUpdate={handleUpdateValue}
-                    onRemove={() => handleRemoveValue(entry.fieldIndex!)}
-                    onReorder={handleReorderValue}
-                    isOverride={entry.isOverride}
-                    onRevert={
-                      entry.isOverride ? () => handleRevertEnumOverride(entry.name) : undefined
-                    }
-                  />
-                ) : (
-                  <InheritedEnumValueRow
-                    key={entry.id}
-                    name={entry.name}
-                    displayName={entry.displayName}
-                    ancestorName={entry.ancestorName!}
-                    onOverride={() =>
-                      handleOverrideInheritedValue(entry.name, entry.displayName ?? '')
-                    }
-                  />
-                )
-              )}
-
-              {effectiveValues.length === 0 && (
-                <p className="text-xs text-muted-foreground italic py-2 text-center">
-                  No values defined. Click &quot;+ Add Value&quot; to create one.
-                </p>
-              )}
-            </FieldGroup>
+            <PaginatedEnumValues
+              effectiveValues={effectiveValues}
+              committedRef={committedRef}
+              nodeId={nodeId}
+              onUpdate={handleUpdateValue}
+              onRemove={handleRemoveValue}
+              onReorder={handleReorderValue}
+              onRevertOverride={handleRevertEnumOverride}
+              onOverrideInherited={handleOverrideInheritedValue}
+            />
           </FieldSet>
 
           {/* Annotations + Metadata sections — declarative path (Phase 7).
@@ -362,6 +330,96 @@ function EnumForm({
         </div>
       </EditorActionsProvider>
     </FormProvider>
+  );
+}
+
+// Pagination threshold — render rows incrementally to avoid mounting
+// 600+ Controller-bound form rows at once. Can't use @tanstack/react-virtual
+// here because EnumValueRow uses useFormContext + Controller with index-based
+// paths — unmounting rows would unregister fields from react-hook-form state
+// even with shouldUnregister: false, and drag-reorder indices would break.
+const PAGE_SIZE = 50;
+
+interface PaginatedEnumValuesProps {
+  effectiveValues: Array<{
+    id: string;
+    source: 'local' | 'inherited';
+    name: string;
+    displayName?: string;
+    fieldIndex?: number;
+    isOverride?: boolean;
+    ancestorName?: string;
+  }>;
+  committedRef: React.RefObject<unknown>;
+  nodeId: string;
+  onUpdate: (nodeId: string, oldName: string, newName: string, displayName?: string) => void;
+  onRemove: (index: number) => void;
+  onReorder: (from: number, to: number) => void;
+  onRevertOverride: (name: string) => void;
+  onOverrideInherited: (name: string, displayName: string) => void;
+}
+
+function PaginatedEnumValues({
+  effectiveValues,
+  committedRef,
+  nodeId,
+  onUpdate,
+  onRemove,
+  onReorder,
+  onRevertOverride,
+  onOverrideInherited
+}: PaginatedEnumValuesProps) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  if (effectiveValues.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground italic py-2 text-center">
+        No values defined. Click &quot;+ Add Value&quot; to create one.
+      </p>
+    );
+  }
+
+  const visible = effectiveValues.slice(0, visibleCount);
+  const remaining = effectiveValues.length - visibleCount;
+
+  return (
+    <FieldGroup className="gap-0.5">
+      {visible.map((entry) =>
+        entry.source === 'local' ? (
+          <EnumValueRow
+            key={entry.id}
+            index={entry.fieldIndex!}
+            name={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''}
+            displayName={
+              ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ?? ''
+            }
+            nodeId={nodeId}
+            onUpdate={onUpdate}
+            onRemove={() => onRemove(entry.fieldIndex!)}
+            onReorder={onReorder}
+            isOverride={entry.isOverride}
+            onRevert={entry.isOverride ? () => onRevertOverride(entry.name) : undefined}
+          />
+        ) : (
+          <InheritedEnumValueRow
+            key={entry.id}
+            name={entry.name}
+            displayName={entry.displayName}
+            ancestorName={entry.ancestorName!}
+            onOverride={() => onOverrideInherited(entry.name, entry.displayName ?? '')}
+          />
+        )
+      )}
+      {remaining > 0 && (
+        <button
+          type="button"
+          className="text-xs text-primary hover:underline py-1 text-center w-full"
+          onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+        >
+          Show more ({remaining} remaining)
+        </button>
+      )}
+    </FieldGroup>
   );
 }
 

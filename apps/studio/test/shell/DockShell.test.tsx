@@ -129,13 +129,13 @@ describe('DockShell — dockview integration (T065)', () => {
     }
   });
 
-  it('calls onLayoutChange on initial mount with version=2', async () => {
+  it('calls onLayoutChange on initial mount with version=3', async () => {
     const onChange = vi.fn();
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" onLayoutChange={onChange} />);
     await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
     expect(onChange).toHaveBeenCalled();
     const last = onChange.mock.calls.at(-1)?.[0];
-    expect(last.version).toBe(2);
+    expect(last.version).toBe(3);
   });
 
   it('exposes role=application on the shell container', () => {
@@ -143,16 +143,13 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(screen.getByRole('application', { name: /studio dock shell/i })).toBeInTheDocument();
   });
 
-  it('renders layout preset controls above the dock surface', () => {
+  it('renders center pane selector above the dock surface', () => {
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
     const header = screen.getByRole('toolbar', { name: /studio layout presets/i });
     expect(header).toBeInTheDocument();
-    expect(header).toHaveTextContent('Navigate');
-    expect(header).toHaveTextContent('Edit');
-    expect(header).toHaveTextContent('Preview');
-    expect(screen.getByTestId('layout-resize-hint')).toHaveTextContent(
-      'Drag panel dividers to resize'
-    );
+    expect(header).toHaveTextContent('Graph');
+    expect(header).toHaveTextContent('Source');
+    expect(header).toHaveTextContent('Inspector');
   });
 
   it('Reset Layout calls api.clear() then re-applies a fresh layout', async () => {
@@ -179,10 +176,13 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(last.dockview).toHaveProperty('columns');
   });
 
-  it('activates a requested panel when focusPanel changes', async () => {
+  it('activates a requested dockview panel when focusPanel changes', async () => {
+    // workspace.inspector is no longer a dockview panel (it renders inside CenterStackPanel),
+    // so focusPanel with that component is a no-op at the dockview level.
+    // Use workspace.problems (a real dockview panel) to verify the mechanism still works.
     function Harness() {
       const [focusPanel, setFocusPanel] = useState<{
-        component: 'workspace.inspector';
+        component: 'workspace.problems';
         nonce: number;
       } | null>(null);
 
@@ -190,9 +190,9 @@ describe('DockShell — dockview integration (T065)', () => {
         <>
           <button
             type="button"
-            onClick={() => setFocusPanel({ component: 'workspace.inspector', nonce: 1 })}
+            onClick={() => setFocusPanel({ component: 'workspace.problems', nonce: 1 })}
           >
-            focus inspector
+            focus problems
           </button>
           <DockShell studioVersion="0.1.0" workspaceId="ws-1" focusPanel={focusPanel} />
         </>
@@ -202,9 +202,12 @@ describe('DockShell — dockview integration (T065)', () => {
     render(<Harness />);
     await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
 
-    fireEvent.click(screen.getByText('focus inspector'));
+    // Record the call count before clicking so we can detect the delta.
+    const callsBefore = lastApi?.panelStates.get('workspace.problems')?.activeCalls ?? 0;
+    fireEvent.click(screen.getByText('focus problems'));
+    const callsAfter = lastApi?.panelStates.get('workspace.problems')?.activeCalls ?? 0;
 
-    expect(lastApi?.panelStates.get('workspace.inspector')?.activeCalls).toBe(1);
+    expect(callsAfter - callsBefore).toBe(1);
   });
 
   it('surfaces a user-visible notice when an invalid saved factory layout is reset', () => {

@@ -9,7 +9,6 @@
 
 import type React from 'react';
 import type { SyncState } from '../services/git-backing.js';
-import { Button } from '@rune-langium/design-system/ui/button';
 
 interface Props {
   workspaceName: string;
@@ -39,22 +38,38 @@ export function StatusBar({
       role="contentinfo"
       aria-label="Studio status bar"
       data-testid="status-bar"
-      className="flex items-center gap-3 px-3 py-1 text-xs text-muted-foreground"
+      className="studio-statusbar"
     >
-      <span data-testid="status-workspace">{workspaceName}</span>
-      {gitState && <span data-testid="status-git">{SYNC_LABEL[gitState]}</span>}
-      <span data-testid="status-lsp">{lspState}</span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="xs"
-        onClick={onToggleTelemetry}
-        aria-pressed={telemetryEnabled}
-        aria-label={`Telemetry ${telemetryEnabled ? 'enabled' : 'disabled'}`}
-        className="studio-chrome-button ml-auto"
-      >
-        {telemetryEnabled ? '◉ Diagnostics' : '○ Diagnostics'}
-      </Button>
+      <div className="studio-statusbar__left">
+        <span data-testid="status-workspace">⟢ {workspaceName}</span>
+        <span className="studio-statusbar__sep" />
+        {gitState && (
+          <>
+            <span data-testid="status-git">{SYNC_LABEL[gitState]}</span>
+            <span className="studio-statusbar__sep" />
+          </>
+        )}
+        <span className="studio-statusbar__lsp" data-testid="status-lsp">
+          <span className={`studio-statusbar__dot ${lspState === 'connected' ? 'is-ok' : ''}`} />
+          lsp · {lspState}
+        </span>
+      </div>
+      <div className="studio-statusbar__right">
+        {/* Static placeholders — real values require editor state that doesn't exist yet. */}
+        <span>utf-8</span>
+        <span>spaces: 2</span>
+        <span>rosetta</span>
+        <span className="studio-statusbar__sep" />
+        <button
+          type="button"
+          className="studio-statusbar__btn"
+          onClick={onToggleTelemetry}
+          aria-pressed={telemetryEnabled}
+          aria-label={`Telemetry ${telemetryEnabled ? 'enabled' : 'disabled'}`}
+        >
+          {telemetryEnabled ? '◉' : '○'} diagnostics
+        </button>
+      </div>
     </footer>
   );
 }

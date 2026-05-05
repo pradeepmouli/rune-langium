@@ -470,6 +470,13 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     expect(nameInput).not.toBeNull();
     expect((nameInput as HTMLInputElement).value).toBe('Trade');
 
+    // Metadata fields live in the "Doc" tab — activate it first.
+    // Radix Tabs switches on onMouseDown, not onClick, so use mouseDown event.
+    const docTab = screen.getByRole('tab', { name: /doc/i });
+    act(() => {
+      fireEvent.mouseDown(docTab);
+    });
+
     // The MetadataSection renders Description (definition) and Comments
     // textareas — assert both are present with the values from the data prop.
     const descriptionTextarea = container.querySelector('[data-slot="metadata-description"]');
@@ -479,8 +486,8 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     expect((descriptionTextarea as HTMLTextAreaElement).value).toBe('A financial trade');
     expect((commentsTextarea as HTMLTextAreaElement).value).toBe('Initial comments');
 
-    // Tab order is: name input < description textarea < comments textarea
-    // (verified by document order — RTL preserves DOM order).
+    // Tab order: name input appears before doc-tab content in DOM order.
+    // After clicking Doc, the textarea elements are rendered in the active panel.
     const allInteractive = Array.from(
       container.querySelectorAll(
         'input[data-slot="type-name-input"], textarea[data-slot="metadata-description"], textarea[data-slot="metadata-comments"]'
@@ -580,6 +587,13 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     expect(renameType).toHaveBeenCalled();
 
     // Pristine fields (definition) reflect nodeB's values after the swap.
+    // MetadataSection lives in the "Doc" tab — activate it to render the DOM.
+    // Radix Tabs switches on onMouseDown, not onClick, so use mouseDown event.
+    const docTab = screen.getByRole('tab', { name: /doc/i });
+    act(() => {
+      fireEvent.mouseDown(docTab);
+    });
+
     const definitionTextarea = container.querySelector(
       '[data-slot="metadata-description"]'
     ) as HTMLTextAreaElement;

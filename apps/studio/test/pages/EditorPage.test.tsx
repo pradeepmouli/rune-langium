@@ -156,7 +156,13 @@ vi.mock('lucide-react', () => ({
   LayoutGrid: () => React.createElement('span'),
   Code2: () => React.createElement('span'),
   Network: () => React.createElement('span'),
-  XCircle: () => React.createElement('span')
+  XCircle: () => React.createElement('span'),
+  Check: () => React.createElement('span'),
+  Download: () => React.createElement('span'),
+  Share2: () => React.createElement('span'),
+  Zap: () => React.createElement('span'),
+  Search: () => React.createElement('span'),
+  ChevronDown: () => React.createElement('span')
 }));
 
 vi.mock('../../src/components/GraphFilterMenu.js', () => ({
@@ -725,7 +731,7 @@ describe('EditorPage workspace chrome', () => {
     expect(screen.getByText('Rune Studio')).toBeInTheDocument();
     expect(screen.getByText('CDM Workspace')).toBeInTheDocument();
     expect(screen.getByText('1 file')).toBeInTheDocument();
-    expect(screen.getByTitle('Generate code from model')).toBeInTheDocument();
+    expect(screen.getByText('Generate')).toBeInTheDocument();
 
     const graphToolbar = screen.getByLabelText('Graph toolbar');
     expect(graphToolbar).toBeInTheDocument();

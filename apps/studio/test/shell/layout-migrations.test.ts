@@ -17,15 +17,14 @@ afterEach(() => vi.restoreAllMocks());
 describe('sanitizeLayout (T063)', () => {
   it('rebuilds when the input is missing or malformed', () => {
     const out = sanitizeLayout(null, { studioVersion: '0.1.0', viewportWidth: 1440 });
-    expect(out.version).toBe(2);
+    expect(out.version).toBe(3);
     const dockview = out.dockview;
     if (!dockview || dockview.shape !== 'factory') {
       throw new Error('factory layout expected');
     }
     expect(dockview.columns).toHaveLength(3);
     expect(dockview.columns[0]).toMatchObject({
-      top: { component: 'workspace.fileTree' },
-      bottom: { component: 'workspace.visualPreview' }
+      component: 'workspace.fileTree'
     });
     expect(dockview.bottomGroup.tabs.map((tab) => tab.component)).toEqual([
       'workspace.problems',
@@ -57,7 +56,7 @@ describe('sanitizeLayout (T063)', () => {
       dockview: { something: 'unknown' }
     };
     const out = sanitizeLayout(futureLayout, { studioVersion: '0.2.0', viewportWidth: 1440 });
-    expect(out.version).toBe(2);
+    expect(out.version).toBe(3);
     expect(out.writtenBy).toBe('0.2.0');
   });
 
@@ -77,18 +76,16 @@ describe('sanitizeLayout (T063)', () => {
     expect(out.dockview).toEqual(older.dockview);
   });
 
-  it('normalizes invalid active tabs back to surviving tabs', () => {
+  it('normalizes invalid active tabs back to surviving tabs (v3 ExplorerColumn shape)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // v3 factory layout: columns[0] is an ExplorerColumn (single `component`, no top/bottom).
     const stale = {
       version: 1,
       writtenBy: '0.1.0',
       dockview: {
         shape: 'factory',
         columns: [
-          {
-            top: { component: 'workspace.fileTree' },
-            bottom: { component: 'workspace.visualPreview' }
-          },
+          { component: 'workspace.fileTree' },
           {
             active: 'workspace.visualPreview',
             tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
@@ -117,6 +114,47 @@ describe('sanitizeLayout (T063)', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       '[layout-migrations] normalized invalid active tabs in saved layout'
     );
+  });
+
+  it('migrates old NavigationColumn (top/bottom) layout to v3 ExplorerColumn', () => {
+    // Pre-v3 layouts used NavigationColumn with top/bottom — these are
+    // migrated inline to the v3 ExplorerColumn shape (no rebuild needed).
+    const oldShape = {
+      version: 1,
+      writtenBy: '0.1.0',
+      dockview: {
+        shape: 'factory',
+        columns: [
+          {
+            top: { component: 'workspace.fileTree' },
+            bottom: { component: 'workspace.visualPreview' },
+            size: 260
+          },
+          {
+            active: 'workspace.editor',
+            tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
+          },
+          {
+            active: 'workspace.formPreview',
+            tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
+          }
+        ],
+        bottomGroup: {
+          active: 'workspace.problems',
+          collapsed: false,
+          tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
+        }
+      }
+    };
+
+    const out = sanitizeLayout(oldShape, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    if (!out.dockview || out.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected');
+    }
+
+    // Migrated to v3 ExplorerColumn, preserving original size.
+    expect(out.dockview.columns[0]).toMatchObject({ component: 'workspace.fileTree', size: 260 });
+    expect(out.dockview.columns).toHaveLength(3);
   });
 
   it('rebuilds malformed factory layouts instead of throwing during active-tab normalization', () => {

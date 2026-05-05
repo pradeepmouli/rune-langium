@@ -30,6 +30,7 @@ import {
 } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { AttributeRow } from './AttributeRow.js';
 import { InheritedAttributeRow } from './AttributeRow.js';
 import { TypeSelector } from './TypeSelector.js';
@@ -378,9 +379,9 @@ function DataTypeForm({
 
   return (
     <FormProvider {...form}>
-      <div data-slot="data-type-form" className="flex flex-col gap-4 p-4">
-        {/* Header: Name + Badge */}
-        <div data-slot="form-header" className="flex items-center gap-2">
+      <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full">
+        {/* Header: Name + Badge — always visible above tabs */}
+        <div data-slot="form-header" className="flex items-center gap-2 px-4 pt-4 pb-2 shrink-0">
           <Controller
             control={form.control}
             name="name"
@@ -408,120 +409,140 @@ function DataTypeForm({
           <Badge variant="data">Data</Badge>
         </div>
 
-        {/* Inheritance */}
-        <FieldSet className="gap-1.5">
-          <FieldLegend variant="label" className="mb-0 text-muted-foreground">
-            Extends
-          </FieldLegend>
-          {parentName && (
-            <TypeLink
-              typeName={parentName}
-              onNavigateToNode={onNavigateToNode}
-              allNodeIds={allNodeIds}
-              className="text-sm font-mono mb-1"
-            />
-          )}
-          <TypeSelector
-            value={parentValue ?? ''}
-            options={parentOptions}
-            onSelect={handleParentSelect}
-            placeholder="Select parent type..."
-            allowClear
-          />
-        </FieldSet>
-
-        {/* Attributes */}
-        <FieldSet className="gap-1">
-          <FieldLegend
-            variant="label"
-            className="mb-0 text-muted-foreground flex items-center justify-between"
-          >
-            <span>Attributes ({fields.length + inheritedCount})</span>
-            <button
-              data-slot="add-attribute-btn"
-              type="button"
-              onClick={handleAddAttribute}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary
-                border border-border rounded px-2 py-0.5
-                hover:bg-card hover:border-input transition-colors"
-            >
-              + Add Attribute
-            </button>
-          </FieldLegend>
-
-          <FieldGroup className="gap-1">
-            {/* Inherited rows via z2f's `arrayConfig.before` ghost-row primitive
-                (R6 / US4). Rendered above local rows; do not participate in
-                form state, validation, or submission. */}
-            {ghostRowsBefore.map((row, i) => (
-              <div key={`ghost-before-${row.id}`}>
-                {
-                  row.render({
-                    isFirst: i === 0,
-                    isLast: i === ghostRowsBefore.length - 1
-                  }) as ReactNode
-                }
-              </div>
-            ))}
-
-            {/* Local rows from RHF's useFieldArray — the form-state surface. */}
-            {fields.map((field, index) => {
-              const meta = localMeta[index];
-              const isOverride = meta?.isOverride ?? false;
-              const localName = meta?.name ?? '';
-              return (
-                <AttributeRow
-                  key={field.id}
-                  index={index}
-                  committedName={
-                    ((committedRef.current as any).attributes ?? [])[index]?.name ?? ''
-                  }
-                  availableTypes={availableTypes}
-                  onUpdate={handleUpdateAttribute}
-                  onRemove={handleRemoveAttribute}
-                  onReorder={handleReorderAttribute}
-                  onNavigateToNode={onNavigateToNode}
-                  allNodeIds={allNodeIds}
-                  isOverride={isOverride}
-                  onRevert={isOverride ? () => handleRevertOverride(localName) : undefined}
-                />
-              );
-            })}
-
-            {fields.length === 0 && ghostRowsBefore.length === 0 && (
-              <p className="text-xs text-muted-foreground italic py-2 text-center">
-                No attributes defined. Click &quot;+ Add Attribute&quot; to create one.
-              </p>
+        {/* Inheritance — always visible above tabs */}
+        <div className="px-4 pb-3 shrink-0">
+          <FieldSet className="gap-1.5">
+            <FieldLegend variant="label" className="mb-0 text-muted-foreground">
+              Extends
+            </FieldLegend>
+            {parentName && (
+              <TypeLink
+                typeName={parentName}
+                onNavigateToNode={onNavigateToNode}
+                allNodeIds={allNodeIds}
+                className="text-sm font-mono mb-1"
+              />
             )}
-          </FieldGroup>
-        </FieldSet>
+            <TypeSelector
+              value={parentValue ?? ''}
+              options={parentOptions}
+              onSelect={handleParentSelect}
+              placeholder="Select parent type..."
+              allowClear
+            />
+          </FieldSet>
+        </div>
 
-        {/* Conditions */}
-        <ConditionSection
-          label="Conditions"
-          conditions={d.conditions}
-          readOnly={d.isReadOnly}
-          onAdd={handleAddCondition}
-          onRemove={handleRemoveCondition}
-          onUpdate={handleUpdateCondition}
-          onReorder={handleReorderCondition}
-          renderExpressionEditor={renderExpressionEditor}
-        />
+        {/* Tabbed sections */}
+        <Tabs defaultValue="members" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="studio-insp-tabs">
+            <TabsTrigger value="members">Members</TabsTrigger>
+            <TabsTrigger value="conditions">Conditions</TabsTrigger>
+            <TabsTrigger value="doc">Doc</TabsTrigger>
+            <TabsTrigger value="meta">Meta</TabsTrigger>
+          </TabsList>
 
-        {/* Annotations */}
-        <AnnotationSection
-          annotations={d.annotations}
-          onAdd={handleAddAnnotation}
-          onRemove={handleRemoveAnnotation}
-        />
+          {/* Members tab — attributes */}
+          <TabsContent value="members" className="flex-1 overflow-y-auto p-3 mt-0">
+            <FieldSet className="gap-1">
+              <FieldLegend
+                variant="label"
+                className="mb-0 text-muted-foreground flex items-center justify-between"
+              >
+                <span>Attributes ({fields.length + inheritedCount})</span>
+                <button
+                  data-slot="add-attribute-btn"
+                  type="button"
+                  onClick={handleAddAttribute}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary
+                    border border-border rounded px-2 py-0.5
+                    hover:bg-card hover:border-input transition-colors"
+                >
+                  + Add Attribute
+                </button>
+              </FieldLegend>
 
-        {/* Metadata */}
-        <MetadataSection
-          onDefinitionCommit={commitDefinition}
-          onCommentsCommit={commitComments}
-          onSynonymAdd={handleAddSynonym}
-          onSynonymRemove={handleRemoveSynonym}
-        />
+              <FieldGroup className="gap-1">
+                {/* Inherited rows via z2f's `arrayConfig.before` ghost-row primitive
+                    (R6 / US4). Rendered above local rows; do not participate in
+                    form state, validation, or submission. */}
+                {ghostRowsBefore.map((row, i) => (
+                  <div key={`ghost-before-${row.id}`}>
+                    {
+                      row.render({
+                        isFirst: i === 0,
+                        isLast: i === ghostRowsBefore.length - 1
+                      }) as ReactNode
+                    }
+                  </div>
+                ))}
+
+                {/* Local rows from RHF's useFieldArray — the form-state surface. */}
+                {fields.map((field, index) => {
+                  const meta = localMeta[index];
+                  const isOverride = meta?.isOverride ?? false;
+                  const localName = meta?.name ?? '';
+                  return (
+                    <AttributeRow
+                      key={field.id}
+                      index={index}
+                      committedName={
+                        ((committedRef.current as any).attributes ?? [])[index]?.name ?? ''
+                      }
+                      availableTypes={availableTypes}
+                      onUpdate={handleUpdateAttribute}
+                      onRemove={handleRemoveAttribute}
+                      onReorder={handleReorderAttribute}
+                      onNavigateToNode={onNavigateToNode}
+                      allNodeIds={allNodeIds}
+                      isOverride={isOverride}
+                      onRevert={isOverride ? () => handleRevertOverride(localName) : undefined}
+                    />
+                  );
+                })}
+
+                {fields.length === 0 && ghostRowsBefore.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic py-2 text-center">
+                    No attributes defined. Click &quot;+ Add Attribute&quot; to create one.
+                  </p>
+                )}
+              </FieldGroup>
+            </FieldSet>
+          </TabsContent>
+
+          {/* Conditions tab */}
+          <TabsContent value="conditions" className="flex-1 overflow-y-auto p-3 mt-0">
+            <ConditionSection
+              label="Conditions"
+              conditions={d.conditions}
+              readOnly={d.isReadOnly}
+              onAdd={handleAddCondition}
+              onRemove={handleRemoveCondition}
+              onUpdate={handleUpdateCondition}
+              onReorder={handleReorderCondition}
+              renderExpressionEditor={renderExpressionEditor}
+            />
+          </TabsContent>
+
+          {/* Doc tab — description, comments, synonyms */}
+          <TabsContent value="doc" className="flex-1 overflow-y-auto p-3 mt-0">
+            <MetadataSection
+              onDefinitionCommit={commitDefinition}
+              onCommentsCommit={commitComments}
+              onSynonymAdd={handleAddSynonym}
+              onSynonymRemove={handleRemoveSynonym}
+            />
+          </TabsContent>
+
+          {/* Meta tab — annotations */}
+          <TabsContent value="meta" className="flex-1 overflow-y-auto p-3 mt-0">
+            <AnnotationSection
+              annotations={d.annotations}
+              onAdd={handleAddAnnotation}
+              onRemove={handleRemoveAnnotation}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
     </FormProvider>
   );

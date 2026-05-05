@@ -150,12 +150,23 @@ function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape'
   if (shape.columns.length !== 3) {
     return 'invalid-shape';
   }
-  const navigation = shape.columns[0];
-  if (
-    !isNavigationColumn(navigation) ||
-    navigation.top.component !== 'workspace.fileTree' ||
-    navigation.bottom.component !== 'workspace.visualPreview'
-  ) {
+  // v3 layout: columns[0] is an ExplorerColumn (single `component` field).
+  // v2 layout: columns[0] is a NavigationColumn ({ top, bottom } stack).
+  // Migrate v2→v3 inline rather than resetting.
+  const col0 = shape.columns[0] as unknown as Record<string, unknown>;
+  if (col0 && typeof col0 === 'object' && 'top' in col0 && 'bottom' in col0) {
+    // v2 NavigationColumn → extract fileTree as ExplorerColumn, drop visualPreview
+    // (it's now in the center group). Mutate in place.
+    const top = col0.top as { component?: string } | undefined;
+    if (top?.component === 'workspace.fileTree') {
+      (shape.columns as unknown[])[0] = { component: 'workspace.fileTree', size: col0.size ?? 248 };
+      normalized = true;
+    } else {
+      return 'invalid-shape';
+    }
+  }
+  const explorerCol = shape.columns[0];
+  if (!isExplorerColumn(explorerCol) || explorerCol.component !== 'workspace.fileTree') {
     return 'invalid-shape';
   }
   const groups = [shape.columns[1], shape.columns[2], shape.bottomGroup];
@@ -181,23 +192,13 @@ function normalizeFactoryActives(shape: FactoryShape): boolean | 'invalid-shape'
   return normalized;
 }
 
-function isNavigationColumn(value: unknown): value is FactoryShape['columns'][0] & {
-  top: { component: string };
-  bottom: { component: string };
+/** Guard for the v3 ExplorerColumn shape: a single `component` string, no top/bottom. */
+function isExplorerColumn(value: unknown): value is FactoryShape['columns'][0] & {
+  component: string;
 } {
   if (!value || typeof value !== 'object') {
     return false;
   }
-  const record = value as {
-    top?: { component?: unknown } | null;
-    bottom?: { component?: unknown } | null;
-  };
-  return (
-    !!record.top &&
-    typeof record.top === 'object' &&
-    typeof record.top.component === 'string' &&
-    !!record.bottom &&
-    typeof record.bottom === 'object' &&
-    typeof record.bottom.component === 'string'
-  );
+  const record = value as { component?: unknown };
+  return typeof record.component === 'string';
 }

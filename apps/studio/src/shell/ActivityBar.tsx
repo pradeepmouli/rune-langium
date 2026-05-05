@@ -8,7 +8,7 @@
  */
 
 import type React from 'react';
-import { Button } from '@rune-langium/design-system/ui/button';
+import { Layers, Network, Search, Database, Bell, Settings } from 'lucide-react';
 
 interface Props {
   onWorkspaceClick: () => void;
@@ -26,38 +26,49 @@ export function ActivityBar({
       role="navigation"
       aria-label="Studio activity bar"
       data-testid="activity-bar"
-      className="flex flex-col items-center gap-1.5 p-2"
+      className="studio-rail"
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={onWorkspaceClick}
-        aria-label="Workspaces"
-        className="studio-chrome-button"
-      >
-        WS
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={onModelsClick}
-        aria-label="Models"
-        className="studio-chrome-button"
-      >
-        M
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={onSettingsClick}
-        aria-label="Settings"
-        className="studio-chrome-button"
-      >
-        ⚙
-      </Button>
+      <div className="studio-brand__mark">R</div>
+      <div className="studio-rail__group">
+        <button
+          type="button"
+          className="studio-rail__btn"
+          aria-label="Explorer"
+          aria-pressed="true"
+          onClick={onWorkspaceClick}
+        >
+          <span className="studio-rail__pip" />
+          <Layers className="size-4" />
+        </button>
+        <button type="button" disabled className="studio-rail__btn" aria-label="Graph">
+          <Network className="size-4" />
+        </button>
+        <button type="button" disabled className="studio-rail__btn" aria-label="Search">
+          <Search className="size-4" />
+        </button>
+        <button
+          type="button"
+          className="studio-rail__btn"
+          aria-label="Curated models"
+          onClick={onModelsClick}
+        >
+          <Database className="size-4" />
+        </button>
+      </div>
+      <div className="studio-rail__spacer" />
+      <div className="studio-rail__group">
+        <button type="button" disabled className="studio-rail__btn" aria-label="Notifications">
+          <Bell className="size-4" />
+        </button>
+        <button
+          type="button"
+          className="studio-rail__btn"
+          aria-label="Settings"
+          onClick={onSettingsClick}
+        >
+          <Settings className="size-4" />
+        </button>
+      </div>
     </nav>
   );
 }

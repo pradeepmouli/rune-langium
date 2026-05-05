@@ -54,6 +54,7 @@ import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { UtilityTrayContext } from './utility-tray-context.js';
+import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
 
 const DEFAULT_VIEWPORT_WIDTH = 1920;
 const DEFAULT_UTILITY_HEIGHT = 220;
@@ -62,6 +63,12 @@ const PRESET_OPTIONS: Array<{ id: LayoutPreset; label: string }> = [
   { id: 'edit', label: 'Edit' },
   { id: 'preview', label: 'Preview' }
 ] as const;
+
+const CENTER_PANE_OPTIONS: Array<{ id: CenterPane; label: string; panel: string }> = [
+  { id: 'graph', label: 'Graph', panel: 'workspace.visualPreview' },
+  { id: 'source', label: 'Source', panel: 'workspace.editor' },
+  { id: 'inspector', label: 'Inspector', panel: 'workspace.inspector' }
+];
 
 type ZeroArgRenderer = () => React.ReactElement | null;
 
@@ -171,6 +178,9 @@ export function DockShell({
     layout.dockview && layout.dockview.shape === 'factory'
       ? (layout.dockview.preset ?? 'edit')
       : 'edit'
+  );
+  const [activePanes, setActivePanes] = useState<Set<CenterPane>>(
+    () => new Set<CenterPane>(['graph', 'source', 'inspector'])
   );
   const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
     layout.dockview && layout.dockview.shape === 'factory'
@@ -315,43 +325,38 @@ export function DockShell({
         <div
           className="studio-paneswitch"
           role="group"
-          aria-label="Layout preset"
+          aria-label="Center pane selector"
           data-testid="studio-paneswitch"
         >
-          {PRESET_OPTIONS.map((preset) => {
-            const isActive = layoutPreset === preset.id;
+          {CENTER_PANE_OPTIONS.map((pane) => {
+            const isActive = activePanes.has(pane.id);
             return (
               <button
-                key={preset.id}
+                key={pane.id}
                 type="button"
                 aria-pressed={isActive}
                 className={isActive ? 'studio-paneswitch__seg is-active' : 'studio-paneswitch__seg'}
                 onClick={() => {
-                  const next = buildDefaultLayout({
-                    studioVersion,
-                    viewportWidth: getViewportWidth(),
-                    preset: preset.id
+                  setActivePanes((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(pane.id)) {
+                      if (next.size <= 1) return prev;
+                      next.delete(pane.id);
+                    } else {
+                      next.add(pane.id);
+                      // Only activate the panel when adding it to the active set.
+                      const panel = apiRef.current?.getPanel(pane.panel);
+                      if (panel) panel.api.setActive();
+                    }
+                    return next;
                   });
-                  setLayoutPreset(preset.id);
-                  setLayout(next);
-                  setUtilitiesCollapsedState(
-                    next.dockview?.shape === 'factory' ? next.dockview.bottomGroup.collapsed : false
-                  );
-                  if (apiRef.current) {
-                    apiRef.current.clear();
-                    applyLayout(apiRef.current, next);
-                  }
-                  onLayoutChangeRef.current?.(next);
                 }}
               >
-                {preset.label}
+                {pane.label}
               </button>
             );
           })}
         </div>
-        <p className="studio-layout-presets__hint" data-testid="layout-resize-hint">
-          Drag panel dividers to resize
-        </p>
         <div className="studio-layout-presets__group studio-layout-presets__group--actions">
           <Button
             type="button"
@@ -388,19 +393,21 @@ export function DockShell({
           </button>
         </div>
       ) : null}
-      <PanelRegistryContext.Provider value={panelRegistry}>
-        <UtilityTrayContext.Provider
-          value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}
-        >
-          <div className="min-h-0 flex-1">
-            <DockviewReact
-              components={DOCKVIEW_COMPONENTS}
-              onReady={onReady}
-              className="dockview-theme-abyss"
-            />
-          </div>
-        </UtilityTrayContext.Provider>
-      </PanelRegistryContext.Provider>
+      <CenterPanesContext.Provider value={activePanes}>
+        <PanelRegistryContext.Provider value={panelRegistry}>
+          <UtilityTrayContext.Provider
+            value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}
+          >
+            <div className="min-h-0 flex-1">
+              <DockviewReact
+                components={DOCKVIEW_COMPONENTS}
+                onReady={onReady}
+                className="dockview-theme-abyss"
+              />
+            </div>
+          </UtilityTrayContext.Provider>
+        </PanelRegistryContext.Provider>
+      </CenterPanesContext.Provider>
     </div>
   );
 }

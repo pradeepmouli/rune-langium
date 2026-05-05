@@ -86,16 +86,15 @@ describe('applyLayout — factory shape', () => {
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     const ids = api.calls.map((c) => c.id);
-    // First four are left stack + center group; remaining calls include preview + bottom tabs.
-    expect(ids.slice(0, 4)).toEqual([
-      'workspace.fileTree',
-      'workspace.visualPreview',
-      'workspace.editor',
-      'workspace.inspector'
-    ]);
-    expect(ids.slice(4)).toEqual(
+    // Center column is now a single-tab group (source and inspector render inside CenterStackPanel).
+    // First two are fileTree + visualPreview; remaining calls include preview + bottom tabs.
+    expect(ids.slice(0, 2)).toEqual(['workspace.fileTree', 'workspace.visualPreview']);
+    expect(ids.slice(2)).toEqual(
       expect.arrayContaining(['workspace.problems', 'workspace.output', 'workspace.formPreview'])
     );
+    // workspace.editor and workspace.inspector are NOT added as dockview panels
+    expect(ids).not.toContain('workspace.editor');
+    expect(ids).not.toContain('workspace.inspector');
   });
 
   it('passes user-facing PANEL_TITLES on every addPanel call (FR-008)', () => {
@@ -104,8 +103,6 @@ describe('applyLayout — factory shape', () => {
     applyLayout(api as never, layout);
     const titleById = new Map(api.calls.map((c) => [c.id, c.title]));
     expect(titleById.get('workspace.fileTree')).toBe('Types');
-    expect(titleById.get('workspace.editor')).toBe('Source');
-    expect(titleById.get('workspace.inspector')).toBe('Inspector');
     expect(titleById.get('workspace.problems')).toBe('Problems');
     expect(titleById.get('workspace.output')).toBe('Messages');
     expect(titleById.get('workspace.visualPreview')).toBe('Graph');
@@ -121,17 +118,17 @@ describe('applyLayout — factory shape', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
-    const editor = api.calls.find((c) => c.id === 'workspace.editor');
-    expect(editor?.position?.direction).toBe('right');
-    expect(editor?.position?.referencePanel).toBe('workspace.fileTree');
-    const inspector = api.calls.find((c) => c.id === 'workspace.inspector');
-    expect(inspector?.position?.direction).toBe('within');
+    // Column 0: fileTree is a single panel (no position / undefined direction for first panel)
+    const fileTree = api.calls.find((c) => c.id === 'workspace.fileTree');
+    expect(fileTree?.position).toBeUndefined();
+    // Column 1: visualPreview is the only tab in the center group, positioned right of fileTree
     const visualize = api.calls.find((c) => c.id === 'workspace.visualPreview');
-    expect(visualize?.position?.direction).toBe('below');
+    expect(visualize?.position?.direction).toBe('right');
     expect(visualize?.position?.referencePanel).toBe('workspace.fileTree');
+    // Column 2: formPreview is first tab in the right group, positioned right of visualPreview
     const preview = api.calls.find((c) => c.id === 'workspace.formPreview');
     expect(preview?.position?.direction).toBe('right');
-    expect(preview?.position?.referencePanel).toBe('workspace.editor');
+    expect(preview?.position?.referencePanel).toBe('workspace.visualPreview');
   });
 
   it('positions the first bottom tab below the editor and the rest within the same group', () => {
@@ -150,14 +147,6 @@ describe('applyLayout — factory shape', () => {
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     expect(api.activatedPanels).toContain('workspace.problems');
-  });
-
-  it('collapses the bottom utilities at viewport ≤ 1280px (FR-024)', () => {
-    const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1280 });
-    const api = new FakeDockviewApi();
-    applyLayout(api as never, layout);
-    const firstBottom = api.groups.get('workspace.problems');
-    expect(firstBottom?.sizeCalls).toEqual([{ height: 0 }]);
   });
 });
 

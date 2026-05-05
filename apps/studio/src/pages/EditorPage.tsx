@@ -49,7 +49,19 @@ import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import { Maximize2, LayoutGrid, Code2, Network, XCircle } from 'lucide-react';
+import {
+  Maximize2,
+  LayoutGrid,
+  Code2,
+  Network,
+  XCircle,
+  Check,
+  Download,
+  Share2,
+  Zap,
+  Search,
+  ChevronDown
+} from 'lucide-react';
 import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { DockShell } from '../shell/DockShell.js';
 import type { WorkspaceFile } from '../services/workspace.js';
@@ -70,6 +82,7 @@ import {
 } from '../services/codegen-service.js';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
+import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
 import { useCodegenStore } from '../store/codegen-store.js';
 import '../test-api.js';
 import { getRuneStudioTestApi } from '../test-api.js';
@@ -128,6 +141,36 @@ function matchesPreviewSourceIdentity(
   );
 }
 
+function FileTabStrip({
+  files,
+  activeFile,
+  onSelectFile
+}: {
+  files: WorkspaceFile[];
+  activeFile: string | undefined;
+  onSelectFile: (path: string) => void;
+}) {
+  const userFiles = files.filter((f) => !f.readOnly);
+  if (userFiles.length === 0) return null;
+
+  return (
+    <div className="studio-topbar__tabs">
+      {userFiles.map((f) => (
+        <button
+          key={f.path}
+          type="button"
+          className={`studio-topbar__tab ${f.path === activeFile ? 'is-active' : ''}`}
+          onClick={() => onSelectFile(f.path)}
+          title={f.path}
+        >
+          <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
+          <span className="studio-topbar__tab-name">{f.name}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function EditorPage({
   models,
   parsedModels,
@@ -143,10 +186,14 @@ export function EditorPage({
   onClose
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
+  const graphContainerRef = useRef<HTMLDivElement>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
   const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [groupedLayout, setGroupedLayout] = useState(false);
+  // Ref so ResizeObserver callbacks always see the latest value without stale closures.
+  const groupedLayoutRef = useRef(groupedLayout);
+  groupedLayoutRef.current = groupedLayout;
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -182,6 +229,19 @@ export function EditorPage({
   const setWorkerRef = usePreviewStore((s) => s.setWorkerRef);
   const codePreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
   const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
+
+  useEffect(() => {
+    const el = graphContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      const direction = width >= height ? 'LR' : 'TB';
+      graphRef.current?.relayout({ direction, groupByInheritance: groupedLayoutRef.current });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const resolvedModelFiles = useMemo(() => {
     if (parsedModels && parsedModels.length > 0) {
@@ -880,54 +940,12 @@ export function EditorPage({
     ]
   );
 
-  const SourceEditorPanelMounted = useCallback(
-    () => (
-      <SourceEditor
-        ref={sourceEditorRef}
-        files={sourceEditorFiles}
-        activeFile={activeEditorFile}
-        lspClient={lspClient}
-        onFileSelect={(path) => setActiveEditorFile(path)}
-        onContentChange={handleSourceChange}
-        onNavigateToNode={navigateToNode}
-        onEditorViewCreated={handleEditorViewCreated}
-      />
-    ),
-    [
-      sourceEditorFiles,
-      activeEditorFile,
-      lspClient,
-      handleSourceChange,
-      navigateToNode,
-      handleEditorViewCreated
-    ]
-  );
+  // workspace.editor and workspace.inspector are rendered inside CenterStackPanel.
+  // These stubs are kept so the dockview component registry remains complete,
+  // but they are not part of the active layout.
+  const SourceEditorPanelMounted = useCallback(() => <div data-testid="panel-editor" />, []);
 
-  const InspectorPanelMounted = useCallback(
-    () => (
-      <EditorFormPanel
-        nodeData={selectedNodeData}
-        nodeId={selectedNodeId}
-        availableTypes={availableTypes}
-        actions={editorActions}
-        allNodes={storeNodes}
-        renderExpressionEditor={renderExpressionEditor}
-        onClose={() => {
-          /* dock collapse handled by dockview */
-        }}
-        onNavigateToNode={navigateToNode}
-      />
-    ),
-    [
-      selectedNodeData,
-      selectedNodeId,
-      availableTypes,
-      editorActions,
-      storeNodes,
-      renderExpressionEditor,
-      navigateToNode
-    ]
-  );
+  const InspectorPanelMounted = useCallback(() => <div data-testid="panel-inspector" />, []);
 
   const ProblemsPanelMounted = useCallback(
     () => (
@@ -964,7 +982,7 @@ export function EditorPage({
 
   const FormPreviewPanelMounted = useCallback(() => <FormPreviewPanelShell />, []);
 
-  const VisualPreviewPanelMounted = useCallback(
+  const renderGraphPane = useCallback(
     () => (
       <section
         role="region"
@@ -1012,11 +1030,13 @@ export function EditorPage({
           <Separator orientation="vertical" className="mx-1 h-5" />
           <GraphFilterMenu />
         </div>
-        <div className="min-h-0 flex-1">
+        <div ref={graphContainerRef} className="min-h-0 flex-1 relative studio-graph-canvas">
           <RuneTypeGraph
             ref={graphRef}
             config={{
-              layout: { direction: focusMode ? 'LR' : 'TB', groupByInheritance: groupedLayout },
+              // 'LR' is a safe default — the ResizeObserver corrects direction on the first frame
+              // once the container is measured. The container dimensions aren't available yet here.
+              layout: { direction: 'LR', groupByInheritance: groupedLayout },
               showControls: true,
               showMinimap: true,
               readOnly: false
@@ -1031,13 +1051,79 @@ export function EditorPage({
       </section>
     ),
     [
+      focusMode,
       groupedLayout,
       handleFitView,
       handleModelChanged,
       handleRelayout,
+      handleToggleFocusMode,
       handleToggleGroupedLayout,
       navigateToNode
     ]
+  );
+
+  const renderSourcePane = useCallback(
+    () => (
+      <div className="flex flex-col min-h-0 h-full">
+        <SourceEditor
+          ref={sourceEditorRef}
+          files={sourceEditorFiles}
+          activeFile={activeEditorFile}
+          lspClient={lspClient}
+          onFileSelect={(path) => setActiveEditorFile(path)}
+          onContentChange={handleSourceChange}
+          onNavigateToNode={navigateToNode}
+          onEditorViewCreated={handleEditorViewCreated}
+        />
+      </div>
+    ),
+    [
+      sourceEditorFiles,
+      activeEditorFile,
+      lspClient,
+      handleSourceChange,
+      navigateToNode,
+      handleEditorViewCreated
+    ]
+  );
+
+  const renderInspectorPane = useCallback(
+    () => (
+      <div className="flex flex-col min-h-0 h-full overflow-auto">
+        <EditorFormPanel
+          nodeData={selectedNodeData}
+          nodeId={selectedNodeId}
+          availableTypes={availableTypes}
+          actions={editorActions}
+          allNodes={storeNodes}
+          renderExpressionEditor={renderExpressionEditor}
+          onClose={() => {
+            /* pane visibility handled by paneswitch */
+          }}
+          onNavigateToNode={navigateToNode}
+        />
+      </div>
+    ),
+    [
+      selectedNodeData,
+      selectedNodeId,
+      availableTypes,
+      editorActions,
+      storeNodes,
+      renderExpressionEditor,
+      navigateToNode
+    ]
+  );
+
+  const VisualPreviewPanelMounted = useCallback(
+    () => (
+      <CenterStackPanel
+        renderGraph={renderGraphPane}
+        renderSource={renderSourcePane}
+        renderInspector={renderInspectorPane}
+      />
+    ),
+    [renderGraphPane, renderSourcePane, renderInspectorPane]
   );
 
   // Memoize the overrides object so DockShell's useMemo([panelComponents])
@@ -1080,57 +1166,55 @@ export function EditorPage({
       onKeyDown={handleEditorPageKeyDown}
       tabIndex={-1}
     >
-      <header
-        className="glass-header studio-app-header--compact flex flex-wrap items-center justify-between gap-3 px-3 py-2"
-        aria-label="Studio workspace header"
-      >
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="studio-topbar" aria-label="Studio workspace header">
+        <div className="studio-topbar__left">
           <div className="studio-brand">
             <div className="studio-brand__mark">R</div>
             <span className="studio-brand__name">Rune Studio</span>
           </div>
-          <Separator orientation="vertical" className="hidden h-5 sm:block" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-foreground">
-              {workspaceName || 'Untitled workspace'}
-            </div>
-            <div className="text-xs text-muted-foreground">
+          <span className="studio-topbar__divider" />
+          <button type="button" className="studio-topbar__ws-btn" onClick={onClose}>
+            <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
+            <span className="studio-topbar__ws-sub">
               {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
-            </div>
-          </div>
+            </span>
+            <ChevronDown className="size-3" />
+          </button>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <ExportMenu
-            getSerializedFiles={getSerializedFiles}
-            exportImage={handleExportImage}
-            hasModels={models.length > 0}
-          />
-          <Separator orientation="vertical" className="mx-1 h-5" />
-          <Button
-            variant="secondary"
-            size="sm"
+        <FileTabStrip files={files} activeFile={activeEditorFile} onSelectFile={openFileInSource} />
+        <div className="studio-topbar__right">
+          <button type="button" className="studio-topbar__cmdk" aria-label="Search">
+            <Search className="size-3.5" />
+            <span>Search types, files, commands…</span>
+            <kbd>⌘K</kbd>
+          </button>
+          <span className="studio-topbar__divider" />
+          <button type="button" className="studio-topbar__icon-btn" aria-label="Validate">
+            <Check className="size-4" />
+          </button>
+          <button
+            type="button"
+            className="studio-topbar__icon-btn"
+            aria-label="Export code"
             onClick={() => setShowExportDialog(true)}
-            disabled={models.length === 0}
-            title="Generate code from model"
           >
-            <Code2 className="w-3.5 h-3.5 mr-1" />
-            Export Code
-          </Button>
-          {onClose && (
-            <>
-              <Separator orientation="vertical" className="mx-1 h-5" />
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={onClose}
-                title="Close all files"
-                aria-label="Close workspace"
-              >
-                <XCircle className="w-3.5 h-3.5 mr-1" />
-                Close
-              </Button>
-            </>
-          )}
+            <Download className="size-4" />
+          </button>
+          <button type="button" className="studio-topbar__icon-btn" aria-label="Share">
+            <Share2 className="size-4" />
+          </button>
+          <button
+            type="button"
+            className="studio-topbar__generate"
+            onClick={() => setShowExportDialog(true)}
+          >
+            <Zap className="size-3.5" />
+            Generate
+          </button>
+          <span className="studio-topbar__divider" />
+          <button type="button" className="studio-topbar__avatar" aria-label="Account">
+            PM
+          </button>
         </div>
       </header>
 
