@@ -1858,22 +1858,19 @@
   overflow: hidden;
 }
 
-.studio-app .studio-center-stack[data-count='1'] .studio-center-stack__pane {
-  flex: 1 1 100%;
-}
-
-.studio-app .studio-center-stack[data-count='2'] .studio-center-stack__pane {
-  flex: 1 1 50%;
-}
-
-.studio-app .studio-center-stack[data-count='3'] .studio-center-stack__pane {
-  flex: 1 1 33.33%;
-}
-
 .studio-app .studio-center-stack__split {
-  width: 1px;
-  background: var(--border);
+  width: 5px;
+  margin: 0 -2px;
+  background: transparent;
+  border-left: 1px solid var(--border);
   flex-shrink: 0;
+  cursor: col-resize;
+  z-index: 1;
+  transition: background 0.15s;
+}
+
+.studio-app .studio-center-stack__split:hover {
+  background: color-mix(in oklch, var(--primary), transparent 70%);
 }
 
 /* Hide dockview's tab strip for the center stack when it has only one tab.
