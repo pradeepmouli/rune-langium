@@ -31,7 +31,20 @@ export interface ParseWorkspaceRequest {
   }>;
 }
 
-export type WorkerRequest = ParseRequest | ParseWorkspaceRequest;
+export interface LinkDocumentRequest {
+  type: 'linkDocument';
+  id: string;
+  uri: string;
+}
+
+export interface LinkDocumentResponse {
+  type: 'linkDocumentResult';
+  id: string;
+  linked: boolean;
+  errors: string[];
+}
+
+export type WorkerRequest = ParseRequest | ParseWorkspaceRequest | LinkDocumentRequest;
 
 export interface ParseResponse {
   type: 'parseResult';
@@ -48,7 +61,7 @@ export interface ParseWorkspaceResponse {
   errors: Record<string, string[]>;
 }
 
-export type WorkerResponse = ParseResponse | ParseWorkspaceResponse;
+export type WorkerResponse = ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse;
 
 const { RuneDsl } = createRuneDslServices();
 const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
@@ -222,6 +235,36 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
   }
 }
 
+async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumentResponse> {
+  try {
+    const targetUri = URI.parse(req.uri);
+    const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
+
+    if (!langiumDocs.hasDocument(targetUri)) {
+      return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [] };
+    }
+
+    const doc = langiumDocs.getDocument(targetUri);
+    if (!doc) {
+      return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [] };
+    }
+    await builder.build([doc], { validation: false, eagerLinking: true });
+
+    const errors: string[] = [];
+    for (const diag of doc.diagnostics ?? []) {
+      errors.push(diag.message);
+    }
+    return { type: 'linkDocumentResult', id: req.id, linked: true, errors };
+  } catch (error) {
+    return {
+      type: 'linkDocumentResult',
+      id: req.id,
+      linked: false,
+      errors: [(error as Error).message]
+    };
+  }
+}
+
 async function buildWorkspaceDocumentsFromSerializedPayload(
   files: ParseWorkspaceRequest['files']
 ): Promise<{
@@ -265,6 +308,8 @@ if (typeof self !== 'undefined' && typeof self.onmessage !== 'undefined') {
       response = await handleParse(req);
     } else if (req.type === 'parseWorkspace') {
       response = await handleParseWorkspace(req);
+    } else if (req.type === 'linkDocument') {
+      response = await handleLinkDocument(req);
     } else {
       return;
     }
@@ -273,4 +318,9 @@ if (typeof self !== 'undefined' && typeof self.onmessage !== 'undefined') {
   };
 }
 
-export { handleParse, handleParseWorkspace };
+export function isLinkDocumentResponse(value: unknown): value is LinkDocumentResponse {
+  if (!isRecord(value)) return false;
+  return value.type === 'linkDocumentResult' && typeof value.id === 'string';
+}
+
+export { handleParse, handleParseWorkspace, handleLinkDocument };

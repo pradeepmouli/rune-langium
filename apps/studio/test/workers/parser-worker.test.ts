@@ -28,6 +28,11 @@ const fromModelMock = vi.fn((model: unknown, uri: string) => ({
 }));
 const addDocumentMock = vi.fn();
 const deserializeMock = vi.fn((json: string) => JSON.parse(json));
+const hasDocumentMock = vi.fn((_uri: unknown) => false);
+const getDocumentMock = vi.fn((_uri: unknown) => ({
+  diagnostics: [],
+  parseResult: { value: { $type: 'RosettaModel', elements: [] }, parserErrors: [] }
+}));
 
 vi.mock('@rune-langium/core', () => ({
   createRuneDslServices: () => ({
@@ -39,7 +44,11 @@ vi.mock('@rune-langium/core', () => ({
         workspace: {
           LangiumDocumentFactory: { fromString: fromStringMock, fromModel: fromModelMock },
           DocumentBuilder: { build: buildMock },
-          LangiumDocuments: { addDocument: addDocumentMock }
+          LangiumDocuments: {
+            addDocument: addDocumentMock,
+            hasDocument: hasDocumentMock,
+            getDocument: getDocumentMock
+          }
         }
       }
     }
@@ -65,6 +74,9 @@ describe('parser-worker', () => {
     fromModelMock.mockClear();
     addDocumentMock.mockClear();
     deserializeMock.mockClear();
+    hasDocumentMock.mockReset();
+    hasDocumentMock.mockReturnValue(false);
+    getDocumentMock.mockClear();
   });
 
   afterEach(() => {
@@ -170,5 +182,59 @@ describe('parser-worker', () => {
     expect(fromStringMock).toHaveBeenCalledWith('namespace local', 'local.rosetta');
     expect(response.type).toBe('parseWorkspaceResult');
     expect(response.models[0]).toBe(hydratedModel);
+  });
+
+  it('links a single document on demand after lazy workspace parse', async () => {
+    const fakeDoc = {
+      diagnostics: [],
+      parseResult: { value: { $type: 'RosettaModel', elements: [] }, parserErrors: [] }
+    };
+    hasDocumentMock.mockReturnValue(true);
+    getDocumentMock.mockReturnValue(fakeDoc);
+
+    const { handleParseWorkspace, handleLinkDocument } = await loadParserWorkerModule();
+
+    const wsResult = await handleParseWorkspace({
+      type: 'parseWorkspace',
+      id: 'ws-link',
+      files: [
+        {
+          name: 'inmemory:///types.rosetta',
+          content: 'namespace test\n\ntype Foo:\n  bar string (1..1)'
+        },
+        {
+          name: 'inmemory:///refs.rosetta',
+          content: 'namespace test\n\ntype Bar:\n  foo Foo (1..1)'
+        }
+      ]
+    });
+    expect(wsResult.models).toHaveLength(2);
+
+    const linkResult = await handleLinkDocument({
+      type: 'linkDocument',
+      id: 'link-1',
+      uri: 'inmemory:///refs.rosetta'
+    });
+    expect(linkResult.linked).toBe(true);
+    expect(linkResult.type).toBe('linkDocumentResult');
+    expect(buildMock).toHaveBeenLastCalledWith([fakeDoc], {
+      validation: false,
+      eagerLinking: true
+    });
+  });
+
+  it('returns linked: false for unknown document URIs', async () => {
+    hasDocumentMock.mockReturnValue(false);
+
+    const { handleLinkDocument } = await loadParserWorkerModule();
+
+    const result = await handleLinkDocument({
+      type: 'linkDocument',
+      id: 'link-unknown',
+      uri: 'inmemory:///does-not-exist.rosetta'
+    });
+    expect(result.linked).toBe(false);
+    expect(result.type).toBe('linkDocumentResult');
+    expect(result.errors).toEqual([]);
   });
 });
