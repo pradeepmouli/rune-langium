@@ -38,6 +38,20 @@
     font-family: var(--font-sans);
   }
 
+  /* Override the design-system's body font (Outfit) for all studio
+   * UI elements. Outfit is only used on the brand wordmark. Code/mono
+   * elements use var(--font-mono) via their own rules. */
+  .studio-app button,
+  .studio-app input,
+  .studio-app select,
+  .studio-app textarea,
+  .studio-app label,
+  .studio-app legend,
+  .studio-app fieldset,
+  .studio-app [data-slot] {
+    font-family: var(--font-sans);
+  }
+
   .studio-app [data-slot='button'] {
     cursor: pointer;
     transition:
@@ -299,6 +313,7 @@
     width: 36px;
     height: 36px;
     border-radius: var(--radius);
+    overflow: visible;
     color: var(--muted-foreground);
     display: grid;
     place-items: center;
@@ -324,13 +339,14 @@
 
   .studio-app .studio-rail__pip {
     position: absolute;
-    left: -8px;
-    top: 8px;
-    bottom: 8px;
-    width: 2px;
+    left: -10px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
     background: var(--primary);
-    border-radius: 2px;
+    border-radius: 0 2px 2px 0;
   }
+
 
   .studio-app .studio-rail > .studio-brand__mark {
     margin-bottom: 8px;
