@@ -222,9 +222,17 @@ describe('parser-worker', () => {
     // User file must be parsed normally
     expect(fromStringMock).toHaveBeenCalledWith('namespace local', 'local.rosetta');
 
-    // Only user file ends up in models (corpus deferred)
+    // Both corpus skeleton and user file appear in parsedModels
     expect(response.type).toBe('parseWorkspaceResult');
-    expect(response.parsedModels.map((m) => m.filePath)).toEqual(['local.rosetta']);
+    expect(response.parsedModels.map((m) => m.filePath)).toEqual([
+      '[cdm]/types.rosetta',
+      'local.rosetta'
+    ]);
+    // Corpus model is a skeleton with just element stubs (no full AST)
+    const corpusModel = response.parsedModels[0]!.model as any;
+    expect(corpusModel.$type).toBe('RosettaModel');
+    expect(corpusModel.elements).toHaveLength(1);
+    expect(corpusModel.elements[0].name).toBe('Party');
   });
 
   it('on-demand deserializes a deferred corpus document when linkDocument is called', async () => {

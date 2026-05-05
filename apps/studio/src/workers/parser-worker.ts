@@ -87,6 +87,11 @@ function getIndexManager(): RuneDslIndexManager {
   return im as RuneDslIndexManager;
 }
 
+function extractNamespace(content: string): string {
+  const match = content.match(/^\s*namespace\s+([\w.]+)/m);
+  return match?.[1] ?? '';
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
@@ -208,14 +213,21 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
     const models: RosettaModel[] = [];
     const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
 
-    // Clear deferred blobs from previous workspace load
+    // Clear stale state from previous workspace load — both deferred blobs
+    // and index entries registered via registerExports. Without this, symbols
+    // from an unloaded curated model remain globally resolvable.
+    for (const uriStr of deferredModelJson.keys()) {
+      indexManager.clearExports(URI.parse(uriStr));
+    }
     deferredModelJson.clear();
 
     for (const file of req.files) {
       const uri = URI.parse(file.name);
 
       if (file.serializedModelJson && file.exports?.length) {
-        // Corpus file with exports manifest — register index only, defer AST deserialization
+        // Corpus file with exports manifest — register index only, defer AST deserialization.
+        // Build a skeleton RosettaModel with just element stubs so the UI can
+        // render graph nodes and explorer rows without full deserialization.
         const descriptions = file.exports.map((exp) => ({
           type: exp.type,
           name: exp.name,
@@ -224,7 +236,19 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
         }));
         indexManager.registerExports(uri, descriptions);
         deferredModelJson.set(uri.toString(), file.serializedModelJson);
-        // Do not create a document or add to documents array
+
+        // Synthesize a lightweight model for the UI (graph/explorer) from exports.
+        // Elements carry $type + name so the graph adapter can create nodes.
+        const skeletonModel = {
+          $type: 'RosettaModel',
+          name: extractNamespace(file.content),
+          elements: file.exports.map((exp) => ({
+            $type: exp.type,
+            name: exp.name
+          }))
+        } as unknown as RosettaModel;
+        models.push(skeletonModel);
+        parsedModels.push({ filePath: file.name, model: skeletonModel });
       } else if (file.serializedModelJson) {
         // Corpus file WITHOUT exports (old artifact format) — deserialize fully
         const model = serializer.deserialize<RosettaModel>(file.serializedModelJson);
