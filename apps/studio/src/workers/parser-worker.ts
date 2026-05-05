@@ -231,6 +231,16 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
         }));
         indexManager.registerExports(uri, descriptions);
         deferredModelJson.set(uri.toString(), file.serializedModelJson);
+
+        // Emit a skeleton model so the graph/explorer can render nodes.
+        // astToModel only needs { $type, name } per element.
+        const skeleton = {
+          $type: 'RosettaModel',
+          name: file.content.match(/^\s*namespace\s+([\w.]+)/m)?.[1] ?? '',
+          elements: file.exports.map((exp) => ({ $type: exp.type, name: exp.name }))
+        } as unknown as RosettaModel;
+        models.push(skeleton);
+        parsedModels.push({ filePath: file.name, model: skeleton });
       } else if (file.serializedModelJson) {
         // Corpus file WITHOUT exports (old artifact format) — deserialize fully
         const model = serializer.deserialize<RosettaModel>(file.serializedModelJson);
