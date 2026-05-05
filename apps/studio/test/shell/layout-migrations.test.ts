@@ -116,10 +116,9 @@ describe('sanitizeLayout (T063)', () => {
     );
   });
 
-  it('rebuilds old NavigationColumn (top/bottom) layout as incompatible v1 shape', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    // Pre-v3 layouts used NavigationColumn with top/bottom — these are now incompatible
-    // and should be rebuilt from defaults rather than migrated in-place.
+  it('migrates old NavigationColumn (top/bottom) layout to v3 ExplorerColumn', () => {
+    // Pre-v3 layouts used NavigationColumn with top/bottom — these are
+    // migrated inline to the v3 ExplorerColumn shape (no rebuild needed).
     const oldShape = {
       version: 1,
       writtenBy: '0.1.0',
@@ -128,19 +127,20 @@ describe('sanitizeLayout (T063)', () => {
         columns: [
           {
             top: { component: 'workspace.fileTree' },
-            bottom: { component: 'workspace.visualPreview' }
+            bottom: { component: 'workspace.visualPreview' },
+            size: 260
           },
           {
-            active: 'workspace.visualPreview',
+            active: 'workspace.editor',
             tabs: [{ component: 'workspace.editor' }, { component: 'workspace.inspector' }]
           },
           {
-            active: 'workspace.output',
+            active: 'workspace.formPreview',
             tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
           }
         ],
         bottomGroup: {
-          active: 'workspace.editor',
+          active: 'workspace.problems',
           collapsed: false,
           tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
         }
@@ -152,12 +152,9 @@ describe('sanitizeLayout (T063)', () => {
       throw new Error('factory layout expected');
     }
 
-    // Rebuilt to defaults — v3 ExplorerColumn shape.
-    expect(out.dockview.columns[0]).toMatchObject({ component: 'workspace.fileTree' });
+    // Migrated to v3 ExplorerColumn, preserving original size.
+    expect(out.dockview.columns[0]).toMatchObject({ component: 'workspace.fileTree', size: 260 });
     expect(out.dockview.columns).toHaveLength(3);
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[layout-migrations] reset invalid saved layout to defaults'
-    );
   });
 
   it('rebuilds malformed factory layouts instead of throwing during active-tab normalization', () => {

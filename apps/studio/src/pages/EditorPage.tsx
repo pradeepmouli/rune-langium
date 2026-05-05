@@ -1148,7 +1148,7 @@ export function EditorPage({
             <span className="studio-brand__name">Rune Studio</span>
           </div>
           <span className="studio-topbar__divider" />
-          <button type="button" className="studio-topbar__ws-btn">
+          <button type="button" className="studio-topbar__ws-btn" onClick={onClose}>
             <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
             <span className="studio-topbar__ws-sub">
               {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
