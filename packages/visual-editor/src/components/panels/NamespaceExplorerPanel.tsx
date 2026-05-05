@@ -426,10 +426,6 @@ function TypeItemRow({
           <TooltipContent>{refCount} hidden reference(s)</TooltipContent>
         </Tooltip>
       )}
-
-      <span className="text-[10px] text-muted-foreground shrink-0">
-        {KIND_LABELS[row.typeKind]}
-      </span>
     </div>
   );
 }
