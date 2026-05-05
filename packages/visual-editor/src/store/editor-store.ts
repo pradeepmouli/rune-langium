@@ -484,7 +484,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
           for (const entry of entries) {
             for (const exp of entry.exports) {
-              const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type] ?? 'data';
+              // Only create graph nodes for top-level element kinds.
+              // Enum values are index-only (for cross-file reference resolution).
+              if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
+              const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
               const nodeId = `${entry.namespace}::${exp.name}`;
               if (existingIds.has(nodeId)) continue;
               newNodes.push({
