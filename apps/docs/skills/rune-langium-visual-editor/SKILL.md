@@ -20,7 +20,7 @@ need to embed the editor in a larger application.
 **Do NOT use when:**
 - You only need a single graph — use the pre-created `useEditorStore` singleton.
 
-API surface: 49 functions, 62 types, 10 constants
+API surface: 49 functions, 63 types, 10 constants
 
 ## Configuration
 
@@ -30,7 +30,7 @@ API surface: 49 functions, 62 types, 10 constants
 
 **Key functions:** `createEditorStore` (Create an isolated zustand editor store instance)
 
-*121 exports total — see references/ for full API.*
+*122 exports total — see references/ for full API.*
 
 ## References
 

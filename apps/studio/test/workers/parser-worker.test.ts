@@ -49,7 +49,9 @@ vi.mock('@rune-langium/core', () => ({
           LangiumDocuments: {
             addDocument: addDocumentMock,
             hasDocument: hasDocumentMock,
-            getDocument: getDocumentMock
+            getDocument: getDocumentMock,
+            deleteDocument: vi.fn(),
+            all: { toArray: () => [] }
           },
           IndexManager: { registerExports: registerExportsMock }
         }

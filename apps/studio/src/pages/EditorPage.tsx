@@ -263,10 +263,15 @@ export function EditorPage({
   }, [files, models, parsedModels]);
 
   useEffect(() => {
-    if (models.length > 0) {
-      useEditorStore.getState().loadModels(models as unknown[]);
+    if (models.length > 0 || deferredExports.length > 0) {
+      if (models.length > 0) {
+        useEditorStore.getState().loadModels(models as unknown[]);
+      }
+      if (deferredExports.length > 0) {
+        useEditorStore.getState().loadDeferredExports(deferredExports);
+      }
     }
-  }, [models]);
+  }, [models, deferredExports]);
 
   const selectedNodeData: AnyGraphNode | null = useMemo(() => {
     if (!selectedNodeId) return null;
@@ -421,8 +426,9 @@ export function EditorPage({
     }
 
     // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
+    // Skip system:// URIs (base types are always parsed, never deferred).
     // Debounced so rapid keyboard navigation doesn't queue many worker requests.
-    if (filePath) {
+    if (filePath && !filePath.startsWith('system://')) {
       if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
       linkDocumentTimerRef.current = setTimeout(() => void linkDocument(filePath), 150);
     }

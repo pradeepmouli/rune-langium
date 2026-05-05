@@ -73,7 +73,7 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
 
   const previewActive = preset === 'preview' ? 'workspace.codePreview' : 'workspace.formPreview';
 
-  const explorerColumn: ExplorerColumn = { component: 'workspace.fileTree', size: 248 };
+  const explorerColumn: ExplorerColumn = { component: 'workspace.fileTree', size: 200 };
 
   const dockview: FactoryShape = {
     shape: 'factory',

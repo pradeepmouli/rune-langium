@@ -234,6 +234,14 @@ Snapshot of visual editor state tracked by the zustand store.
 
 **Required:** yes
 
+#### focusMode
+
+When true, selecting a node auto-isolates it + direct neighbors.
+
+**Type:** `boolean`
+
+**Required:** yes
+
 #### visibility
 
 

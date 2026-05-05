@@ -22,10 +22,19 @@ import { logger, logRead } from './log.js';
 const ALLOWED_MODEL_IDS = new Set<string>(CURATED_MODEL_IDS);
 const PATH_RE = /^\/curated\/([^/]+)\/(.+)$/;
 
+const DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:4321'];
+
+function resolveOrigin(req: Request, env: Env): string {
+  const reqOrigin = req.headers.get('Origin') ?? '';
+  if (reqOrigin === env.ALLOWED_ORIGIN) return reqOrigin;
+  if (DEV_ORIGINS.includes(reqOrigin)) return reqOrigin;
+  return env.ALLOWED_ORIGIN;
+}
+
 export async function handleCuratedRead(req: Request, env: Env): Promise<Response> {
   const startedAt = Date.now();
   const url = new URL(req.url);
-  const allowedOrigin = env.ALLOWED_ORIGIN;
+  const allowedOrigin = resolveOrigin(req, env);
   const method = req.method;
   const path = url.pathname;
 
@@ -40,6 +49,19 @@ export async function handleCuratedRead(req: Request, env: Env): Promise<Respons
     return res;
   }
 
+  if (method === 'OPTIONS') {
+    return done(
+      new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': allowedOrigin,
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Max-Age': '86400',
+          Vary: 'Origin'
+        }
+      })
+    );
+  }
   if (method !== 'GET' && method !== 'HEAD') {
     return done(json(405, { error: 'method_not_allowed' }, allowedOrigin));
   }

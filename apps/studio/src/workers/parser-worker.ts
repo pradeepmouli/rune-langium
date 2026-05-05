@@ -247,6 +247,10 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
 
     for (const file of req.files) {
       const uri = URI.parse(file.name);
+      // Defensively remove any previously registered document with this URI
+      if (langiumDocs.hasDocument(uri)) {
+        langiumDocs.deleteDocument(uri);
+      }
 
       if (file.serializedModelJson && file.exports?.length) {
         // Corpus file with exports manifest — register index only, defer AST deserialization.

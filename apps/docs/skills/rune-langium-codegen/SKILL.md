@@ -19,7 +19,8 @@ documents from `@rune-langium/core`.
 ## Quick Reference
 
 **codegen/src:** `generate` (Generate code from one or more parsed Langium documents), `generatePreviewSchemas` (Generate structured form-preview schemas from one or more parsed Langium documents)
-**types:** `GeneratorError` (Thrown when strict mode is enabled and any error diagnostic is produced), `FormPreviewSchema`, `GeneratorOutput` (One emitted output file from the generator), `GeneratorDiagnostic` (A generator-time diagnostic (not a Langium validation diagnostic)), `PreviewField`, `PreviewFieldKind`, `PreviewSourceMapEntry`, `SourceMapEntry` (One source-map entry: maps an output line back to a source location), `Target` (The three supported generator targets), `GeneratedFunc` (Metadata for a single emitted Rune `func` (TypeScript target only))
+**types:** `GeneratorError` (Thrown when strict mode is enabled and any error diagnostic is produced), `FormPreviewKind`, `FormPreviewSchema`, `GeneratorOutput` (One emitted output file from the generator), `GeneratorDiagnostic` (A generator-time diagnostic (not a Langium validation diagnostic)), `PreviewField`, `PreviewFieldKind`, `PreviewSourceMapEntry`, `SourceMapEntry` (One source-map entry: maps an output line back to a source location), `Target` (The three supported generator targets), `GeneratedFunc` (Metadata for a single emitted Rune `func` (TypeScript target only)), `RuneTypeAlias`, `Condition`, `TypeParam`, `RuneRule`, `RuneReport`, `RuneAnnotationDecl`, `AnnotationAttribute`, `RuneLibraryFunc`, `LibraryFuncParam`
+**emit:** `NamespaceManifest`, `NamespaceRegistry`
 
 ## References
 

@@ -120,14 +120,9 @@ export function App() {
       setWorkspaceNotice(
         result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null
       );
-      // Store + register deferred corpus types as graph nodes.
-      const deferred = result.deferredExports ?? [];
-      setDeferredExports(deferred);
-      if (deferred.length > 0) {
-        setTimeout(() => {
-          useEditorStore.getState().loadDeferredExports(deferred);
-        }, 0);
-      }
+      // Store deferred corpus types — they'll be registered in the editor
+      // store by the EditorPage effect that watches models + deferredExports.
+      setDeferredExports(result.deferredExports ?? []);
     },
     []
   );

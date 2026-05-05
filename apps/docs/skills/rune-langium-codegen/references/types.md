@@ -2,11 +2,17 @@
 
 ## types
 
+### `FormPreviewKind`
+```ts
+"data" | "typeAlias" | "choice" | "function"
+```
+
 ### `FormPreviewSchema`
 **Properties:**
 - `schemaVersion: 1`
 - `targetId: string`
 - `title: string`
+- `kind: FormPreviewKind` (optional)
 - `status: "ready" | "unsupported"`
 - `fields: PreviewField[]`
 - `unsupportedFeatures: string[]` (optional)
@@ -81,3 +87,90 @@ GeneratorOutput.content). Useful for unit-testing the emitter in
 isolation without parsing the full file.
 - `sourceMap: SourceMapEntry[]` — Source-map entries scoped to this function's output lines.
 A subset of the enclosing GeneratorOutput.sourceMap.
+
+### `RuneTypeAlias`
+**Properties:**
+- `name: string`
+- `namespace: string`
+- `targetTypeName: string`
+- `targetKind: "alias" | "enum" | "data" | "primitive"`
+- `conditions: Condition[]`
+- `parameters: TypeParam[]`
+- `definition: string` (optional)
+
+### `Condition`
+**Properties:**
+- `name: string` (optional)
+- `expression: unknown` (optional)
+
+### `TypeParam`
+**Properties:**
+- `name: string`
+- `typeName: string`
+
+### `RuneRule`
+**Properties:**
+- `name: string`
+- `namespace: string`
+- `isEligibility: boolean`
+- `inputTypeName: string` (optional)
+- `exprNode: unknown`
+- `identifier: string` (optional)
+- `definition: string` (optional)
+
+### `RuneReport`
+**Properties:**
+- `name: string`
+- `namespace: string`
+- `inputTypeName: string`
+- `reportTypeName: string`
+- `eligibilityRuleNames: string[]`
+- `timing: string`
+- `regulatoryBody: string` (optional)
+
+### `RuneAnnotationDecl`
+**Properties:**
+- `name: string`
+- `namespace: string`
+- `prefix: string` (optional)
+- `attributes: AnnotationAttribute[]`
+- `definition: string` (optional)
+
+### `AnnotationAttribute`
+**Properties:**
+- `name: string`
+- `typeName: string`
+- `isList: boolean`
+- `isOptional: boolean`
+
+### `RuneLibraryFunc`
+**Properties:**
+- `name: string`
+- `namespace: string`
+- `parameters: LibraryFuncParam[]`
+- `returnTypeName: string`
+- `definition: string` (optional)
+
+### `LibraryFuncParam`
+**Properties:**
+- `name: string`
+- `typeName: string`
+- `isArray: boolean`
+
+## emit
+
+### `NamespaceManifest`
+**Properties:**
+- `namespace: string`
+- `exportedDataNames: Set<string>`
+- `exportedEnumNames: Set<string>`
+- `exportedFuncNames: Set<string>`
+- `exportedRuleNames: Set<string>`
+- `exportedTypeAliasNames: Set<string>`
+- `exportedAnnotationNames: Set<string>`
+- `exportedLibraryFuncNames: Set<string>`
+- `relativePath: string`
+
+### `NamespaceRegistry`
+**Properties:**
+- `namespaces: Map<string, NamespaceManifest>`

@@ -385,7 +385,7 @@ const initialState: EditorState = {
   detailPanelOpen: false,
   validationErrors: [],
   layoutOptions: { direction: 'LR', nodeSeparation: 50, rankSeparation: 100 },
-  focusMode: true,
+  focusMode: false,
   visibility: {
     expandedNamespaces: new Set<string>(),
     hiddenNodeIds: new Set<string>(),
@@ -530,7 +530,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         selectNode(nodeId) {
           set({ selectedNodeId: nodeId, detailPanelOpen: nodeId !== null });
           if (nodeId && get().focusMode) {
-            get().isolateNode(nodeId);
+            // Only isolate if the node has at least one edge — stub nodes
+            // from deferred exports have no edges and crash ReactFlow when
+            // isolated (no layout, no measured dimensions).
+            const hasEdges = get().edges.some((e) => e.source === nodeId || e.target === nodeId);
+            if (hasEdges) {
+              get().isolateNode(nodeId);
+            }
           }
         },
 
