@@ -11,9 +11,15 @@ import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import type {
   WorkerRequest,
   ParseResponse,
-  ParseWorkspaceResponse
+  ParseWorkspaceResponse,
+  LinkDocumentRequest,
+  LinkDocumentResponse
 } from '../workers/parser-worker.js';
-import { isParseResponse, isParseWorkspaceResponse } from '../workers/parser-worker.js';
+import {
+  isParseResponse,
+  isParseWorkspaceResponse,
+  isLinkDocumentResponse
+} from '../workers/parser-worker.js';
 
 export interface WorkspaceFile {
   name: string;
@@ -143,7 +149,10 @@ function workerRequest(msg: Extract<WorkerRequest, { type: 'parse' }>): Promise<
 function workerRequest(
   msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>
 ): Promise<ParseWorkspaceResponse>;
-function workerRequest(msg: WorkerRequest): Promise<ParseResponse | ParseWorkspaceResponse> {
+function workerRequest(msg: LinkDocumentRequest): Promise<LinkDocumentResponse>;
+function workerRequest(
+  msg: WorkerRequest
+): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse> {
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (!w) {
@@ -171,6 +180,16 @@ function workerRequest(msg: WorkerRequest): Promise<ParseResponse | ParseWorkspa
         if (msg.type === 'parse') {
           if (!isParseResponse(e.data)) {
             const error = new Error('Worker returned an invalid parse response');
+            resetWorkerState(error);
+            reject(error);
+            return;
+          }
+          resolve(e.data);
+          return;
+        }
+        if (msg.type === 'linkDocument') {
+          if (!isLinkDocumentResponse(e.data)) {
+            const error = new Error('Worker returned an invalid linkDocument response');
             resetWorkerState(error);
             reject(error);
             return;
@@ -328,6 +347,28 @@ export function _resetParserWorkerForTests(): void {
   worker = null;
   requestId = 0;
   workerInitError = null;
+}
+
+/**
+ * Trigger on-demand cross-reference linking for a single document (ADR 007 Phase 2).
+ * Fire-and-forget: callers do not need to await the result.
+ */
+export async function linkDocument(uri: string): Promise<{ linked: boolean; errors: string[] }> {
+  try {
+    const id = String(++requestId);
+    const response = await workerRequest({
+      type: 'linkDocument',
+      id,
+      uri
+    });
+    if (isLinkDocumentResponse(response)) {
+      return { linked: response.linked, errors: response.errors };
+    }
+    return { linked: false, errors: ['Unexpected response'] };
+  } catch (error) {
+    console.warn('[workspace] linkDocument failed:', error);
+    return { linked: false, errors: [(error as Error).message] };
+  }
 }
 
 /**

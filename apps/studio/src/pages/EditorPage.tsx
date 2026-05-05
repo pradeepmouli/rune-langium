@@ -66,6 +66,7 @@ import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
 import type { WorkspaceFile } from '../services/workspace.js';
+import { linkDocument } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
@@ -410,6 +411,12 @@ export function EditorPage({
           }
         }
       }
+    }
+
+    // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2)
+    const docUri = (nodeData as any)?.$container?.$document?.uri?.toString();
+    if (docUri) {
+      void linkDocument(docUri);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);
