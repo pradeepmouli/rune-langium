@@ -33,6 +33,7 @@ import {
   loadWorkspaceFiles,
   saveWorkspaceFiles
 } from './workspace/workspace-files.js';
+import { WorkspaceManager } from './workspace/workspace-manager.js';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
 
@@ -89,6 +90,7 @@ export function App() {
   const lspClientRef = useRef<LspClientService | null>(null);
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const workspaceManagerRef = useRef<WorkspaceManager | null>(null);
   // Incremented before each model-merge parse; only the matching result is
   // applied, preventing stale async results from overwriting newer state.
   const modelParseTokenRef = useRef(0);
@@ -452,6 +454,58 @@ export function App() {
     setWorkspaceNotice(null);
   }, []);
 
+  const getWorkspaceManager = useCallback(async (): Promise<WorkspaceManager> => {
+    if (workspaceManagerRef.current) return workspaceManagerRef.current;
+    const opfsRoot = await navigator.storage.getDirectory();
+    workspaceManagerRef.current = new WorkspaceManager({
+      opfsRoot,
+      studioVersion: STUDIO_VERSION,
+      tabId: `tab-${Date.now()}`
+    });
+    return workspaceManagerRef.current;
+  }, []);
+
+  const handleCreateGitBackedWorkspace = useCallback(
+    async (input: { repoUrl: string; branch: string; user: string; token: string }) => {
+      const wm = await getWorkspaceManager();
+      const repoName =
+        input.repoUrl
+          .replace(/\.git$/, '')
+          .split('/')
+          .pop() ?? 'workspace';
+      const ws = await wm.createGitBacked({
+        name: repoName,
+        repoUrl: input.repoUrl,
+        branch: input.branch,
+        user: input.user,
+        token: input.token
+      });
+      return { id: ws.id };
+    },
+    [getWorkspaceManager]
+  );
+
+  const handleGitHubWorkspaceCreated = useCallback(
+    async (workspaceId: string) => {
+      try {
+        const loadedFiles = await loadWorkspaceFiles(workspaceId);
+        if (loadedFiles.length > 0) {
+          const wsFiles: WorkspaceFile[] = loadedFiles.map((f) => ({
+            name: f.path.split('/').pop() ?? f.path,
+            path: f.path,
+            content: f.content,
+            dirty: false,
+            readOnly: false
+          }));
+          handleFilesLoaded(wsFiles);
+        }
+      } catch (err) {
+        reportWorkspaceError('Failed to load cloned workspace', err);
+      }
+    },
+    [handleFilesLoaded, reportWorkspaceError]
+  );
+
   /** Delete a recent workspace from the recents store (T029). */
   const handleDeleteWorkspace = useCallback(
     async (workspaceId: string) => {
@@ -587,7 +641,12 @@ export function App() {
           // as one visually-balanced empty state rather than fenced-off
           // sections.
           <div className="flex flex-col items-center justify-center h-full px-8 py-12 gap-8">
-            <FileLoader onFilesLoaded={handleFilesLoaded} existingFiles={files} />
+            <FileLoader
+              onFilesLoaded={handleFilesLoaded}
+              existingFiles={files}
+              createGitBackedWorkspace={handleCreateGitBackedWorkspace}
+              onGitHubWorkspaceCreated={handleGitHubWorkspaceCreated}
+            />
             <div className="w-full max-w-[560px] mt-8">
               <WorkspaceSwitcher
                 onOpen={handleSwitchWorkspace}
