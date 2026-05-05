@@ -663,6 +663,31 @@
     border-radius: 2px;
   }
 
+  /* Explorer selected row — gradient wash from primary (left-to-right fade) */
+  .studio-app .studio-type-row--selected {
+    background: linear-gradient(90deg, color-mix(in oklch, var(--primary), transparent 88%), transparent);
+    color: var(--foreground);
+  }
+
+  /* ─── Accent underline on active dockview tabs ────────────────────
+   * Matches the design's orange underline bar on active tabs in the
+   * right column (Code/Form) and bottom dock (Problems/Messages).
+   */
+  .studio-app .dockview-theme-abyss .dv-tab.dv-active-tab {
+    position: relative;
+  }
+
+  .studio-app .dockview-theme-abyss .dv-tab.dv-active-tab::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 0;
+    height: 1.5px;
+    background: var(--primary);
+    border-radius: 1.5px;
+  }
+
   .studio-app .studio-graph-canvas {
     background:
       radial-gradient(ellipse at 50% 30%, var(--card), var(--background));

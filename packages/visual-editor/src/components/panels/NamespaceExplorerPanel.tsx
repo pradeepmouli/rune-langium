@@ -377,7 +377,7 @@ function TypeItemRow({
     <div
       className={`flex items-center gap-1.5 px-2 py-0.5 ml-4 text-xs hover:bg-accent/50 relative ${
         isSelected
-          ? 'bg-accent text-accent-foreground'
+          ? 'studio-type-row--selected'
           : isVisible
             ? 'text-foreground'
             : 'text-muted-foreground opacity-60'
