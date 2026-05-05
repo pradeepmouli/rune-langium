@@ -163,10 +163,7 @@ describe('parser-worker', () => {
     });
   });
 
-  it('deserializes corpus files without exports via JsonSerializer and fromModel (old artifact format)', async () => {
-    const hydratedModel = { $type: 'RosettaModel', elements: [], hydrated: true };
-    deserializeMock.mockReturnValue(hydratedModel);
-
+  it('stores corpus JSON for deferred loading and registers export stubs at workspace parse', async () => {
     const { handleParseWorkspace } = await loadParserWorkerModule();
 
     const response = await handleParseWorkspace({
@@ -174,34 +171,13 @@ describe('parser-worker', () => {
       id: 'workspace-3',
       files: [
         {
-          name: '[cdm]/types.rosetta',
+          name: '[cdm]/base.rosetta',
           content: 'ignored',
           serializedModelJson: '{"$type":"RosettaModel","elements":[]}'
-          // No exports — old artifact format, deserialize fully
         },
-        { name: 'local.rosetta', content: 'namespace local' }
-      ]
-    });
-
-    expect(deserializeMock).toHaveBeenCalledWith('{"$type":"RosettaModel","elements":[]}');
-    expect(fromModelMock).toHaveBeenCalledWith(hydratedModel, '[cdm]/types.rosetta');
-    expect(addDocumentMock).toHaveBeenCalledTimes(1);
-    expect(fromStringMock).toHaveBeenCalledWith('namespace local', 'local.rosetta');
-    expect(registerExportsMock).not.toHaveBeenCalled();
-    expect(response.type).toBe('parseWorkspaceResult');
-    expect(response.models[0]).toBe(hydratedModel);
-  });
-
-  it('defers AST deserialization for corpus files that carry an exports manifest', async () => {
-    const { handleParseWorkspace } = await loadParserWorkerModule();
-
-    const response = await handleParseWorkspace({
-      type: 'parseWorkspace',
-      id: 'workspace-deferred',
-      files: [
         {
           name: '[cdm]/types.rosetta',
-          content: 'ignored',
+          content: 'namespace cdm.types',
           serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
           exports: [{ type: 'RosettaType', name: 'Party', path: '/elements/0' }]
         },
@@ -209,78 +185,73 @@ describe('parser-worker', () => {
       ]
     });
 
-    // Corpus file with exports — must NOT deserialize, must register exports
+    // Corpus files are NOT deserialized at workspace load — JSON is stored for lazy use
     expect(deserializeMock).not.toHaveBeenCalled();
-    expect(fromModelMock).not.toHaveBeenCalled();
-    expect(registerExportsMock).toHaveBeenCalledWith('[cdm]/types.rosetta', [
-      {
-        type: 'RosettaType',
-        name: 'Party',
-        documentUri: '[cdm]/types.rosetta',
-        path: '/elements/0'
-      }
-    ]);
-
-    // User file must be parsed normally
+    // Only the user file is added to LangiumDocuments at workspace load
+    expect(addDocumentMock).toHaveBeenCalledTimes(1);
     expect(fromStringMock).toHaveBeenCalledWith('namespace local', 'local.rosetta');
+    // types.rosetta has exports → registerExports called once for Langium scope resolution
+    expect(registerExportsMock).toHaveBeenCalledTimes(1);
 
-    // Only user file appears in parsedModels — corpus is index-only
+    // Only user file appears in parsedModels
     expect(response.type).toBe('parseWorkspaceResult');
     expect(response.parsedModels.map((m) => m.filePath)).toEqual(['local.rosetta']);
-    // Deferred exports carry the corpus type info for the graph/explorer
+    // Stub entries for the namespace explorer UI still emitted
     expect(response.deferredExports).toHaveLength(1);
     expect(response.deferredExports[0]!.exports[0]!.name).toBe('Party');
+    // Corpus models are NOT in models[] at workspace load (deferred)
+    expect(response.models).toHaveLength(1);
   });
 
-  it('cascade-hydrates all deferred corpus documents when linkDocument is called', async () => {
-    const modelA = { $type: 'RosettaModel', elements: [], name: 'A' };
-    const modelB = { $type: 'RosettaModel', elements: [], name: 'B' };
-    deserializeMock
-      .mockReturnValueOnce(modelA) // [cdm]/types.rosetta
-      .mockReturnValueOnce(modelB); // [cdm]/enums.rosetta
+  it('deserializes corpus document on first link request, not at workspace parse', async () => {
+    const modelA = { $type: 'RosettaModel', elements: [] };
+    deserializeMock.mockReturnValueOnce(modelA);
+
+    const fakeDoc = {
+      diagnostics: [],
+      parseResult: { value: modelA, lexerErrors: [], parserErrors: [] }
+    };
+    fromModelMock.mockReturnValue(fakeDoc);
 
     const { handleParseWorkspace, handleLinkDocument } = await loadParserWorkerModule();
 
-    // Workspace with two deferred corpus files
     await handleParseWorkspace({
       type: 'parseWorkspace',
-      id: 'ws-deferred',
+      id: 'ws-link',
       files: [
         {
           name: '[cdm]/types.rosetta',
-          content: 'ignored',
-          serializedModelJson: '{"$type":"RosettaModel","elements":[],"name":"A"}',
+          content: 'namespace cdm.types',
+          serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
           exports: [{ type: 'RosettaType', name: 'Party', path: '/elements/0' }]
         },
         {
           name: '[cdm]/enums.rosetta',
-          content: 'ignored',
-          serializedModelJson: '{"$type":"RosettaModel","elements":[],"name":"B"}',
+          content: 'namespace cdm.enums',
+          serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
           exports: [{ type: 'RosettaEnumeration', name: 'PartyRole', path: '/elements/0' }]
         }
       ]
     });
 
+    // No deserialization at workspace parse — corpus JSON is stored for lazy use
     expect(deserializeMock).not.toHaveBeenCalled();
 
-    // Link types.rosetta — both deferred docs must be hydrated in the batch
     const linkResult = await handleLinkDocument({
       type: 'linkDocument',
-      id: 'link-deferred',
+      id: 'link-1',
       uri: '[cdm]/types.rosetta'
     });
 
-    // Both deferred docs are deserialized together
-    expect(deserializeMock).toHaveBeenCalledTimes(2);
-    expect(addDocumentMock).toHaveBeenCalledTimes(2);
-    // Build called once for the whole batch (eagerLinking: true)
-    expect(buildMock).toHaveBeenLastCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ parseResult: expect.objectContaining({ value: modelA }) }),
-        expect.objectContaining({ parseResult: expect.objectContaining({ value: modelB }) })
-      ]),
-      { validation: false, eagerLinking: true }
-    );
+    // Target corpus doc deserialized exactly once on first link request
+    expect(deserializeMock).toHaveBeenCalledTimes(1);
+    expect(fromModelMock).toHaveBeenCalledTimes(1);
+    expect(addDocumentMock).toHaveBeenCalledTimes(1);
+    // Build called with eagerLinking: true — RuneDslLinker handles transitive deps
+    expect(buildMock).toHaveBeenLastCalledWith([fakeDoc], {
+      validation: false,
+      eagerLinking: true
+    });
     expect(linkResult.linked).toBe(true);
     expect(linkResult.type).toBe('linkDocumentResult');
   });

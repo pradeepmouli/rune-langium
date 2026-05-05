@@ -78,6 +78,7 @@ export function GraphFilterMenu() {
               <button
                 className="text-xs text-primary hover:text-primary/80"
                 onClick={showAllNodeKinds}
+                type="button"
               >
                 Show all
               </button>
@@ -95,6 +96,7 @@ export function GraphFilterMenu() {
                       : 'text-muted-foreground/50 hover:bg-accent/50 line-through'
                   }`}
                   onClick={() => toggleNodeKind(kind)}
+                  type="button"
                 >
                   <span
                     className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
@@ -124,6 +126,7 @@ export function GraphFilterMenu() {
               <button
                 className="text-xs text-primary hover:text-primary/80"
                 onClick={showAllEdgeKinds}
+                type="button"
               >
                 Show all
               </button>
@@ -140,6 +143,7 @@ export function GraphFilterMenu() {
                       ? 'text-foreground hover:bg-accent'
                       : 'text-muted-foreground/50 hover:bg-accent/50 line-through'
                   }`}
+                  type="button"
                   onClick={() => toggleEdgeKind(kind)}
                 >
                   <span className="w-4 flex-shrink-0 flex items-center">
@@ -163,6 +167,7 @@ export function GraphFilterMenu() {
           <button
             className="w-full px-2 py-1.5 rounded text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors text-center"
             onClick={handleResetAll}
+            type="button"
           >
             Reset all filters
           </button>

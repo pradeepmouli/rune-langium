@@ -31,12 +31,13 @@ function mapToCategory(code: ModelLoadErrorCode | string | undefined): ErrorCate
       return 'archive_decode';
     case 'CANCELLED':
       return 'cancelled';
-    default:
+    default: {
       // CuratedLoadError already exposes `.category` directly; the store
       // stuffs it into `code`. Validate against the schema rather than a
       // hand-maintained lookup so adding a category in one place is enough.
       const r = ErrorCategorySchema.safeParse(code);
       return r.success ? r.data : 'unknown';
+    }
   }
 }
 
