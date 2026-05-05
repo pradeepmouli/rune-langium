@@ -126,6 +126,19 @@ async function buildArtifact(source, archiveBytes) {
             name: elem.name,
             path: `/elements@${j}`,
           });
+          // Include enum values for cross-file resolution
+          if (elem.enumValues) {
+            for (let k = 0; k < elem.enumValues.length; k++) {
+              const val = elem.enumValues[k];
+              if (val?.name) {
+                exports.push({
+                  type: val.$type ?? 'RosettaEnumValue',
+                  name: val.name,
+                  path: `/elements@${j}/enumValues@${k}`,
+                });
+              }
+            }
+          }
         }
       }
       return {

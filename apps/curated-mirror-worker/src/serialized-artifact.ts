@@ -58,13 +58,33 @@ export async function buildSerializedWorkspaceArtifact(
       const exports: Array<{ type: string; name: string; path: string }> = [];
       const elements = (model as { elements?: unknown[] }).elements;
       for (let j = 0; j < (elements?.length ?? 0); j++) {
-        const elem = elements![j] as { name?: string; $type?: string } | undefined;
+        const elem = elements![j] as
+          | {
+              name?: string;
+              $type?: string;
+              enumValues?: Array<{ name?: string; $type?: string }>;
+            }
+          | undefined;
         if (elem?.name && elem?.$type) {
           exports.push({
             type: elem.$type,
             name: elem.name,
             path: `/elements@${j}`
           });
+          // Include enum values — Langium's ScopeComputation adds these
+          // to the global index so cross-file enum literal references resolve.
+          if (elem.enumValues) {
+            for (let k = 0; k < elem.enumValues.length; k++) {
+              const val = elem.enumValues[k];
+              if (val?.name) {
+                exports.push({
+                  type: val.$type ?? 'RosettaEnumValue',
+                  name: val.name,
+                  path: `/elements@${j}/enumValues@${k}`
+                });
+              }
+            }
+          }
         }
       }
       return {
