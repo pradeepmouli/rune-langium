@@ -6,6 +6,7 @@ import type {
   LangiumCoreServices,
   PartialLangiumCoreServices,
   LangiumSharedCoreServices,
+  PartialLangiumSharedCoreServices,
   DefaultSharedCoreModuleContext
 } from 'langium';
 import {
@@ -19,6 +20,23 @@ import { RuneDslScopeProvider } from './rune-dsl-scope-provider.js';
 import { RuneDslScopeComputation } from './rune-dsl-scope-computation.js';
 import { RuneDslValidator } from './rune-dsl-validator.js';
 import { createRuneDslParser } from './rune-dsl-parser.js';
+import { RuneDslIndexManager } from './rune-dsl-index-manager.js';
+
+/**
+ * Shared services module that overrides Langium's default IndexManager with
+ * `RuneDslIndexManager`, enabling external registration of exported symbols
+ * without requiring a full document build (ADR 007 Phase 4).
+ *
+ * @category Core
+ */
+export const RuneDslSharedModule: Module<
+  LangiumSharedCoreServices,
+  PartialLangiumSharedCoreServices
+> = {
+  workspace: {
+    IndexManager: (services) => new RuneDslIndexManager(services)
+  }
+};
 
 /**
  * Union type for all services available in the Rune DSL language.
@@ -126,7 +144,11 @@ export function createRuneDslServices(context: DefaultSharedCoreModuleContext = 
   shared: LangiumSharedCoreServices;
   RuneDsl: LangiumCoreServices;
 } {
-  const shared = inject(createDefaultSharedCoreModule(context), RuneDslGeneratedSharedModule);
+  const shared = inject(
+    createDefaultSharedCoreModule(context),
+    RuneDslGeneratedSharedModule,
+    RuneDslSharedModule
+  );
   const RuneDsl = inject(
     createDefaultCoreModule({ shared }),
     RuneDslGeneratedModule,
