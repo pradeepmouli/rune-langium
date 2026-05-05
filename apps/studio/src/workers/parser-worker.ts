@@ -54,6 +54,8 @@ export interface LinkDocumentResponse {
   id: string;
   linked: boolean;
   errors: string[];
+  /** Corpus models that were lazily deserialized during this link request. */
+  newModels: RosettaModel[];
 }
 
 export type WorkerRequest = ParseRequest | ParseWorkspaceRequest | LinkDocumentRequest;
@@ -91,11 +93,18 @@ const deferredModelJson = new Map<string, string>();
 // called during build(), which happens inside handleLinkDocument (post-init).
 let serializer: { deserialize<T extends AstNode>(content: string): T };
 
+// Accumulates models deserialized via the deferred provider during a single
+// handleLinkDocument call so they can be returned in LinkDocumentResponse.newModels.
+// Reset at the start of each handleLinkDocument call.
+let newModelsAccumulator: RosettaModel[] = [];
+
 const deferredProvider: DeferredModelProvider = {
   getModel(uri: string): AstNode | undefined {
     const json = deferredModelJson.get(uri);
     if (json === undefined) return undefined;
-    return serializer.deserialize(json);
+    const model = serializer.deserialize<RosettaModel>(json);
+    newModelsAccumulator.push(model);
+    return model;
   },
   consume(uri: string): void {
     deferredModelJson.delete(uri);
@@ -360,6 +369,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
 }
 
 async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumentResponse> {
+  newModelsAccumulator = [];
   try {
     const targetUri = URI.parse(req.uri);
     let doc: LangiumDocument<AstNode> | undefined;
@@ -369,6 +379,7 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
     if (deferredModelJson.has(targetUri.toString())) {
       const json = deferredModelJson.get(targetUri.toString())!;
       const model = serializer.deserialize<RosettaModel>(json);
+      newModelsAccumulator.push(model);
       doc = factory.fromModel(model, targetUri);
       activeLangiumDocs.addDocument(doc);
       deferredModelJson.delete(targetUri.toString());
@@ -377,24 +388,32 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
     }
 
     if (!doc) {
-      return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [] };
+      return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [], newModels: [] };
     }
 
     // eagerLinking: true runs Langium's linker immediately.
-    // RuneDslLinker.loadAstNode handles transitive corpus deps on demand.
+    // RuneDslLinker.loadAstNode handles transitive corpus deps on demand,
+    // each calling deferredProvider.getModel() which appends to newModelsAccumulator.
     await activeBuilder.build([doc], { validation: false, eagerLinking: true });
 
     const errors: string[] = [];
     for (const diag of doc.diagnostics ?? []) {
       errors.push(diag.message);
     }
-    return { type: 'linkDocumentResult', id: req.id, linked: true, errors };
+    return {
+      type: 'linkDocumentResult',
+      id: req.id,
+      linked: true,
+      errors,
+      newModels: newModelsAccumulator
+    };
   } catch (error) {
     return {
       type: 'linkDocumentResult',
       id: req.id,
       linked: false,
-      errors: [(error as Error).message]
+      errors: [(error as Error).message],
+      newModels: []
     };
   }
 }
@@ -429,7 +448,8 @@ export function isLinkDocumentResponse(value: unknown): value is LinkDocumentRes
     typeof value.id === 'string' &&
     typeof value.linked === 'boolean' &&
     Array.isArray(value.errors) &&
-    value.errors.every((e) => typeof e === 'string')
+    value.errors.every((e) => typeof e === 'string') &&
+    Array.isArray(value.newModels)
   );
 }
 

@@ -209,6 +209,9 @@ export function EditorPage({
   const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
   const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Accumulates corpus models returned by linkDocument so they can be merged into
+  // the graph. Reset when a new workspace is loaded (models prop changes).
+  const corpusModelsRef = useRef<RosettaModel[]>([]);
   const previewRequestSequenceRef = useRef(0);
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const navigationHistoryRef = useRef<string[]>([]);
@@ -263,6 +266,9 @@ export function EditorPage({
   }, [files, models, parsedModels]);
 
   useEffect(() => {
+    // New workspace — discard any previously accumulated corpus models.
+    corpusModelsRef.current = [];
+
     if (models.length > 0 || deferredExports.length > 0) {
       if (models.length > 0) {
         useEditorStore.getState().loadModels(models as unknown[]);
@@ -430,7 +436,16 @@ export function EditorPage({
     // Debounced so rapid keyboard navigation doesn't queue many worker requests.
     if (filePath && !filePath.startsWith('system://')) {
       if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
-      linkDocumentTimerRef.current = setTimeout(() => void linkDocument(filePath), 150);
+      linkDocumentTimerRef.current = setTimeout(() => {
+        void linkDocument(filePath).then((result) => {
+          if (result.newModels.length > 0) {
+            corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
+            useEditorStore
+              .getState()
+              .loadModels([...models, ...corpusModelsRef.current] as unknown[]);
+          }
+        });
+      }, 150);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);

@@ -364,9 +364,12 @@ export function _resetParserWorkerForTests(): void {
 
 /**
  * Trigger on-demand cross-reference linking for a single document (ADR 007 Phase 2).
- * Fire-and-forget: callers do not need to await the result.
+ * Returns any corpus models that were lazily deserialized during linking so the
+ * caller can merge them into the graph store.
  */
-export async function linkDocument(uri: string): Promise<{ linked: boolean; errors: string[] }> {
+export async function linkDocument(
+  uri: string
+): Promise<{ linked: boolean; errors: string[]; newModels: RosettaModel[] }> {
   try {
     const id = String(++requestId);
     const response = await workerRequest({
@@ -375,12 +378,12 @@ export async function linkDocument(uri: string): Promise<{ linked: boolean; erro
       uri
     });
     if (isLinkDocumentResponse(response)) {
-      return { linked: response.linked, errors: response.errors };
+      return { linked: response.linked, errors: response.errors, newModels: response.newModels };
     }
-    return { linked: false, errors: ['Unexpected response'] };
+    return { linked: false, errors: ['Unexpected response'], newModels: [] };
   } catch (error) {
     console.warn('[workspace] linkDocument failed:', error);
-    return { linked: false, errors: [(error as Error).message] };
+    return { linked: false, errors: [(error as Error).message], newModels: [] };
   }
 }
 

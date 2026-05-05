@@ -63,7 +63,8 @@ vi.mock('@rune-langium/core', () => ({
 vi.mock('langium', () => ({
   URI: {
     parse: (value: string) => value
-  }
+  },
+  EmptyFileSystem: {}
 }));
 
 async function loadParserWorkerModule() {
@@ -254,6 +255,8 @@ describe('parser-worker', () => {
     });
     expect(linkResult.linked).toBe(true);
     expect(linkResult.type).toBe('linkDocumentResult');
+    // Newly deserialized corpus model returned for graph hydration
+    expect(linkResult.newModels).toEqual([modelA]);
   });
 
   it('does not re-deserialize deferred documents on a second linkDocument call', async () => {
@@ -281,16 +284,26 @@ describe('parser-worker', () => {
       ]
     });
 
-    // First linkDocument — cascade hydrates the deferred doc, clears deferredModelJson
-    await handleLinkDocument({ type: 'linkDocument', id: 'link-1', uri: '[cdm]/types.rosetta' });
+    // First linkDocument — materializes the corpus doc from deferredModelJson
+    const firstResult = await handleLinkDocument({
+      type: 'linkDocument',
+      id: 'link-1',
+      uri: '[cdm]/types.rosetta'
+    });
     expect(deserializeMock).toHaveBeenCalledTimes(1);
+    expect(firstResult.newModels).toHaveLength(1);
 
-    // Second call — deferredModelJson is now empty, goes through regular path
-    // Deserialize must NOT be called again
+    // Second call — deferredModelJson entry is consumed; doc found via LangiumDocuments
+    // Deserialize must NOT be called again and newModels must be empty
     hasDocumentMock.mockReturnValue(true);
     getDocumentMock.mockReturnValue(fakeDoc);
-    await handleLinkDocument({ type: 'linkDocument', id: 'link-2', uri: '[cdm]/types.rosetta' });
+    const secondResult = await handleLinkDocument({
+      type: 'linkDocument',
+      id: 'link-2',
+      uri: '[cdm]/types.rosetta'
+    });
     expect(deserializeMock).toHaveBeenCalledTimes(1);
+    expect(secondResult.newModels).toEqual([]);
   });
 
   it('links a single document on demand after lazy workspace parse', async () => {
@@ -326,6 +339,7 @@ describe('parser-worker', () => {
     });
     expect(linkResult.linked).toBe(true);
     expect(linkResult.type).toBe('linkDocumentResult');
+    expect(linkResult.newModels).toEqual([]);
     expect(buildMock).toHaveBeenLastCalledWith([fakeDoc], {
       validation: false,
       eagerLinking: true
@@ -345,5 +359,6 @@ describe('parser-worker', () => {
     expect(result.linked).toBe(false);
     expect(result.type).toBe('linkDocumentResult');
     expect(result.errors).toEqual([]);
+    expect(result.newModels).toEqual([]);
   });
 });
