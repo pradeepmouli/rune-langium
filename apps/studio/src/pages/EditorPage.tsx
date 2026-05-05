@@ -92,6 +92,11 @@ import { getRuneStudioTestApi } from '../test-api.js';
 export interface EditorPageProps {
   models: RosettaModel[];
   parsedModels?: ParsedWorkspaceModel[];
+  deferredExports?: Array<{
+    filePath: string;
+    namespace: string;
+    exports: Array<{ type: string; name: string }>;
+  }>;
   files: WorkspaceFile[];
   onFilesChange?: (files: WorkspaceFile[]) => void;
   lspClient?: LspClientService;
@@ -176,6 +181,7 @@ function FileTabStrip({
 export function EditorPage({
   models,
   parsedModels,
+  deferredExports = [],
   files,
   onFilesChange,
   lspClient,
@@ -658,8 +664,15 @@ export function EditorPage({
         if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
       }
     }
+    // Include deferred corpus entries so linkDocument can resolve their file paths.
+    for (const entry of deferredExports) {
+      for (const exp of entry.exports) {
+        const nodeId = `${entry.namespace}::${exp.name}`;
+        if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
+      }
+    }
     return map;
-  }, [resolvedModelFiles]);
+  }, [resolvedModelFiles, deferredExports]);
 
   const resolveNodeFile = useCallback(
     (nodeData: AnyGraphNode): string | undefined => {

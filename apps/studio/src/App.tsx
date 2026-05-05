@@ -78,6 +78,9 @@ export function App() {
     Array<{ filePath: string; model: RosettaModel }>
   >([]);
   const [, setErrors] = useState<Map<string, string[]>>(new Map());
+  const [deferredExports, setDeferredExports] = useState<
+    Array<{ filePath: string; namespace: string; exports: Array<{ type: string; name: string }> }>
+  >([]);
   const [loading, setLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
@@ -117,12 +120,12 @@ export function App() {
       setWorkspaceNotice(
         result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null
       );
-      // Register deferred corpus types as graph nodes via the editor store.
-      // These are index-only entries — no full AST, just { type, name, namespace }.
-      if (result.deferredExports?.length) {
-        // Defer to next tick so loadModels (triggered by setModels) runs first.
+      // Store + register deferred corpus types as graph nodes.
+      const deferred = result.deferredExports ?? [];
+      setDeferredExports(deferred);
+      if (deferred.length > 0) {
         setTimeout(() => {
-          useEditorStore.getState().loadDeferredExports(result.deferredExports!);
+          useEditorStore.getState().loadDeferredExports(deferred);
         }, 0);
       }
     },
@@ -673,6 +676,7 @@ export function App() {
           <EditorPage
             models={models}
             parsedModels={parsedModels}
+            deferredExports={deferredExports}
             files={files}
             onFilesChange={handleFilesChange}
             lspClient={lspClientRef.current ?? undefined}
@@ -702,6 +706,7 @@ export function App() {
           <EditorPage
             models={models}
             parsedModels={parsedModels}
+            deferredExports={deferredExports}
             files={files}
             onFilesChange={handleFilesChange}
             lspClient={lspClientRef.current ?? undefined}
