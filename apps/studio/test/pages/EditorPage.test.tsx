@@ -162,7 +162,11 @@ vi.mock('lucide-react', () => ({
   Share2: () => React.createElement('span'),
   Zap: () => React.createElement('span'),
   Search: () => React.createElement('span'),
-  ChevronDown: () => React.createElement('span')
+  ChevronDown: () => React.createElement('span'),
+  Layers: () => React.createElement('span'),
+  Database: () => React.createElement('span'),
+  Bell: () => React.createElement('span'),
+  Settings: () => React.createElement('span')
 }));
 
 vi.mock('../../src/components/GraphFilterMenu.js', () => ({

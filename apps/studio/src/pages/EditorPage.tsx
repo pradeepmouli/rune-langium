@@ -64,6 +64,7 @@ import {
 } from 'lucide-react';
 import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { DockShell } from '../shell/DockShell.js';
+import { ActivityBar } from '../shell/ActivityBar.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
@@ -1235,13 +1236,20 @@ export function EditorPage({
         </div>
       )}
 
-      <div className="flex-1 min-h-0">
-        <DockShell
-          studioVersion={studioVersion}
-          workspaceId={workspaceId}
-          focusPanel={focusPanelRequest}
-          panelComponents={panelComponents}
+      <div className="flex flex-1 min-h-0">
+        <ActivityBar
+          onWorkspaceClick={() => onClose?.()}
+          onModelsClick={() => {}}
+          onSettingsClick={() => {}}
         />
+        <div className="flex-1 min-h-0">
+          <DockShell
+            studioVersion={studioVersion}
+            workspaceId={workspaceId}
+            focusPanel={focusPanelRequest}
+            panelComponents={panelComponents}
+          />
+        </div>
       </div>
 
       <footer className="glass-statusbar flex items-center gap-4 px-3 py-1 text-xs text-muted-foreground border-t border-border">
