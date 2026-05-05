@@ -11,9 +11,15 @@ import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import type {
   WorkerRequest,
   ParseResponse,
-  ParseWorkspaceResponse
+  ParseWorkspaceResponse,
+  LinkDocumentRequest,
+  LinkDocumentResponse
 } from '../workers/parser-worker.js';
-import { isParseResponse, isParseWorkspaceResponse } from '../workers/parser-worker.js';
+import {
+  isParseResponse,
+  isParseWorkspaceResponse,
+  isLinkDocumentResponse
+} from '../workers/parser-worker.js';
 
 export interface WorkspaceFile {
   name: string;
@@ -24,6 +30,12 @@ export interface WorkspaceFile {
   readOnly?: boolean;
   /** Optional precomputed serialized Langium model JSON used by the parser worker. */
   serializedModelJson?: CuratedSerializedDocument['modelJson'];
+  /**
+   * Optional exports manifest for deferred deserialization (ADR 007 Phase 4).
+   * When present alongside serializedModelJson, the parser worker registers
+   * these symbols in the IndexManager without deserializing the full AST.
+   */
+  exports?: Array<{ type: string; name: string; path: string }>;
 }
 
 export interface WorkspaceLoadProgress {
@@ -60,6 +72,11 @@ export interface ParseWorkspaceFilesResult {
   errors: Map<string, string[]>;
   parseMode: ParseMode;
   fallbackMessage?: string;
+  deferredExports?: Array<{
+    filePath: string;
+    namespace: string;
+    exports: Array<{ type: string; name: string }>;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,7 +160,10 @@ function workerRequest(msg: Extract<WorkerRequest, { type: 'parse' }>): Promise<
 function workerRequest(
   msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>
 ): Promise<ParseWorkspaceResponse>;
-function workerRequest(msg: WorkerRequest): Promise<ParseResponse | ParseWorkspaceResponse> {
+function workerRequest(msg: LinkDocumentRequest): Promise<LinkDocumentResponse>;
+function workerRequest(
+  msg: WorkerRequest
+): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse> {
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (!w) {
@@ -171,6 +191,16 @@ function workerRequest(msg: WorkerRequest): Promise<ParseResponse | ParseWorkspa
         if (msg.type === 'parse') {
           if (!isParseResponse(e.data)) {
             const error = new Error('Worker returned an invalid parse response');
+            resetWorkerState(error);
+            reject(error);
+            return;
+          }
+          resolve(e.data);
+          return;
+        }
+        if (msg.type === 'linkDocument') {
+          if (!isLinkDocumentResponse(e.data)) {
+            const error = new Error('Worker returned an invalid linkDocument response');
             resetWorkerState(error);
             reject(error);
             return;
@@ -294,7 +324,8 @@ export async function parseWorkspaceFiles(
       files: files.map((f) => ({
         name: f.path,
         content: f.content,
-        serializedModelJson: f.serializedModelJson
+        serializedModelJson: f.serializedModelJson,
+        exports: f.exports
       }))
     });
     if (response.errors.__worker__?.length) {
@@ -308,7 +339,8 @@ export async function parseWorkspaceFiles(
       models: response.models,
       parsedModels: response.parsedModels,
       errors: errMap,
-      parseMode: 'worker'
+      parseMode: 'worker',
+      deferredExports: response.deferredExports
     };
   } catch (error) {
     // Fallback to main thread
@@ -328,6 +360,28 @@ export function _resetParserWorkerForTests(): void {
   worker = null;
   requestId = 0;
   workerInitError = null;
+}
+
+/**
+ * Trigger on-demand cross-reference linking for a single document (ADR 007 Phase 2).
+ * Fire-and-forget: callers do not need to await the result.
+ */
+export async function linkDocument(uri: string): Promise<{ linked: boolean; errors: string[] }> {
+  try {
+    const id = String(++requestId);
+    const response = await workerRequest({
+      type: 'linkDocument',
+      id,
+      uri
+    });
+    if (isLinkDocumentResponse(response)) {
+      return { linked: response.linked, errors: response.errors };
+    }
+    return { linked: false, errors: ['Unexpected response'] };
+  } catch (error) {
+    console.warn('[workspace] linkDocument failed:', error);
+    return { linked: false, errors: [(error as Error).message] };
+  }
 }
 
 /**
@@ -457,7 +511,8 @@ export function mergeModelFiles(
     content: f.content,
     dirty: false,
     readOnly: true,
-    serializedModelJson: f.serializedModelJson
+    serializedModelJson: f.serializedModelJson,
+    exports: f.exports
   }));
 
   return [...userFiles, ...modelFiles];

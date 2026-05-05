@@ -66,6 +66,7 @@ import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
 import type { WorkspaceFile } from '../services/workspace.js';
+import { linkDocument } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
@@ -91,6 +92,11 @@ import { getRuneStudioTestApi } from '../test-api.js';
 export interface EditorPageProps {
   models: RosettaModel[];
   parsedModels?: ParsedWorkspaceModel[];
+  deferredExports?: Array<{
+    filePath: string;
+    namespace: string;
+    exports: Array<{ type: string; name: string }>;
+  }>;
   files: WorkspaceFile[];
   onFilesChange?: (files: WorkspaceFile[]) => void;
   lspClient?: LspClientService;
@@ -175,6 +181,7 @@ function FileTabStrip({
 export function EditorPage({
   models,
   parsedModels,
+  deferredExports = [],
   files,
   onFilesChange,
   lspClient,
@@ -201,6 +208,7 @@ export function EditorPage({
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
   const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
+  const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewRequestSequenceRef = useRef(0);
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const navigationHistoryRef = useRef<string[]>([]);
@@ -410,6 +418,13 @@ export function EditorPage({
           }
         }
       }
+    }
+
+    // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
+    // Debounced so rapid keyboard navigation doesn't queue many worker requests.
+    if (filePath) {
+      if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
+      linkDocumentTimerRef.current = setTimeout(() => void linkDocument(filePath), 150);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);
@@ -649,8 +664,15 @@ export function EditorPage({
         if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
       }
     }
+    // Include deferred corpus entries so linkDocument can resolve their file paths.
+    for (const entry of deferredExports) {
+      for (const exp of entry.exports) {
+        const nodeId = `${entry.namespace}::${exp.name}`;
+        if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
+      }
+    }
     return map;
-  }, [resolvedModelFiles]);
+  }, [resolvedModelFiles, deferredExports]);
 
   const resolveNodeFile = useCallback(
     (nodeData: AnyGraphNode): string | undefined => {

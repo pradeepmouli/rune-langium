@@ -137,7 +137,12 @@ export { buildNamespaceTree, filterNamespaceTree } from './utils/namespace-tree.
 
 // Store (for advanced consumers)
 export { createEditorStore, useEditorStore } from './store/editor-store.js';
-export type { EditorStore, EditorState, EditorActions } from './store/editor-store.js';
+export type {
+  EditorStore,
+  EditorState,
+  EditorActions,
+  DeferredExportEntry
+} from './store/editor-store.js';
 
 // History / undo-redo
 export { useTemporalStore, useCanUndo, useCanRedo, useUndo, useRedo } from './store/history.js';

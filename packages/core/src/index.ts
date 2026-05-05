@@ -23,8 +23,13 @@ export { parse, parseWorkspace } from './api/parse.js';
 export type { ParseResult } from './api/parse.js';
 
 // Services
-export { createRuneDslServices, RuneDslModule } from './services/rune-dsl-module.js';
+export {
+  createRuneDslServices,
+  RuneDslModule,
+  RuneDslSharedModule
+} from './services/rune-dsl-module.js';
 export type { RuneDslServices } from './services/rune-dsl-module.js';
+export { RuneDslIndexManager } from './services/rune-dsl-index-manager.js';
 export { RuneDslScopeProvider } from './services/rune-dsl-scope-provider.js';
 export { RuneDslValidator } from './services/rune-dsl-validator.js';
 export {

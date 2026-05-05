@@ -20,6 +20,7 @@ import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
+import { useEditorStore } from '@rune-langium/visual-editor';
 import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
@@ -77,6 +78,9 @@ export function App() {
     Array<{ filePath: string; model: RosettaModel }>
   >([]);
   const [, setErrors] = useState<Map<string, string[]>>(new Map());
+  const [deferredExports, setDeferredExports] = useState<
+    Array<{ filePath: string; namespace: string; exports: Array<{ type: string; name: string }> }>
+  >([]);
   const [loading, setLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
@@ -116,6 +120,14 @@ export function App() {
       setWorkspaceNotice(
         result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null
       );
+      // Store + register deferred corpus types as graph nodes.
+      const deferred = result.deferredExports ?? [];
+      setDeferredExports(deferred);
+      if (deferred.length > 0) {
+        setTimeout(() => {
+          useEditorStore.getState().loadDeferredExports(deferred);
+        }, 0);
+      }
     },
     []
   );
@@ -664,6 +676,7 @@ export function App() {
           <EditorPage
             models={models}
             parsedModels={parsedModels}
+            deferredExports={deferredExports}
             files={files}
             onFilesChange={handleFilesChange}
             lspClient={lspClientRef.current ?? undefined}
@@ -693,6 +706,7 @@ export function App() {
           <EditorPage
             models={models}
             parsedModels={parsedModels}
+            deferredExports={deferredExports}
             files={files}
             onFilesChange={handleFilesChange}
             lspClient={lspClientRef.current ?? undefined}

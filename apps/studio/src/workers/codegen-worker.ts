@@ -106,7 +106,7 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
       factory.fromString(content, URI.parse(uri))
     );
 
-    await builder.build(documents, { validation: false });
+    await builder.build(documents, { validation: false, eagerLinking: false });
 
     const hasErrors = documents.some(hasDocumentErrors);
 
@@ -164,7 +164,7 @@ async function buildDocuments(): Promise<LangiumDocument[] | null> {
     factory.fromString(content, URI.parse(uri))
   );
 
-  await builder.build(documents, { validation: false });
+  await builder.build(documents, { validation: false, eagerLinking: false });
 
   const hasErrors = documents.some(hasDocumentErrors);
   return hasErrors ? null : documents;

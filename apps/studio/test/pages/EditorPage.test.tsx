@@ -151,6 +151,14 @@ vi.mock('@rune-langium/design-system/ui/scroll-area', () => ({
     React.createElement('div', {}, children)
 }));
 
+vi.mock('../../src/services/workspace.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/workspace.js')>();
+  return {
+    ...actual,
+    linkDocument: vi.fn().mockResolvedValue({ linked: false, errors: [] })
+  };
+});
+
 vi.mock('lucide-react', () => ({
   Maximize2: () => React.createElement('span'),
   LayoutGrid: () => React.createElement('span'),

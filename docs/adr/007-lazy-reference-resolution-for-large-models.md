@@ -150,6 +150,62 @@ The graph adapter converts Langium AST nodes into the graph's `TypeGraphNode` sh
 
 The embedded LSP worker has its own Langium services instance and manages its own document lifecycle. It is completely independent of the parser worker. No impact.
 
+## Phase 4: Index-Only Loading (Deferred Deserialization)
+
+Phases 1–3 eliminate eager linking but still deserialize all 141 CDM ASTs into memory at startup. Each full AST is a deep tree of thousands of nodes — holding 141 simultaneously is significant memory pressure.
+
+### Observation
+
+Langium's `IndexManager` stores `AstNodeDescription` entries per document:
+
+```typescript
+interface AstNodeDescription {
+  type: string;        // "Data", "RosettaEnumeration", "Choice", etc.
+  name: string;        // "TradableProduct", "Party", etc.
+  documentUri: URI;    // file URI
+  path: string;        // "/elements@0"
+  node?: AstNode;      // OPTIONAL — only for local references
+}
+```
+
+The `node` field is optional. The index only needs `type + name + documentUri + path` — no AST required. This means we can populate the global scope from a lightweight manifest without ever deserializing the full AST JSON.
+
+### Approach
+
+Extend the serialized artifact schema with an `exports` array per document:
+
+```json
+{
+  "path": "cdm/product/template/TradableProduct.rosetta",
+  "exports": [
+    { "type": "Data", "name": "TradableProduct", "path": "/elements@0" },
+    { "type": "Data", "name": "EconomicTerms", "path": "/elements@1" }
+  ],
+  "modelJson": "..."
+}
+```
+
+The CI artifact build (`scripts/build-serialized-artifacts.mjs`) already parses every document — extracting `exports` during the build is trivial (walk `model.elements`, emit `{ $type, name, path }`).
+
+### Loading strategy
+
+1. **Read exports only** — iterate the artifact's documents, populate `IndexManager.symbolIndex` directly with `AstNodeDescription` entries. No `JsonSerializer.deserialize()`, no AST in memory. This is O(N) in the number of exported symbols, not the AST size.
+
+2. **Register placeholder documents** — create empty `LangiumDocument` stubs for each URI so `LangiumDocuments.hasDocument()` returns `true` and cross-reference resolution can discover them.
+
+3. **Deserialize on demand** — when a document is actually needed (user selects a type, codegen targets it, a reference chain reaches it), call `JsonSerializer.deserialize(modelJson)` for that single file, replace the stub, and build to `ComputedScopes`.
+
+### Memory impact
+
+- **Before (current)**: 141 full ASTs in memory (~50-100MB for CDM)
+- **After Phase 4**: 141 index entries in memory (~100KB for CDM) + ASTs loaded on demand (typically 1-5 at a time)
+
+### Prerequisites
+
+- The CI artifact build must emit `exports` per document (schema change to `CuratedSerializedWorkspaceArtifact`)
+- The parser worker must support registering index entries without full documents
+- Langium's `IndexManager` must support externally injected `AstNodeDescription` entries (needs investigation — the default implementation builds them from parsed documents)
+
 ## Implementation Notes
 
 1. Change `handleParseWorkspace` in `parser-worker.ts` to pass `eagerLinking: false`
