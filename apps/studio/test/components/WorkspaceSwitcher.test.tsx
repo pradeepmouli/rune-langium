@@ -88,14 +88,6 @@ describe('WorkspaceSwitcher (T059)', () => {
     expect(onOpen).toHaveBeenCalledWith('w-1');
   });
 
-  it('Create button calls onCreate', async () => {
-    const onCreate = vi.fn();
-    render(<WorkspaceSwitcher onOpen={() => {}} onCreate={onCreate} onDelete={() => {}} />);
-    await waitFor(() => screen.getByRole('button', { name: /new workspace/i }));
-    fireEvent.click(screen.getByRole('button', { name: /new workspace/i }));
-    expect(onCreate).toHaveBeenCalledTimes(1);
-  });
-
   it('Delete button on a row calls onDelete after confirmation', async () => {
     await saveWorkspace(ws('w-1', 'Doomed', 'browser-only', '2026-04-25T00:00:00Z'));
     const onDelete = vi.fn();

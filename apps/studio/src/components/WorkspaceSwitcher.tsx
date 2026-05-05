@@ -38,7 +38,6 @@ export function WorkspaceSwitcher({ onOpen, onCreate, onDelete }: Props): React.
 
   return (
     <div data-testid="workspace-switcher">
-      <Button onClick={onCreate}>New workspace</Button>
       {rows.length === 0 ? (
         <p data-testid="workspace-switcher-empty" className="text-sm text-muted-foreground">
           No recent workspaces
