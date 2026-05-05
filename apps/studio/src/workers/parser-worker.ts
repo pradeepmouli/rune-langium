@@ -87,11 +87,6 @@ function getIndexManager(): RuneDslIndexManager {
   return im as RuneDslIndexManager;
 }
 
-function extractNamespace(content: string): string {
-  const match = content.match(/^\s*namespace\s+([\w.]+)/m);
-  return match?.[1] ?? '';
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
@@ -236,19 +231,6 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
         }));
         indexManager.registerExports(uri, descriptions);
         deferredModelJson.set(uri.toString(), file.serializedModelJson);
-
-        // Synthesize a lightweight model for the UI (graph/explorer) from exports.
-        // Elements carry $type + name so the graph adapter can create nodes.
-        const skeletonModel = {
-          $type: 'RosettaModel',
-          name: extractNamespace(file.content),
-          elements: file.exports.map((exp) => ({
-            $type: exp.type,
-            name: exp.name
-          }))
-        } as unknown as RosettaModel;
-        models.push(skeletonModel);
-        parsedModels.push({ filePath: file.name, model: skeletonModel });
       } else if (file.serializedModelJson) {
         // Corpus file WITHOUT exports (old artifact format) — deserialize fully
         const model = serializer.deserialize<RosettaModel>(file.serializedModelJson);
