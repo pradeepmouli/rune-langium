@@ -414,9 +414,12 @@ export function EditorPage({
     }
 
     // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
-    // Use the resolved file path (not $container.$document which is stripped by postMessage).
+    // Pass the file path directly — the parser worker uses it as the URI key
+    // (via URI.parse(file.name)). Don't convert via pathToUri() which would
+    // produce a different URI scheme (file:///workspace/...) than what the
+    // worker registered.
     if (filePath) {
-      void linkDocument(pathToUri(filePath));
+      void linkDocument(filePath);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);

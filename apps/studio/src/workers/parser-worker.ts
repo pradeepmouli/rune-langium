@@ -360,7 +360,13 @@ if (typeof self !== 'undefined' && typeof self.onmessage !== 'undefined') {
 
 export function isLinkDocumentResponse(value: unknown): value is LinkDocumentResponse {
   if (!isRecord(value)) return false;
-  return value.type === 'linkDocumentResult' && typeof value.id === 'string';
+  return (
+    value.type === 'linkDocumentResult' &&
+    typeof value.id === 'string' &&
+    typeof value.linked === 'boolean' &&
+    Array.isArray(value.errors) &&
+    value.errors.every((e) => typeof e === 'string')
+  );
 }
 
 export { handleParse, handleParseWorkspace, handleLinkDocument };
