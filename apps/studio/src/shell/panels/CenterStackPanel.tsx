@@ -6,6 +6,11 @@ import type React from 'react';
 import { useCenterPanes, type CenterPane } from '../center-panes-context.js';
 
 const PANE_ORDER: CenterPane[] = ['graph', 'source', 'inspector'];
+const PANE_LABELS: Record<CenterPane, string> = {
+  graph: 'Graph',
+  source: 'Source',
+  inspector: 'Inspector'
+};
 const MIN_PANE_PX = 120;
 
 interface CenterStackPanelProps {
@@ -19,19 +24,15 @@ export function CenterStackPanel({
   renderSource,
   renderInspector
 }: CenterStackPanelProps): React.ReactElement {
-  const activePanes = useCenterPanes();
+  const { activePanes, toggle } = useCenterPanes();
   const ordered = PANE_ORDER.filter((p) => activePanes.has(p));
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Fractional widths per pane — reset to equal when pane set changes.
   const [fractions, setFractions] = useState<number[]>(() => ordered.map(() => 1 / ordered.length));
 
-  // Keep fractions in sync with pane count.
   const prevCountRef = useRef(ordered.length);
   if (ordered.length !== prevCountRef.current) {
     prevCountRef.current = ordered.length;
-    // Reset to equal split — can't preserve fractions across pane add/remove
-    // because the mapping shifts.
     const equal = ordered.map(() => 1 / ordered.length);
     if (JSON.stringify(equal) !== JSON.stringify(fractions)) {
       setFractions(equal);
@@ -51,16 +52,11 @@ export function CenterStackPanel({
         const dx = ev.clientX - startX;
         const dFrac = dx / totalWidth;
         const next = [...startFractions];
-
-        // splitIndex is between pane[splitIndex] and pane[splitIndex+1]
         const left = splitIndex;
         const right = splitIndex + 1;
         const minFrac = MIN_PANE_PX / totalWidth;
-
         next[left] = Math.max(minFrac, startFractions[left]! + dFrac);
         next[right] = Math.max(minFrac, startFractions[right]! - dFrac);
-
-        // Normalize so they sum to 1
         const sum = next.reduce((a, b) => a + b, 0);
         setFractions(next.map((f) => f / sum));
       };
@@ -92,29 +88,57 @@ export function CenterStackPanel({
   };
 
   return (
-    <div
-      ref={containerRef}
-      className="studio-center-stack"
-      data-count={ordered.length}
-      data-testid="center-stack"
-    >
-      {ordered.map((pane, i) => (
-        <Fragment key={pane}>
-          {i > 0 && (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Paneswitch pill — sits below the dockview tab strip */}
+      <div
+        className="studio-center-stack__bar"
+        role="toolbar"
+        aria-label="Center pane selector"
+        data-testid="studio-paneswitch"
+      >
+        <div className="studio-paneswitch" role="group">
+          {PANE_ORDER.map((pane) => {
+            const isActive = activePanes.has(pane);
+            return (
+              <button
+                key={pane}
+                type="button"
+                aria-pressed={isActive}
+                className={isActive ? 'studio-paneswitch__seg is-active' : 'studio-paneswitch__seg'}
+                onClick={() => toggle(pane)}
+              >
+                {PANE_LABELS[pane]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Pane body — active panes split side-by-side */}
+      <div
+        ref={containerRef}
+        className="studio-center-stack"
+        data-count={ordered.length}
+        data-testid="center-stack"
+      >
+        {ordered.map((pane, i) => (
+          <Fragment key={pane}>
+            {i > 0 && (
+              <div
+                className="studio-center-stack__split"
+                onMouseDown={(e) => handleDragStart(i - 1, e)}
+              />
+            )}
             <div
-              className="studio-center-stack__split"
-              onMouseDown={(e) => handleDragStart(i - 1, e)}
-            />
-          )}
-          <div
-            className="studio-center-stack__pane"
-            data-pane={pane}
-            style={{ flex: `${fractions[i] ?? 1 / ordered.length} 1 0%` }}
-          >
-            {renderPane(pane)}
-          </div>
-        </Fragment>
-      ))}
+              className="studio-center-stack__pane"
+              data-pane={pane}
+              style={{ flex: `${fractions[i] ?? 1 / ordered.length} 1 0%` }}
+            >
+              {renderPane(pane)}
+            </div>
+          </Fragment>
+        ))}
+      </div>
     </div>
   );
 }

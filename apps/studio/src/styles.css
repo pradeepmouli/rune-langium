@@ -249,6 +249,11 @@
     font-weight: 700;
   }
 
+  .studio-app .dockview-theme-abyss {
+    gap: 8px;
+    padding: 8px;
+  }
+
   .studio-app .dockview-theme-abyss .dv-group-panel {
     border-radius: var(--radius);
     border: 0.5px solid var(--border);
@@ -1843,9 +1848,17 @@
 
 /* ─── Center stack — panes split side-by-side via paneswitch pill ────────── */
 
+.studio-app .studio-center-stack__bar {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  flex-shrink: 0;
+  border-bottom: 0.5px solid var(--border);
+}
+
 .studio-app .studio-center-stack {
   display: flex;
-  height: 100%;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
 }

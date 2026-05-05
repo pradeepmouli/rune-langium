@@ -322,41 +322,6 @@ export function DockShell({
         className="studio-layout-presets"
         data-testid="studio-layout-presets"
       >
-        <div
-          className="studio-paneswitch"
-          role="group"
-          aria-label="Center pane selector"
-          data-testid="studio-paneswitch"
-        >
-          {CENTER_PANE_OPTIONS.map((pane) => {
-            const isActive = activePanes.has(pane.id);
-            return (
-              <button
-                key={pane.id}
-                type="button"
-                aria-pressed={isActive}
-                className={isActive ? 'studio-paneswitch__seg is-active' : 'studio-paneswitch__seg'}
-                onClick={() => {
-                  setActivePanes((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(pane.id)) {
-                      if (next.size <= 1) return prev;
-                      next.delete(pane.id);
-                    } else {
-                      next.add(pane.id);
-                      // Only activate the panel when adding it to the active set.
-                      const panel = apiRef.current?.getPanel(pane.panel);
-                      if (panel) panel.api.setActive();
-                    }
-                    return next;
-                  });
-                }}
-              >
-                {pane.label}
-              </button>
-            );
-          })}
-        </div>
         <div className="studio-layout-presets__group studio-layout-presets__group--actions">
           <Button
             type="button"
@@ -393,7 +358,23 @@ export function DockShell({
           </button>
         </div>
       ) : null}
-      <CenterPanesContext.Provider value={activePanes}>
+      <CenterPanesContext.Provider
+        value={{
+          activePanes,
+          toggle: (pane: CenterPane) => {
+            setActivePanes((prev) => {
+              const next = new Set(prev);
+              if (next.has(pane)) {
+                if (next.size <= 1) return prev;
+                next.delete(pane);
+              } else {
+                next.add(pane);
+              }
+              return next;
+            });
+          }
+        }}
+      >
         <PanelRegistryContext.Provider value={panelRegistry}>
           <UtilityTrayContext.Provider
             value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}

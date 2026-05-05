@@ -236,17 +236,18 @@ export function App() {
     };
   }, []);
 
-  // Theme overlay (e.g. "daikonic") — drive via ?theme=daikonic query param
-  // or localStorage so users can preview the variant without a code change.
-  // Tokens cascade through `[data-theme="daikonic"]` in styles/daikonic.css.
+  // Theme — defaults to Daikonic. Override via ?theme=<name> query param
+  // or localStorage. Use ?theme=default to revert to Refactory Dark.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const queryTheme = params.get('theme');
     const stored = window.localStorage.getItem('rune-studio:theme');
-    const theme = queryTheme ?? stored;
-    if (theme) {
+    const theme = queryTheme ?? stored ?? 'daikonic';
+    if (queryTheme) window.localStorage.setItem('rune-studio:theme', queryTheme);
+    if (theme && theme !== 'default') {
       document.documentElement.setAttribute('data-theme', theme);
-      if (queryTheme) window.localStorage.setItem('rune-studio:theme', queryTheme);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
     }
   }, []);
 

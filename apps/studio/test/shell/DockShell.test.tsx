@@ -143,13 +143,10 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(screen.getByRole('application', { name: /studio dock shell/i })).toBeInTheDocument();
   });
 
-  it('renders center pane selector above the dock surface', () => {
+  it('renders utility actions in the layout toolbar', () => {
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
-    const header = screen.getByRole('toolbar', { name: /studio layout presets/i });
-    expect(header).toBeInTheDocument();
-    expect(header).toHaveTextContent('Graph');
-    expect(header).toHaveTextContent('Source');
-    expect(header).toHaveTextContent('Inspector');
+    expect(screen.getByTestId('toggle-utilities')).toBeInTheDocument();
+    expect(screen.getByTestId('reset-layout')).toBeInTheDocument();
   });
 
   it('Reset Layout calls api.clear() then re-applies a fresh layout', async () => {

@@ -5,10 +5,16 @@ import { createContext, useContext } from 'react';
 
 export type CenterPane = 'graph' | 'source' | 'inspector';
 
-export const CenterPanesContext = createContext<Set<CenterPane>>(
-  new Set<CenterPane>(['graph', 'source', 'inspector'])
-);
+export interface CenterPanesContextValue {
+  activePanes: Set<CenterPane>;
+  toggle: (pane: CenterPane) => void;
+}
 
-export function useCenterPanes(): Set<CenterPane> {
+export const CenterPanesContext = createContext<CenterPanesContextValue>({
+  activePanes: new Set<CenterPane>(['graph', 'source', 'inspector']),
+  toggle: () => {}
+});
+
+export function useCenterPanes(): CenterPanesContextValue {
   return useContext(CenterPanesContext);
 }
