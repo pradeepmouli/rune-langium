@@ -80,7 +80,11 @@ let activeLangiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
 const deferredModelJson = new Map<string, string>();
 
 function getIndexManager(): RuneDslIndexManager {
-  return RuneDsl.shared.workspace.IndexManager as RuneDslIndexManager;
+  const im = RuneDsl.shared.workspace.IndexManager;
+  if (typeof (im as RuneDslIndexManager).registerExports !== 'function') {
+    throw new Error('IndexManager is not a RuneDslIndexManager — registerExports is unavailable');
+  }
+  return im as RuneDslIndexManager;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -243,22 +247,27 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
     activeBuilder = builder;
     activeLangiumDocs = langiumDocs;
 
+    // Pre-build URI→file name map to avoid O(N²) lookup in the collection loop
+    const uriToFileName = new Map<string, string>();
+    for (const file of req.files) {
+      uriToFileName.set(URI.parse(file.name).toString(), file.name);
+    }
+
     // Collect models from built documents
     for (const document of documents) {
       const model = document.parseResult.value as RosettaModel;
       if (model) {
         preserveCstText(model);
         models.push(model);
-        const docUri = document.uri?.toString();
-        const matchingFile = req.files.find((f) => URI.parse(f.name).toString() === docUri);
-        if (matchingFile) {
-          parsedModels.push({ filePath: matchingFile.name, model });
+        const fileName = uriToFileName.get(document.uri?.toString() ?? '');
+        if (fileName) {
+          parsedModels.push({ filePath: fileName, model });
         }
       }
       if (document.parseResult.parserErrors.length > 0) {
         const docUri = document.uri?.toString() ?? '';
-        const matchingFile = req.files.find((f) => URI.parse(f.name).toString() === docUri);
-        errors[matchingFile?.name ?? docUri] = document.parseResult.parserErrors.map(
+        const fileName = uriToFileName.get(docUri) ?? docUri;
+        errors[fileName] = document.parseResult.parserErrors.map(
           (e: { message: string }) => e.message
         );
       }

@@ -202,6 +202,7 @@ export function EditorPage({
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
   const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
+  const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewRequestSequenceRef = useRef(0);
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const navigationHistoryRef = useRef<string[]>([]);
@@ -414,12 +415,10 @@ export function EditorPage({
     }
 
     // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
-    // Pass the file path directly — the parser worker uses it as the URI key
-    // (via URI.parse(file.name)). Don't convert via pathToUri() which would
-    // produce a different URI scheme (file:///workspace/...) than what the
-    // worker registered.
+    // Debounced so rapid keyboard navigation doesn't queue many worker requests.
     if (filePath) {
-      void linkDocument(filePath);
+      if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
+      linkDocumentTimerRef.current = setTimeout(() => void linkDocument(filePath), 150);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);
