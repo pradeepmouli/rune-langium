@@ -7,7 +7,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildDefaultLayout, PANEL_COMPONENT_NAMES } from '../../src/shell/layout-factory.js';
+import {
+  buildDefaultLayout,
+  LAYOUT_SCHEMA_VERSION,
+  PANEL_COMPONENT_NAMES
+} from '../../src/shell/layout-factory.js';
 
 describe('buildDefaultLayout (T061)', () => {
   it('emits the layout component names present in the factory shape', () => {
@@ -42,8 +46,10 @@ describe('buildDefaultLayout (T061)', () => {
     ]);
   });
 
-  it('layout.version starts at 3', () => {
-    expect(buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 }).version).toBe(3);
+  it('layout.version equals LAYOUT_SCHEMA_VERSION', () => {
+    expect(buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 }).version).toBe(
+      LAYOUT_SCHEMA_VERSION
+    );
   });
 
   it('preview starts reachable above 1280px', () => {

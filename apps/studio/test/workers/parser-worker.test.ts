@@ -232,13 +232,16 @@ describe('parser-worker', () => {
     expect(response.deferredExports[0]!.exports[0]!.name).toBe('Party');
   });
 
-  it('on-demand deserializes a deferred corpus document when linkDocument is called', async () => {
-    const hydratedModel = { $type: 'RosettaModel', elements: [], hydrated: true };
-    deserializeMock.mockReturnValue(hydratedModel);
+  it('cascade-hydrates all deferred corpus documents when linkDocument is called', async () => {
+    const modelA = { $type: 'RosettaModel', elements: [], name: 'A' };
+    const modelB = { $type: 'RosettaModel', elements: [], name: 'B' };
+    deserializeMock
+      .mockReturnValueOnce(modelA) // [cdm]/types.rosetta
+      .mockReturnValueOnce(modelB); // [cdm]/enums.rosetta
 
     const { handleParseWorkspace, handleLinkDocument } = await loadParserWorkerModule();
 
-    // First load workspace with a deferred corpus file
+    // Workspace with two deferred corpus files
     await handleParseWorkspace({
       type: 'parseWorkspace',
       id: 'ws-deferred',
@@ -246,39 +249,43 @@ describe('parser-worker', () => {
         {
           name: '[cdm]/types.rosetta',
           content: 'ignored',
-          serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
+          serializedModelJson: '{"$type":"RosettaModel","elements":[],"name":"A"}',
           exports: [{ type: 'RosettaType', name: 'Party', path: '/elements/0' }]
+        },
+        {
+          name: '[cdm]/enums.rosetta',
+          content: 'ignored',
+          serializedModelJson: '{"$type":"RosettaModel","elements":[],"name":"B"}',
+          exports: [{ type: 'RosettaEnumeration', name: 'PartyRole', path: '/elements/0' }]
         }
       ]
     });
 
-    // Deserialize should not have been called yet
     expect(deserializeMock).not.toHaveBeenCalled();
-    expect(fromModelMock).not.toHaveBeenCalled();
 
-    // Now link the deferred document — triggers on-demand deserialization
+    // Link types.rosetta — both deferred docs must be hydrated in the batch
     const linkResult = await handleLinkDocument({
       type: 'linkDocument',
       id: 'link-deferred',
       uri: '[cdm]/types.rosetta'
     });
 
-    expect(deserializeMock).toHaveBeenCalledWith('{"$type":"RosettaModel","elements":[]}');
-    expect(fromModelMock).toHaveBeenCalledWith(hydratedModel, '[cdm]/types.rosetta');
-    expect(addDocumentMock).toHaveBeenCalledTimes(1);
+    // Both deferred docs are deserialized together
+    expect(deserializeMock).toHaveBeenCalledTimes(2);
+    expect(addDocumentMock).toHaveBeenCalledTimes(2);
+    // Build called once for the whole batch (eagerLinking: true)
     expect(buildMock).toHaveBeenLastCalledWith(
-      [
-        expect.objectContaining({
-          parseResult: { value: hydratedModel, lexerErrors: [], parserErrors: [] }
-        })
-      ],
+      expect.arrayContaining([
+        expect.objectContaining({ parseResult: expect.objectContaining({ value: modelA }) }),
+        expect.objectContaining({ parseResult: expect.objectContaining({ value: modelB }) })
+      ]),
       { validation: false, eagerLinking: true }
     );
     expect(linkResult.linked).toBe(true);
     expect(linkResult.type).toBe('linkDocumentResult');
   });
 
-  it('does not deserialize a deferred document twice if linkDocument is called again', async () => {
+  it('does not re-deserialize deferred documents on a second linkDocument call', async () => {
     const hydratedModel = { $type: 'RosettaModel', elements: [] };
     deserializeMock.mockReturnValue(hydratedModel);
 
@@ -303,12 +310,12 @@ describe('parser-worker', () => {
       ]
     });
 
-    // First linkDocument — triggers deserialization and removes from deferred map
+    // First linkDocument — cascade hydrates the deferred doc, clears deferredModelJson
     await handleLinkDocument({ type: 'linkDocument', id: 'link-1', uri: '[cdm]/types.rosetta' });
     expect(deserializeMock).toHaveBeenCalledTimes(1);
 
-    // Second call — document is now in activeLangiumDocs (or returns linked:false if not tracked)
-    // Either way, deserialize must NOT be called again
+    // Second call — deferredModelJson is now empty, goes through regular path
+    // Deserialize must NOT be called again
     hasDocumentMock.mockReturnValue(true);
     getDocumentMock.mockReturnValue(fakeDoc);
     await handleLinkDocument({ type: 'linkDocument', id: 'link-2', uri: '[cdm]/types.rosetta' });

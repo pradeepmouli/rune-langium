@@ -17,7 +17,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('sanitizeLayout (T063)', () => {
   it('rebuilds when the input is missing or malformed', () => {
     const out = sanitizeLayout(null, { studioVersion: '0.1.0', viewportWidth: 1440 });
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(LAYOUT_SCHEMA_VERSION);
     const dockview = out.dockview;
     if (!dockview || dockview.shape !== 'factory') {
       throw new Error('factory layout expected');
@@ -56,7 +56,7 @@ describe('sanitizeLayout (T063)', () => {
       dockview: { something: 'unknown' }
     };
     const out = sanitizeLayout(futureLayout, { studioVersion: '0.2.0', viewportWidth: 1440 });
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(LAYOUT_SCHEMA_VERSION);
     expect(out.writtenBy).toBe('0.2.0');
   });
 

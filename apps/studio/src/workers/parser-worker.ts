@@ -354,26 +354,40 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
 async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumentResponse> {
   try {
     const targetUri = URI.parse(req.uri);
+    const serializer = RuneDsl.serializer.JsonSerializer;
 
-    // Check if this is a deferred corpus document that has not been deserialized yet
-    const deferredJson = deferredModelJson.get(targetUri.toString());
-    if (deferredJson) {
-      // On-demand deserialization — first access of this corpus document
-      const serializer = RuneDsl.serializer.JsonSerializer;
-      const model = serializer.deserialize<RosettaModel>(deferredJson);
-      const doc = factory.fromModel(model, targetUri);
-      activeLangiumDocs.addDocument(doc);
-      deferredModelJson.delete(targetUri.toString()); // Prevent re-deserialization
-      await activeBuilder.build([doc], { validation: false, eagerLinking: true });
+    // Cascade-hydrate ALL remaining deferred corpus documents when any is first
+    // accessed. This ensures Langium can resolve cross-references transitively —
+    // a deferred doc's .ref fields are undefined until every dependency is loaded.
+    // Cost is paid once on the first corpus click; deferredModelJson is empty after.
+    let targetDoc: LangiumDocument<AstNode> | undefined;
+    if (deferredModelJson.size > 0) {
+      const batchDocs: LangiumDocument<AstNode>[] = [];
+      for (const [uriStr, json] of deferredModelJson) {
+        const uri = URI.parse(uriStr);
+        if (activeLangiumDocs.hasDocument(uri)) continue;
+        const model = serializer.deserialize<RosettaModel>(json);
+        const doc = factory.fromModel(model, uri);
+        activeLangiumDocs.addDocument(doc);
+        batchDocs.push(doc);
+        if (uriStr === targetUri.toString()) targetDoc = doc;
+      }
+      deferredModelJson.clear();
+      if (batchDocs.length > 0) {
+        await activeBuilder.build(batchDocs, { validation: false, eagerLinking: true });
+      }
+    }
 
+    // If the target was hydrated in the batch above, return its diagnostics directly.
+    if (targetDoc) {
       const errors: string[] = [];
-      for (const diag of doc.diagnostics ?? []) {
+      for (const diag of targetDoc.diagnostics ?? []) {
         errors.push(diag.message);
       }
       return { type: 'linkDocumentResult', id: req.id, linked: true, errors };
     }
 
-    // Regular document (already parsed and registered during workspace load)
+    // Regular document (already parsed and registered during workspace load).
     if (!activeLangiumDocs.hasDocument(targetUri)) {
       return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [] };
     }
