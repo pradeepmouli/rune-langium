@@ -58,7 +58,7 @@ export const PANEL_TITLES: Record<PanelComponentName, string> = {
   'workspace.codePreview': 'Code'
 };
 
-export const LAYOUT_SCHEMA_VERSION = 4;
+export const LAYOUT_SCHEMA_VERSION = 5;
 
 const SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
 
@@ -87,7 +87,7 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
       },
       {
         active: previewActive,
-        size: 360,
+        size: 280,
         tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
       }
     ],

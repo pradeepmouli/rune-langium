@@ -106,7 +106,9 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
   const left = addLeafOrGroup(api, c0, undefined, c0.size);
   const middle = addLeafOrGroup(api, c1, { referencePanel: left.id, direction: 'right' });
   const right = addLeafOrGroup(api, c2, { referencePanel: middle.id, direction: 'right' });
+  if (c0.size) left.group.api.setSize({ width: c0.size });
   if (c2.collapsed) right.group.api.setSize({ width: 0 });
+  else if (c2.size) right.group.api.setSize({ width: c2.size });
 
   // Bottom group: stack tabs in a single group below the editor.
   const firstTab = shape.bottomGroup.tabs[0];
