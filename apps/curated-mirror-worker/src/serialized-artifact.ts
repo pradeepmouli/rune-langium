@@ -53,15 +53,31 @@ export async function buildSerializedWorkspaceArtifact(
     modelId,
     version,
     langiumVersion: LANGIUM_VERSION,
-    documents: documents.map((document, index) => ({
-      path: rosettaFiles[index]!.path,
-      modelJson: serializer.serialize(document.parseResult.value, {
-        refText: true,
-        textRegions: true,
-        replacer: (key, value, defaultReplacer) =>
-          typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value)
-      })
-    }))
+    documents: documents.map((document, index) => {
+      const model = document.parseResult.value;
+      const exports: Array<{ type: string; name: string; path: string }> = [];
+      const elements = (model as { elements?: unknown[] }).elements;
+      for (let j = 0; j < (elements?.length ?? 0); j++) {
+        const elem = elements![j] as { name?: string; $type?: string } | undefined;
+        if (elem?.name && elem?.$type) {
+          exports.push({
+            type: elem.$type,
+            name: elem.name,
+            path: `/elements@${j}`
+          });
+        }
+      }
+      return {
+        path: rosettaFiles[index]!.path,
+        modelJson: serializer.serialize(document.parseResult.value, {
+          refText: true,
+          textRegions: true,
+          replacer: (key, value, defaultReplacer) =>
+            typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value)
+        }),
+        exports
+      };
+    })
   };
 
   const bytes = gzip(new TextEncoder().encode(JSON.stringify(artifact)));

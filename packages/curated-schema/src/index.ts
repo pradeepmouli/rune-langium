@@ -47,9 +47,17 @@ export const LangiumJsonArtifactRefSchema = z.object({
 });
 export type LangiumJsonArtifactRef = z.infer<typeof LangiumJsonArtifactRefSchema>;
 
+export const CuratedSerializedDocumentExportSchema = z.object({
+  type: z.string().min(1),
+  name: z.string().min(1),
+  path: z.string().min(1)
+});
+export type CuratedSerializedDocumentExport = z.infer<typeof CuratedSerializedDocumentExportSchema>;
+
 export const CuratedSerializedDocumentSchema = z.object({
   path: z.string().min(1),
-  modelJson: z.string().min(1)
+  modelJson: z.string().min(1),
+  exports: z.array(CuratedSerializedDocumentExportSchema).optional()
 });
 export type CuratedSerializedDocument = z.infer<typeof CuratedSerializedDocumentSchema>;
 

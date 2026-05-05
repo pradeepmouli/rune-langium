@@ -115,15 +115,30 @@ async function buildArtifact(source, archiveBytes) {
     modelId: source.id,
     version,
     langiumVersion: LANGIUM_VERSION,
-    documents: documents.map((doc, i) => ({
-      path: rosettaFiles[i].path,
-      modelJson: serializer.serialize(doc.parseResult.value, {
-        refText: true,
-        textRegions: true,
-        replacer: (key, value, defaultReplacer) =>
-          typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value),
-      }),
-    })),
+    documents: documents.map((doc, i) => {
+      const model = doc.parseResult.value;
+      const exports = [];
+      for (let j = 0; j < (model.elements?.length ?? 0); j++) {
+        const elem = model.elements[j];
+        if (elem?.name && elem?.$type) {
+          exports.push({
+            type: elem.$type,
+            name: elem.name,
+            path: `/elements@${j}`,
+          });
+        }
+      }
+      return {
+        path: rosettaFiles[i].path,
+        modelJson: serializer.serialize(doc.parseResult.value, {
+          refText: true,
+          textRegions: true,
+          replacer: (key, value, defaultReplacer) =>
+            typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value),
+        }),
+        exports,
+      };
+    }),
   };
 
   const json = JSON.stringify(artifact, (_key, value) =>
