@@ -84,7 +84,7 @@ describe('parser-worker', () => {
     expect(fromStringMock).toHaveBeenCalledWith('namespace demo', 'file:///demo.rosetta');
     expect(buildMock).toHaveBeenCalledWith(
       [expect.objectContaining({ uri: 'file:///demo.rosetta' })],
-      { validation: false }
+      { validation: false, eagerLinking: false }
     );
     expect(response).toMatchObject({
       type: 'parseResult',
@@ -112,7 +112,7 @@ describe('parser-worker', () => {
         expect.objectContaining({ uri: 'a.rosetta' }),
         expect.objectContaining({ uri: 'b.rosetta' })
       ],
-      { validation: false }
+      { validation: false, eagerLinking: false }
     );
     expect(response.type).toBe('parseWorkspaceResult');
     expect(response.id).toBe('workspace-1');

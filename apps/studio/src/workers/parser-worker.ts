@@ -141,7 +141,7 @@ async function handleParse(req: ParseRequest): Promise<ParseResponse> {
       req.content,
       URI.parse(req.uri ?? 'inmemory:///model.rosetta')
     );
-    await builder.build([document], { validation: false });
+    await builder.build([document], { validation: false, eagerLinking: false });
     const errors: string[] = [];
     if (document.parseResult.parserErrors.length > 0) {
       for (const err of document.parseResult.parserErrors) {
@@ -179,7 +179,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
           ),
           builder
         };
-    await workspace.builder.build(workspace.documents, { validation: false });
+    await workspace.builder.build(workspace.documents, { validation: false, eagerLinking: false });
     const models: RosettaModel[] = [];
     const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
 
