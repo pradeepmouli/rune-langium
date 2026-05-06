@@ -274,12 +274,17 @@
   .studio-app .dockview-theme-abyss {
     gap: 10px;
     padding: 10px;
+    /* Dock surround is visibly lighter than panel content so panels sit as
+     * inset dark tiles against a lighter frame — matches the reference design.
+     * oklch(0.22) is roughly 2× the lightness of --background (0.12). */
+    background: oklch(0.22 0.025 280);
   }
 
   .studio-app .dockview-theme-abyss .dv-group-panel {
     border-radius: 12px;
-    border: 0.5px solid var(--border);
+    border: 0.5px solid color-mix(in oklch, var(--border) 60%, transparent);
     overflow: hidden;
+    background: var(--background);
   }
 
   .studio-app .dockview-theme-abyss .dv-group-panel .dv-tabs-container {
@@ -1947,4 +1952,20 @@
  * Placed outside @layer so it beats dockview's unlayered CSS in the cascade. */
 .studio-app .dockview-theme-abyss .dv-tab .dv-default-tab .dv-default-tab-action {
   display: none;
+}
+
+/* dv-grid-view and dv-groupview both default to #000c18 from the abyss theme,
+ * which covers the lighter gap background set on .dockview-theme-abyss.
+ * Making them transparent lets the parent's color show in the sash/gap areas. */
+.studio-app .dockview-theme-abyss .dv-grid-view,
+.studio-app .dockview-theme-abyss .dv-groupview {
+  background: transparent;
+}
+
+/* Crisp gap around each panel: a 4px border in the lighter dock-frame color
+ * creates a consistent, readable gap between all adjacent panels. */
+.studio-app .dockview-theme-abyss .dv-resize-container {
+  border: 4px solid oklch(0.22 0.025 280);
+  border-radius: 14px;
+  overflow: hidden;
 }
