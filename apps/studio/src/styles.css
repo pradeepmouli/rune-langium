@@ -277,7 +277,7 @@
     /* Dock surround is visibly lighter than panel content so panels sit as
      * inset dark tiles against a lighter frame — matches the reference design.
      * oklch(0.22) is roughly 2× the lightness of --background (0.12). */
-    background: oklch(0.22 0.025 280);
+    background: oklch(0.28 0.025 280);
   }
 
   .studio-app .dockview-theme-abyss .dv-group-panel {
@@ -1966,16 +1966,16 @@
 .studio-app .dockview-theme-abyss .dv-view {
   padding: 4px;
   box-sizing: border-box;
-  background: oklch(0.22 0.025 280);
+  background: oklch(0.28 0.025 280);
   border-radius: 12px;
 }
 
-/* Panel surface: rounded corners, dark background, subtle border. */
+/* Panel surface: rounded corners and dark background. No border needed —
+ * the lighter gap frame provides visual separation between panels. */
 .studio-app .dockview-theme-abyss .dv-groupview {
   border-radius: 8px;
   overflow: hidden;
   background: var(--background);
-  border: 0.5px solid color-mix(in oklch, var(--border) 60%, transparent);
 }
 
 /* Tab header background matches card surface; top corners follow panel radius. */
