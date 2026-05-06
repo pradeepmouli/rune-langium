@@ -1967,12 +1967,12 @@
   padding: 4px;
   box-sizing: border-box;
   background: oklch(0.22 0.025 280);
-  border-radius: 16px;
+  border-radius: 12px;
 }
 
 /* Panel surface: rounded corners, dark background, subtle border. */
 .studio-app .dockview-theme-abyss .dv-groupview {
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--background);
   border: 0.5px solid color-mix(in oklch, var(--border) 60%, transparent);
@@ -1980,7 +1980,7 @@
 
 /* Tab header background matches card surface; top corners follow panel radius. */
 .studio-app .dockview-theme-abyss .dv-tabs-and-actions-container {
-  border-radius: 12px 12px 0 0;
+  border-radius: 8px 8px 0 0;
   background: var(--card);
 }
 
