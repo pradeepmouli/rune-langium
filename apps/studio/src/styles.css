@@ -1954,20 +1954,34 @@
   display: none;
 }
 
-/* dv-grid-view and dv-groupview both default to #000c18 from the abyss theme,
- * which covers the lighter gap background set on .dockview-theme-abyss.
- * Making them transparent lets the parent's color show in the sash/gap areas. */
-.studio-app .dockview-theme-abyss .dv-grid-view,
-.studio-app .dockview-theme-abyss .dv-groupview {
+/* dv-grid-view defaults to #000c18 (abyss theme) — make it transparent so the
+ * lighter frame background on .dockview-theme-abyss shows in the gap areas. */
+.studio-app .dockview-theme-abyss .dv-grid-view {
   background: transparent;
 }
 
-/* Crisp gap around each panel: a 4px border in the lighter dock-frame color
- * creates a consistent, readable gap between all adjacent panels. */
-.studio-app .dockview-theme-abyss .dv-resize-container {
-  border: 4px solid oklch(0.22 0.025 280);
-  border-radius: 14px;
+/* dv-view is dockview's layout-managed panel slot (sized by JS). Padding +
+ * matching frame background creates the visible gap between panels;
+ * box-sizing: border-box keeps the JS-calculated outer dimensions intact. */
+.studio-app .dockview-theme-abyss .dv-view {
+  padding: 4px;
+  box-sizing: border-box;
+  background: oklch(0.22 0.025 280);
+  border-radius: 16px;
+}
+
+/* Panel surface: rounded corners, dark background, subtle border. */
+.studio-app .dockview-theme-abyss .dv-groupview {
+  border-radius: 12px;
   overflow: hidden;
+  background: var(--background);
+  border: 0.5px solid color-mix(in oklch, var(--border) 60%, transparent);
+}
+
+/* Tab header background matches card surface; top corners follow panel radius. */
+.studio-app .dockview-theme-abyss .dv-tabs-and-actions-container {
+  border-radius: 12px 12px 0 0;
+  background: var(--card);
 }
 
 /* Sash (resize handle) — outside @layer so it beats dockview's 4px default.
