@@ -1970,12 +1970,18 @@
   border-radius: 12px;
 }
 
-/* Panel surface: rounded corners and dark background. No border needed —
- * the lighter gap frame provides visual separation between panels. */
+/* Kill dockview's ::before separator line — with our padding-based gap the
+ * ::before floats visibly in the center of the gap rather than at an edge. */
+.studio-app .dockview-theme-abyss {
+  --dv-separator-border: transparent;
+}
+
+/* Panel surface: rounded corners, dark background, subtle edge border. */
 .studio-app .dockview-theme-abyss .dv-groupview {
   border-radius: 8px;
   overflow: hidden;
   background: var(--background);
+  border: 0.5px solid color-mix(in oklch, var(--border) 60%, transparent);
 }
 
 /* Tab header background matches card surface; top corners follow panel radius. */
