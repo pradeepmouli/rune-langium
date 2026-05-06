@@ -362,7 +362,16 @@ export function DockShell({
         value={{
           activePanes,
           toggle: (pane: CenterPane) => {
-            setActivePanes(new Set([pane]));
+            setActivePanes((prev) => {
+              const next = new Set(prev);
+              if (next.has(pane)) {
+                if (next.size <= 1) return prev;
+                next.delete(pane);
+              } else {
+                next.add(pane);
+              }
+              return next;
+            });
           }
         }}
       >
