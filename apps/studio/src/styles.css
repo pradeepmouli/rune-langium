@@ -1942,9 +1942,11 @@
   background: color-mix(in oklch, var(--primary), transparent 70%);
 }
 
-/* Hide dockview's tab strip for the center stack when it has only one tab.
- * The paneswitch pill in the layout-presets toolbar replaces it. */
-.studio-app .dockview-theme-abyss .dv-tabs-container:has(.dv-tab:only-child) {
+/* Hide the entire tab header bar for single-tab panels — the 24px bar adds
+ * no value when there's nothing to switch between. Multi-tab panels (e.g.
+ * Form/Code on the inspector, Problems/Messages on the utility tray) keep
+ * their headers because dockview does not add dv-single-tab to those. */
+.studio-app .dockview-theme-abyss .dv-tabs-and-actions-container.dv-single-tab {
   display: none;
 }
 
