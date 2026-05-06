@@ -272,12 +272,8 @@
   }
 
   .studio-app .dockview-theme-abyss {
-    gap: 10px;
-    padding: 10px;
-    /* Dock surround is visibly lighter than panel content so panels sit as
-     * inset dark tiles against a lighter frame — matches the reference design.
-     * oklch(0.22) is roughly 2× the lightness of --background (0.12). */
-    background: oklch(0.28 0.025 280);
+    padding: 8px;
+    background: oklch(0.22 0.03 240);
   }
 
   .studio-app .dockview-theme-abyss .dv-group-panel {
@@ -1962,14 +1958,16 @@
   background: transparent;
 }
 
-/* dv-view is dockview's layout-managed panel slot (sized by JS). Padding +
- * matching frame background creates the visible gap between panels;
- * box-sizing: border-box keeps the JS-calculated outer dimensions intact. */
-.studio-app .dockview-theme-abyss .dv-view {
-  padding: 4px;
+/* Only target leaf dv-views (those with a direct dv-groupview child). Container
+ * dv-views hold nested splits and must not get padding — dockview's JS doesn't
+ * account for CSS padding when computing inner panel sizes, so padding on a
+ * container causes nested panels to overflow and misalign. Leaf panels are safe
+ * because they own a single dv-groupview (the actual panel surface). */
+.studio-app .dockview-theme-abyss .dv-view:has(> .dv-groupview) {
+  padding: 2px;
   box-sizing: border-box;
-  background: oklch(0.28 0.025 280);
-  border-radius: 12px;
+  background: oklch(0.22 0.03 240);
+  border-radius: 10px;
 }
 
 /* Kill dockview's ::before separator line — with our padding-based gap the
@@ -1983,7 +1981,7 @@
   border-radius: 8px;
   overflow: hidden;
   background: var(--background);
-  border: 0.5px solid color-mix(in oklch, var(--border) 60%, transparent);
+  border: 1px solid color-mix(in oklch, var(--border) 75%, transparent);
 }
 
 /* Tab header background matches card surface; top corners follow panel radius. */
@@ -1993,20 +1991,20 @@
 }
 
 /* Sash (resize handle) — outside @layer so it beats dockview's 4px default.
- * The visual gap is 8px (4px border per panel side); the sash must cover
- * the full gap width so the entire lighter-colored gap region is draggable. */
+ * The visual gap is 4px (2px per leaf panel side); the sash covers the full
+ * gap plus a small overshoot so the cursor changes anywhere in the gap. */
 .studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
-  width: 12px;
-  margin-left: -6px;
-  margin-right: -6px;
+  width: 8px;
+  margin-left: -4px;
+  margin-right: -4px;
   z-index: 8;
   cursor: col-resize;
 }
 
 .studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
-  height: 12px;
-  margin-top: -6px;
-  margin-bottom: -6px;
+  height: 8px;
+  margin-top: -4px;
+  margin-bottom: -4px;
   z-index: 8;
   cursor: row-resize;
 }
@@ -2018,10 +2016,10 @@
 .studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::after {
   content: '';
   position: absolute;
-  top: 10px;
-  bottom: 10px;
+  top: 16px;
+  bottom: 16px;
   left: 50%;
-  width: 3px;
+  width: 2px;
   transform: translateX(-50%);
   border-radius: 999px;
   background: var(--dv-sash-color);
@@ -2035,10 +2033,10 @@
 .studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::after {
   content: '';
   position: absolute;
-  left: 10px;
-  right: 10px;
+  left: 16px;
+  right: 16px;
   top: 50%;
-  height: 3px;
+  height: 2px;
   transform: translateY(-50%);
   border-radius: 999px;
   background: var(--dv-sash-color);
