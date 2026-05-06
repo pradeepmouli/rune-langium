@@ -272,8 +272,8 @@
   }
 
   .studio-app .dockview-theme-abyss {
-    padding: 8px;
-    background: oklch(0.22 0.03 240);
+    padding: 4px;
+    background: oklch(0.10 0.02 240);
   }
 
   .studio-app .dockview-theme-abyss .dv-group-panel {
@@ -1966,7 +1966,7 @@
 .studio-app .dockview-theme-abyss .dv-view:has(> .dv-groupview) {
   padding: 2px;
   box-sizing: border-box;
-  background: oklch(0.22 0.03 240);
+  background: oklch(0.10 0.02 240);
   border-radius: 10px;
 }
 
@@ -1976,12 +1976,12 @@
   --dv-separator-border: transparent;
 }
 
-/* Panel surface: rounded corners, dark background, subtle edge border. */
+/* Panel surface: rounded corners, slightly elevated over the dark gap. */
 .studio-app .dockview-theme-abyss .dv-groupview {
   border-radius: 8px;
   overflow: hidden;
   background: var(--background);
-  border: 1px solid color-mix(in oklch, var(--border) 75%, transparent);
+  box-shadow: 0 0 0 0.5px color-mix(in oklch, var(--border) 50%, transparent);
 }
 
 /* Tab header background matches card surface; top corners follow panel radius. */
