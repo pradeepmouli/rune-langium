@@ -1969,3 +1969,76 @@
   border-radius: 14px;
   overflow: hidden;
 }
+
+/* Sash (resize handle) — outside @layer so it beats dockview's 4px default.
+ * The visual gap is 8px (4px border per panel side); the sash must cover
+ * the full gap width so the entire lighter-colored gap region is draggable. */
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
+  width: 12px;
+  margin-left: -6px;
+  margin-right: -6px;
+  z-index: 8;
+  cursor: col-resize;
+}
+
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
+  height: 12px;
+  margin-top: -6px;
+  margin-bottom: -6px;
+  z-index: 8;
+  cursor: row-resize;
+}
+
+.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash {
+  position: relative;
+}
+
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--dv-sash-color);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22);
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--dv-sash-color);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22);
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash:not(.disabled):hover::after,
+.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash:not(.disabled):active::after {
+  background: var(--dv-active-sash-color);
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.18);
+}
+
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.disabled):hover::after,
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.disabled):active::after {
+  transform: translateX(-50%) scaleX(1.35);
+}
+
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.disabled):hover::after,
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.disabled):active::after {
+  transform: translateY(-50%) scaleY(1.35);
+}
