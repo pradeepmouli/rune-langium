@@ -51,6 +51,7 @@ export type { RuneReport } from './types/report.js';
 export type { RuneAnnotationDecl, AnnotationAttribute } from './types/annotation.js';
 export type { RuneLibraryFunc, LibraryFuncParam } from './types/library-func.js';
 export type { NamespaceManifest, NamespaceRegistry } from './emit/namespace-registry.js';
+export { RUNTIME_HELPER_JS_SOURCE } from './helpers.js';
 
 /**
  * Generate code from one or more parsed Langium documents.
