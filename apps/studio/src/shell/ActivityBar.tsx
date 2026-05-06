@@ -28,7 +28,6 @@ export function ActivityBar({
       data-testid="activity-bar"
       className="studio-rail"
     >
-      <div className="studio-brand__mark">R</div>
       <div className="studio-rail__group">
         <button
           type="button"

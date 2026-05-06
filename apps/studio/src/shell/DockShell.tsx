@@ -180,7 +180,7 @@ export function DockShell({
       : 'edit'
   );
   const [activePanes, setActivePanes] = useState<Set<CenterPane>>(
-    () => new Set<CenterPane>(['graph', 'source', 'inspector'])
+    () => new Set<CenterPane>(['graph'])
   );
   const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
     layout.dockview && layout.dockview.shape === 'factory'
@@ -362,16 +362,7 @@ export function DockShell({
         value={{
           activePanes,
           toggle: (pane: CenterPane) => {
-            setActivePanes((prev) => {
-              const next = new Set(prev);
-              if (next.has(pane)) {
-                if (next.size <= 1) return prev;
-                next.delete(pane);
-              } else {
-                next.add(pane);
-              }
-              return next;
-            });
+            setActivePanes(new Set([pane]));
           }
         }}
       >

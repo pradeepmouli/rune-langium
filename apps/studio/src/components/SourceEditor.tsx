@@ -71,6 +71,9 @@ export interface SourceEditorProps {
    * Used by cross-file go-to-definition to resolve pending displayFile promises.
    */
   onEditorViewCreated?: (filePath: string, view: EditorView) => void;
+  /** When true, suppress the internal tab strip. Use when the parent (e.g. topbar
+   * FileTabStrip) already provides file-tab navigation. */
+  hideTabs?: boolean;
 }
 
 /** Imperative handle exposed by SourceEditor for programmatic navigation. */
@@ -178,7 +181,8 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
     onContentChange,
     lspClient,
     onNavigateToNode,
-    onEditorViewCreated
+    onEditorViewCreated,
+    hideTabs
   },
   ref
 ) {
@@ -432,79 +436,81 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
 
   return (
     <section className="flex flex-col h-full bg-background" data-testid="source-editor">
-      {/* Tab bar */}
-      <nav
-        className="flex overflow-x-auto bg-card border-b border-border gap-px min-h-[32px]"
-        role="tablist"
-        aria-label="Open files"
-      >
-        {files.map((file) => (
-          <div
-            key={file.path}
-            className={cn(
-              'group flex items-center gap-0.5 border-b-2 border-b-transparent transition-colors',
-              file.path === selectedPath ? 'border-b-primary' : ''
-            )}
-          >
-            <button
-              id={getTabId(file.path)}
-              role="tab"
-              aria-selected={file.path === selectedPath}
-              aria-controls="editor-tabpanel"
-              tabIndex={file.path === selectedPath ? 0 : -1}
+      {/* Tab bar — suppressed when parent already provides file-tab navigation */}
+      {!hideTabs && (
+        <nav
+          className="flex overflow-x-auto bg-card border-b border-border gap-px min-h-[32px]"
+          role="tablist"
+          aria-label="Open files"
+        >
+          {files.map((file) => (
+            <div
+              key={file.path}
               className={cn(
-                'max-w-[16rem] truncate pl-2.5 pr-1 py-1 text-xs bg-transparent border-none cursor-pointer whitespace-nowrap transition-[color,background-color,transform]',
-                'hover:text-foreground',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-                file.path === selectedPath ? 'text-primary' : 'text-muted-foreground'
+                'group flex items-center gap-0.5 border-b-2 border-b-transparent transition-colors',
+                file.path === selectedPath ? 'border-b-primary' : ''
               )}
-              onClick={() => handleFileSelect(file.path)}
-              onKeyDown={(event) => handleTabKeyDown(event, file.path)}
-              title={file.path}
             >
-              {file.name}
-              {file.readOnly && (
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  aria-label="read-only"
-                  className="inline-block ml-1 opacity-60"
-                >
-                  <path d="M11 7V5a3 3 0 0 0-6 0v2H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1zm-5 0V5a2 2 0 1 1 4 0v2H6zm2 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
-                </svg>
-              )}
-              {file.dirty && <span className="text-warning text-xs"> ●</span>}
-            </button>
-            {onFileClose && !file.readOnly && (
               <button
-                type="button"
-                aria-label={`Close ${file.name}`}
+                id={getTabId(file.path)}
+                role="tab"
+                aria-selected={file.path === selectedPath}
+                aria-controls="editor-tabpanel"
+                tabIndex={file.path === selectedPath ? 0 : -1}
                 className={cn(
-                  'shrink-0 p-0.5 rounded-sm text-muted-foreground transition-[color,background-color,opacity,transform]',
-                  'hover:text-foreground hover:bg-muted',
-                  'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-                  file.path === selectedPath && 'opacity-60'
+                  'max-w-[16rem] truncate pl-2.5 pr-1 py-1 text-xs bg-transparent border-none cursor-pointer whitespace-nowrap transition-[color,background-color,transform]',
+                  'hover:text-foreground',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                  file.path === selectedPath ? 'text-primary' : 'text-muted-foreground'
                 )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFileClose(file.path);
-                }}
+                onClick={() => handleFileSelect(file.path)}
+                onKeyDown={(event) => handleTabKeyDown(event, file.path)}
+                title={file.path}
               >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                  <path
-                    d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                {file.name}
+                {file.readOnly && (
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-label="read-only"
+                    className="inline-block ml-1 opacity-60"
+                  >
+                    <path d="M11 7V5a3 3 0 0 0-6 0v2H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1zm-5 0V5a2 2 0 1 1 4 0v2H6zm2 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
+                  </svg>
+                )}
+                {file.dirty && <span className="text-warning text-xs"> ●</span>}
               </button>
-            )}
-          </div>
-        ))}
-      </nav>
+              {onFileClose && !file.readOnly && (
+                <button
+                  type="button"
+                  aria-label={`Close ${file.name}`}
+                  className={cn(
+                    'shrink-0 p-0.5 rounded-sm text-muted-foreground transition-[color,background-color,opacity,transform]',
+                    'hover:text-foreground hover:bg-muted',
+                    'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                    file.path === selectedPath && 'opacity-60'
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFileClose(file.path);
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                    <path
+                      d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
+          ))}
+        </nav>
+      )}
 
       {/* Editor container */}
       <div

@@ -1118,6 +1118,7 @@ export function EditorPage({
           onContentChange={handleSourceChange}
           onNavigateToNode={navigateToNode}
           onEditorViewCreated={handleEditorViewCreated}
+          hideTabs
         />
       </div>
     ),

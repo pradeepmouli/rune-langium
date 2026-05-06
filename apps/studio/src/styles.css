@@ -52,6 +52,17 @@
     font-family: var(--font-sans);
   }
 
+  /* design-system theme.css sets h1-h6 to --font-display (Outfit) globally;
+   * override so studio panels use the same sans stack as all other UI chrome. */
+  .studio-app h1,
+  .studio-app h2,
+  .studio-app h3,
+  .studio-app h4,
+  .studio-app h5,
+  .studio-app h6 {
+    font-family: var(--font-sans), system-ui, sans-serif;
+  }
+
   .studio-app [data-slot='button'] {
     cursor: pointer;
     transition:
@@ -121,6 +132,7 @@
   .studio-app .dockview-theme-abyss {
     --dv-tabs-and-actions-container-font-size: 11px;
     --dv-tabs-and-actions-container-height: 24px;
+    --dv-tabs-and-actions-container-background-color: var(--card);
     --dv-sash-color: rgba(148, 163, 184, 0.42);
     --dv-active-sash-color: rgba(94, 234, 212, 0.9);
     --dv-active-sash-transition-duration: 0.12s;
@@ -128,13 +140,7 @@
   }
 
   .studio-app .studio-layout-presets {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-height: 38px;
-    padding: 0 0.5rem;
-    background: transparent;
-    border-bottom: none;
+    display: none;
   }
 
   .studio-app .studio-layout-presets__group {
@@ -173,10 +179,12 @@
     display: inline-flex;
     height: 26px;
     background: color-mix(in srgb, var(--background) 96%, var(--muted) 4%);
-    border: 0.5px solid color-mix(in srgb, var(--border) 90%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
     border-radius: 999px;
     overflow: hidden;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 1px 3px rgba(0, 0, 0, 0.15);
     flex-shrink: 0;
   }
 
@@ -264,19 +272,21 @@
   }
 
   .studio-app .dockview-theme-abyss {
-    gap: 8px;
-    padding: 8px;
+    gap: 10px;
+    padding: 10px;
   }
 
   .studio-app .dockview-theme-abyss .dv-group-panel {
-    border-radius: var(--radius);
+    border-radius: 12px;
     border: 0.5px solid var(--border);
     overflow: hidden;
   }
 
   .studio-app .dockview-theme-abyss .dv-group-panel .dv-tabs-container {
-    border-radius: var(--radius) var(--radius) 0 0;
+    border-radius: 12px 12px 0 0;
+    background: var(--card);
   }
+
 
   /* ─── Activity Rail ────────────────────────────────────────────
    * Narrow 52px left column with icon-only buttons, an active-state
@@ -1930,5 +1940,11 @@
 /* Hide dockview's tab strip for the center stack when it has only one tab.
  * The paneswitch pill in the layout-presets toolbar replaces it. */
 .studio-app .dockview-theme-abyss .dv-tabs-container:has(.dv-tab:only-child) {
+  display: none;
+}
+
+/* Dockview panel tabs are fixed layout components — no close buttons needed.
+ * Placed outside @layer so it beats dockview's unlayered CSS in the cascade. */
+.studio-app .dockview-theme-abyss .dv-tab .dv-default-tab .dv-default-tab-action {
   display: none;
 }
