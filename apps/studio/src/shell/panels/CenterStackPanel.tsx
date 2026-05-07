@@ -3,6 +3,7 @@
 
 import { Fragment, useCallback, useRef, useState } from 'react';
 import type React from 'react';
+import { Network, FileCode2, Info } from 'lucide-react';
 import { useCenterPanes, type CenterPane } from '../center-panes-context.js';
 
 const PANE_ORDER: CenterPane[] = ['graph', 'source', 'inspector'];
@@ -10,6 +11,11 @@ const PANE_LABELS: Record<CenterPane, string> = {
   graph: 'Graph',
   source: 'Source',
   inspector: 'Inspector'
+};
+const PANE_ICONS: Record<CenterPane, React.FC<React.SVGProps<SVGSVGElement>>> = {
+  graph: Network,
+  source: FileCode2,
+  inspector: Info
 };
 const MIN_PANE_PX = 120;
 
@@ -99,6 +105,7 @@ export function CenterStackPanel({
         <div className="studio-paneswitch" role="group">
           {PANE_ORDER.map((pane) => {
             const isActive = activePanes.has(pane);
+            const Icon = PANE_ICONS[pane];
             return (
               <button
                 key={pane}
@@ -107,6 +114,7 @@ export function CenterStackPanel({
                 className={isActive ? 'studio-paneswitch__seg is-active' : 'studio-paneswitch__seg'}
                 onClick={() => toggle(pane)}
               >
+                <Icon className="size-3.5" aria-hidden />
                 {PANE_LABELS[pane]}
               </button>
             );

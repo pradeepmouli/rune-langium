@@ -719,11 +719,17 @@
     pointer-events: none;
   }
 
-  /* dockview 6.x adds a full-size ::after overlay on focus/focus-within with
-   * outline but no background — suppress it so our ::before underline shows. */
+  /* dockview 6.x adds a full-size ::after overlay on focus/focus-within —
+   * suppress it so our ::before underline shows, then restore a ring for
+   * keyboard focus so the tab remains accessible. */
   .studio-app .dockview-theme-abyss .dv-tab:focus-within::after,
   .studio-app .dockview-theme-abyss .dv-tab:focus::after {
     display: none;
+  }
+  .studio-app .dockview-theme-abyss .dv-tab:focus-visible,
+  .studio-app .dockview-theme-abyss .dv-tab:has(:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
   }
 
   .studio-app .studio-graph-canvas {

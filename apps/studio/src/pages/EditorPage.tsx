@@ -546,9 +546,13 @@ export function EditorPage({
       .filter((f) => !f.readOnly)
       .map((f) => ({ uri: pathToUri(f.path), content: f.content }));
     const allFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+    // Mint a fresh requestId so any in-flight preview result built against the
+    // previous file snapshot is discarded by the stale-check on arrival.
+    const requestId = `preview:files:${++previewRequestSequenceRef.current}`;
+    currentPreviewRequestIdRef.current = requestId;
     try {
       codegenWorker.postMessage({ type: 'codegen:setFiles', files: codegenFiles });
-      codegenWorker.postMessage(createPreviewSetFilesMessage(allFiles));
+      codegenWorker.postMessage(createPreviewSetFilesMessage(allFiles, requestId));
     } catch (error) {
       handlePreviewWorkerFailure('Preview worker could not process updated files.', error);
     }
