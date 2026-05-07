@@ -9,6 +9,7 @@ import {
   isRosettaEnumeration,
   isRosettaFunction,
   isRosettaModel,
+  isRosettaRecordType,
   isRosettaTypeAlias,
   type Attribute,
   type Choice,
@@ -531,6 +532,12 @@ function buildBaseField(attr: Attribute, ctx: FieldContext): PreviewField {
   const refText = attr.typeCall?.type?.$refText;
 
   if (typeRef && isRosettaBasicType(typeRef)) {
+    const builtinKind = BUILTIN_KIND_MAP[typeRef.name];
+    return builtinKind ? scalarField(ctx, builtinKind) : unsupportedField(ctx, typeRef.name);
+  }
+
+  // recordType (date, dateTime, zonedDateTime) resolves to RosettaRecordType, not RosettaBasicType
+  if (typeRef && isRosettaRecordType(typeRef)) {
     const builtinKind = BUILTIN_KIND_MAP[typeRef.name];
     return builtinKind ? scalarField(ctx, builtinKind) : unsupportedField(ctx, typeRef.name);
   }

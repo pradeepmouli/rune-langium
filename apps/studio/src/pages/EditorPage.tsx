@@ -85,7 +85,6 @@ import {
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
 import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
-import { useCodegenStore } from '../store/codegen-store.js';
 import '../test-api.js';
 import { getRuneStudioTestApi } from '../test-api.js';
 
@@ -239,9 +238,6 @@ export function EditorPage({
   const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
   const receiveExecutionError = usePreviewStore((s) => s.receiveExecutionError);
   const setWorkerRef = usePreviewStore((s) => s.setWorkerRef);
-  const codePreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
-  const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
-
   useEffect(() => {
     const el = graphContainerRef.current;
     if (!el) return;
@@ -420,15 +416,9 @@ export function EditorPage({
       pendingRevealRef.current = { line: range.start.line + 1, filePath };
     } else if (filePath) {
       const typeName = (nodeData as { name?: string }).name;
-      if (typeName) {
-        const file = files.find((f) => f.path === filePath);
-        if (file) {
-          const line = findDeclarationLine(file.content, typeName);
-          if (line > 0) {
-            pendingRevealRef.current = { line, filePath };
-          }
-        }
-      }
+      const file = files.find((f) => f.path === filePath);
+      const line = typeName && file ? findDeclarationLine(file.content, typeName) : 0;
+      pendingRevealRef.current = { line: line > 0 ? line : 1, filePath };
     }
 
     // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
@@ -546,20 +536,21 @@ export function EditorPage({
 
   // Keep the codegen worker in sync with the workspace file set and
   // regenerate the selected preview whenever the backing files change.
+  // Note: codegen:setFiles is sent without a request ID so the worker
+  // auto-runs with the request ID that CodePreviewPanel owns, avoiding
+  // the race where EditorPage's beginCodePreviewRequest call invalidates
+  // the ID that CodePreviewPanel is waiting on.
   useEffect(() => {
     if (!codegenWorker) return;
-    const previewFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
-    const codegenRequestId = beginCodePreviewRequest(codePreviewTarget);
+    const previewFiles = files
+      .filter((f) => !f.readOnly)
+      .map((f) => ({ uri: pathToUri(f.path), content: f.content }));
     const requestId = previewSelectedTargetId
       ? `preview:${previewSelectedTargetId}:${++previewRequestSequenceRef.current}`
       : undefined;
     currentPreviewRequestIdRef.current = requestId;
     try {
-      codegenWorker.postMessage({
-        type: 'codegen:setFiles',
-        files: previewFiles,
-        requestId: codegenRequestId
-      });
+      codegenWorker.postMessage({ type: 'codegen:setFiles', files: previewFiles });
       codegenWorker.postMessage(createPreviewSetFilesMessage(previewFiles, requestId));
     } catch (error) {
       handlePreviewWorkerFailure(
@@ -568,14 +559,7 @@ export function EditorPage({
         previewSelectedTargetId
       );
     }
-  }, [
-    beginCodePreviewRequest,
-    codePreviewTarget,
-    codegenWorker,
-    files,
-    handlePreviewWorkerFailure,
-    previewSelectedTargetId
-  ]);
+  }, [codegenWorker, files, handlePreviewWorkerFailure, previewSelectedTargetId]);
 
   useEffect(() => {
     if (!codegenWorker || !previewSelectedTargetId) return;
@@ -858,7 +842,7 @@ export function EditorPage({
         sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
       });
     }
-  }, [sourceEditorFiles]);
+  }, [sourceEditorFiles, selectedNodeId]);
 
   const getSerializedFiles = useCallback((): Map<string, string> => {
     const rosettaText = graphRef.current?.exportRosetta?.();
@@ -1106,9 +1090,23 @@ export function EditorPage({
     ]
   );
 
-  const renderSourcePane = useCallback(
-    () => (
+  const renderSourcePane = useCallback(() => {
+    const activeFile = sourceEditorFiles[0];
+    const fileExt = activeFile?.name.includes('.') ? `.${activeFile.name.split('.').pop()}` : null;
+    const lineEnding = activeFile?.content.includes('\r\n') ? 'CRLF' : 'LF';
+    const lineCount = activeFile?.content.split('\n').length ?? 0;
+    return (
       <div className="flex flex-col min-h-0 h-full">
+        <div className="studio-source-meta" aria-label="Source file path">
+          {fileExt && <span className="studio-source-meta__pill">{fileExt}</span>}
+          <span className="studio-source-meta__path">{activeFile?.path ?? '—'}</span>
+          <span className="studio-source-meta__spacer" />
+          {activeFile && (
+            <span className="studio-source-meta__stat">
+              UTF-8 · {lineEnding} · {lineCount} lines
+            </span>
+          )}
+        </div>
         <SourceEditor
           ref={sourceEditorRef}
           files={sourceEditorFiles}
@@ -1121,16 +1119,15 @@ export function EditorPage({
           hideTabs
         />
       </div>
-    ),
-    [
-      sourceEditorFiles,
-      activeEditorFile,
-      lspClient,
-      handleSourceChange,
-      navigateToNode,
-      handleEditorViewCreated
-    ]
-  );
+    );
+  }, [
+    sourceEditorFiles,
+    activeEditorFile,
+    lspClient,
+    handleSourceChange,
+    navigateToNode,
+    handleEditorViewCreated
+  ]);
 
   const renderInspectorPane = useCallback(
     () => (

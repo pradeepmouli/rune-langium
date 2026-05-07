@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
+import { javascript } from '@codemirror/lang-javascript';
+import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen';
 import { refactoryDark } from '../lang/refactory-dark-theme.js';
 import { TargetSwitcher } from './TargetSwitcher.js';
@@ -190,12 +192,15 @@ export function CodePreviewPanel({
   useEffect(() => {
     if (!editorContainerRef.current) return;
 
+    const langExtension = target === 'json-schema' ? json() : javascript({ typescript: true });
+
     const state = EditorState.create({
       doc: '',
       extensions: [
         basicSetup,
         EditorState.readOnly.of(true),
         EditorView.lineWrapping,
+        langExtension,
         ...refactoryDark,
         EditorView.domEventHandlers({
           click: (event, view) => {
@@ -215,8 +220,7 @@ export function CodePreviewPanel({
       view.destroy();
       editorViewRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [handleLineClick, target]);
 
   useEffect(() => {
     const view = editorViewRef.current;

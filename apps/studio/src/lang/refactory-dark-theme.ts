@@ -15,7 +15,11 @@ export const refactoryDarkTheme = EditorView.theme(
   {
     '&': {
       backgroundColor: '#0C0C14',
-      color: '#E8E6E1'
+      color: '#E8E6E1',
+      height: '100%'
+    },
+    '.cm-scroller': {
+      overflow: 'auto'
     },
     '.cm-content': {
       caretColor: '#00D4AA',

@@ -1549,6 +1549,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             const shouldCollapse = totalNodeCount > LARGE_MODEL_THRESHOLD;
             const allNs = new Set(state.nodes.map((n) => n.data.namespace));
             return {
+              focusMode: true,
               visibility: {
                 ...state.visibility,
                 expandedNamespaces: shouldCollapse ? new Set<string>() : allNs,
