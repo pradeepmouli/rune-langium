@@ -212,6 +212,7 @@ export function EditorPage({
   // the graph. Reset when a new workspace is loaded (models prop changes).
   const corpusModelsRef = useRef<RosettaModel[]>([]);
   const previewRequestSequenceRef = useRef(0);
+  const codegenRequestSequenceRef = useRef(0);
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const navigationHistoryRef = useRef<string[]>([]);
   const pendingDisplayFileRef = useRef<
@@ -546,13 +547,16 @@ export function EditorPage({
       .filter((f) => !f.readOnly)
       .map((f) => ({ uri: pathToUri(f.path), content: f.content }));
     const allFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
-    // Mint a fresh requestId so any in-flight preview result built against the
-    // previous file snapshot is discarded by the stale-check on arrival.
-    const requestId = `preview:files:${++previewRequestSequenceRef.current}`;
-    currentPreviewRequestIdRef.current = requestId;
+    const previewRequestId = `preview:files:${++previewRequestSequenceRef.current}`;
+    const codegenRequestId = `codegen:files:${++codegenRequestSequenceRef.current}`;
+    currentPreviewRequestIdRef.current = previewRequestId;
     try {
-      codegenWorker.postMessage({ type: 'codegen:setFiles', files: codegenFiles });
-      codegenWorker.postMessage(createPreviewSetFilesMessage(allFiles, requestId));
+      codegenWorker.postMessage({
+        type: 'codegen:setFiles',
+        files: codegenFiles,
+        requestId: codegenRequestId
+      });
+      codegenWorker.postMessage(createPreviewSetFilesMessage(allFiles, previewRequestId));
     } catch (error) {
       handlePreviewWorkerFailure('Preview worker could not process updated files.', error);
     }
