@@ -4,7 +4,7 @@
 /**
  * JSON Schema 2020-12 target emitter for the Rune code generator.
  *
- * Entry point: emitNamespace(docs, namespace, options) → GeneratorOutput
+ * Entry point: emitNamespace(model, options) → GeneratorOutput
  *
  * FR-019: Emit JSON Schema 2020-12 documents encoding cardinality,
  * enums, and inheritance equivalent to the Zod target.
@@ -33,10 +33,8 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { LangiumDocument } from 'langium';
 import {
   isData,
-  isRosettaModel,
   isRosettaEnumeration,
   isRosettaBasicType,
   isRosettaTypeAlias,
@@ -47,7 +45,6 @@ import {
   type Data,
   type Attribute,
   type RosettaEnumeration,
-  type RosettaModel,
   type RosettaCardinality,
   type RosettaTypeAlias,
   type RosettaRule,
@@ -61,9 +58,8 @@ import type {
   SourceMapEntry,
   GeneratorDiagnostic
 } from '../types.js';
-import { buildTypeReferenceGraph, findCyclicTypes } from '../cycle-detector.js';
-import { topoSort } from '../topo-sort.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
+import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 
 /** JSON Schema 2020-12 meta-schema URI. */
 const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
@@ -140,16 +136,16 @@ interface EmissionContext {
   /** The relative output path (e.g., "test/cardinality.schema.json"). */
   relativePath: string;
   /** All Data nodes keyed by name. */
-  dataByName: Map<string, Data>;
+  dataByName: ReadonlyMap<string, Data>;
   /** All Enumeration nodes keyed by name. */
-  enumByName: Map<string, RosettaEnumeration>;
-  typeAliasByName: Map<string, RosettaTypeAlias>;
-  rulesByName: Map<string, RosettaRule>;
-  reportsByName: Map<string, RosettaReport>;
-  annotationsByName: Map<string, Annotation>;
-  libraryFuncsByName: Map<string, RosettaExternalFunction>;
+  enumByName: ReadonlyMap<string, RosettaEnumeration>;
+  typeAliasByName: ReadonlyMap<string, RosettaTypeAlias>;
+  rulesByName: ReadonlyMap<string, RosettaRule>;
+  reportsByName: ReadonlyMap<string, RosettaReport>;
+  annotationsByName: ReadonlyMap<string, Annotation>;
+  libraryFuncsByName: ReadonlyMap<string, RosettaExternalFunction>;
   /** Types in emission order (topo-sorted). */
-  emitOrder: string[];
+  emitOrder: readonly string[];
   /** Source-map entries collected during emission. */
   sourceMap: SourceMapEntry[];
   /** Generator-time diagnostics accumulated during emission. */
@@ -173,14 +169,6 @@ const BUILTIN_JSON_TYPE_MAP: Record<string, object> = {
   productType: { type: 'string' },
   eventType: { type: 'string' }
 };
-
-/**
- * Convert a dot-separated Rune namespace to a file path.
- * e.g., "cdm.base.math" → "cdm/base/math.schema.json"
- */
-function namespaceToPath(namespace: string): string {
-  return namespace.replace(/\./g, '/') + '.schema.json';
-}
 
 /**
  * Resolve the item schema for a scalar type reference.
@@ -437,60 +425,21 @@ function emitEnumDef(enumNode: RosettaEnumeration): object {
   return def;
 }
 
-/**
- * Build the EmissionContext for a set of documents sharing a namespace.
- */
 function buildEmissionContext(
-  docs: LangiumDocument[],
-  namespace: string,
+  model: NamespaceWalkResult,
   registry: NamespaceRegistry
 ): EmissionContext {
-  const dataByName = new Map<string, Data>();
-  const enumByName = new Map<string, RosettaEnumeration>();
-  const typeAliasByName = new Map<string, RosettaTypeAlias>();
-  const rulesByName = new Map<string, RosettaRule>();
-  const reportsByName = new Map<string, RosettaReport>();
-  const annotationsByName = new Map<string, Annotation>();
-  const libraryFuncsByName = new Map<string, RosettaExternalFunction>();
-
-  for (const doc of docs) {
-    const model = doc.parseResult?.value;
-    if (!model || !isRosettaModel(model)) continue;
-
-    for (const element of (model as RosettaModel).elements) {
-      if (isData(element)) {
-        dataByName.set(element.name, element);
-      } else if (isRosettaEnumeration(element)) {
-        enumByName.set(element.name, element);
-      } else if (isRosettaTypeAlias(element)) {
-        typeAliasByName.set(element.name, element);
-      } else if (isRosettaRule(element)) {
-        rulesByName.set(element.name, element);
-      } else if (isRosettaReport(element)) {
-        // Reports skip in json-schema for now
-      } else if (isAnnotation(element)) {
-        annotationsByName.set(element.name, element);
-      } else if (isRosettaExternalFunction(element)) {
-        libraryFuncsByName.set(element.name, element);
-      }
-    }
-  }
-
-  const graph = buildTypeReferenceGraph(docs);
-  const cyclicTypes = findCyclicTypes(graph);
-  const emitOrder = topoSort(graph, cyclicTypes);
-
   return {
-    namespace,
-    relativePath: namespaceToPath(namespace),
-    dataByName,
-    enumByName,
-    typeAliasByName,
-    rulesByName,
-    reportsByName,
-    annotationsByName,
-    libraryFuncsByName,
-    emitOrder,
+    namespace: model.namespace,
+    relativePath: getTargetRelativePath(model.namespace, 'json-schema'),
+    dataByName: model.dataByName,
+    enumByName: model.enumByName,
+    typeAliasByName: model.typeAliasByName,
+    rulesByName: model.rulesByName,
+    reportsByName: model.reportsByName,
+    annotationsByName: model.annotationsByName,
+    libraryFuncsByName: model.libraryFuncsByName,
+    emitOrder: model.emitOrder,
     sourceMap: [],
     diagnostics: [],
     registry
@@ -515,13 +464,13 @@ function buildEmissionContext(
  * the 'type TypeName:' Rune line." We honour this by populating sourceMap entries.
  */
 export function emitNamespace(
-  docs: LangiumDocument[],
-  namespace: string,
+  model: NamespaceWalkResult,
   _options: GeneratorOptions,
   registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(docs, namespace, registry);
+  const ctx = buildEmissionContext(model, registry);
   const $defs: Record<string, object> = {};
+  const sourceUri = model.docs[0]?.uri?.toString() ?? '';
 
   // Emit enums first (alphabetically)
   const enumNames = Array.from(ctx.enumByName.keys()).sort();
@@ -532,7 +481,6 @@ export function emitNamespace(
     // Source map: $defs/<EnumName> → source location
     // We use outputLine: 0 as a sentinel (JSON files don't have line-based source maps);
     // JSON Pointer navigation is handled via x-rune-source-map extension.
-    const sourceUri = docs[0]?.uri?.toString() ?? '';
     ctx.sourceMap.push({
       outputLine: 0,
       sourceUri,
@@ -558,7 +506,6 @@ export function emitNamespace(
     $defs[typeName] = emitTypeDef(data, ctx);
 
     // Source map entry for this type ($defs/<TypeName>)
-    const sourceUri = docs[0]?.uri?.toString() ?? '';
     ctx.sourceMap.push({
       outputLine: 0, // sentinel for JSON output (not line-based)
       sourceUri,
@@ -575,7 +522,6 @@ export function emitNamespace(
     const data = ctx.dataByName.get(typeName)!;
     $defs[typeName] = emitTypeDef(data, ctx);
 
-    const sourceUri = docs[0]?.uri?.toString() ?? '';
     ctx.sourceMap.push({
       outputLine: 0,
       sourceUri,
@@ -587,7 +533,7 @@ export function emitNamespace(
   const schema: Record<string, unknown> = {
     $schema: DRAFT_2020_12,
     $id: ctx.relativePath,
-    title: namespace,
+    title: model.namespace,
     $defs
   };
 

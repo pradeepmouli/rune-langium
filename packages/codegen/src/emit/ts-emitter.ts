@@ -4,7 +4,7 @@
 /**
  * TypeScript class target emitter for the Rune code generator.
  *
- * Entry point: emitNamespace(docs, namespace, options, funcs?) → GeneratorOutput
+ * Entry point: emitNamespace(model, options) → GeneratorOutput
  *
  * FR-020 (full TS class shape, no Zod dependency), US5B acceptance scenarios 2–5, SC-005.
  * T104–T111 (Phase 8).
@@ -20,10 +20,8 @@
  *   - // (functions emitted by Phase 8b appear below this line)  [marker for Phase 8b]
  */
 
-import type { LangiumDocument } from 'langium';
 import {
   isData,
-  isRosettaModel,
   isRosettaEnumeration,
   isRosettaBasicType,
   isData as _isData,
@@ -36,7 +34,6 @@ import {
   type Attribute,
   type Condition,
   type RosettaEnumeration,
-  type RosettaModel,
   type RosettaCardinality,
   type RosettaTypeAlias,
   type RosettaRule,
@@ -52,9 +49,8 @@ import type {
   GeneratedFunc
 } from '../types.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
+import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { resolveImportPath } from './namespace-registry.js';
-import { buildTypeReferenceGraph, findCyclicTypes } from '../cycle-detector.js';
-import { topoSort } from '../topo-sort.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import {
   transpileCondition,
@@ -79,18 +75,18 @@ import {
 
 interface EmissionContext {
   target: 'typescript';
-  emitOrder: string[];
-  lazyTypes: Set<string>;
+  emitOrder: readonly string[];
+  lazyTypes: ReadonlySet<string>;
   sourceMap: SourceMapEntry[];
   diagnostics: GeneratorDiagnostic[];
   namespace: string;
-  dataByName: Map<string, Data>;
-  enumByName: Map<string, RosettaEnumeration>;
-  typeAliasByName: Map<string, RosettaTypeAlias>;
-  rulesByName: Map<string, RosettaRule>;
-  reportsByName: Map<string, RosettaReport>;
-  annotationsByName: Map<string, Annotation>;
-  libraryFuncsByName: Map<string, RosettaExternalFunction>;
+  dataByName: ReadonlyMap<string, Data>;
+  enumByName: ReadonlyMap<string, RosettaEnumeration>;
+  typeAliasByName: ReadonlyMap<string, RosettaTypeAlias>;
+  rulesByName: ReadonlyMap<string, RosettaRule>;
+  reportsByName: ReadonlyMap<string, RosettaReport>;
+  annotationsByName: ReadonlyMap<string, Annotation>;
+  libraryFuncsByName: ReadonlyMap<string, RosettaExternalFunction>;
   registry: NamespaceRegistry;
 }
 
@@ -1070,71 +1066,24 @@ function emitLibraryFunc(func: RosettaExternalFunction, ctx: EmissionContext): s
 // T104: emitNamespace
 // ---------------------------------------------------------------------------
 
-/**
- * Convert a dot-separated Rune namespace to a file path.
- * e.g., "cdm.base.math" → "cdm/base/math.ts"
- */
-function namespaceToPath(namespace: string): string {
-  return namespace.replace(/\./g, '/') + '.ts';
-}
-
-/**
- * Build the EmissionContext for a set of documents sharing a namespace.
- */
 function buildEmissionContext(
-  docs: LangiumDocument[],
-  namespace: string,
+  model: NamespaceWalkResult,
   registry: NamespaceRegistry
 ): EmissionContext {
-  const dataByName = new Map<string, Data>();
-  const enumByName = new Map<string, RosettaEnumeration>();
-  const typeAliasByName = new Map<string, RosettaTypeAlias>();
-  const rulesByName = new Map<string, RosettaRule>();
-  const reportsByName = new Map<string, RosettaReport>();
-  const annotationsByName = new Map<string, Annotation>();
-  const libraryFuncsByName = new Map<string, RosettaExternalFunction>();
-
-  for (const doc of docs) {
-    const model = doc.parseResult?.value;
-    if (!model || !isRosettaModel(model)) continue;
-
-    for (const element of (model as RosettaModel).elements) {
-      if (isData(element)) {
-        dataByName.set(element.name, element);
-      } else if (isRosettaEnumeration(element)) {
-        enumByName.set(element.name, element);
-      } else if (isRosettaTypeAlias(element)) {
-        typeAliasByName.set(element.name, element);
-      } else if (isRosettaRule(element)) {
-        rulesByName.set(element.name, element);
-      } else if (isRosettaReport(element)) {
-        // Reports don't have simple names — skip for now
-      } else if (isAnnotation(element)) {
-        annotationsByName.set(element.name, element);
-      } else if (isRosettaExternalFunction(element)) {
-        libraryFuncsByName.set(element.name, element);
-      }
-    }
-  }
-
-  const graph = buildTypeReferenceGraph(docs);
-  const lazyTypes = findCyclicTypes(graph);
-  const emitOrder = topoSort(graph, lazyTypes);
-
   return {
     target: 'typescript',
-    emitOrder,
-    lazyTypes,
+    emitOrder: model.emitOrder,
+    lazyTypes: model.cyclicTypes,
     sourceMap: [],
     diagnostics: [],
-    namespace,
-    dataByName,
-    enumByName,
-    typeAliasByName,
-    rulesByName,
-    reportsByName,
-    annotationsByName,
-    libraryFuncsByName,
+    namespace: model.namespace,
+    dataByName: model.dataByName,
+    enumByName: model.enumByName,
+    typeAliasByName: model.typeAliasByName,
+    rulesByName: model.rulesByName,
+    reportsByName: model.reportsByName,
+    annotationsByName: model.annotationsByName,
+    libraryFuncsByName: model.libraryFuncsByName,
     registry
   };
 }
@@ -1161,22 +1110,19 @@ function emitFileHeader(namespace: string, _ctx: EmissionContext): string {
  * Entry point for the TypeScript class emitter.
  * T104, FR-020, US5B, T126 (func emission).
  *
- * @param docs      - Langium documents for this namespace.
- * @param namespace - The namespace string.
- * @param _options  - Generator options.
- * @param _funcs    - Unused (Phase 8b populates funcs internally from docs).
+ * @param model    - Shared walker output for this namespace.
+ * @param _options - Generator options.
  */
 export function emitNamespace(
-  docs: LangiumDocument[],
-  namespace: string,
+  model: NamespaceWalkResult,
   _options: GeneratorOptions,
-  _funcs: GeneratedFunc[] = [],
   registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(docs, namespace, registry);
+  const ctx = buildEmissionContext(model, registry);
   const sections: string[] = [];
+  const relativePath = getTargetRelativePath(model.namespace, 'typescript');
 
-  sections.push(emitFileHeader(namespace, ctx));
+  sections.push(emitFileHeader(model.namespace, ctx));
 
   // Collect and emit cross-namespace import statements at the top of the file
   const crossNsImports = collectCrossNamespaceImports(ctx);
@@ -1276,7 +1222,7 @@ export function emitNamespace(
   // ---------------------------------------------------------------------------
 
   // Extract funcs from the documents
-  const runeFuncs = extractFuncs(docs, namespace, ctx.diagnostics);
+  const runeFuncs = extractFuncs(Array.from(model.docs), model.namespace, ctx.diagnostics);
 
   // Build call graph and determine topological order
   const callGraph = buildFuncCallGraph(runeFuncs);
@@ -1299,7 +1245,7 @@ export function emitNamespace(
 
     generatedFuncs.push({
       name: func.name,
-      relativePath: namespaceToPath(namespace),
+      relativePath,
       fileContents: funcText,
       sourceMap: []
     });
@@ -1313,7 +1259,7 @@ export function emitNamespace(
   const content = sections.join('\n') + '\n';
 
   return {
-    relativePath: namespaceToPath(namespace),
+    relativePath,
     content,
     sourceMap: ctx.sourceMap,
     diagnostics: ctx.diagnostics,
