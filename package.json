@@ -105,7 +105,8 @@
       "@zod-to-form/core": "^0.8.1",
       "@zod-to-form/react": "^0.8.1",
       "@zod-to-form/vite": "^0.3.0",
-      "codemirror": "6.0.2"
+      "codemirror": "6.0.2",
+      "@radix-ui/react-compose-refs": "1.1.1"
     },
     "patchedDependencies": {}
   },
