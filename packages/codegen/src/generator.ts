@@ -3,14 +3,21 @@
 
 import type { LangiumDocument } from 'langium';
 import { isRosettaModel } from '@rune-langium/core';
-import type { GeneratorOutput, GeneratorOptions } from './types.js';
+import type { GeneratorOutput, GeneratorOptions, Target } from './types.js';
 import { GeneratorError } from './types.js';
 import { createDiagnostic, hasFatalDiagnostics } from './diagnostics.js';
-import { emitNamespace as emitZodNamespace } from './emit/zod-emitter.js';
-import { emitNamespace as emitJsonSchemaNamespace } from './emit/json-schema-emitter.js';
-import { emitNamespace as emitTsNamespace } from './emit/ts-emitter.js';
-import { buildNamespaceRegistry, type NamespaceRegistry } from './emit/namespace-registry.js';
+import { emitNamespaceWithContract, type NamespaceEmitterConstructor } from './emit/namespace-emitter.js';
+import { ZodNamespaceEmitter } from './emit/zod-emitter.js';
+import { JsonSchemaNamespaceEmitter } from './emit/json-schema-emitter.js';
+import { TsNamespaceEmitter } from './emit/ts-emitter.js';
+import { buildNamespaceRegistry } from './emit/namespace-registry.js';
 import { walkNamespace } from './emit/namespace-walker.js';
+
+const EMITTER_CLASSES: Record<Target, NamespaceEmitterConstructor> = {
+  zod: ZodNamespaceEmitter,
+  'json-schema': JsonSchemaNamespaceEmitter,
+  typescript: TsNamespaceEmitter
+};
 
 /**
  * Group Langium documents by their namespace name.
@@ -73,14 +80,11 @@ export function runGenerate(docs: LangiumDocument[], options: GeneratorOptions):
 
   for (const [namespace, namespaceDocs] of byNamespace) {
     const walkedNamespace = walkNamespace(namespaceDocs, namespace);
+    const emitterClass = EMITTER_CLASSES[target];
     let output: GeneratorOutput;
 
-    if (target === 'zod') {
-      output = emitZodNamespace(walkedNamespace, options, registry);
-    } else if (target === 'json-schema') {
-      output = emitJsonSchemaNamespace(walkedNamespace, options, registry);
-    } else if (target === 'typescript') {
-      output = emitTsNamespace(walkedNamespace, options, registry);
+    if (emitterClass) {
+      output = emitNamespaceWithContract(walkedNamespace, options, registry, emitterClass);
     } else {
       // Unknown target — should be unreachable given the Target union, but
       // emit a structured diagnostic rather than crashing.

@@ -49,14 +49,11 @@ import type {
   GeneratedFunc
 } from '../types.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
+import { emitNamespaceWithContract, type NamespaceEmitter } from './namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { resolveImportPath } from './namespace-registry.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
-import {
-  transpileCondition,
-  transpileExpression,
-  type ExpressionTranspilerContext
-} from '../expr/transpiler.js';
+import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
 import {
   extractFuncs,
   buildFuncCallGraph,
@@ -335,8 +332,7 @@ function emitInterface(data: Data, ctx: EmissionContext): string {
   const interfaceName = `${name}Shape`;
 
   const parentRef = data.superType?.ref;
-  const parentInNamespace =
-    parentRef && isData(parentRef) && ctx.dataByName.has((parentRef as Data).name);
+  const parentInNamespace = parentRef && isData(parentRef) && ctx.dataByName.has((parentRef as Data).name);
   const parentInterfaceName = parentInNamespace ? `${(parentRef as Data).name}Shape` : undefined;
 
   const header = parentInterfaceName
@@ -372,8 +368,7 @@ function emitClass(data: Data, ctx: EmissionContext): string {
   const name = data.name;
   const interfaceName = `${name}Shape`;
   const parentRef = data.superType?.ref;
-  const parentInNamespace =
-    parentRef && isData(parentRef) && ctx.dataByName.has((parentRef as Data).name);
+  const parentInNamespace = parentRef && isData(parentRef) && ctx.dataByName.has((parentRef as Data).name);
   const parentName = parentInNamespace ? (parentRef as Data).name : undefined;
 
   // Class header
@@ -484,9 +479,7 @@ function buildTypeGuardChecks(data: Data, ctx: EmissionContext): string[] {
     if (isArray) {
       const lower = card.inf;
       if (lower > 0) {
-        lines.push(
-          `  if (!Array.isArray((${obj} as Record<string, unknown>).${attr.name})) return false;`
-        );
+        lines.push(`  if (!Array.isArray((${obj} as Record<string, unknown>).${attr.name})) return false;`);
       } else {
         lines.push(
           `  if ((${obj} as Record<string, unknown>).${attr.name} !== undefined && !Array.isArray((${obj} as Record<string, unknown>).${attr.name})) return false;`
@@ -500,13 +493,9 @@ function buildTypeGuardChecks(data: Data, ctx: EmissionContext): string[] {
       }
     } else {
       if (typeofStr) {
-        lines.push(
-          `  if (typeof (${obj} as Record<string, unknown>).${attr.name} !== '${typeofStr}') return false;`
-        );
+        lines.push(`  if (typeof (${obj} as Record<string, unknown>).${attr.name} !== '${typeofStr}') return false;`);
       } else {
-        lines.push(
-          `  if ((${obj} as Record<string, unknown>).${attr.name} === undefined) return false;`
-        );
+        lines.push(`  if ((${obj} as Record<string, unknown>).${attr.name} === undefined) return false;`);
       }
     }
   }
@@ -524,8 +513,7 @@ function buildTypeGuardChecks(data: Data, ctx: EmissionContext): string[] {
 function emitTypeGuard(data: Data, ctx: EmissionContext): string {
   const name = data.name;
   const parentRef = data.superType?.ref;
-  const parentInNamespace =
-    parentRef && isData(parentRef) && ctx.dataByName.has((parentRef as Data).name);
+  const parentInNamespace = parentRef && isData(parentRef) && ctx.dataByName.has((parentRef as Data).name);
   const parentName = parentInNamespace ? (parentRef as Data).name : undefined;
 
   const checkLines = buildTypeGuardChecks(data, ctx);
@@ -591,9 +579,7 @@ function emitDiscriminatorPredicate(child: Data, parent: Data, ctx: EmissionCont
       checks.push(`Array.isArray(${obj}.${attr.name})`);
     } else if (isOpt) {
       if (typeofStr) {
-        checks.push(
-          `(${obj}.${attr.name} === undefined || typeof ${obj}.${attr.name} === '${typeofStr}')`
-        );
+        checks.push(`(${obj}.${attr.name} === undefined || typeof ${obj}.${attr.name} === '${typeofStr}')`);
       }
     } else {
       if (typeofStr) {
@@ -606,11 +592,9 @@ function emitDiscriminatorPredicate(child: Data, parent: Data, ctx: EmissionCont
 
   const condition = checks.length === 0 ? 'true' : checks.join(' && ');
 
-  return [
-    `export function is${childName}(x: ${parentName}): x is ${childName} {`,
-    `  return ${condition};`,
-    `}`
-  ].join('\n');
+  return [`export function is${childName}(x: ${parentName}): x is ${childName} {`, `  return ${condition};`, `}`].join(
+    '\n'
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -728,9 +712,7 @@ function emitRule(rule: RosettaRule, ctx: EmissionContext): string {
   const inputTypeRef = rule.input?.type?.ref;
   const inputTypeName = inputTypeRef ? inputTypeRef.name : undefined;
   const paramType = inputTypeName ? `${inputTypeName}Shape` : 'Record<string, unknown>';
-  const paramName = inputTypeName
-    ? inputTypeName.charAt(0).toLowerCase() + inputTypeName.slice(1)
-    : 'input';
+  const paramName = inputTypeName ? inputTypeName.charAt(0).toLowerCase() + inputTypeName.slice(1) : 'input';
 
   const attributeTypes = new Map<string, string>();
   if (inputTypeRef && isData(inputTypeRef)) {
@@ -1066,10 +1048,7 @@ function emitLibraryFunc(func: RosettaExternalFunction, ctx: EmissionContext): s
 // T104: emitNamespace
 // ---------------------------------------------------------------------------
 
-function buildEmissionContext(
-  model: NamespaceWalkResult,
-  registry: NamespaceRegistry
-): EmissionContext {
+function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
   return {
     target: 'typescript',
     emitOrder: model.emitOrder,
@@ -1115,156 +1094,124 @@ function emitFileHeader(namespace: string, _ctx: EmissionContext): string {
  */
 export function emitNamespace(
   model: NamespaceWalkResult,
-  _options: GeneratorOptions,
+  options: GeneratorOptions,
   registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(model, registry);
-  const sections: string[] = [];
-  const relativePath = getTargetRelativePath(model.namespace, 'typescript');
+  return emitNamespaceWithContract(model, options, registry, TsNamespaceEmitter);
+}
 
-  sections.push(emitFileHeader(model.namespace, ctx));
+export class TsNamespaceEmitter implements NamespaceEmitter {
+  private readonly ctx: EmissionContext;
+  private readonly sections: string[] = [];
+  private readonly relativePath: string;
+  private readonly generatedFuncs: GeneratedFunc[] = [];
 
-  // Collect and emit cross-namespace import statements at the top of the file
-  const crossNsImports = collectCrossNamespaceImports(ctx);
-  for (const importLine of crossNsImports) {
-    sections.push(importLine);
-  }
-  if (crossNsImports.length > 0) {
-    sections.push('');
-  }
-
-  // Emit annotation decorator factories (before enums and data types)
-  const annotationNames = Array.from(ctx.annotationsByName.keys()).sort();
-  for (const name of annotationNames) {
-    const ann = ctx.annotationsByName.get(name)!;
-    sections.push('');
-    sections.push(emitAnnotationDeclaration(ann, ctx));
-  }
-  if (annotationNames.length > 0) {
-    sections.push('');
+  constructor(
+    private readonly model: NamespaceWalkResult,
+    _options: GeneratorOptions,
+    registry: NamespaceRegistry = { namespaces: new Map() }
+  ) {
+    this.ctx = buildEmissionContext(model, registry);
+    this.relativePath = getTargetRelativePath(model.namespace, 'typescript');
   }
 
-  // Emit enum types (no class — just a const object + type alias for union)
-  const enumNames = Array.from(ctx.enumByName.keys()).sort();
-  for (const name of enumNames) {
-    const enumNode = ctx.enumByName.get(name)!;
-    sections.push(emitEnumDeclaration(enumNode, ctx));
-    sections.push('');
+  emitHeader(): void {
+    this.sections.push(emitFileHeader(this.model.namespace, this.ctx));
   }
 
-  // Emit type aliases (after enums, before data types)
-  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
-  for (const name of typeAliasNames) {
-    const alias = ctx.typeAliasByName.get(name)!;
-    sections.push('');
-    sections.push(emitTypeAlias(alias, ctx));
+  emitCrossNamespaceImports(): void {
+    const crossNsImports = collectCrossNamespaceImports(this.ctx);
+    for (const importLine of crossNsImports) {
+      this.sections.push(importLine);
+    }
+    if (crossNsImports.length > 0) {
+      this.sections.push('');
+    }
   }
 
-  // Emit data types in topological order
-  const emittedData = new Set<string>();
-
-  function emitDataType(data: Data): void {
-    emittedData.add(data.name);
-
-    // 1. Interface (Shape)
-    sections.push(emitInterface(data, ctx));
-    sections.push('');
-
-    // 2. Class
-    sections.push(emitClass(data, ctx));
-    sections.push('');
-
-    // 3. Type guard (includes discriminator overload when there is a parent in namespace)
-    sections.push(emitTypeGuard(data, ctx));
-    sections.push('');
+  emitAnnotation(annotation: Annotation): void {
+    this.sections.push('');
+    this.sections.push(emitAnnotationDeclaration(annotation, this.ctx));
   }
 
-  for (const typeName of ctx.emitOrder) {
-    const data = ctx.dataByName.get(typeName);
-    if (!data) continue;
-    emitDataType(data);
+  emitAfterAnnotations(): void {
+    this.sections.push('');
   }
 
-  // Emit any data types not captured in topo order (defensive)
-  const remainingData = Array.from(ctx.dataByName.keys())
-    .filter((n) => !emittedData.has(n))
-    .sort();
-  for (const typeName of remainingData) {
-    const data = ctx.dataByName.get(typeName)!;
-    emitDataType(data);
+  emitEnumeration(enumNode: RosettaEnumeration): void {
+    this.sections.push(emitEnumDeclaration(enumNode, this.ctx));
+    this.sections.push('');
   }
 
-  // Emit rules (after types, before Phase 8b funcs)
-  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
-  for (const name of ruleNames) {
-    const rule = ctx.rulesByName.get(name)!;
-    sections.push('');
-    sections.push(emitRule(rule, ctx));
+  emitTypeAlias(typeAlias: RosettaTypeAlias): void {
+    this.sections.push('');
+    this.sections.push(emitTypeAlias(typeAlias, this.ctx));
   }
 
-  // Emit report metadata (Phase 9, US5) — one const object summarising all rules
-  const reportMeta = emitReportMetadata(ctx);
-  if (reportMeta !== '') {
-    sections.push('');
-    sections.push(reportMeta);
+  emitData(data: Data): void {
+    this.sections.push(emitInterface(data, this.ctx));
+    this.sections.push('');
+    this.sections.push(emitClass(data, this.ctx));
+    this.sections.push('');
+    this.sections.push(emitTypeGuard(data, this.ctx));
+    this.sections.push('');
   }
 
-  // Emit library function type aliases (Phase 10, US6)
-  const libraryFuncNames = Array.from(ctx.libraryFuncsByName.keys()).sort();
-  for (const name of libraryFuncNames) {
-    const func = ctx.libraryFuncsByName.get(name)!;
-    sections.push('');
-    sections.push(emitLibraryFunc(func, ctx));
+  emitRule(rule: RosettaRule): void {
+    this.sections.push('');
+    this.sections.push(emitRule(rule, this.ctx));
   }
 
-  // ---------------------------------------------------------------------------
-  // T126: Phase 8b func emission (TypeScript target only)
-  // ---------------------------------------------------------------------------
-
-  // Extract funcs from the documents
-  const runeFuncs = extractFuncs(Array.from(model.docs), model.namespace, ctx.diagnostics);
-
-  // Build call graph and determine topological order
-  const callGraph = buildFuncCallGraph(runeFuncs);
-  const cyclicNames = findCyclicFuncs(callGraph);
-  const sortedFuncs = topoSortFuncs(runeFuncs, callGraph);
-
-  // Emit the Phase 8b marker
-  sections.push('// (functions emitted by Phase 8b appear below this line)');
-
-  // Track GeneratedFunc metadata for the output
-  const generatedFuncs: GeneratedFunc[] = [];
-
-  for (const func of sortedFuncs) {
-    const isHoisted = cyclicNames.has(func.name);
-    const funcCtx = buildFuncBodyContext(func, callGraph, ctx.diagnostics);
-    const funcText = emitFunc(func, funcCtx, isHoisted);
-
-    sections.push('');
-    sections.push(funcText);
-
-    generatedFuncs.push({
-      name: func.name,
-      relativePath,
-      fileContents: funcText,
-      sourceMap: []
-    });
+  emitReportMetadata(): void {
+    const reportMeta = emitReportMetadata(this.ctx);
+    if (reportMeta !== '') {
+      this.sections.push('');
+      this.sections.push(reportMeta);
+    }
   }
 
-  // Remove trailing empty section
-  while (sections.length > 0 && sections[sections.length - 1] === '') {
-    sections.pop();
+  emitExternalFunction(func: RosettaExternalFunction): void {
+    this.sections.push('');
+    this.sections.push(emitLibraryFunc(func, this.ctx));
   }
 
-  const content = sections.join('\n') + '\n';
+  emitFunctions(): void {
+    const runeFuncs = extractFuncs(Array.from(this.model.docs), this.model.namespace, this.ctx.diagnostics);
+    const callGraph = buildFuncCallGraph(runeFuncs);
+    const cyclicNames = findCyclicFuncs(callGraph);
+    const sortedFuncs = topoSortFuncs(runeFuncs, callGraph);
 
-  return {
-    relativePath,
-    content,
-    sourceMap: ctx.sourceMap,
-    diagnostics: ctx.diagnostics,
-    funcs: generatedFuncs
-  };
+    this.sections.push('// (functions emitted by Phase 8b appear below this line)');
+
+    for (const func of sortedFuncs) {
+      const isHoisted = cyclicNames.has(func.name);
+      const funcCtx = buildFuncBodyContext(func, callGraph, this.ctx.diagnostics);
+      const funcText = emitFunc(func, funcCtx, isHoisted);
+
+      this.sections.push('');
+      this.sections.push(funcText);
+
+      this.generatedFuncs.push({
+        name: func.name,
+        relativePath: this.relativePath,
+        fileContents: funcText,
+        sourceMap: []
+      });
+    }
+  }
+
+  finalize(): GeneratorOutput {
+    while (this.sections.length > 0 && this.sections[this.sections.length - 1] === '') {
+      this.sections.pop();
+    }
+    return {
+      relativePath: this.relativePath,
+      content: this.sections.join('\n') + '\n',
+      sourceMap: this.ctx.sourceMap,
+      diagnostics: this.ctx.diagnostics,
+      funcs: this.generatedFuncs
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1280,9 +1227,7 @@ function emitEnumDeclaration(enumNode: RosettaEnumeration, _ctx: EmissionContext
   const memberNames = enumNode.enumValues.map((v) => v.name);
 
   if (memberNames.length === 0) {
-    return [`export type ${name} = never;`, `export const ${name}Values: ${name}[] = [];`].join(
-      '\n'
-    );
+    return [`export type ${name} = never;`, `export const ${name}Values: ${name}[] = [];`].join('\n');
   }
 
   const memberLiterals = memberNames.map((m) => `'${m}'`).join(' | ');
@@ -1302,9 +1247,7 @@ function emitEnumDeclaration(enumNode: RosettaEnumeration, _ctx: EmissionContext
       return `  ${v.name}: '${escaped}'`;
     });
     lines.push('');
-    lines.push(
-      `export const ${name}DisplayNames: Record<${name}, string> = {\n${displayEntries.join(',\n')}\n};`
-    );
+    lines.push(`export const ${name}DisplayNames: Record<${name}, string> = {\n${displayEntries.join(',\n')}\n};`);
   }
 
   return lines.join('\n');

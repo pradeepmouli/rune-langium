@@ -52,12 +52,8 @@ import {
   type Annotation,
   type RosettaExternalFunction
 } from '@rune-langium/core';
-import type {
-  GeneratorOptions,
-  GeneratorOutput,
-  SourceMapEntry,
-  GeneratorDiagnostic
-} from '../types.js';
+import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
+import { emitNamespaceWithContract, type NamespaceEmitter } from './namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 
@@ -425,10 +421,7 @@ function emitEnumDef(enumNode: RosettaEnumeration): object {
   return def;
 }
 
-function buildEmissionContext(
-  model: NamespaceWalkResult,
-  registry: NamespaceRegistry
-): EmissionContext {
+function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
   return {
     namespace: model.namespace,
     relativePath: getTargetRelativePath(model.namespace, 'json-schema'),
@@ -465,100 +458,72 @@ function buildEmissionContext(
  */
 export function emitNamespace(
   model: NamespaceWalkResult,
-  _options: GeneratorOptions,
+  options: GeneratorOptions,
   registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(model, registry);
-  const $defs: Record<string, object> = {};
-  const sourceUri = model.docs[0]?.uri?.toString() ?? '';
+  return emitNamespaceWithContract(model, options, registry, JsonSchemaNamespaceEmitter);
+}
 
-  // Emit enums first (alphabetically)
-  const enumNames = Array.from(ctx.enumByName.keys()).sort();
-  for (const name of enumNames) {
-    const enumNode = ctx.enumByName.get(name)!;
-    $defs[name] = emitEnumDef(enumNode);
+export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
+  private readonly ctx: EmissionContext;
+  private readonly $defs: Record<string, object> = {};
+  private readonly sourceUri: string;
+  private readonly rulesMetadata: Record<string, { kind: string; inputType: string }> = {};
 
-    // Source map: $defs/<EnumName> → source location
-    // We use outputLine: 0 as a sentinel (JSON files don't have line-based source maps);
-    // JSON Pointer navigation is handled via x-rune-source-map extension.
-    ctx.sourceMap.push({
+  constructor(
+    private readonly model: NamespaceWalkResult,
+    _options: GeneratorOptions,
+    registry: NamespaceRegistry = { namespaces: new Map() }
+  ) {
+    this.ctx = buildEmissionContext(model, registry);
+    this.sourceUri = model.docs[0]?.uri?.toString() ?? '';
+  }
+
+  private pushTypeSourceMap(): void {
+    this.ctx.sourceMap.push({
       outputLine: 0,
-      sourceUri,
+      sourceUri: this.sourceUri,
       sourceLine: 1,
       sourceChar: 1
     });
   }
 
-  // Emit type alias definitions (after enums, before data types)
-  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
-  for (const name of typeAliasNames) {
-    const alias = ctx.typeAliasByName.get(name)!;
-    $defs[name] = emitTypeAliasDef(alias, ctx);
+  emitEnumeration(enumNode: RosettaEnumeration): void {
+    this.$defs[enumNode.name] = emitEnumDef(enumNode);
+    this.pushTypeSourceMap();
   }
 
-  // Emit data types in topological order
-  const emittedData = new Set<string>();
-
-  for (const typeName of ctx.emitOrder) {
-    const data = ctx.dataByName.get(typeName);
-    if (!data) continue;
-    emittedData.add(typeName);
-    $defs[typeName] = emitTypeDef(data, ctx);
-
-    // Source map entry for this type ($defs/<TypeName>)
-    ctx.sourceMap.push({
-      outputLine: 0, // sentinel for JSON output (not line-based)
-      sourceUri,
-      sourceLine: 1,
-      sourceChar: 1
-    });
+  emitTypeAlias(typeAlias: RosettaTypeAlias): void {
+    this.$defs[typeAlias.name] = emitTypeAliasDef(typeAlias, this.ctx);
   }
 
-  // Emit any data types not in topo order (defensive)
-  const remaining = Array.from(ctx.dataByName.keys())
-    .filter((n) => !emittedData.has(n))
-    .sort();
-  for (const typeName of remaining) {
-    const data = ctx.dataByName.get(typeName)!;
-    $defs[typeName] = emitTypeDef(data, ctx);
-
-    ctx.sourceMap.push({
-      outputLine: 0,
-      sourceUri,
-      sourceLine: 1,
-      sourceChar: 1
-    });
+  emitData(data: Data): void {
+    this.$defs[data.name] = emitTypeDef(data, this.ctx);
+    this.pushTypeSourceMap();
   }
 
-  const schema: Record<string, unknown> = {
-    $schema: DRAFT_2020_12,
-    $id: ctx.relativePath,
-    title: model.namespace,
-    $defs
-  };
+  emitRule(rule: RosettaRule): void {
+    const kind = rule.eligibility ? 'eligibility' : 'reporting';
+    const inputRef = rule.input?.type?.ref;
+    this.rulesMetadata[rule.name] = { kind, inputType: inputRef ? inputRef.name : 'unknown' };
+  }
 
-  // T074c: Emit x-rune-rules extension when there are rules in this namespace.
-  // Provides rule metadata (kind + input type) for downstream tooling.
-  const sortedRuleNames = Array.from(ctx.rulesByName.keys()).sort();
-  if (sortedRuleNames.length > 0) {
-    const rulesMetadata: Record<string, { kind: string; inputType: string }> = {};
-    for (const name of sortedRuleNames) {
-      const rule = ctx.rulesByName.get(name)!;
-      const kind = rule.eligibility ? 'eligibility' : 'reporting';
-      const inputRef = rule.input?.type?.ref;
-      const inputName = inputRef ? inputRef.name : 'unknown';
-      rulesMetadata[name] = { kind, inputType: inputName };
+  finalize(): GeneratorOutput {
+    const schema: Record<string, unknown> = {
+      $schema: DRAFT_2020_12,
+      $id: this.ctx.relativePath,
+      title: this.model.namespace,
+      $defs: this.$defs
+    };
+    if (Object.keys(this.rulesMetadata).length > 0) {
+      schema['x-rune-rules'] = this.rulesMetadata;
     }
-    schema['x-rune-rules'] = rulesMetadata;
+    return {
+      relativePath: this.ctx.relativePath,
+      content: serializeJson(schema) + '\n',
+      sourceMap: this.ctx.sourceMap,
+      diagnostics: this.ctx.diagnostics,
+      funcs: []
+    };
   }
-
-  const content = serializeJson(schema) + '\n';
-
-  return {
-    relativePath: ctx.relativePath,
-    content,
-    sourceMap: ctx.sourceMap,
-    diagnostics: ctx.diagnostics,
-    funcs: [] // FR-031: json-schema target silently skips funcs
-  };
 }
