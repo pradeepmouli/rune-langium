@@ -385,7 +385,7 @@ const initialState: EditorState = {
   detailPanelOpen: false,
   validationErrors: [],
   layoutOptions: { direction: 'LR', nodeSeparation: 50, rankSeparation: 100 },
-  focusMode: false,
+  focusMode: true,
   visibility: {
     expandedNamespaces: new Set<string>(),
     hiddenNodeIds: new Set<string>(),
