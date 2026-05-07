@@ -339,6 +339,17 @@
     background: var(--accent);
   }
 
+  .studio-app .studio-rail__btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+    color: var(--foreground);
+  }
+
+  .studio-app .studio-rail__btn:active {
+    transform: scale(0.92);
+    background: color-mix(in srgb, var(--accent) 70%, var(--background));
+  }
+
   .studio-app .studio-rail__btn[aria-pressed='true'] {
     color: var(--foreground);
     background: var(--accent);
@@ -513,10 +524,22 @@
     font-size: 12.5px;
     font-weight: 500;
     cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
   }
 
   .studio-app .studio-topbar__ws-btn:hover {
     background: var(--accent);
+    border-color: color-mix(in srgb, var(--ring) 35%, var(--border));
+  }
+
+  .studio-app .studio-topbar__ws-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .studio-app .studio-topbar__ws-btn:active {
+    transform: translateY(0.5px);
+    background: color-mix(in srgb, var(--accent) 80%, var(--background));
   }
 
   .studio-app .studio-topbar__ws-sub {
@@ -539,10 +562,19 @@
     width: 260px;
     font-size: 12px;
     cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
 
   .studio-app .studio-topbar__cmdk:hover {
     border-color: var(--ring);
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--card) 80%, var(--accent));
+  }
+
+  .studio-app .studio-topbar__cmdk:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    color: var(--foreground);
   }
 
   .studio-app .studio-topbar__cmdk span {
@@ -571,11 +603,29 @@
     place-items: center;
     color: var(--muted-foreground);
     cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.05s ease;
   }
 
   .studio-app .studio-topbar__icon-btn:hover {
     background: var(--accent);
     color: var(--foreground);
+  }
+
+  .studio-app .studio-topbar__icon-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    color: var(--foreground);
+  }
+
+  .studio-app .studio-topbar__icon-btn:active {
+    transform: scale(0.94);
+    background: color-mix(in srgb, var(--accent) 70%, var(--background));
+  }
+
+  .studio-app .studio-topbar__icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
   }
 
   .studio-app .studio-topbar__generate {
@@ -595,10 +645,24 @@
     box-shadow:
       0 0 0 0.5px color-mix(in oklch, var(--primary), transparent 60%),
       0 6px 18px -6px color-mix(in oklch, var(--primary), transparent 50%);
+    transition: filter 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
   }
 
   .studio-app .studio-topbar__generate:hover {
     filter: brightness(1.1);
+    box-shadow:
+      0 0 0 0.5px color-mix(in oklch, var(--primary), transparent 50%),
+      0 8px 22px -6px color-mix(in oklch, var(--primary), transparent 35%);
+  }
+
+  .studio-app .studio-topbar__generate:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .studio-app .studio-topbar__generate:active {
+    transform: translateY(0.5px) scale(0.99);
+    filter: brightness(0.96);
   }
 
   .studio-app .studio-topbar__avatar {
@@ -615,6 +679,20 @@
     place-items: center;
     cursor: pointer;
     letter-spacing: 0.02em;
+    transition: filter 0.15s ease, transform 0.05s ease;
+  }
+
+  .studio-app .studio-topbar__avatar:hover {
+    filter: brightness(1.12);
+  }
+
+  .studio-app .studio-topbar__avatar:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .studio-app .studio-topbar__avatar:active {
+    transform: scale(0.94);
   }
 
   .studio-app .studio-topbar__tabs {
@@ -641,12 +719,23 @@
     font-size: 12px;
     cursor: pointer;
     white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   }
 
-  .studio-app .studio-topbar__tab:hover,
+  .studio-app .studio-topbar__tab:hover {
+    background: color-mix(in srgb, var(--card) 70%, var(--accent));
+    color: var(--foreground);
+  }
+
   .studio-app .studio-topbar__tab.is-active {
     background: var(--card);
     color: var(--foreground);
+    box-shadow: inset 0 -2px 0 0 var(--primary);
+  }
+
+  .studio-app .studio-topbar__tab:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
   }
 
   .studio-app .studio-topbar__tab-dot {
