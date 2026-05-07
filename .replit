@@ -1,6 +1,7 @@
 modules = ["nodejs-20", "bash", "web"]
 [agent]
 expertMode = true
+stack = "BEST_EFFORT_FALLBACK"
 
 [nix]
 channel = "stable-25_05"
@@ -22,12 +23,13 @@ name = "Studio Dev Server"
 author = "agent"
 mode = "sequential"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && pnpm dev"
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm install -g pnpm@10.32.0 --quiet 2>/dev/null; pnpm install && pnpm --filter @rune-langium/core build && pnpm --filter @rune-langium/curated-schema build && pnpm --filter @rune-langium/codegen-legacy build && pnpm --filter @rune-langium/codegen build && pnpm --filter @rune-langium/design-tokens build && pnpm --filter @rune-langium/design-system build && pnpm --filter @rune-langium/visual-editor build && pnpm --filter @rune-langium/lsp-server build && STUDIO_DEV_PORT=5000 pnpm --filter @rune-langium/studio dev"
+waitForPort = 5000
 
 [[ports]]
 localPort = 3001
@@ -36,10 +38,6 @@ externalPort = 3001
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 5001
-externalPort = 3000
 
 [deployment]
 deploymentTarget = "static"
