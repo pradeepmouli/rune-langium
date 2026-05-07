@@ -369,14 +369,12 @@
     width: 12px;
     margin-left: -6px;
     margin-right: -6px;
-    z-index: 8;
   }
 
   .studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
     height: 12px;
     margin-top: -6px;
     margin-bottom: -6px;
-    z-index: 8;
   }
 
   .studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash {
@@ -429,12 +427,12 @@
     .dockview-theme-abyss
     .dv-split-view-container
     .dv-sash-container
-    .dv-sash:not(.disabled):hover::after,
+    .dv-sash.dv-enabled:hover::after,
   .studio-app
     .dockview-theme-abyss
     .dv-split-view-container
     .dv-sash-container
-    .dv-sash:not(.disabled):active::after {
+    .dv-sash.dv-enabled:active::after {
     background: var(--dv-active-sash-color);
     box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.18);
   }
@@ -443,12 +441,12 @@
     .dockview-theme-abyss
     .dv-split-view-container.dv-horizontal
     > .dv-sash-container
-    > .dv-sash:not(.disabled):hover::after,
+    > .dv-sash.dv-enabled:hover::after,
   .studio-app
     .dockview-theme-abyss
     .dv-split-view-container.dv-horizontal
     > .dv-sash-container
-    > .dv-sash:not(.disabled):active::after {
+    > .dv-sash.dv-enabled:active::after {
     transform: translateX(-50%) scaleX(1.35);
   }
 
@@ -456,12 +454,12 @@
     .dockview-theme-abyss
     .dv-split-view-container.dv-vertical
     > .dv-sash-container
-    > .dv-sash:not(.disabled):hover::after,
+    > .dv-sash.dv-enabled:hover::after,
   .studio-app
     .dockview-theme-abyss
     .dv-split-view-container.dv-vertical
     > .dv-sash-container
-    > .dv-sash:not(.disabled):active::after {
+    > .dv-sash.dv-enabled:active::after {
     transform: translateY(-50%) scaleY(1.35);
   }
 
@@ -706,7 +704,9 @@
     position: relative;
   }
 
-  .studio-app .dockview-theme-abyss .dv-tab.dv-active-tab::after {
+  /* Accent underline via ::before — dockview 6.x owns ::after for its focus
+   * indicator (full-size overlay with outline), so we use ::before instead. */
+  .studio-app .dockview-theme-abyss .dv-tab.dv-active-tab::before {
     content: '';
     position: absolute;
     left: 8px;
@@ -715,6 +715,15 @@
     height: 1.5px;
     background: var(--primary);
     border-radius: 1.5px;
+    z-index: 6;
+    pointer-events: none;
+  }
+
+  /* dockview 6.x adds a full-size ::after overlay on focus/focus-within with
+   * outline but no background — suppress it so our ::before underline shows. */
+  .studio-app .dockview-theme-abyss .dv-tab:focus-within::after,
+  .studio-app .dockview-theme-abyss .dv-tab:focus::after {
+    display: none;
   }
 
   .studio-app .studio-graph-canvas {
@@ -2054,7 +2063,6 @@
   width: 16px;
   margin-left: -8px;
   margin-right: -8px;
-  z-index: 8;
   cursor: col-resize;
 }
 
@@ -2062,7 +2070,6 @@
   height: 16px;
   margin-top: -8px;
   margin-bottom: -8px;
-  z-index: 8;
   cursor: row-resize;
 }
 
@@ -2104,18 +2111,18 @@
     transform 120ms ease;
 }
 
-.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash:not(.disabled):hover::after,
-.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash:not(.disabled):active::after {
+.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash.dv-enabled:hover::after,
+.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash.dv-enabled:active::after {
   background: var(--dv-active-sash-color);
   box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.18);
 }
 
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.disabled):hover::after,
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.disabled):active::after {
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash.dv-enabled:hover::after,
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash.dv-enabled:active::after {
   transform: translateX(-50%) scaleX(1.35);
 }
 
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.disabled):hover::after,
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.disabled):active::after {
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash.dv-enabled:hover::after,
+.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash.dv-enabled:active::after {
   transform: translateY(-50%) scaleY(1.35);
 }
