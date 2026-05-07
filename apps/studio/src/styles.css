@@ -1971,6 +1971,27 @@
   flex-shrink: 0;
   border-bottom: 0.5px solid var(--border);
 }
+.studio-app .studio-utility-toggle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.studio-app .studio-utility-toggle:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.studio-app .studio-utility-toggle[aria-pressed='true'] {
+  color: var(--foreground);
+}
 
 .studio-app .studio-center-stack {
   display: flex;

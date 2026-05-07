@@ -173,6 +173,7 @@ vi.mock('lucide-react', () => ({
   Zap: () => React.createElement('span'),
   Search: () => React.createElement('span'),
   ChevronDown: () => React.createElement('span'),
+  ChevronUp: () => React.createElement('span'),
   Layers: () => React.createElement('span'),
   Database: () => React.createElement('span'),
   Bell: () => React.createElement('span'),

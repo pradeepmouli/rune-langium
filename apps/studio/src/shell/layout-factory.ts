@@ -93,7 +93,7 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
     ],
     bottomGroup: {
       active: 'workspace.problems',
-      collapsed: false,
+      collapsed: true,
       tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
     }
   };
