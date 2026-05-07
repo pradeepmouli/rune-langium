@@ -22,6 +22,8 @@ import { useEffect, useCallback, useRef, useMemo, Component, memo } from 'react'
 import type { ReactNode, ErrorInfo } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Input } from '@rune-langium/design-system/ui/input';
+import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { DataTypeForm } from '../editors/DataTypeForm.js';
 import { EnumForm } from '../editors/EnumForm.js';
 import { ChoiceForm } from '../editors/ChoiceForm.js';
