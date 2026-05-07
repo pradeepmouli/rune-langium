@@ -592,41 +592,8 @@
     color: var(--muted-foreground);
   }
 
-  .studio-app .studio-topbar__icon-btn {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    display: grid;
-    place-items: center;
-    color: var(--muted-foreground);
-    cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease, transform 0.05s ease;
-  }
-
-  .studio-app .studio-topbar__icon-btn:hover {
-    background: var(--accent);
-    color: var(--foreground);
-  }
-
-  .studio-app .studio-topbar__icon-btn:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-    color: var(--foreground);
-  }
-
-  .studio-app .studio-topbar__icon-btn:active {
-    transform: scale(0.94);
-    background: color-mix(in srgb, var(--accent) 70%, var(--background));
-  }
-
-  .studio-app .studio-topbar__icon-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    pointer-events: none;
-  }
+  /* studio-topbar__icon-btn — removed; topbar icon buttons now use the
+   * design-system <Button variant="ghost" size="icon-sm">. */
 
   .studio-app .studio-topbar__generate {
     appearance: none;
@@ -665,35 +632,8 @@
     filter: brightness(0.96);
   }
 
-  .studio-app .studio-topbar__avatar {
-    appearance: none;
-    border: 0;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--color-enum), var(--color-data));
-    color: var(--primary-foreground);
-    font-weight: 700;
-    font-size: 11px;
-    display: grid;
-    place-items: center;
-    cursor: pointer;
-    letter-spacing: 0.02em;
-    transition: filter 0.15s ease, transform 0.05s ease;
-  }
-
-  .studio-app .studio-topbar__avatar:hover {
-    filter: brightness(1.12);
-  }
-
-  .studio-app .studio-topbar__avatar:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
-
-  .studio-app .studio-topbar__avatar:active {
-    transform: scale(0.94);
-  }
+  /* studio-topbar__avatar — removed; topbar avatar now uses the
+   * design-system <Avatar> primitive with a gradient AvatarFallback. */
 
   .studio-app .studio-topbar__tabs {
     display: flex;

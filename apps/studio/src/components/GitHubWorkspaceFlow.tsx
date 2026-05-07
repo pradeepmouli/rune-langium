@@ -18,6 +18,7 @@
 
 import { useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import { GitHubConnectDialog } from './GitHubConnectDialog.js';
 
 export interface GitHubWorkspaceFlowProps {
@@ -157,16 +158,10 @@ export function GitHubWorkspaceFlow({
       {state.phase === 'error' && state.errorReason && (() => {
         const friendly = friendlyCloneError(state.errorReason);
         return (
-          <div
-            data-testid="github-clone-error"
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            <p className="font-medium">{friendly.headline}</p>
-            {friendly.hint && (
-              <p className="mt-1 text-destructive/80">{friendly.hint}</p>
-            )}
-          </div>
+          <Alert variant="destructive" data-testid="github-clone-error">
+            <AlertTitle>{friendly.headline}</AlertTitle>
+            {friendly.hint && <AlertDescription>{friendly.hint}</AlertDescription>}
+          </Alert>
         );
       })()}
       <Button

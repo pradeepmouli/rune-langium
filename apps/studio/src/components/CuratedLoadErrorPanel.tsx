@@ -10,6 +10,7 @@
  */
 
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import type { ErrorCategory } from '../services/curated-loader.js';
 
 interface ErrorCopy {
@@ -65,21 +66,23 @@ export function CuratedLoadErrorPanel({
 }: CuratedLoadErrorPanelProps): React.ReactElement {
   const copy = COPY[category];
   return (
-    <div
-      role="alert"
+    <Alert
+      variant="destructive"
       aria-live="polite"
       data-testid="curated-load-error"
       data-category={category}
       className={className}
     >
-      <h3>
-        Loading {modelName} failed: {copy.title}
-      </h3>
-      <p>{copy.body}</p>
-      {copy.hint ? <p>{copy.hint}</p> : null}
-      <Button onClick={onRetry} type="button">
-        Retry
-      </Button>
-    </div>
+      <AlertTitle asChild>
+        <h3>Loading {modelName} failed: {copy.title}</h3>
+      </AlertTitle>
+      <AlertDescription>
+        <p>{copy.body}</p>
+        {copy.hint ? <p>{copy.hint}</p> : null}
+        <Button onClick={onRetry} type="button" size="sm" className="mt-2">
+          Retry
+        </Button>
+      </AlertDescription>
+    </Alert>
   );
 }

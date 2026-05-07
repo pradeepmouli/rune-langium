@@ -20,6 +20,14 @@ import {
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@rune-langium/design-system/ui/dialog';
+import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import { KNOWN_GENERATORS } from '@rune-langium/codegen-legacy';
 import type {
   CodeGenerationResult,
@@ -203,8 +211,6 @@ export function ExportDialog({
     }
   }, [state]);
 
-  if (!open) return null;
-
   function renderErrorBody(details: ErrorDetails) {
     const { status, body, message } = details;
     // 401 turnstile_required → re-challenge is automatic; short message.
@@ -246,64 +252,63 @@ export function ExportDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      data-testid="export-dialog-overlay"
-    >
-      <div
-        className="bg-card border border-border rounded-lg shadow-lg w-[720px] max-h-[80vh] flex flex-col"
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        className="w-[720px] max-w-[92vw] max-h-[80vh] flex flex-col gap-0 p-0"
         data-testid="export-dialog"
+        overlayProps={{ 'data-testid': 'export-dialog-overlay' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3">
-          <h2 className="text-lg font-semibold">Export Code</h2>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </div>
+        <DialogHeader className="px-4 py-3">
+          <DialogTitle>Export Code</DialogTitle>
+          <DialogDescription className="sr-only">
+            Choose a target language, generate code, preview the output, and download files.
+          </DialogDescription>
+        </DialogHeader>
         <Separator />
 
         {/* Content */}
-        <div className="flex-1 min-h-0 p-4 flex flex-col gap-4">
+        <div className="flex-1 min-h-0 p-4 flex flex-col gap-4 overflow-hidden">
           {/* Service unavailable warning — T030: give hosted users a
               different hint than local-dev users. */}
           {serviceAvailable === false && (
-            <div className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive">
-              {isHosted ? (
-                <>
-                  The code generation service is temporarily unavailable. Please try again in a
-                  minute, or{' '}
-                  <a
-                    href="https://github.com/pradeepmouli/rune-langium#export-code"
-                    className="underline"
-                  >
-                    run Studio locally
-                  </a>{' '}
-                  for unlimited generation.
-                </>
-              ) : (
-                <>
-                  Code generation service is not available. Start it with{' '}
-                  <code className="font-mono">pnpm codegen:start</code>, or set{' '}
-                  <code className="font-mono">VITE_CODEGEN_URL</code> to a reachable service.
-                </>
-              )}
-            </div>
+            <Alert variant="destructive">
+              <AlertDescription>
+                {isHosted ? (
+                  <>
+                    The code generation service is temporarily unavailable. Please try again in a
+                    minute, or{' '}
+                    <a
+                      href="https://github.com/pradeepmouli/rune-langium#export-code"
+                      className="underline"
+                    >
+                      run Studio locally
+                    </a>{' '}
+                    for unlimited generation.
+                  </>
+                ) : (
+                  <>
+                    Code generation service is not available. Start it with{' '}
+                    <code className="font-mono">pnpm codegen:start</code>, or set{' '}
+                    <code className="font-mono">VITE_CODEGEN_URL</code> to a reachable service.
+                  </>
+                )}
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Validation warnings */}
           {validationWarnings.length > 0 && (
-            <div className="px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-sm">
-              <p className="font-medium mb-1">Validation warnings:</p>
-              <ul className="list-disc pl-4">
-                {validationWarnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            </div>
+            <Alert variant="warning">
+              <AlertTitle>Validation warnings</AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc pl-4">
+                  {validationWarnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* CF Turnstile challenge — hosted deploys only; first generation per session */}
@@ -468,7 +473,7 @@ export function ExportDialog({
             </>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
