@@ -11,11 +11,11 @@
   "dependencies": {
     "@lspeasy/core": "^2.1.2",
     "@rune-langium/lsp-server": "workspace:*",
-    "langium": "^4.2.2"
+    "langium": "^4.2.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260504.1",
-    "wrangler": "^4.85.0",
+    "@cloudflare/workers-types": "^4.20260507.1",
+    "wrangler": "^4.88.0",
     "ws": "^8.20.0"
   }
 }

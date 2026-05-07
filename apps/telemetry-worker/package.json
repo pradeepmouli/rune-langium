@@ -15,13 +15,13 @@
   "dependencies": {
     "@rune-langium/curated-schema": "workspace:*",
     "pino": "^10.3.1",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260504.1",
-    "miniflare": "^4.20260424.0",
+    "@cloudflare/workers-types": "^4.20260507.1",
+    "miniflare": "^4.20260504.0",
     "vitest": "^4.1.5",
-    "wrangler": "^4.85.0"
+    "wrangler": "^4.88.0"
   },
   "engines": {
     "node": ">=20.0.0"
