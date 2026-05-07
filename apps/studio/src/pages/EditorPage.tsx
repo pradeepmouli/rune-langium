@@ -1218,7 +1218,13 @@ export function EditorPage({
             <span className="studio-brand__name">Rune Studio</span>
           </div>
           <span className="studio-topbar__divider" />
-          <button type="button" className="studio-topbar__ws-btn" onClick={onClose}>
+          <button
+            type="button"
+            className="studio-topbar__ws-btn"
+            onClick={onClose}
+            aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
+            title="Close workspace — return to start page"
+          >
             <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
             <span className="studio-topbar__ws-sub">
               {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}

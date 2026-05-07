@@ -1206,6 +1206,21 @@
   color: var(--foreground);
 }
 
+/* Responsive: tighten spacing on tablets, hide brand wordmark on phones so
+ * the nav links don't wrap. The mark + links stay accessible. */
+@media (max-width: 640px) {
+  .studio-links {
+    gap: var(--space-4, 16px);
+  }
+  .studio-links a {
+    font-size: 12px;
+    letter-spacing: 0.03em;
+  }
+  .glass-header .studio-brand__name {
+    display: none;
+  }
+}
+
 /* ---------- CodeMirror Editor (T043) — dark theme ---------- */
 .studio-editor-page__source .cm-editor {
   height: 100%;
