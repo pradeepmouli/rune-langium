@@ -59,6 +59,16 @@ export function sanitizeLayoutWithDiagnostics(
       notice: INVALID_LAYOUT_RESET_NOTICE
     };
   }
+  // v5→v6: dockview 6.x changed its internal toJSON format. Native-shape
+  // snapshots saved under v5 will load silently but panels can't be resized.
+  // Force a factory reset so users get a clean layout after the upgrade.
+  if (input.version <= 5 && input.dockview?.shape === 'native') {
+    return {
+      layout: buildDefaultLayout(ctx),
+      notice: INVALID_LAYOUT_RESET_NOTICE
+    };
+  }
+
   // Walk + drop unknown component names. Mutation happens on a deep clone
   // so the original (persisted) record stays untouched until a new save.
   const cloned: PanelLayoutRecord = JSON.parse(JSON.stringify(input));

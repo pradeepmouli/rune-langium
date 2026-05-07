@@ -15,15 +15,15 @@
   "dependencies": {
     "@rune-langium/core": "workspace:*",
     "@rune-langium/curated-schema": "workspace:*",
-    "langium": "^4.2.2",
+    "langium": "^4.2.3",
     "pako": "^2.1.0",
     "pino": "^10.3.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260504.1",
-    "miniflare": "^4.20260424.0",
+    "@cloudflare/workers-types": "^4.20260507.1",
+    "miniflare": "^4.20260504.0",
     "vitest": "^4.1.5",
-    "wrangler": "^4.85.0"
+    "wrangler": "^4.88.0"
   },
   "engines": {
     "node": ">=20.0.0"

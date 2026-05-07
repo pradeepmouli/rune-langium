@@ -385,7 +385,7 @@ const initialState: EditorState = {
   detailPanelOpen: false,
   validationErrors: [],
   layoutOptions: { direction: 'LR', nodeSeparation: 50, rankSeparation: 100 },
-  focusMode: false,
+  focusMode: true,
   visibility: {
     expandedNamespaces: new Set<string>(),
     hiddenNodeIds: new Set<string>(),
@@ -1549,6 +1549,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             const shouldCollapse = totalNodeCount > LARGE_MODEL_THRESHOLD;
             const allNs = new Set(state.nodes.map((n) => n.data.namespace));
             return {
+              focusMode: true,
               visibility: {
                 ...state.visibility,
                 expandedNamespaces: shouldCollapse ? new Set<string>() : allNs,

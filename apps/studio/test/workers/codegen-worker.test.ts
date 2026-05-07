@@ -200,7 +200,7 @@ describe('codegen-worker preview messages', () => {
       targetId: 'beta.Trade',
       requestId: 'preview:beta.Trade:7',
       reason: 'parse-error',
-      message: 'Fix model errors to refresh the form preview.'
+      message: 'No valid files to generate a form preview from.'
     });
   });
 
@@ -232,7 +232,7 @@ describe('codegen-worker preview messages', () => {
       targetId: 'beta.Trade',
       requestId: 'preview:beta.Trade:parser-error:generate',
       reason: 'parse-error',
-      message: 'Fix model errors to refresh the form preview.'
+      message: 'No valid files to generate a form preview from.'
     });
   });
 

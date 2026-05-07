@@ -25,7 +25,7 @@
 import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
 import { createRuneDslServices } from '@rune-langium/core';
-import { generate, generatePreviewSchemas } from '@rune-langium/codegen';
+import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen';
 import type { Target } from '@rune-langium/codegen';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
 
@@ -68,7 +68,8 @@ const { RuneDsl } = createRuneDslServices();
 const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
 const builder = RuneDsl.shared.workspace.DocumentBuilder;
 
-let currentFiles: FileEntry[] = [];
+let currentCodegenFiles: FileEntry[] = [];
+let currentPreviewFiles: FileEntry[] = [];
 let lastTarget: Target = 'zod';
 let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
@@ -91,7 +92,7 @@ function hasDocumentErrors(document: LangiumDocument): boolean {
 async function runCodegen(target: Target, requestId?: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-  if (currentFiles.length === 0) {
+  if (currentCodegenFiles.length === 0) {
     scope.postMessage({
       type: 'codegen:outdated',
       target,
@@ -102,7 +103,7 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
   }
 
   try {
-    const documents: LangiumDocument[] = currentFiles.map(({ uri, content }) =>
+    const documents: LangiumDocument[] = currentCodegenFiles.map(({ uri, content }) =>
       factory.fromString(content, URI.parse(uri))
     );
 
@@ -122,14 +123,18 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
 
     const results = generate(documents, { target });
 
-    // Cache generated function code for preview:execute, keyed by namespace.funcName
+    // Cache generated function code for preview:execute, keyed by namespace.funcName.
+    // Store func.fileContents (isolated function declaration only) rather than
+    // result.content (full file with imports, interfaces, helper declarations) so
+    // that stripTypeAnnotations only has to handle a plain function body — no TS
+    // constructs that would cause a SyntaxError at execution time.
     if (target === 'typescript') {
       cachedFuncCode = new Map();
       for (const result of results) {
         const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
         for (const func of result.funcs) {
-          cachedFuncCode.set(func.name, result.content);
-          cachedFuncCode.set(`${ns}.${func.name}`, result.content);
+          cachedFuncCode.set(func.name, func.fileContents);
+          cachedFuncCode.set(`${ns}.${func.name}`, func.fileContents);
         }
       }
     }
@@ -155,25 +160,33 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
   }
 }
 
-async function buildDocuments(): Promise<LangiumDocument[] | null> {
-  if (currentFiles.length === 0) {
-    return null;
+async function buildDocuments(): Promise<LangiumDocument[]> {
+  if (currentPreviewFiles.length === 0) {
+    return [];
   }
 
-  const documents: LangiumDocument[] = currentFiles.map(({ uri, content }) =>
+  const documents: LangiumDocument[] = currentPreviewFiles.map(({ uri, content }) =>
     factory.fromString(content, URI.parse(uri))
   );
 
   await builder.build(documents, { validation: false, eagerLinking: false });
 
-  const hasErrors = documents.some(hasDocumentErrors);
-  return hasErrors ? null : documents;
+  // Filter out files with parse/lex errors rather than aborting entirely.
+  // Corpus files may contain constructs the parser doesn't fully support;
+  // excluding them keeps the namespace index intact for the remaining files.
+  const valid = documents.filter((d) => !hasDocumentErrors(d));
+  if (valid.length < documents.length) {
+    console.warn(
+      `[codegen-worker] ${documents.length - valid.length} file(s) had parse errors and were excluded from preview.`
+    );
+  }
+  return valid;
 }
 
 async function runPreview(targetId: string, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-  if (currentFiles.length === 0) {
+  if (currentPreviewFiles.length === 0) {
     scope.postMessage({
       type: 'preview:stale',
       targetId,
@@ -186,13 +199,13 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
 
   try {
     const documents = await buildDocuments();
-    if (!documents) {
+    if (documents.length === 0) {
       scope.postMessage({
         type: 'preview:stale',
         targetId,
         requestId,
         reason: 'parse-error',
-        message: 'Fix model errors to refresh the form preview.'
+        message: 'No valid files to generate a form preview from.'
       });
       return;
     }
@@ -229,36 +242,38 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
 function stripTypeAnnotations(tsCode: string): string {
   const lines = tsCode.split('\n');
   const output: string[] = [];
-  let braceDepth = 0;
-  let skipping = false;
 
   for (const line of lines) {
-    const trimmed = line.trimStart();
-
-    if (!skipping) {
-      if (/^(?:export\s+)?(?:interface|abstract\s+class|class)\s+\w+/.test(trimmed)) {
-        skipping = true;
-        braceDepth = (trimmed.match(/\{/g) || []).length - (trimmed.match(/\}/g) || []).length;
-        if (braceDepth <= 0) skipping = false;
-        continue;
-      }
-      if (/^(?:export\s+)?type\s+\w+\s*=/.test(trimmed)) continue;
-    }
-
-    if (skipping) {
-      braceDepth += (trimmed.match(/\{/g) || []).length;
-      braceDepth -= (trimmed.match(/\}/g) || []).length;
-      if (braceDepth <= 0) skipping = false;
-      continue;
-    }
-
+    // Drop the export keyword — functions cached from func.fileContents are
+    // declared at top scope and will be referenced by name after the body.
     let cleaned = line.replace(/^export\s+/, '');
-    cleaned = cleaned.replace(/(\w+)\s*:\s*[\w.]+(?:Shape)?(?:\[\])?\s*(?=[,)])/g, '$1');
-    cleaned = cleaned.replace(/\)\s*:\s*[\w.|& [\]]+\s*\{/g, ') {');
+
+    // Strip object literal type annotations in parameters:
+    // (param: { field: Type })  →  (param)
+    cleaned = cleaned.replace(/(\w+)\??\s*:\s*\{[^{}]*\}\s*(?=[,)])/g, '$1');
+
+    // Strip union/intersection/array/generic type annotations in parameters:
+    // (param: TypeA | TypeB[], param2?: Generic<T>)  →  (param, param2)
+    cleaned = cleaned.replace(/(\w+)\??\s*:\s*[\w.<>()[\] |&?,]+\s*(?=[,)])/g, '$1');
+
+    // Strip arrow function return type: ): ReturnType =>  →  ) =>
+    cleaned = cleaned.replace(/\)\s*:\s*[\w.<>()[\] |&?,]+\s*=>/g, ') =>');
+
+    // Strip regular function/method return type: ): ReturnType {  →  ) {
+    cleaned = cleaned.replace(/\)\s*:\s*[\w.<>()[\] |&?| ]+\s*\{/g, ') {');
     cleaned = cleaned.replace(/\)\s*:\s*\w+\s+is\s+\w+\s*\{/g, ') {');
+
+    // Strip variable type annotations: let/const x: Type = or let x: Type;
+    cleaned = cleaned.replace(
+      /((?:const|let|var)\s+\w+)\s*:\s*[\w.<>()[\] |&?,]+\s*(=|;)/g,
+      '$1 $2'
+    );
+
+    // Strip type casts
     cleaned = cleaned.replace(/\s+as\s+typeof\s+this\.\w+/g, '');
     cleaned = cleaned.replace(/\s+as\s+const/g, '');
     cleaned = cleaned.replace(/\s+as\s+\w+/g, '');
+
     output.push(cleaned);
   }
 
@@ -278,12 +293,12 @@ async function executeFunction(
 
   if (!cachedFuncCode.has(funcName)) {
     const documents = await buildDocuments();
-    if (documents) {
+    if (documents.length > 0) {
       const results = generate(documents, { target: 'typescript' });
       cachedFuncCode = new Map();
       for (const result of results) {
         for (const func of result.funcs) {
-          cachedFuncCode.set(func.name, result.content);
+          cachedFuncCode.set(func.name, func.fileContents);
         }
       }
     }
@@ -302,11 +317,14 @@ async function executeFunction(
   const code = cachedFuncCode.get(funcName)!;
 
   try {
-    // Strip TS type annotations from the controlled @rune-langium/codegen output.
-    // Uses a line-by-line parser with brace-depth tracking — safe for our known
-    // output format (interfaces, classes, type aliases, function signatures).
+    // Strip TS type annotations from the isolated function body stored in
+    // func.fileContents. This contains only the function declaration — no
+    // imports, interface blocks, or helper declarations — so stripTypeAnnotations
+    // only needs to handle inline type syntax.
+    // Prepend plain-JS runtime helpers so runeCheckOneOf / runeCount /
+    // runeAttrExists are available without any TypeScript annotation.
     // Security: execution runs in a dedicated web worker (no DOM/network/FS).
-    const jsCode = stripTypeAnnotations(code);
+    const jsCode = RUNTIME_HELPER_JS_SOURCE + '\n\n' + stripTypeAnnotations(code);
 
     // Shadow globals that could exfiltrate data from the worker sandbox
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
@@ -347,7 +365,7 @@ async function executeFunction(
     const msg = e.data;
 
     if (msg.type === 'codegen:setFiles') {
-      currentFiles = msg.files;
+      currentCodegenFiles = msg.files;
       if (msg.requestId) {
         lastCodegenRequestId = msg.requestId;
       }
@@ -361,7 +379,7 @@ async function executeFunction(
       }
       runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
     } else if (msg.type === 'preview:setFiles') {
-      currentFiles = msg.files;
+      currentPreviewFiles = msg.files;
       if (msg.requestId) {
         lastPreviewRequestId = msg.requestId;
       }

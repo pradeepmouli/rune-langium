@@ -60,10 +60,10 @@ export function GraphFilterMenu() {
       <PopoverTrigger asChild>
         <Button
           variant={allNodesVisible && allEdgesVisible ? 'secondary' : 'default'}
-          size="sm"
+          size="xs"
           title="Filter visible types and relationships"
         >
-          <Filter className="w-3.5 h-3.5 mr-1" />
+          <Filter />
           Filter
         </Button>
       </PopoverTrigger>

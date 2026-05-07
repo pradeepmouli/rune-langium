@@ -58,7 +58,7 @@ export const PANEL_TITLES: Record<PanelComponentName, string> = {
   'workspace.codePreview': 'Code'
 };
 
-export const LAYOUT_SCHEMA_VERSION = 5;
+export const LAYOUT_SCHEMA_VERSION = 6;
 
 const SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
 
@@ -93,7 +93,7 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
     ],
     bottomGroup: {
       active: 'workspace.problems',
-      collapsed: false,
+      collapsed: true,
       tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
     }
   };

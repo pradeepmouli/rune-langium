@@ -164,6 +164,8 @@ vi.mock('lucide-react', () => ({
   LayoutGrid: () => React.createElement('span'),
   Code2: () => React.createElement('span'),
   Network: () => React.createElement('span'),
+  FileCode2: () => React.createElement('span'),
+  Info: () => React.createElement('span'),
   XCircle: () => React.createElement('span'),
   Check: () => React.createElement('span'),
   Download: () => React.createElement('span'),
@@ -171,6 +173,7 @@ vi.mock('lucide-react', () => ({
   Zap: () => React.createElement('span'),
   Search: () => React.createElement('span'),
   ChevronDown: () => React.createElement('span'),
+  ChevronUp: () => React.createElement('span'),
   Layers: () => React.createElement('span'),
   Database: () => React.createElement('span'),
   Bell: () => React.createElement('span'),
@@ -275,7 +278,9 @@ describe('EditorPage preview target identity', () => {
     render(
       <EditorPage
         models={[]}
-        files={[{ path: 'trade.rosetta', content: 'namespace beta', dirty: false }]}
+        files={[
+          { name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace beta', dirty: false }
+        ]}
       />
     );
 
@@ -306,7 +311,12 @@ describe('EditorPage preview target identity', () => {
       <EditorPage
         models={[modelWithType('Trade') as never]}
         files={[
-          { path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+          {
+            name: 'preview-alpha.rosetta',
+            path: 'preview-alpha.rosetta',
+            content: 'namespace preview.alpha',
+            dirty: false
+          }
         ]}
       />
     );
@@ -326,7 +336,14 @@ describe('EditorPage preview target identity', () => {
     rerender(
       <EditorPage
         models={[]}
-        files={[{ path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: true }]}
+        files={[
+          {
+            name: 'preview-alpha.rosetta',
+            path: 'preview-alpha.rosetta',
+            content: 'namespace preview.alpha',
+            dirty: true
+          }
+        ]}
       />
     );
 
@@ -339,7 +356,14 @@ describe('EditorPage preview target identity', () => {
     rerender(
       <EditorPage
         models={[modelWithType('RenamedTrade') as never]}
-        files={[{ path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: true }]}
+        files={[
+          {
+            name: 'preview-alpha.rosetta',
+            path: 'preview-alpha.rosetta',
+            content: 'namespace preview.alpha',
+            dirty: true
+          }
+        ]}
       />
     );
 
@@ -368,7 +392,12 @@ describe('EditorPage preview target identity', () => {
       <EditorPage
         models={[modelWithType('Trade') as never]}
         files={[
-          { path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+          {
+            name: 'preview-alpha.rosetta',
+            path: 'preview-alpha.rosetta',
+            content: 'namespace preview.alpha',
+            dirty: false
+          }
         ]}
       />
     );
@@ -392,6 +421,7 @@ describe('EditorPage preview target identity', () => {
         models={[modelWithType('Trade') as never]}
         files={[
           {
+            name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha\n\ntype Trade:\n  settlementDate string (0..1)',
             dirty: true
@@ -442,7 +472,12 @@ describe('EditorPage preview target identity', () => {
       <EditorPage
         models={[modelWithType('Trade') as never]}
         files={[
-          { path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+          {
+            name: 'preview-alpha.rosetta',
+            path: 'preview-alpha.rosetta',
+            content: 'namespace preview.alpha',
+            dirty: false
+          }
         ]}
       />
     );
@@ -461,6 +496,7 @@ describe('EditorPage preview target identity', () => {
         models={[modelWithType('Trade') as never]}
         files={[
           {
+            name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha\n\ntype Trade:\n  settlementDate string (0..1)',
             dirty: true
@@ -532,7 +568,12 @@ describe('EditorPage preview target identity', () => {
         models={[parsedModel as never]}
         parsedModels={[{ filePath: '/preview-alpha.rosetta', model: parsedModel as never }]}
         files={[
-          { path: '/preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+          {
+            name: 'preview-alpha.rosetta',
+            path: '/preview-alpha.rosetta',
+            content: 'namespace preview.alpha',
+            dirty: false
+          }
         ]}
       />
     );
@@ -559,7 +600,12 @@ describe('EditorPage preview target identity', () => {
       <EditorPage
         models={[modelWithType('Trade') as never]}
         files={[
-          { path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+          {
+            name: 'preview-alpha.rosetta',
+            path: 'preview-alpha.rosetta',
+            content: 'namespace preview.alpha',
+            dirty: false
+          }
         ]}
       />
     );
@@ -615,7 +661,12 @@ describe('EditorPage preview target identity', () => {
       <EditorPage
         models={[modelWithType('Trade') as never]}
         files={[
-          { path: 'preview-alpha.rosetta', content: 'namespace preview.alpha', dirty: false }
+          {
+            name: 'preview-alpha.rosetta',
+            path: 'preview-alpha.rosetta',
+            content: 'namespace preview.alpha',
+            dirty: false
+          }
         ]}
       />
     );
@@ -733,7 +784,9 @@ describe('EditorPage workspace chrome', () => {
     render(
       <EditorPage
         models={[]}
-        files={[{ path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}
+        files={[
+          { name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }
+        ]}
         workspaceName="CDM Workspace"
         onClose={vi.fn()}
       />
@@ -766,6 +819,7 @@ describe('EditorPage workspace chrome', () => {
         models={[]}
         files={[
           {
+            name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false

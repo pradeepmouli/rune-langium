@@ -20,6 +20,25 @@ export const RUNTIME_HELPER_SOURCE: string =
   `// --- end runtime helpers ---`;
 
 /**
+ * Plain JavaScript equivalent of `RUNTIME_HELPER_SOURCE` — no type annotations.
+ *
+ * Used by the Studio codegen worker when executing generated functions in a
+ * sandboxed Function constructor. Since the worker strips TypeScript annotations
+ * from the isolated function body (`GeneratedFunc.fileContents`), the helpers
+ * also need to be annotation-free so no TypeScript constructs reach the JS engine.
+ */
+export const RUNTIME_HELPER_JS_SOURCE: string =
+  `// --- rune-codegen runtime helpers (inlined) ---\n` +
+  `const runeCheckOneOf = (values) =>\n` +
+  `  values.filter((v) => v !== undefined && v !== null).length === 1;\n` +
+  `\n` +
+  `const runeCount = (arr) => arr?.length ?? 0;\n` +
+  `\n` +
+  `const runeAttrExists = (v) =>\n` +
+  `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
+  `// --- end runtime helpers ---`;
+
+/**
  * Returns true iff exactly one value in the array is non-null and non-undefined.
  *
  * Parity: matches Python rune_check_one_of(values) semantics.

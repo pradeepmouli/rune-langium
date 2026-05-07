@@ -85,7 +85,6 @@ import {
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
 import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
-import { useCodegenStore } from '../store/codegen-store.js';
 import '../test-api.js';
 import { getRuneStudioTestApi } from '../test-api.js';
 
@@ -213,6 +212,7 @@ export function EditorPage({
   // the graph. Reset when a new workspace is loaded (models prop changes).
   const corpusModelsRef = useRef<RosettaModel[]>([]);
   const previewRequestSequenceRef = useRef(0);
+  const codegenRequestSequenceRef = useRef(0);
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const navigationHistoryRef = useRef<string[]>([]);
   const pendingDisplayFileRef = useRef<
@@ -239,9 +239,6 @@ export function EditorPage({
   const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
   const receiveExecutionError = usePreviewStore((s) => s.receiveExecutionError);
   const setWorkerRef = usePreviewStore((s) => s.setWorkerRef);
-  const codePreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
-  const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
-
   useEffect(() => {
     const el = graphContainerRef.current;
     if (!el) return;
@@ -420,15 +417,9 @@ export function EditorPage({
       pendingRevealRef.current = { line: range.start.line + 1, filePath };
     } else if (filePath) {
       const typeName = (nodeData as { name?: string }).name;
-      if (typeName) {
-        const file = files.find((f) => f.path === filePath);
-        if (file) {
-          const line = findDeclarationLine(file.content, typeName);
-          if (line > 0) {
-            pendingRevealRef.current = { line, filePath };
-          }
-        }
-      }
+      const file = files.find((f) => f.path === filePath);
+      const line = typeName && file ? findDeclarationLine(file.content, typeName) : 0;
+      pendingRevealRef.current = { line: line > 0 ? line : 1, filePath };
     }
 
     // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
@@ -544,39 +535,35 @@ export function EditorPage({
     };
   }, [handlePreviewWorkerFailure]);
 
-  // Keep the codegen worker in sync with the workspace file set and
-  // regenerate the selected preview whenever the backing files change.
+  // Sync worker file state whenever the workspace changes.
+  // codegen:setFiles uses only user-authored files (readOnly corpus files are
+  // not the target of local code generation).
+  // preview:setFiles includes ALL files so that corpus types (readOnly) can
+  // be form-previewed — the worker only parses with eagerLinking:false so the
+  // 186-file corpus costs one parse pass, not cross-reference resolution.
   useEffect(() => {
     if (!codegenWorker) return;
-    const previewFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
-    const codegenRequestId = beginCodePreviewRequest(codePreviewTarget);
-    const requestId = previewSelectedTargetId
-      ? `preview:${previewSelectedTargetId}:${++previewRequestSequenceRef.current}`
-      : undefined;
-    currentPreviewRequestIdRef.current = requestId;
+    const codegenFiles = files
+      .filter((f) => !f.readOnly)
+      .map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+    const allFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+    const previewRequestId = `preview:files:${++previewRequestSequenceRef.current}`;
+    const codegenRequestId = `codegen:files:${++codegenRequestSequenceRef.current}`;
+    currentPreviewRequestIdRef.current = previewRequestId;
     try {
       codegenWorker.postMessage({
         type: 'codegen:setFiles',
-        files: previewFiles,
+        files: codegenFiles,
         requestId: codegenRequestId
       });
-      codegenWorker.postMessage(createPreviewSetFilesMessage(previewFiles, requestId));
+      codegenWorker.postMessage(createPreviewSetFilesMessage(allFiles, previewRequestId));
     } catch (error) {
-      handlePreviewWorkerFailure(
-        'Preview worker could not process updated files.',
-        error,
-        previewSelectedTargetId
-      );
+      handlePreviewWorkerFailure('Preview worker could not process updated files.', error);
     }
-  }, [
-    beginCodePreviewRequest,
-    codePreviewTarget,
-    codegenWorker,
-    files,
-    handlePreviewWorkerFailure,
-    previewSelectedTargetId
-  ]);
+  }, [codegenWorker, files, handlePreviewWorkerFailure]);
 
+  // Trigger form preview whenever the selected target changes. Files are
+  // already current from the effect above; this effect only updates the target.
   useEffect(() => {
     if (!codegenWorker || !previewSelectedTargetId) return;
     const requestId = `preview:${previewSelectedTargetId}:${++previewRequestSequenceRef.current}`;
@@ -858,7 +845,7 @@ export function EditorPage({
         sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
       });
     }
-  }, [sourceEditorFiles]);
+  }, [sourceEditorFiles, selectedNodeId]);
 
   const getSerializedFiles = useCallback((): Map<string, string> => {
     const rosettaText = graphRef.current?.exportRosetta?.();
@@ -1038,40 +1025,40 @@ export function EditorPage({
         <div
           role="toolbar"
           aria-label="Graph toolbar"
-          className="glass-toolbar flex flex-wrap items-center gap-1.5 border-b border-border px-2 py-1.5"
+          className="glass-toolbar flex flex-wrap items-center gap-1 border-b border-border px-2 py-1"
         >
-          <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
-            <Maximize2 className="w-3.5 h-3.5 mr-1" />
+          <Button variant="secondary" size="xs" onClick={handleFitView} title="Fit to view">
+            <Maximize2 />
             Fit View
           </Button>
-          <Button variant="secondary" size="sm" onClick={handleRelayout} title="Re-run auto layout">
-            <LayoutGrid className="w-3.5 h-3.5 mr-1" />
+          <Button variant="secondary" size="xs" onClick={handleRelayout} title="Re-run auto layout">
+            <LayoutGrid />
             Re-layout
           </Button>
-          <Separator orientation="vertical" className="mx-1 h-5" />
+          <Separator orientation="vertical" className="mx-1 h-4" />
           <Button
             variant={focusMode ? 'default' : 'secondary'}
             data-variant={focusMode ? 'default' : 'secondary'}
             aria-pressed={focusMode}
-            size="sm"
+            size="xs"
             onClick={handleToggleFocusMode}
             title="Show selected node and its direct connections only"
           >
-            <Network className="w-3.5 h-3.5 mr-1" />
+            <Network />
             Focus
           </Button>
           <Button
             variant={groupedLayout ? 'default' : 'secondary'}
             data-variant={groupedLayout ? 'default' : 'secondary'}
             aria-pressed={groupedLayout}
-            size="sm"
+            size="xs"
             onClick={handleToggleGroupedLayout}
             title="Group by inheritance trees"
           >
-            <LayoutGrid className="w-3.5 h-3.5 mr-1" />
+            <LayoutGrid />
             Grouped
           </Button>
-          <Separator orientation="vertical" className="mx-1 h-5" />
+          <Separator orientation="vertical" className="mx-1 h-4" />
           <GraphFilterMenu />
         </div>
         <div ref={graphContainerRef} className="min-h-0 flex-1 relative studio-graph-canvas">
@@ -1106,9 +1093,23 @@ export function EditorPage({
     ]
   );
 
-  const renderSourcePane = useCallback(
-    () => (
+  const renderSourcePane = useCallback(() => {
+    const activeFile = sourceEditorFiles[0];
+    const fileExt = activeFile?.name.includes('.') ? `.${activeFile.name.split('.').pop()}` : null;
+    const lineEnding = activeFile?.content.includes('\r\n') ? 'CRLF' : 'LF';
+    const lineCount = activeFile?.content.split('\n').length ?? 0;
+    return (
       <div className="flex flex-col min-h-0 h-full">
+        <div className="studio-source-meta" aria-label="Source file path">
+          {fileExt && <span className="studio-source-meta__pill">{fileExt}</span>}
+          <span className="studio-source-meta__path">{activeFile?.path ?? '—'}</span>
+          <span className="studio-source-meta__spacer" />
+          {activeFile && (
+            <span className="studio-source-meta__stat">
+              UTF-8 · {lineEnding} · {lineCount} lines
+            </span>
+          )}
+        </div>
         <SourceEditor
           ref={sourceEditorRef}
           files={sourceEditorFiles}
@@ -1121,16 +1122,15 @@ export function EditorPage({
           hideTabs
         />
       </div>
-    ),
-    [
-      sourceEditorFiles,
-      activeEditorFile,
-      lspClient,
-      handleSourceChange,
-      navigateToNode,
-      handleEditorViewCreated
-    ]
-  );
+    );
+  }, [
+    sourceEditorFiles,
+    activeEditorFile,
+    lspClient,
+    handleSourceChange,
+    navigateToNode,
+    handleEditorViewCreated
+  ]);
 
   const renderInspectorPane = useCallback(
     () => (
