@@ -15,6 +15,13 @@ import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@ru
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { FieldSet, FieldLegend } from '@rune-langium/design-system/ui/field';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@rune-langium/design-system/ui/select';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import {
   usePreviewStore,
@@ -590,25 +597,44 @@ function PreviewFieldControl({
 
   if (field.kind === 'enum') {
     const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
+    const stringValue = typeof value === 'string' && value !== '' ? value : undefined;
+    const fieldLabel = resolvedFieldLabel(field, arrayIndices);
+    // Radix Select disallows empty-string item values, so optional enums use a
+    // sentinel item that maps back to '' on selection — restoring the native
+    // "Select…/clear" behaviour the prior <option value=""> provided.
+    const CLEAR_SENTINEL = '__rune_enum_unset__';
     return (
-      <label className="block text-xs font-medium">
-        <span>{resolvedFieldLabel(field, arrayIndices)}</span>
-        <select
-          aria-label={resolvedFieldLabel(field, arrayIndices)}
-          value={typeof value === 'string' ? value : ''}
-          className="mt-0.5 h-7 w-full rounded border border-input bg-background px-2 text-xs"
-          onChange={(event) => onFieldChange(field.path, event.target.value, arrayIndices)}
-          onBlur={onFieldBlur}
+      <div className="block text-xs font-medium">
+        <span className="block">{fieldLabel}</span>
+        <Select
+          value={stringValue}
+          onValueChange={(next) => {
+            onFieldChange(field.path, next === CLEAR_SENTINEL ? '' : next, arrayIndices);
+            onFieldBlur();
+          }}
         >
-          {!field.required ? <option value="">Select…</option> : null}
-          {(field.enumValues ?? []).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            size="sm"
+            aria-label={fieldLabel}
+            className="mt-0.5 w-full text-xs"
+          >
+            <SelectValue placeholder={field.required ? undefined : 'Select…'} />
+          </SelectTrigger>
+          <SelectContent>
+            {!field.required ? (
+              <SelectItem value={CLEAR_SENTINEL} className="text-xs text-muted-foreground">
+                Select…
+              </SelectItem>
+            ) : null}
+            {(field.enumValues ?? []).map((option) => (
+              <SelectItem key={option.value} value={option.value} className="text-xs">
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {fieldError ? <FieldError message={fieldError} /> : null}
-      </label>
+      </div>
     );
   }
 
