@@ -57,29 +57,29 @@ function friendlyCloneError(raw: string): { headline: string; hint?: string } {
   // isomorphic-git surfaces server status as "HTTP Error: 404 Not Found".
   if (/\b(HTTP\s*(Error)?:?\s*)?404\b/i.test(msg)) {
     return {
-      headline: "Repository not found",
+      headline: 'Repository not found',
       hint: "Check the URL — the repo may not exist, or it may be private and your account doesn't have access. Public repos work without extra permissions; private repos need a token with repo scope."
     };
   }
   if (/\b(HTTP\s*(Error)?:?\s*)?(401|403)\b/i.test(msg) || /unauthor|forbidden|denied/i.test(msg)) {
     return {
-      headline: "Permission denied",
+      headline: 'Permission denied',
       hint: "Your GitHub authorisation doesn't have access to this repository. If it's a private repo, reconnect and grant access, or pick a different repo."
     };
   }
   if (/network|fetch|failed to fetch|timeout|offline/i.test(msg)) {
     return {
-      headline: "Network problem",
+      headline: 'Network problem',
       hint: "We couldn't reach GitHub. Check your connection and try again."
     };
   }
   if (/\bbranch\b/i.test(msg) && /not found|unknown/i.test(msg)) {
     return {
-      headline: "Branch not found",
+      headline: 'Branch not found',
       hint: "Double-check the branch name (case-sensitive). Most repos use 'main' or 'master'."
     };
   }
-  return { headline: "Clone failed", hint: msg };
+  return { headline: 'Clone failed', hint: msg };
 }
 
 /**
@@ -155,15 +155,17 @@ export function GitHubWorkspaceFlow({
         onChange={(e) => setBranch(e.target.value)}
         placeholder="main"
       />
-      {state.phase === 'error' && state.errorReason && (() => {
-        const friendly = friendlyCloneError(state.errorReason);
-        return (
-          <Alert variant="destructive" data-testid="github-clone-error">
-            <AlertTitle>{friendly.headline}</AlertTitle>
-            {friendly.hint && <AlertDescription>{friendly.hint}</AlertDescription>}
-          </Alert>
-        );
-      })()}
+      {state.phase === 'error' &&
+        state.errorReason &&
+        (() => {
+          const friendly = friendlyCloneError(state.errorReason);
+          return (
+            <Alert variant="destructive" data-testid="github-clone-error">
+              <AlertTitle>{friendly.headline}</AlertTitle>
+              {friendly.hint && <AlertDescription>{friendly.hint}</AlertDescription>}
+            </Alert>
+          );
+        })()}
       <Button
         disabled={!canSubmit}
         onClick={async () => {

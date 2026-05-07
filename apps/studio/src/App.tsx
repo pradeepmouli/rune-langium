@@ -606,10 +606,7 @@ export function App() {
 
       <main className="flex-1 overflow-hidden relative">
         {workspaceError ? (
-          <Alert
-            variant="destructive"
-            className="absolute left-3 right-3 top-3 z-20 shadow-sm"
-          >
+          <Alert variant="destructive" className="absolute left-3 right-3 top-3 z-20 shadow-sm">
             <AlertDescription>{workspaceError}</AlertDescription>
           </Alert>
         ) : null}

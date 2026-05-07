@@ -613,11 +613,7 @@ function PreviewFieldControl({
             onFieldBlur();
           }}
         >
-          <SelectTrigger
-            size="sm"
-            aria-label={fieldLabel}
-            className="mt-0.5 w-full text-xs"
-          >
+          <SelectTrigger size="sm" aria-label={fieldLabel} className="mt-0.5 w-full text-xs">
             <SelectValue placeholder={field.required ? undefined : 'Select…'} />
           </SelectTrigger>
           <SelectContent>

@@ -74,7 +74,9 @@ export function CuratedLoadErrorPanel({
       className={className}
     >
       <AlertTitle asChild>
-        <h3>Loading {modelName} failed: {copy.title}</h3>
+        <h3>
+          Loading {modelName} failed: {copy.title}
+        </h3>
       </AlertTitle>
       <AlertDescription>
         <p>{copy.body}</p>

@@ -44,7 +44,6 @@ import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
-import { ExportMenu } from '../components/ExportMenu.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
@@ -55,9 +54,7 @@ import { Kbd } from '@rune-langium/design-system/ui/kbd';
 import {
   Maximize2,
   LayoutGrid,
-  Code2,
   Network,
-  XCircle,
   Check,
   Download,
   Share2,
@@ -856,10 +853,6 @@ export function EditorPage({
     return rosettaText;
   }, []);
 
-  const handleExportImage = useCallback((format: 'svg' | 'png') => {
-    return graphRef.current?.exportImage(format) ?? Promise.resolve(new Blob());
-  }, []);
-
   const validateModelForExport = useCallback((): string[] => {
     const warnings: string[] = [];
     const { totalErrors: terr, totalWarnings: twarn } = useDiagnosticsStore.getState();
@@ -1267,10 +1260,7 @@ export function EditorPage({
             Generate
           </button>
           <span className="studio-topbar__divider" />
-          <Avatar
-            asChild
-            className="size-7 cursor-pointer"
-          >
+          <Avatar asChild className="size-7 cursor-pointer">
             <button type="button" aria-label="Account">
               <AvatarFallback className="bg-gradient-to-br from-[var(--color-enum)] to-[var(--color-data)] text-primary-foreground text-[11px] font-bold">
                 PM

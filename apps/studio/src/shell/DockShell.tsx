@@ -356,7 +356,11 @@ export function DockShell({
         >
           <AlertDescription className="grid-cols-[1fr_auto] flex w-full items-center justify-between">
             <span>{layoutNotice}</span>
-            <button type="button" className="ml-2 font-medium" onClick={() => setLayoutNotice(null)}>
+            <button
+              type="button"
+              className="ml-2 font-medium"
+              onClick={() => setLayoutNotice(null)}
+            >
               Dismiss
             </button>
           </AlertDescription>
