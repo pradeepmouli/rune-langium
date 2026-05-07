@@ -13,7 +13,7 @@
  */
 
 import * as React from 'react';
-import { Slot } from 'radix-ui';
+import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../utils';
@@ -53,7 +53,7 @@ function AlertTitle({
   asChild = false,
   ...props
 }: React.ComponentProps<'div'> & { asChild?: boolean }) {
-  const Comp: React.ElementType = asChild ? Slot.Root : 'div';
+  const Comp: React.ElementType = asChild ? Slot : 'div';
   return (
     <Comp
       data-slot="alert-title"

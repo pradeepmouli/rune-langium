@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import * as React from 'react';
-import { Separator as SeparatorPrimitive } from 'radix-ui';
+import * as SeparatorPrimitive from '@radix-ui/react-separator';
 
 import { cn } from '../utils';
 
