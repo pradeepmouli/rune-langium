@@ -68,7 +68,8 @@ const { RuneDsl } = createRuneDslServices();
 const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
 const builder = RuneDsl.shared.workspace.DocumentBuilder;
 
-let currentFiles: FileEntry[] = [];
+let currentCodegenFiles: FileEntry[] = [];
+let currentPreviewFiles: FileEntry[] = [];
 let lastTarget: Target = 'zod';
 let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
@@ -91,7 +92,7 @@ function hasDocumentErrors(document: LangiumDocument): boolean {
 async function runCodegen(target: Target, requestId?: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-  if (currentFiles.length === 0) {
+  if (currentCodegenFiles.length === 0) {
     scope.postMessage({
       type: 'codegen:outdated',
       target,
@@ -102,7 +103,7 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
   }
 
   try {
-    const documents: LangiumDocument[] = currentFiles.map(({ uri, content }) =>
+    const documents: LangiumDocument[] = currentCodegenFiles.map(({ uri, content }) =>
       factory.fromString(content, URI.parse(uri))
     );
 
@@ -160,11 +161,11 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
 }
 
 async function buildDocuments(): Promise<LangiumDocument[]> {
-  if (currentFiles.length === 0) {
+  if (currentPreviewFiles.length === 0) {
     return [];
   }
 
-  const documents: LangiumDocument[] = currentFiles.map(({ uri, content }) =>
+  const documents: LangiumDocument[] = currentPreviewFiles.map(({ uri, content }) =>
     factory.fromString(content, URI.parse(uri))
   );
 
@@ -185,7 +186,7 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
 async function runPreview(targetId: string, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-  if (currentFiles.length === 0) {
+  if (currentPreviewFiles.length === 0) {
     scope.postMessage({
       type: 'preview:stale',
       targetId,
@@ -364,7 +365,7 @@ async function executeFunction(
     const msg = e.data;
 
     if (msg.type === 'codegen:setFiles') {
-      currentFiles = msg.files;
+      currentCodegenFiles = msg.files;
       if (msg.requestId) {
         lastCodegenRequestId = msg.requestId;
       }
@@ -378,7 +379,7 @@ async function executeFunction(
       }
       runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
     } else if (msg.type === 'preview:setFiles') {
-      currentFiles = msg.files;
+      currentPreviewFiles = msg.files;
       if (msg.requestId) {
         lastPreviewRequestId = msg.requestId;
       }
