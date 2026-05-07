@@ -3,7 +3,7 @@ set -e
 
 # Ensure pnpm is available (matches the version used by the Studio workflow).
 if ! command -v pnpm >/dev/null 2>&1; then
-  npm install -g pnpm@10.32.0 --quiet
+  npm install -g pnpm@10.32.1 --quiet
 fi
 
 # Sync workspace dependencies after a task merge that may have touched

@@ -26,8 +26,7 @@ const alertVariants = cva(
         default: 'bg-card text-card-foreground border-border',
         destructive:
           'bg-destructive/10 border-destructive/30 text-destructive [&>svg]:text-destructive',
-        warning:
-          'bg-amber-500/10 border-amber-500/30 text-amber-100 [&>svg]:text-amber-400 dark:text-amber-100'
+        warning: 'bg-warning/10 border-warning/30 text-warning [&>svg]:text-warning'
       }
     },
     defaultVariants: { variant: 'default' }
