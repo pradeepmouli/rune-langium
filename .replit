@@ -39,6 +39,10 @@ externalPort = 3001
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 5001
+externalPort = 3000
+
 [deployment]
 deploymentTarget = "static"
 build = ["bash", "-c", "npm install -g pnpm@10.28.0 && pnpm install && pnpm --filter @rune-langium/core build && pnpm --filter @rune-langium/visual-editor build && pnpm --filter @rune-langium/lsp-server build && pnpm --filter @rune-langium/studio build"]
