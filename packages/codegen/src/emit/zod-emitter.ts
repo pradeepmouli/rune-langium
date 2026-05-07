@@ -4,17 +4,16 @@
 /**
  * Zod target emitter for the Rune code generator.
  *
- * Entry point: emitNamespace(docs, options) → GeneratorOutput
+ * Entry point: emitNamespace(model, options) → GeneratorOutput
  *
  * FR-002–FR-009, FR-021 (inline helpers), FR-022 (deterministic output).
  */
 
-import type { LangiumDocument } from 'langium';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { resolveImportPath } from './namespace-registry.js';
+import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import {
   isData,
-  isRosettaModel,
   isRosettaEnumeration,
   isRosettaBasicType,
   isRosettaTypeAlias,
@@ -27,7 +26,6 @@ import {
   type Attribute,
   type Condition,
   type RosettaEnumeration,
-  type RosettaModel,
   type RosettaCardinality,
   type RosettaTypeAlias,
   type RosettaRule,
@@ -41,8 +39,6 @@ import type {
   SourceMapEntry,
   GeneratorDiagnostic
 } from '../types.js';
-import { buildTypeReferenceGraph, findCyclicTypes } from '../cycle-detector.js';
-import { topoSort } from '../topo-sort.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import {
   transpileCondition,
@@ -59,9 +55,9 @@ interface EmissionContext {
   /** The target being emitted (always 'zod' for this emitter). */
   target: 'zod';
   /** Sorted emit order for types in this namespace (topo-sorted). */
-  emitOrder: string[];
+  emitOrder: readonly string[];
   /** Type names that require z.lazy() wrapping due to cycles. */
-  lazyTypes: Set<string>;
+  lazyTypes: ReadonlySet<string>;
   /** Source-map entries collected during emission. */
   sourceMap: SourceMapEntry[];
   /** Generator-time diagnostics accumulated during emission. */
@@ -69,19 +65,19 @@ interface EmissionContext {
   /** The namespace string (e.g., "cdm.base.math"). */
   namespace: string;
   /** All Data nodes keyed by name for lookup. */
-  dataByName: Map<string, Data>;
+  dataByName: ReadonlyMap<string, Data>;
   /** All Enumeration nodes keyed by name for lookup. */
-  enumByName: Map<string, RosettaEnumeration>;
+  enumByName: ReadonlyMap<string, RosettaEnumeration>;
   /** All RosettaTypeAlias nodes keyed by name for lookup. */
-  typeAliasByName: Map<string, RosettaTypeAlias>;
+  typeAliasByName: ReadonlyMap<string, RosettaTypeAlias>;
   /** All RosettaRule nodes keyed by name for lookup. */
-  rulesByName: Map<string, RosettaRule>;
+  rulesByName: ReadonlyMap<string, RosettaRule>;
   /** All RosettaReport nodes keyed by name for lookup. */
-  reportsByName: Map<string, RosettaReport>;
+  reportsByName: ReadonlyMap<string, RosettaReport>;
   /** All Annotation nodes keyed by name for lookup. */
-  annotationsByName: Map<string, Annotation>;
+  annotationsByName: ReadonlyMap<string, Annotation>;
   /** All RosettaExternalFunction nodes keyed by name for lookup. */
-  libraryFuncsByName: Map<string, RosettaExternalFunction>;
+  libraryFuncsByName: ReadonlyMap<string, RosettaExternalFunction>;
   /** Namespace registry for cross-namespace lookups. */
   registry: NamespaceRegistry;
 }
@@ -916,73 +912,24 @@ function emitFileHeader(namespace: string, _ctx: EmissionContext): string {
   ].join('\n');
 }
 
-/**
- * Convert a dot-separated Rune namespace to a file path.
- * e.g., "cdm.base.math" → "cdm/base/math.zod.ts"
- * R6 (file organization).
- */
-function namespaceToPath(namespace: string): string {
-  return namespace.replace(/\./g, '/') + '.zod.ts';
-}
-
-/**
- * Build the EmissionContext for a set of documents sharing a namespace.
- */
 function buildEmissionContext(
-  docs: LangiumDocument[],
-  namespace: string,
+  model: NamespaceWalkResult,
   registry: NamespaceRegistry
 ): EmissionContext {
-  const dataByName = new Map<string, Data>();
-  const enumByName = new Map<string, RosettaEnumeration>();
-  const typeAliasByName = new Map<string, RosettaTypeAlias>();
-  const rulesByName = new Map<string, RosettaRule>();
-  const reportsByName = new Map<string, RosettaReport>();
-  const annotationsByName = new Map<string, Annotation>();
-  const libraryFuncsByName = new Map<string, RosettaExternalFunction>();
-
-  for (const doc of docs) {
-    const model = doc.parseResult?.value;
-    if (!model || !isRosettaModel(model)) continue;
-
-    for (const element of (model as RosettaModel).elements) {
-      if (isData(element)) {
-        dataByName.set(element.name, element);
-      } else if (isRosettaEnumeration(element)) {
-        enumByName.set(element.name, element);
-      } else if (isRosettaTypeAlias(element)) {
-        typeAliasByName.set(element.name, element);
-      } else if (isRosettaRule(element)) {
-        rulesByName.set(element.name, element);
-      } else if (isRosettaReport(element)) {
-        // Reports don't have simple names — derive from context
-      } else if (isAnnotation(element)) {
-        annotationsByName.set(element.name, element);
-      } else if (isRosettaExternalFunction(element)) {
-        libraryFuncsByName.set(element.name, element);
-      }
-    }
-  }
-
-  // Build reference graph and find cycles
-  const graph = buildTypeReferenceGraph(docs);
-  const lazyTypes = findCyclicTypes(graph);
-  const emitOrder = topoSort(graph, lazyTypes);
-
   return {
     target: 'zod',
-    emitOrder,
-    lazyTypes,
+    emitOrder: model.emitOrder,
+    lazyTypes: model.cyclicTypes,
     sourceMap: [],
     diagnostics: [],
-    namespace,
-    dataByName,
-    enumByName,
-    typeAliasByName,
-    rulesByName,
-    reportsByName,
-    annotationsByName,
-    libraryFuncsByName,
+    namespace: model.namespace,
+    dataByName: model.dataByName,
+    enumByName: model.enumByName,
+    typeAliasByName: model.typeAliasByName,
+    rulesByName: model.rulesByName,
+    reportsByName: model.reportsByName,
+    annotationsByName: model.annotationsByName,
+    libraryFuncsByName: model.libraryFuncsByName,
     registry
   };
 }
@@ -994,15 +941,14 @@ function buildEmissionContext(
  * FR-001 (one file per namespace), FR-022 (deterministic output).
  */
 export function emitNamespace(
-  docs: LangiumDocument[],
-  namespace: string,
+  model: NamespaceWalkResult,
   _options: GeneratorOptions,
   registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(docs, namespace, registry);
+  const ctx = buildEmissionContext(model, registry);
   const sections: string[] = [];
 
-  sections.push(emitFileHeader(namespace, ctx));
+  sections.push(emitFileHeader(model.namespace, ctx));
 
   // Collect and emit cross-namespace import statements at the top of the file
   const crossNsImports = collectCrossNamespaceImports(ctx);
@@ -1095,7 +1041,7 @@ export function emitNamespace(
   const content = sections.join('\n') + '\n';
 
   return {
-    relativePath: namespaceToPath(namespace),
+    relativePath: getTargetRelativePath(model.namespace, 'zod'),
     content,
     sourceMap: ctx.sourceMap,
     diagnostics: ctx.diagnostics,

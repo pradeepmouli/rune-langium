@@ -6,30 +6,28 @@ When installing or creating new skills, always:
 1. Place the canonical copy in `.agents/skills/<skill-name>/`
 2. Create a relative symlink from `.github/skills/<skill-name>` -> `../../.agents/skills/<skill-name>`
 
-This ensures skills are discoverable from both `.agents/skills/` and `.github/skills/` without duplication.
+This keeps skills discoverable from both locations without duplication.
 
-## Active Technologies
-- TypeScript 5.9+ (strict mode, ESM), React 19, @xyflow/react 12, zustand 5, zundo 2 (undo/redo), @rune-langium/core (parser, AST types), @rune-langium/design-system (theme, tokens, UI primitives), @radix-ui/*, class-variance-authority (CVA), cmdk, lucide-react, Tailwind CSS 4
-- Browser-only; File System Access API for standalone app, no backend
-- TypeScript 5.9+ (strict mode, ESM) + React 19, @xyflow/react 12, zustand 5, @tanstack/react-virtual (new), @radix-ui/*, Tailwind CSS 4 (refactor/001-optimize-ui-performance)
-- N/A (browser-only, File System Access API) (refactor/001-optimize-ui-performance)
-- TypeScript 5.9+ (strict mode, ESM) + React 19, @xyflow/react 12, zustand 5, zundo 2, langium 4.2.1, zod 4.3.6, @zod-to-form/cli 0.2.7, langium-zod 0.5.3, isomorphic-git (new), idb (new), commander 14 (008-core-editor-features)
-- IndexedDB (via idb) for model caching; in-memory for workspace state (008-core-editor-features)
-- TypeScript 5.9+ (studio, worker, container HTTP wrapper) / Java 21 (codegen CLI, already in use via `rosetta-code-generators`) + `@rune-langium/codegen` (existing), Cloudflare Workers, Cloudflare Containers (beta), `@cloudflare/workers-types`, `wrangler` 4, CF Turnstile (`@marsidev/react-turnstile` or equivalent), CF Durable Objects, `rosetta-code-generators` (existing Maven build) (011-export-code-cf)
-- CF Durable Object for per-IP rate-limit counters (hour + day buckets); container is stateless (no disk writes beyond `/tmp`) (011-export-code-cf)
-- TypeScript 5.9 (strict mode, ESM) for all browser + Worker code; Java 21 unchanged for the existing codegen container (untouched by this feature). + React 19, `dockview-react` (new), `@zod-to-form/{core,react,vite}` 0.7.x / 0.2.x (upgrade), `isomorphic-git` 1.37 (existing, retained for arbitrary-URL + git-backed workspaces), `pako` (new — gzip), small custom tar parser or `tar-stream` (new), `idb` (existing), Tailwind CSS 4 (existing), VitePress (existing for docs), Cloudflare Workers + R2 + Durable Objects + Cron Triggers. (012-studio-workspace-ux)
-- OPFS (Origin Private File System) for workspace files + git object stores; IndexedDB for workspace metadata, recent-workspaces, settings, and serialised FSA folder handles. R2 for the curated-mirror archives. Durable Object storage for telemetry counters (per-day instances). No D1, no KV. (012-studio-workspace-ux)
-- TypeScript 5.9 (strict mode, ESM) for all new (014-studio-prod-ready)
-- TypeScript 5.9+ (strict mode, ESM) — all new (015-rune-codegen-zod)
-- No persistent storage in the generator. The CLI writes to (015-rune-codegen-zod)
+## Core Stack
 
-## Recent Changes
-- 002-reactflow-visual-editor: Added TypeScript 5.9+ (strict mode, ESM)
+- TypeScript 5.9+ (strict mode, ESM) in a pnpm workspace monorepo
+- Studio/UI: React 19, `@xyflow/react` 12, `dockview-react`, zustand 5, zundo 2, Tailwind CSS 4, Radix UI, CodeMirror 6
+- Language/tooling: Langium 4.2.x, Zod v4, `@rune-langium/core`, `@rune-langium/codegen`, `@rune-langium/visual-editor`
+- Browser persistence: OPFS for workspace files, IndexedDB for workspace metadata, caches, settings, and layouts
+- Codegen server/container paths still depend on Java 21 + `rosetta-code-generators`
 
 ## Current Repo-Wide Notes
-- Studio now prefers the embedded browser LSP worker transport first; direct WebSocket and Cloudflare Worker LSP remain fallbacks, and an explicit `wsUri` should select the direct WebSocket path.
+
+- Studio prefers the embedded browser LSP worker transport first; direct WebSocket and Cloudflare Worker LSP remain fallbacks, and an explicit `wsUri` selects the direct WebSocket path.
 - Real CDM/source fixtures live under the hidden `.resources/` tree. Use those files for runtime repros, and guard/skip tests that depend on them when the corpus is absent.
 - Studio Playwright flows should wait for visible UI readiness rather than `networkidle` on routes that keep worker/LSP connections open.
+- Codegen is now split between a shared namespace walker and language-specific emitters. `packages/codegen/src/generator.ts` walks each namespace once via `packages/codegen/src/emit/namespace-walker.ts`, then passes a readonly `NamespaceWalkResult` to the Zod, TypeScript, and JSON Schema emitters.
+- Target-specific output paths are centralized in `getTargetRelativePath`, while TypeScript-only func extraction stays in `packages/codegen/src/emit/ts-emitter.ts` so non-TS targets do not pick up func diagnostics.
+- Useful validation commands: `pnpm run lint`, `pnpm test`, `pnpm run type-check`; for codegen-only work prefer `pnpm --filter @rune-langium/codegen test` and `pnpm --filter @rune-langium/codegen run type-check`.
+
+## Recent Changes
+
+- Codegen cleanup: shared namespace walking was extracted so emitters focus on target-specific output; regression coverage lives in `packages/codegen/test/namespace-walker.test.ts`.
 
 ## Licensing Boundary
 
@@ -42,5 +40,5 @@ Never refer to the studio as "open source" — it is "source-available."
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan.
 <!-- SPECKIT END -->
