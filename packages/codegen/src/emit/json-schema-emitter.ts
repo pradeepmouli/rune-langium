@@ -149,6 +149,13 @@ interface EmissionContext {
   registry: NamespaceRegistry;
 }
 
+interface PendingSourceMapEntry {
+  name: string;
+  sourceUri: string;
+  sourceLine: number;
+  sourceChar: number;
+}
+
 /**
  * Maps Rune built-in type names to JSON Schema types.
  * FR-019.
@@ -447,14 +454,9 @@ function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceReg
  *
  * Source-map convention for JSON Schema (FR-018, studio-preview.md §Source-map coverage):
  *   - Each type ($defs/<TypeName>) → maps to the `type TypeName:` Rune source line
- *   - Each attribute property (properties/<attrName>) → maps to the `attribute` Rune line
  *
- * Since JSON Schema is a JSON file (not line-addressable like TS), the "outputLine"
- * field in SourceMapEntry carries a JSON Pointer path string cast to a number sentinel
- * of 0. Consumers that need click-to-navigate use the JSON Pointer paths stored in an
- * extra `x-rune-source-map` extension on the schema document instead.
- * The studio-preview.md contract specifies: "Every '$defs/<TypeName>' key line →
- * the 'type TypeName:' Rune line." We honour this by populating sourceMap entries.
+ * Source-map entries point at the concrete `$defs/<TypeName>` key lines in the emitted
+ * JSON so Studio line-click navigation can resolve back to the defining Rune node.
  */
 export function emitNamespace(
   model: NamespaceWalkResult,
@@ -467,7 +469,8 @@ export function emitNamespace(
 export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
   private readonly ctx: EmissionContext;
   private readonly $defs: Record<string, object> = {};
-  private readonly sourceUri: string;
+  private readonly pendingSourceMapEntries: PendingSourceMapEntry[] = [];
+  private readonly fallbackSourceUri: string;
   private readonly rulesMetadata: Record<string, { kind: string; inputType: string }> = {};
 
   constructor(
@@ -476,30 +479,53 @@ export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
     this.ctx = buildEmissionContext(model, registry);
-    this.sourceUri = model.docs[0]?.uri?.toString() ?? '';
+    this.fallbackSourceUri = model.docs[0]?.uri?.toString() ?? '';
   }
 
-  private pushTypeSourceMap(): void {
-    this.ctx.sourceMap.push({
-      outputLine: 0,
-      sourceUri: this.sourceUri,
-      sourceLine: 1,
-      sourceChar: 1
+  private trackDefinitionSourceMap(node: Data | RosettaEnumeration | RosettaTypeAlias): void {
+    const start = node.$cstNode?.range?.start;
+    const sourceUri = node.$container?.$document?.uri?.toString() ?? this.fallbackSourceUri;
+    if (!sourceUri || !start) {
+      return;
+    }
+    this.pendingSourceMapEntries.push({
+      name: node.name,
+      sourceUri,
+      sourceLine: start.line + 1,
+      sourceChar: start.character + 1
     });
+  }
+
+  private flushSourceMap(content: string): void {
+    const lines = content.split('\n');
+    for (const entry of this.pendingSourceMapEntries) {
+      const marker = `    ${JSON.stringify(entry.name)}: {`;
+      const outputLine = lines.findIndex((line) => line === marker);
+      if (outputLine === -1) {
+        continue;
+      }
+      this.ctx.sourceMap.push({
+        outputLine,
+        sourceUri: entry.sourceUri,
+        sourceLine: entry.sourceLine,
+        sourceChar: entry.sourceChar
+      });
+    }
   }
 
   emitEnumeration(enumNode: RosettaEnumeration): void {
     this.$defs[enumNode.name] = emitEnumDef(enumNode);
-    this.pushTypeSourceMap();
+    this.trackDefinitionSourceMap(enumNode);
   }
 
   emitTypeAlias(typeAlias: RosettaTypeAlias): void {
     this.$defs[typeAlias.name] = emitTypeAliasDef(typeAlias, this.ctx);
+    this.trackDefinitionSourceMap(typeAlias);
   }
 
   emitData(data: Data): void {
     this.$defs[data.name] = emitTypeDef(data, this.ctx);
-    this.pushTypeSourceMap();
+    this.trackDefinitionSourceMap(data);
   }
 
   emitRule(rule: RosettaRule): void {
@@ -518,9 +544,11 @@ export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
     if (Object.keys(this.rulesMetadata).length > 0) {
       schema['x-rune-rules'] = this.rulesMetadata;
     }
+    const content = serializeJson(schema) + '\n';
+    this.flushSourceMap(content);
     return {
       relativePath: this.ctx.relativePath,
-      content: serializeJson(schema) + '\n',
+      content,
       sourceMap: this.ctx.sourceMap,
       diagnostics: this.ctx.diagnostics,
       funcs: []

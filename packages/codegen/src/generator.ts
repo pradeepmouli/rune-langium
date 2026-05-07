@@ -13,11 +13,13 @@ import { TsNamespaceEmitter } from './emit/ts-emitter.js';
 import { buildNamespaceRegistry } from './emit/namespace-registry.js';
 import { walkNamespace } from './emit/namespace-walker.js';
 
-const EMITTER_CLASSES: Record<Target, NamespaceEmitterConstructor> = {
+const EMITTER_CLASSES = {
   zod: ZodNamespaceEmitter,
   'json-schema': JsonSchemaNamespaceEmitter,
   typescript: TsNamespaceEmitter
-};
+} satisfies Record<Target, NamespaceEmitterConstructor>;
+
+const EMITTER_CLASS_LOOKUP: Record<string, NamespaceEmitterConstructor | undefined> = EMITTER_CLASSES;
 
 /**
  * Group Langium documents by their namespace name.
@@ -80,7 +82,7 @@ export function runGenerate(docs: LangiumDocument[], options: GeneratorOptions):
 
   for (const [namespace, namespaceDocs] of byNamespace) {
     const walkedNamespace = walkNamespace(namespaceDocs, namespace);
-    const emitterClass = EMITTER_CLASSES[target];
+    const emitterClass = EMITTER_CLASS_LOOKUP[target];
     let output: GeneratorOutput;
 
     if (emitterClass) {

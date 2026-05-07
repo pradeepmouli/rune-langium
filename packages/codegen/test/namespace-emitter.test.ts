@@ -11,12 +11,10 @@ import type {
   RosettaRule,
   RosettaTypeAlias
 } from '@rune-langium/core';
-import {
-  emitNamespaceWithContract,
-  type NamespaceEmitter,
-  type NamespaceEmitterConstructor
-} from '../src/emit/namespace-emitter.js';
+import { emitNamespaceWithContract, type NamespaceEmitter } from '../src/emit/namespace-emitter.js';
+import type { NamespaceRegistry } from '../src/emit/namespace-registry.js';
 import type { NamespaceWalkResult } from '../src/emit/namespace-walker.js';
+import type { GeneratorOptions } from '../src/types.js';
 import type { TypeReferenceGraph } from '../src/cycle-detector.js';
 
 function named<T extends { name: string }>(name: string): T {
@@ -58,6 +56,8 @@ describe('namespace emitter contract', () => {
     };
 
     class TestNamespaceEmitter implements NamespaceEmitter {
+      constructor(_model: NamespaceWalkResult, _options: GeneratorOptions, _registry: NamespaceRegistry) {}
+
       emitHeader(): void {
         events.push('header');
       }
@@ -103,12 +103,7 @@ describe('namespace emitter contract', () => {
       }
     }
 
-    emitNamespaceWithContract(
-      model,
-      {},
-      { namespaces: new Map() },
-      TestNamespaceEmitter as NamespaceEmitterConstructor
-    );
+    emitNamespaceWithContract(model, {}, { namespaces: new Map() }, TestNamespaceEmitter);
 
     expect(events).toEqual([
       'header',
