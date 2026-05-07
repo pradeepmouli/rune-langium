@@ -534,33 +534,28 @@ export function EditorPage({
     };
   }, [handlePreviewWorkerFailure]);
 
-  // Keep the codegen worker in sync with the workspace file set and
-  // regenerate the selected preview whenever the backing files change.
-  // Note: codegen:setFiles is sent without a request ID so the worker
-  // auto-runs with the request ID that CodePreviewPanel owns, avoiding
-  // the race where EditorPage's beginCodePreviewRequest call invalidates
-  // the ID that CodePreviewPanel is waiting on.
+  // Sync worker file state whenever the workspace changes.
+  // codegen:setFiles uses only user-authored files (readOnly corpus files are
+  // not the target of local code generation).
+  // preview:setFiles includes ALL files so that corpus types (readOnly) can
+  // be form-previewed — the worker only parses with eagerLinking:false so the
+  // 186-file corpus costs one parse pass, not cross-reference resolution.
   useEffect(() => {
     if (!codegenWorker) return;
-    const previewFiles = files
+    const codegenFiles = files
       .filter((f) => !f.readOnly)
       .map((f) => ({ uri: pathToUri(f.path), content: f.content }));
-    const requestId = previewSelectedTargetId
-      ? `preview:${previewSelectedTargetId}:${++previewRequestSequenceRef.current}`
-      : undefined;
-    currentPreviewRequestIdRef.current = requestId;
+    const allFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
     try {
-      codegenWorker.postMessage({ type: 'codegen:setFiles', files: previewFiles });
-      codegenWorker.postMessage(createPreviewSetFilesMessage(previewFiles, requestId));
+      codegenWorker.postMessage({ type: 'codegen:setFiles', files: codegenFiles });
+      codegenWorker.postMessage(createPreviewSetFilesMessage(allFiles));
     } catch (error) {
-      handlePreviewWorkerFailure(
-        'Preview worker could not process updated files.',
-        error,
-        previewSelectedTargetId
-      );
+      handlePreviewWorkerFailure('Preview worker could not process updated files.', error);
     }
-  }, [codegenWorker, files, handlePreviewWorkerFailure, previewSelectedTargetId]);
+  }, [codegenWorker, files, handlePreviewWorkerFailure]);
 
+  // Trigger form preview whenever the selected target changes. Files are
+  // already current from the effect above; this effect only updates the target.
   useEffect(() => {
     if (!codegenWorker || !previewSelectedTargetId) return;
     const requestId = `preview:${previewSelectedTargetId}:${++previewRequestSequenceRef.current}`;

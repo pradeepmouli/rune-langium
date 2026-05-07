@@ -159,9 +159,9 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
   }
 }
 
-async function buildDocuments(): Promise<LangiumDocument[] | null> {
+async function buildDocuments(): Promise<LangiumDocument[]> {
   if (currentFiles.length === 0) {
-    return null;
+    return [];
   }
 
   const documents: LangiumDocument[] = currentFiles.map(({ uri, content }) =>
@@ -170,8 +170,16 @@ async function buildDocuments(): Promise<LangiumDocument[] | null> {
 
   await builder.build(documents, { validation: false, eagerLinking: false });
 
-  const hasErrors = documents.some(hasDocumentErrors);
-  return hasErrors ? null : documents;
+  // Filter out files with parse/lex errors rather than aborting entirely.
+  // Corpus files may contain constructs the parser doesn't fully support;
+  // excluding them keeps the namespace index intact for the remaining files.
+  const valid = documents.filter((d) => !hasDocumentErrors(d));
+  if (valid.length < documents.length) {
+    console.warn(
+      `[codegen-worker] ${documents.length - valid.length} file(s) had parse errors and were excluded from preview.`
+    );
+  }
+  return valid;
 }
 
 async function runPreview(targetId: string, requestId: string): Promise<void> {
@@ -190,13 +198,13 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
 
   try {
     const documents = await buildDocuments();
-    if (!documents) {
+    if (documents.length === 0) {
       scope.postMessage({
         type: 'preview:stale',
         targetId,
         requestId,
         reason: 'parse-error',
-        message: 'Fix model errors to refresh the form preview.'
+        message: 'No valid files to generate a form preview from.'
       });
       return;
     }
@@ -284,7 +292,7 @@ async function executeFunction(
 
   if (!cachedFuncCode.has(funcName)) {
     const documents = await buildDocuments();
-    if (documents) {
+    if (documents.length > 0) {
       const results = generate(documents, { target: 'typescript' });
       cachedFuncCode = new Map();
       for (const result of results) {
