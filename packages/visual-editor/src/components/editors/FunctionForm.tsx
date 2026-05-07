@@ -266,7 +266,10 @@ function FunctionForm({
       <FormProvider {...form}>
         <div data-slot="function-form" className="flex flex-col gap-4 p-4">
           {/* Header: Name + Badge */}
-          <div data-slot="form-header" className="flex items-center gap-2">
+          <div
+            data-slot="form-header"
+            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-4 py-3 border-b bg-muted"
+          >
             <Controller
               control={form.control}
               name={'name' as never}
