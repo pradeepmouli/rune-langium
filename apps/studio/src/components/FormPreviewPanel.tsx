@@ -15,6 +15,7 @@ import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@ru
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { FieldSet, FieldLegend } from '@rune-langium/design-system/ui/field';
+import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import {
   usePreviewStore,
   type FormPreviewTarget,
@@ -216,6 +217,7 @@ export function FormPreviewPanel({
   const summaryMessage = schema ? getSummaryMessage(schema, status, activeSample) : undefined;
 
   if (showStatusOnly) {
+    const isWaiting = status.state === 'waiting' && status.targetId;
     return (
       <section
         role="region"
@@ -223,9 +225,18 @@ export function FormPreviewPanel({
         data-testid="panel-formPreview"
         className="flex h-full flex-col overflow-auto p-3"
       >
-        <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
-          {getStatusOnlyMessage(schema, status)}
-        </p>
+        {isWaiting ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="size-3.5 shrink-0" />
+            <span role="status" aria-live="polite">
+              {getStatusOnlyMessage(schema, status)}
+            </span>
+          </div>
+        ) : (
+          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+            {getStatusOnlyMessage(schema, status)}
+          </p>
+        )}
       </section>
     );
   }
