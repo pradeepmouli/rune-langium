@@ -1025,40 +1025,40 @@ export function EditorPage({
         <div
           role="toolbar"
           aria-label="Graph toolbar"
-          className="glass-toolbar flex flex-wrap items-center gap-1.5 border-b border-border px-2 py-1.5"
+          className="glass-toolbar flex flex-wrap items-center gap-1 border-b border-border px-2 py-1"
         >
-          <Button variant="secondary" size="sm" onClick={handleFitView} title="Fit to view">
-            <Maximize2 className="w-3.5 h-3.5 mr-1" />
+          <Button variant="secondary" size="xs" onClick={handleFitView} title="Fit to view">
+            <Maximize2 />
             Fit View
           </Button>
-          <Button variant="secondary" size="sm" onClick={handleRelayout} title="Re-run auto layout">
-            <LayoutGrid className="w-3.5 h-3.5 mr-1" />
+          <Button variant="secondary" size="xs" onClick={handleRelayout} title="Re-run auto layout">
+            <LayoutGrid />
             Re-layout
           </Button>
-          <Separator orientation="vertical" className="mx-1 h-5" />
+          <Separator orientation="vertical" className="mx-1 h-4" />
           <Button
             variant={focusMode ? 'default' : 'secondary'}
             data-variant={focusMode ? 'default' : 'secondary'}
             aria-pressed={focusMode}
-            size="sm"
+            size="xs"
             onClick={handleToggleFocusMode}
             title="Show selected node and its direct connections only"
           >
-            <Network className="w-3.5 h-3.5 mr-1" />
+            <Network />
             Focus
           </Button>
           <Button
             variant={groupedLayout ? 'default' : 'secondary'}
             data-variant={groupedLayout ? 'default' : 'secondary'}
             aria-pressed={groupedLayout}
-            size="sm"
+            size="xs"
             onClick={handleToggleGroupedLayout}
             title="Group by inheritance trees"
           >
-            <LayoutGrid className="w-3.5 h-3.5 mr-1" />
+            <LayoutGrid />
             Grouped
           </Button>
-          <Separator orientation="vertical" className="mx-1 h-5" />
+          <Separator orientation="vertical" className="mx-1 h-4" />
           <GraphFilterMenu />
         </div>
         <div ref={graphContainerRef} className="min-h-0 flex-1 relative studio-graph-canvas">
