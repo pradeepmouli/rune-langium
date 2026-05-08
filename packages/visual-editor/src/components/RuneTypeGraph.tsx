@@ -477,12 +477,14 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
         if (selectedNodes.length > 0) {
           const node = selectedNodes[0] as Node;
           if (node.type === 'groupContainer') return;
-          selectNode(node.id);
+          if (selectedNodeId !== node.id) {
+            selectNode(node.id);
+          }
         } else {
           callbacks?.onSelectionClear?.();
         }
       },
-      [selectNode, callbacks]
+      [selectNode, callbacks, selectedNodeId]
     );
 
     // Navigation context value for clickable type references in nodes
@@ -517,12 +519,21 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
           if (node) {
             setCenter(node.position.x + 110, node.position.y + 60, { zoom: 1.5, duration: 300 });
             // Programmatically select the target node in React Flow
-            setNodes((prev) =>
-              prev.map((n) => ({
-                ...n,
-                selected: n.id === nodeId
-              }))
-            );
+            setNodes((prev) => {
+              let changed = false;
+              const next = prev.map((n) => {
+                const isSelected = n.id === nodeId;
+                if ((n.selected ?? false) === isSelected) {
+                  return n;
+                }
+                changed = true;
+                return {
+                  ...n,
+                  selected: isSelected
+                };
+              });
+              return changed ? next : prev;
+            });
           }
         },
 
