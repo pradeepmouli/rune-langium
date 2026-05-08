@@ -9,6 +9,7 @@
  * - Accessibility attributes (role, aria-label)
  * - Escape key closes panel
  * - Sticky header renders name + kind badge
+ * - Inspector close remains keyboard-driven (Escape), no header close button
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -240,14 +241,15 @@ describe('EditorFormPanel', () => {
       />
     );
 
-    const header = document.querySelector('[data-slot="panel-header"]');
+    const header = document.querySelector('[data-slot="form-header"]');
     expect(header).toBeDefined();
-    expect(header!.textContent).toContain('Trade');
+    expect(screen.getByDisplayValue('Trade')).toBeInTheDocument();
+    expect(header!.textContent).toContain('Data');
   });
 
-  // ---- Close button -------------------------------------------------------
+  // ---- Close affordance ---------------------------------------------------
 
-  it('renders close button when onClose is provided', () => {
+  it('does not render a header close button even when onClose is provided', () => {
     const onClose = vi.fn();
 
     render(
@@ -260,10 +262,9 @@ describe('EditorFormPanel', () => {
       />
     );
 
-    const closeBtn = screen.getByLabelText('Close editor panel');
-    expect(closeBtn).toBeDefined();
-
-    fireEvent.click(closeBtn);
+    expect(screen.queryByLabelText('Close editor panel')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole('complementary'), { key: 'Escape' });
     expect(onClose).toHaveBeenCalledOnce();
   });
 

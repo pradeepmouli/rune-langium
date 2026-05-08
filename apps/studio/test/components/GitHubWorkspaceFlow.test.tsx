@@ -171,6 +171,8 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('github-clone-error')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('github-clone-error')).toHaveTextContent(/clone failed: 404/);
+    // Friendly copy: a "404" surfaces as a user-facing "Repository not found"
+    // headline; the raw text is no longer leaked into the banner.
+    expect(screen.getByTestId('github-clone-error')).toHaveTextContent(/repository not found/i);
   });
 });

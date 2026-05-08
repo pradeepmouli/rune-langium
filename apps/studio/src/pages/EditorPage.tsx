@@ -44,17 +44,17 @@ import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
-import { ExportMenu } from '../components/ExportMenu.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
+import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
+import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
+import { Kbd } from '@rune-langium/design-system/ui/kbd';
 import {
   Maximize2,
   LayoutGrid,
-  Code2,
   Network,
-  XCircle,
   Check,
   Download,
   Share2,
@@ -853,10 +853,6 @@ export function EditorPage({
     return rosettaText;
   }, []);
 
-  const handleExportImage = useCallback((format: 'svg' | 'png') => {
-    return graphRef.current?.exportImage(format) ?? Promise.resolve(new Blob());
-  }, []);
-
   const validateModelForExport = useCallback((): string[] => {
     const warnings: string[] = [];
     const { totalErrors: terr, totalWarnings: twarn } = useDiagnosticsStore.getState();
@@ -1218,7 +1214,13 @@ export function EditorPage({
             <span className="studio-brand__name">Rune Studio</span>
           </div>
           <span className="studio-topbar__divider" />
-          <button type="button" className="studio-topbar__ws-btn" onClick={onClose}>
+          <button
+            type="button"
+            className="studio-topbar__ws-btn"
+            onClick={onClose}
+            aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
+            title="Close workspace — return to start page"
+          >
             <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
             <span className="studio-topbar__ws-sub">
               {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
@@ -1231,23 +1233,24 @@ export function EditorPage({
           <button type="button" className="studio-topbar__cmdk" aria-label="Search">
             <Search className="size-3.5" />
             <span>Search types, files, commands…</span>
-            <kbd>⌘K</kbd>
+            <Kbd>⌘K</Kbd>
           </button>
           <span className="studio-topbar__divider" />
-          <button type="button" className="studio-topbar__icon-btn" aria-label="Validate">
-            <Check className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="studio-topbar__icon-btn"
+          <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">
+            <Check />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             aria-label="Export code"
+            title="Export code"
             onClick={() => setShowExportDialog(true)}
           >
-            <Download className="size-4" />
-          </button>
-          <button type="button" className="studio-topbar__icon-btn" aria-label="Share">
-            <Share2 className="size-4" />
-          </button>
+            <Download />
+          </Button>
+          <Button variant="ghost" size="icon-sm" aria-label="Share" title="Share">
+            <Share2 />
+          </Button>
           <button
             type="button"
             className="studio-topbar__generate"
@@ -1257,27 +1260,33 @@ export function EditorPage({
             Generate
           </button>
           <span className="studio-topbar__divider" />
-          <button type="button" className="studio-topbar__avatar" aria-label="Account">
-            PM
-          </button>
+          <Avatar asChild className="size-7 cursor-pointer">
+            <button type="button" aria-label="Account">
+              <AvatarFallback className="bg-gradient-to-br from-[var(--color-enum)] to-[var(--color-data)] text-primary-foreground text-[11px] font-bold">
+                PM
+              </AvatarFallback>
+            </button>
+          </Avatar>
         </div>
       </header>
 
       {toastMessage && (
-        <div
-          className="flex items-center justify-between px-3 py-1.5 bg-destructive/10 text-destructive text-sm border-b border-destructive/20"
-          role="alert"
+        <Alert
+          variant="destructive"
+          className="rounded-none border-x-0 border-t-0 px-3 py-1.5 text-sm"
         >
-          <span>{toastMessage}</span>
-          <button
-            type="button"
-            className="ml-2 text-destructive hover:text-destructive/80 font-medium"
-            onClick={() => setToastMessage(null)}
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
+          <AlertDescription className="flex w-full items-center justify-between">
+            <span>{toastMessage}</span>
+            <button
+              type="button"
+              className="ml-2 font-medium hover:opacity-80"
+              onClick={() => setToastMessage(null)}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="flex flex-1 min-h-0">

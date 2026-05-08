@@ -20,8 +20,6 @@
 
 import { useEffect, useCallback, useRef, useMemo, Component, memo } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
-import { X } from 'lucide-react';
-import { Button } from '@rune-langium/design-system/ui/button';
 import { DataTypeForm } from '../editors/DataTypeForm.js';
 import { EnumForm } from '../editors/EnumForm.js';
 import { ChoiceForm } from '../editors/ChoiceForm.js';
@@ -31,14 +29,12 @@ import { DetailPanel } from './DetailPanel.js';
 import { useInheritedMembers } from '../../hooks/useInheritedMembers.js';
 import type {
   AnyGraphNode,
-  TypeKind,
   TypeOption,
   EditorFormActions,
   TypeGraphNode,
   ExpressionEditorSlotProps
 } from '../../types.js';
 import { AST_TYPE_TO_NODE_TYPE } from '../../adapters/model-helpers.js';
-import { NodeKindBadge } from '../nodes/NodeKindBadge.js';
 
 // ---------------------------------------------------------------------------
 // Error Boundary
@@ -290,40 +286,15 @@ const EditorFormPanel = memo(function EditorFormPanel({
     }
   }
 
-  const displayName = (nodeData as any).name as string;
-  const displayKind = kind as TypeKind;
-
   return (
     <aside
       ref={panelRef}
       data-slot="editor-form-panel"
       role="complementary"
-      aria-label={`Edit ${displayName}`}
+      aria-label={`Edit ${(nodeData as any).name}`}
       className="flex flex-col h-full overflow-hidden"
       tabIndex={-1}
     >
-      {/* Sticky header */}
-      <div
-        data-slot="panel-header"
-        className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3
-          border-b bg-muted"
-      >
-        <span className="text-sm font-semibold truncate">{displayName}</span>
-        <NodeKindBadge kind={displayKind} />
-        {onClose && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onClose}
-            className="ml-auto text-muted-foreground hover:text-foreground"
-            aria-label="Close editor panel"
-          >
-            <X className="size-4" />
-          </Button>
-        )}
-      </div>
-
-      {/* Scrollable content */}
       <div data-slot="panel-content" className="flex-1 overflow-y-auto">
         <FormErrorBoundary nodeId={nodeId}>{renderForm()}</FormErrorBoundary>
       </div>

@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { FormPreviewSchema } from '@rune-langium/codegen';
 import { FormPreviewPanel } from '../../src/components/FormPreviewPanel.js';
 import { usePreviewStore } from '../../src/store/preview-store.js';
@@ -136,8 +137,12 @@ const numericSchema: FormPreviewSchema = {
 describe('FormPreviewPanel', () => {
   beforeEach(() => {
     usePreviewStore.getState().resetPreviewState();
-    Object.assign(navigator, {
-      clipboard: {
+    // Use defineProperty (not Object.assign) so the override works even after
+    // user-event installs its own non-writable clipboard implementation.
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      writable: true,
+      value: {
         writeText: async () => undefined
       }
     });
@@ -193,11 +198,59 @@ describe('FormPreviewPanel', () => {
 
     expect(screen.getByRole('heading', { name: 'Trade' })).toBeInTheDocument();
     expect(screen.getByLabelText('id')).toHaveAttribute('type', 'text');
-    expect(screen.getByLabelText('side')).toHaveDisplayValue('Buy side');
+    // Radix Select renders the trigger as a button — assert the visible value
+    // text rather than `toHaveDisplayValue` (which only works on form controls).
+    expect(screen.getByLabelText('side')).toHaveTextContent('Buy side');
     expect(screen.getByLabelText('name')).toHaveAttribute('type', 'text');
     expect(screen.getByText('tags')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add tags item/i })).toBeInTheDocument();
     expect(screen.getByText(/ready to validate sample/i)).toBeInTheDocument();
+  });
+
+  it('lets users clear an optional enum back to the unset placeholder', async () => {
+    const optionalEnumSchema: FormPreviewSchema = {
+      schemaVersion: 1,
+      targetId: 'test.preview.OptionalSide',
+      title: 'OptionalSide',
+      status: 'ready',
+      fields: [
+        {
+          path: 'side',
+          label: 'side',
+          kind: 'enum',
+          required: false,
+          enumValues: [
+            { value: 'Buy', label: 'Buy side' },
+            { value: 'Sell', label: 'Sell' }
+          ]
+        }
+      ],
+      sourceMap: []
+    };
+
+    render(
+      <FormPreviewPanel
+        schema={optionalEnumSchema}
+        status={{ state: 'ready', targetId: optionalEnumSchema.targetId }}
+      />
+    );
+
+    const trigger = screen.getByLabelText('side');
+    // Initially unset for an optional enum -> placeholder visible.
+    expect(trigger).toHaveTextContent('Select…');
+
+    // `writeToClipboard: false` keeps userEvent from installing a non-writable
+    // clipboard mock, which otherwise breaks the per-test `navigator.clipboard`
+    // override in this file's beforeEach.
+    const user = userEvent.setup({ writeToClipboard: false });
+    await user.click(trigger);
+    await user.click(await screen.findByRole('option', { name: 'Sell' }));
+    expect(trigger).toHaveTextContent('Sell');
+
+    // Clearing back to unset must round-trip through the sentinel "Select…" item.
+    await user.click(trigger);
+    await user.click(await screen.findByRole('option', { name: 'Select…' }));
+    expect(trigger).toHaveTextContent('Select…');
   });
 
   it('shows unsupported preview messaging without presenting the sample as valid', () => {
