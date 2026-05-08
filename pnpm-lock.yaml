@@ -280,9 +280,6 @@ importers:
       '@rune-langium/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
-      '@rune-langium/design-tokens':
-        specifier: workspace:*
-        version: link:../../packages/design-tokens
       '@rune-langium/lsp-server':
         specifier: workspace:*
         version: link:../../packages/lsp-server

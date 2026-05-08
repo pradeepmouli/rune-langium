@@ -1,12 +1,9 @@
 /* @rune-langium/studio — App styles */
 @import 'tailwindcss';
 @import 'tw-animate-css';
-/* Cross-app design tokens (T086 + T089). Loaded BEFORE the design-system
- * theme so studio's tailwind utilities resolve their colour / spacing /
- * typography / radius scales from the same source as the docs and
- * landing surface. */
-@import '@rune-langium/design-tokens/tokens.css';
-@import '../../../packages/design-system/src/theme.css';
+/* Shared Daikon theme entrypoint — this package export pulls in the
+ * canonical design tokens before the design-system aliases. */
+@import '@rune-langium/design-system/theme.css';
 @import './styles/daikonic.css';
 
 /* Ensure Tailwind scans workspace packages for utility classes */

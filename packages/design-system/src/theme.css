@@ -1,5 +1,5 @@
 /**
- * Rune DSL Design System — Refactory Dark theme for Tailwind v4.
+ * Rune DSL Design System — Daikon theme for Tailwind v4.
  *
  * This file is imported AFTER `@import 'tailwindcss'` by the consuming app.
  * It provides:
@@ -8,7 +8,7 @@
  *     theme rule below. Studio + landing + docs share this source.
  *  2. shadcn @theme inline bridge (--color-* → var(--*))
  *  3. Domain-specific color tokens (data/choice/enum/func/status)
- *  4. :root / .dark color palettes (Refactory Dark)
+ *  4. :root / .dark color palettes (Daikon)
  *  5. Base layer defaults (typography, borders)
  */
 
@@ -78,124 +78,101 @@
 
 @theme {
   /* Type kind badges — teal/amber/purple palette */
-  --color-data: #00D4AA;
-  --color-data-bg: rgba(0, 212, 170, 0.12);
-  --color-data-text: #00D4AA;
-  --color-data-badge: rgba(0, 212, 170, 0.20);
+  --color-data: var(--color-kind-data-base);
+  --color-data-bg: var(--color-kind-data-bg);
+  --color-data-text: var(--color-kind-data-text);
+  --color-data-badge: var(--color-kind-data-badge);
 
-  --color-choice: #E8913A;
-  --color-choice-bg: rgba(232, 145, 58, 0.12);
-  --color-choice-text: #E8913A;
-  --color-choice-badge: rgba(232, 145, 58, 0.20);
+  --color-choice: var(--color-kind-choice-base);
+  --color-choice-bg: var(--color-kind-choice-bg);
+  --color-choice-text: var(--color-kind-choice-text);
+  --color-choice-badge: var(--color-kind-choice-badge);
 
-  --color-enum: #8B7BF4;
-  --color-enum-bg: rgba(139, 123, 244, 0.12);
-  --color-enum-text: #8B7BF4;
-  --color-enum-badge: rgba(139, 123, 244, 0.20);
+  --color-enum: var(--color-kind-enum-base);
+  --color-enum-bg: var(--color-kind-enum-bg);
+  --color-enum-text: var(--color-kind-enum-text);
+  --color-enum-badge: var(--color-kind-enum-badge);
 
-  --color-func: #82AAFF;
-  --color-func-bg: rgba(130, 170, 255, 0.12);
-  --color-func-text: #82AAFF;
-  --color-func-badge: rgba(130, 170, 255, 0.20);
+  --color-func: var(--color-kind-func-base);
+  --color-func-bg: var(--color-kind-func-bg);
+  --color-func-text: var(--color-kind-func-text);
+  --color-func-badge: var(--color-kind-func-badge);
 
-  --color-edge-ref: #5C5C6A;
-  --color-success: #00D4AA;
-  --color-warning: #E8913A;
-  --color-info: #82AAFF;
+  --color-edge-ref: var(--color-kind-edge-ref);
+  --color-success: var(--color-status-success);
+  --color-warning: var(--color-status-warning);
+  --color-info: var(--color-status-info);
 
   /* Expression builder — operator category colors */
-  --color-expr-arithmetic: #82AAFF;
-  --color-expr-arithmetic-bg: rgba(130, 170, 255, 0.12);
-  --color-expr-comparison: #00D4AA;
-  --color-expr-comparison-bg: rgba(0, 212, 170, 0.12);
-  --color-expr-logic: #C792EA;
-  --color-expr-logic-bg: rgba(199, 146, 234, 0.12);
-  --color-expr-navigation: #00D4AA;
-  --color-expr-navigation-bg: rgba(0, 212, 170, 0.12);
-  --color-expr-collection: #E8913A;
-  --color-expr-collection-bg: rgba(232, 145, 58, 0.12);
-  --color-expr-control: #C792EA;
-  --color-expr-control-bg: rgba(199, 146, 234, 0.12);
-  --color-expr-literal: #8A8A96;
-  --color-expr-literal-bg: rgba(138, 138, 150, 0.12);
-  --color-expr-reference: #8B7BF4;
-  --color-expr-reference-bg: rgba(139, 123, 244, 0.12);
-  --color-expr-placeholder: #5C5C6A;
-  --color-expr-placeholder-bg: rgba(92, 92, 106, 0.10);
+  --color-expr-arithmetic: var(--color-expr-arithmetic-base);
+  --color-expr-comparison: var(--color-expr-comparison-base);
+  --color-expr-logic: var(--color-expr-logic-base);
+  --color-expr-navigation: var(--color-expr-navigation-base);
+  --color-expr-collection: var(--color-expr-collection-base);
+  --color-expr-control: var(--color-expr-control-base);
+  --color-expr-literal: var(--color-expr-literal-base);
+  --color-expr-reference: var(--color-expr-reference-base);
+  --color-expr-placeholder: var(--color-expr-placeholder-base);
 
   /* Extended palette */
-  --color-teal: #00D4AA;
-  --color-teal-dim: rgba(0, 212, 170, 0.12);
-  --color-amber: #E8913A;
-  --color-amber-dim: rgba(232, 145, 58, 0.12);
-  --color-purple: #8B7BF4;
-  --color-purple-dim: rgba(139, 123, 244, 0.12);
+  --color-teal: var(--color-accent-base);
+  --color-teal-dim: var(--color-accent-subtle);
+  --color-amber: var(--color-warning-base);
+  --color-amber-dim: var(--color-warning-subtle);
+  --color-purple: var(--color-kind-enum-base);
+  --color-purple-dim: var(--color-kind-enum-bg);
 
   /* Syntax highlighting */
-  --color-syntax-keyword: #C792EA;
-  --color-syntax-type: #00D4AA;
-  --color-syntax-attribute: #82AAFF;
-  --color-syntax-string: #C3E88D;
-  --color-syntax-comment: #5C5C6A;
-  --color-syntax-number: #E8913A;
-  --color-syntax-operator: #8A8A96;
+  --color-syntax-keyword: var(--syntax-keyword);
+  --color-syntax-type: var(--syntax-type);
+  --color-syntax-attribute: var(--syntax-attribute);
+  --color-syntax-string: var(--syntax-string);
+  --color-syntax-comment: var(--syntax-comment);
+  --color-syntax-number: var(--syntax-number);
+  --color-syntax-operator: var(--syntax-operator);
 }
 
-/* ── Color palette: Refactory Dark ──────────────────────────────── */
-/* oklch values for Tailwind v4 @theme inline compatibility          */
+/* ── Color palette: Daikon ──────────────────────────────────────── */
 :root {
-  --radius: 0.5rem;
-  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --radius: var(--radius-md);
+  --font-sans: var(--font-family-sans);
 
-  /* Surfaces: deep indigo-black */
-  --background: oklch(0.12 0.02 280);        /* #0C0C14 */
-  --foreground: oklch(0.92 0.01 80);          /* #E8E6E1 */
-  --card: oklch(0.16 0.02 280);              /* #181824 */
-  --card-foreground: oklch(0.92 0.01 80);
-  --popover: oklch(0.14 0.02 280);           /* #12121C */
-  --popover-foreground: oklch(0.92 0.01 80);
-  --muted: oklch(0.16 0.02 280);
-  --muted-foreground: oklch(0.60 0.01 280);  /* #8A8A96 */
+  --background: var(--color-surface-1);
+  --foreground: var(--color-foreground-primary);
+  --card: var(--color-surface-3);
+  --card-foreground: var(--color-foreground-primary);
+  --popover: var(--color-surface-2);
+  --popover-foreground: var(--color-foreground-primary);
+  --muted: var(--color-surface-3);
+  --muted-foreground: var(--color-foreground-secondary);
 
-  /* Primary: Teal */
-  --primary: oklch(0.78 0.17 168);            /* #00D4AA */
-  --primary-foreground: oklch(0.12 0.02 280);
+  --primary: var(--color-accent-base);
+  --primary-foreground: var(--color-surface-1);
+  --secondary: var(--color-warning-base);
+  --secondary-foreground: var(--color-surface-1);
+  --accent: var(--color-surface-4);
+  --accent-foreground: var(--color-foreground-primary);
+  --destructive: var(--color-danger-base);
+  --destructive-foreground: var(--color-foreground-primary);
 
-  /* Secondary: Amber */
-  --secondary: oklch(0.70 0.15 55);           /* #E8913A */
-  --secondary-foreground: oklch(0.12 0.02 280);
+  --border: var(--color-border-default);
+  --input: var(--color-border-strong);
+  --ring: var(--focus-ring-colour);
 
-  /* Accent */
-  --accent: oklch(0.19 0.02 280);            /* #1E1E2C */
-  --accent-foreground: oklch(0.92 0.01 80);
+  --chart-1: var(--color-accent-base);
+  --chart-2: var(--color-warning-base);
+  --chart-3: var(--color-kind-enum-base);
+  --chart-4: var(--color-accent-active);
+  --chart-5: var(--color-warning-hover);
 
-  /* Destructive */
-  --destructive: oklch(0.58 0.22 25);
-  --destructive-foreground: oklch(0.92 0.01 80);
-
-  /* Borders & inputs */
-  --border: oklch(1 0 0 / 6%);
-  --input: oklch(1 0 0 / 10%);
-  --ring: oklch(0.78 0.17 168);              /* teal focus ring */
-
-  /* Charts */
-  --chart-1: oklch(0.78 0.17 168);           /* teal */
-  --chart-2: oklch(0.70 0.15 55);            /* amber */
-  --chart-3: oklch(0.65 0.18 290);           /* purple */
-  --chart-4: oklch(0.45 0.10 168);           /* dark teal */
-  --chart-5: oklch(0.50 0.10 55);            /* dark amber */
-
-  /* Sidebar */
-  --sidebar: oklch(0.14 0.02 280);
-  --sidebar-foreground: oklch(0.92 0.01 80);
-  --sidebar-primary: oklch(0.78 0.17 168);
-  --sidebar-primary-foreground: oklch(0.12 0.02 280);
-  --sidebar-accent: oklch(0.19 0.02 280);
-  --sidebar-accent-foreground: oklch(0.92 0.01 80);
-  --sidebar-border: oklch(1 0 0 / 6%);
-  --sidebar-ring: oklch(0.78 0.17 168);
+  --sidebar: var(--color-surface-2);
+  --sidebar-foreground: var(--color-foreground-primary);
+  --sidebar-primary: var(--color-accent-base);
+  --sidebar-primary-foreground: var(--color-surface-1);
+  --sidebar-accent: var(--color-surface-4);
+  --sidebar-accent-foreground: var(--color-foreground-primary);
+  --sidebar-border: var(--color-border-default);
+  --sidebar-ring: var(--focus-ring-colour);
 
   /* ── T052 (014/FR-025) — Studio alias layer ────────────────────────
    * The studio's hand-rolled CSS (apps/studio/src/styles.css) refers
@@ -230,38 +207,38 @@
 }
 
 .dark {
-  --background: oklch(0.12 0.02 280);
-  --foreground: oklch(0.92 0.01 80);
-  --card: oklch(0.16 0.02 280);
-  --card-foreground: oklch(0.92 0.01 80);
-  --popover: oklch(0.14 0.02 280);
-  --popover-foreground: oklch(0.92 0.01 80);
-  --muted: oklch(0.16 0.02 280);
-  --muted-foreground: oklch(0.60 0.01 280);
-  --primary: oklch(0.78 0.17 168);
-  --primary-foreground: oklch(0.12 0.02 280);
-  --secondary: oklch(0.70 0.15 55);
-  --secondary-foreground: oklch(0.12 0.02 280);
-  --accent: oklch(0.19 0.02 280);
-  --accent-foreground: oklch(0.92 0.01 80);
-  --destructive: oklch(0.58 0.22 25);
-  --destructive-foreground: oklch(0.92 0.01 80);
-  --border: oklch(1 0 0 / 6%);
-  --input: oklch(1 0 0 / 10%);
-  --ring: oklch(0.78 0.17 168);
-  --chart-1: oklch(0.78 0.17 168);
-  --chart-2: oklch(0.70 0.15 55);
-  --chart-3: oklch(0.65 0.18 290);
-  --chart-4: oklch(0.45 0.10 168);
-  --chart-5: oklch(0.50 0.10 55);
-  --sidebar: oklch(0.14 0.02 280);
-  --sidebar-foreground: oklch(0.92 0.01 80);
-  --sidebar-primary: oklch(0.78 0.17 168);
-  --sidebar-primary-foreground: oklch(0.12 0.02 280);
-  --sidebar-accent: oklch(0.19 0.02 280);
-  --sidebar-accent-foreground: oklch(0.92 0.01 80);
-  --sidebar-border: oklch(1 0 0 / 6%);
-  --sidebar-ring: oklch(0.78 0.17 168);
+  --background: var(--color-surface-1);
+  --foreground: var(--color-foreground-primary);
+  --card: var(--color-surface-3);
+  --card-foreground: var(--color-foreground-primary);
+  --popover: var(--color-surface-2);
+  --popover-foreground: var(--color-foreground-primary);
+  --muted: var(--color-surface-3);
+  --muted-foreground: var(--color-foreground-secondary);
+  --primary: var(--color-accent-base);
+  --primary-foreground: var(--color-surface-1);
+  --secondary: var(--color-warning-base);
+  --secondary-foreground: var(--color-surface-1);
+  --accent: var(--color-surface-4);
+  --accent-foreground: var(--color-foreground-primary);
+  --destructive: var(--color-danger-base);
+  --destructive-foreground: var(--color-foreground-primary);
+  --border: var(--color-border-default);
+  --input: var(--color-border-strong);
+  --ring: var(--focus-ring-colour);
+  --chart-1: var(--color-accent-base);
+  --chart-2: var(--color-warning-base);
+  --chart-3: var(--color-kind-enum-base);
+  --chart-4: var(--color-accent-active);
+  --chart-5: var(--color-warning-hover);
+  --sidebar: var(--color-surface-2);
+  --sidebar-foreground: var(--color-foreground-primary);
+  --sidebar-primary: var(--color-accent-base);
+  --sidebar-primary-foreground: var(--color-surface-1);
+  --sidebar-accent: var(--color-surface-4);
+  --sidebar-accent-foreground: var(--color-foreground-primary);
+  --sidebar-border: var(--color-border-default);
+  --sidebar-ring: var(--focus-ring-colour);
 }
 
 /* ── Base layer ───────────────────────────────────────────────── */
