@@ -134,7 +134,9 @@
 
 /* ── Color palette: Daikon ──────────────────────────────────────── */
 :root {
-  --radius: var(--radius-md);
+  /* Keep the shadcn base radius concrete so the derived --radius-* theme
+   * tokens don't form a circular var(--radius) <-> var(--radius-md) chain. */
+  --radius: 8px;
   --font-sans: var(--font-family-sans);
 
   --background: var(--color-surface-1);
