@@ -1,8 +1,8 @@
 diff --git a/dist/index.js b/dist/index.js
-index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..fb9a4febacadabc4f41d9bf5b959612419bc2f48 100644
+index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..45d19fe90c64561326d9ada7e5afeed0560e967e 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -68,7 +68,67 @@ function composeRefs(...refs) {
+@@ -68,7 +68,68 @@ function composeRefs(...refs) {
      }
    };
  }
@@ -61,8 +61,9 @@ index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..fb9a4febacadabc4f41d9bf5b9596124
 +    cleanupMapRef.current = cleanupMap;
 +    if (hasCleanup) {
 +      return () => {
++        const currentCleanupMap = cleanupMapRef.current;
 +        for (const ref of refsRef.current) {
-+          clearRef(ref, cleanupMap.get(ref));
++          clearRef(ref, currentCleanupMap.get(ref));
 +        }
 +        cleanupMapRef.current = /* @__PURE__ */ new Map();
 +        nodeRef.current = null;
@@ -72,10 +73,10 @@ index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..fb9a4febacadabc4f41d9bf5b9596124
  }
  //# sourceMappingURL=index.js.map
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..88ddd9e3dc4cae3322e0b07f9a17a1b9617c4d6c 100644
+index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..5c5396e4fccc36eda8a74b2fc98e073d911169c7 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -31,8 +31,68 @@ function composeRefs(...refs) {
+@@ -31,8 +31,69 @@ function composeRefs(...refs) {
      }
    };
  }
@@ -134,8 +135,9 @@ index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..88ddd9e3dc4cae3322e0b07f9a17a1b9
 +    cleanupMapRef.current = cleanupMap;
 +    if (hasCleanup) {
 +      return () => {
++        const currentCleanupMap = cleanupMapRef.current;
 +        for (const ref of refsRef.current) {
-+          clearRef(ref, cleanupMap.get(ref));
++          clearRef(ref, currentCleanupMap.get(ref));
 +        }
 +        cleanupMapRef.current = /* @__PURE__ */ new Map();
 +        nodeRef.current = null;
