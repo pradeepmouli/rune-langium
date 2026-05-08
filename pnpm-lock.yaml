@@ -16,7 +16,7 @@ overrides:
 
 patchedDependencies:
   '@radix-ui/react-compose-refs@1.1.2':
-    hash: 5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89
+    hash: c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622
     path: patches/@radix-ui__react-compose-refs@1.1.2.patch
   '@radix-ui/react-slot@1.2.4':
     hash: 0bbc5cd3584d5dc149c0025c50842be8cec9b0ac15fcc45c76f219cd71720807
@@ -278,7 +278,7 @@ importers:
         version: 1.5.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-compose-refs':
         specifier: 1.1.2
-        version: 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+        version: 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-primitive':
         specifier: 2.1.4
         version: 2.1.4(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -7425,7 +7425,7 @@ snapshots:
   '@radix-ui/react-collapsible@1.1.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
       '@radix-ui/primitive': 1.1.3
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-id': 1.1.1(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-presence': 1.1.5(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -7440,7 +7440,7 @@ snapshots:
 
   '@radix-ui/react-collection@1.1.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-primitive': 2.1.4(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-slot': 1.2.4(patch_hash=0bbc5cd3584d5dc149c0025c50842be8cec9b0ac15fcc45c76f219cd71720807)(@types/react@19.2.14)(react@19.2.6)
@@ -7450,7 +7450,7 @@ snapshots:
       '@types/react': 19.2.14
       '@types/react-dom': 19.2.3(@types/react@19.2.14)
 
-  '@radix-ui/react-compose-refs@1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)':
+  '@radix-ui/react-compose-refs@1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)':
     dependencies:
       react: 19.2.6
     optionalDependencies:
@@ -7465,7 +7465,7 @@ snapshots:
   '@radix-ui/react-dialog@1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
       '@radix-ui/primitive': 1.1.3
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-dismissable-layer': 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-focus-guards': 1.1.3(@types/react@19.2.14)(react@19.2.6)
@@ -7493,7 +7493,7 @@ snapshots:
   '@radix-ui/react-dismissable-layer@1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
       '@radix-ui/primitive': 1.1.3
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-primitive': 2.1.4(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-use-callback-ref': 1.1.1(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-use-escape-keydown': 1.1.1(@types/react@19.2.14)(react@19.2.6)
@@ -7511,7 +7511,7 @@ snapshots:
 
   '@radix-ui/react-focus-scope@1.1.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-primitive': 2.1.4(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-use-callback-ref': 1.1.1(@types/react@19.2.14)(react@19.2.6)
       react: 19.2.6
@@ -7539,7 +7539,7 @@ snapshots:
   '@radix-ui/react-popover@1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
       '@radix-ui/primitive': 1.1.3
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-dismissable-layer': 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-focus-guards': 1.1.3(@types/react@19.2.14)(react@19.2.6)
@@ -7563,7 +7563,7 @@ snapshots:
     dependencies:
       '@floating-ui/react-dom': 2.1.8(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-arrow': 1.1.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-primitive': 2.1.4(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-use-callback-ref': 1.1.1(@types/react@19.2.14)(react@19.2.6)
@@ -7589,7 +7589,7 @@ snapshots:
 
   '@radix-ui/react-presence@1.1.5(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-use-layout-effect': 1.1.1(@types/react@19.2.14)(react@19.2.6)
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
@@ -7610,7 +7610,7 @@ snapshots:
     dependencies:
       '@radix-ui/primitive': 1.1.3
       '@radix-ui/react-collection': 1.1.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-direction': 1.1.1(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-id': 1.1.1(@types/react@19.2.14)(react@19.2.6)
@@ -7627,7 +7627,7 @@ snapshots:
     dependencies:
       '@radix-ui/number': 1.1.1
       '@radix-ui/primitive': 1.1.3
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-direction': 1.1.1(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-presence': 1.1.5(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -7645,7 +7645,7 @@ snapshots:
       '@radix-ui/number': 1.1.1
       '@radix-ui/primitive': 1.1.3
       '@radix-ui/react-collection': 1.1.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-direction': 1.1.1(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-dismissable-layer': 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -7680,7 +7680,7 @@ snapshots:
 
   '@radix-ui/react-slot@1.2.4(patch_hash=0bbc5cd3584d5dc149c0025c50842be8cec9b0ac15fcc45c76f219cd71720807)(@types/react@19.2.14)(react@19.2.6)':
     dependencies:
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       react: 19.2.6
     optionalDependencies:
       '@types/react': 19.2.14
@@ -7704,7 +7704,7 @@ snapshots:
   '@radix-ui/react-tooltip@1.2.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
       '@radix-ui/primitive': 1.1.3
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-dismissable-layer': 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-id': 1.1.1(@types/react@19.2.14)(react@19.2.6)
@@ -8675,7 +8675,7 @@ snapshots:
 
   cmdk@1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
-      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=5e7c2924e0183aaf9dd3ebff1cead11a0fdf52a3373da4450f5d2247e0d03d89)(@types/react@19.2.14)(react@19.2.6)
+      '@radix-ui/react-compose-refs': 1.1.2(patch_hash=c80957d8bdec01307a119373fa5cf0919e0130f54906ab36b316d500abf6f622)(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-dialog': 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-id': 1.1.1(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-primitive': 2.1.4(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)

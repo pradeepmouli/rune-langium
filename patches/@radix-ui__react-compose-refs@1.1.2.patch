@@ -1,8 +1,8 @@
 diff --git a/dist/index.js b/dist/index.js
-index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..abc93b86bd07030211b1077b77547e105dff9997 100644
+index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..fb9a4febacadabc4f41d9bf5b959612419bc2f48 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -68,7 +68,59 @@ function composeRefs(...refs) {
+@@ -68,7 +68,67 @@ function composeRefs(...refs) {
      }
    };
  }
@@ -41,6 +41,14 @@ index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..abc93b86bd07030211b1077b77547e10
 +  });
 +  return React.useCallback((node) => {
 +    nodeRef.current = node;
++    if (node === null) {
++      const cleanupMap = cleanupMapRef.current;
++      for (const ref of refsRef.current) {
++        clearRef(ref, cleanupMap.get(ref));
++      }
++      cleanupMapRef.current = /* @__PURE__ */ new Map();
++      return;
++    }
 +    const cleanupMap = /* @__PURE__ */ new Map();
 +    let hasCleanup = false;
 +    for (const ref of refsRef.current) {
@@ -64,10 +72,10 @@ index 5ba7a95bc7a29605f32aa010a14224ad87bf6589..abc93b86bd07030211b1077b77547e10
  }
  //# sourceMappingURL=index.js.map
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..a49f64f3a1cb4cc0d1dd96b44a95254ee4ff64b0 100644
+index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..88ddd9e3dc4cae3322e0b07f9a17a1b9617c4d6c 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -31,8 +31,60 @@ function composeRefs(...refs) {
+@@ -31,8 +31,68 @@ function composeRefs(...refs) {
      }
    };
  }
@@ -106,6 +114,14 @@ index 7dd9172a7228d70a25f708d0fd577cfc69ea15a8..a49f64f3a1cb4cc0d1dd96b44a95254e
 +  });
 +  return React.useCallback((node) => {
 +    nodeRef.current = node;
++    if (node === null) {
++      const cleanupMap = cleanupMapRef.current;
++      for (const ref of refsRef.current) {
++        clearRef(ref, cleanupMap.get(ref));
++      }
++      cleanupMapRef.current = /* @__PURE__ */ new Map();
++      return;
++    }
 +    const cleanupMap = /* @__PURE__ */ new Map();
 +    let hasCleanup = false;
 +    for (const ref of refsRef.current) {
