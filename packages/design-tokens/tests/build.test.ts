@@ -121,6 +121,18 @@ describe('@rune-langium/design-tokens build (T024)', () => {
     expect(css).toMatch(/--brand-mark-border-width:\s*2px/);
   });
 
+  it('pins the canonical Daikon palette values used by Studio, docs, and the landing surface', () => {
+    const css = readFileSync(CSS_OUT, 'utf8');
+    expect(css).toMatch(/--color-surface-1:\s*#0C0C14/);
+    expect(css).toMatch(/--color-surface-4:\s*#1E1E2C/);
+    expect(css).toMatch(/--color-foreground-primary:\s*#E8E6E1/);
+    expect(css).toMatch(/--color-accent-base:\s*#00D4AA/);
+    expect(css).toMatch(/--color-accent-glow:\s*rgba\(0, 212, 170, 0\.06\)/);
+    expect(css).toMatch(/--color-kind-data-base:\s*#00D4AA/);
+    expect(css).toMatch(/--color-kind-enum-base:\s*#8B7BF4/);
+    expect(css).toMatch(/--color-status-info:\s*#82AAFF/);
+  });
+
   it('emits dist/brand.css with the brand subset (T050)', () => {
     const brand = readFileSync(BRAND_OUT, 'utf8');
     expect(brand).toMatch(/--color-accent-base:/);

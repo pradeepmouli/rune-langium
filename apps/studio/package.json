@@ -37,7 +37,6 @@
     "@rune-langium/core": "workspace:*",
     "@rune-langium/curated-schema": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
-    "@rune-langium/design-tokens": "workspace:*",
     "@rune-langium/lsp-server": "workspace:*",
     "@rune-langium/visual-editor": "workspace:*",
     "@tanstack/react-virtual": "^3.13.24",
