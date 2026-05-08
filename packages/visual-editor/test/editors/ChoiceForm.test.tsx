@@ -35,9 +35,7 @@ vi.mock('@zod-to-form/react', async (importOriginal) => {
     ...actual,
     useExternalSync: (...args: unknown[]) => {
       useExternalSyncSpy(...args);
-      return (actual as any).useExternalSync(
-        ...(args as Parameters<typeof actual.useExternalSync>)
-      );
+      return (actual as any).useExternalSync(...(args as Parameters<typeof actual.useExternalSync>));
     }
   };
 });
@@ -70,7 +68,10 @@ vi.mock('../../src/components/editors/TypeSelector.js', () => {
   function getKindBadgeClasses(_kind: string): string {
     return '';
   }
-  return { TypeSelector, getKindBadgeClasses };
+  function getKindDotClass(_kind: string): string {
+    return '';
+  }
+  return { TypeSelector, getKindBadgeClasses, getKindDotClass };
 });
 
 // ---------------------------------------------------------------------------
@@ -140,12 +141,7 @@ describe('ChoiceForm', () => {
 
   it('renders choice name in header', () => {
     render(
-      <ChoiceForm
-        nodeId="node-1"
-        data={makeChoiceData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
+      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
     );
 
     const nameInput = screen.getByLabelText(/type name/i);
@@ -154,12 +150,7 @@ describe('ChoiceForm', () => {
 
   it('renders "Choice" badge', () => {
     render(
-      <ChoiceForm
-        nodeId="node-1"
-        data={makeChoiceData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
+      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
     );
 
     expect(screen.getByText('Choice')).toBeDefined();
@@ -167,12 +158,7 @@ describe('ChoiceForm', () => {
 
   it('renders all option rows', () => {
     const { container } = render(
-      <ChoiceForm
-        nodeId="node-1"
-        data={makeChoiceData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
+      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
     );
 
     const rows = container.querySelectorAll('[data-slot="choice-option-row"]');
@@ -182,14 +168,7 @@ describe('ChoiceForm', () => {
   it('triggers removeChoiceOption when remove button is clicked', () => {
     const actions = makeActions();
 
-    render(
-      <ChoiceForm
-        nodeId="node-1"
-        data={makeChoiceData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const removeBtns = screen.getAllByLabelText(/remove option/i);
     fireEvent.click(removeBtns[0]!);
@@ -200,14 +179,7 @@ describe('ChoiceForm', () => {
   it('triggers renameType after debounce on name change', () => {
     const actions = makeActions();
 
-    render(
-      <ChoiceForm
-        nodeId="node-1"
-        data={makeChoiceData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const nameInput = screen.getByLabelText(/type name/i);
     fireEvent.change(nameInput, { target: { value: 'SettlementType' } });
@@ -223,12 +195,7 @@ describe('ChoiceForm', () => {
 
   it('shows options count label', () => {
     render(
-      <ChoiceForm
-        nodeId="node-1"
-        data={makeChoiceData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
+      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
     );
 
     expect(screen.getByText(/2/)).toBeDefined();
@@ -269,12 +236,7 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
       comments: 'Initial comments'
     });
     const { container } = render(
-      <ChoiceForm
-        nodeId="node-1"
-        data={data}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
+      <ChoiceForm nodeId="node-1" data={data} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
     );
 
     // Name input is the first text input, in the form-header slot.
@@ -306,14 +268,7 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
     const renameType = vi.fn();
     const actions = { ...makeActions(), renameType };
 
-    render(
-      <ChoiceForm
-        nodeId="node-1"
-        data={makeChoiceData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const nameInput = screen.getByLabelText(/type name/i);
 
@@ -353,17 +308,13 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
       <ChoiceForm nodeId="node-1" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
-    const initialName = container.querySelector(
-      '[data-slot="type-name-input"]'
-    ) as HTMLInputElement;
+    const initialName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
     expect(initialName.value).toBe('PaymentType');
 
     // Dirty the name field on nodeA, then swap to nodeB.
     fireEvent.change(initialName, { target: { value: 'Dirty' } });
 
-    rerender(
-      <ChoiceForm nodeId="node-2" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />
-    );
+    rerender(<ChoiceForm nodeId="node-2" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     act(() => {
       vi.advanceTimersByTime(500);
@@ -373,9 +324,7 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
     expect(renameType).toHaveBeenCalled();
 
     // Pristine fields reflect nodeB after the swap.
-    const definitionTextarea = container.querySelector(
-      '[data-slot="metadata-description"]'
-    ) as HTMLTextAreaElement;
+    const definitionTextarea = container.querySelector('[data-slot="metadata-description"]') as HTMLTextAreaElement;
     expect(definitionTextarea.value).toBe('Variant B definition');
 
     // The upstream useExternalSync hook is the integration surface.
@@ -393,20 +342,13 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
     const actions = { ...makeActions(), addChoiceOption };
 
     const { container } = render(
-      <ChoiceForm
-        nodeId="node-1"
-        data={makeChoiceData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // The "Add option" TypeSelector is the second selector in the form
     // (the existing options render their own ChoiceOptionRow above it).
     const addContainer = container.querySelector('[data-slot="add-option"]')!;
-    const addSelect = addContainer.querySelector(
-      '[data-slot="type-selector-stub"]'
-    ) as HTMLSelectElement;
+    const addSelect = addContainer.querySelector('[data-slot="type-selector-stub"]') as HTMLSelectElement;
     expect(addSelect).not.toBeNull();
 
     // Pick a type that is not already used as an option (Trade — the fixture

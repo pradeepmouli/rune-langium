@@ -3,21 +3,9 @@
 
 import { useCallback, useMemo } from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import { TypeSelector } from './TypeSelector.js';
+import { getKindDotClass, TypeSelector } from './TypeSelector.js';
 import { resolveNodeId } from './TypeLink.js';
 import type { NavigateToNodeCallback, TypeKind, TypeOption } from '../../types.js';
-
-const KIND_DOT_CLASS: Record<TypeKind | 'builtin', string> = {
-  data: 'bg-data',
-  choice: 'bg-choice',
-  enum: 'bg-enum',
-  func: 'bg-func',
-  record: 'bg-data',
-  typeAlias: 'bg-muted-foreground',
-  basicType: 'bg-muted-foreground',
-  annotation: 'bg-choice',
-  builtin: 'bg-muted-foreground'
-};
 
 export interface TypeReferenceFieldProps {
   value: string | null;
@@ -70,7 +58,7 @@ export function TypeReferenceField({
     return resolveNodeId(typeLabel, allNodeIds);
   }, [allNodeIds, typeLabel]);
   const canNavigate = Boolean(onNavigateToNode && resolvedNodeId);
-  const dotClass = selected ? (KIND_DOT_CLASS[selected.kind] ?? KIND_DOT_CLASS.builtin) : null;
+  const dotClass = selected ? getKindDotClass(selected.kind) : null;
 
   const handleNavigate = useCallback(() => {
     if (resolvedNodeId && onNavigateToNode) {
