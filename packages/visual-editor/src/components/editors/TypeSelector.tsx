@@ -42,6 +42,8 @@ export interface TypeSelectorProps {
   allowClear?: boolean;
   /** Filter options to specific kinds. */
   filterKinds?: Array<TypeKind | 'builtin'>;
+  /** Additional CSS classes for the fallback trigger surface. */
+  triggerClassName?: string;
   /** Render-prop for the trigger (button that opens the popover). */
   renderTrigger?: (props: TypeSelectorTriggerProps) => React.ReactNode;
   /** Render-prop for the popover content (search + list). */
@@ -99,15 +101,7 @@ export interface TypeSelectorGroup {
  * basicType | annotation` variants. `builtin` falls through to `basicType`
  * (gray) — visually unchanged from the previous local mapping.
  */
-type BadgeKindVariant =
-  | 'data'
-  | 'enum'
-  | 'choice'
-  | 'func'
-  | 'record'
-  | 'typeAlias'
-  | 'basicType'
-  | 'annotation';
+type BadgeKindVariant = 'data' | 'enum' | 'choice' | 'func' | 'record' | 'typeAlias' | 'basicType' | 'annotation';
 
 function kindToBadgeVariant(kind: TypeKind | 'builtin'): BadgeKindVariant {
   return kind === 'builtin' ? 'basicType' : kind;
@@ -131,6 +125,10 @@ const KIND_DOT_TOKEN_CLASS: Record<TypeKind | 'builtin', string> = {
   annotation: 'bg-choice',
   builtin: 'bg-muted-foreground'
 };
+
+export function getKindDotClass(kind: TypeKind | 'builtin'): string {
+  return KIND_DOT_TOKEN_CLASS[kind] ?? KIND_DOT_TOKEN_CLASS.builtin;
+}
 
 /**
  * Returns badge CSS classes for a given type kind. Wraps the design-system
@@ -178,6 +176,7 @@ export function TypeSelector({
   disabled = false,
   allowClear = false,
   filterKinds,
+  triggerClassName,
   renderTrigger,
   renderPopover
 }: TypeSelectorProps): React.ReactNode {
@@ -274,7 +273,7 @@ export function TypeSelector({
       onValueChange={(val) => handleSelect(val === NONE_SENTINEL ? null : val)}
       disabled={disabled}
     >
-      <SelectTrigger data-slot="type-selector" className="h-7 text-xs px-2">
+      <SelectTrigger data-slot="type-selector" className={`h-7 text-xs px-2 ${triggerClassName ?? ''}`.trim()}>
         <SelectValue placeholder={allowClear ? '— None —' : placeholder} />
       </SelectTrigger>
       <SelectContent>
@@ -286,7 +285,7 @@ export function TypeSelector({
               <SelectItem key={opt.value} value={opt.value}>
                 <span className="inline-flex items-center gap-1.5">
                   <span
-                    className={`inline-block size-2 rounded-full shrink-0 ${KIND_DOT_TOKEN_CLASS[opt.kind] ?? KIND_DOT_TOKEN_CLASS.builtin}`}
+                    className={`inline-block size-2 rounded-full shrink-0 ${getKindDotClass(opt.kind)}`}
                     aria-hidden="true"
                   />
                   {opt.label}

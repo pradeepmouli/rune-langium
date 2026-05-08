@@ -21,34 +21,23 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLegend,
-  FieldSet
-} from '@rune-langium/design-system/ui/field';
+import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { AttributeRow } from './AttributeRow.js';
 import { InheritedAttributeRow } from './AttributeRow.js';
-import { TypeSelector } from './TypeSelector.js';
+import { TypeReferenceField } from './TypeReferenceField.js';
 import { MetadataSection } from './MetadataSection.js';
 import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
-import {
-  getRefText,
-  parseCardinality,
-  type ConditionDisplayInfo
-} from '../../adapters/model-helpers.js';
+import { getRefText, parseCardinality, type ConditionDisplayInfo } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { identityProjection } from './identity-projection.js';
-import { TypeLink } from './TypeLink.js';
 import type {
   AnyGraphNode,
   TypeGraphNode,
@@ -280,12 +269,7 @@ function DataTypeForm({
   // ---- Condition callbacks -------------------------------------------------
 
   const handleAddCondition = useCallback(
-    (condition: {
-      name?: string;
-      definition?: string;
-      expressionText: string;
-      isPostCondition?: boolean;
-    }) => {
+    (condition: { name?: string; definition?: string; expressionText: string; isPostCondition?: boolean }) => {
       actions.addCondition(nodeId, condition);
     },
     [nodeId, actions]
@@ -371,9 +355,7 @@ function DataTypeForm({
     (opt) => (opt.kind === 'data' || opt.kind === 'builtin') && opt.label !== d.name
   );
 
-  const parentValue = parentName
-    ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null)
-    : null;
+  const parentValue = parentName ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null) : null;
 
   // ---- Render --------------------------------------------------------------
 
@@ -381,7 +363,10 @@ function DataTypeForm({
     <FormProvider {...form}>
       <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full">
         {/* Header: Name + Badge — always visible above tabs */}
-        <div data-slot="form-header" className="flex items-center gap-2 px-4 pt-4 pb-2 shrink-0">
+        <div
+          data-slot="form-header"
+          className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 shrink-0 border-b bg-muted"
+        >
           <Controller
             control={form.control}
             name="name"
@@ -415,20 +400,16 @@ function DataTypeForm({
             <FieldLegend variant="label" className="mb-0 text-muted-foreground">
               Extends
             </FieldLegend>
-            {parentName && (
-              <TypeLink
-                typeName={parentName}
-                onNavigateToNode={onNavigateToNode}
-                allNodeIds={allNodeIds}
-                className="text-sm font-mono mb-1"
-              />
-            )}
-            <TypeSelector
-              value={parentValue ?? ''}
+            <TypeReferenceField
+              value={parentValue ?? null}
+              displayName={parentName}
               options={parentOptions}
               onSelect={handleParentSelect}
               placeholder="Select parent type..."
               allowClear
+              emptyLabel="No parent type"
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
             />
           </FieldSet>
         </div>
@@ -445,10 +426,7 @@ function DataTypeForm({
           {/* Members tab — attributes */}
           <TabsContent value="members" className="flex-1 overflow-y-auto p-3 mt-0">
             <FieldSet className="gap-1">
-              <FieldLegend
-                variant="label"
-                className="mb-0 text-muted-foreground flex items-center justify-between"
-              >
+              <FieldLegend variant="label" className="mb-0 text-muted-foreground flex items-center justify-between">
                 <span>Attributes ({fields.length + inheritedCount})</span>
                 <button
                   data-slot="add-attribute-btn"
@@ -486,9 +464,7 @@ function DataTypeForm({
                     <AttributeRow
                       key={field.id}
                       index={index}
-                      committedName={
-                        ((committedRef.current as any).attributes ?? [])[index]?.name ?? ''
-                      }
+                      committedName={((committedRef.current as any).attributes ?? [])[index]?.name ?? ''}
                       availableTypes={availableTypes}
                       onUpdate={handleUpdateAttribute}
                       onRemove={handleRemoveAttribute}

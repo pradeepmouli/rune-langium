@@ -27,7 +27,7 @@ export interface TypeLinkProps {
  * Resolve a short type name to a full node ID (namespace::name).
  * Searches allNodeIds for a match ending with ::typeName.
  */
-function resolveNodeId(typeName: string, allNodeIds: string[]): string | undefined {
+export function resolveNodeId(typeName: string, allNodeIds: string[]): string | undefined {
   // Exact match first (already fully qualified)
   if (allNodeIds.includes(typeName)) return typeName;
   // Search for ::typeName suffix
@@ -39,7 +39,11 @@ export function TypeLink({ typeName, onNavigateToNode, allNodeIds, className }: 
 
   // If no navigation callback, render as plain text
   if (!onNavigateToNode) {
-    return <span className={className}>{typeName}</span>;
+    return (
+      <span data-slot="type-link" className={className}>
+        {typeName}
+      </span>
+    );
   }
 
   // Resolve once per render — avoids duplicate linear scans
@@ -55,10 +59,9 @@ export function TypeLink({ typeName, onNavigateToNode, allNodeIds, className }: 
   return (
     <button
       type="button"
+      data-slot="type-link"
       onClick={handleClick}
-      className={`${className ?? ''} ${
-        isResolvable ? 'text-primary hover:underline cursor-pointer' : ''
-      }`.trim()}
+      className={`${className ?? ''} ${isResolvable ? 'text-primary hover:underline cursor-pointer' : ''}`.trim()}
       title={isResolvable ? `Go to ${typeName}` : typeName}
       disabled={!isResolvable}
     >

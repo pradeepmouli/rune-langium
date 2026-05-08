@@ -30,8 +30,7 @@
 import { useCallback, useMemo } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
-import { TypeSelector } from './TypeSelector.js';
-import { TypeLink } from './TypeLink.js';
+import { TypeReferenceField } from './TypeReferenceField.js';
 import { CardinalityPicker } from './CardinalityPicker.js';
 import { formatCardinality, parseCardinality } from '../../adapters/model-helpers.js';
 import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
@@ -48,13 +47,7 @@ export interface AttributeRowProps {
   /** Available type options for the TypeSelector. */
   availableTypes: TypeOption[];
   /** Commit attribute changes to the graph. */
-  onUpdate: (
-    index: number,
-    oldName: string,
-    newName: string,
-    typeName: string,
-    cardinality: string
-  ) => void;
+  onUpdate: (index: number, oldName: string, newName: string, typeName: string, cardinality: string) => void;
   /** Remove this attribute by index. */
   onRemove: (index: number) => void;
   /** Reorder (drag) callback; fromIndex → toIndex. */
@@ -117,17 +110,9 @@ function AttributeRow({
     (newName: string) => {
       const currentType: string = getValues(`${prefix}.typeCall.type.$refText`) ?? 'string';
       const currentCard = normaliseCard(
-        getValues(`${prefix}.card`) as
-          | { inf: number; sup?: number; unbounded?: boolean }
-          | undefined
+        getValues(`${prefix}.card`) as { inf: number; sup?: number; unbounded?: boolean } | undefined
       );
-      onUpdate(
-        index,
-        committedName,
-        newName,
-        currentType,
-        formatCardinality(currentCard) || '(1..1)'
-      );
+      onUpdate(index, committedName, newName, currentType, formatCardinality(currentCard) || '(1..1)');
     },
     [index, committedName, prefix, getValues, onUpdate]
   );
@@ -252,37 +237,29 @@ function AttributeRow({
       />
 
       {/* Type selector + navigation link */}
-      <div data-slot="attribute-type" className="w-32 shrink-0 flex items-center gap-1">
-        <TypeLink
-          typeName={typeName ?? ''}
-          onNavigateToNode={onNavigateToNode}
-          allNodeIds={allNodeIds}
-          className="text-xs font-mono truncate"
-        />
-        <TypeSelector
+      <div data-slot="attribute-type" className="w-36 shrink-0">
+        <TypeReferenceField
           value={typeValue}
+          displayName={typeName}
           options={availableTypes}
           onSelect={handleTypeSelect}
           disabled={disabled}
-          placeholder="type"
+          placeholder="Select type..."
+          emptyLabel="Type"
+          onNavigateToNode={onNavigateToNode}
+          allNodeIds={allNodeIds}
+          className="attribute-type-field"
         />
       </div>
 
       {/* Cardinality */}
       <div data-slot="attribute-cardinality" className="shrink-0">
-        <CardinalityPicker
-          value={cardinalityString}
-          onChange={handleCardinalityChange}
-          disabled={disabled}
-        />
+        <CardinalityPicker value={cardinalityString} onChange={handleCardinalityChange} disabled={disabled} />
       </div>
 
       {/* Override badge */}
       {isOverride && (
-        <span
-          data-slot="override-badge"
-          className="text-xs text-muted-foreground italic whitespace-nowrap"
-        >
+        <span data-slot="override-badge" className="text-xs text-muted-foreground italic whitespace-nowrap">
           override
         </span>
       )}
@@ -360,12 +337,17 @@ function InheritedAttributeRow({
         {name}
       </span>
 
-      <div data-slot="attribute-type" className="w-32 shrink-0 flex items-center gap-1">
-        <TypeLink
-          typeName={typeName}
+      <div data-slot="attribute-type" className="w-36 shrink-0">
+        <TypeReferenceField
+          value={null}
+          displayName={typeName}
+          options={[]}
+          onSelect={() => undefined}
+          readOnly
+          placeholder="Type"
           onNavigateToNode={onNavigateToNode}
           allNodeIds={allNodeIds}
-          className="text-xs font-mono truncate"
+          className="attribute-type-field"
         />
       </div>
 
@@ -373,10 +355,7 @@ function InheritedAttributeRow({
         {cardinality}
       </span>
 
-      <span
-        data-slot="inherited-from-label"
-        className="text-xs text-muted-foreground italic whitespace-nowrap"
-      >
+      <span data-slot="inherited-from-label" className="text-xs text-muted-foreground italic whitespace-nowrap">
         inherited from {ancestorName}
       </span>
 

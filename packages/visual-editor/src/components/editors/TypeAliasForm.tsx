@@ -35,8 +35,7 @@ import { FormProvider, Controller, useWatch } from 'react-hook-form';
 import { Field, FieldError, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
-import { TypeSelector } from './TypeSelector.js';
-import { TypeLink } from './TypeLink.js';
+import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { RosettaTypeAliasSchema } from '../../generated/zod-schemas.js';
@@ -152,8 +151,7 @@ function TypeAliasForm({
     control: form.control,
     name: 'typeCall.type' as never
   }) as { $refText?: string } | undefined;
-  const dataTypeRef = (data as { typeCall?: { type?: { $refText?: string } } }).typeCall?.type
-    ?.$refText;
+  const dataTypeRef = (data as { typeCall?: { type?: { $refText?: string } } }).typeCall?.type?.$refText;
   const currentTypeLabel = watchedTypeRef?.$refText ?? dataTypeRef ?? '';
   const currentTypeValue = currentTypeLabel
     ? (availableTypes.find((opt) => opt.label === currentTypeLabel)?.value ?? null)
@@ -176,7 +174,10 @@ function TypeAliasForm({
       <FormProvider {...form}>
         <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
           {/* Header: Name + Badge */}
-          <div data-slot="form-header" className="flex items-center gap-2">
+          <div
+            data-slot="form-header"
+            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-4 py-3 border-b bg-muted"
+          >
             <Controller
               control={form.control}
               name="name"
@@ -209,19 +210,15 @@ function TypeAliasForm({
             <FieldLegend variant="label" className="mb-0 text-muted-foreground">
               Wrapped type
             </FieldLegend>
-            {currentTypeLabel && (
-              <TypeLink
-                typeName={currentTypeLabel}
-                onNavigateToNode={onNavigateToNode}
-                allNodeIds={allNodeIds}
-                className="text-sm font-mono mb-1"
-              />
-            )}
-            <TypeSelector
-              value={currentTypeValue ?? ''}
+            <TypeReferenceField
+              value={currentTypeValue ?? null}
+              displayName={currentTypeLabel}
               options={availableTypes}
               onSelect={handleTypeSelect}
               placeholder="Select wrapped type..."
+              emptyLabel="No wrapped type"
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
             />
           </FieldSet>
         </div>

@@ -31,17 +31,11 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLegend,
-  FieldSet
-} from '@rune-langium/design-system/ui/field';
+import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { EnumValueRow, InheritedEnumValueRow } from './EnumValueRow.js';
-import { TypeSelector } from './TypeSelector.js';
+import { TypeReferenceField } from './TypeReferenceField.js';
 import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
@@ -49,7 +43,6 @@ import { RosettaEnumerationSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { identityProjection } from './identity-projection.js';
 import { getRefText } from '../../adapters/model-helpers.js';
-import { TypeLink } from './TypeLink.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { MetadataSection } from './MetadataSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
@@ -219,9 +212,7 @@ function EnumForm({
 
   const parentOptions = availableTypes.filter((opt) => opt.kind === 'enum' && opt.label !== d.name);
 
-  const parentValue = parentName
-    ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null)
-    : null;
+  const parentValue = parentName ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null) : null;
 
   // ---- Editor actions context (Phase 7 / US5) ------------------------------
   // Bridges declarative section components (Annotations, Metadata) to the
@@ -240,7 +231,10 @@ function EnumForm({
       <EditorActionsProvider {...editorActionsValue}>
         <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
           {/* Header: Name + Badge */}
-          <div data-slot="form-header" className="flex items-center gap-2">
+          <div
+            data-slot="form-header"
+            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-4 py-3 border-b bg-muted"
+          >
             <Controller
               control={form.control}
               name="name"
@@ -273,29 +267,22 @@ function EnumForm({
             <FieldLegend variant="label" className="mb-0 text-muted-foreground">
               Extends
             </FieldLegend>
-            {parentName && (
-              <TypeLink
-                typeName={parentName}
-                onNavigateToNode={onNavigateToNode}
-                allNodeIds={allNodeIds}
-                className="text-sm font-mono mb-1"
-              />
-            )}
-            <TypeSelector
-              value={parentValue ?? ''}
+            <TypeReferenceField
+              value={parentValue ?? null}
+              displayName={parentName}
               options={parentOptions}
               onSelect={handleParentSelect}
               placeholder="Select parent enum..."
               allowClear
+              emptyLabel="No parent enum"
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
             />
           </FieldSet>
 
           {/* Enum Values */}
           <FieldSet className="gap-1">
-            <FieldLegend
-              variant="label"
-              className="mb-0 text-muted-foreground flex items-center justify-between"
-            >
+            <FieldLegend variant="label" className="mb-0 text-muted-foreground flex items-center justify-between">
               <span>Values ({fields.length + inheritedCount})</span>
               <button
                 data-slot="add-value-btn"
@@ -390,9 +377,7 @@ function PaginatedEnumValues({
             key={entry.id}
             index={entry.fieldIndex!}
             name={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''}
-            displayName={
-              ((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ?? ''
-            }
+            displayName={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ?? ''}
             nodeId={nodeId}
             onUpdate={onUpdate}
             onRemove={() => onRemove(entry.fieldIndex!)}

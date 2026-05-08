@@ -35,17 +35,12 @@
 import { useState, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { FormProvider, Controller } from 'react-hook-form';
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLegend,
-  FieldSet
-} from '@rune-langium/design-system/ui/field';
+import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeSelector } from './TypeSelector.js';
+import { TypeReferenceField } from './TypeReferenceField.js';
 import { MetadataSection } from './MetadataSection.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
@@ -59,7 +54,6 @@ import { functionFormRegistry } from '../forms/rows/index.js';
 import { RosettaFunctionSchema } from '../../generated/zod-schemas.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
 import { validateExpression } from '../../validation/edit-validator.js';
-import { TypeLink } from './TypeLink.js';
 import { identityProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
@@ -212,9 +206,7 @@ function FunctionForm({
   );
 
   const outputType = getTypeRefText(d.output?.typeCall) ?? d.outputType ?? '';
-  const outputValue = outputType
-    ? (availableTypes.find((o) => o.label === outputType)?.value ?? '')
-    : '';
+  const outputValue = outputType ? (availableTypes.find((o) => o.label === outputType)?.value ?? '') : '';
 
   // ---- Input param callbacks -----------------------------------------------
 
@@ -224,10 +216,7 @@ function FunctionForm({
   }));
 
   // Autocomplete hook (available for future autocompletion popup integration)
-  const { getCompletions: _getCompletions } = useExpressionAutocomplete(
-    availableTypes,
-    inputParams
-  );
+  const { getCompletions: _getCompletions } = useExpressionAutocomplete(availableTypes, inputParams);
 
   // Inline add-input state
   const [addParamName, setAddParamName] = useState('');
@@ -258,15 +247,14 @@ function FunctionForm({
   // Phase 7 / US5 contract.
 
   return (
-    <EditorActionsProvider
-      nodeId={nodeId}
-      actions={actions as EditorFormActions}
-      readOnly={d.isReadOnly}
-    >
+    <EditorActionsProvider nodeId={nodeId} actions={actions as EditorFormActions} readOnly={d.isReadOnly}>
       <FormProvider {...form}>
         <div data-slot="function-form" className="flex flex-col gap-4 p-4">
           {/* Header: Name + Badge */}
-          <div data-slot="form-header" className="flex items-center gap-2">
+          <div
+            data-slot="form-header"
+            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-4 py-3 border-b bg-muted"
+          >
             <Controller
               control={form.control}
               name={'name' as never}
@@ -314,9 +302,7 @@ function FunctionForm({
               ))}
 
               {inputParams.length === 0 && (
-                <p className="text-xs text-muted-foreground italic py-2 text-center">
-                  No input parameters defined.
-                </p>
+                <p className="text-xs text-muted-foreground italic py-2 text-center">No input parameters defined.</p>
               )}
             </FieldGroup>
 
@@ -357,19 +343,15 @@ function FunctionForm({
             <FieldLegend variant="label" className="mb-0 text-muted-foreground">
               Output Type
             </FieldLegend>
-            {outputType && (
-              <TypeLink
-                typeName={outputType}
-                onNavigateToNode={onNavigateToNode}
-                allNodeIds={allNodeIds}
-                className="text-sm font-mono mb-1"
-              />
-            )}
-            <TypeSelector
+            <TypeReferenceField
               value={outputValue}
+              displayName={outputType}
               options={availableTypes}
               onSelect={handleOutputTypeSelect}
               placeholder="Select output type..."
+              emptyLabel="No output type"
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
             />
           </FieldSet>
 
@@ -384,14 +366,8 @@ function FunctionForm({
             {(d.shortcuts ?? []).map((shortcut: any, i: number) => {
               const aliasText = getCstText(shortcut.expression);
               return (
-                <div
-                  key={`alias-${shortcut.name ?? i}`}
-                  data-slot="alias-section"
-                  className="flex flex-col gap-1"
-                >
-                  <span className="text-xs font-medium text-muted-foreground">
-                    alias {shortcut.name ?? `#${i}`}
-                  </span>
+                <div key={`alias-${shortcut.name ?? i}`} data-slot="alias-section" className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">alias {shortcut.name ?? `#${i}`}</span>
                   {renderExpressionEditor ? (
                     renderExpressionEditor({
                       value: aliasText,
@@ -416,8 +392,7 @@ function FunctionForm({
             {(d.operations ?? []).map((op: any, i: number) => {
               const opText = getCstText(op.expression);
               // assignRoot is a Langium Reference — resolve to $refText string
-              const assignRoot =
-                typeof op.assignRoot === 'string' ? op.assignRoot : (op.assignRoot?.$refText ?? '');
+              const assignRoot = typeof op.assignRoot === 'string' ? op.assignRoot : (op.assignRoot?.$refText ?? '');
               // Fall back to extracting from CST text: "set <target>: <expr>"
               const assignTarget =
                 assignRoot ||
@@ -436,9 +411,7 @@ function FunctionForm({
                     renderExpressionEditor({
                       value: opText,
                       onChange: (val: string) => {
-                        const currentVals = form.getValues(
-                          'expressionText' as never
-                        ) as unknown as string;
+                        const currentVals = form.getValues('expressionText' as never) as unknown as string;
                         if (val !== currentVals) {
                           form.setValue('expressionText' as never, val as never, {
                             shouldDirty: true

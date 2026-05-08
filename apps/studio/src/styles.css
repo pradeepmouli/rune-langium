@@ -336,6 +336,17 @@
     background: var(--accent);
   }
 
+  .studio-app .studio-rail__btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+    color: var(--foreground);
+  }
+
+  .studio-app .studio-rail__btn:active {
+    transform: scale(0.92);
+    background: color-mix(in srgb, var(--accent) 70%, var(--background));
+  }
+
   .studio-app .studio-rail__btn[aria-pressed='true'] {
     color: var(--foreground);
     background: var(--accent);
@@ -498,22 +509,54 @@
 
   .studio-app .studio-topbar__ws-btn {
     appearance: none;
-    border: 0.5px solid var(--border);
-    background: var(--card);
+    border: 0.5px solid color-mix(in srgb, var(--border) 82%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--card) 92%, transparent),
+        color-mix(in srgb, var(--background) 82%, transparent)
+      );
     display: flex;
     align-items: center;
     gap: 8px;
     height: 28px;
-    padding: 0 8px 0 10px;
+    padding: 0 10px 0 7px;
     border-radius: var(--radius);
     color: var(--foreground);
     font-size: 12.5px;
     font-weight: 500;
     cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 9%, transparent),
+      0 8px 24px -18px color-mix(in srgb, var(--foreground) 24%, transparent);
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      transform 0.05s ease,
+      box-shadow 0.15s ease;
   }
 
   .studio-app .studio-topbar__ws-btn:hover {
-    background: var(--accent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--card) 94%, transparent),
+        color-mix(in srgb, var(--accent) 48%, transparent)
+      );
+    border-color: color-mix(in srgb, var(--ring) 35%, var(--border));
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
+      0 14px 30px -18px color-mix(in srgb, var(--primary) 32%, transparent);
+  }
+
+  .studio-app .studio-topbar__ws-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .studio-app .studio-topbar__ws-btn:active {
+    transform: translateY(0.5px);
+    background: color-mix(in srgb, var(--accent) 80%, var(--background));
   }
 
   .studio-app .studio-topbar__ws-sub {
@@ -522,10 +565,37 @@
     font-family: var(--font-mono);
   }
 
+  .studio-app .studio-topbar__ws-mark {
+    width: 17px;
+    height: 17px;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9.5px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--primary);
+    background:
+      linear-gradient(
+        160deg,
+        color-mix(in srgb, var(--primary) 24%, transparent),
+        color-mix(in srgb, var(--secondary) 18%, transparent)
+      );
+    border: 0.5px solid color-mix(in srgb, var(--primary) 38%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
+    flex-shrink: 0;
+  }
+
   .studio-app .studio-topbar__cmdk {
     appearance: none;
-    border: 0.5px solid var(--border);
-    background: var(--card);
+    border: 0.5px solid color-mix(in srgb, var(--border) 82%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--card) 90%, transparent),
+        color-mix(in srgb, var(--background) 84%, transparent)
+      );
     display: flex;
     align-items: center;
     gap: 8px;
@@ -536,10 +606,19 @@
     width: 260px;
     font-size: 12px;
     cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
 
   .studio-app .studio-topbar__cmdk:hover {
     border-color: var(--ring);
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--card) 80%, var(--accent));
+  }
+
+  .studio-app .studio-topbar__cmdk:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    color: var(--foreground);
   }
 
   .studio-app .studio-topbar__cmdk span {
@@ -557,23 +636,8 @@
     color: var(--muted-foreground);
   }
 
-  .studio-app .studio-topbar__icon-btn {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    display: grid;
-    place-items: center;
-    color: var(--muted-foreground);
-    cursor: pointer;
-  }
-
-  .studio-app .studio-topbar__icon-btn:hover {
-    background: var(--accent);
-    color: var(--foreground);
-  }
+  /* studio-topbar__icon-btn — removed; topbar icon buttons now use the
+   * design-system <Button variant="ghost" size="icon-sm">. */
 
   .studio-app .studio-topbar__generate {
     appearance: none;
@@ -592,31 +656,32 @@
     box-shadow:
       0 0 0 0.5px color-mix(in oklch, var(--primary), transparent 60%),
       0 6px 18px -6px color-mix(in oklch, var(--primary), transparent 50%);
+    transition: filter 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
   }
 
   .studio-app .studio-topbar__generate:hover {
     filter: brightness(1.1);
+    box-shadow:
+      0 0 0 0.5px color-mix(in oklch, var(--primary), transparent 50%),
+      0 8px 22px -6px color-mix(in oklch, var(--primary), transparent 35%);
   }
 
-  .studio-app .studio-topbar__avatar {
-    appearance: none;
-    border: 0;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--color-enum), var(--color-data));
-    color: var(--primary-foreground);
-    font-weight: 700;
-    font-size: 11px;
-    display: grid;
-    place-items: center;
-    cursor: pointer;
-    letter-spacing: 0.02em;
+  .studio-app .studio-topbar__generate:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
+
+  .studio-app .studio-topbar__generate:active {
+    transform: translateY(0.5px) scale(0.99);
+    filter: brightness(0.96);
+  }
+
+  /* studio-topbar__avatar — removed; topbar avatar now uses the
+   * design-system <Avatar> primitive with a gradient AvatarFallback. */
 
   .studio-app .studio-topbar__tabs {
     display: flex;
-    gap: 1px;
+    gap: 4px;
     align-items: center;
     min-width: 0;
     overflow: hidden;
@@ -625,25 +690,55 @@
 
   .studio-app .studio-topbar__tab {
     appearance: none;
-    border: 0;
+    border: 0.5px solid transparent;
     background: transparent;
     display: flex;
     align-items: center;
     gap: 7px;
     height: 28px;
-    padding: 0 8px;
-    border-radius: var(--radius);
+    padding: 0 10px;
+    border-radius: calc(var(--radius) + 2px);
     color: var(--muted-foreground);
     max-width: 200px;
     font-size: 12px;
     cursor: pointer;
     white-space: nowrap;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease,
+      border-color 0.15s ease,
+      transform 0.05s ease;
   }
 
-  .studio-app .studio-topbar__tab:hover,
-  .studio-app .studio-topbar__tab.is-active {
-    background: var(--card);
+  .studio-app .studio-topbar__tab:hover {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--card) 82%, transparent),
+        color-mix(in srgb, var(--accent) 28%, transparent)
+      );
+    border-color: color-mix(in srgb, var(--border) 84%, transparent);
     color: var(--foreground);
+  }
+
+  .studio-app .studio-topbar__tab.is-active {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--card) 96%, transparent),
+        color-mix(in srgb, var(--primary) 10%, transparent)
+      );
+    color: var(--foreground);
+    border-color: color-mix(in srgb, var(--primary) 34%, transparent);
+    box-shadow:
+      inset 0 -2px 0 0 var(--primary),
+      inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+  }
+
+  .studio-app .studio-topbar__tab:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
   }
 
   .studio-app .studio-topbar__tab-dot {
@@ -662,6 +757,31 @@
   .studio-app .studio-topbar__tab-name {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .studio-app .studio-topbar__tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 16px;
+    padding: 0 6px;
+    border-radius: 999px;
+    border: 0.5px solid color-mix(in srgb, var(--border) 76%, transparent);
+    background: color-mix(in srgb, var(--muted) 68%, transparent);
+    color: color-mix(in srgb, var(--muted-foreground) 88%, white 12%);
+    font-size: 9.5px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .studio-app .studio-topbar__tab.is-active .studio-topbar__tab-badge {
+    background: color-mix(in srgb, var(--primary) 14%, transparent);
+    border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+    color: color-mix(in srgb, var(--primary) 78%, white 22%);
   }
 
   .studio-app .studio-type-glyph {
@@ -1203,6 +1323,21 @@
   color: var(--foreground);
 }
 
+/* Responsive: tighten spacing on tablets, hide brand wordmark on phones so
+ * the nav links don't wrap. The mark + links stay accessible. */
+@media (max-width: 640px) {
+  .studio-links {
+    gap: var(--space-4, 16px);
+  }
+  .studio-links a {
+    font-size: 12px;
+    letter-spacing: 0.03em;
+  }
+  .glass-header .studio-brand__name {
+    display: none;
+  }
+}
+
 /* ---------- CodeMirror Editor (T043) — dark theme ---------- */
 .studio-editor-page__source .cm-editor {
   height: 100%;
@@ -1645,8 +1780,8 @@
 .studio-brand__mark {
   width: 22px;
   height: 22px;
-  border: 1px solid var(--primary);
-  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1654,7 +1789,15 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  background:
+    linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--primary) 16%, transparent),
+      color-mix(in srgb, var(--secondary) 10%, transparent)
+    );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 14%, transparent),
+    0 10px 24px -18px color-mix(in srgb, var(--primary) 42%, transparent);
   flex-shrink: 0;
 }
 
@@ -1878,14 +2021,20 @@
   height: 18px;
   padding: 0 6px;
   border-radius: 9px;
-  background: var(--muted);
-  color: var(--muted-foreground);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--muted) 88%, transparent),
+      color-mix(in srgb, var(--background) 76%, transparent)
+    );
+  color: color-mix(in srgb, var(--muted-foreground) 92%, white 8%);
   font-size: 10.5px;
   font-family: var(--font-mono);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  border: 0.5px solid var(--border);
+  border: 0.5px solid color-mix(in srgb, var(--border) 86%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 9%, transparent);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1910,9 +2059,15 @@
   letter-spacing: 0;
   white-space: nowrap;
   flex-shrink: 0;
-  background: color-mix(in oklch, var(--kind-color, var(--muted)) 14%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--kind-color, var(--muted)) 16%, transparent),
+      color-mix(in oklch, var(--background) 82%, transparent)
+    );
   color: var(--kind-color, var(--muted-foreground));
-  border: 0.5px solid color-mix(in oklch, var(--kind-color, var(--border)) 35%, transparent);
+  border: 0.5px solid color-mix(in oklch, var(--kind-color, var(--border)) 42%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
 }
 
 .studio-app .kind-chip__dot {

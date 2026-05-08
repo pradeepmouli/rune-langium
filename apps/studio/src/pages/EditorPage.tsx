@@ -44,24 +44,14 @@ import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
-import { ExportMenu } from '../components/ExportMenu.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import {
-  Maximize2,
-  LayoutGrid,
-  Code2,
-  Network,
-  XCircle,
-  Check,
-  Download,
-  Share2,
-  Zap,
-  Search,
-  ChevronDown
-} from 'lucide-react';
+import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
+import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
+import { Kbd } from '@rune-langium/design-system/ui/kbd';
+import { Maximize2, LayoutGrid, Network, Check, Download, Share2, Zap, Search, ChevronDown } from 'lucide-react';
 import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
@@ -113,8 +103,7 @@ export interface EditorPageProps {
   onClose?: () => void;
 }
 
-const DECL_KEYWORDS =
-  /^(type|enum|func|choice|annotation|metaType|typeAlias|library\s+function|reporting\s+rule)\s+/;
+const DECL_KEYWORDS = /^(type|enum|func|choice|annotation|metaType|typeAlias|library\s+function|reporting\s+rule)\s+/;
 
 function findDeclarationLine(content: string, name: string): number {
   const lines = content.split('\n');
@@ -127,15 +116,8 @@ function findDeclarationLine(content: string, name: string): number {
   return 0;
 }
 
-function matchesPreviewSourceIdentity(
-  current: FormPreviewTarget,
-  candidate: FormPreviewTarget
-): boolean {
-  if (
-    !current.sourceUri ||
-    current.sourceUri !== candidate.sourceUri ||
-    current.kind !== candidate.kind
-  ) {
+function matchesPreviewSourceIdentity(current: FormPreviewTarget, candidate: FormPreviewTarget): boolean {
+  if (!current.sourceUri || current.sourceUri !== candidate.sourceUri || current.kind !== candidate.kind) {
     return false;
   }
   if (current.sourceIndex !== undefined && candidate.sourceIndex !== undefined) {
@@ -145,6 +127,27 @@ function matchesPreviewSourceIdentity(
     current.sourceRange?.start.line === candidate.sourceRange?.start.line &&
     current.sourceRange?.start.character === candidate.sourceRange?.start.character
   );
+}
+
+function getFileKindBadge(name: string): string {
+  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
+  switch (ext) {
+    case 'rosetta':
+      return 'DSL';
+    case 'json':
+      return 'JSON';
+    case 'yaml':
+    case 'yml':
+      return 'YAML';
+    case 'ts':
+      return 'TS';
+    case 'js':
+      return 'JS';
+    case 'md':
+      return 'MD';
+    default:
+      return ext ? ext.slice(0, 4).toUpperCase() : 'FILE';
+  }
 }
 
 function FileTabStrip({
@@ -171,6 +174,9 @@ function FileTabStrip({
         >
           <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
           <span className="studio-topbar__tab-name">{f.name}</span>
+          <span className="studio-topbar__tab-badge" aria-hidden="true">
+            {getFileKindBadge(f.name)}
+          </span>
         </button>
       ))}
     </div>
@@ -215,9 +221,9 @@ export function EditorPage({
   const codegenRequestSequenceRef = useRef(0);
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const navigationHistoryRef = useRef<string[]>([]);
-  const pendingDisplayFileRef = useRef<
-    Map<string, (view: import('@codemirror/view').EditorView | null) => void>
-  >(new Map());
+  const pendingDisplayFileRef = useRef<Map<string, (view: import('@codemirror/view').EditorView | null) => void>>(
+    new Map()
+  );
 
   const storeNodes = useEditorStore((s) => s.nodes);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
@@ -283,10 +289,7 @@ export function EditorPage({
   }, [selectedNodeId, storeNodes]);
 
   const previewTargets: FormPreviewTarget[] = useMemo(() => {
-    const sourceByTargetId = new Map<
-      string,
-      Pick<FormPreviewTarget, 'sourceUri' | 'sourceIndex' | 'sourceRange'>
-    >();
+    const sourceByTargetId = new Map<string, Pick<FormPreviewTarget, 'sourceUri' | 'sourceIndex' | 'sourceRange'>>();
     for (const entry of resolvedModelFiles) {
       const model = entry.model;
       const modelUriValue = (
@@ -294,9 +297,7 @@ export function EditorPage({
           $document?: { uri?: { path?: string; toString(): string } };
         }
       ).$document?.uri;
-      const sourceUri = pathToUri(
-        modelUriValue?.path ?? modelUriValue?.toString() ?? entry.filePath
-      );
+      const sourceUri = pathToUri(modelUriValue?.path ?? modelUriValue?.toString() ?? entry.filePath);
       const namespace =
         typeof model.name === 'string'
           ? model.name
@@ -371,9 +372,7 @@ export function EditorPage({
     if (previewTargets.some((target) => target.id === previewSelectedTargetId)) {
       return;
     }
-    const renamedTarget = previewTargets.find((target) =>
-      matchesPreviewSourceIdentity(previewSelectedTarget, target)
-    );
+    const renamedTarget = previewTargets.find((target) => matchesPreviewSourceIdentity(previewSelectedTarget, target));
     selectPreviewTarget(renamedTarget?.id);
   }, [previewSelectedTarget, previewSelectedTargetId, previewTargets, selectPreviewTarget]);
 
@@ -409,9 +408,7 @@ export function EditorPage({
     const cstNode = nodeData['$cstNode'] as
       | { range?: { start?: { line?: number } }; _rangeCache?: { start?: { line?: number } } }
       | undefined;
-    const textRegion = nodeData['$textRegion'] as
-      | { range?: { start?: { line?: number } } }
-      | undefined;
+    const textRegion = nodeData['$textRegion'] as { range?: { start?: { line?: number } } } | undefined;
     const range = cstNode?._rangeCache ?? cstNode?.range ?? textRegion?.range;
     if (range?.start?.line !== undefined && filePath) {
       pendingRevealRef.current = { line: range.start.line + 1, filePath };
@@ -431,9 +428,7 @@ export function EditorPage({
         void linkDocument(filePath).then((result) => {
           if (result.newModels.length > 0) {
             corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
-            useEditorStore
-              .getState()
-              .loadModels([...models, ...corpusModelsRef.current] as unknown[]);
+            useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
           }
         });
       }, 150);
@@ -450,13 +445,9 @@ export function EditorPage({
       inputs: (d.inputs ?? []).map((p: any) => ({
         name: p.name,
         typeName: p.typeCall?.type?.$refText,
-        cardinality: p.card
-          ? `(${p.card.inf}..${p.card.unbounded ? '*' : (p.card.sup ?? p.card.inf)})`
-          : undefined
+        cardinality: p.card ? `(${p.card.inf}..${p.card.unbounded ? '*' : (p.card.sup ?? p.card.inf)})` : undefined
       })),
-      output: d.output?.typeCall?.type?.$refText
-        ? { name: 'output', typeName: d.output.typeCall.type.$refText }
-        : null,
+      output: d.output?.typeCall?.type?.$refText ? { name: 'output', typeName: d.output.typeCall.type.$refText } : null,
       aliases: (d.shortcuts ?? []).map((s: any) => ({
         name: s.name,
         typeName: s.typeCall?.type?.$refText
@@ -498,10 +489,7 @@ export function EditorPage({
           ? error.message
           : typeof error === 'object' && error && 'type' in error && error.type === 'messageerror'
             ? 'A preview worker message could not be deserialized.'
-            : typeof error === 'object' &&
-                error &&
-                'message' in error &&
-                typeof error.message === 'string'
+            : typeof error === 'object' && error && 'message' in error && typeof error.message === 'string'
               ? error.message
               : 'Reload Studio to restore form preview.';
       receivePreviewStale({
@@ -543,9 +531,7 @@ export function EditorPage({
   // 186-file corpus costs one parse pass, not cross-reference resolution.
   useEffect(() => {
     if (!codegenWorker) return;
-    const codegenFiles = files
-      .filter((f) => !f.readOnly)
-      .map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+    const codegenFiles = files.filter((f) => !f.readOnly).map((f) => ({ uri: pathToUri(f.path), content: f.content }));
     const allFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
     const previewRequestId = `preview:files:${++previewRequestSequenceRef.current}`;
     const codegenRequestId = `codegen:files:${++codegenRequestSequenceRef.current}`;
@@ -606,9 +592,7 @@ export function EditorPage({
     }
     function handleWorkerFailure(event: ErrorEvent | MessageEvent<unknown>) {
       const baseMessage =
-        event.type === 'messageerror'
-          ? 'Preview worker rejected a message.'
-          : 'Preview worker crashed.';
+        event.type === 'messageerror' ? 'Preview worker rejected a message.' : 'Preview worker crashed.';
       handlePreviewWorkerFailure(baseMessage, event, previewSelectedTargetId);
     }
     codegenWorker.addEventListener('message', handleMessage as EventListener);
@@ -632,9 +616,7 @@ export function EditorPage({
 
   const handleSourceChange = useCallback(
     (path: string, content: string) => {
-      const updatedFiles = filesRef.current.map((f) =>
-        f.path === path ? { ...f, content, dirty: true } : f
-      );
+      const updatedFiles = filesRef.current.map((f) => (f.path === path ? { ...f, content, dirty: true } : f));
       onFilesChange?.(updatedFiles);
     },
     [onFilesChange]
@@ -687,9 +669,7 @@ export function EditorPage({
       const d = nodeData as any;
       const docPath = d.$container?.$document?.uri?.path as string | undefined;
       if (docPath) {
-        const match = files.find(
-          (f) => f.path === docPath || f.path.endsWith(docPath) || docPath.endsWith(f.path)
-        );
+        const match = files.find((f) => f.path === docPath || f.path.endsWith(docPath) || docPath.endsWith(f.path));
         if (match) return match.path;
         const fileName = docPath.split('/').pop();
         if (fileName) {
@@ -789,14 +769,10 @@ export function EditorPage({
         path = uri.startsWith('file://') ? decodeURIComponent(uri.slice(7)) : uri;
       }
       const fileName = path.split('/').pop() ?? path;
-      const file = files.find(
-        (f) => f.path === path || f.path.endsWith(fileName) || path.endsWith(f.path)
-      );
+      const file = files.find((f) => f.path === path || f.path.endsWith(fileName) || path.endsWith(f.path));
       if (!file) {
         // eslint-disable-next-line no-console
-        console.warn(
-          `[displayFile] No workspace file found matching URI: ${uri} (fileName: ${fileName})`
-        );
+        console.warn(`[displayFile] No workspace file found matching URI: ${uri} (fileName: ${fileName})`);
         return null;
       }
       openFileInSource(file.path);
@@ -817,16 +793,13 @@ export function EditorPage({
     return unsub;
   }, [lspClient, files, openFileInSource]);
 
-  const handleEditorViewCreated = useCallback(
-    (filePath: string, view: import('@codemirror/view').EditorView) => {
-      const resolve = pendingDisplayFileRef.current.get(filePath);
-      if (resolve) {
-        pendingDisplayFileRef.current.delete(filePath);
-        resolve(view);
-      }
-    },
-    []
-  );
+  const handleEditorViewCreated = useCallback((filePath: string, view: import('@codemirror/view').EditorView) => {
+    const resolve = pendingDisplayFileRef.current.get(filePath);
+    if (resolve) {
+      pendingDisplayFileRef.current.delete(filePath);
+      resolve(view);
+    }
+  }, []);
 
   const sourceEditorFiles = useMemo(() => {
     const resolvedActiveFile =
@@ -851,10 +824,6 @@ export function EditorPage({
     const rosettaText = graphRef.current?.exportRosetta?.();
     if (!rosettaText || rosettaText.size === 0) return new Map();
     return rosettaText;
-  }, []);
-
-  const handleExportImage = useCallback((format: 'svg' | 'png') => {
-    return graphRef.current?.exportImage(format) ?? Promise.resolve(new Blob());
   }, []);
 
   const validateModelForExport = useCallback((): string[] => {
@@ -895,14 +864,12 @@ export function EditorPage({
       removeSynonym: (nodeId, index) => s().removeSynonym(nodeId, index),
       addAttribute: (nodeId, name, type, card) => s().addAttribute(nodeId, name, type, card),
       removeAttribute: (nodeId, name) => s().removeAttribute(nodeId, name),
-      updateAttribute: (nodeId, oldN, newN, type, card) =>
-        s().updateAttribute(nodeId, oldN, newN, type, card),
+      updateAttribute: (nodeId, oldN, newN, type, card) => s().updateAttribute(nodeId, oldN, newN, type, card),
       reorderAttribute: (nodeId, from, to) => s().reorderAttribute(nodeId, from, to),
       setInheritance: (childId, parentId) => s().setInheritance(childId, parentId),
       addEnumValue: (nodeId, name, display) => s().addEnumValue(nodeId, name, display),
       removeEnumValue: (nodeId, name) => s().removeEnumValue(nodeId, name),
-      updateEnumValue: (nodeId, oldN, newN, display) =>
-        s().updateEnumValue(nodeId, oldN, newN, display),
+      updateEnumValue: (nodeId, oldN, newN, display) => s().updateEnumValue(nodeId, oldN, newN, display),
       reorderEnumValue: (nodeId, from, to) => s().reorderEnumValue(nodeId, from, to),
       setEnumParent: (nodeId, parentId) => s().setEnumParent(nodeId, parentId),
       addChoiceOption: (nodeId, type) => s().addChoiceOption(nodeId, type),
@@ -985,9 +952,7 @@ export function EditorPage({
         onNavigate={(uri) => {
           const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
           const fileName = normPath.split('/').pop() ?? normPath;
-          const file = files.find(
-            (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
-          );
+          const file = files.find((f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? ''));
           if (file) openFileInSource(file.path ?? file.name);
         }}
       />
@@ -998,8 +963,7 @@ export function EditorPage({
   // Stable adapter for CodePreviewPanel cross-file source-map navigation.
   const sourceEditorHandle = useMemo<SourceEditorHandle>(
     () => ({
-      revealPosition: (position, filePath) =>
-        sourceEditorRef.current?.revealPosition(position, filePath)
+      revealPosition: (position, filePath) => sourceEditorRef.current?.revealPosition(position, filePath)
     }),
     // Intentionally stable — reads ref.current at call time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1123,14 +1087,7 @@ export function EditorPage({
         />
       </div>
     );
-  }, [
-    sourceEditorFiles,
-    activeEditorFile,
-    lspClient,
-    handleSourceChange,
-    navigateToNode,
-    handleEditorViewCreated
-  ]);
+  }, [sourceEditorFiles, activeEditorFile, lspClient, handleSourceChange, navigateToNode, handleEditorViewCreated]);
 
   const renderInspectorPane = useCallback(
     () => (
@@ -1197,10 +1154,7 @@ export function EditorPage({
 
   const workspaceFileCount = fileCount ?? files.length;
   const focusPanelRequest = useMemo(
-    () =>
-      inspectorFocusNonce > 0
-        ? { component: 'workspace.inspector' as const, nonce: inspectorFocusNonce }
-        : null,
+    () => (inspectorFocusNonce > 0 ? { component: 'workspace.inspector' as const, nonce: inspectorFocusNonce } : null),
     [inspectorFocusNonce]
   );
 
@@ -1218,7 +1172,16 @@ export function EditorPage({
             <span className="studio-brand__name">Rune Studio</span>
           </div>
           <span className="studio-topbar__divider" />
-          <button type="button" className="studio-topbar__ws-btn" onClick={onClose}>
+          <button
+            type="button"
+            className="studio-topbar__ws-btn"
+            onClick={onClose}
+            aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
+            title="Close workspace — return to start page"
+          >
+            <span className="studio-topbar__ws-mark" aria-hidden="true">
+              {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
+            </span>
             <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
             <span className="studio-topbar__ws-sub">
               {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
@@ -1231,61 +1194,57 @@ export function EditorPage({
           <button type="button" className="studio-topbar__cmdk" aria-label="Search">
             <Search className="size-3.5" />
             <span>Search types, files, commands…</span>
-            <kbd>⌘K</kbd>
+            <Kbd>⌘K</Kbd>
           </button>
           <span className="studio-topbar__divider" />
-          <button type="button" className="studio-topbar__icon-btn" aria-label="Validate">
-            <Check className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="studio-topbar__icon-btn"
+          <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">
+            <Check />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
             aria-label="Export code"
+            title="Export code"
             onClick={() => setShowExportDialog(true)}
           >
-            <Download className="size-4" />
-          </button>
-          <button type="button" className="studio-topbar__icon-btn" aria-label="Share">
-            <Share2 className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="studio-topbar__generate"
-            onClick={() => setShowExportDialog(true)}
-          >
+            <Download />
+          </Button>
+          <Button variant="ghost" size="icon-sm" aria-label="Share" title="Share">
+            <Share2 />
+          </Button>
+          <button type="button" className="studio-topbar__generate" onClick={() => setShowExportDialog(true)}>
             <Zap className="size-3.5" />
             Generate
           </button>
           <span className="studio-topbar__divider" />
-          <button type="button" className="studio-topbar__avatar" aria-label="Account">
-            PM
-          </button>
+          <Avatar asChild className="size-7 cursor-pointer">
+            <button type="button" aria-label="Account">
+              <AvatarFallback className="bg-gradient-to-br from-[var(--color-enum)] to-[var(--color-data)] text-primary-foreground text-[11px] font-bold">
+                PM
+              </AvatarFallback>
+            </button>
+          </Avatar>
         </div>
       </header>
 
       {toastMessage && (
-        <div
-          className="flex items-center justify-between px-3 py-1.5 bg-destructive/10 text-destructive text-sm border-b border-destructive/20"
-          role="alert"
-        >
-          <span>{toastMessage}</span>
-          <button
-            type="button"
-            className="ml-2 text-destructive hover:text-destructive/80 font-medium"
-            onClick={() => setToastMessage(null)}
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
+        <Alert variant="destructive" className="rounded-none border-x-0 border-t-0 px-3 py-1.5 text-sm">
+          <AlertDescription className="flex w-full items-center justify-between">
+            <span>{toastMessage}</span>
+            <button
+              type="button"
+              className="ml-2 font-medium hover:opacity-80"
+              onClick={() => setToastMessage(null)}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="flex flex-1 min-h-0">
-        <ActivityBar
-          onWorkspaceClick={() => onClose?.()}
-          onModelsClick={() => {}}
-          onSettingsClick={() => {}}
-        />
+        <ActivityBar onWorkspaceClick={() => onClose?.()} onModelsClick={() => {}} onSettingsClick={() => {}} />
         <div className="flex-1 min-h-0">
           <DockShell
             studioVersion={studioVersion}
