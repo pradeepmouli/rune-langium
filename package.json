@@ -110,7 +110,10 @@
       "@radix-ui/react-primitive": "2.1.4",
       "@radix-ui/react-slot": "1.2.4"
     },
-    "patchedDependencies": {}
+    "patchedDependencies": {
+      "@radix-ui/react-slot@1.2.4": "patches/@radix-ui__react-slot@1.2.4.patch",
+      "@radix-ui/react-compose-refs@1.1.2": "patches/@radix-ui__react-compose-refs@1.1.2.patch"
+    }
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged",

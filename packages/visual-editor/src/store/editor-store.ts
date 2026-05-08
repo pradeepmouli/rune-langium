@@ -528,8 +528,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // -----------------------------------------------------------------------
 
         selectNode(nodeId) {
-          set({ selectedNodeId: nodeId, detailPanelOpen: nodeId !== null });
-          if (nodeId && get().focusMode) {
+          const nextDetailPanelOpen = nodeId !== null;
+          const { selectedNodeId, detailPanelOpen } = get();
+          const selectionChanged = selectedNodeId !== nodeId;
+          if (selectionChanged || detailPanelOpen !== nextDetailPanelOpen) {
+            set({ selectedNodeId: nodeId, detailPanelOpen: nextDetailPanelOpen });
+          }
+          if (nodeId && get().focusMode && selectionChanged) {
             // Only isolate if the node has at least one edge — stub nodes
             // from deferred exports have no edges and crash ReactFlow when
             // isolated (no layout, no measured dimensions).
