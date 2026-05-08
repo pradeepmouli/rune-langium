@@ -52,12 +52,8 @@ import {
   type Annotation,
   type RosettaExternalFunction
 } from '@rune-langium/core';
-import type {
-  GeneratorOptions,
-  GeneratorOutput,
-  SourceMapEntry,
-  GeneratorDiagnostic
-} from '../types.js';
+import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
+import { emitNamespaceWithContract, type NamespaceEmitter } from './namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 
@@ -151,6 +147,13 @@ interface EmissionContext {
   /** Generator-time diagnostics accumulated during emission. */
   diagnostics: GeneratorDiagnostic[];
   registry: NamespaceRegistry;
+}
+
+interface PendingSourceMapEntry {
+  name: string;
+  sourceUri: string;
+  sourceLine: number;
+  sourceChar: number;
 }
 
 /**
@@ -425,10 +428,7 @@ function emitEnumDef(enumNode: RosettaEnumeration): object {
   return def;
 }
 
-function buildEmissionContext(
-  model: NamespaceWalkResult,
-  registry: NamespaceRegistry
-): EmissionContext {
+function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
   return {
     namespace: model.namespace,
     relativePath: getTargetRelativePath(model.namespace, 'json-schema'),
@@ -454,111 +454,104 @@ function buildEmissionContext(
  *
  * Source-map convention for JSON Schema (FR-018, studio-preview.md §Source-map coverage):
  *   - Each type ($defs/<TypeName>) → maps to the `type TypeName:` Rune source line
- *   - Each attribute property (properties/<attrName>) → maps to the `attribute` Rune line
  *
- * Since JSON Schema is a JSON file (not line-addressable like TS), the "outputLine"
- * field in SourceMapEntry carries a JSON Pointer path string cast to a number sentinel
- * of 0. Consumers that need click-to-navigate use the JSON Pointer paths stored in an
- * extra `x-rune-source-map` extension on the schema document instead.
- * The studio-preview.md contract specifies: "Every '$defs/<TypeName>' key line →
- * the 'type TypeName:' Rune line." We honour this by populating sourceMap entries.
+ * Source-map entries point at the concrete `$defs/<TypeName>` key lines in the emitted
+ * JSON so Studio line-click navigation can resolve back to the defining Rune node.
  */
 export function emitNamespace(
   model: NamespaceWalkResult,
-  _options: GeneratorOptions,
+  options: GeneratorOptions,
   registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(model, registry);
-  const $defs: Record<string, object> = {};
-  const sourceUri = model.docs[0]?.uri?.toString() ?? '';
+  return emitNamespaceWithContract(model, options, registry, JsonSchemaNamespaceEmitter);
+}
 
-  // Emit enums first (alphabetically)
-  const enumNames = Array.from(ctx.enumByName.keys()).sort();
-  for (const name of enumNames) {
-    const enumNode = ctx.enumByName.get(name)!;
-    $defs[name] = emitEnumDef(enumNode);
+export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
+  private readonly ctx: EmissionContext;
+  private readonly $defs: Record<string, object> = {};
+  private readonly pendingSourceMapEntries: PendingSourceMapEntry[] = [];
+  private readonly fallbackSourceUri: string;
+  private readonly rulesMetadata: Record<string, { kind: string; inputType: string }> = {};
 
-    // Source map: $defs/<EnumName> → source location
-    // We use outputLine: 0 as a sentinel (JSON files don't have line-based source maps);
-    // JSON Pointer navigation is handled via x-rune-source-map extension.
-    ctx.sourceMap.push({
-      outputLine: 0,
-      sourceUri,
-      sourceLine: 1,
-      sourceChar: 1
-    });
+  constructor(
+    private readonly model: NamespaceWalkResult,
+    _options: GeneratorOptions,
+    registry: NamespaceRegistry = { namespaces: new Map() }
+  ) {
+    this.ctx = buildEmissionContext(model, registry);
+    this.fallbackSourceUri = model.docs[0]?.uri?.toString() ?? '';
   }
 
-  // Emit type alias definitions (after enums, before data types)
-  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
-  for (const name of typeAliasNames) {
-    const alias = ctx.typeAliasByName.get(name)!;
-    $defs[name] = emitTypeAliasDef(alias, ctx);
-  }
-
-  // Emit data types in topological order
-  const emittedData = new Set<string>();
-
-  for (const typeName of ctx.emitOrder) {
-    const data = ctx.dataByName.get(typeName);
-    if (!data) continue;
-    emittedData.add(typeName);
-    $defs[typeName] = emitTypeDef(data, ctx);
-
-    // Source map entry for this type ($defs/<TypeName>)
-    ctx.sourceMap.push({
-      outputLine: 0, // sentinel for JSON output (not line-based)
-      sourceUri,
-      sourceLine: 1,
-      sourceChar: 1
-    });
-  }
-
-  // Emit any data types not in topo order (defensive)
-  const remaining = Array.from(ctx.dataByName.keys())
-    .filter((n) => !emittedData.has(n))
-    .sort();
-  for (const typeName of remaining) {
-    const data = ctx.dataByName.get(typeName)!;
-    $defs[typeName] = emitTypeDef(data, ctx);
-
-    ctx.sourceMap.push({
-      outputLine: 0,
-      sourceUri,
-      sourceLine: 1,
-      sourceChar: 1
-    });
-  }
-
-  const schema: Record<string, unknown> = {
-    $schema: DRAFT_2020_12,
-    $id: ctx.relativePath,
-    title: model.namespace,
-    $defs
-  };
-
-  // T074c: Emit x-rune-rules extension when there are rules in this namespace.
-  // Provides rule metadata (kind + input type) for downstream tooling.
-  const sortedRuleNames = Array.from(ctx.rulesByName.keys()).sort();
-  if (sortedRuleNames.length > 0) {
-    const rulesMetadata: Record<string, { kind: string; inputType: string }> = {};
-    for (const name of sortedRuleNames) {
-      const rule = ctx.rulesByName.get(name)!;
-      const kind = rule.eligibility ? 'eligibility' : 'reporting';
-      const inputRef = rule.input?.type?.ref;
-      const inputName = inputRef ? inputRef.name : 'unknown';
-      rulesMetadata[name] = { kind, inputType: inputName };
+  private trackDefinitionSourceMap(node: Data | RosettaEnumeration | RosettaTypeAlias): void {
+    const start = node.$cstNode?.range?.start;
+    const sourceUri = node.$container?.$document?.uri?.toString() ?? this.fallbackSourceUri;
+    if (!sourceUri || !start) {
+      return;
     }
-    schema['x-rune-rules'] = rulesMetadata;
+    this.pendingSourceMapEntries.push({
+      name: node.name,
+      sourceUri,
+      sourceLine: start.line + 1,
+      sourceChar: start.character + 1
+    });
   }
 
-  const content = serializeJson(schema) + '\n';
+  private flushSourceMap(content: string): void {
+    const lines = content.split('\n');
+    for (const entry of this.pendingSourceMapEntries) {
+      const marker = `    ${JSON.stringify(entry.name)}: {`;
+      const outputLine = lines.findIndex((line) => line === marker);
+      if (outputLine === -1) {
+        continue;
+      }
+      this.ctx.sourceMap.push({
+        outputLine,
+        sourceUri: entry.sourceUri,
+        sourceLine: entry.sourceLine,
+        sourceChar: entry.sourceChar
+      });
+    }
+  }
 
-  return {
-    relativePath: ctx.relativePath,
-    content,
-    sourceMap: ctx.sourceMap,
-    diagnostics: ctx.diagnostics,
-    funcs: [] // FR-031: json-schema target silently skips funcs
-  };
+  emitEnumeration(enumNode: RosettaEnumeration): void {
+    this.$defs[enumNode.name] = emitEnumDef(enumNode);
+    this.trackDefinitionSourceMap(enumNode);
+  }
+
+  emitTypeAlias(typeAlias: RosettaTypeAlias): void {
+    this.$defs[typeAlias.name] = emitTypeAliasDef(typeAlias, this.ctx);
+    this.trackDefinitionSourceMap(typeAlias);
+  }
+
+  emitData(data: Data): void {
+    this.$defs[data.name] = emitTypeDef(data, this.ctx);
+    this.trackDefinitionSourceMap(data);
+  }
+
+  emitRule(rule: RosettaRule): void {
+    const kind = rule.eligibility ? 'eligibility' : 'reporting';
+    const inputRef = rule.input?.type?.ref;
+    this.rulesMetadata[rule.name] = { kind, inputType: inputRef ? inputRef.name : 'unknown' };
+  }
+
+  finalize(): GeneratorOutput {
+    const schema: Record<string, unknown> = {
+      $schema: DRAFT_2020_12,
+      $id: this.ctx.relativePath,
+      title: this.model.namespace,
+      $defs: this.$defs
+    };
+    if (Object.keys(this.rulesMetadata).length > 0) {
+      schema['x-rune-rules'] = this.rulesMetadata;
+    }
+    const content = serializeJson(schema) + '\n';
+    this.flushSourceMap(content);
+    return {
+      relativePath: this.ctx.relativePath,
+      content,
+      sourceMap: this.ctx.sourceMap,
+      diagnostics: this.ctx.diagnostics,
+      funcs: []
+    };
+  }
 }

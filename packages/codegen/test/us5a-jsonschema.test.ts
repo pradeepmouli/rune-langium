@@ -19,13 +19,14 @@ import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import Ajv from 'ajv/dist/2020.js';
 import { generate } from '../src/index.js';
+import type { GeneratorOutput } from '../src/types.js';
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures');
 
 /**
  * Parse a .rune fixture and generate JSON Schema output.
  */
-async function runJsonSchemaFixture(fixtureName: string): Promise<string> {
+async function runJsonSchemaFixtureOutput(fixtureName: string): Promise<GeneratorOutput> {
   const fixtureDir = join(FIXTURES_DIR, fixtureName);
   const inputPath = join(fixtureDir, 'input.rune');
 
@@ -47,7 +48,11 @@ async function runJsonSchemaFixture(fixtureName: string): Promise<string> {
   if (outputs.length === 0) {
     throw new Error(`Generator produced no output for ${fixtureName}`);
   }
-  return outputs[0]!.content;
+  return outputs[0]!;
+}
+
+async function runJsonSchemaFixture(fixtureName: string): Promise<string> {
+  return (await runJsonSchemaFixtureOutput(fixtureName)).content;
 }
 
 /**
@@ -178,6 +183,42 @@ describe('US5A T091: enums fixture — enum shape and ajv meta-schema validation
   });
 });
 
+describe('US5A JSON Schema source maps', () => {
+  it('maps each enum definition to its emitted $defs line and Rune source line', async () => {
+    const output = await runJsonSchemaFixtureOutput('enums');
+    const sourceUri = URI.parse('inmemory:///enums.rosetta').toString();
+
+    expect(output.sourceMap).toEqual([
+      {
+        outputLine: 5,
+        sourceUri,
+        sourceLine: 4,
+        sourceChar: 1
+      },
+      {
+        outputLine: 9,
+        sourceUri,
+        sourceLine: 9,
+        sourceChar: 1
+      }
+    ]);
+  });
+
+  it('maps data definitions to unique output lines', async () => {
+    const output = await runJsonSchemaFixtureOutput('cardinality');
+    const sourceUri = URI.parse('inmemory:///cardinality.rosetta').toString();
+
+    expect(output.sourceMap).toEqual([
+      {
+        outputLine: 5,
+        sourceUri,
+        sourceLine: 4,
+        sourceChar: 1
+      }
+    ]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // T092 — Byte-identical fixture-diff tests
 // ---------------------------------------------------------------------------
@@ -201,10 +242,7 @@ describe('US5A T092: byte-identical fixture-diff — enums', () => {
     const fixtureDir = join(FIXTURES_DIR, 'enums');
     const expectedPath = join(fixtureDir, 'expected.schema.json');
 
-    const [actual, expected] = await Promise.all([
-      runJsonSchemaFixture('enums'),
-      readFile(expectedPath, 'utf-8')
-    ]);
+    const [actual, expected] = await Promise.all([runJsonSchemaFixture('enums'), readFile(expectedPath, 'utf-8')]);
 
     expect(actual).toBe(expected);
   });

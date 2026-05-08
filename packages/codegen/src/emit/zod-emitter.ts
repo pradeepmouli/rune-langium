@@ -11,6 +11,7 @@
 
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { resolveImportPath } from './namespace-registry.js';
+import { emitNamespaceWithContract, type NamespaceEmitter } from './namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import {
   isData,
@@ -33,12 +34,7 @@ import {
   type Annotation,
   type RosettaExternalFunction
 } from '@rune-langium/core';
-import type {
-  GeneratorOptions,
-  GeneratorOutput,
-  SourceMapEntry,
-  GeneratorDiagnostic
-} from '../types.js';
+import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import {
   transpileCondition,
@@ -483,14 +479,11 @@ function emitTypeSchema(data: Data, ctx: EmissionContext): string {
       return `export const ${schemaName} = ${chainedObjectExpr}\n${condIndented};`;
     } else {
       // z.object chain: build chain as `z\n  .object({...})\n  .refine(...)`
-      const attrLines =
-        data.attributes.length === 0 ? [] : data.attributes.map((attr) => emitAttribute(attr, ctx));
+      const attrLines = data.attributes.length === 0 ? [] : data.attributes.map((attr) => emitAttribute(attr, ctx));
       // Build object body with 4-space attribute indentation.
       // emitAttribute returns '  key: val' (2-space prefix), so add 2 more for 4 total.
       const objectBody =
-        attrLines.length === 0
-          ? `.object({})`
-          : `.object({\n${attrLines.map((a) => `  ${a}`).join(',\n')}\n  })`;
+        attrLines.length === 0 ? `.object({})` : `.object({\n${attrLines.map((a) => `  ${a}`).join(',\n')}\n  })`;
       // Condition block indented 2 spaces
       const condIndented = condBlock
         .split('\n')
@@ -714,10 +707,9 @@ function emitEnum(enumNode: RosettaEnumeration, ctx: EmissionContext): string {
       code: 'empty-enum',
       message: `Enum '${name}' has no values; emitting z.enum([]) which is not valid Zod — treating as z.never()`
     });
-    return [
-      `export const ${schemaName} = z.never();`,
-      `export type ${name} = z.infer<typeof ${schemaName}>;`
-    ].join('\n');
+    return [`export const ${schemaName} = z.never();`, `export type ${name} = z.infer<typeof ${schemaName}>;`].join(
+      '\n'
+    );
   }
 
   const memberLiterals = memberNames.map((m) => `'${m}'`).join(', ');
@@ -731,14 +723,11 @@ function emitEnum(enumNode: RosettaEnumeration, ctx: EmissionContext): string {
   if (hasDisplayNames) {
     const displayEntries = enumNode.enumValues.map((v) => {
       // Use single-quoted value (oxfmt singleQuote: true); key unquoted (valid ES5+ property key)
-      const displayName =
-        v.display != null ? escapeDisplayName(v.display) : escapeDisplayName(v.name);
+      const displayName = v.display != null ? escapeDisplayName(v.display) : escapeDisplayName(v.name);
       return `  ${v.name}: '${displayName}'`;
     });
     lines.push('');
-    lines.push(
-      `export const ${name}DisplayNames: Record<${name}, string> = {\n${displayEntries.join(',\n')}\n};`
-    );
+    lines.push(`export const ${name}DisplayNames: Record<${name}, string> = {\n${displayEntries.join(',\n')}\n};`);
   }
 
   return lines.join('\n');
@@ -869,8 +858,7 @@ function emitRuleValidator(rule: RosettaRule, ctx: EmissionContext): string {
   const schemaName = `${inputTypeName}Schema`;
   const attributeTypes = new Map<string, string>();
   const inputData =
-    ctx.dataByName.get(inputTypeName) ??
-    (inputTypeRef && isData(inputTypeRef) ? inputTypeRef : undefined);
+    ctx.dataByName.get(inputTypeName) ?? (inputTypeRef && isData(inputTypeRef) ? inputTypeRef : undefined);
   if (inputData && 'attributes' in inputData) {
     for (const attr of (
       inputData as {
@@ -912,10 +900,7 @@ function emitFileHeader(namespace: string, _ctx: EmissionContext): string {
   ].join('\n');
 }
 
-function buildEmissionContext(
-  model: NamespaceWalkResult,
-  registry: NamespaceRegistry
-): EmissionContext {
+function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
   return {
     target: 'zod',
     emitOrder: model.emitOrder,
@@ -942,109 +927,90 @@ function buildEmissionContext(
  */
 export function emitNamespace(
   model: NamespaceWalkResult,
-  _options: GeneratorOptions,
+  options: GeneratorOptions,
   registry: NamespaceRegistry = { namespaces: new Map() }
 ): GeneratorOutput {
-  const ctx = buildEmissionContext(model, registry);
-  const sections: string[] = [];
+  return emitNamespaceWithContract(model, options, registry, ZodNamespaceEmitter);
+}
 
-  sections.push(emitFileHeader(model.namespace, ctx));
+export class ZodNamespaceEmitter implements NamespaceEmitter {
+  private readonly ctx: EmissionContext;
+  private readonly sections: string[] = [];
 
-  // Collect and emit cross-namespace import statements at the top of the file
-  const crossNsImports = collectCrossNamespaceImports(ctx);
-  if (crossNsImports.length > 0) {
-    sections.push(crossNsImports.join('\n'));
-    sections.push('');
+  constructor(
+    private readonly model: NamespaceWalkResult,
+    _options: GeneratorOptions,
+    registry: NamespaceRegistry = { namespaces: new Map() }
+  ) {
+    this.ctx = buildEmissionContext(model, registry);
   }
 
-  // Emit in topological order: enums first (they don't have dependencies on data types),
-  // then data types in topo-sorted order.
-  //
-  // Emit all enums first (alphabetically for determinism)
-  const enumNames = Array.from(ctx.enumByName.keys()).sort();
-  for (const name of enumNames) {
-    const enumNode = ctx.enumByName.get(name)!;
-    sections.push(emitEnum(enumNode, ctx));
-    sections.push('');
+  emitHeader(): void {
+    this.sections.push(emitFileHeader(this.model.namespace, this.ctx));
   }
 
-  // Emit type alias schemas (after enums, before data types)
-  const typeAliasNames = Array.from(ctx.typeAliasByName.keys()).sort();
-  for (const name of typeAliasNames) {
-    const alias = ctx.typeAliasByName.get(name)!;
-    sections.push('');
-    sections.push(emitTypeAliasSchema(alias, ctx));
+  emitCrossNamespaceImports(): void {
+    const crossNsImports = collectCrossNamespaceImports(this.ctx);
+    if (crossNsImports.length > 0) {
+      this.sections.push(crossNsImports.join('\n'));
+      this.sections.push('');
+    }
   }
 
-  // For cyclic types: emit interface declarations first so that
-  // z.ZodType<TypeName> annotations can reference the TS interface.
-  const cyclicDataNames = Array.from(ctx.lazyTypes)
-    .filter((n) => ctx.dataByName.has(n))
-    .sort();
-  if (cyclicDataNames.length > 0) {
+  emitEnumeration(enumNode: RosettaEnumeration): void {
+    this.sections.push(emitEnum(enumNode, this.ctx));
+    this.sections.push('');
+  }
+
+  emitTypeAlias(typeAlias: RosettaTypeAlias): void {
+    this.sections.push('');
+    this.sections.push(emitTypeAliasSchema(typeAlias, this.ctx));
+  }
+
+  emitDataPrelude(): void {
+    const cyclicDataNames = Array.from(this.ctx.lazyTypes)
+      .filter((name) => this.ctx.dataByName.has(name))
+      .sort();
+    if (cyclicDataNames.length === 0) return;
     for (const typeName of cyclicDataNames) {
-      const data = ctx.dataByName.get(typeName)!;
-      sections.push(emitCyclicInterface(data, ctx));
+      this.sections.push(emitCyclicInterface(this.ctx.dataByName.get(typeName)!, this.ctx));
     }
-    sections.push('');
+    this.sections.push('');
   }
 
-  // Emit data types in topological order (from emitOrder), then any
-  // data types not in the topo order (shouldn't happen, but defensive)
-  const emittedData = new Set<string>();
-
-  for (const typeName of ctx.emitOrder) {
-    const data = ctx.dataByName.get(typeName);
-    if (!data) continue; // might be from another namespace
-    emittedData.add(typeName);
-    sections.push(emitTypeSchema(data, ctx));
-    const alias = emitTypeAlias(data, ctx);
-    if (alias) sections.push(alias);
-    sections.push('');
+  emitData(data: Data): void {
+    this.sections.push(emitTypeSchema(data, this.ctx));
+    const alias = emitTypeAlias(data, this.ctx);
+    if (alias) this.sections.push(alias);
+    this.sections.push('');
   }
 
-  // Emit any data types not captured in topo order (defensive)
-  const remainingData = Array.from(ctx.dataByName.keys())
-    .filter((n) => !emittedData.has(n))
-    .sort();
-  for (const typeName of remainingData) {
-    const data = ctx.dataByName.get(typeName)!;
-    sections.push(emitTypeSchema(data, ctx));
-    const alias = emitTypeAlias(data, ctx);
-    if (alias) sections.push(alias);
-    sections.push('');
-  }
-
-  // Emit rule validators (after data types)
-  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
-  for (const name of ruleNames) {
-    const rule = ctx.rulesByName.get(name)!;
-    const result = emitRuleValidator(rule, ctx);
+  emitRule(rule: RosettaRule): void {
+    const result = emitRuleValidator(rule, this.ctx);
     if (result) {
-      sections.push('');
-      sections.push(result);
+      this.sections.push('');
+      this.sections.push(result);
     }
   }
 
-  // Emit report metadata (T074b) — one const object summarising all rules
-  const reportMeta = emitReportMetadata(ctx);
-  if (reportMeta !== '') {
-    sections.push('');
-    sections.push(reportMeta);
+  emitReportMetadata(): void {
+    const reportMeta = emitReportMetadata(this.ctx);
+    if (reportMeta !== '') {
+      this.sections.push('');
+      this.sections.push(reportMeta);
+    }
   }
 
-  // Remove trailing empty section
-  while (sections.length > 0 && sections[sections.length - 1] === '') {
-    sections.pop();
+  finalize(): GeneratorOutput {
+    while (this.sections.length > 0 && this.sections[this.sections.length - 1] === '') {
+      this.sections.pop();
+    }
+    return {
+      relativePath: getTargetRelativePath(this.model.namespace, 'zod'),
+      content: this.sections.join('\n') + '\n',
+      sourceMap: this.ctx.sourceMap,
+      diagnostics: this.ctx.diagnostics,
+      funcs: []
+    };
   }
-
-  const content = sections.join('\n') + '\n';
-
-  return {
-    relativePath: getTargetRelativePath(model.namespace, 'zod'),
-    content,
-    sourceMap: ctx.sourceMap,
-    diagnostics: ctx.diagnostics,
-    funcs: [] // FR-031: zod target silently skips funcs
-  };
 }
