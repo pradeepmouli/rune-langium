@@ -34,7 +34,14 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
-    dedupe: ['react', 'react-dom', '@xyflow/react']
+    dedupe: [
+      'react',
+      'react-dom',
+      '@xyflow/react',
+      '@radix-ui/react-compose-refs',
+      '@radix-ui/react-primitive',
+      '@radix-ui/react-slot'
+    ]
   },
   server: {
     // Default 5173 (Vite convention, uncontested on macOS where AirPlay owns

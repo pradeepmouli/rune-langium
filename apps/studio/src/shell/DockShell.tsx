@@ -53,6 +53,7 @@ import { applyLayout, serializeLayout } from './dockview-bridge.js';
 import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
 import { UtilityTrayContext } from './utility-tray-context.js';
 import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
 
@@ -347,16 +348,23 @@ export function DockShell({
         </div>
       </div>
       {layoutNotice ? (
-        <div
-          role="alert"
-          className="flex items-center justify-between border-b border-border bg-muted/60 px-3 py-1.5 text-xs text-foreground"
+        <Alert
+          role="status"
+          aria-live="polite"
+          className="flex items-center justify-between rounded-none border-x-0 border-t-0 bg-muted/60 px-3 py-1.5 text-xs"
           data-testid="layout-reset-notice"
         >
-          <span>{layoutNotice}</span>
-          <button type="button" className="font-medium" onClick={() => setLayoutNotice(null)}>
-            Dismiss
-          </button>
-        </div>
+          <AlertDescription className="grid-cols-[1fr_auto] flex w-full items-center justify-between">
+            <span>{layoutNotice}</span>
+            <button
+              type="button"
+              className="ml-2 font-medium"
+              onClick={() => setLayoutNotice(null)}
+            >
+              Dismiss
+            </button>
+          </AlertDescription>
+        </Alert>
       ) : null}
       <CenterPanesContext.Provider
         value={{

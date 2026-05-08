@@ -202,12 +202,25 @@ export function ModelLoader() {
       {/* Custom URL input */}
       <div className="space-y-2">
         {showCustom ? (
-          <div className="space-y-2">
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleLoadCustom();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setShowCustom(false);
+              }
+            }}
+          >
             <Input
               placeholder="https://github.com/owner/repo.git"
               value={customUrl}
               onChange={(e) => setCustomUrl(e.target.value)}
               data-testid="custom-url-input"
+              autoFocus
             />
             <div className="flex gap-2">
               <Input
@@ -216,14 +229,15 @@ export function ModelLoader() {
                 onChange={(e) => setCustomRef(e.target.value)}
                 className="flex-1"
               />
-              <Button size="sm" onClick={handleLoadCustom} disabled={!customUrl.trim()}>
+              <Button type="submit" size="sm" disabled={!customUrl.trim()}>
                 Load
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowCustom(false)}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowCustom(false)}>
                 Cancel
               </Button>
             </div>
-          </div>
+            <p className="text-xs text-muted-foreground">Press Esc to cancel, Enter to load.</p>
+          </form>
         ) : (
           <Button variant="link" size="sm" onClick={() => setShowCustom(true)} className="p-0">
             + Load from custom URL

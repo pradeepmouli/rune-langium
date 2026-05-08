@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 vi.mock('@codemirror/view', () => ({
   EditorView: class MockEditorView {
@@ -200,9 +201,11 @@ describe('CodePreviewPanel — target switching', () => {
       } as MessageEvent);
     });
 
-    fireEvent.change(screen.getByTestId('codegen-file-select'), {
-      target: { value: 'beta.zod.ts' }
-    });
+    // Radix Select renders a button trigger + portal-mounted listbox, so we
+    // drive it through user-event (open the menu, then click the option).
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('codegen-file-select'));
+    await user.click(await screen.findByRole('option', { name: 'beta.zod.ts' }));
 
     expect(screen.getByTestId('codegen-relative-path')).toHaveTextContent('beta.zod.ts');
   });

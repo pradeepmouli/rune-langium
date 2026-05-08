@@ -11,6 +11,13 @@ import { useCallback, useRef, useState } from 'react';
 import type { WorkspaceFile, WorkspaceLoadProgress } from '../services/workspace.js';
 import { createBlankWorkspaceFile, readFileList } from '../services/workspace.js';
 import { Button } from '@rune-langium/design-system/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@rune-langium/design-system/ui/dialog';
 import { cn } from '@rune-langium/design-system/utils';
 import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
 import { config } from '../config.js';
@@ -189,20 +196,20 @@ export function FileLoader({
           </div>
         )}
 
-        {config.githubAuthEnabled && isGitHubOpen && createGitBackedWorkspace && (
+        {config.githubAuthEnabled && createGitBackedWorkspace && (
           // T031 visible affordance + T032e end-to-end clone wiring.
           // The CTA only renders when `createGitBackedWorkspace` is wired,
           // so reaching here means the full flow is available. App.tsx
           // hasn't threaded the prop in yet → the CTA stays hidden and
           // the legacy "auth-only" stub no longer ships in production.
-          <div
-            role="presentation"
-            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setIsGitHubOpen(false);
-            }}
-          >
-            <div className="bg-popover border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+          <Dialog open={isGitHubOpen} onOpenChange={setIsGitHubOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Open from GitHub</DialogTitle>
+                <DialogDescription>
+                  Sign in with GitHub and clone a repository into a new workspace.
+                </DialogDescription>
+              </DialogHeader>
               <GitHubWorkspaceFlow
                 authBase={authBase}
                 createWorkspace={createGitBackedWorkspace}
@@ -212,8 +219,8 @@ export function FileLoader({
                 }}
                 onCancel={() => setIsGitHubOpen(false)}
               />
-            </div>
-          </div>
+            </DialogContent>
+          </Dialog>
         )}
 
         {/* Visually hidden — NOT display:none, Chrome blocks .click() on those.

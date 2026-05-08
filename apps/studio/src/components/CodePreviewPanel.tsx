@@ -7,6 +7,13 @@ import { basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@rune-langium/design-system/ui/select';
 import { refactoryDark } from '../lang/refactory-dark-theme.js';
 import { TargetSwitcher } from './TargetSwitcher.js';
 import {
@@ -277,21 +284,26 @@ export function CodePreviewPanel({
       <div className="preview-panel__toolbar flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-1.5">
         <TargetSwitcher value={target} onChange={handleTargetChange} />
         {selectableFiles && selectableFiles.length > 1 ? (
-          <label className="min-w-0 text-xs text-muted-foreground">
-            <span className="sr-only">Generated file</span>
-            <select
-              className="preview-panel__select max-w-[18rem] px-2 py-1 text-xs"
-              value={activeRelativePath}
-              onChange={(event) => setActiveCodePreviewFile(event.target.value)}
+          <Select
+            value={activeRelativePath}
+            onValueChange={(value) => setActiveCodePreviewFile(value)}
+          >
+            <SelectTrigger
+              size="sm"
+              aria-label="Generated file"
               data-testid="codegen-file-select"
+              className="max-w-[18rem] text-xs"
             >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
               {selectableFiles.map((file) => (
-                <option key={file.relativePath} value={file.relativePath}>
+                <SelectItem key={file.relativePath} value={file.relativePath} className="text-xs">
                   {file.relativePath}
-                </option>
+                </SelectItem>
               ))}
-            </select>
-          </label>
+            </SelectContent>
+          </Select>
         ) : null}
         <div className="ml-auto min-w-0 text-right">
           <span

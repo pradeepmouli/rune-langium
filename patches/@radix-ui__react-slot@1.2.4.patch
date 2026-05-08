@@ -1,0 +1,50 @@
+diff --git a/dist/index.js b/dist/index.js
+index 3691205244d1602e995967a2f23a3621f75f5c47..a9d3e7aa880d5ff9664377b970882354513efd93 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -85,11 +85,14 @@ function createSlotClone(ownerName) {
+     if (isLazyComponent(children) && typeof use === "function") {
+       children = use(children._payload);
+     }
++    const childrenRef = React.isValidElement(children) ? getElementRef(children) : void 0;
++    const composedRef = (0, import_react_compose_refs.useComposedRefs)(forwardedRef, childrenRef);
+     if (React.isValidElement(children)) {
+-      const childrenRef = getElementRef(children);
+       const props2 = mergeProps(slotProps, children.props);
++      // Keep the composed callback ref stable across renders so React 19
++      // doesn't treat each render as a ref unmount/remount cycle.
+       if (children.type !== React.Fragment) {
+-        props2.ref = forwardedRef ? (0, import_react_compose_refs.composeRefs)(forwardedRef, childrenRef) : childrenRef;
++        props2.ref = composedRef;
+       }
+       return React.cloneElement(children, props2);
+     }
+diff --git a/dist/index.mjs b/dist/index.mjs
+index d7ea37463aa39e6b9f27e9ab6882d3ed6e61ffe1..69a4bcaa4fedd63be562f429624519945b41c14b 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1,6 +1,6 @@
+ // src/slot.tsx
+ import * as React from "react";
+-import { composeRefs } from "@radix-ui/react-compose-refs";
++import { useComposedRefs } from "@radix-ui/react-compose-refs";
+ import { Fragment as Fragment2, jsx } from "react/jsx-runtime";
+ var REACT_LAZY_TYPE = Symbol.for("react.lazy");
+ var use = React[" use ".trim().toString()];
+@@ -45,11 +45,14 @@ function createSlotClone(ownerName) {
+     if (isLazyComponent(children) && typeof use === "function") {
+       children = use(children._payload);
+     }
++    const childrenRef = React.isValidElement(children) ? getElementRef(children) : void 0;
++    const composedRef = useComposedRefs(forwardedRef, childrenRef);
+     if (React.isValidElement(children)) {
+-      const childrenRef = getElementRef(children);
+       const props2 = mergeProps(slotProps, children.props);
++      // Keep the composed callback ref stable across renders so React 19
++      // doesn't treat each render as a ref unmount/remount cycle.
+       if (children.type !== React.Fragment) {
+-        props2.ref = forwardedRef ? composeRefs(forwardedRef, childrenRef) : childrenRef;
++        props2.ref = composedRef;
+       }
+       return React.cloneElement(children, props2);
+     }

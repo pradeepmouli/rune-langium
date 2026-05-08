@@ -17,6 +17,7 @@ import { ModelLoader } from './components/ModelLoader.js';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
+import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
@@ -605,23 +606,21 @@ export function App() {
 
       <main className="flex-1 overflow-hidden relative">
         {workspaceError ? (
-          <div
-            role="alert"
-            className="absolute left-3 right-3 top-3 z-20 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive shadow-sm"
-          >
-            {workspaceError}
-          </div>
+          <Alert variant="destructive" className="absolute left-3 right-3 top-3 z-20 shadow-sm">
+            <AlertDescription>{workspaceError}</AlertDescription>
+          </Alert>
         ) : null}
         {workspaceNotice ? (
-          <div
+          <Alert
+            variant="warning"
             role="status"
             aria-live="polite"
-            className={`absolute left-3 right-3 z-20 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 shadow-sm dark:text-amber-100 ${
+            className={`absolute left-3 right-3 z-20 shadow-sm ${
               workspaceError ? 'top-16' : 'top-3'
             }`}
           >
-            {workspaceNotice}
-          </div>
+            <AlertDescription>{workspaceNotice}</AlertDescription>
+          </Alert>
         ) : null}
         {(bootState === 'checking' || bootState === 'restoring') && (
           <div

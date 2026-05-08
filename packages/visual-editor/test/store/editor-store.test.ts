@@ -5,7 +5,7 @@
  * Unit tests for the editor store — selection, search, and filter behavior.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import { COMBINED_MODEL_SOURCE, SIMPLE_INHERITANCE_SOURCE } from '../helpers/fixture-loader.js';
@@ -67,6 +67,21 @@ describe('EditorStore', () => {
       store.getState().selectNode(nodes[0]!.id);
       store.getState().selectNode(null);
       expect(store.getState().selectedNodeId).toBeNull();
+    });
+
+    it('does not notify subscribers when selecting the same node twice', async () => {
+      const result = await parse(COMBINED_MODEL_SOURCE);
+      store.getState().loadModels(result.value);
+      const nodeId = store.getState().nodes[0]!.id;
+      const listener = vi.fn();
+      const unsubscribe = store.subscribe(listener);
+
+      store.getState().selectNode(nodeId);
+      listener.mockClear();
+      store.getState().selectNode(nodeId);
+
+      expect(listener).not.toHaveBeenCalled();
+      unsubscribe();
     });
   });
 
