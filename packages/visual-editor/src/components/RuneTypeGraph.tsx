@@ -477,14 +477,12 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
         if (selectedNodes.length > 0) {
           const node = selectedNodes[0] as Node;
           if (node.type === 'groupContainer') return;
-          if (selectedNodeId !== node.id) {
-            selectNode(node.id);
-          }
+          selectNode(node.id);
         } else {
           callbacks?.onSelectionClear?.();
         }
       },
-      [selectNode, callbacks, selectedNodeId]
+      [selectNode, callbacks]
     );
 
     // Navigation context value for clickable type references in nodes
