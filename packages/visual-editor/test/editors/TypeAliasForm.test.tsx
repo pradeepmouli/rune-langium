@@ -36,6 +36,7 @@ import type { AnyGraphNode, EditorFormActions, TypeOption } from '../../src/type
 // ---------------------------------------------------------------------------
 
 vi.mock('../../src/components/editors/TypeSelector.js', () => ({
+  getKindDotClass: () => 'bg-muted-foreground',
   TypeSelector: ({
     value,
     options = [],
@@ -66,9 +67,7 @@ import { TypeAliasForm } from '../../src/components/editors/TypeAliasForm.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeActions(
-  overrides: Partial<EditorFormActions<'typeAlias'>> = {}
-): EditorFormActions<'typeAlias'> {
+function makeActions(overrides: Partial<EditorFormActions<'typeAlias'>> = {}): EditorFormActions<'typeAlias'> {
   return {
     renameType: vi.fn(),
     deleteType: vi.fn(),
@@ -122,9 +121,7 @@ vi.mock('@zod-to-form/react', async (importOriginal) => {
     ...actual,
     useExternalSync: (...args: unknown[]) => {
       useExternalSyncSpy(...args);
-      return (actual as any).useExternalSync(
-        ...(args as Parameters<typeof actual.useExternalSync>)
-      );
+      return (actual as any).useExternalSync(...(args as Parameters<typeof actual.useExternalSync>));
     }
   };
 });
@@ -173,10 +170,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     const interactive = Array.from(
       container.querySelectorAll('input[data-slot="type-name-input"], [data-slot="type-selector"]')
     );
-    expect(interactive.map((el) => el.getAttribute('data-slot'))).toEqual([
-      'type-name-input',
-      'type-selector'
-    ]);
+    expect(interactive.map((el) => el.getAttribute('data-slot'))).toEqual(['type-name-input', 'type-selector']);
   });
 
   // -------------------------------------------------------------------------
@@ -225,28 +219,16 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     });
 
     const { container, rerender } = render(
-      <TypeAliasForm
-        nodeId="test.aliases::ShortText"
-        data={nodeA}
-        actions={actions}
-        availableTypes={AVAILABLE_TYPES}
-      />
+      <TypeAliasForm nodeId="test.aliases::ShortText" data={nodeA} actions={actions} availableTypes={AVAILABLE_TYPES} />
     );
 
     // Initial state pulled from nodeA
-    const initialName = container.querySelector(
-      '[data-slot="type-name-input"]'
-    ) as HTMLInputElement;
+    const initialName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
     expect(initialName.value).toBe('ShortText');
 
     // Swap to nodeB (different reference identity)
     rerender(
-      <TypeAliasForm
-        nodeId="test.aliases::TinyInt"
-        data={nodeB}
-        actions={actions}
-        availableTypes={AVAILABLE_TYPES}
-      />
+      <TypeAliasForm nodeId="test.aliases::TinyInt" data={nodeB} actions={actions} availableTypes={AVAILABLE_TYPES} />
     );
 
     act(() => {
@@ -254,9 +236,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     });
 
     // Pristine field reflects nodeB after the swap
-    const swappedName = container.querySelector(
-      '[data-slot="type-name-input"]'
-    ) as HTMLInputElement;
+    const swappedName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
     expect(swappedName.value).toBe('TinyInt');
 
     // Migration contract — the upstream useExternalSync hook is the

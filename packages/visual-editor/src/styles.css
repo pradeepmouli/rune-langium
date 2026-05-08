@@ -120,27 +120,72 @@
 .rune-node {
   border-radius: var(--radius-lg, 8px);
   border: 1px solid transparent;
-  background: oklch(0.19 0.02 280);
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 10%, oklch(0.21 0.02 280)) 0%,
+      oklch(0.18 0.02 280) 100%
+    );
   font-family: var(--font-sans, 'Inter', ui-sans-serif, system-ui, sans-serif);
   font-size: var(--text-base, 13px);
   min-width: 200px;
   color: var(--color-node-text, #E8E6E1);
-  box-shadow: 0 1px 4px oklch(0 0 0 / 0.4);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 26px oklch(0 0 0 / 0.24);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.rune-node::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 82%, white 18%);
+  opacity: 0.78;
+}
+
+.rune-node::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at top,
+      color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 18%, transparent),
+      transparent 52%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 38%);
 }
 
 .rune-node:hover {
-  box-shadow: 0 2px 12px oklch(0 0 0 / 0.5);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 28px oklch(0 0 0 / 0.3);
 }
 
 .rune-node-header {
   padding: var(--space-4, 8px) var(--space-6, 12px);
   font-weight: 600;
   font-size: var(--text-md, 14px);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
   display: flex;
   align-items: center;
   gap: var(--space-3, 6px);
+  position: relative;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 10%, transparent),
+      transparent 72%
+    ),
+    color-mix(in oklch, var(--background, #121218) 28%, transparent);
 }
 
 .rune-node-summary {
@@ -270,6 +315,7 @@ button[data-navigable]:focus-visible {
 /* Default: subtle tinted border. Hover: stronger. Selected handled by .rune-node-selected. */
 
 .rune-node-data {
+  --node-accent: var(--color-data, #00D4AA);
   border-color: color-mix(in oklch, var(--color-data, #00D4AA) 25%, transparent);
 }
 .rune-node-data:hover {
@@ -284,6 +330,7 @@ button[data-navigable]:focus-visible {
 /* ── Choice node (amber) ──────────────────────────────────────── */
 
 .rune-node-choice {
+  --node-accent: var(--color-choice, #E8913A);
   border-color: color-mix(in oklch, var(--color-choice, #E8913A) 25%, transparent);
 }
 .rune-node-choice:hover {
@@ -298,6 +345,7 @@ button[data-navigable]:focus-visible {
 /* ── Enum node (purple) ──────────────────────────────────────── */
 
 .rune-node-enum {
+  --node-accent: var(--color-enum, #8B7BF4);
   border-color: color-mix(in oklch, var(--color-enum, #8B7BF4) 25%, transparent);
 }
 .rune-node-enum:hover {
@@ -312,6 +360,7 @@ button[data-navigable]:focus-visible {
 /* ── Function node (blue) ───────────────────────────────────── */
 
 .rune-node-func {
+  --node-accent: var(--color-func, #82AAFF);
   border-color: color-mix(in oklch, var(--color-func, #82AAFF) 25%, transparent);
 }
 .rune-node-func:hover {
@@ -529,6 +578,125 @@ button[data-navigable]:focus-visible {
 .rune-toolbar-select:hover {
   background: var(--input);
   color: var(--foreground);
+}
+
+/* ── Shared type reference field ─────────────────────────────── */
+
+.rune-type-reference {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 4px 2px 2px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--muted, #2a2a33) 20%, transparent);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.rune-type-reference:hover {
+  border-color: color-mix(in oklch, var(--border, #454552) 78%, transparent);
+  background: color-mix(in oklch, var(--muted, #2a2a33) 32%, transparent);
+}
+
+.rune-type-reference:focus-within {
+  border-color: color-mix(in oklch, var(--primary, #00d4aa) 42%, transparent);
+  background: color-mix(in oklch, var(--muted, #2a2a33) 42%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary, #00d4aa) 18%, transparent);
+}
+
+.rune-type-reference[data-readonly='true'] {
+  padding-inline: 8px;
+  background: color-mix(in oklch, var(--muted, #2a2a33) 14%, transparent);
+}
+
+.rune-type-reference[data-empty='true'] {
+  padding-left: 8px;
+}
+
+.rune-type-reference__picker-wrap {
+  flex-shrink: 0;
+  display: flex;
+}
+
+.rune-type-reference__picker {
+  color: var(--muted-foreground, #8a8a96);
+  border-radius: 999px;
+}
+
+.rune-type-reference__picker:hover {
+  color: var(--foreground, #e8e6e1);
+  background: color-mix(in oklch, var(--muted, #2a2a33) 58%, transparent) !important;
+}
+
+.rune-type-reference__link {
+  min-width: 0;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground, #8a8a96);
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  line-height: 1.2;
+}
+
+.rune-type-reference__link--navigable {
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.rune-type-reference__link--navigable:hover,
+.rune-type-reference__link--navigable:focus-visible {
+  color: var(--foreground, #e8e6e1);
+}
+
+.rune-type-reference__link--navigable:focus-visible {
+  outline: none;
+}
+
+.rune-type-reference__link--static {
+  cursor: default;
+}
+
+.rune-type-reference__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px color-mix(in oklch, currentColor 18%, transparent);
+}
+
+.rune-type-reference__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rune-type-reference__icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  opacity: 0.65;
+}
+
+.rune-type-reference__placeholder {
+  min-width: 0;
+  padding-inline: 4px;
+  color: var(--muted-foreground, #8a8a96);
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Detail panel ─────────────────────────────────────────────── */

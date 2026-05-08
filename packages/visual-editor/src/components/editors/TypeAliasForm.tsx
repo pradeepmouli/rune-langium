@@ -35,8 +35,7 @@ import { FormProvider, Controller, useWatch } from 'react-hook-form';
 import { Field, FieldError, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
-import { TypeSelector } from './TypeSelector.js';
-import { TypeLink } from './TypeLink.js';
+import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { RosettaTypeAliasSchema } from '../../generated/zod-schemas.js';
@@ -152,8 +151,7 @@ function TypeAliasForm({
     control: form.control,
     name: 'typeCall.type' as never
   }) as { $refText?: string } | undefined;
-  const dataTypeRef = (data as { typeCall?: { type?: { $refText?: string } } }).typeCall?.type
-    ?.$refText;
+  const dataTypeRef = (data as { typeCall?: { type?: { $refText?: string } } }).typeCall?.type?.$refText;
   const currentTypeLabel = watchedTypeRef?.$refText ?? dataTypeRef ?? '';
   const currentTypeValue = currentTypeLabel
     ? (availableTypes.find((opt) => opt.label === currentTypeLabel)?.value ?? null)
@@ -212,19 +210,15 @@ function TypeAliasForm({
             <FieldLegend variant="label" className="mb-0 text-muted-foreground">
               Wrapped type
             </FieldLegend>
-            {currentTypeLabel && (
-              <TypeLink
-                typeName={currentTypeLabel}
-                onNavigateToNode={onNavigateToNode}
-                allNodeIds={allNodeIds}
-                className="text-sm font-mono mb-1"
-              />
-            )}
-            <TypeSelector
-              value={currentTypeValue ?? ''}
+            <TypeReferenceField
+              value={currentTypeValue ?? null}
+              displayName={currentTypeLabel}
               options={availableTypes}
               onSelect={handleTypeSelect}
               placeholder="Select wrapped type..."
+              emptyLabel="No wrapped type"
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
             />
           </FieldSet>
         </div>

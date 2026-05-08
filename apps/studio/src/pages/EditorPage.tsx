@@ -147,6 +147,27 @@ function matchesPreviewSourceIdentity(
   );
 }
 
+function getFileKindBadge(name: string): string {
+  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
+  switch (ext) {
+    case 'rosetta':
+      return 'DSL';
+    case 'json':
+      return 'JSON';
+    case 'yaml':
+    case 'yml':
+      return 'YAML';
+    case 'ts':
+      return 'TS';
+    case 'js':
+      return 'JS';
+    case 'md':
+      return 'MD';
+    default:
+      return ext ? ext.slice(0, 4).toUpperCase() : 'FILE';
+  }
+}
+
 function FileTabStrip({
   files,
   activeFile,
@@ -171,6 +192,9 @@ function FileTabStrip({
         >
           <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
           <span className="studio-topbar__tab-name">{f.name}</span>
+          <span className="studio-topbar__tab-badge" aria-hidden="true">
+            {getFileKindBadge(f.name)}
+          </span>
         </button>
       ))}
     </div>
@@ -1221,6 +1245,9 @@ export function EditorPage({
             aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
             title="Close workspace — return to start page"
           >
+            <span className="studio-topbar__ws-mark" aria-hidden="true">
+              {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
+            </span>
             <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
             <span className="studio-topbar__ws-sub">
               {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}

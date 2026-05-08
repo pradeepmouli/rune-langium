@@ -232,18 +232,11 @@ export function ModelLoader() {
               <Button type="submit" size="sm" disabled={!customUrl.trim()}>
                 Load
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCustom(false)}
-              >
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowCustom(false)}>
                 Cancel
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Press Esc to cancel, Enter to load.
-            </p>
+            <p className="text-xs text-muted-foreground">Press Esc to cancel, Enter to load.</p>
           </form>
         ) : (
           <Button variant="link" size="sm" onClick={() => setShowCustom(true)} className="p-0">
