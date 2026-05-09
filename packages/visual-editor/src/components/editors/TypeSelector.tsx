@@ -276,7 +276,7 @@ export function TypeSelector({
       <SelectTrigger data-slot="type-selector" className={`h-7 text-xs px-2 ${triggerClassName ?? ''}`.trim()}>
         <SelectValue placeholder={allowClear ? '— None —' : placeholder} />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="rune-type-selector__content">
         {allowClear && <SelectItem value={NONE_SENTINEL}>— None —</SelectItem>}
         {groups.map((group) => (
           <SelectGroup key={group.label}>

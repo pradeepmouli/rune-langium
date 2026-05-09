@@ -24,4 +24,5 @@ export * from './separator.js';
 export * from './spinner.js';
 export * from './tabs.js';
 export * from './textarea.js';
+export * from './toast.js';
 export * from './tooltip.js';

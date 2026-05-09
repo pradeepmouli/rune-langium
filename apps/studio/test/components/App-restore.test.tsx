@@ -17,24 +17,24 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
+import type { ReactNode } from 'react';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 import { App } from '../../src/App.js';
-import {
-  saveWorkspace,
-  _resetForTests,
-  type WorkspaceRecord
-} from '../../src/workspace/persistence.js';
+import { saveWorkspace, _resetForTests, type WorkspaceRecord } from '../../src/workspace/persistence.js';
 import { createOpfsRoot, type OpfsRoot } from '../setup/opfs-mock.js';
 import { saveWorkspaceFiles, setWorkspaceFilesDeps } from '../../src/workspace/workspace-files.js';
+
+const { showToastSpy } = vi.hoisted(() => ({
+  showToastSpy: vi.fn()
+}));
 
 vi.mock('../../src/components/ModelLoader.js', () => ({
   ModelLoader: () => null
 }));
 
 vi.mock('../../src/pages/EditorPage.js', () => ({
-  EditorPage: ({ fileCount }: { fileCount?: number }) =>
-    fileCount != null ? <span>{fileCount} file(s)</span> : null
+  EditorPage: ({ fileCount }: { fileCount?: number }) => (fileCount != null ? <span>{fileCount} file(s)</span> : null)
 }));
 
 vi.mock('../../src/store/model-store.js', () => ({
@@ -57,11 +57,12 @@ vi.mock('../../src/services/lsp-client.js', () => ({
   })
 }));
 
-function makeWorkspace(
-  id: string,
-  name: string,
-  lastOpenedAt = new Date().toISOString()
-): WorkspaceRecord {
+vi.mock('../../src/components/StudioToastProvider.js', () => ({
+  StudioToastProvider: ({ children }: { children?: ReactNode }) => children,
+  useStudioToast: () => ({ showToast: showToastSpy })
+}));
+
+function makeWorkspace(id: string, name: string, lastOpenedAt = new Date().toISOString()): WorkspaceRecord {
   return {
     id,
     name,
@@ -182,5 +183,24 @@ describe('App workspace restore on mount (T027/US2)', () => {
     });
     expect(screen.queryByTestId('workspace-restored')).not.toBeInTheDocument();
     expect(document.body).not.toHaveAttribute('data-workspace-active', 'true');
+  });
+
+  it('shows a destructive workspace toast when restore throws', async () => {
+    await saveWorkspace(makeWorkspace('ws-broken', 'Broken Project'));
+    const persistence = await import('../../src/workspace/persistence.js');
+    const spy = vi.spyOn(persistence, 'loadWorkspace').mockRejectedValue(new Error('boom'));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(showToastSpy).toHaveBeenCalledWith({
+        title: 'Workspace error',
+        description: 'Workspace restore failed; showing the start page instead',
+        variant: 'destructive',
+        duration: 5000
+      });
+    });
+
+    spy.mockRestore();
   });
 });

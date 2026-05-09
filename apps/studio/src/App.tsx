@@ -17,7 +17,6 @@ import { ModelLoader } from './components/ModelLoader.js';
 import { WorkspaceSwitcher } from './components/WorkspaceSwitcher.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
-import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
@@ -30,12 +29,9 @@ import { config, studioConfig } from './config.js';
 import * as persistence from './workspace/persistence.js';
 import type { WorkspaceRecord } from './workspace/persistence.js';
 import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
-import {
-  deleteWorkspaceFiles,
-  loadWorkspaceFiles,
-  saveWorkspaceFiles
-} from './workspace/workspace-files.js';
+import { deleteWorkspaceFiles, loadWorkspaceFiles, saveWorkspaceFiles } from './workspace/workspace-files.js';
 import { WorkspaceManager } from './workspace/workspace-manager.js';
+import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
 
@@ -72,12 +68,10 @@ function deriveWorkspaceName(files: readonly WorkspaceFile[]): string {
   return firstFile.name.replace(/\.rosetta$/i, '') || 'Workspace';
 }
 
-export function App() {
+function AppContent() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [models, setModels] = useState<RosettaModel[]>([]);
-  const [parsedModels, setParsedModels] = useState<
-    Array<{ filePath: string; model: RosettaModel }>
-  >([]);
+  const [parsedModels, setParsedModels] = useState<Array<{ filePath: string; model: RosettaModel }>>([]);
   const [, setErrors] = useState<Map<string, string[]>>(new Map());
   const [deferredExports, setDeferredExports] = useState<
     Array<{ filePath: string; namespace: string; exports: Array<{ type: string; name: string }> }>
@@ -107,36 +101,52 @@ export function App() {
   // preserve them without calling useModelStore.getState() (which is not
   // available in the test mock of useModelStore).
   const loadedModelsRef = useRef<Map<string, LoadedModel>>(new Map());
+  const { showToast } = useStudioToast();
 
   const reportWorkspaceError = useCallback((message: string, error: unknown) => {
     console.warn(`[App] ${message}:`, error);
     setWorkspaceError(message);
   }, []);
 
-  const applyParseResult = useCallback(
-    (result: Awaited<ReturnType<typeof parseWorkspaceFiles>>) => {
-      setModels(result.models);
-      setParsedModels(result.parsedModels);
-      setErrors(result.errors);
-      setWorkspaceNotice(
-        result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null
-      );
-      // Store deferred corpus types — they'll be registered in the editor
-      // store by the EditorPage effect that watches models + deferredExports.
-      setDeferredExports(result.deferredExports ?? []);
-    },
-    []
-  );
+  useEffect(() => {
+    if (!workspaceError) {
+      return;
+    }
+    showToast({
+      title: 'Workspace error',
+      description: workspaceError,
+      variant: 'destructive',
+      duration: 5000
+    });
+  }, [showToast, workspaceError]);
+
+  useEffect(() => {
+    if (!workspaceNotice) {
+      return;
+    }
+    showToast({
+      title: 'Workspace notice',
+      description: workspaceNotice,
+      duration: 4000
+    });
+  }, [showToast, workspaceNotice]);
+
+  const applyParseResult = useCallback((result: Awaited<ReturnType<typeof parseWorkspaceFiles>>) => {
+    setModels(result.models);
+    setParsedModels(result.parsedModels);
+    setErrors(result.errors);
+    setWorkspaceNotice(result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null);
+    // Store deferred corpus types — they'll be registered in the editor
+    // store by the EditorPage effect that watches models + deferredExports.
+    setDeferredExports(result.deferredExports ?? []);
+  }, []);
 
   const syncWorkspaceToEditor = useCallback(
     async (workspaceFiles: WorkspaceFile[]) => {
       setLoading(true);
       try {
         // Start with the built-in base types and the user's workspace files.
-        let mergedFiles: WorkspaceFile[] = [
-          ...BASE_TYPE_FILES.map((file) => ({ ...file })),
-          ...workspaceFiles
-        ];
+        let mergedFiles: WorkspaceFile[] = [...BASE_TYPE_FILES.map((file) => ({ ...file })), ...workspaceFiles];
         // Preserve any reference model files that are already loaded so that
         // switching/restoring a workspace doesn't silently drop them.
         for (const model of loadedModelsRef.current.values()) {
@@ -349,10 +359,7 @@ export function App() {
 
       if (restoredWorkspace) {
         void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles).catch((err) => {
-          reportWorkspaceError(
-            'Failed to save workspace changes to browser storage; edits remain in memory',
-            err
-          );
+          reportWorkspaceError('Failed to save workspace changes to browser storage; edits remain in memory', err);
         });
       }
 
@@ -363,10 +370,7 @@ export function App() {
           const result = await parseWorkspaceFiles(updatedFiles);
           applyParseResult(result);
         } catch (error) {
-          reportWorkspaceError(
-            'Failed to re-parse updated files; keeping the last valid graph',
-            error
-          );
+          reportWorkspaceError('Failed to re-parse updated files; keeping the last valid graph', error);
         }
       }, 500);
     },
@@ -384,10 +388,7 @@ export function App() {
   const handleReset = useCallback(() => {
     if (restoredWorkspace) {
       void saveWorkspaceFiles(restoredWorkspace.id, []).catch((err) => {
-        reportWorkspaceError(
-          'Failed to persist the cleared workspace state to browser storage',
-          err
-        );
+        reportWorkspaceError('Failed to persist the cleared workspace state to browser storage', err);
       });
     }
     setFiles([]);
@@ -431,10 +432,7 @@ export function App() {
       try {
         const ws = await persistence.loadWorkspace(workspaceId);
         if (!ws) {
-          reportWorkspaceError(
-            'The selected workspace no longer exists in browser storage',
-            workspaceId
-          );
+          reportWorkspaceError('The selected workspace no longer exists in browser storage', workspaceId);
           return;
         }
         setBootState('restoring');
@@ -571,8 +569,7 @@ export function App() {
   const userFiles = files.filter((f) => !f.readOnly);
   const showEditorPage = useMemo(
     () =>
-      (bootState === 'start' && !loading && userFiles.length > 0) ||
-      (bootState === 'restored' && userFiles.length > 0),
+      (bootState === 'start' && !loading && userFiles.length > 0) || (bootState === 'restored' && userFiles.length > 0),
     [bootState, loading, userFiles.length]
   );
 
@@ -605,23 +602,6 @@ export function App() {
       )}
 
       <main className="flex-1 overflow-hidden relative">
-        {workspaceError ? (
-          <Alert variant="destructive" className="absolute left-3 right-3 top-3 z-20 shadow-sm">
-            <AlertDescription>{workspaceError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {workspaceNotice ? (
-          <Alert
-            variant="warning"
-            role="status"
-            aria-live="polite"
-            className={`absolute left-3 right-3 z-20 shadow-sm ${
-              workspaceError ? 'top-16' : 'top-3'
-            }`}
-          >
-            <AlertDescription>{workspaceNotice}</AlertDescription>
-          </Alert>
-        ) : null}
         {(bootState === 'checking' || bootState === 'restoring') && (
           <div
             className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md"
@@ -689,9 +669,7 @@ export function App() {
             data-testid="workspace-restored"
             aria-label={`Workspace ${restoredWorkspace?.name ?? ''} restored`}
           >
-            <p className="text-2xl font-semibold text-foreground mb-1">
-              {restoredWorkspace?.name ?? 'Workspace'}
-            </p>
+            <p className="text-2xl font-semibold text-foreground mb-1">{restoredWorkspace?.name ?? 'Workspace'}</p>
             <p>Workspace ready.</p>
           </div>
         )}
@@ -714,5 +692,13 @@ export function App() {
         )}
       </main>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <StudioToastProvider>
+      <AppContent />
+    </StudioToastProvider>
   );
 }

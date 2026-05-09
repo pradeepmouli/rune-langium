@@ -48,10 +48,11 @@ import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
 import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { Kbd } from '@rune-langium/design-system/ui/kbd';
 import { Maximize2, LayoutGrid, Network, Check, Download, Share2, Zap, Search, ChevronDown } from 'lucide-react';
+import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
+import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
 import type { WorkspaceFile } from '../services/workspace.js';
@@ -208,7 +209,6 @@ export function EditorPage({
   groupedLayoutRef.current = groupedLayout;
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
   const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
@@ -220,6 +220,7 @@ export function EditorPage({
   const codegenRequestSequenceRef = useRef(0);
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const navigationHistoryRef = useRef<string[]>([]);
+  const { showToast } = useStudioToast();
   const pendingDisplayFileRef = useRef<Map<string, (view: import('@codemirror/view').EditorView | null) => void>>(
     new Map()
   );
@@ -699,7 +700,11 @@ export function EditorPage({
       const exists = storeNodes.some((n) => n.id === nodeId);
       if (!exists) {
         const shortName = nodeId.includes('::') ? nodeId.split('::').pop() : nodeId;
-        setToastMessage(`Type "${shortName}" not loaded — load the file containing this type`);
+        showToast({
+          description: `Type "${shortName}" not loaded — load the file containing this type`,
+          variant: 'destructive',
+          duration: 3000
+        });
         return;
       }
       const current = useEditorStore.getState().selectedNodeId;
@@ -710,7 +715,7 @@ export function EditorPage({
       graphRef.current?.focusNode(nodeId);
       storeSelectNode(nodeId);
     },
-    [storeNodes, storeSelectNode]
+    [showToast, storeNodes, storeSelectNode]
   );
 
   const navigateBack = useCallback(() => {
@@ -718,18 +723,16 @@ export function EditorPage({
     if (!prev) return;
     const exists = storeNodes.some((n) => n.id === prev);
     if (!exists) {
-      setToastMessage(`Previous node "${prev}" is no longer in the graph`);
+      showToast({
+        description: `Previous node "${prev}" is no longer in the graph`,
+        variant: 'destructive',
+        duration: 3000
+      });
       return;
     }
     graphRef.current?.focusNode(prev);
     storeSelectNode(prev);
-  }, [storeSelectNode, storeNodes]);
-
-  useEffect(() => {
-    if (!toastMessage) return;
-    const timer = setTimeout(() => setToastMessage(null), 3000);
-    return () => clearTimeout(timer);
-  }, [toastMessage]);
+  }, [showToast, storeSelectNode, storeNodes]);
 
   const handleEditorPageKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
@@ -1233,23 +1236,6 @@ export function EditorPage({
           </Avatar>
         </div>
       </header>
-
-      {toastMessage && (
-        <Alert variant="destructive" className="rounded-none border-x-0 border-t-0 px-3 py-1.5 text-sm">
-          <AlertDescription className="flex w-full items-center justify-between">
-            <span>{toastMessage}</span>
-            <button
-              type="button"
-              className="ml-2 font-medium hover:opacity-80"
-              onClick={() => setToastMessage(null)}
-              aria-label="Dismiss"
-            >
-              ×
-            </button>
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="flex flex-1 min-h-0">
         <ActivityBar onWorkspaceClick={() => onClose?.()} onModelsClick={() => {}} onSettingsClick={() => {}} />
         <div className="flex-1 min-h-0">

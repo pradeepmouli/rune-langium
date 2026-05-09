@@ -3,41 +3,62 @@
 
 import React, { useEffect, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, cleanup, waitFor, screen, act } from '@testing-library/react';
+import { render, cleanup, waitFor, screen, act, fireEvent } from '@testing-library/react';
 import { usePreviewStore } from '../../src/store/preview-store.js';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 
-const { editorStoreState, useEditorStore, useDiagnosticsStore } = vi.hoisted(() => {
-  const editorStoreState = {
-    nodes: [] as Array<{
-      id: string;
-      data: { namespace?: string; name?: string; $type?: string };
-    }>,
-    selectedNodeId: undefined as string | undefined,
-    visibility: { expandedNamespaces: new Set<string>(), hiddenNodeIds: new Set<string>() },
-    selectNode: vi.fn(),
-    toggleNamespace: vi.fn(),
-    toggleNodeVisibility: vi.fn(),
-    expandAllNamespaces: vi.fn(),
-    collapseAllNamespaces: vi.fn(),
-    loadModels: vi.fn()
-  };
+const { editorStoreState, useEditorStore, useDiagnosticsStore, runeTypeGraphMockState, showToastSpy } = vi.hoisted(
+  () => {
+    const editorStoreState = {
+      nodes: [] as Array<{
+        id: string;
+        data: { namespace?: string; name?: string; $type?: string };
+      }>,
+      selectedNodeId: undefined as string | undefined,
+      visibility: { expandedNamespaces: new Set<string>(), hiddenNodeIds: new Set<string>() },
+      selectNode: vi.fn((nodeId: string) => {
+        editorStoreState.selectedNodeId = nodeId;
+      }),
+      toggleNamespace: vi.fn(),
+      toggleNodeVisibility: vi.fn(),
+      expandAllNamespaces: vi.fn(),
+      collapseAllNamespaces: vi.fn(),
+      loadModels: vi.fn()
+    };
 
-  const useEditorStore = ((selector: (state: typeof editorStoreState) => unknown) =>
-    selector(editorStoreState)) as typeof import('@rune-langium/visual-editor').useEditorStore;
-  Object.assign(useEditorStore, {
-    getState: () => editorStoreState
-  });
+    const useEditorStore = ((selector: (state: typeof editorStoreState) => unknown) =>
+      selector(editorStoreState)) as typeof import('@rune-langium/visual-editor').useEditorStore;
+    Object.assign(useEditorStore, {
+      getState: () => editorStoreState
+    });
 
-  const diagnosticsState = { fileDiagnostics: new Map(), totalErrors: 0, totalWarnings: 0 };
-  const useDiagnosticsStore = (() =>
-    diagnosticsState) as typeof import('../../src/store/diagnostics-store.js').useDiagnosticsStore;
-  Object.assign(useDiagnosticsStore, {
-    getState: () => diagnosticsState
-  });
+    const diagnosticsState = { fileDiagnostics: new Map(), totalErrors: 0, totalWarnings: 0 };
+    const useDiagnosticsStore = (() =>
+      diagnosticsState) as typeof import('../../src/store/diagnostics-store.js').useDiagnosticsStore;
+    Object.assign(useDiagnosticsStore, {
+      getState: () => diagnosticsState
+    });
 
-  return { editorStoreState, useEditorStore, diagnosticsState, useDiagnosticsStore };
-});
+    const runeTypeGraphMockState = {
+      latestCallbacks: undefined as
+        | {
+            onNavigateToType?: (nodeId: string) => void;
+          }
+        | undefined
+    };
+
+    const showToastSpy = vi.fn();
+
+    return {
+      editorStoreState,
+      useEditorStore,
+      diagnosticsState,
+      useDiagnosticsStore,
+      runeTypeGraphMockState,
+      showToastSpy
+    };
+  }
+);
 
 const { sourceEditorMockState, dockShellMockState } = vi.hoisted(() => ({
   sourceEditorMockState: {
@@ -83,7 +104,10 @@ class MockWorker {
 }
 
 vi.mock('@rune-langium/visual-editor', () => ({
-  RuneTypeGraph: () => React.createElement('div'),
+  RuneTypeGraph: ({ callbacks }: { callbacks?: { onNavigateToType?: (nodeId: string) => void } }) => {
+    runeTypeGraphMockState.latestCallbacks = callbacks;
+    return React.createElement('div');
+  },
   NamespaceExplorerPanel: () => React.createElement('div'),
   EditorFormPanel: () => React.createElement('div'),
   ExpressionBuilder: () => React.createElement('div'),
@@ -157,6 +181,12 @@ vi.mock('../../src/services/workspace.js', async (importOriginal) => {
     linkDocument: vi.fn().mockResolvedValue({ linked: false, errors: [], newModels: [] })
   };
 });
+
+vi.mock('../../src/components/StudioToastProvider.js', () => ({
+  StudioToastProvider: ({ children }: { children?: React.ReactNode }) =>
+    React.createElement(React.Fragment, {}, children),
+  useStudioToast: () => ({ showToast: showToastSpy })
+}));
 
 vi.mock('lucide-react', () => ({
   Maximize2: () => React.createElement('span'),
@@ -260,6 +290,7 @@ describe('EditorPage preview target identity', () => {
     vi.clearAllMocks();
     sourceEditorMockState.latestProps = undefined;
     dockShellMockState.latestProps = undefined;
+    runeTypeGraphMockState.latestCallbacks = undefined;
   });
 
   afterEach(() => {
@@ -275,7 +306,7 @@ describe('EditorPage preview target identity', () => {
     ];
     editorStoreState.selectedNodeId = 'beta-trade';
 
-    render(
+    const view = render(
       <EditorPage
         models={[]}
         files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace beta', dirty: false }]}
@@ -708,7 +739,7 @@ describe('EditorPage preview target identity', () => {
       })
     };
 
-    render(
+    const view = render(
       <EditorPage
         models={[]}
         files={[
@@ -762,6 +793,7 @@ describe('EditorPage workspace chrome', () => {
     vi.clearAllMocks();
     sourceEditorMockState.latestProps = undefined;
     dockShellMockState.latestProps = undefined;
+    runeTypeGraphMockState.latestCallbacks = undefined;
   });
 
   afterEach(() => {
@@ -771,7 +803,7 @@ describe('EditorPage workspace chrome', () => {
   });
 
   it('renders a workspace header and keeps graph controls inside the graph panel', () => {
-    render(
+    const view = render(
       <EditorPage
         models={[]}
         files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}
@@ -821,6 +853,99 @@ describe('EditorPage workspace chrome', () => {
         component: 'workspace.inspector',
         nonce: 1
       });
+    });
+  });
+
+  it('shows a destructive toast when navigating to a type that is not loaded', () => {
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
+      }
+    ];
+
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::GhostType');
+    });
+
+    expect(showToastSpy).toHaveBeenCalledWith({
+      description: 'Type "GhostType" not loaded — load the file containing this type',
+      variant: 'destructive',
+      duration: 3000
+    });
+  });
+
+  it('shows a destructive toast when navigating back to a node that is no longer in the graph', () => {
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
+      },
+      {
+        id: 'cdm.base.datetime::BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
+
+    const view = render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::BusinessCenter');
+    });
+
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }
+      }
+    ];
+    view.rerender(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    fireEvent.keyDown(screen.getByTestId('editor-page'), { key: 'ArrowLeft', altKey: true });
+
+    expect(showToastSpy).toHaveBeenCalledWith({
+      description: 'Previous node "cdm.base.datetime::AdjustableDate" is no longer in the graph',
+      variant: 'destructive',
+      duration: 3000
     });
   });
 });

@@ -249,6 +249,33 @@
   color: color-mix(in oklch, var(--color-choice, #E8913A) 72%, white 28%);
 }
 
+.rune-type-selector__content {
+  max-height: min(24rem, var(--radix-select-content-available-height));
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--border, #3a3a44) 82%, white 18%) transparent;
+}
+
+.rune-type-selector__content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.rune-type-selector__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rune-type-selector__content::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+  background-color: color-mix(in oklch, var(--border, #3a3a44) 82%, white 18%);
+}
+
+.rune-type-selector__content::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklch, var(--border, #3a3a44) 68%, white 32%);
+}
+
 .rune-node-body {
   padding: var(--space-4, 8px) var(--space-6, 12px);
 }
