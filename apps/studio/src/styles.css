@@ -259,23 +259,47 @@
   }
 
   .studio-app .dockview-theme-abyss .dv-tab {
-    min-height: 24px;
+    min-height: 28px;
+    border-radius: 6px;
     user-select: none;
+    color: color-mix(in srgb, var(--foreground) 52%, transparent);
+    transition:
+      color 140ms ease,
+      background-color 140ms ease,
+      box-shadow 140ms ease,
+      opacity 140ms ease;
   }
 
-  .studio-app .dockview-theme-abyss .dv-tab .dv-tab-content {
-    padding-inline: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 0.625rem;
-    font-weight: 700;
+  .studio-app .dockview-theme-abyss .dv-tab .dv-default-tab {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .studio-app .dockview-theme-abyss .dv-tab .dv-default-tab-content {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    padding-inline: 0.625rem;
+    text-transform: none;
+    letter-spacing: -0.01em;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1;
+    text-align: center;
   }
 
   .studio-app .studio-dock-tab {
-    display: inline-flex;
+    display: flex;
+    width: 100%;
     min-width: 0;
     align-items: center;
-    gap: 0.35rem;
+    justify-content: center;
+    gap: 0.375rem;
+    padding-inline: 0.625rem;
+    text-align: center;
   }
 
   .studio-app .studio-dock-tab__label {
@@ -286,11 +310,13 @@
   }
 
   .studio-app .dockview-theme-abyss .dv-tab .studio-dock-tab__count {
-    min-width: 16px;
-    height: 16px;
+    position: static;
+    min-width: 14px;
+    height: 14px;
     padding: 0 5px;
     border-radius: 999px;
-    font-size: 9.5px;
+    font-size: 10px;
+    line-height: 14px;
     letter-spacing: 0;
     box-shadow: none;
   }
@@ -411,7 +437,9 @@
   }
 
   .studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash {
-    position: relative;
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
   }
 
   .studio-app
@@ -845,6 +873,27 @@
    */
   .studio-app .dockview-theme-abyss .dv-tab.dv-active-tab {
     position: relative;
+  }
+
+  .studio-app .dockview-theme-abyss .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+    color: color-mix(in srgb, var(--foreground) 96%, white 4%);
+  }
+
+  .studio-app .dockview-theme-abyss .dv-groupview.dv-active-group .dv-tab.dv-inactive-tab {
+    color: color-mix(in srgb, var(--foreground) 52%, transparent);
+  }
+
+  .studio-app .dockview-theme-abyss .dv-groupview.dv-inactive-group .dv-tab.dv-active-tab {
+    color: color-mix(in srgb, var(--foreground) 72%, white 4%);
+  }
+
+  .studio-app .dockview-theme-abyss .dv-groupview.dv-inactive-group .dv-tab.dv-inactive-tab {
+    color: color-mix(in srgb, var(--foreground) 34%, transparent);
+  }
+
+  .studio-app .dockview-theme-abyss .dv-tab.dv-inactive-tab:hover {
+    color: color-mix(in srgb, var(--foreground) 76%, transparent);
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
   }
 
   /* Accent underline via ::before — dockview 6.x owns ::after for its focus
@@ -1288,9 +1337,10 @@
   gap: 8px;
   padding: 0 12px;
   border-bottom: 0.5px solid var(--border);
+  background: color-mix(in oklch, var(--card) 92%, var(--background) 8%);
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--muted-foreground);
+  color: color-mix(in srgb, var(--muted-foreground) 82%, var(--foreground) 18%);
 }
 
 /* File-extension badge — rs-pill-soft equivalent */
@@ -1302,13 +1352,13 @@
   font-size: 10.5px;
   padding: 2px 7px;
   border-radius: 4px;
-  background: var(--accent);
-  color: oklch(0.78 0.01 80);
-  border: 0.5px solid var(--input);
+  background: color-mix(in oklch, var(--accent) 16%, var(--card) 84%);
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--border) 78%, transparent);
 }
 
 .studio-source-meta__path {
-  color: oklch(0.78 0.01 80);
+  color: color-mix(in srgb, var(--foreground) 74%, transparent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1320,10 +1370,121 @@
 }
 
 .studio-source-meta__stat {
-  color: var(--muted-foreground);
-  opacity: 0.7;
+  color: color-mix(in srgb, var(--muted-foreground) 84%, transparent);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.studio-source-editor__tabs {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  overflow-x: auto;
+  min-height: 34px;
+  padding: 3px 6px 4px;
+  border-bottom: 0.5px solid var(--border);
+  background: color-mix(in oklch, var(--card) 94%, var(--background) 6%);
+}
+
+.studio-source-editor__tab-shell {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  height: 28px;
+  padding-inline: 2px;
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--foreground) 56%, transparent);
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.studio-source-editor__tab-shell:hover {
+  background: color-mix(in oklch, var(--accent) 12%, var(--card) 88%);
+  color: color-mix(in srgb, var(--foreground) 84%, transparent);
+}
+
+.studio-source-editor__tab-shell--active {
+  background: color-mix(in oklch, var(--accent) 24%, var(--card) 76%);
+  color: var(--foreground);
+  box-shadow: inset 0 -1.5px 0 var(--primary);
+}
+
+.studio-source-editor__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 16rem;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  appearance: none;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.studio-source-editor__tab--active {
+  color: var(--foreground);
+}
+
+.studio-source-editor__tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-source-editor__tab-lock {
+  flex: none;
+  opacity: 0.56;
+}
+
+.studio-source-editor__tab-dirty {
+  flex: none;
+  color: var(--color-warning);
+  font-size: 0.5rem;
+  line-height: 1;
+  text-shadow: 0 0 0.4rem color-mix(in srgb, var(--color-warning) 24%, transparent);
+}
+
+.studio-source-editor__tab-close {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--foreground) 42%, transparent);
+  opacity: 0;
+  transition:
+    opacity 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.studio-source-editor__tab-shell:hover .studio-source-editor__tab-close,
+.studio-source-editor__tab-close:focus-visible,
+.studio-source-editor__tab-close--active {
+  opacity: 1;
+}
+
+.studio-source-editor__tab-close:hover {
+  background: color-mix(in oklch, var(--accent) 18%, var(--card) 82%);
+  color: var(--foreground);
 }
 
 /* T055 (014/FR-022) — match landing's `.nav-links a` typography:
@@ -1455,7 +1616,9 @@
 .ns-row__chevron:focus-visible,
 .ns-row__visibility:focus-visible,
 .ns-type__visibility:focus-visible,
-.studio-source-view__tab:focus-visible {
+.studio-source-view__tab:focus-visible,
+.studio-source-editor__tab:focus-visible,
+.studio-source-editor__tab-close:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
@@ -2231,6 +2394,19 @@
   background: transparent;
 }
 
+/* Dockview's outer dv-view wrappers default to overflow:auto. Our padded shell
+ * makes those wrappers a few pixels larger than their client box, which causes
+ * browser scrollbars around the entire dock frame. Clamp only the shell-level
+ * wrappers so inner panel content can keep its own scrolling behavior. */
+.studio-app .dv-view.visible:has(> .dockview-theme-abyss),
+.studio-app .dv-view.visible:has(> .dv-shell-middle-column) {
+  overflow: hidden !important;
+}
+
+.studio-app .dv-view.visible {
+  overflow: hidden !important;
+}
+
 /* dockview leaves .dv-content-container without overflow, so tall panel content
  * (e.g. a very long code preview) bleeds outside the panel bounds and creates a
  * visual gap at the bottom. overflow:hidden clips it at the panel edge and lets
@@ -2267,6 +2443,10 @@
 
 /* Tab header background matches card surface; top corners follow panel radius. */
 .studio-app .dockview-theme-abyss .dv-tabs-and-actions-container {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 3px 6px 4px;
   border-radius: 12px 12px 0 0;
   background:
     linear-gradient(
@@ -2275,6 +2455,50 @@
       color-mix(in srgb, var(--card) 97%, var(--background) 3%)
     );
   box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 52%, transparent);
+}
+
+/* Dockview tab text defaults are theme-defined and unlayered, so keep these
+ * overrides here with the other high-priority dockview patches. */
+.studio-app .dockview-theme-abyss .dv-tab .dv-default-tab {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.studio-app .dockview-theme-abyss .dv-tab .dv-default-tab-content {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 0.625rem;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  text-align: center !important;
+}
+
+.studio-app .dockview-theme-abyss .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+  background: color-mix(in oklch, var(--accent) 26%, var(--card) 74%) !important;
+  color: color-mix(in srgb, var(--foreground) 96%, white 4%) !important;
+}
+
+.studio-app .dockview-theme-abyss .dv-groupview.dv-active-group .dv-tab.dv-inactive-tab {
+  background: transparent !important;
+  color: color-mix(in srgb, var(--foreground) 52%, transparent) !important;
+}
+
+.studio-app .dockview-theme-abyss .dv-groupview.dv-inactive-group .dv-tab.dv-active-tab {
+  background: color-mix(in oklch, var(--accent) 16%, var(--card) 84%) !important;
+  color: color-mix(in srgb, var(--foreground) 72%, white 4%) !important;
+}
+
+.studio-app .dockview-theme-abyss .dv-groupview.dv-inactive-group .dv-tab.dv-inactive-tab {
+  background: transparent !important;
+  color: color-mix(in srgb, var(--foreground) 34%, transparent) !important;
 }
 
 /* Sash (resize handle) — outside @layer so it beats dockview's 4px default.
@@ -2295,7 +2519,9 @@
 }
 
 .studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash {
-  position: relative;
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
 }
 
 .studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::after {

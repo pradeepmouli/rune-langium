@@ -429,20 +429,19 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
   }
 
   return (
-    <section className="studio-editor-page__source flex h-full flex-col bg-card" data-testid="source-editor">
+    <section
+      className="studio-source-editor studio-editor-page__source flex h-full flex-col bg-card"
+      data-testid="source-editor"
+    >
       {/* Tab bar — suppressed when parent already provides file-tab navigation */}
       {!hideTabs && (
-        <nav
-          className="flex overflow-x-auto bg-card border-b border-border gap-px min-h-[32px]"
-          role="tablist"
-          aria-label="Open files"
-        >
+        <nav className="studio-source-editor__tabs" role="tablist" aria-label="Open files">
           {files.map((file) => (
             <div
               key={file.path}
               className={cn(
-                'group flex items-center gap-0.5 border-b-2 border-b-transparent transition-colors',
-                file.path === selectedPath ? 'border-b-primary' : ''
+                'studio-source-editor__tab-shell group',
+                file.path === selectedPath ? 'studio-source-editor__tab-shell--active' : ''
               )}
             >
               <button
@@ -452,16 +451,14 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
                 aria-controls="editor-tabpanel"
                 tabIndex={file.path === selectedPath ? 0 : -1}
                 className={cn(
-                  'max-w-[16rem] truncate pl-2.5 pr-1 py-1 text-xs bg-transparent border-none cursor-pointer whitespace-nowrap transition-[color,background-color,transform]',
-                  'hover:text-foreground',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-                  file.path === selectedPath ? 'text-primary' : 'text-muted-foreground'
+                  'studio-source-editor__tab',
+                  file.path === selectedPath ? 'studio-source-editor__tab--active' : ''
                 )}
                 onClick={() => handleFileSelect(file.path)}
                 onKeyDown={(event) => handleTabKeyDown(event, file.path)}
                 title={file.path}
               >
-                {file.name}
+                <span className="studio-source-editor__tab-label">{file.name}</span>
                 {file.readOnly && (
                   <svg
                     width="11"
@@ -469,22 +466,24 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
                     viewBox="0 0 16 16"
                     fill="currentColor"
                     aria-label="read-only"
-                    className="inline-block ml-1 opacity-60"
+                    className="studio-source-editor__tab-lock"
                   >
                     <path d="M11 7V5a3 3 0 0 0-6 0v2H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1zm-5 0V5a2 2 0 1 1 4 0v2H6zm2 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
                   </svg>
                 )}
-                {file.dirty && <span className="text-warning text-xs"> ●</span>}
+                {file.dirty && (
+                  <span className="studio-source-editor__tab-dirty" aria-hidden>
+                    ●
+                  </span>
+                )}
               </button>
               {onFileClose && !file.readOnly && (
                 <button
                   type="button"
                   aria-label={`Close ${file.name}`}
                   className={cn(
-                    'shrink-0 p-0.5 rounded-sm text-muted-foreground transition-[color,background-color,opacity,transform]',
-                    'hover:text-foreground hover:bg-muted',
-                    'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-                    file.path === selectedPath && 'opacity-60'
+                    'studio-source-editor__tab-close',
+                    file.path === selectedPath && 'studio-source-editor__tab-close--active'
                   )}
                   onClick={(e) => {
                     e.stopPropagation();
