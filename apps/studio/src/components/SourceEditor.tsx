@@ -98,10 +98,7 @@ function getTabId(path: string): string {
   return `tab-${encoded}`;
 }
 
-function scrollToPosition(
-  view: EditorView | null,
-  position: { line: number; character: number }
-): void {
+function scrollToPosition(view: EditorView | null, position: { line: number; character: number }): void {
   if (!view) return;
   const clampedLine = Math.max(1, Math.min(position.line, view.state.doc.lines));
   const lineInfo = view.state.doc.line(clampedLine);
@@ -111,7 +108,7 @@ function scrollToPosition(
     selection: { anchor: selectionAnchor },
     effects: EditorView.scrollIntoView(selectionAnchor, { y: 'center' })
   });
-  view.focus();
+  view.contentDOM.focus({ preventScroll: true });
 }
 
 /**
@@ -273,10 +270,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
     }
   }, [files, selectedPath]);
 
-  const currentFile = useMemo(
-    () => files.find((f) => f.path === selectedPath),
-    [files, selectedPath]
-  );
+  const currentFile = useMemo(() => files.find((f) => f.path === selectedPath), [files, selectedPath]);
 
   const handleFileSelect = useCallback(
     (path: string) => {

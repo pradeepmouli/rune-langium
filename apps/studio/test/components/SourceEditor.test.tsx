@@ -17,15 +17,20 @@ import type { SourceEditorProps } from '../../src/components/SourceEditor.js';
 // Mock CodeMirror since it needs a real DOM
 const mockEditorViewDestroy = vi.fn();
 const mockEditorViewFocus = vi.fn();
+const mockContentDomFocus = vi.fn();
 const mockEditorViewDispatch = vi.fn();
 let lastEditorView: {
   dispatch: typeof mockEditorViewDispatch;
   focus: typeof mockEditorViewFocus;
+  contentDOM: { focus: typeof mockContentDomFocus };
 } | null = null;
 
 vi.mock('@codemirror/view', () => {
   class MockEditorView {
     dom = document.createElement('div');
+    contentDOM = {
+      focus: mockContentDomFocus
+    };
     state = {
       doc: {
         toString: () => '',
@@ -42,7 +47,11 @@ vi.mock('@codemirror/view', () => {
     static scrollIntoView = vi.fn((anchor: number) => ({ anchor }));
     static lineWrapping = [];
     constructor() {
-      lastEditorView = this;
+      lastEditorView = {
+        dispatch: this.dispatch,
+        focus: this.focus,
+        contentDOM: this.contentDOM
+      };
     }
   }
   return {
@@ -186,19 +195,14 @@ describe('SourceEditor', () => {
         selection: { anchor: 12 },
         effects: { anchor: 12 }
       });
-      expect(lastEditorView?.focus).toHaveBeenCalled();
+      expect(lastEditorView?.contentDOM.focus).toHaveBeenCalledWith({ preventScroll: true });
     });
 
     it('switches files before revealing a source position in another tab', async () => {
       const ref = React.createRef<import('../../src/components/SourceEditor.js').SourceEditorRef>();
       const onFileSelect = vi.fn();
       render(
-        <SourceEditor
-          ref={ref}
-          files={sampleFiles}
-          activeFile="/workspace/model.rosetta"
-          onFileSelect={onFileSelect}
-        />
+        <SourceEditor ref={ref} files={sampleFiles} activeFile="/workspace/model.rosetta" onFileSelect={onFileSelect} />
       );
 
       await act(async () => {
@@ -213,19 +217,14 @@ describe('SourceEditor', () => {
         selection: { anchor: 12 },
         effects: { anchor: 12 }
       });
-      expect(lastEditorView?.focus).toHaveBeenCalled();
+      expect(lastEditorView?.contentDOM.focus).toHaveBeenCalledWith({ preventScroll: true });
     });
 
     it('matches a basename when revealPosition is given a different file path format', async () => {
       const ref = React.createRef<import('../../src/components/SourceEditor.js').SourceEditorRef>();
       const onFileSelect = vi.fn();
       render(
-        <SourceEditor
-          ref={ref}
-          files={sampleFiles}
-          activeFile="/workspace/model.rosetta"
-          onFileSelect={onFileSelect}
-        />
+        <SourceEditor ref={ref} files={sampleFiles} activeFile="/workspace/model.rosetta" onFileSelect={onFileSelect} />
       );
 
       await act(async () => {
@@ -240,7 +239,7 @@ describe('SourceEditor', () => {
         selection: { anchor: 12 },
         effects: { anchor: 12 }
       });
-      expect(lastEditorView?.focus).toHaveBeenCalled();
+      expect(lastEditorView?.contentDOM.focus).toHaveBeenCalledWith({ preventScroll: true });
     });
   });
 
@@ -307,13 +306,7 @@ describe('SourceEditor', () => {
     it('applies read-only EditorState extension when read-only file is active', async () => {
       const { EditorState } = vi.mocked(await import('@codemirror/state'));
       const onContentChange = vi.fn();
-      render(
-        <SourceEditor
-          files={[readOnlyFile]}
-          activeFile={readOnlyFile.path}
-          onContentChange={onContentChange}
-        />
-      );
+      render(<SourceEditor files={[readOnlyFile]} activeFile={readOnlyFile.path} onContentChange={onContentChange} />);
       // EditorState.readOnly.of should have been called with true
       expect(EditorState.readOnly.of).toHaveBeenCalledWith(true);
     });

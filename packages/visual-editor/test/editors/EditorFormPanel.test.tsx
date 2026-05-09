@@ -19,6 +19,17 @@ import { EditorFormPanel } from '../../src/components/panels/EditorFormPanel.js'
 import { astToModel } from '../../src/adapters/ast-to-model.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 
+const { typeAliasFormSpy } = vi.hoisted(() => ({
+  typeAliasFormSpy: vi.fn()
+}));
+
+vi.mock('../../src/components/editors/TypeAliasForm.js', () => ({
+  TypeAliasForm: (props: unknown) => {
+    typeAliasFormSpy(props);
+    return <div data-slot="mock-type-alias-form">TypeAliasForm</div>;
+  }
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -94,19 +105,13 @@ function makeNodeData(overrides: Record<string, unknown> = {}): AnyGraphNode {
 describe('EditorFormPanel', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    typeAliasFormSpy.mockReset();
   });
 
   // ---- Empty state -------------------------------------------------------
 
   it('renders empty state when nodeData is null', () => {
-    render(
-      <EditorFormPanel
-        nodeData={null}
-        nodeId={null}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
-    );
+    render(<EditorFormPanel nodeData={null} nodeId={null} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
 
     expect(screen.getByText('Select a node to edit')).toBeDefined();
   });
@@ -142,14 +147,7 @@ describe('EditorFormPanel', () => {
   });
 
   it('sets aria-label="Editor form" in empty state', () => {
-    render(
-      <EditorFormPanel
-        nodeData={null}
-        nodeId={null}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
-    );
+    render(<EditorFormPanel nodeData={null} nodeId={null} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
 
     const panel = screen.getByRole('complementary');
     expect(panel.getAttribute('aria-label')).toBe('Editor form');
@@ -227,6 +225,57 @@ describe('EditorFormPanel', () => {
 
     // Falls through to DetailPanel for annotation kind — shows Namespace label
     expect(screen.getByText('Namespace')).toBeDefined();
+  });
+
+  it('forwards available types and navigation props to TypeAliasForm', () => {
+    const onNavigateToNode = vi.fn();
+
+    render(
+      <EditorFormPanel
+        nodeData={makeNodeData({
+          $type: 'RosettaTypeAlias',
+          name: 'AliasName',
+          typeCall: { $type: 'TypeCall', type: { $refText: 'string' } }
+        })}
+        nodeId="alias-node"
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={
+          [
+            {
+              id: 'alias-node',
+              data: {
+                $type: 'RosettaTypeAlias',
+                name: 'AliasName',
+                namespace: 'test.model'
+              }
+            },
+            {
+              id: 'other-node',
+              data: {
+                $type: 'Data',
+                name: 'Trade',
+                namespace: 'test.model'
+              }
+            }
+          ] as never
+        }
+        onNavigateToNode={onNavigateToNode}
+      />
+    );
+
+    expect(screen.getByText('TypeAliasForm')).toBeInTheDocument();
+    expect(typeAliasFormSpy).toHaveBeenCalledOnce();
+
+    const props = typeAliasFormSpy.mock.calls[0]?.[0] as {
+      availableTypes?: TypeOption[];
+      allNodeIds?: string[];
+      onNavigateToNode?: (nodeId: string) => void;
+    };
+
+    expect(props.availableTypes).toEqual(AVAILABLE_TYPES);
+    expect(props.allNodeIds).toEqual(['alias-node', 'other-node']);
+    expect(props.onNavigateToNode).toBe(onNavigateToNode);
   });
 
   // ---- Sticky header ------------------------------------------------------

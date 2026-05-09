@@ -130,7 +130,8 @@
   .studio-app .dockview-theme-abyss {
     --dv-tabs-and-actions-container-font-size: 11px;
     --dv-tabs-and-actions-container-height: 24px;
-    --dv-tabs-and-actions-container-background-color: var(--card);
+    --dv-tabs-and-actions-container-background-color:
+      color-mix(in srgb, var(--card) 92%, var(--background) 8%);
     --dv-sash-color: rgba(148, 163, 184, 0.42);
     --dv-active-sash-color: rgba(94, 234, 212, 0.9);
     --dv-active-sash-transition-duration: 0.12s;
@@ -268,6 +269,30 @@
     letter-spacing: 0.08em;
     font-size: 0.625rem;
     font-weight: 700;
+  }
+
+  .studio-app .studio-dock-tab {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .studio-app .studio-dock-tab__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .studio-app .dockview-theme-abyss .dv-tab .studio-dock-tab__count {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 999px;
+    font-size: 9.5px;
+    letter-spacing: 0;
+    box-shadow: none;
   }
 
   .studio-app .dockview-theme-abyss {
@@ -2233,7 +2258,13 @@
 /* Tab header background matches card surface; top corners follow panel radius. */
 .studio-app .dockview-theme-abyss .dv-tabs-and-actions-container {
   border-radius: 12px 12px 0 0;
-  background: var(--popover);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card) 94%, white 6%),
+      color-mix(in srgb, var(--card) 97%, var(--background) 3%)
+    );
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 52%, transparent);
 }
 
 /* Sash (resize handle) — outside @layer so it beats dockview's 4px default.
