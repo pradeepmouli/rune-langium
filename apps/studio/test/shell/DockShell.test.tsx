@@ -20,8 +20,9 @@ interface FakeGroupSpy {
 }
 
 interface FakePanelSpy {
-  api: { setActive: () => void };
+  api: { setActive: () => void; updateParameters: (parameters: unknown) => void };
   activeCalls: number;
+  parameterCalls: unknown[];
   group: FakeGroupSpy;
 }
 
@@ -35,10 +36,11 @@ function makeFakeGroup(): FakeGroupSpy {
 
 interface CapturedReady {
   components: Record<string, unknown>;
+  defaultTabComponent: unknown;
   onReady: ((ev: { api: FakeApi }) => void) | undefined;
 }
 
-const captured: CapturedReady = { components: {}, onReady: undefined };
+const captured: CapturedReady = { components: {}, defaultTabComponent: undefined, onReady: undefined };
 let lastApi: FakeApi | null = null;
 
 class FakeApi {
@@ -54,9 +56,13 @@ class FakeApi {
     const group = makeFakeGroup();
     const panelSpy: FakePanelSpy = {
       activeCalls: 0,
+      parameterCalls: [],
       api: {
         setActive: () => {
           panelSpy.activeCalls++;
+        },
+        updateParameters: (parameters) => {
+          panelSpy.parameterCalls.push(parameters);
         }
       },
       group
@@ -89,9 +95,11 @@ class FakeApi {
 vi.mock('dockview-react', () => ({
   DockviewReact(props: {
     components: Record<string, unknown>;
+    defaultTabComponent?: unknown;
     onReady: (ev: { api: FakeApi }) => void;
   }) {
     captured.components = props.components;
+    captured.defaultTabComponent = props.defaultTabComponent;
     captured.onReady = props.onReady;
     setTimeout(() => {
       lastApi = new FakeApi();
@@ -117,6 +125,7 @@ import { LAYOUT_SCHEMA_VERSION, PANEL_COMPONENT_NAMES } from '../../src/shell/la
 
 beforeEach(() => {
   captured.components = {};
+  captured.defaultTabComponent = undefined;
   captured.onReady = undefined;
   lastApi = null;
 });
@@ -127,6 +136,11 @@ describe('DockShell — dockview integration (T065)', () => {
     for (const name of PANEL_COMPONENT_NAMES) {
       expect(captured.components).toHaveProperty(name);
     }
+  });
+
+  it('installs a custom dockview tab renderer for the header count pills', () => {
+    render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
+    expect(captured.defaultTabComponent).toBeTypeOf('function');
   });
 
   it('calls onLayoutChange on initial mount with current schema version', async () => {
@@ -185,10 +199,7 @@ describe('DockShell — dockview integration (T065)', () => {
 
       return (
         <>
-          <button
-            type="button"
-            onClick={() => setFocusPanel({ component: 'workspace.problems', nonce: 1 })}
-          >
+          <button type="button" onClick={() => setFocusPanel({ component: 'workspace.problems', nonce: 1 })}>
             focus problems
           </button>
           <DockShell studioVersion="0.1.0" workspaceId="ws-1" focusPanel={focusPanel} />
@@ -205,6 +216,73 @@ describe('DockShell — dockview integration (T065)', () => {
     const callsAfter = lastApi?.panelStates.get('workspace.problems')?.activeCalls ?? 0;
 
     expect(callsAfter - callsBefore).toBe(1);
+  });
+
+  it('updates dockview panel parameters when the header count metadata changes', async () => {
+    function Harness() {
+      const [count, setCount] = useState(2);
+      return (
+        <>
+          <button type="button" onClick={() => setCount(5)}>
+            update count
+          </button>
+          <DockShell studioVersion="0.1.0" workspaceId="ws-1" panelTabMeta={{ 'workspace.problems': { count } }} />
+        </>
+      );
+    }
+
+    render(<Harness />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    expect(lastApi?.panelStates.get('workspace.problems')?.parameterCalls).toContainEqual({ count: 2 });
+
+    fireEvent.click(screen.getByText('update count'));
+
+    expect(lastApi?.panelStates.get('workspace.problems')?.parameterCalls).toContainEqual({ count: 5 });
+  });
+
+  it('skips undefined panel metadata entries when applying dockview parameters', async () => {
+    render(
+      <DockShell
+        studioVersion="0.1.0"
+        workspaceId="ws-1"
+        panelTabMeta={{ 'workspace.problems': undefined, 'workspace.output': { count: 3 } }}
+      />
+    );
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    expect(lastApi?.panelStates.get('workspace.problems')?.parameterCalls).toEqual([]);
+    expect(lastApi?.panelStates.get('workspace.output')?.parameterCalls).toContainEqual({ count: 3 });
+  });
+
+  it('renders dock tabs without crashing when params are missing', async () => {
+    render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    type TabMeta = { count?: number };
+    const Tab = captured.defaultTabComponent as React.FC<{
+      api: {
+        title?: string;
+        getParameters: () => TabMeta | undefined;
+        onDidParametersChange: (listener: (next: TabMeta | undefined) => void) => { dispose(): void };
+      };
+      params?: TabMeta;
+    }>;
+    const onDidParametersChange = vi.fn().mockReturnValue({ dispose: vi.fn() });
+
+    const { container } = render(
+      <Tab
+        api={{
+          title: 'Files',
+          getParameters: () => undefined,
+          onDidParametersChange
+        }}
+        params={undefined}
+      />
+    );
+
+    expect(container.querySelector('.studio-dock-tab__label')?.textContent).toBe('Files');
+    expect(screen.queryByTitle(/item/)).toBeNull();
   });
 
   it('surfaces a user-visible notice when an invalid saved factory layout is reset', () => {
@@ -228,9 +306,7 @@ describe('DockShell — dockview integration (T065)', () => {
       />
     );
 
-    expect(screen.getByTestId('layout-reset-notice')).toHaveTextContent(
-      /saved layout was incompatible/i
-    );
+    expect(screen.getByTestId('layout-reset-notice')).toHaveTextContent(/saved layout was incompatible/i);
   });
 
   it('updates override panel content when parent state changes', async () => {
@@ -242,11 +318,7 @@ describe('DockShell — dockview integration (T065)', () => {
           <button type="button" onClick={() => setLabel('updated file tree')}>
             update panel
           </button>
-          <DockShell
-            studioVersion="0.1.0"
-            workspaceId="ws-1"
-            panelComponents={{ 'workspace.fileTree': FileTree }}
-          />
+          <DockShell studioVersion="0.1.0" workspaceId="ws-1" panelComponents={{ 'workspace.fileTree': FileTree }} />
         </>
       );
     }
@@ -274,11 +346,7 @@ describe('DockShell — dockview integration (T065)', () => {
           <button type="button" onClick={() => setLabel('updated file tree')}>
             update panel
           </button>
-          <DockShell
-            studioVersion="0.1.0"
-            workspaceId="ws-1"
-            panelComponents={{ 'workspace.fileTree': FileTree }}
-          />
+          <DockShell studioVersion="0.1.0" workspaceId="ws-1" panelComponents={{ 'workspace.fileTree': FileTree }} />
         </>
       );
     }
@@ -317,9 +385,7 @@ describe('DockShell — keyboard shortcuts (T074 / T075)', () => {
     const onAction = vi.fn();
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" onAction={onAction} />);
     act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'ArrowRight', ctrlKey: true, altKey: true })
-      );
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', ctrlKey: true, altKey: true }));
     });
     expect(onAction).toHaveBeenCalledWith('focus-next-panel');
   });
@@ -340,8 +406,6 @@ describe('EditorPanel dirty indicator (FR-026)', () => {
     render(<EditorPanel tabs={[{ path: 'foo.rosetta', dirty: true }]} activePath="foo.rosetta" />);
     expect(screen.getByTestId('dirty-foo.rosetta')).toBeInTheDocument();
     expect(screen.getByLabelText(/Close foo\.rosetta/i)).toBeInTheDocument();
-    expect(screen.getByTestId('dirty-foo.rosetta')).not.toBe(
-      screen.getByLabelText(/Close foo\.rosetta/i)
-    );
+    expect(screen.getByTestId('dirty-foo.rosetta')).not.toBe(screen.getByLabelText(/Close foo\.rosetta/i));
   });
 });

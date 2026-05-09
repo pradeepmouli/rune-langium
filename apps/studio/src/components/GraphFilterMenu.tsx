@@ -15,19 +15,19 @@ import { Separator } from '@rune-langium/design-system/ui/separator';
 import { Filter, GitBranch, ArrowRight, List, Hash, Braces, Tag, FileText } from 'lucide-react';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import type { TypeKind, EdgeKind } from '@rune-langium/visual-editor';
+import { cn } from '@rune-langium/design-system/utils';
 
 /** Node kind display config. */
-const NODE_KINDS: Array<{ kind: TypeKind; label: string; color: string; icon: typeof GitBranch }> =
-  [
-    { kind: 'data', label: 'Data', color: '#00D4AA', icon: Braces },
-    { kind: 'choice', label: 'Choice', color: '#E8913A', icon: List },
-    { kind: 'enum', label: 'Enum', color: '#8B7BF4', icon: Hash },
-    { kind: 'func', label: 'Function', color: '#82AAFF', icon: ArrowRight },
-    { kind: 'record', label: 'Record', color: '#82AAFF', icon: FileText },
-    { kind: 'typeAlias', label: 'Type Alias', color: '#8A8A96', icon: Tag },
-    { kind: 'basicType', label: 'Basic Type', color: '#8A8A96', icon: Tag },
-    { kind: 'annotation', label: 'Annotation', color: '#8A8A96', icon: Tag }
-  ];
+const NODE_KINDS: Array<{ kind: TypeKind; label: string; color: string; icon: typeof GitBranch }> = [
+  { kind: 'data', label: 'Data', color: '#00D4AA', icon: Braces },
+  { kind: 'choice', label: 'Choice', color: '#E8913A', icon: List },
+  { kind: 'enum', label: 'Enum', color: '#8B7BF4', icon: Hash },
+  { kind: 'func', label: 'Function', color: '#82AAFF', icon: ArrowRight },
+  { kind: 'record', label: 'Record', color: '#82AAFF', icon: FileText },
+  { kind: 'typeAlias', label: 'Type Alias', color: '#8A8A96', icon: Tag },
+  { kind: 'basicType', label: 'Basic Type', color: '#8A8A96', icon: Tag },
+  { kind: 'annotation', label: 'Annotation', color: '#8A8A96', icon: Tag }
+];
 
 /** Edge kind display config. */
 const EDGE_KINDS: Array<{ kind: EdgeKind; label: string; color: string; dashed?: boolean }> = [
@@ -38,7 +38,13 @@ const EDGE_KINDS: Array<{ kind: EdgeKind; label: string; color: string; dashed?:
   { kind: 'type-alias-ref', label: 'Type Alias Refs', color: '#8A8A96', dashed: true }
 ];
 
-export function GraphFilterMenu() {
+export interface GraphFilterMenuProps {
+  compact?: boolean;
+  className?: string;
+  align?: 'start' | 'center' | 'end';
+}
+
+export function GraphFilterMenu({ compact = false, className, align = 'start' }: GraphFilterMenuProps) {
   const visibility = useEditorStore((s) => s.visibility);
   const toggleNodeKind = useEditorStore((s) => s.toggleNodeKind);
   const toggleEdgeKind = useEditorStore((s) => s.toggleEdgeKind);
@@ -49,6 +55,7 @@ export function GraphFilterMenu() {
 
   const allNodesVisible = visibleNodeKinds.size === NODE_KINDS.length;
   const allEdgesVisible = visibleEdgeKinds.size === EDGE_KINDS.length;
+  const filtersActive = !allNodesVisible || !allEdgesVisible;
 
   const handleResetAll = useCallback(() => {
     showAllNodeKinds();
@@ -58,28 +65,35 @@ export function GraphFilterMenu() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button
-          variant={allNodesVisible && allEdgesVisible ? 'secondary' : 'default'}
-          size="xs"
-          title="Filter visible types and relationships"
-        >
-          <Filter />
-          Filter
-        </Button>
+        {compact ? (
+          <button
+            type="button"
+            className={cn('studio-panel-action', className)}
+            data-active={filtersActive ? 'true' : undefined}
+            aria-label="Filter visible types and relationships"
+            title="Filter visible types and relationships"
+          >
+            <Filter className="size-4" />
+          </button>
+        ) : (
+          <Button
+            variant={filtersActive ? 'default' : 'secondary'}
+            size="xs"
+            title="Filter visible types and relationships"
+            className={className}
+          >
+            <Filter />
+            Filter
+          </Button>
+        )}
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start" sideOffset={4}>
+      <PopoverContent className="w-64 p-0" align={align} sideOffset={4}>
         <div className="p-3">
           {/* Node kinds section */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Node Types
-            </span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Node Types</span>
             {!allNodesVisible && (
-              <button
-                className="text-xs text-primary hover:text-primary/80"
-                onClick={showAllNodeKinds}
-                type="button"
-              >
+              <button className="text-xs text-primary hover:text-primary/80" onClick={showAllNodeKinds} type="button">
                 Show all
               </button>
             )}
@@ -105,10 +119,7 @@ export function GraphFilterMenu() {
                       border: `1.5px solid ${active ? color : 'currentColor'}`
                     }}
                   />
-                  <Icon
-                    className="w-3.5 h-3.5 flex-shrink-0"
-                    style={{ opacity: active ? 1 : 0.4 }}
-                  />
+                  <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ opacity: active ? 1 : 0.4 }} />
                   <span>{label}</span>
                 </button>
               );
@@ -119,15 +130,9 @@ export function GraphFilterMenu() {
 
           {/* Edge kinds section */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Relationships
-            </span>
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Relationships</span>
             {!allEdgesVisible && (
-              <button
-                className="text-xs text-primary hover:text-primary/80"
-                onClick={showAllEdgeKinds}
-                type="button"
-              >
+              <button className="text-xs text-primary hover:text-primary/80" onClick={showAllEdgeKinds} type="button">
                 Show all
               </button>
             )}

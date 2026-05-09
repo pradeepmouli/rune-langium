@@ -22,18 +22,10 @@
  * assertions remain reachable.
  */
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { DockviewReact } from 'dockview-react';
-import type { DockviewApi, IDockviewPanelProps, DockviewReadyEvent } from 'dockview-react';
+import type { DockviewApi, DockviewReadyEvent, IDockviewPanelHeaderProps, IDockviewPanelProps } from 'dockview-react';
 import { FileTreePanel } from './panels/FileTreePanel.js';
 import { EditorPanel } from './panels/EditorPanel.js';
 import { InspectorPanel } from './panels/InspectorPanel.js';
@@ -42,11 +34,7 @@ import { OutputPanel } from './panels/OutputPanel.js';
 import { VisualPreviewPanel } from './panels/VisualPreviewPanel.js';
 import { FormPreviewPanel } from './panels/FormPreviewPanel.js';
 import { CodePreviewPanel as CodePreviewPanelShell } from './panels/CodePreviewPanel.js';
-import {
-  buildDefaultLayout,
-  LAYOUT_SCHEMA_VERSION,
-  PANEL_COMPONENT_NAMES
-} from './layout-factory.js';
+import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_COMPONENT_NAMES } from './layout-factory.js';
 import type { LayoutPreset } from './layout-factory.js';
 import { sanitizeLayoutWithDiagnostics } from './layout-migrations.js';
 import { applyLayout, serializeLayout } from './dockview-bridge.js';
@@ -72,6 +60,9 @@ const CENTER_PANE_OPTIONS: Array<{ id: CenterPane; label: string; panel: string 
 ];
 
 type ZeroArgRenderer = () => React.ReactElement | null;
+interface PanelTabMeta {
+  count?: number;
+}
 
 type PanelOverrides = Partial<{
   'workspace.fileTree': ZeroArgRenderer;
@@ -99,6 +90,7 @@ interface DockShellProps {
   panelComponents?: PanelOverrides;
   onLayoutChange?: (layout: PanelLayoutRecord) => void;
   onAction?: (action: ShellAction) => void;
+  panelTabMeta?: Partial<Record<PanelComponentName, PanelTabMeta>>;
 }
 
 type PanelComponentName = keyof PanelOverrides;
@@ -144,6 +136,48 @@ const DOCKVIEW_COMPONENTS: Record<string, React.FC<IDockviewPanelProps>> = Objec
   PANEL_COMPONENT_NAMES.map((name) => [name, createDockviewPanelBridge(name as PanelComponentName)])
 );
 
+function applyPanelTabMeta(
+  api: DockviewApi | null,
+  panelTabMeta: Partial<Record<PanelComponentName, PanelTabMeta>> | undefined
+): void {
+  if (!api || !panelTabMeta) {
+    return;
+  }
+  for (const [panelId, meta] of Object.entries(panelTabMeta)) {
+    if (!meta) {
+      continue;
+    }
+    api.getPanel(panelId)?.api.updateParameters(meta);
+  }
+}
+
+function StudioDockTab({ api, params }: IDockviewPanelHeaderProps<PanelTabMeta>): React.ReactElement {
+  const [count, setCount] = useState<number | undefined>(params?.count ?? api.getParameters<PanelTabMeta>()?.count);
+
+  useEffect(() => {
+    setCount(params?.count);
+  }, [params?.count]);
+
+  useEffect(() => {
+    setCount(api.getParameters<PanelTabMeta>()?.count);
+    const disposable = api.onDidParametersChange((next) => {
+      setCount((next as PanelTabMeta | undefined)?.count);
+    });
+    return () => disposable.dispose();
+  }, [api]);
+
+  return (
+    <div className="studio-dock-tab" data-count={count === undefined ? undefined : String(count)}>
+      <span className="studio-dock-tab__label">{api.title ?? ''}</span>
+      {count !== undefined ? (
+        <span className="number-chiclet studio-dock-tab__count" title={`${count} item${count === 1 ? '' : 's'}`}>
+          {count}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function DockShell({
   studioVersion,
   workspaceId,
@@ -151,10 +185,10 @@ export function DockShell({
   focusPanel,
   panelComponents,
   onLayoutChange,
-  onAction
+  onAction,
+  panelTabMeta
 }: DockShellProps): React.ReactElement {
-  const getViewportWidth = () =>
-    typeof window !== 'undefined' ? window.innerWidth : DEFAULT_VIEWPORT_WIDTH;
+  const getViewportWidth = () => (typeof window !== 'undefined' ? window.innerWidth : DEFAULT_VIEWPORT_WIDTH);
   const getSanitizedLayout = useCallback(
     (candidate: PanelLayoutRecord | null | undefined) =>
       sanitizeLayoutWithDiagnostics(candidate ?? null, {
@@ -172,21 +206,13 @@ export function DockShell({
     const sanitized = getSanitizedLayout(initialLayout);
     return sanitized.notice ?? null;
   });
-  const [layout, setLayout] = useState<PanelLayoutRecord>(
-    () => getSanitizedLayout(initialLayout).layout
-  );
+  const [layout, setLayout] = useState<PanelLayoutRecord>(() => getSanitizedLayout(initialLayout).layout);
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>(() =>
-    layout.dockview && layout.dockview.shape === 'factory'
-      ? (layout.dockview.preset ?? 'edit')
-      : 'edit'
+    layout.dockview && layout.dockview.shape === 'factory' ? (layout.dockview.preset ?? 'edit') : 'edit'
   );
-  const [activePanes, setActivePanes] = useState<Set<CenterPane>>(
-    () => new Set<CenterPane>(['graph'])
-  );
+  const [activePanes, setActivePanes] = useState<Set<CenterPane>>(() => new Set<CenterPane>(['graph']));
   const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
-    layout.dockview && layout.dockview.shape === 'factory'
-      ? layout.dockview.bottomGroup.collapsed
-      : false
+    layout.dockview && layout.dockview.shape === 'factory' ? layout.dockview.bottomGroup.collapsed : false
   );
 
   // Refs kept current on every render so stable callbacks always read
@@ -195,6 +221,8 @@ export function DockShell({
   layoutRef.current = layout;
   const studioVersionRef = useRef(studioVersion);
   studioVersionRef.current = studioVersion;
+  const panelTabMetaRef = useRef(panelTabMeta);
+  panelTabMetaRef.current = panelTabMeta;
 
   // onReady is called exactly once by dockview (on mount). Including
   // layout/studioVersion as deps would recreate the callback whenever
@@ -211,6 +239,7 @@ export function DockShell({
 
       try {
         applyLayout(event.api, currentLayout);
+        applyPanelTabMeta(event.api, panelTabMetaRef.current);
         if (currentLayout.dockview?.shape === 'factory') {
           setUtilitiesCollapsedState(currentLayout.dockview.bottomGroup.collapsed);
         }
@@ -222,14 +251,13 @@ export function DockShell({
         console.error('[DockShell] Failed to apply layout, falling back to default layout', err);
         appliedLayout = fallback;
         setLayout(fallback);
-        setLayoutPreset(
-          fallback.dockview?.shape === 'factory' ? (fallback.dockview.preset ?? 'edit') : 'edit'
-        );
+        setLayoutPreset(fallback.dockview?.shape === 'factory' ? (fallback.dockview.preset ?? 'edit') : 'edit');
         setUtilitiesCollapsedState(
           fallback.dockview?.shape === 'factory' ? fallback.dockview.bottomGroup.collapsed : false
         );
         event.api.clear();
         applyLayout(event.api, fallback);
+        applyPanelTabMeta(event.api, panelTabMetaRef.current);
       }
 
       // Persist on every layout change. The serialized JSON replaces our
@@ -282,6 +310,10 @@ export function DockShell({
   );
 
   useEffect(() => {
+    applyPanelTabMeta(apiRef.current, panelTabMeta);
+  }, [panelTabMeta]);
+
+  useEffect(() => {
     if (!focusPanel) {
       return;
     }
@@ -292,16 +324,13 @@ export function DockShell({
   function resetLayout(): void {
     const fresh = buildDefaultLayout({ studioVersion, viewportWidth: getViewportWidth() });
     setLayout(fresh);
-    setLayoutPreset(
-      fresh.dockview?.shape === 'factory' ? (fresh.dockview.preset ?? 'edit') : 'edit'
-    );
-    setUtilitiesCollapsedState(
-      fresh.dockview?.shape === 'factory' ? fresh.dockview.bottomGroup.collapsed : false
-    );
+    setLayoutPreset(fresh.dockview?.shape === 'factory' ? (fresh.dockview.preset ?? 'edit') : 'edit');
+    setUtilitiesCollapsedState(fresh.dockview?.shape === 'factory' ? fresh.dockview.bottomGroup.collapsed : false);
     if (apiRef.current) {
       try {
         apiRef.current.clear();
         applyLayout(apiRef.current, fresh);
+        applyPanelTabMeta(apiRef.current, panelTabMetaRef.current);
       } catch (err) {
         console.error('[DockShell] Failed to reset layout', err);
       }
@@ -356,11 +385,7 @@ export function DockShell({
         >
           <AlertDescription className="grid-cols-[1fr_auto] flex w-full items-center justify-between">
             <span>{layoutNotice}</span>
-            <button
-              type="button"
-              className="ml-2 font-medium"
-              onClick={() => setLayoutNotice(null)}
-            >
+            <button type="button" className="ml-2 font-medium" onClick={() => setLayoutNotice(null)}>
               Dismiss
             </button>
           </AlertDescription>
@@ -384,12 +409,11 @@ export function DockShell({
         }}
       >
         <PanelRegistryContext.Provider value={panelRegistry}>
-          <UtilityTrayContext.Provider
-            value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}
-          >
+          <UtilityTrayContext.Provider value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}>
             <div className="min-h-0 flex-1">
               <DockviewReact
                 components={DOCKVIEW_COMPONENTS}
+                defaultTabComponent={StudioDockTab}
                 onReady={onReady}
                 className="dockview-theme-abyss"
               />

@@ -12,13 +12,7 @@ import type { LspDiagnostic } from '../../src/store/diagnostics-store.js';
 
 // Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: ({
-    count,
-    estimateSize
-  }: {
-    count: number;
-    estimateSize: (i: number) => number;
-  }) => {
+  useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: (i: number) => number }) => {
     let offset = 0;
     const items = Array.from({ length: count }, (_, i) => {
       const size = estimateSize(i);
@@ -33,12 +27,7 @@ vi.mock('@tanstack/react-virtual', () => ({
   }
 }));
 
-function makeDiag(
-  message: string,
-  severity: 1 | 2 | 3 | 4 = 1,
-  startLine = 0,
-  startChar = 0
-): LspDiagnostic {
+function makeDiag(message: string, severity: 1 | 2 | 3 | 4 = 1, startLine = 0, startChar = 0): LspDiagnostic {
   return {
     range: {
       start: { line: startLine, character: startChar },
@@ -60,6 +49,7 @@ describe('DiagnosticsPanel', () => {
   it('renders empty state when no diagnostics', () => {
     render(<DiagnosticsPanel fileDiagnostics={new Map()} onNavigate={onNavigate} />);
     expect(screen.getByText(/no problems/i)).toBeInTheDocument();
+    expect(screen.getByText('Problems')).toBeInTheDocument();
   });
 
   it('renders error diagnostics with file grouping', () => {
@@ -88,16 +78,14 @@ describe('DiagnosticsPanel', () => {
 
   it('displays totals in summary bar', () => {
     const diags = new Map<string, LspDiagnostic[]>();
-    diags.set('file:///trade.rosetta', [
-      makeDiag('Error 1', 1),
-      makeDiag('Error 2', 1),
-      makeDiag('Warning 1', 2)
-    ]);
+    diags.set('file:///trade.rosetta', [makeDiag('Error 1', 1), makeDiag('Error 2', 1), makeDiag('Warning 1', 2)]);
 
     render(<DiagnosticsPanel fileDiagnostics={diags} onNavigate={onNavigate} />);
 
-    expect(screen.getByText(/2 error/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 warning/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 problems/i)).toBeInTheDocument();
+    expect(screen.getByTitle('2 errors')).toBeInTheDocument();
+    expect(screen.getByTitle('1 warning')).toBeInTheDocument();
+    expect(screen.getByTitle('3 problems')).toBeInTheDocument();
   });
 
   it('navigates when a diagnostic is clicked', () => {
@@ -125,16 +113,10 @@ describe('DiagnosticsPanel', () => {
     const diags = new Map<string, LspDiagnostic[]>();
     diags.set('file:///test.rosetta', [makeDiag('An error', 1), makeDiag('A warning', 2)]);
 
-    const { container } = render(
-      <DiagnosticsPanel fileDiagnostics={diags} onNavigate={onNavigate} />
-    );
+    render(<DiagnosticsPanel fileDiagnostics={diags} onNavigate={onNavigate} />);
 
-    // Error icon (●) and warning icon (▲) in shrink-0 spans
-    const iconSpans = container.querySelectorAll('span.shrink-0.text-xs');
-    const errorIcons = Array.from(iconSpans).filter((el) => el.textContent === '\u25cf');
-    const warningIcons = Array.from(iconSpans).filter((el) => el.textContent === '\u25b2');
-    expect(errorIcons.length).toBe(1);
-    expect(warningIcons.length).toBe(1);
+    expect(screen.getByLabelText('error')).toBeInTheDocument();
+    expect(screen.getByLabelText('warning')).toBeInTheDocument();
   });
 
   it('shows line and column numbers', () => {
@@ -145,5 +127,15 @@ describe('DiagnosticsPanel', () => {
 
     // Lines are 0-indexed in LSP, display as 1-indexed
     expect(screen.getByText(/5:3/)).toBeInTheDocument();
+  });
+
+  it('does not collapse info-only diagnostics into the empty state', () => {
+    const diags = new Map<string, LspDiagnostic[]>();
+    diags.set('file:///info.rosetta', [makeDiag('Helpful note', 3, 1, 0)]);
+
+    render(<DiagnosticsPanel fileDiagnostics={diags} onNavigate={onNavigate} />);
+
+    expect(screen.getByText('Helpful note')).toBeInTheDocument();
+    expect(screen.getByText('info')).toBeInTheDocument();
   });
 });

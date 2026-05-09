@@ -45,10 +45,7 @@ interface FormErrorBoundaryState {
   error: Error | null;
 }
 
-class FormErrorBoundary extends Component<
-  { children: ReactNode; nodeId: string | null },
-  FormErrorBoundaryState
-> {
+class FormErrorBoundary extends Component<{ children: ReactNode; nodeId: string | null }, FormErrorBoundaryState> {
   constructor(props: { children: ReactNode; nodeId: string | null }) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -179,11 +176,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
         className="flex flex-col h-full overflow-hidden"
         tabIndex={-1}
       >
-        <DetailPanel
-          nodeData={nodeData}
-          onNavigateToNode={onNavigateToNode}
-          allNodeIds={allNodeIds}
-        />
+        <DetailPanel nodeData={nodeData} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
       </aside>
     );
   }
@@ -257,8 +250,11 @@ const EditorFormPanel = memo(function EditorFormPanel({
             key={nodeId!}
             nodeId={nodeId!}
             data={nodeData!}
+            availableTypes={availableTypes}
             actions={actions}
             renderExpressionEditor={renderExpressionEditor}
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
           />
         );
 
@@ -267,22 +263,10 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'record':
       case 'basicType':
       case 'annotation':
-        return (
-          <DetailPanel
-            nodeData={nodeData!}
-            onNavigateToNode={onNavigateToNode}
-            allNodeIds={allNodeIds}
-          />
-        );
+        return <DetailPanel nodeData={nodeData!} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />;
 
       default:
-        return (
-          <DetailPanel
-            nodeData={nodeData!}
-            onNavigateToNode={onNavigateToNode}
-            allNodeIds={allNodeIds}
-          />
-        );
+        return <DetailPanel nodeData={nodeData!} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />;
     }
   }
 

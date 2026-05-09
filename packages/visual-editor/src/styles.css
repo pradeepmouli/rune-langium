@@ -49,8 +49,7 @@
 .rune-flow-node-shell {
   transition:
     opacity 140ms ease,
-    filter 140ms ease,
-    transform 140ms ease;
+    filter 140ms ease;
 }
 
 .rune-flow-node-shell--dimmed {
@@ -61,13 +60,13 @@
 .rune-flow-node-shell--related .rune-node {
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 8px 24px oklch(0 0 0 / 0.32);
+    0 6px 18px oklch(0 0 0 / 0.28);
 }
 
 .rune-flow-node-shell--focus .rune-node {
   box-shadow:
     0 0 0 1px oklch(0.78 0.17 168 / 0.45),
-    0 12px 28px oklch(0 0 0 / 0.42);
+    0 8px 20px oklch(0 0 0 / 0.34);
 }
 
 .rune-graph-group-shell {
@@ -134,8 +133,8 @@
   color: var(--color-node-text, #E8E6E1);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 26px oklch(0 0 0 / 0.24);
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    0 8px 18px oklch(0 0 0 / 0.2);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .rune-node::before {
@@ -164,10 +163,20 @@
 }
 
 .rune-node:hover {
-  transform: translateY(-1px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 14px 28px oklch(0 0 0 / 0.3);
+    0 10px 22px oklch(0 0 0 / 0.24);
+}
+
+.react-flow__node.dragging .rune-node {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 4px 12px oklch(0 0 0 / 0.18);
+  transition: none;
+}
+
+.react-flow__node.dragging .rune-node::after {
+  opacity: 0.42;
 }
 
 .rune-node-header {

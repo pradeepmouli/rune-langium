@@ -22,16 +22,12 @@ import {
   Circle,
   PlusSquare,
   MinusSquare,
-  Link
+  Link,
+  Search
 } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from '@rune-langium/design-system/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import type { TypeGraphNode, TypeKind } from '../../types.js';
 import { buildNamespaceTree, flattenNamespaceTree } from '../../utils/namespace-tree.js';
 import type { FlatTreeRow } from '../../utils/namespace-tree.js';
@@ -121,9 +117,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   hiddenRefCounts
 }: NamespaceExplorerPanelProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
-  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(
-    () => new Set(nodes.map((n) => n.data.namespace))
-  );
+  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => new Set(nodes.map((n) => n.data.namespace)));
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Build namespace tree
@@ -139,13 +133,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
 
   // Flatten for virtualization
   const flatRows = useMemo(
-    () =>
-      flattenNamespaceTree(
-        fullTree,
-        effectiveTreeExpanded,
-        hiddenNodeIds,
-        searchQuery || undefined
-      ),
+    () => flattenNamespaceTree(fullTree, effectiveTreeExpanded, hiddenNodeIds, searchQuery || undefined),
     [fullTree, effectiveTreeExpanded, hiddenNodeIds, searchQuery]
   );
 
@@ -165,23 +153,16 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   }, []);
 
   const totalTypes = nodes.length;
-  const visibleCount = nodes.filter(
-    (n) => expandedNamespaces.has(n.data.namespace) && !hiddenNodeIds.has(n.id)
-  ).length;
+  const visibleCount = nodes.filter((n) => expandedNamespaces.has(n.data.namespace) && !hiddenNodeIds.has(n.id)).length;
 
   return (
     <TooltipProvider>
-      <div
-        className={`flex flex-col h-full bg-card ${className ?? ''}`}
-        data-testid="namespace-explorer"
-      >
+      <div className={`flex flex-col h-full bg-card ${className ?? ''}`} data-testid="namespace-explorer">
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b">
           <div className="min-w-0">
             <span className="text-sm font-semibold">Type explorer</span>
-            <p className="text-[11px] text-muted-foreground">
-              Browse namespaces and types in the active source.
-            </p>
+            <p className="text-[11px] text-muted-foreground">Browse namespaces and types in the active source.</p>
           </div>
           <span className="number-chiclet" data-testid="namespace-explorer-count">
             {visibleCount}/{totalTypes}
@@ -189,38 +170,50 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-1.5 px-3 py-2 border-b">
-          <Input
-            type="text"
-            placeholder="Filter types or namespaces..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-7 text-xs"
-            data-testid="namespace-search"
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-xs" onClick={onExpandAll} data-testid="expand-all">
-                <PlusSquare className="size-4" />
-                <span className="sr-only">Show all</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Show all namespaces on graph</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={onCollapseAll}
-                data-testid="collapse-all"
-              >
-                <MinusSquare className="size-4" />
-                <span className="sr-only">Hide all</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Hide all namespaces from graph</TooltipContent>
-          </Tooltip>
+        <div className="flex items-center gap-2 border-b px-3 py-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/80" />
+            <Input
+              type="text"
+              placeholder="Filter types or namespaces..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-7 border-border/70 bg-background/55 pl-8 pr-2 text-[11px] shadow-none placeholder:text-muted-foreground/70"
+              data-testid="namespace-search"
+            />
+          </div>
+          <div className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/35 p-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onExpandAll}
+                  data-testid="expand-all"
+                  className="rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                >
+                  <PlusSquare className="size-3.5" />
+                  <span className="sr-only">Show all</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Show all namespaces on graph</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onCollapseAll}
+                  data-testid="collapse-all"
+                  className="rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                >
+                  <MinusSquare className="size-3.5" />
+                  <span className="sr-only">Hide all</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Hide all namespaces from graph</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         {/* Virtualized Tree */}
@@ -311,11 +304,7 @@ function NamespaceHeaderRow({
           aria-label={row.expanded ? 'Collapse tree' : 'Expand tree'}
           className="shrink-0"
         >
-          {row.expanded ? (
-            <ChevronDown className="size-3.5" />
-          ) : (
-            <ChevronRight className="size-3.5" />
-          )}
+          {row.expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </Button>
 
         <Tooltip>
@@ -327,20 +316,13 @@ function NamespaceHeaderRow({
               aria-label={isGraphVisible ? 'Hide namespace from graph' : 'Show namespace on graph'}
               className="shrink-0"
             >
-              {isGraphVisible ? (
-                <Eye className="size-3.5" />
-              ) : (
-                <EyeOff className="size-3.5 text-muted-foreground" />
-              )}
+              {isGraphVisible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5 text-muted-foreground" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent>{isGraphVisible ? 'Hide from graph' : 'Show on graph'}</TooltipContent>
         </Tooltip>
 
-        <span
-          className="flex-1 truncate text-xs font-medium cursor-pointer"
-          onClick={onToggleTreeExpand}
-        >
+        <span className="flex-1 truncate text-xs font-medium cursor-pointer" onClick={onToggleTreeExpand}>
           {row.namespace}
         </span>
 
@@ -376,11 +358,7 @@ function TypeItemRow({
   return (
     <div
       className={`flex items-center gap-1.5 px-2 py-0.5 ml-4 text-xs hover:bg-accent/50 relative ${
-        isSelected
-          ? 'studio-type-row--selected'
-          : isVisible
-            ? 'text-foreground'
-            : 'text-muted-foreground opacity-60'
+        isSelected ? 'studio-type-row--selected' : isVisible ? 'text-foreground' : 'text-muted-foreground opacity-60'
       }`}
       data-testid={`ns-type-${row.nodeId}`}
     >
