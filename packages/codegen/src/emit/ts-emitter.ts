@@ -24,6 +24,7 @@ import {
   isData,
   isRosettaEnumeration,
   isRosettaBasicType,
+  isRosettaTypeAlias,
   isData as _isData,
   type Data,
   type Attribute,
