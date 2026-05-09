@@ -1370,7 +1370,7 @@
   font-family: var(--font-mono);
   font-size: var(--text-base);
   line-height: 1.5;
-  background: var(--background);
+  background: color-mix(in srgb, var(--card) 78%, var(--background));
   color: var(--foreground);
 }
 
@@ -1379,18 +1379,18 @@
 }
 
 .studio-editor-page__source .cm-editor .cm-gutters {
-  background: var(--card);
-  border-right: 1px solid var(--border);
-  color: var(--input);
+  background: color-mix(in srgb, var(--card) 92%, var(--background));
+  border-right: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  color: color-mix(in srgb, var(--muted-foreground) 74%, var(--input));
 }
 
 .studio-editor-page__source .cm-editor .cm-activeLineGutter {
-  background: var(--muted);
+  background: color-mix(in srgb, var(--accent) 42%, var(--card));
   color: var(--muted-foreground);
 }
 
 .studio-editor-page__source .cm-editor .cm-activeLine {
-  background: rgba(51, 65, 85, 0.3);
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
 .studio-editor-page__source .cm-editor .cm-selectionBackground {
@@ -1406,8 +1406,8 @@
 }
 
 .studio-editor-page__source .cm-editor .cm-tooltip {
-  background: var(--card);
-  border: 1px solid var(--input);
+  background: color-mix(in srgb, var(--card) 88%, var(--background));
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   color: var(--foreground);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);

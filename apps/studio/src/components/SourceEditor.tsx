@@ -420,7 +420,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
   if (files.length === 0) {
     return (
       <section
-        className="flex flex-col items-center justify-center h-full bg-background text-muted-foreground"
+        className="studio-editor-page__source flex h-full flex-col items-center justify-center bg-card text-muted-foreground"
         data-testid="source-editor"
       >
         <p>No files loaded</p>
@@ -429,7 +429,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
   }
 
   return (
-    <section className="flex flex-col h-full bg-background" data-testid="source-editor">
+    <section className="studio-editor-page__source flex h-full flex-col bg-card" data-testid="source-editor">
       {/* Tab bar — suppressed when parent already provides file-tab navigation */}
       {!hideTabs && (
         <nav
