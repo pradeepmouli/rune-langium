@@ -143,17 +143,20 @@ function applyPanelTabMeta(
   if (!api || !panelTabMeta) {
     return;
   }
-  for (const [panelId, meta] of Object.entries(panelTabMeta) as Array<[PanelComponentName, PanelTabMeta]>) {
+  for (const [panelId, meta] of Object.entries(panelTabMeta)) {
+    if (!meta) {
+      continue;
+    }
     api.getPanel(panelId)?.api.updateParameters(meta);
   }
 }
 
 function StudioDockTab({ api, params }: IDockviewPanelHeaderProps<PanelTabMeta>): React.ReactElement {
-  const [count, setCount] = useState<number | undefined>(params.count);
+  const [count, setCount] = useState<number | undefined>(params?.count ?? api.getParameters<PanelTabMeta>()?.count);
 
   useEffect(() => {
-    setCount(params.count);
-  }, [params.count]);
+    setCount(params?.count);
+  }, [params?.count]);
 
   useEffect(() => {
     setCount(api.getParameters<PanelTabMeta>()?.count);

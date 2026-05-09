@@ -241,6 +241,50 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(lastApi?.panelStates.get('workspace.problems')?.parameterCalls).toContainEqual({ count: 5 });
   });
 
+  it('skips undefined panel metadata entries when applying dockview parameters', async () => {
+    render(
+      <DockShell
+        studioVersion="0.1.0"
+        workspaceId="ws-1"
+        panelTabMeta={{ 'workspace.problems': undefined, 'workspace.output': { count: 3 } }}
+      />
+    );
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    expect(lastApi?.panelStates.get('workspace.problems')?.parameterCalls).toEqual([]);
+    expect(lastApi?.panelStates.get('workspace.output')?.parameterCalls).toContainEqual({ count: 3 });
+  });
+
+  it('renders dock tabs without crashing when params are missing', async () => {
+    render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    type TabMeta = { count?: number };
+    const Tab = captured.defaultTabComponent as React.FC<{
+      api: {
+        title?: string;
+        getParameters: () => TabMeta | undefined;
+        onDidParametersChange: (listener: (next: TabMeta | undefined) => void) => { dispose(): void };
+      };
+      params?: TabMeta;
+    }>;
+    const onDidParametersChange = vi.fn().mockReturnValue({ dispose: vi.fn() });
+
+    const { container } = render(
+      <Tab
+        api={{
+          title: 'Files',
+          getParameters: () => undefined,
+          onDidParametersChange
+        }}
+        params={undefined}
+      />
+    );
+
+    expect(container.querySelector('.studio-dock-tab__label')?.textContent).toBe('Files');
+    expect(screen.queryByTitle(/item/)).toBeNull();
+  });
+
   it('surfaces a user-visible notice when an invalid saved factory layout is reset', () => {
     render(
       <DockShell
