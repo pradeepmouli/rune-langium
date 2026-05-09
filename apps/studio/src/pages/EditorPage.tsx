@@ -689,7 +689,6 @@ export function EditorPage({
 
   const handleExplorerSelectNode = useCallback(
     (nodeId: string) => {
-      graphRef.current?.focusNode(nodeId);
       storeSelectNode(nodeId);
     },
     [storeSelectNode]

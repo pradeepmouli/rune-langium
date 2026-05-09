@@ -7,58 +7,73 @@ import { render, cleanup, waitFor, screen, act, fireEvent } from '@testing-libra
 import { usePreviewStore } from '../../src/store/preview-store.js';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 
-const { editorStoreState, useEditorStore, useDiagnosticsStore, runeTypeGraphMockState, showToastSpy } = vi.hoisted(
-  () => {
-    const editorStoreState = {
-      nodes: [] as Array<{
-        id: string;
-        data: { namespace?: string; name?: string; $type?: string };
-      }>,
-      selectedNodeId: undefined as string | undefined,
-      visibility: { expandedNamespaces: new Set<string>(), hiddenNodeIds: new Set<string>() },
-      selectNode: vi.fn((nodeId: string) => {
-        editorStoreState.selectedNodeId = nodeId;
-      }),
-      toggleNamespace: vi.fn(),
-      toggleNodeVisibility: vi.fn(),
-      expandAllNamespaces: vi.fn(),
-      collapseAllNamespaces: vi.fn(),
-      loadModels: vi.fn()
-    };
+const {
+  editorStoreState,
+  useEditorStore,
+  useDiagnosticsStore,
+  runeTypeGraphMockState,
+  namespaceExplorerMockState,
+  showToastSpy
+} = vi.hoisted(() => {
+  const editorStoreState = {
+    nodes: [] as Array<{
+      id: string;
+      data: { namespace?: string; name?: string; $type?: string };
+    }>,
+    selectedNodeId: undefined as string | undefined,
+    visibility: { expandedNamespaces: new Set<string>(), hiddenNodeIds: new Set<string>() },
+    selectNode: vi.fn((nodeId: string) => {
+      editorStoreState.selectedNodeId = nodeId;
+    }),
+    toggleNamespace: vi.fn(),
+    toggleNodeVisibility: vi.fn(),
+    expandAllNamespaces: vi.fn(),
+    collapseAllNamespaces: vi.fn(),
+    loadModels: vi.fn()
+  };
 
-    const useEditorStore = ((selector: (state: typeof editorStoreState) => unknown) =>
-      selector(editorStoreState)) as typeof import('@rune-langium/visual-editor').useEditorStore;
-    Object.assign(useEditorStore, {
-      getState: () => editorStoreState
-    });
+  const useEditorStore = ((selector: (state: typeof editorStoreState) => unknown) =>
+    selector(editorStoreState)) as typeof import('@rune-langium/visual-editor').useEditorStore;
+  Object.assign(useEditorStore, {
+    getState: () => editorStoreState
+  });
 
-    const diagnosticsState = { fileDiagnostics: new Map(), totalErrors: 0, totalWarnings: 0 };
-    const useDiagnosticsStore = (() =>
-      diagnosticsState) as typeof import('../../src/store/diagnostics-store.js').useDiagnosticsStore;
-    Object.assign(useDiagnosticsStore, {
-      getState: () => diagnosticsState
-    });
+  const diagnosticsState = { fileDiagnostics: new Map(), totalErrors: 0, totalWarnings: 0 };
+  const useDiagnosticsStore = (() =>
+    diagnosticsState) as typeof import('../../src/store/diagnostics-store.js').useDiagnosticsStore;
+  Object.assign(useDiagnosticsStore, {
+    getState: () => diagnosticsState
+  });
 
-    const runeTypeGraphMockState = {
-      latestCallbacks: undefined as
-        | {
-            onNavigateToType?: (nodeId: string) => void;
-          }
-        | undefined
-    };
+  const runeTypeGraphMockState = {
+    focusNode: vi.fn(),
+    latestCallbacks: undefined as
+      | {
+          onNavigateToType?: (nodeId: string) => void;
+        }
+      | undefined
+  };
 
-    const showToastSpy = vi.fn();
+  const namespaceExplorerMockState = {
+    latestProps: undefined as
+      | {
+          onSelectNode?: (nodeId: string) => void;
+        }
+      | undefined
+  };
 
-    return {
-      editorStoreState,
-      useEditorStore,
-      diagnosticsState,
-      useDiagnosticsStore,
-      runeTypeGraphMockState,
-      showToastSpy
-    };
-  }
-);
+  const showToastSpy = vi.fn();
+
+  return {
+    editorStoreState,
+    useEditorStore,
+    diagnosticsState,
+    useDiagnosticsStore,
+    runeTypeGraphMockState,
+    namespaceExplorerMockState,
+    showToastSpy
+  };
+});
 
 const { sourceEditorMockState, dockShellMockState } = vi.hoisted(() => ({
   sourceEditorMockState: {
@@ -104,11 +119,30 @@ class MockWorker {
 }
 
 vi.mock('@rune-langium/visual-editor', () => ({
-  RuneTypeGraph: ({ callbacks }: { callbacks?: { onNavigateToType?: (nodeId: string) => void } }) => {
-    runeTypeGraphMockState.latestCallbacks = callbacks;
+  RuneTypeGraph: React.forwardRef(
+    (
+      { callbacks }: { callbacks?: { onNavigateToType?: (nodeId: string) => void } },
+      ref: React.ForwardedRef<{
+        fitView(): void;
+        focusNode(nodeId: string): void;
+        relayout(config?: { groupByInheritance?: boolean }): void;
+        exportRosetta(): Map<string, string>;
+      }>
+    ) => {
+      runeTypeGraphMockState.latestCallbacks = callbacks;
+      useImperativeHandle(ref, () => ({
+        fitView: vi.fn(),
+        focusNode: runeTypeGraphMockState.focusNode,
+        relayout: vi.fn(),
+        exportRosetta: () => new Map()
+      }));
+      return React.createElement('div');
+    }
+  ),
+  NamespaceExplorerPanel: (props: { onSelectNode?: (nodeId: string) => void }) => {
+    namespaceExplorerMockState.latestProps = props;
     return React.createElement('div');
   },
-  NamespaceExplorerPanel: () => React.createElement('div'),
   EditorFormPanel: () => React.createElement('div'),
   ExpressionBuilder: () => React.createElement('div'),
   BUILTIN_TYPES: [],
@@ -224,6 +258,9 @@ vi.mock('../../src/shell/DockShell.js', () => ({
   }) => {
     dockShellMockState.latestProps = { focusPanel };
     return React.createElement('div', { 'data-testid': 'dock-shell' }, [
+      panelComponents?.['workspace.fileTree']
+        ? React.createElement(panelComponents['workspace.fileTree'], { key: 'fileTree' })
+        : null,
       panelComponents?.['workspace.editor']
         ? React.createElement(panelComponents['workspace.editor'], { key: 'editor' })
         : null,
@@ -291,6 +328,7 @@ describe('EditorPage preview target identity', () => {
     sourceEditorMockState.latestProps = undefined;
     dockShellMockState.latestProps = undefined;
     runeTypeGraphMockState.latestCallbacks = undefined;
+    namespaceExplorerMockState.latestProps = undefined;
   });
 
   afterEach(() => {
@@ -794,6 +832,7 @@ describe('EditorPage workspace chrome', () => {
     sourceEditorMockState.latestProps = undefined;
     dockShellMockState.latestProps = undefined;
     runeTypeGraphMockState.latestCallbacks = undefined;
+    namespaceExplorerMockState.latestProps = undefined;
   });
 
   afterEach(() => {
@@ -887,6 +926,36 @@ describe('EditorPage workspace chrome', () => {
       variant: 'destructive',
       duration: 3000
     });
+  });
+
+  it('selects explorer nodes without re-centering the graph view', () => {
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
+      }
+    ];
+
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    act(() => {
+      namespaceExplorerMockState.latestProps?.onSelectNode?.('cdm.base.datetime::AdjustableDate');
+    });
+
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::AdjustableDate');
+    expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
   });
 
   it('shows a destructive toast when navigating back to a node that is no longer in the graph', () => {
