@@ -687,12 +687,14 @@ export function EditorPage({
     setActiveEditorFile(filePath);
   }, []);
 
-  const handleExplorerSelectNode = useCallback(
-    (nodeId: string) => {
-      storeSelectNode(nodeId);
-    },
-    [storeSelectNode]
-  );
+  const handleExplorerSelectNode = useCallback((nodeId: string) => {
+    const nextDetailPanelOpen = nodeId !== null;
+    const { selectedNodeId, detailPanelOpen } = useEditorStore.getState();
+    if (selectedNodeId === nodeId && detailPanelOpen === nextDetailPanelOpen) {
+      return;
+    }
+    useEditorStore.setState({ selectedNodeId: nodeId, detailPanelOpen: nextDetailPanelOpen });
+  }, []);
 
   const navigateToNode = useCallback(
     (nodeId: string) => {

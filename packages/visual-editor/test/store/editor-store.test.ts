@@ -83,6 +83,18 @@ describe('EditorStore', () => {
       expect(listener).not.toHaveBeenCalled();
       unsubscribe();
     });
+
+    it('can skip focus-mode isolation while still updating selection', async () => {
+      const result = await parse(COMBINED_MODEL_SOURCE);
+      store.getState().loadModels(result.value);
+      const nodeId = store.getState().nodes[0]!.id;
+
+      store.getState().selectNode(nodeId, { isolateInFocusMode: false });
+
+      expect(store.getState().selectedNodeId).toBe(nodeId);
+      expect(store.getState().detailPanelOpen).toBe(true);
+      expect(store.getState().visibility.hiddenNodeIds.size).toBe(0);
+    });
   });
 
   describe('setSearchQuery', () => {

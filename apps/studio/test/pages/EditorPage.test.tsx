@@ -21,8 +21,9 @@ const {
       data: { namespace?: string; name?: string; $type?: string };
     }>,
     selectedNodeId: undefined as string | undefined,
+    detailPanelOpen: false,
     visibility: { expandedNamespaces: new Set<string>(), hiddenNodeIds: new Set<string>() },
-    selectNode: vi.fn((nodeId: string) => {
+    selectNode: vi.fn((nodeId: string, _options?: { isolateInFocusMode?: boolean }) => {
       editorStoreState.selectedNodeId = nodeId;
     }),
     toggleNamespace: vi.fn(),
@@ -35,7 +36,10 @@ const {
   const useEditorStore = ((selector: (state: typeof editorStoreState) => unknown) =>
     selector(editorStoreState)) as typeof import('@rune-langium/visual-editor').useEditorStore;
   Object.assign(useEditorStore, {
-    getState: () => editorStoreState
+    getState: () => editorStoreState,
+    setState: vi.fn((partial: Partial<typeof editorStoreState>) => {
+      Object.assign(editorStoreState, partial);
+    })
   });
 
   const diagnosticsState = { fileDiagnostics: new Map(), totalErrors: 0, totalWarnings: 0 };
@@ -954,7 +958,8 @@ describe('EditorPage workspace chrome', () => {
       namespaceExplorerMockState.latestProps?.onSelectNode?.('cdm.base.datetime::AdjustableDate');
     });
 
-    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::AdjustableDate');
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime::AdjustableDate');
+    expect(editorStoreState.detailPanelOpen).toBe(true);
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
   });
 

@@ -53,11 +53,7 @@ import type {
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
-import {
-  getTypeRefText,
-  AST_TYPE_TO_NODE_TYPE,
-  NODE_TYPE_TO_AST_TYPE
-} from '../adapters/model-helpers.js';
+import { getTypeRefText, AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE } from '../adapters/model-helpers.js';
 import type { TrackedState } from './history.js';
 
 // ---------------------------------------------------------------------------
@@ -110,7 +106,7 @@ export interface EditorActions {
   loadDeferredExports(entries: DeferredExportEntry[]): void;
 
   // --- Navigation ---
-  selectNode(nodeId: string | null): void;
+  selectNode(nodeId: string | null, options?: { isolateInFocusMode?: boolean }): void;
   setSearchQuery(query: string): void;
   setFilters(filters: GraphFilters): void;
   toggleDetailPanel(): void;
@@ -156,13 +152,7 @@ export interface EditorActions {
   renameType(nodeId: string, newName: string): void;
   addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string): void;
   removeAttribute(nodeId: string, attrName: string): void;
-  updateAttribute(
-    nodeId: string,
-    oldName: string,
-    newName: string,
-    typeName: string,
-    cardinality: string
-  ): void;
+  updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string): void;
   reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
   updateCardinality(nodeId: string, attrName: string, cardinality: string): void;
   setInheritance(childId: string, parentId: string | null): void;
@@ -270,9 +260,7 @@ function formatCardinalityString(card: string): string {
 function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string): AnyGraphNode {
   let changed = false;
 
-  function updateMemberRefs<T extends { typeCall?: { type?: { $refText?: string } } }>(
-    members: T[]
-  ): T[] {
+  function updateMemberRefs<T extends { typeCall?: { type?: { $refText?: string } } }>(members: T[]): T[] {
     const updated = members.map((m) => {
       if (m.typeCall?.type?.$refText === oldName) {
         changed = true;
@@ -289,9 +277,7 @@ function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string)
     return updated;
   }
 
-  function updateRefText(
-    ref: { $refText?: string } | undefined
-  ): { $refText?: string } | undefined {
+  function updateRefText(ref: { $refText?: string } | undefined): { $refText?: string } | undefined {
     if (ref?.$refText === oldName) {
       changed = true;
       return { ...ref, $refText: newName };
@@ -456,8 +442,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           // Only layout visible nodes
           const visibleNodes = shouldCollapse ? [] : rawNodes;
           const visibleEdges = shouldCollapse ? [] : edges;
-          const nodes =
-            visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : [];
+          const nodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : [];
 
           set({
             nodes: rawNodes,
@@ -527,14 +512,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // Navigation
         // -----------------------------------------------------------------------
 
-        selectNode(nodeId) {
+        selectNode(nodeId, options) {
           const nextDetailPanelOpen = nodeId !== null;
           const { selectedNodeId, detailPanelOpen } = get();
           const selectionChanged = selectedNodeId !== nodeId;
           if (selectionChanged || detailPanelOpen !== nextDetailPanelOpen) {
             set({ selectedNodeId: nodeId, detailPanelOpen: nextDetailPanelOpen });
           }
-          if (nodeId && get().focusMode && selectionChanged) {
+          if (nodeId && get().focusMode && selectionChanged && options?.isolateInFocusMode !== false) {
             // Only isolate if the node has at least one edge — stub nodes
             // from deferred exports have no edges and crash ReactFlow when
             // isolated (no layout, no measured dimensions).
@@ -706,8 +691,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             });
 
             // 3. Update selectedNodeId
-            const updatedSelectedNodeId =
-              state.selectedNodeId === nodeId ? newNodeId : state.selectedNodeId;
+            const updatedSelectedNodeId = state.selectedNodeId === nodeId ? newNodeId : state.selectedNodeId;
 
             return {
               nodes: updatedNodes,
@@ -734,9 +718,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           };
 
           set((state) => {
-            const targetNodeId = state.nodes.find(
-              (n) => (n.data as AnyGraphNode).name === typeName
-            )?.id;
+            const targetNodeId = state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
 
             const updatedNodes = state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
@@ -780,12 +762,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               return n;
             }),
             edges: state.edges.filter(
-              (e) =>
-                !(
-                  e.source === nodeId &&
-                  e.data?.kind === 'attribute-ref' &&
-                  e.data?.label === attrName
-                )
+              (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName)
             )
           }));
         },
@@ -809,9 +786,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         setInheritance(childId: string, parentId: string | null) {
           set((state) => {
-            const filteredEdges = state.edges.filter(
-              (e) => !(e.source === childId && e.data?.kind === 'extends')
-            );
+            const filteredEdges = state.edges.filter((e) => !(e.source === childId && e.data?.kind === 'extends'));
 
             const parentNode = parentId ? state.nodes.find((n) => n.id === parentId) : null;
             const parentName = (parentNode?.data as AnyGraphNode)?.name as string | undefined;
@@ -819,9 +794,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             const updatedNodes = state.nodes.map((n) => {
               if (n.id !== childId) return n;
               const d = n.data as AnyGraphNode;
-              const superRef = parentName
-                ? ({ ref: { name: parentName }, $refText: parentName } as any)
-                : undefined;
+              const superRef = parentName ? ({ ref: { name: parentName }, $refText: parentName } as any) : undefined;
               if (d.$type === 'Data') {
                 return { ...n, data: { ...d, superType: superRef } } as TypeGraphNode;
               }
@@ -856,13 +829,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // Attribute operations
         // -----------------------------------------------------------------------
 
-        updateAttribute(
-          nodeId: string,
-          oldName: string,
-          newName: string,
-          typeName: string,
-          cardinality: string
-        ) {
+        updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string) {
           const card = parseCardinalityString(cardinality);
           set((state) => {
             const updatedNodes = state.nodes.map((n) => {
@@ -890,18 +857,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
             // Remove old attribute-ref edge for the old attribute name
             const filteredEdges = state.edges.filter(
-              (e) =>
-                !(
-                  e.source === nodeId &&
-                  e.data?.kind === 'attribute-ref' &&
-                  e.data?.label === oldName
-                )
+              (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
             );
 
             // Add new attribute-ref edge if target exists
-            const targetNodeId = state.nodes.find(
-              (n) => (n.data as AnyGraphNode).name === typeName
-            )?.id;
+            const targetNodeId = state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
             if (targetNodeId && targetNodeId !== nodeId) {
               const newEdge: TypeGraphEdge = {
                 id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
@@ -1015,15 +975,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         setEnumParent(nodeId: string, parentId: string | null) {
           set((state) => {
-            const filteredEdges = state.edges.filter(
-              (e) => !(e.source === nodeId && e.data?.kind === 'enum-extends')
-            );
+            const filteredEdges = state.edges.filter((e) => !(e.source === nodeId && e.data?.kind === 'enum-extends'));
 
             const parentNode = parentId ? state.nodes.find((n) => n.id === parentId) : null;
             const parentName = (parentNode?.data as AnyGraphNode)?.name as string | undefined;
-            const parentRef = parentName
-              ? ({ ref: { name: parentName }, $refText: parentName } as any)
-              : undefined;
+            const parentRef = parentName ? ({ ref: { name: parentName }, $refText: parentName } as any) : undefined;
 
             const updatedNodes = state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
@@ -1069,9 +1025,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           };
 
           set((state) => {
-            const targetNodeId = state.nodes.find(
-              (n) => (n.data as AnyGraphNode).name === typeName
-            )?.id;
+            const targetNodeId = state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
 
             const updatedNodes = state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
@@ -1104,20 +1058,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
               if (d.$type === 'Choice') {
-                const attrs = ((d as any).attributes ?? []).filter(
-                  (a: any) => a.typeCall?.type?.$refText !== typeName
-                );
+                const attrs = ((d as any).attributes ?? []).filter((a: any) => a.typeCall?.type?.$refText !== typeName);
                 return { ...n, data: { ...d, attributes: attrs } };
               }
               return n;
             }),
             edges: state.edges.filter(
-              (e) =>
-                !(
-                  e.source === nodeId &&
-                  e.data?.kind === 'choice-option' &&
-                  e.data?.label === typeName
-                )
+              (e) => !(e.source === nodeId && e.data?.kind === 'choice-option' && e.data?.label === typeName)
             )
           }));
         },
@@ -1271,10 +1218,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             nodes: state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
-              const allConditions = [
-                ...((d as any).conditions ?? []),
-                ...((d as any).postConditions ?? [])
-              ];
+              const allConditions = [...((d as any).conditions ?? []), ...((d as any).postConditions ?? [])];
               allConditions.splice(index, 1);
               const conditions = allConditions.filter((c: any) => !c.postCondition);
               const postConditions = allConditions.filter((c: any) => c.postCondition);
@@ -1292,10 +1236,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             nodes: state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
-              const allConditions = [
-                ...((d as any).conditions ?? []),
-                ...((d as any).postConditions ?? [])
-              ];
+              const allConditions = [...((d as any).conditions ?? []), ...((d as any).postConditions ?? [])];
               if (index < 0 || index >= allConditions.length) return n;
               const cond = allConditions[index];
               allConditions[index] = {
@@ -1334,17 +1275,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         updateDefinition(nodeId: string, definition: string) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId ? { ...n, data: { ...n.data, definition } } : n
-            )
+            nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, definition } } : n))
           }));
         },
 
         updateComments(nodeId: string, comments: string) {
           set((state) => ({
-            nodes: state.nodes.map((n) =>
-              n.id === nodeId ? { ...n, data: { ...n.data, comments } } : n
-            )
+            nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, comments } } : n))
           }));
         },
 
@@ -1374,9 +1311,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             nodes: state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
-              const synonyms = ((d as any).synonyms ?? []).filter(
-                (_: any, i: number) => i !== index
-              );
+              const synonyms = ((d as any).synonyms ?? []).filter((_: any, i: number) => i !== index);
               return { ...n, data: { ...d, synonyms } };
             })
           }));
@@ -1407,9 +1342,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             nodes: state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
-              const annotations = ((d as any).annotations ?? []).filter(
-                (_: any, i: number) => i !== index
-              );
+              const annotations = ((d as any).annotations ?? []).filter((_: any, i: number) => i !== index);
               return { ...n, data: { ...d, annotations } };
             })
           }));
