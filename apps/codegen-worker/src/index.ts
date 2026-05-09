@@ -127,7 +127,7 @@ async function handleHealth(req: Request, env: WorkerEnv): Promise<Response> {
       cold_start_likely: payload.cold_start_likely ?? elapsedMs >= COLD_START_THRESHOLD_MS,
       languages
     });
-  } catch (_err) {
+  } catch {
     // Container failed or timed out. Serve cached languages so the Studio
     // picker isn't empty; if cache is also empty, surface 503.
     const cached = await readCachedLanguages(env);
@@ -221,7 +221,7 @@ async function handleGenerate(req: Request, env: WorkerEnv): Promise<Response> {
   try {
     const rlRes = await doStub.fetch(new Request('http://do/check', { method: 'POST' }));
     rlResult = (await rlRes.json()) as typeof rlResult;
-  } catch (_err) {
+  } catch {
     // If the DO itself is broken, fail closed (treat as denied) — better to
     // over-reject than to let abuse through.
     return json(503, { error: 'rate_limiter_unavailable' });

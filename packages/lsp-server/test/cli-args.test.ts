@@ -40,11 +40,11 @@ function parseArgsForTest(argv: string[]): { port: number; host: string } {
 
 describe('parseArgs (port validation)', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-  let processExitSpy: ReturnType<typeof vi.spyOn>;
+  let _processExitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    processExitSpy = vi
+    _processExitSpy = vi
       .spyOn(process, 'exit')
       .mockImplementation((code?: string | number | null | undefined): never => {
         throw new Error(`process.exit(${code})`) as never;

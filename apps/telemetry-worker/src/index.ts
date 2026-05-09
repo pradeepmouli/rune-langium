@@ -116,7 +116,7 @@ type TelemetryEvent = z.infer<typeof TelemetryEventBody>;
 
 const RATE_LIMIT = 10;
 const WINDOW_MS = 60_000;
-const MAX_TRACKED_IPS = 50_000;
+const _MAX_TRACKED_IPS = 50_000;
 
 interface RateWindow {
   windowStart: number;

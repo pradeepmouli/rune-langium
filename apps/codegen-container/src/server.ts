@@ -60,7 +60,7 @@ async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
       try {
         const raw = Buffer.concat(chunks).toString('utf8');
         resolve(JSON.parse(raw) as T);
-      } catch (err) {
+      } catch {
         reject(new SyntaxError('malformed JSON body'));
       }
     });
@@ -115,7 +115,7 @@ export function createContainerServer(options: ContainerServerOptions = {}): Ser
         return;
       }
       writeJson(res, 404, { error: 'not_found' });
-    } catch (_err) {
+    } catch {
       // Last-resort catch. The thrown error may contain fragments of the
       // user's source, so we log only a stable code — pino's redact would
       // also catch {err} shapes but keeping the payload minimal is safer.
@@ -138,7 +138,7 @@ async function handleHealth(proxy: CodegenProxyLike, res: ServerResponse): Promi
       cold_start_likely: false,
       languages: languages.map((l) => l.id)
     });
-  } catch (err) {
+  } catch {
     writeJson(res, 503, {
       status: 'unavailable',
       message: 'The code generation service is temporarily unavailable.'
@@ -165,7 +165,7 @@ async function handleGenerate(
     const result = await proxy.generate(request);
     const status = result.errors.length > 0 ? 422 : 200;
     writeJson(res, status, result);
-  } catch (err) {
+  } catch {
     // Do NOT include err.message — it could contain fragments of the user's source.
     writeJson(res, 500, { error: 'generation_failed' });
   }

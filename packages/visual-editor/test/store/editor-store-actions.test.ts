@@ -239,7 +239,7 @@ describe('EditorStore — enum operations', () => {
       const vals = (enumNode!.data as any).enumValues ?? [];
 
       const first = vals[0]!.name;
-      const last = vals[vals.length - 1]!.name;
+      const _last = vals[vals.length - 1]!.name;
 
       store.getState().reorderEnumValue(enumNode!.id, 0, vals.length - 1);
 
@@ -308,8 +308,8 @@ describe('EditorStore — choice operations', () => {
     it('adds a member and edge for a choice option', () => {
       const nodes = store.getState().nodes;
       const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
-      const initialAttrs = ((choiceNode!.data as any).attributes ?? []).length;
-      const initialEdges = store.getState().edges.length;
+      const _initialAttrs = ((choiceNode!.data as any).attributes ?? []).length;
+      const _initialEdges = store.getState().edges.length;
 
       // Add a new option referencing CashPayment
       store.getState().addChoiceOption(choiceNode!.id, 'CashPayment');

@@ -91,7 +91,7 @@ export function Select({
   disabled,
   options,
   children,
-  ...rest
+  ..._rest
 }: ControlledProps & {
   disabled?: boolean;
   options?: Array<{ label: string; value: string }>;
@@ -119,7 +119,7 @@ export function Select({
   );
 }
 
-export function TypeSelector({ value, onChange, ...rest }: ControlledProps) {
+export function TypeSelector({ value, onChange, ..._rest }: ControlledProps) {
   return (
     <RawTypeSelector
       value={(value as string) ?? ''}
@@ -129,7 +129,7 @@ export function TypeSelector({ value, onChange, ...rest }: ControlledProps) {
   );
 }
 
-export function CardinalitySelector({ value, onChange, ...rest }: ControlledProps) {
+export function CardinalitySelector({ value, onChange, ..._rest }: ControlledProps) {
   return (
     <CardinalityPicker
       value={(value as string) ?? ''}

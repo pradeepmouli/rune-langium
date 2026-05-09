@@ -13,5 +13,23 @@
       "filename-case": "off"
     }
   },
-  "ignorePatterns": ["node_modules", "dist", "build", "coverage", "*.config.ts", "*.config.js"]
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "*.config.ts",
+    "*.config.js",
+    "**/test/fixtures/**",
+    "**/*.expected.ts",
+    "**/*.expected.zod.ts",
+    "**/expected.ts",
+    "**/expected.zod.ts",
+    ".agents/**",
+    ".github/skills/**",
+    "scratch/**",
+    "specs/**",
+    "rule-tests/**",
+    "rules/**"
+  ]
 }

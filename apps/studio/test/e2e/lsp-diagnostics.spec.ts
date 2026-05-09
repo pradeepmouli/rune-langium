@@ -34,7 +34,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 
 const SESSION_URL_GLOB = '**/api/lsp/session';
-const WS_URL_GLOB = '**/api/lsp/ws/**';
+const _WS_URL_GLOB = '**/api/lsp/ws/**';
 
 interface MockState {
   sessionMintCount: number;

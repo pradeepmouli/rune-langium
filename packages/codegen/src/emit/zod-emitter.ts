@@ -17,11 +17,6 @@ import {
   isData,
   isRosettaEnumeration,
   isRosettaBasicType,
-  isRosettaTypeAlias,
-  isRosettaRule,
-  isRosettaReport,
-  isAnnotation,
-  isRosettaExternalFunction,
   isData as _isData,
   type Data,
   type Attribute,
@@ -82,7 +77,7 @@ interface EmissionContext {
  * TypeScript/JavaScript reserved words that must be quoted when used as property keys.
  * FR-009.
  */
-const RESERVED_WORDS = new Set([
+const _RESERVED_WORDS = new Set([
   'break',
   'case',
   'catch',
@@ -529,7 +524,7 @@ function emitCyclicInterface(data: Data, ctx: EmissionContext): string {
 /**
  * Resolve the TypeScript type expression for an attribute (for interface declarations).
  */
-function resolveTypeExprAsTs(attr: Attribute, ctx: EmissionContext): string {
+function resolveTypeExprAsTs(attr: Attribute, _ctx: EmissionContext): string {
   const typeRef = attr.typeCall?.type?.ref;
   const refText = attr.typeCall?.type?.$refText;
 

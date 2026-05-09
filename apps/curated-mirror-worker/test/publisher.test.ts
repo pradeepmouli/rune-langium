@@ -46,7 +46,7 @@ function buildHeader(name: string, typeflag: string, size = 0): Uint8Array {
   return block;
 }
 
-function packTar(...entries: Array<{ path: string; content: string }>): Uint8Array {
+function _packTar(...entries: Array<{ path: string; content: string }>): Uint8Array {
   const encoder = new TextEncoder();
   const blocks: Uint8Array[] = [];
   for (const entry of entries) {

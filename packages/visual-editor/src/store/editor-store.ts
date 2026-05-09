@@ -53,7 +53,7 @@ import type {
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
-import { getTypeRefText, AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE } from '../adapters/model-helpers.js';
+import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE } from '../adapters/model-helpers.js';
 import type { TrackedState } from './history.js';
 
 // ---------------------------------------------------------------------------
@@ -442,7 +442,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           // Only layout visible nodes
           const visibleNodes = shouldCollapse ? [] : rawNodes;
           const visibleEdges = shouldCollapse ? [] : edges;
-          const nodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : [];
+          const _nodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : [];
 
           set({
             nodes: rawNodes,

@@ -20,7 +20,6 @@ import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
-import { useEditorStore } from '@rune-langium/visual-editor';
 import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';

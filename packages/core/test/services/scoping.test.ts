@@ -6,7 +6,7 @@ import { parse, parseWorkspace } from '../../src/index.js';
 import type { Data, RosettaFunction, RosettaEnumeration, RosettaModel } from '../../src/index.js';
 import { createRuneDslServices } from '../../src/index.js';
 import { URI } from 'langium';
-import type { Diagnostic, LangiumDocument } from 'langium';
+import type { Diagnostic } from 'langium';
 
 /**
  * Helper: parse and assert no errors.

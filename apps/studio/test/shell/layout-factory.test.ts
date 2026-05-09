@@ -97,7 +97,7 @@ function collectColumnComponents(node: unknown): string[] {
   return obj.component ? [obj.component] : [];
 }
 
-function collectStackComponents(node: unknown): string[] {
+function _collectStackComponents(node: unknown): string[] {
   if (!node || typeof node !== 'object') return [];
   const obj = node as {
     top?: { component?: string };

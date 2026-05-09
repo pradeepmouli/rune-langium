@@ -76,21 +76,21 @@ describe('Studio CSS uses only defined custom properties (T062 / FR-025)', () =>
     const referenced = readReferencedNames();
     const defined = readDefinedNames();
 
-    const undefined: string[] = [];
+    const undefinedVars: string[] = [];
     for (const name of referenced) {
-      if (!defined.has(name)) undefined.push(name);
+      if (!defined.has(name)) undefinedVars.push(name);
     }
 
-    if (undefined.length > 0) {
+    if (undefinedVars.length > 0) {
       // Fail with the offending names listed so CI output points at the fix.
       throw new Error(
-        `Undefined var(--…) refs in apps/studio/src/styles.css:\n  ${undefined.sort().join(', ')}\n\n` +
+        `Undefined var(--…) refs in apps/studio/src/styles.css:\n  ${undefinedVars.sort().join(', ')}\n\n` +
           'Each name MUST be defined in either packages/design-tokens/src/tokens.json (preferred) ' +
           'or packages/design-system/src/theme.css (Studio-specific alias). ' +
           'See specs/014-studio-prod-ready/spec.md FR-025.'
       );
     }
-    expect(undefined).toEqual([]);
+    expect(undefinedVars).toEqual([]);
   });
 
   it('reads the canonical token + theme files (sanity check)', () => {

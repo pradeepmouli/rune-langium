@@ -48,7 +48,6 @@ import {
 } from '../../../generated/zod-schemas.js';
 import {
   useRowDispatchContext,
-  type RowDispatchContextValue,
   type AttributeRowDispatch,
   type ChoiceOptionRowDispatch,
   type EnumValueRowDispatch,

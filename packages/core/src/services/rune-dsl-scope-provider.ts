@@ -905,6 +905,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
     const attrs: (Attribute | RosettaRecordFeature | ChoiceOption)[] =
       this.collectDataAttributes(data);
+    // eslint-disable-next-line unicorn/no-useless-spread
     for (const attr of [...attrs]) {
       if (isAttribute(attr)) {
         const attrType = this.resolveTypeCallToData(attr.typeCall);

@@ -19,7 +19,7 @@ import {
   detectDuplicateEnumValue,
   validateGraph
 } from '../../src/validation/edit-validator.js';
-import type { TypeGraphNode, TypeGraphEdge } from '../../src/types.js';
+import type { TypeGraphNode } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

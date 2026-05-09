@@ -2,14 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import { parse } from '../../src/index.js';
-import type {
-  Data,
-  RosettaFunction,
-  RosettaEnumeration,
-  Choice,
-  RosettaModel
-} from '../../src/index.js';
+import type { RosettaModel } from '../../src/index.js';
 import { createRuneDslServices } from '../../src/index.js';
 import { URI } from 'langium';
 import type { LangiumDocument } from 'langium';

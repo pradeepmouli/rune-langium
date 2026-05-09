@@ -6,7 +6,6 @@ import { resolve, relative, extname } from 'node:path';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import type { LangiumDocument } from 'langium';
-import type { RosettaModel } from '@rune-langium/core';
 
 export interface ValidateCommandOptions {
   json?: boolean;

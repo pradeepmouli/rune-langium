@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { parse } from '../../src/index.js';
-import type { RosettaModel, Data, RosettaEnumeration } from '../../src/index.js';
+import type { Data, RosettaEnumeration } from '../../src/index.js';
 
 /**
  * Helper: parse and assert no errors.

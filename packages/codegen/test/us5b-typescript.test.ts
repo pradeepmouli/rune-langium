@@ -16,7 +16,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { join, resolve, dirname } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';

@@ -11,7 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
-import type { TypeGraphNode, AnyGraphNode, TypeKind } from '../../src/types.js';
+import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
 
 // Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
 vi.mock('@tanstack/react-virtual', () => ({

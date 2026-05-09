@@ -51,7 +51,6 @@ import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { Kbd } from '@rune-langium/design-system/ui/kbd';
 import { Maximize2, LayoutGrid, Network, Check, Download, Share2, Zap, Search, ChevronDown } from 'lucide-react';
-import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';

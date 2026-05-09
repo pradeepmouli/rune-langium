@@ -348,7 +348,7 @@ describe('EditorPage preview target identity', () => {
     ];
     editorStoreState.selectedNodeId = 'beta-trade';
 
-    const view = render(
+    const _view = render(
       <EditorPage
         models={[]}
         files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace beta', dirty: false }]}
@@ -781,7 +781,7 @@ describe('EditorPage preview target identity', () => {
       })
     };
 
-    const view = render(
+    const _view = render(
       <EditorPage
         models={[]}
         files={[
@@ -846,7 +846,7 @@ describe('EditorPage workspace chrome', () => {
   });
 
   it('renders a workspace header and keeps graph controls inside the graph panel', () => {
-    const view = render(
+    const _view = render(
       <EditorPage
         models={[]}
         files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}

@@ -3,7 +3,6 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  CuratedManifestSchema,
   CuratedModelIdSchema,
   CURATED_MODEL_IDS,
   ErrorCategorySchema,

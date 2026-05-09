@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { BlockRenderer } from '../../src/components/editors/expression-builder/BlockRenderer.js';
 import type { ExpressionNode } from '../../src/schemas/expression-node-schema.js';
 

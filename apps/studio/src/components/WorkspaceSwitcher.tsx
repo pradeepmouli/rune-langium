@@ -23,7 +23,7 @@ const KIND_LABEL: Record<RecentWorkspaceRecord['kind'], string> = {
   'git-backed': 'Git'
 };
 
-export function WorkspaceSwitcher({ onOpen, onCreate, onDelete }: Props): React.ReactElement {
+export function WorkspaceSwitcher({ onOpen, onCreate: _onCreate, onDelete }: Props): React.ReactElement {
   const [rows, setRows] = useState<RecentWorkspaceRecord[]>([]);
 
   useEffect(() => {

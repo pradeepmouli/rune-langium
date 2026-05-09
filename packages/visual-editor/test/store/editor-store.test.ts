@@ -9,7 +9,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import { COMBINED_MODEL_SOURCE, SIMPLE_INHERITANCE_SOURCE } from '../helpers/fixture-loader.js';
-import type { EditorStore } from '../../src/store/editor-store.js';
 
 describe('EditorStore', () => {
   let store: ReturnType<typeof createEditorStore>;

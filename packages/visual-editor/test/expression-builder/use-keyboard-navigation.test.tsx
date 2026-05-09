@@ -10,7 +10,7 @@
  * @module
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { createExpressionStore } from '../../src/store/expression-store.js';
 import { useKeyboardNavigation } from '../../src/hooks/useKeyboardNavigation.js';
@@ -22,10 +22,6 @@ import type { ExpressionNode } from '../../src/schemas/expression-node-schema.js
 
 function node($type: string, id: string, extra: Record<string, unknown> = {}): ExpressionNode {
   return { $type, id, ...extra } as unknown as ExpressionNode;
-}
-
-function placeholder(id: string): ExpressionNode {
-  return node('Placeholder', id);
 }
 
 function fireKey(

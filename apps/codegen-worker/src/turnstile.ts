@@ -60,7 +60,7 @@ export async function verifyTurnstile(
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString()
     });
-  } catch (_err) {
+  } catch {
     // Deliberately no err.message in the reason — could echo fetch input.
     return { valid: false, reason: 'siteverify_fetch_failed' };
   }
@@ -72,7 +72,7 @@ export async function verifyTurnstile(
   let payload: SiteVerifyResponse;
   try {
     payload = (await response.json()) as SiteVerifyResponse;
-  } catch (_err) {
+  } catch {
     return { valid: false, reason: 'siteverify_bad_json' };
   }
 

@@ -12,17 +12,7 @@
  * Groups nodes by namespace and produces one RosettaModel per namespace.
  */
 
-import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode, GraphNode } from '../types.js';
-import type {
-  Data,
-  Choice,
-  RosettaEnumeration,
-  RosettaFunction,
-  RosettaRecordType,
-  RosettaTypeAlias,
-  RosettaBasicType,
-  Annotation
-} from '@rune-langium/core';
+import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Types

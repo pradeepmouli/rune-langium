@@ -521,7 +521,7 @@ export class RuneDslValidator {
   /**
    * N-08: Standalone enum value naming (used from ChoiceOption context).
    */
-  checkEnumValueNamingRule(node: RosettaEnumValue, accept: ValidationAcceptor): void {
+  checkEnumValueNamingRule(_node: RosettaEnumValue, _accept: ValidationAcceptor): void {
     // Already handled by checkEnumValueNaming on the parent, but kept for completeness
   }
 

@@ -29,7 +29,7 @@ export interface UseExpressionBuilderOptions {
 }
 
 export function useExpressionBuilder({
-  value,
+  value: _value,
   onChange,
   onBlur,
   scope,

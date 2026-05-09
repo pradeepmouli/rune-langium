@@ -9,7 +9,6 @@
 import { useCallback, useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Input } from '@rune-langium/design-system/ui/input';
-import { cn } from '@rune-langium/design-system/utils';
 import { getModelRegistry, createCustomModelSource } from '../services/model-registry.js';
 import { useModelStore } from '../store/model-store.js';
 import type { ModelSource, LoadProgress, ModelLoadErrorCode } from '../types/model-types.js';

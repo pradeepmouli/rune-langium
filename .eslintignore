@@ -1,0 +1,11 @@
+# Ignore test fixture and generated expected-output files
+**/test/fixtures/**
+**/__fixtures__/**
+
+# Ignore skill/example files not part of the main codebase
+.agents/**
+.github/skills/**
+scratch/**
+specs/**
+rule-tests/**
+rules/**

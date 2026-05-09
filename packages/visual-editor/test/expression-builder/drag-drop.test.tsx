@@ -10,10 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  createExpressionStore,
-  type ExpressionBuilderState
-} from '../../src/store/expression-store.js';
+import { createExpressionStore } from '../../src/store/expression-store.js';
 import type { ExpressionNode } from '../../src/schemas/expression-node-schema.js';
 
 // ---------------------------------------------------------------------------

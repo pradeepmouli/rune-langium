@@ -113,6 +113,7 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
 
   function setState(next: TransportState): void {
     state = next;
+    // eslint-disable-next-line unicorn/no-useless-spread
     for (const l of [...listeners]) l(state);
   }
 

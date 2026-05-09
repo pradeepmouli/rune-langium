@@ -47,13 +47,13 @@ import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
 
 const DEFAULT_VIEWPORT_WIDTH = 1920;
 const DEFAULT_UTILITY_HEIGHT = 220;
-const PRESET_OPTIONS: Array<{ id: LayoutPreset; label: string }> = [
+const _PRESET_OPTIONS: Array<{ id: LayoutPreset; label: string }> = [
   { id: 'navigate', label: 'Navigate' },
   { id: 'edit', label: 'Edit' },
   { id: 'preview', label: 'Preview' }
 ] as const;
 
-const CENTER_PANE_OPTIONS: Array<{ id: CenterPane; label: string; panel: string }> = [
+const _CENTER_PANE_OPTIONS: Array<{ id: CenterPane; label: string; panel: string }> = [
   { id: 'graph', label: 'Graph', panel: 'workspace.visualPreview' },
   { id: 'source', label: 'Source', panel: 'workspace.editor' },
   { id: 'inspector', label: 'Inspector', panel: 'workspace.inspector' }
@@ -207,7 +207,7 @@ export function DockShell({
     return sanitized.notice ?? null;
   });
   const [layout, setLayout] = useState<PanelLayoutRecord>(() => getSanitizedLayout(initialLayout).layout);
-  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>(() =>
+  const [_layoutPreset, setLayoutPreset] = useState<LayoutPreset>(() =>
     layout.dockview && layout.dockview.shape === 'factory' ? (layout.dockview.preset ?? 'edit') : 'edit'
   );
   const [activePanes, setActivePanes] = useState<Set<CenterPane>>(() => new Set<CenterPane>(['graph']));

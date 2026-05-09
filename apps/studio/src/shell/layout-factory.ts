@@ -60,7 +60,7 @@ export const PANEL_TITLES: Record<PanelComponentName, string> = {
 
 export const LAYOUT_SCHEMA_VERSION = 6;
 
-const SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
+const _SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
 
 export interface BuildLayoutInput {
   studioVersion: string;

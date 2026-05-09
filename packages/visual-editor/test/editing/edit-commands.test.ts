@@ -10,7 +10,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
-import type { EditorStore } from '../../src/store/editor-store.js';
 
 const SIMPLE_SOURCE = `
 namespace test.edit

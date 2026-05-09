@@ -17,7 +17,7 @@ export interface AttributeEditorProps {
 export const AttributeEditor = memo(function AttributeEditor({
   nodeId,
   onAddAttribute,
-  onRemoveAttribute,
+  onRemoveAttribute: _onRemoveAttribute,
   onCancel
 }: AttributeEditorProps) {
   const [name, setName] = useState('');

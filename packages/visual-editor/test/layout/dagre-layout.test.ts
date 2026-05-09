@@ -11,11 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { astToModel } from '../../src/adapters/ast-to-model.js';
 import { computeLayout } from '../../src/layout/dagre-layout.js';
-import {
-  SIMPLE_INHERITANCE_SOURCE,
-  DEEP_INHERITANCE_SOURCE,
-  EMPTY_MODEL_SOURCE
-} from '../helpers/fixture-loader.js';
+import { SIMPLE_INHERITANCE_SOURCE, DEEP_INHERITANCE_SOURCE } from '../helpers/fixture-loader.js';
 
 describe('computeLayout', () => {
   it('assigns positions to all nodes', async () => {

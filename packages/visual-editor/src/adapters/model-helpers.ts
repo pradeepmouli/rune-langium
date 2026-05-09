@@ -10,7 +10,6 @@
  * form components can share them.
  */
 
-import type { AstNodeModel, AstNodeShape } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Cardinality

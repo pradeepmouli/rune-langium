@@ -41,7 +41,7 @@ export interface FormPreviewPanelProps {
 export function FormPreviewPanel({
   schema,
   status,
-  target,
+  target: _target,
   getFieldSource,
   onExecute
 }: FormPreviewPanelProps): ReactElement {
@@ -481,7 +481,7 @@ interface PreviewFieldControlProps {
 function PreviewFieldControl({
   field,
   sample,
-  lookupFieldSource,
+  lookupFieldSource, // oxlint-disable-line only-used-in-recursion
   onFieldBlur,
   onFieldChange,
   onArrayAdd,
@@ -770,6 +770,7 @@ function buildDefaultObjectValue(field: PreviewField): Record<string, unknown> {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formatSourceLocation(source: PreviewSourceMapEntry): string {
   return `${basenameFromUri(source.sourceUri)}:${source.sourceLine}:${source.sourceChar}`;
 }

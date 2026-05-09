@@ -97,7 +97,7 @@ const initialState: PreviewStoreState = {
 };
 
 let dispatchExecuteCounter = 0;
-let lastExecuteRequestId = '';
+let _lastExecuteRequestId = '';
 let workerRef: Worker | null = null;
 
 function serializeSampleValues(values: Record<string, unknown>): string {
@@ -514,7 +514,7 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     const worker = workerRef;
     dispatchExecuteCounter++;
     const requestId = `exec:${funcName}:${dispatchExecuteCounter}`;
-    lastExecuteRequestId = requestId;
+    _lastExecuteRequestId = requestId;
     worker.postMessage({
       type: 'preview:execute',
       funcName,

@@ -51,7 +51,7 @@ describe('Expression round-trip (T029)', () => {
 
     expect(expressions.length).toBeGreaterThan(0);
 
-    for (const { name, expr, sourceText } of expressions) {
+    for (const { name: _name, expr, sourceText } of expressions) {
       // AST → ExpressionNode
       const exprNode = astToExpressionNode(expr, sourceText);
       expect(exprNode).toBeDefined();

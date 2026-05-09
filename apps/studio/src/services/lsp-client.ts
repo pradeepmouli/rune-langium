@@ -286,6 +286,7 @@ export function createLspClientService(opts?: LspClientOptions): LspClientServic
         }
       }
 
+      // eslint-disable-next-line unicorn/no-useless-spread
       for (const uri of [...workspaceSnapshot.keys()]) {
         if (nextUris.has(uri)) continue;
         workspaceSnapshot.delete(uri);

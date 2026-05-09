@@ -25,14 +25,8 @@ import {
   isRosettaEnumeration,
   isRosettaBasicType,
   isData as _isData,
-  isRosettaTypeAlias,
-  isRosettaRule,
-  isRosettaReport,
-  isAnnotation,
-  isRosettaExternalFunction,
   type Data,
   type Attribute,
-  type Condition,
   type RosettaEnumeration,
   type RosettaCardinality,
   type RosettaTypeAlias,
@@ -226,7 +220,7 @@ function collectCrossNamespaceImports(ctx: EmissionContext): string[] {
  * Resolve the TypeScript type expression for an attribute.
  * T105.
  */
-function resolveTypeExprAsTs(attr: Attribute, ctx: EmissionContext): string {
+function resolveTypeExprAsTs(attr: Attribute, _ctx: EmissionContext): string {
   const typeRef = attr.typeCall?.type?.ref;
   const refText = attr.typeCall?.type?.$refText;
 
@@ -551,6 +545,7 @@ function emitTypeGuard(data: Data, ctx: EmissionContext): string {
  * Emit `export function is<Child>(x: <Parent>): x is <Child>` discriminator predicate.
  * T109.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function emitDiscriminatorPredicate(child: Data, parent: Data, ctx: EmissionContext): string {
   const childName = child.name;
   const parentName = parent.name;
@@ -1306,7 +1301,7 @@ function emitAnnotationDeclaration(annotation: Annotation, ctx: EmissionContext)
  * Emit a TypeScript type alias declaration.
  * Maps a Rune typeAlias to `export type <Name> = <TsType>;`.
  */
-function emitTypeAlias(alias: RosettaTypeAlias, ctx: EmissionContext): string {
+function emitTypeAlias(alias: RosettaTypeAlias, _ctx: EmissionContext): string {
   const name = alias.name;
   const typeRef = alias.typeCall?.type?.ref;
   const refText = alias.typeCall?.type?.$refText;

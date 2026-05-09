@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { EnumForm } from '../../src/components/editors/EnumForm.js';
 import type {
   AnyGraphNode,

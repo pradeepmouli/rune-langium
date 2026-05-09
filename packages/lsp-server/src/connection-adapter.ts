@@ -426,7 +426,7 @@ function registerInitializeHandler(
   server: LSPServer<ServerCapabilities>,
   langiumHandler: (...args: any[]) => any
 ): { dispose(): void } {
-  return server.onRequest('initialize' as any, async (params: any, token: any, context: any) => {
+  return server.onRequest('initialize' as any, async (params: any, token: any, _context: any) => {
     const srv = server as any;
 
     // ── Replicate built-in state management ──
