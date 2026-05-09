@@ -18,10 +18,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260507.1",
-    "miniflare": "^4.20260504.0",
+    "@cloudflare/workers-types": "^4.20260509.1",
+    "miniflare": "^4.20260507.1",
     "vitest": "^4.1.5",
-    "wrangler": "^4.88.0"
+    "wrangler": "^4.90.0"
   },
   "engines": {
     "node": ">=20.0.0"
