@@ -147,8 +147,7 @@ vi.mock('@rune-langium/design-system/ui/separator', () => ({
 }));
 
 vi.mock('@rune-langium/design-system/ui/scroll-area', () => ({
-  ScrollArea: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement('div', {}, children)
+  ScrollArea: ({ children }: { children?: React.ReactNode }) => React.createElement('div', {}, children)
 }));
 
 vi.mock('../../src/services/workspace.js', async (importOriginal) => {
@@ -174,6 +173,7 @@ vi.mock('lucide-react', () => ({
   Search: () => React.createElement('span'),
   ChevronDown: () => React.createElement('span'),
   ChevronUp: () => React.createElement('span'),
+  MoreHorizontal: () => React.createElement('span'),
   Layers: () => React.createElement('span'),
   Database: () => React.createElement('span'),
   Bell: () => React.createElement('span'),
@@ -278,9 +278,7 @@ describe('EditorPage preview target identity', () => {
     render(
       <EditorPage
         models={[]}
-        files={[
-          { name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace beta', dirty: false }
-        ]}
+        files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace beta', dirty: false }]}
       />
     );
 
@@ -450,12 +448,8 @@ describe('EditorPage preview target identity', () => {
         .map(([message]) => message as { type?: string; requestId?: string })
         .filter((message) => message.type === 'codegen:setFiles');
       expect(codegenSetFilesMessages.length).toBeGreaterThan(0);
-      expect(
-        codegenSetFilesMessages.every((message) => message.requestId?.startsWith('codegen:'))
-      ).toBe(true);
-      expect(
-        codegenSetFilesMessages.every((message) => !message.requestId?.startsWith('preview:'))
-      ).toBe(true);
+      expect(codegenSetFilesMessages.every((message) => message.requestId?.startsWith('codegen:'))).toBe(true);
+      expect(codegenSetFilesMessages.every((message) => !message.requestId?.startsWith('preview:'))).toBe(true);
     });
   });
 
@@ -683,8 +677,7 @@ describe('EditorPage preview target identity', () => {
       state: 'unavailable',
       targetId: 'preview.alpha.Trade',
       reason: 'generation-error',
-      message:
-        'Preview worker rejected a message. A preview worker message could not be deserialized.'
+      message: 'Preview worker rejected a message. A preview worker message could not be deserialized.'
     });
   });
 
@@ -753,10 +746,7 @@ describe('EditorPage preview target identity', () => {
     await expect(pendingView).resolves.toEqual({ id: '/workspace/beta.rosetta' });
 
     await waitFor(() => {
-      expect(screen.getByTestId('source-editor-mock')).toHaveAttribute(
-        'data-active-file',
-        '/workspace/beta.rosetta'
-      );
+      expect(screen.getByTestId('source-editor-mock')).toHaveAttribute('data-active-file', '/workspace/beta.rosetta');
     });
   });
 });
@@ -784,9 +774,7 @@ describe('EditorPage workspace chrome', () => {
     render(
       <EditorPage
         models={[]}
-        files={[
-          { name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }
-        ]}
+        files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}
         workspaceName="CDM Workspace"
         onClose={vi.fn()}
       />

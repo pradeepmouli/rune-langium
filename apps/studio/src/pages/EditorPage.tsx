@@ -52,7 +52,6 @@ import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
 import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { Kbd } from '@rune-langium/design-system/ui/kbd';
 import { Maximize2, LayoutGrid, Network, Check, Download, Share2, Zap, Search, ChevronDown } from 'lucide-react';
-import { GraphFilterMenu } from '../components/GraphFilterMenu.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
 import type { WorkspaceFile } from '../services/workspace.js';
@@ -1022,8 +1021,6 @@ export function EditorPage({
             <LayoutGrid />
             Grouped
           </Button>
-          <Separator orientation="vertical" className="mx-1 h-4" />
-          <GraphFilterMenu />
         </div>
         <div ref={graphContainerRef} className="min-h-0 flex-1 relative studio-graph-canvas">
           <RuneTypeGraph

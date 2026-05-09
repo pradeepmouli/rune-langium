@@ -3,7 +3,8 @@
 
 import { Fragment, useCallback, useRef, useState } from 'react';
 import type React from 'react';
-import { Network, FileCode2, Info, ChevronUp, ChevronDown } from 'lucide-react';
+import { Network, FileCode2, Info, MoreHorizontal } from 'lucide-react';
+import { GraphFilterMenu } from '../../components/GraphFilterMenu.js';
 import { useCenterPanes, type CenterPane } from '../center-panes-context.js';
 import { useUtilityTrayControls } from '../utility-tray-context.js';
 
@@ -123,37 +124,27 @@ export function CenterStackPanel({
           })}
         </div>
         <div className="flex-1" />
-        <button
-          type="button"
-          className="studio-utility-toggle"
-          onClick={toggleUtilities}
-          aria-pressed={!utilitiesCollapsed}
-          title={utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages'}
-          data-testid="toggle-utilities-chevron"
-        >
-          {utilitiesCollapsed ? (
-            <ChevronUp className="size-3.5" />
-          ) : (
-            <ChevronDown className="size-3.5" />
-          )}
-        </button>
+        <div className="studio-panel-actions" aria-label="Center stack actions">
+          <GraphFilterMenu compact align="end" />
+          <button
+            type="button"
+            className="studio-panel-action studio-utility-toggle"
+            onClick={toggleUtilities}
+            aria-pressed={!utilitiesCollapsed}
+            aria-label={utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages'}
+            title={utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages'}
+            data-testid="toggle-utilities-chevron"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        </div>
       </div>
 
       {/* Pane body — active panes split side-by-side */}
-      <div
-        ref={containerRef}
-        className="studio-center-stack"
-        data-count={ordered.length}
-        data-testid="center-stack"
-      >
+      <div ref={containerRef} className="studio-center-stack" data-count={ordered.length} data-testid="center-stack">
         {ordered.map((pane, i) => (
           <Fragment key={pane}>
-            {i > 0 && (
-              <div
-                className="studio-center-stack__split"
-                onMouseDown={(e) => handleDragStart(i - 1, e)}
-              />
-            )}
+            {i > 0 && <div className="studio-center-stack__split" onMouseDown={(e) => handleDragStart(i - 1, e)} />}
             <div
               className="studio-center-stack__pane"
               data-pane={pane}

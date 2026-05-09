@@ -11,11 +11,20 @@
  * diagnostic lists.
  */
 
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { AlertCircle, AlertTriangle, FileWarning, Info, Lightbulb, CheckCircle2 } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  FileWarning,
+  Info,
+  Lightbulb,
+  CheckCircle2,
+  Filter,
+  MoreHorizontal
+} from 'lucide-react';
 import type { LspDiagnostic } from '../store/diagnostics-store.js';
-import { Separator } from '@rune-langium/design-system/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
 import { cn } from '@rune-langium/design-system/utils';
 import { flattenDiagnostics } from '../utils/flatten-diagnostics.js';
 import type { FlatDiagnosticRow } from '../utils/flatten-diagnostics.js';
@@ -25,12 +34,14 @@ export interface DiagnosticsPanelProps {
   onNavigate?: (uri: string, line: number, character: number) => void;
 }
 
+type SeverityKind = 'error' | 'warning' | 'info' | 'hint';
+
 function extractFileName(uri: string): string {
   const parts = uri.split('/');
   return parts[parts.length - 1] ?? uri;
 }
 
-function severityLabel(severity?: number): string {
+function severityLabel(severity?: number): SeverityKind {
   switch (severity) {
     case 1:
       return 'error';
@@ -47,6 +58,15 @@ function severityLabel(severity?: number): string {
 
 const FILE_HEADER_HEIGHT = 28;
 const DIAGNOSTIC_ROW_HEIGHT = 36;
+
+const SEVERITY_ORDER: SeverityKind[] = ['error', 'warning', 'info', 'hint'];
+
+const DEFAULT_VISIBLE_SEVERITIES: Record<SeverityKind, boolean> = {
+  error: true,
+  warning: true,
+  info: true,
+  hint: true
+};
 
 interface ProblemCounts {
   errors: number;
@@ -88,14 +108,39 @@ function countProblems(fileDiagnostics: Map<string, LspDiagnostic[]>): ProblemCo
 
 export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const flatRows = useMemo(() => flattenDiagnostics(fileDiagnostics), [fileDiagnostics]);
-  const counts = useMemo(() => countProblems(fileDiagnostics), [fileDiagnostics]);
+  const [visibleSeverities, setVisibleSeverities] = useState<Record<SeverityKind, boolean>>(DEFAULT_VISIBLE_SEVERITIES);
+  const [showSummary, setShowSummary] = useState(true);
+
+  const filteredDiagnostics = useMemo(() => {
+    const filtered = new Map<string, LspDiagnostic[]>();
+    for (const [uri, diagnostics] of fileDiagnostics) {
+      const matching = diagnostics.filter((diagnostic) => visibleSeverities[severityLabel(diagnostic.severity)]);
+      if (matching.length > 0) {
+        filtered.set(uri, matching);
+      }
+    }
+    return filtered;
+  }, [fileDiagnostics, visibleSeverities]);
+
+  const flatRows = useMemo(() => flattenDiagnostics(filteredDiagnostics), [filteredDiagnostics]);
+  const counts = useMemo(() => countProblems(filteredDiagnostics), [filteredDiagnostics]);
+  const rawCounts = useMemo(() => countProblems(fileDiagnostics), [fileDiagnostics]);
   const diagnosticsByFile = useMemo(
-    () => new Map(Array.from(fileDiagnostics.entries(), ([uri, diags]) => [uri, diags.length])),
-    [fileDiagnostics]
+    () => new Map(Array.from(filteredDiagnostics.entries(), ([uri, diags]) => [uri, diags.length])),
+    [filteredDiagnostics]
   );
   const fileCount = diagnosticsByFile.size;
+  const hasActiveSeverityFilters = SEVERITY_ORDER.some((severity) => !visibleSeverities[severity]);
   const isEmpty = counts.total === 0;
+  const isFilteredEmpty = rawCounts.total > 0 && isEmpty;
+
+  const toggleSeverity = (severity: SeverityKind) => {
+    setVisibleSeverities((current) => ({ ...current, [severity]: !current[severity] }));
+  };
+
+  const resetFilters = () => {
+    setVisibleSeverities(DEFAULT_VISIBLE_SEVERITIES);
+  };
 
   const virtualizer = useVirtualizer({
     count: flatRows.length,
@@ -111,16 +156,38 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
         data-testid="diagnostics-panel"
         aria-label="Diagnostics"
       >
-        <PanelHeader total={0} />
+        <PanelHeader
+          total={counts.total}
+          rawTotal={rawCounts.total}
+          hasActiveSeverityFilters={hasActiveSeverityFilters}
+          showSummary={showSummary}
+          onToggleSummary={() => setShowSummary((current) => !current)}
+          onResetFilters={resetFilters}
+          visibleSeverities={visibleSeverities}
+          onToggleSeverity={toggleSeverity}
+        />
         <div className="flex flex-1 items-center justify-center px-4 py-6">
           <div className="flex max-w-60 flex-col items-center gap-2 text-center">
             <span className="rounded-full border border-border/70 bg-background/70 p-2 shadow-sm">
               <CheckCircle2 className="size-4 text-emerald-500" aria-hidden />
             </span>
-            <p className="text-sm font-medium text-foreground">No problems detected</p>
-            <p className="text-xs text-muted-foreground">
-              Parser, validation, and linker issues will appear here as you edit.
+            <p className="text-sm font-medium text-foreground">
+              {isFilteredEmpty ? 'No matching problems' : 'No problems detected'}
             </p>
+            <p className="text-xs text-muted-foreground">
+              {isFilteredEmpty
+                ? 'Adjust the active severity filters to bring hidden diagnostics back into view.'
+                : 'Parser, validation, and linker issues will appear here as you edit.'}
+            </p>
+            {isFilteredEmpty ? (
+              <button
+                type="button"
+                className="text-xs font-medium text-primary hover:text-primary/80"
+                onClick={resetFilters}
+              >
+                Show all severities
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
@@ -133,16 +200,27 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
       data-testid="diagnostics-panel"
       aria-label="Diagnostics"
     >
-      <PanelHeader total={counts.total} />
-      <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-card/40 px-3 py-2 text-sm">
-        <SeverityPill severity="error" count={counts.errors} />
-        <SeverityPill severity="warning" count={counts.warnings} />
-        <SeverityPill severity="info" count={counts.info} />
-        <SeverityPill severity="hint" count={counts.hints} />
-        <span className="number-chiclet" title={`${fileCount} file${fileCount === 1 ? '' : 's'}`}>
-          {fileCount} file{fileCount === 1 ? '' : 's'}
-        </span>
-      </div>
+      <PanelHeader
+        total={counts.total}
+        rawTotal={rawCounts.total}
+        hasActiveSeverityFilters={hasActiveSeverityFilters}
+        showSummary={showSummary}
+        onToggleSummary={() => setShowSummary((current) => !current)}
+        onResetFilters={resetFilters}
+        visibleSeverities={visibleSeverities}
+        onToggleSeverity={toggleSeverity}
+      />
+      {showSummary ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-card/40 px-3 py-2 text-sm">
+          <SeverityPill severity="error" count={counts.errors} />
+          <SeverityPill severity="warning" count={counts.warnings} />
+          <SeverityPill severity="info" count={counts.info} />
+          <SeverityPill severity="hint" count={counts.hints} />
+          <span className="number-chiclet" title={`${fileCount} file${fileCount === 1 ? '' : 's'}`}>
+            {fileCount} file{fileCount === 1 ? '' : 's'}
+          </span>
+        </div>
+      ) : null}
 
       <div ref={scrollRef} className="flex-1 overflow-auto">
         <div
@@ -180,29 +258,136 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
   );
 }
 
-function PanelHeader({ total }: { total: number }) {
+function PanelHeader({
+  total,
+  rawTotal,
+  hasActiveSeverityFilters,
+  showSummary,
+  onToggleSummary,
+  onResetFilters,
+  visibleSeverities,
+  onToggleSeverity
+}: {
+  total: number;
+  rawTotal: number;
+  hasActiveSeverityFilters: boolean;
+  showSummary: boolean;
+  onToggleSummary: () => void;
+  onResetFilters: () => void;
+  visibleSeverities: Record<SeverityKind, boolean>;
+  onToggleSeverity: (severity: SeverityKind) => void;
+}) {
+  const titleMeta =
+    rawTotal === 0
+      ? '· clear'
+      : hasActiveSeverityFilters
+        ? `· ${total}/${rawTotal} shown`
+        : `· ${total} problem${total === 1 ? '' : 's'}`;
+
   return (
-    <>
-      <div className="flex items-start justify-between gap-3 border-b border-border/70 px-3 py-2.5">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <FileWarning className="size-4 text-muted-foreground" aria-hidden />
-            <span>Problems</span>
-          </div>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Review diagnostics and jump straight to the affected source.
-          </p>
+    <div className="flex items-start justify-between gap-3 border-b border-border/70 px-3 py-2">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+          <FileWarning className="size-4 text-muted-foreground" aria-hidden />
+          <span>Problems</span>
+          <span className="font-mono text-[11px] text-muted-foreground">{titleMeta}</span>
         </div>
-        <span className="number-chiclet" title={`${total} problem${total === 1 ? '' : 's'}`}>
-          {total}
-        </span>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          {hasActiveSeverityFilters
+            ? 'Filter active — only matching severities are shown.'
+            : 'Review diagnostics and jump straight to the affected source.'}
+        </p>
       </div>
-      <Separator />
-    </>
+      <div className="studio-panel-actions" aria-label="Problems panel actions">
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="studio-panel-action"
+              data-active={hasActiveSeverityFilters ? 'true' : undefined}
+              aria-label="Filter diagnostics"
+              title="Filter diagnostics"
+            >
+              <Filter className="size-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-2" align="end" sideOffset={6}>
+            <div className="space-y-1">
+              <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Visible severities
+              </p>
+              {SEVERITY_ORDER.map((severity) => {
+                const active = visibleSeverities[severity];
+                return (
+                  <button
+                    key={severity}
+                    type="button"
+                    className={cn(
+                      'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors',
+                      active ? 'bg-accent/65 text-foreground' : 'text-muted-foreground hover:bg-accent/45'
+                    )}
+                    onClick={() => onToggleSeverity(severity)}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'size-2.5 rounded-full border',
+                          severity === 'error' && 'border-destructive bg-destructive',
+                          severity === 'warning' &&
+                            'border-[color:var(--color-warning)] bg-[color:var(--color-warning)]',
+                          severity === 'info' && 'border-[color:var(--color-info)] bg-[color:var(--color-info)]',
+                          severity === 'hint' && 'border-[color:var(--color-data)] bg-[color:var(--color-data)]',
+                          !active && 'bg-transparent opacity-60'
+                        )}
+                      />
+                      <span className="capitalize">{severity}</span>
+                    </span>
+                    <span className="text-[10px] font-medium uppercase tracking-[0.12em]">{active ? 'On' : 'Off'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="studio-panel-action"
+              aria-label="Problem panel options"
+              title="Problem panel options"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-52 p-2" align="end" sideOffset={6}>
+            <div className="space-y-1">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
+                onClick={onToggleSummary}
+              >
+                <span>{showSummary ? 'Hide summary row' : 'Show summary row'}</span>
+                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                  {showSummary ? 'On' : 'Off'}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-50"
+                onClick={onResetFilters}
+                disabled={!hasActiveSeverityFilters}
+              >
+                <span>Show all severities</span>
+                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Reset</span>
+              </button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
   );
 }
-
-type SeverityKind = 'error' | 'warning' | 'info' | 'hint';
 
 function SeverityPill({ severity, count }: { severity: SeverityKind; count: number }) {
   if (count === 0) return null;

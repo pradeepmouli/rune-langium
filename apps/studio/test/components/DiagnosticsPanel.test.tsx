@@ -82,9 +82,10 @@ describe('DiagnosticsPanel', () => {
 
     render(<DiagnosticsPanel fileDiagnostics={diags} onNavigate={onNavigate} />);
 
+    expect(screen.getByText(/3 problems/i)).toBeInTheDocument();
     expect(screen.getByTitle('2 errors')).toBeInTheDocument();
     expect(screen.getByTitle('1 warning')).toBeInTheDocument();
-    expect(screen.getAllByTitle('3 problems')).toHaveLength(2);
+    expect(screen.getByTitle('3 problems')).toBeInTheDocument();
   });
 
   it('navigates when a diagnostic is clicked', () => {
