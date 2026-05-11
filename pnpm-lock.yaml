@@ -7,7 +7,7 @@ settings:
 overrides:
   x-to-zod: ^0.8.0
   '@zod-to-form/core': ^0.8.1
-  '@zod-to-form/react': ^0.8.1
+  '@zod-to-form/react': ^0.9.1
   '@zod-to-form/vite': ^0.3.0
   codemirror: 6.0.2
   '@radix-ui/react-compose-refs': 1.1.2
@@ -693,8 +693,8 @@ importers:
         specifier: ^0.8.1
         version: 0.8.1(jiti@2.7.0)(zod@4.4.3)
       '@zod-to-form/react':
-        specifier: ^0.8.1
-        version: 0.8.1(@hookform/resolvers@5.2.2(react-hook-form@7.75.0(react@19.2.6)))(jiti@2.7.0)(react-hook-form@7.75.0(react@19.2.6))(react@19.2.6)(zod@4.4.3)
+        specifier: ^0.9.1
+        version: 0.9.1(@hookform/resolvers@5.2.2(react-hook-form@7.75.0(react@19.2.6)))(jiti@2.7.0)(react-hook-form@7.75.0(react@19.2.6))(react@19.2.6)(zod@4.4.3)
       lucide-react:
         specifier: ^1.14.0
         version: 1.14.0(react@19.2.6)
@@ -3430,8 +3430,8 @@ packages:
       jiti:
         optional: true
 
-  '@zod-to-form/react@0.8.1':
-    resolution: {integrity: sha512-2IYESvhr9pzU//hCyQVIuhqIoHj7qjpQNrUv/IHQF0qP8kW+Z95tzKC2qLA+/W5A/iejewSRLqY4NyxS8AvvYA==}
+  '@zod-to-form/react@0.9.1':
+    resolution: {integrity: sha512-wMyOkG/Cphvjp/wpLbT+aiiKu2KiDtg/qzkHsgZxhtbm6kiAwR8PHLBIlKXOmFd4Ptn2YUL//2gmlVUDLuqf0A==}
     peerDependencies:
       '@hookform/resolvers': ^5.0.0
       react: ^18.0.0 || ^19.0.0
@@ -8469,7 +8469,7 @@ snapshots:
     optionalDependencies:
       jiti: 2.7.0
 
-  '@zod-to-form/react@0.8.1(@hookform/resolvers@5.2.2(react-hook-form@7.75.0(react@19.2.6)))(jiti@2.7.0)(react-hook-form@7.75.0(react@19.2.6))(react@19.2.6)(zod@4.4.3)':
+  '@zod-to-form/react@0.9.1(@hookform/resolvers@5.2.2(react-hook-form@7.75.0(react@19.2.6)))(jiti@2.7.0)(react-hook-form@7.75.0(react@19.2.6))(react@19.2.6)(zod@4.4.3)':
     dependencies:
       '@hookform/resolvers': 5.2.2(react-hook-form@7.75.0(react@19.2.6))
       '@zod-to-form/core': 0.8.1(jiti@2.7.0)(zod@4.4.3)
