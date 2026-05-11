@@ -564,11 +564,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             (selectionChanged || options?.reapplyFocusMode);
           if (shouldApplyFocusMode) {
             const focusNodeIds = collectFocusClusterNodeIds(nodeId, edges);
-            if (focusNodeIds.size > 1) {
-              get().showOnly(focusNodeIds);
-            } else {
-              get().showAllNodes();
-            }
+            get().showOnly(focusNodeIds);
           }
         },
 
