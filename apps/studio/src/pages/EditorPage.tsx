@@ -216,6 +216,7 @@ export function EditorPage({
   const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [groupedLayout, setGroupedLayout] = useState(false);
+  const [graphLayoutDirection, setGraphLayoutDirection] = useState<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
   // Ref so ResizeObserver callbacks always see the latest value without stale closures.
   const groupedLayoutRef = useRef(groupedLayout);
   groupedLayoutRef.current = groupedLayout;
@@ -258,13 +259,17 @@ export function EditorPage({
   const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
   const receiveExecutionError = usePreviewStore((s) => s.receiveExecutionError);
   const setWorkerRef = usePreviewStore((s) => s.setWorkerRef);
+  const updateGraphLayoutDirection = useCallback((nextDirection: Extract<LayoutDirection, 'LR' | 'TB'>) => {
+    graphLayoutDirectionRef.current = nextDirection;
+    setGraphLayoutDirection((prev) => (prev === nextDirection ? prev : nextDirection));
+    return nextDirection;
+  }, []);
   const getResponsiveGraphDirection = useCallback((): Extract<LayoutDirection, 'LR' | 'TB'> => {
     const rect = graphContainerRef.current?.getBoundingClientRect();
     if (!rect) return graphLayoutDirectionRef.current;
     const nextDirection = resolveResponsiveLayoutDirection(rect.width, rect.height, graphLayoutDirectionRef.current);
-    graphLayoutDirectionRef.current = nextDirection;
-    return nextDirection;
-  }, []);
+    return updateGraphLayoutDirection(nextDirection);
+  }, [updateGraphLayoutDirection]);
 
   useEffect(() => {
     const el = graphContainerRef.current;
@@ -274,12 +279,12 @@ export function EditorPage({
       const { width, height } = entry.contentRect;
       const direction = resolveResponsiveLayoutDirection(width, height, graphLayoutDirectionRef.current);
       if (direction === graphLayoutDirectionRef.current) return;
-      graphLayoutDirectionRef.current = direction;
+      updateGraphLayoutDirection(direction);
       graphRef.current?.relayout({ direction, groupByInheritance: groupedLayoutRef.current });
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [updateGraphLayoutDirection]);
 
   const resolvedModelFiles = useMemo(() => {
     if (parsedModels && parsedModels.length > 0) {
@@ -1063,7 +1068,7 @@ export function EditorPage({
             config={{
               // 'LR' is a safe default — the ResizeObserver corrects direction on the first frame
               // once the container is measured. The container dimensions aren't available yet here.
-              layout: { direction: 'LR', groupByInheritance: groupedLayout },
+              layout: { direction: graphLayoutDirection, groupByInheritance: groupedLayout },
               showControls: true,
               showMinimap: true,
               readOnly: false
@@ -1080,6 +1085,7 @@ export function EditorPage({
     [
       focusMode,
       groupedLayout,
+      graphLayoutDirection,
       handleFitView,
       handleModelChanged,
       handleRelayout,

@@ -12,6 +12,7 @@ const {
   useEditorStore,
   useDiagnosticsStore,
   runeTypeGraphMockState,
+  resizeObserverMockState,
   namespaceExplorerMockState,
   showToastSpy
 } = vi.hoisted(() => {
@@ -53,11 +54,23 @@ const {
 
   const runeTypeGraphMockState = {
     focusNode: vi.fn(),
+    latestConfig: undefined as
+      | {
+          layout?: { direction?: 'LR' | 'TB'; groupByInheritance?: boolean };
+        }
+      | undefined,
     latestCallbacks: undefined as
       | {
           onNavigateToType?: (nodeId: string) => void;
         }
       | undefined
+  };
+
+  const resizeObserverMockState = {
+    instances: [] as Array<{
+      callback: ResizeObserverCallback;
+      targets: Element[];
+    }>
   };
 
   const namespaceExplorerMockState = {
@@ -76,6 +89,7 @@ const {
     diagnosticsState,
     useDiagnosticsStore,
     runeTypeGraphMockState,
+    resizeObserverMockState,
     namespaceExplorerMockState,
     showToastSpy
   };
@@ -127,7 +141,13 @@ class MockWorker {
 vi.mock('@rune-langium/visual-editor', () => ({
   RuneTypeGraph: React.forwardRef(
     (
-      { callbacks }: { callbacks?: { onNavigateToType?: (nodeId: string) => void } },
+      {
+        callbacks,
+        config
+      }: {
+        callbacks?: { onNavigateToType?: (nodeId: string) => void };
+        config?: { layout?: { direction?: 'LR' | 'TB'; groupByInheritance?: boolean } };
+      },
       ref: React.ForwardedRef<{
         fitView(): void;
         focusNode(nodeId: string): void;
@@ -135,6 +155,7 @@ vi.mock('@rune-langium/visual-editor', () => ({
         exportRosetta(): Map<string, string>;
       }>
     ) => {
+      runeTypeGraphMockState.latestConfig = config;
       runeTypeGraphMockState.latestCallbacks = callbacks;
       useImperativeHandle(ref, () => ({
         fitView: vi.fn(),
@@ -325,15 +346,33 @@ function modelWithType(typeName: string) {
 describe('EditorPage preview target identity', () => {
   beforeEach(() => {
     vi.stubGlobal('Worker', MockWorker);
+    vi.stubGlobal(
+      'ResizeObserver',
+      class MockResizeObserver {
+        private instance: { callback: ResizeObserverCallback; targets: Element[] };
+        constructor(callback: ResizeObserverCallback) {
+          this.instance = { callback, targets: [] };
+          resizeObserverMockState.instances.push(this.instance);
+        }
+        observe(target: Element) {
+          this.instance.targets.push(target);
+        }
+        disconnect() {}
+        unobserve() {}
+      }
+    );
     MockWorker.instances = [];
     setRuneStudioTestApi(() => undefined);
     usePreviewStore.getState().resetPreviewState();
     editorStoreState.nodes = [];
+    editorStoreState.edges = [];
     editorStoreState.selectedNodeId = undefined;
     vi.clearAllMocks();
     sourceEditorMockState.latestProps = undefined;
     dockShellMockState.latestProps = undefined;
+    runeTypeGraphMockState.latestConfig = undefined;
     runeTypeGraphMockState.latestCallbacks = undefined;
+    resizeObserverMockState.instances = [];
     namespaceExplorerMockState.latestProps = undefined;
   });
 
@@ -1059,6 +1098,37 @@ describe('EditorPage workspace chrome', () => {
       description: 'Previous node "cdm.base.datetime::AdjustableDate" is no longer in the graph',
       variant: 'destructive',
       duration: 3000
+    });
+  });
+
+  it('updates graph config direction when responsive relayout flips orientation', async () => {
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    expect(runeTypeGraphMockState.latestConfig?.layout?.direction).toBe('LR');
+
+    const graphCanvas = document.querySelector('.studio-graph-canvas') as HTMLDivElement | null;
+    expect(graphCanvas).not.toBeNull();
+    vi.spyOn(graphCanvas!, 'getBoundingClientRect').mockReturnValue({
+      width: 480,
+      height: 960
+    } as DOMRect);
+
+    fireEvent.click(screen.getByTitle('Re-run auto layout'));
+
+    await waitFor(() => {
+      expect(runeTypeGraphMockState.latestConfig?.layout?.direction).toBe('TB');
     });
   });
 });
