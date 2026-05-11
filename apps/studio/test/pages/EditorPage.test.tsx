@@ -23,11 +23,12 @@ const {
     selectedNodeId: undefined as string | undefined,
     detailPanelOpen: false,
     visibility: { expandedNamespaces: new Set<string>(), hiddenNodeIds: new Set<string>() },
-    selectNode: vi.fn((nodeId: string, _options?: { isolateInFocusMode?: boolean }) => {
+    focusMode: true,
+    selectNode: vi.fn((nodeId: string, _options?: { isolateInFocusMode?: boolean; reapplyFocusMode?: boolean }) => {
       editorStoreState.selectedNodeId = nodeId;
+      editorStoreState.detailPanelOpen = nodeId !== null;
     }),
     toggleNamespace: vi.fn(),
-    toggleNodeVisibility: vi.fn(),
     expandAllNamespaces: vi.fn(),
     collapseAllNamespaces: vi.fn(),
     loadModels: vi.fn()
@@ -960,6 +961,9 @@ describe('EditorPage workspace chrome', () => {
 
     expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime::AdjustableDate');
     expect(editorStoreState.detailPanelOpen).toBe(true);
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::AdjustableDate', {
+      reapplyFocusMode: true
+    });
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
   });
 

@@ -15,13 +15,7 @@ import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
 
 // Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: ({
-    count,
-    estimateSize
-  }: {
-    count: number;
-    estimateSize: (i: number) => number;
-  }) => {
+  useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: (i: number) => number }) => {
     let offset = 0;
     const items = Array.from({ length: count }, (_, i) => {
       const size = estimateSize(i);
@@ -76,7 +70,6 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExp
     expandedNamespaces: allNamespaces,
     hiddenNodeIds: new Set<string>(),
     onToggleNamespace: vi.fn(),
-    onToggleNode: vi.fn(),
     onExpandAll: vi.fn(),
     onCollapseAll: vi.fn(),
     onSelectNode: vi.fn(),
@@ -132,20 +125,10 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onCollapseAll).toHaveBeenCalledOnce();
   });
 
-  it('calls onToggleNode when type visibility toggled', () => {
-    const { props } = renderPanel();
-    const toggleBtn = screen.getByTestId('ns-type-com.model::Trade').querySelector('button');
-    expect(toggleBtn).toBeTruthy();
-    fireEvent.click(toggleBtn!);
-    expect(props.onToggleNode).toHaveBeenCalledWith('com.model::Trade');
-  });
-
-  it('calls onSelectNode when type name clicked', () => {
+  it('calls onSelectNode when type row clicked', () => {
     const { props } = renderPanel();
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
-    const nameSpan = typeRow.querySelector('span.truncate');
-    expect(nameSpan).toBeTruthy();
-    fireEvent.click(nameSpan!);
+    fireEvent.click(typeRow);
     expect(props.onSelectNode).toHaveBeenCalledWith('com.model::Trade');
   });
 

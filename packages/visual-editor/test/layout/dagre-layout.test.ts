@@ -87,10 +87,8 @@ describe('computeLayout', () => {
 
     // Wider separation should produce nodes spread further apart
     if (tight.length >= 2 && wide.length >= 2) {
-      const tightSpan =
-        Math.max(...tight.map((n) => n.position.x)) - Math.min(...tight.map((n) => n.position.x));
-      const wideSpan =
-        Math.max(...wide.map((n) => n.position.x)) - Math.min(...wide.map((n) => n.position.x));
+      const tightSpan = Math.max(...tight.map((n) => n.position.x)) - Math.min(...tight.map((n) => n.position.x));
+      const wideSpan = Math.max(...wide.map((n) => n.position.x)) - Math.min(...wide.map((n) => n.position.x));
       expect(wideSpan).toBeGreaterThanOrEqual(tightSpan);
     }
   });

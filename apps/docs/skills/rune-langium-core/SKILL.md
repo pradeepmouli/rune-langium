@@ -45,7 +45,7 @@ preserve original formatting.
 - The model contains `RosettaFunction` or `RosettaRule` elements — these are silently dropped; use the visual editor serializer for full round-trip fidelity. (`serializeModel`)
 - Subclassing for grammar experiments — prefer creating a separate grammar variant and a new services container instead. (`RuneDslParser`)
 
-API surface: 173 functions, 5 classes, 159 types, 149 constants
+API surface: 173 functions, 6 classes, 160 types, 149 constants
 
 ## Configuration
 
@@ -59,7 +59,7 @@ that follow `extract`, `filter`, or `reduce` operators), `serializeModel` (Seria
 implicit `[` and `]` brackets around bare expressions after `extract`,
 `filter`, and `reduce` operators)
 
-*486 exports total — see references/ for full API.*
+*488 exports total — see references/ for full API.*
 
 ## References
 

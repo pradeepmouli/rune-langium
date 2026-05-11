@@ -53,13 +53,7 @@ function baseAttribute(overrides: Partial<TestAttribute> = {}): TestAttribute {
 }
 
 /** Wrapper that provides FormProvider context required by AttributeRow. */
-function FormWrapper({
-  attributes,
-  children
-}: {
-  attributes: TestAttribute[];
-  children: React.ReactNode;
-}) {
+function FormWrapper({ attributes, children }: { attributes: TestAttribute[]; children: React.ReactNode }) {
   const methods = useForm({ defaultValues: { attributes } });
   return <FormProvider {...methods}>{children}</FormProvider>;
 }
@@ -252,5 +246,34 @@ describe('AttributeRow', () => {
 
     const nameInput = screen.getByLabelText(/attribute name/i);
     expect(nameInput).toHaveProperty('disabled', true);
+  });
+
+  it('keeps the type label navigable when a matching node exists', () => {
+    const onUpdate = vi.fn();
+    const onRemove = vi.fn();
+    const onReorder = vi.fn();
+    const onNavigateToNode = vi.fn();
+    const attr = baseAttribute();
+
+    const { container } = render(
+      <FormWrapper attributes={[attr]}>
+        <AttributeRow
+          index={0}
+          committedName={attr.name}
+          availableTypes={AVAILABLE_TYPES}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onReorder={onReorder}
+          onNavigateToNode={onNavigateToNode}
+          allNodeIds={['com.rosetta.model::date']}
+        />
+      </FormWrapper>
+    );
+
+    const typeLink = container.querySelector('[data-slot="type-link"]');
+    expect(typeLink).not.toBeNull();
+    fireEvent.click(typeLink!);
+
+    expect(onNavigateToNode).toHaveBeenCalledWith('com.rosetta.model::date');
   });
 });

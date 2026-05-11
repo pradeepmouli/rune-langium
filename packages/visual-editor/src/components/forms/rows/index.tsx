@@ -41,11 +41,7 @@ import { AttributeRow } from '../../editors/AttributeRow.js';
 import { ChoiceOptionRow } from '../../editors/ChoiceOptionRow.js';
 import { EnumValueRow } from '../../editors/EnumValueRow.js';
 import { FunctionInputRow } from '../../editors/FunctionInputRow.js';
-import {
-  AttributeSchema,
-  ChoiceOptionSchema,
-  RosettaEnumValueSchema
-} from '../../../generated/zod-schemas.js';
+import { AttributeSchema, ChoiceOptionSchema, RosettaEnumValueSchema } from '../../../generated/zod-schemas.js';
 import {
   useRowDispatchContext,
   type AttributeRowDispatch,
@@ -106,10 +102,7 @@ type RowComponent<K extends RowKind> = (
  * `formRegistry.add(...)` line plus one factory call, rather than four
  * near-copies of the same plumbing.
  */
-function makeRowRender<K extends RowKind>(
-  kind: K,
-  Component: RowComponent<K>
-): NonNullable<FormMeta['render']> {
+function makeRowRender<K extends RowKind>(kind: K, Component: RowComponent<K>): NonNullable<FormMeta['render']> {
   function RowRender(field: FormField): ReactElement | null {
     const dispatch = useRowDispatchContext();
     const slot = dispatch?.[kind];
@@ -157,10 +150,7 @@ export const formRegistry: ZodFormRegistry = z.registry<FormMeta>();
 // `(field: FormField, props) => …` with the walked variant. Cast through
 // `$replace<FormMeta, S>` exactly as upstream `register.ts` does — the
 // runtime contract is unchanged.
-formRegistry.add(AttributeSchema, { render: AttributeRowRender } as $replace<
-  FormMeta,
-  typeof AttributeSchema
->);
+formRegistry.add(AttributeSchema, { render: AttributeRowRender } as $replace<FormMeta, typeof AttributeSchema>);
 formRegistry.add(ChoiceOptionSchema, { render: ChoiceOptionRowRender } as $replace<
   FormMeta,
   typeof ChoiceOptionSchema

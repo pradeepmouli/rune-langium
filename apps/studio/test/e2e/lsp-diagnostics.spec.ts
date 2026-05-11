@@ -97,8 +97,7 @@ async function installLspMocks(page: Page): Promise<MockState> {
 
       send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
         try {
-          const text =
-            typeof data === 'string' ? data : new TextDecoder().decode(data as ArrayBuffer);
+          const text = typeof data === 'string' ? data : new TextDecoder().decode(data as ArrayBuffer);
           const msg = JSON.parse(text) as {
             jsonrpc?: string;
             id?: number | string;

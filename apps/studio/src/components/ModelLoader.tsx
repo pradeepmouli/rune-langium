@@ -73,11 +73,7 @@ function ProgressBar({ progress, sourceId }: { progress: LoadProgress; sourceId:
   );
 }
 
-function LoadedModelBadge({
-  model
-}: {
-  model: { source: ModelSource; files: { path: string }[] };
-}) {
+function LoadedModelBadge({ model }: { model: { source: ModelSource; files: { path: string }[] } }) {
   const unload = useModelStore((s) => s.unload);
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-sm">
@@ -130,9 +126,7 @@ export function ModelLoader() {
       {/* Loaded models */}
       {models.size > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Loaded Models
-          </p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Loaded Models</p>
           <div className="flex flex-wrap gap-2">
             {Array.from(models.values()).map((m) => (
               <LoadedModelBadge key={m.source.id} model={m} />
@@ -175,9 +169,7 @@ export function ModelLoader() {
 
       {config.curatedMirrorEnabled && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Reference Models
-          </p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reference Models</p>
           <div className="flex flex-wrap gap-2">
             {registry.map((source) => {
               const isLoaded = models.has(source.id);

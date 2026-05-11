@@ -44,11 +44,7 @@ function makeEnumNode(id: string, name: string, values: string[]): TypeGraphNode
   };
 }
 
-function makeDataNode(
-  id: string,
-  name: string,
-  members: Array<{ name: string; typeName?: string }>
-): TypeGraphNode {
+function makeDataNode(id: string, name: string, members: Array<{ name: string; typeName?: string }>): TypeGraphNode {
   return {
     id,
     type: 'type',
@@ -213,9 +209,7 @@ describe('validateGraph — new rules', () => {
     const errors = validateGraph([node], []);
 
     // Should have no S-05, S-06, or S-07 errors
-    const newRules = errors.filter(
-      (e) => e.ruleId === 'S-05' || e.ruleId === 'S-06' || e.ruleId === 'S-07'
-    );
+    const newRules = errors.filter((e) => e.ruleId === 'S-05' || e.ruleId === 'S-06' || e.ruleId === 'S-07');
     expect(newRules.length).toBe(0);
   });
 });

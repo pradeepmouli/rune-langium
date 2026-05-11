@@ -9,13 +9,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@rune-langium/design-system/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { validateCardinality } from '../../validation/edit-validator.js';
 
 // ---------------------------------------------------------------------------
@@ -55,11 +49,7 @@ const CUSTOM_VALUE = '__custom__';
  * Preset selection commits immediately. Choosing "Custom…" shows an inline
  * input that validates with `validateCardinality()` on blur or Enter.
  */
-export function CardinalityPicker({
-  value,
-  onChange,
-  disabled = false
-}: CardinalityPickerProps): React.ReactNode {
+export function CardinalityPicker({ value, onChange, disabled = false }: CardinalityPickerProps): React.ReactNode {
   const [showCustom, setShowCustom] = useState(false);
   const [customValue, setCustomValue] = useState('');
   const [customError, setCustomError] = useState<string | null>(null);
@@ -68,9 +58,7 @@ export function CardinalityPicker({
   const normalizedValue = value.replace(/[()]/g, '').trim();
 
   // Find matching preset for the Select's controlled value
-  const matchingPreset = PRESETS.find(
-    (p) => p.value.replace(/[()]/g, '').trim() === normalizedValue
-  );
+  const matchingPreset = PRESETS.find((p) => p.value.replace(/[()]/g, '').trim() === normalizedValue);
   const selectValue = matchingPreset?.value ?? CUSTOM_VALUE;
 
   const handleSelectChange = useCallback(
@@ -135,7 +123,7 @@ export function CardinalityPicker({
           aria-label="Custom cardinality"
           aria-invalid={!!customError}
           autoFocus
-          className={`w-20 rounded border px-1.5 py-0.5 text-xs font-mono
+          className={`w-[4.25rem] rounded border px-1.5 py-0.5 text-[11px] font-mono leading-none
             bg-background outline-none
             focus:ring-1 focus:ring-ring
             ${customError ? 'border-destructive' : 'border-input'}`}
@@ -150,12 +138,12 @@ export function CardinalityPicker({
       <Select value={selectValue} onValueChange={handleSelectChange} disabled={disabled}>
         <SelectTrigger
           size="sm"
-          className="h-6 min-w-[4.5rem] px-2 py-0 text-xs font-mono gap-1"
+          className="h-5 min-w-[3.75rem] rounded-md px-1.5 py-0 text-[11px] font-mono leading-none gap-0.5"
           aria-label="Cardinality"
         >
           <SelectValue>{normalizedValue || '1..1'}</SelectValue>
         </SelectTrigger>
-        <SelectContent position="popper" className="min-w-[6rem]">
+        <SelectContent position="popper" className="min-w-[5.5rem]">
           {PRESETS.map((preset) => (
             <SelectItem key={preset.value} value={preset.value} className="text-xs font-mono">
               {preset.label}

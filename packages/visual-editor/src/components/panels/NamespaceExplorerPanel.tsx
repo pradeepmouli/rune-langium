@@ -13,18 +13,7 @@
 
 import { useState, useMemo, useCallback, useRef, memo } from 'react';
 import type { JSX } from 'react';
-import {
-  ChevronRight,
-  ChevronDown,
-  Eye,
-  EyeOff,
-  CircleDot,
-  Circle,
-  PlusSquare,
-  MinusSquare,
-  Link,
-  Search
-} from 'lucide-react';
+import { ChevronRight, ChevronDown, Eye, EyeOff, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
@@ -46,8 +35,6 @@ export interface NamespaceExplorerPanelProps {
   hiddenNodeIds: Set<string>;
   /** Toggle a namespace's visibility on the graph. */
   onToggleNamespace: (namespace: string) => void;
-  /** Toggle an individual node's visibility. */
-  onToggleNode: (nodeId: string) => void;
   /** Expand all namespaces. */
   onExpandAll: () => void;
   /** Collapse all namespaces. */
@@ -109,7 +96,6 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   hiddenNodeIds,
   selectedNodeId,
   onToggleNamespace,
-  onToggleNode,
   onExpandAll,
   onCollapseAll,
   onSelectNode,
@@ -258,7 +244,6 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         isGraphVisible={expandedNamespaces.has(row.namespace)}
                         isSelected={row.nodeId === selectedNodeId}
                         refCount={hiddenRefCounts?.get(row.nodeId) ?? 0}
-                        onToggleNode={() => onToggleNode(row.nodeId)}
                         onSelectNode={() => onSelectNode?.(row.nodeId)}
                       />
                     )}
@@ -341,38 +326,21 @@ interface TypeItemRowProps {
   isGraphVisible: boolean;
   isSelected: boolean;
   refCount: number;
-  onToggleNode: () => void;
   onSelectNode: () => void;
 }
 
-function TypeItemRow({
-  row,
-  isGraphVisible,
-  isSelected,
-  refCount,
-  onToggleNode,
-  onSelectNode
-}: TypeItemRowProps): JSX.Element {
+function TypeItemRow({ row, isGraphVisible, isSelected, refCount, onSelectNode }: TypeItemRowProps): JSX.Element {
   const isVisible = isGraphVisible && !row.hidden;
 
   return (
     <div
-      className={`flex items-center gap-1.5 px-2 py-0.5 ml-4 text-xs hover:bg-accent/50 relative ${
+      className={`relative ml-4 flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
         isSelected ? 'studio-type-row--selected' : isVisible ? 'text-foreground' : 'text-muted-foreground opacity-60'
       }`}
       data-testid={`ns-type-${row.nodeId}`}
+      onClick={onSelectNode}
     >
       {isSelected && <span className="studio-type-pip" />}
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onToggleNode}
-        disabled={!isGraphVisible}
-        aria-label={row.hidden ? 'Show type' : 'Hide type'}
-        className="shrink-0 size-5"
-      >
-        {isVisible ? <CircleDot className="size-3" /> : <Circle className="size-3" />}
-      </Button>
 
       <span
         className="studio-type-glyph"
@@ -385,11 +353,7 @@ function TypeItemRow({
         {KIND_LETTER[row.typeKind]}
       </span>
 
-      <span
-        className="flex-1 truncate cursor-pointer hover:underline"
-        onClick={onSelectNode}
-        title={`${row.name} [${KIND_LABELS[row.typeKind]}]`}
-      >
+      <span className="flex-1 truncate hover:underline" title={`${row.name} [${KIND_LABELS[row.typeKind]}]`}>
         {row.name}
       </span>
 

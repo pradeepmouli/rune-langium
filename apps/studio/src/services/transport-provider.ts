@@ -104,8 +104,7 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
   const sessionUrl = opts?.sessionUrl ?? config.lspSessionUrl;
   const cfWsBase = opts?.cfWsBase ?? config.lspWsUrl;
   const workspaceId = opts?.workspaceId ?? DEFAULT_WORKSPACE_ID;
-  const preferDirectWebSocket =
-    opts?.wsUri !== undefined || !isSameOriginSessionEndpoint(sessionUrl);
+  const preferDirectWebSocket = opts?.wsUri !== undefined || !isSameOriginSessionEndpoint(sessionUrl);
 
   let state: TransportState = { mode: 'disconnected', status: 'disconnected' };
   let currentTransport: Transport | undefined;

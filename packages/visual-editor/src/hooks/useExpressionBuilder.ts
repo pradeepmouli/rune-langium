@@ -11,11 +11,7 @@
 
 import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useStore } from 'zustand';
-import {
-  createExpressionStore,
-  type FunctionScope,
-  type ExpressionBuilderState
-} from '../store/expression-store.js';
+import { createExpressionStore, type FunctionScope, type ExpressionBuilderState } from '../store/expression-store.js';
 import type { ExpressionNode } from '../schemas/expression-node-schema.js';
 import { expressionNodeToDslPreview } from '../adapters/expression-node-to-dsl.js';
 
@@ -37,9 +33,7 @@ export function useExpressionBuilder({
   defaultMode = 'builder'
 }: UseExpressionBuilderOptions) {
   const defaultTree = useMemo<ExpressionNode>(
-    () =>
-      initialTree ??
-      ({ $type: 'Placeholder', id: crypto.randomUUID() } as unknown as ExpressionNode),
+    () => initialTree ?? ({ $type: 'Placeholder', id: crypto.randomUUID() } as unknown as ExpressionNode),
     [initialTree]
   );
 

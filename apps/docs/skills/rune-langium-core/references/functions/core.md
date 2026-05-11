@@ -75,11 +75,12 @@ Services are initialized synchronously. The `ConfigurationProvider.initialized({
 call stubs out LSP configuration so that non-LSP code paths do not hang waiting
 for a client `workspace/configuration` response.
 ```ts
-createRuneDslServices(context: DefaultSharedCoreModuleContext): { shared: LangiumSharedCoreServices; RuneDsl: LangiumCoreServices }
+createRuneDslServices(context: DefaultSharedCoreModuleContext, deferredProvider?: DeferredModelProvider): { shared: LangiumSharedCoreServices; RuneDsl: LangiumCoreServices }
 ```
 **Parameters:**
 - `context: DefaultSharedCoreModuleContext` — default: `EmptyFileSystem` — Optional Langium file-system context. Defaults to `EmptyFileSystem`
   (in-memory only). Pass a `NodeFileSystem` context when resolving imports from disk.
+- `deferredProvider: DeferredModelProvider` (optional)
 **Returns:** `{ shared: LangiumSharedCoreServices; RuneDsl: LangiumCoreServices }` — An object with `shared` (shared core services) and `RuneDsl` (language-specific services).
 ```ts
 import { createRuneDslServices } from '@rune-langium/core';

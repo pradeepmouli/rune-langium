@@ -20,7 +20,7 @@ export interface NavigationContextValue {
   onNavigateToType?: NavigateToNodeCallback;
   /** Set of all node IDs currently in the graph, used to check if a type is navigable. */
   allNodeIds: Set<string>;
-  /** Active layout direction so node handles can align with dagre output. */
+  /** Active dagre layout direction so node handles can choose the opposing connector axis. */
   layoutDirection: GraphLayoutDirection;
 }
 
@@ -36,14 +36,14 @@ export function getHandlePositions(direction: GraphLayoutDirection): {
 } {
   switch (direction) {
     case 'BT':
-      return { target: Position.Bottom, source: Position.Top };
-    case 'LR':
-      return { target: Position.Left, source: Position.Right };
-    case 'RL':
       return { target: Position.Right, source: Position.Left };
+    case 'LR':
+      return { target: Position.Top, source: Position.Bottom };
+    case 'RL':
+      return { target: Position.Bottom, source: Position.Top };
     case 'TB':
     default:
-      return { target: Position.Top, source: Position.Bottom };
+      return { target: Position.Left, source: Position.Right };
   }
 }
 

@@ -159,10 +159,7 @@ describe('drag-and-drop restructuring', () => {
       // Remove num-b to make it a placeholder first
       state.removeNode('num-b');
       const afterRemove = store.getState().tree;
-      const rightAfterRemove = (afterRemove as Record<string, unknown>)['right'] as Record<
-        string,
-        unknown
-      >;
+      const rightAfterRemove = (afterRemove as Record<string, unknown>)['right'] as Record<string, unknown>;
       const placeholderId = rightAfterRemove['id'] as string;
 
       // Paste at the placeholder

@@ -146,11 +146,7 @@ async function handleHealth(proxy: CodegenProxyLike, res: ServerResponse): Promi
   }
 }
 
-async function handleGenerate(
-  proxy: CodegenProxyLike,
-  req: IncomingMessage,
-  res: ServerResponse
-): Promise<void> {
+async function handleGenerate(proxy: CodegenProxyLike, req: IncomingMessage, res: ServerResponse): Promise<void> {
   let request: CodeGenerationRequest;
   try {
     request = await readJsonBody<CodeGenerationRequest>(req);

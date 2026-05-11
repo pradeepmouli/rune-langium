@@ -621,17 +621,19 @@ button[data-navigable]:focus-visible {
 .rune-type-reference {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
   min-width: 0;
-  padding: 2px 4px 2px 2px;
+  padding: 2px 3px 2px 4px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 10px;
   background: color-mix(in oklch, var(--muted, #2a2a33) 20%, transparent);
   transition:
     border-color 140ms ease,
     background-color 140ms ease,
     box-shadow 140ms ease;
+  font-size: 12px;
+  line-height: 10px;
 }
 
 .rune-type-reference:hover {
@@ -646,22 +648,28 @@ button[data-navigable]:focus-visible {
 }
 
 .rune-type-reference[data-readonly='true'] {
-  padding-inline: 8px;
+  padding-inline: 7px;
   background: color-mix(in oklch, var(--muted, #2a2a33) 14%, transparent);
 }
 
 .rune-type-reference[data-empty='true'] {
-  padding-left: 8px;
+  padding-left: 6px;
 }
 
 .rune-type-reference__picker-wrap {
+  margin-left: auto;
   flex-shrink: 0;
   display: flex;
 }
 
 .rune-type-reference__picker {
   color: var(--muted-foreground, #8a8a96);
-  border-radius: 999px;
+  border-radius: 6px;
+  min-width: 18px;
+  height: 18px;
+  line-height: 14px;
+  gap: 0px;
+  padding: 0px 0px;
 }
 
 .rune-type-reference__picker:hover {
@@ -674,14 +682,32 @@ button[data-navigable]:focus-visible {
   flex: 1;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 6px 0 4px;
+  gap: 4px;
+  overflow: hidden;
+  padding: 0px 1px 0px 0px;
   border: 0;
   background: transparent;
   color: var(--muted-foreground, #8a8a96);
-  font-size: 11px;
+  font-size: 12px;
   font-family: var(--font-mono, ui-monospace, monospace);
-  line-height: 1.2;
+  line-height: 14px;
+}
+
+.rune-type-reference__navbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding-inline: 4px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in oklch, var(--border, #454552) 68%, transparent);
+  background: color-mix(in oklch, var(--background, #111218) 22%, transparent);
+  color: currentColor;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .rune-type-reference__link--navigable {
@@ -692,6 +718,12 @@ button[data-navigable]:focus-visible {
 .rune-type-reference__link--navigable:hover,
 .rune-type-reference__link--navigable:focus-visible {
   color: var(--foreground, #e8e6e1);
+}
+
+.rune-type-reference__link--navigable:hover .rune-type-reference__navbox,
+.rune-type-reference__link--navigable:focus-visible .rune-type-reference__navbox {
+  border-color: color-mix(in oklch, var(--foreground, #e8e6e1) 18%, transparent);
+  background: color-mix(in oklch, var(--muted, #2a2a33) 70%, transparent);
 }
 
 .rune-type-reference__link--navigable:focus-visible {
@@ -712,21 +744,16 @@ button[data-navigable]:focus-visible {
 
 .rune-type-reference__label {
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.rune-type-reference__icon {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  opacity: 0.65;
-}
-
 .rune-type-reference__placeholder {
+  flex: 1 1 auto;
   min-width: 0;
-  padding-inline: 4px;
+  padding-inline: 2px;
   color: var(--muted-foreground, #8a8a96);
   font-size: 11px;
   font-family: var(--font-mono, ui-monospace, monospace);

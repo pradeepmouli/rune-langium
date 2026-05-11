@@ -13,11 +13,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
-import {
-  COMBINED_MODEL_SOURCE,
-  ENUM_MODEL_SOURCE,
-  CHOICE_MODEL_SOURCE
-} from '../helpers/fixture-loader.js';
+import { COMBINED_MODEL_SOURCE, ENUM_MODEL_SOURCE, CHOICE_MODEL_SOURCE } from '../helpers/fixture-loader.js';
 
 describe('EditorStore — new actions', () => {
   let store: ReturnType<typeof createEditorStore>;
@@ -38,14 +34,10 @@ describe('EditorStore — new actions', () => {
       const tradeNode = nodes.find((n) => n.data.name === 'Trade');
       expect(tradeNode).toBeDefined();
 
-      store
-        .getState()
-        .updateAttribute(tradeNode!.id, 'tradeDate', 'executionDate', 'dateTime', '0..1');
+      store.getState().updateAttribute(tradeNode!.id, 'tradeDate', 'executionDate', 'dateTime', '0..1');
 
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      const member = ((updated!.data as any).attributes ?? []).find(
-        (m: any) => m.name === 'executionDate'
-      );
+      const member = ((updated!.data as any).attributes ?? []).find((m: any) => m.name === 'executionDate');
       expect(member).toBeDefined();
       expect(member!.typeCall?.type?.$refText).toBe('dateTime');
       expect(member!.card).toMatchObject({ inf: 0, sup: 1, unbounded: false });
@@ -55,14 +47,10 @@ describe('EditorStore — new actions', () => {
       const nodes = store.getState().nodes;
       const tradeNode = nodes.find((n) => n.data.name === 'Trade');
 
-      store
-        .getState()
-        .updateAttribute(tradeNode!.id, 'tradeDate', 'executionDate', 'dateTime', '0..1');
+      store.getState().updateAttribute(tradeNode!.id, 'tradeDate', 'executionDate', 'dateTime', '0..1');
 
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      const currency = ((updated!.data as any).attributes ?? []).find(
-        (m: any) => m.name === 'currency'
-      );
+      const currency = ((updated!.data as any).attributes ?? []).find((m: any) => m.name === 'currency');
       expect(currency).toBeDefined();
       expect(currency!.typeCall?.type?.$refText).toBe('CurrencyEnum');
     });
@@ -317,9 +305,7 @@ describe('EditorStore — choice operations', () => {
       const updated = store.getState().nodes.find((n) => n.id === choiceNode!.id);
       // The member might already exist from parsing, so check for the new typeName
       expect(
-        ((updated!.data as any).attributes ?? []).some(
-          (m: any) => m.typeCall?.type?.$refText === 'CashPayment'
-        )
+        ((updated!.data as any).attributes ?? []).some((m: any) => m.typeCall?.type?.$refText === 'CashPayment')
       ).toBe(true);
     });
   });
@@ -335,9 +321,7 @@ describe('EditorStore — choice operations', () => {
 
       const updated = store.getState().nodes.find((n) => n.id === choiceNode!.id);
       expect(
-        ((updated!.data as any).attributes ?? []).find(
-          (m: any) => m.typeCall?.type?.$refText === memberTypeName
-        )
+        ((updated!.data as any).attributes ?? []).find((m: any) => m.typeCall?.type?.$refText === memberTypeName)
       ).toBeUndefined();
 
       const choiceEdge = store

@@ -67,6 +67,7 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `disabled: boolean` (optional) — Whether the selector is disabled.
 - `allowClear: boolean` (optional) — Whether to include a "None" / clear option.
 - `filterKinds: (TypeKind | "builtin")[]` (optional) — Filter options to specific kinds.
+- `triggerClassName: string` (optional) — Additional CSS classes for the fallback trigger surface.
 - `renderTrigger: (props: TypeSelectorTriggerProps) => ReactNode` (optional) — Render-prop for the trigger (button that opens the popover).
 - `renderPopover: (props: TypeSelectorPopoverProps) => ReactNode` (optional) — Render-prop for the popover content (search + list).
 
@@ -302,9 +303,5 @@ the actual editor implementation (e.g. CodeMirror, Monaco) via a
 - `onBlur: () => void` — Called when the editor loses focus — triggers validation & commit.
 - `error: string | null` (optional) — Validation error message (null when valid).
 - `placeholder: string` (optional) — Placeholder text shown when the editor is empty.
-- `expressionAst: unknown` (optional) — Raw AST expression object — enables direct tree conversion without reparsing text.
-
-### `TypeOption`
-A type option for searchable type selectors.
 
 <!-- truncated -->

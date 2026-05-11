@@ -10,7 +10,6 @@
  * form components can share them.
  */
 
-
 // ---------------------------------------------------------------------------
 // Cardinality
 // ---------------------------------------------------------------------------
@@ -78,9 +77,7 @@ export interface AnnotationDisplayInfo {
 }
 
 /** Convert AstNodeModel<AnnotationRef>[] to display-friendly objects. */
-export function annotationsToDisplay(
-  annotations: AnnotationRefShape[] | undefined
-): AnnotationDisplayInfo[] {
+export function annotationsToDisplay(annotations: AnnotationRefShape[] | undefined): AnnotationDisplayInfo[] {
   if (!annotations || annotations.length === 0) return [];
   return annotations.map((ref) => ({
     name: ref.annotation?.$refText ?? 'unknown',

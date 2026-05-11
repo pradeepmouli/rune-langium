@@ -99,10 +99,7 @@ export async function selectNode(page: Page, kind: FormKind): Promise<void> {
   // the row container's `data-testid="ns-type-<nodeId>"` is stable.
   const typeRow = page.locator('[data-testid^="ns-type-"]').filter({ hasText: nodeName });
   await typeRow.first().waitFor({ state: 'visible', timeout: 10000 });
-  // Click the name span specifically (the row has a visibility-toggle button
-  // next to it; clicking the row's first child would trigger the wrong
-  // handler). The name span has cursor-pointer + onClick={onSelectNode}.
-  await typeRow.first().locator('span.cursor-pointer').first().click();
+  await typeRow.first().click();
   await page.locator('[data-testid="panel-inspector"]').waitFor({ timeout: 5000 });
   await page.waitForTimeout(500);
 }

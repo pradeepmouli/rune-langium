@@ -19,13 +19,7 @@
  */
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import type {
-  ExplorerColumn,
-  FactoryShape,
-  LayoutColumn,
-  LayoutPreset,
-  PanelComponentName
-} from './layout-types.js';
+import type { ExplorerColumn, FactoryShape, LayoutColumn, LayoutPreset, PanelComponentName } from './layout-types.js';
 export {
   type LayoutPreset,
   PANEL_COMPONENT_NAMES,

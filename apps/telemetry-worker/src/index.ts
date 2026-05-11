@@ -97,13 +97,7 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
   z
     .object({
       event: z.literal('lsp_session_failed'),
-      errorCategory: z.enum([
-        'origin_blocked',
-        'token_expired',
-        'nonce_replay',
-        'upstream_unhealthy',
-        'unknown'
-      ]),
+      errorCategory: z.enum(['origin_blocked', 'token_expired', 'nonce_replay', 'upstream_unhealthy', 'unknown']),
       studio_version: StudioVersion,
       ua_class: UaClass
     })
@@ -230,11 +224,7 @@ function corsHeaders(origin: string | null, allowed: string): Record<string, str
 
 // ---------- Helpers ----------
 
-function jsonResponse(
-  status: number,
-  body: unknown,
-  extraHeaders: Record<string, string> = {}
-): Response {
+function jsonResponse(status: number, body: unknown, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', ...extraHeaders }

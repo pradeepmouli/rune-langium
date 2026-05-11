@@ -1,0 +1,470 @@
+[
+  {
+    "sheet": "inline",
+    "rule": ".ͼ1 .cm-highlightSpace { background-image: radial-gradient(circle at 50% 55%, rgb(170, 170, 170) 20%, transparent 5%); background-position: center center; }"
+  },
+  {
+    "sheet": "inline",
+    "rule": ".ͼ2 .cm-button:active { background-image: linear-gradient(rgb(180, 180, 180), rgb(208, 211, 214)); }"
+  },
+  {
+    "sheet": "inline",
+    "rule": ".ͼ2 .cm-button { background-image: linear-gradient(rgb(239, 241, 245), rgb(217, 217, 223)); border: 1px solid rgb(136, 136, 136); }"
+  },
+  {
+    "sheet": "inline",
+    "rule": ".ͼ3 .cm-button:active { background-image: linear-gradient(rgb(17, 17, 17), rgb(51, 51, 51)); }"
+  },
+  {
+    "sheet": "inline",
+    "rule": ".ͼ3 .cm-button { background-image: linear-gradient(rgb(57, 57, 57), rgb(17, 17, 17)); border: 1px solid rgb(136, 136, 136); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".react-flow { --xy-edge-stroke-default: #b1b1b7; --xy-edge-stroke-width-default: 1; --xy-edge-stroke-selected-default: #555; --xy-connectionline-stroke-default: #b1b1b7; --xy-connectionline-stroke-width-default: 1; --xy-attribution-background-color-default: #ffffff80; --xy-minimap-background-color-default: #fff; --xy-minimap-mask-background-color-default: #f0f0f099; --xy-minimap-mask-stroke-color-default: transparent; --xy-minimap-mask-stroke-width-default: 1; --xy-minimap-node-background-color-default: #e2e2e2; --xy-minimap-node-stroke-color-default: transparent; --xy-minimap-node-stroke-width-default: 2; --xy-background-color-default: transparent; --xy-background-pattern-dots-color-default: #91919a; --xy-background-pattern-lines-color-default: #eee; --xy-background-pattern-cross-color-default: #e2e2e2; background-color: var(--xy-background-color,var(--xy-background-color-default)); --xy-node-color-default: inherit; --xy-node-border-default: 1px solid #1a192b; --xy-node-background-col"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".react-flow.dark { --xy-edge-stroke-default: #3e3e3e; --xy-edge-stroke-width-default: 1; --xy-edge-stroke-selected-default: #727272; --xy-connectionline-stroke-default: #b1b1b7; --xy-connectionline-stroke-width-default: 1; --xy-attribution-background-color-default: #96969640; --xy-minimap-background-color-default: #141414; --xy-minimap-mask-background-color-default: #3c3c3c99; --xy-minimap-mask-stroke-color-default: transparent; --xy-minimap-mask-stroke-width-default: 1; --xy-minimap-node-background-color-default: #2b2b2b; --xy-minimap-node-stroke-color-default: transparent; --xy-minimap-node-stroke-width-default: 2; --xy-background-color-default: #141414; --xy-background-pattern-dots-color-default: #777; --xy-background-pattern-lines-color-default: #777; --xy-background-pattern-cross-color-default: #777; --xy-node-color-default: #f8f8f8; --xy-node-border-default: 1px solid #3c3c3c; --xy-node-background-color-default: #1e1e1e; --xy-node-group-background-color-default: #f0f0f040; --xy-n"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".react-flow__controls { box-shadow: var(--xy-controls-box-shadow,var(--xy-controls-box-shadow-default)); flex-direction: column; display: flex; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".react-flow__node-input.selectable:hover, .react-flow__node-default.selectable:hover, .react-flow__node-output.selectable:hover, .react-flow__node-group.selectable:hover { box-shadow: var(--xy-node-boxshadow-hover,var(--xy-node-boxshadow-hover-default)); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".react-flow__node-input.selectable.selected, .react-flow__node-input.selectable:focus, .react-flow__node-default.selectable.selected, .react-flow__node-default.selectable:focus, .react-flow__node-output.selectable.selected, .react-flow__node-output.selectable:focus, .react-flow__node-group.selectable.selected, .react-flow__node-group.selectable:focus { box-shadow: var(--xy-node-boxshadow-selected,var(--xy-node-boxshadow-selected-default)); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".react-flow__node-input.selectable:focus-visible { box-shadow: var(--xy-node-boxshadow-selected,var(--xy-node-boxshadow-selected-default)); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".react-flow__node-default.selectable:focus-visible { box-shadow: var(--xy-node-boxshadow-selected,var(--xy-node-boxshadow-selected-default)); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".react-flow__node-output.selectable:focus-visible { box-shadow: var(--xy-node-boxshadow-selected,var(--xy-node-boxshadow-selected-default)); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".react-flow__node-group.selectable:focus-visible { box-shadow: var(--xy-node-boxshadow-selected,var(--xy-node-boxshadow-selected-default)); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-graph-breadcrumbs { z-index: 5; backdrop-filter: blur(12px); max-width: calc(100% - 24px); color: var(--foreground,#e8e6e1); background: lab(2.38844 0.92943 -4.09593 / 0.82); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 999px; align-items: center; gap: 6px; padding: 6px 10px; font-size: 11px; display: inline-flex; position: absolute; top: 10px; left: 12px; box-shadow: lab(0 0 0 / 0.22) 0px 10px 24px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-flow-node-shell--dimmed { opacity: 0.32; filter: saturate(0.72); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-flow-node-shell--related .rune-node { box-shadow: lab(100 0 0 / 0.0392157) 0px 0px 0px 1px, lab(0 0 0 / 0.32) 0px 8px 24px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-flow-node-shell--focus .rune-node { box-shadow: lab(76.7242 -59.4924 13.1421 / 0.45) 0px 0px 0px 1px, lab(0 0 0 / 0.42) 0px 12px 28px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-graph-group { border: 1px solid color-mix(in oklch, var(--primary,#00d4aa) 14%, transparent); background: linear-gradient(lab(6.04091 1.53229 -6.89823 / 0.4), lab(2.94688 1.03831 -4.64806 / 0.16)), radial-gradient(circle at 0px 0px, lab(76.7242 -59.4924 13.1421 / 0.04), rgba(0, 0, 0, 0) 46%); border-radius: 18px; flex-direction: column; width: 100%; height: 100%; display: flex; box-shadow: lab(100 0 0 / 0.0313726) 0px 0px 0px 1px inset, lab(0 0 0 / 0.12) 0px 8px 22px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-node { border-radius: var(--radius-lg,8px); font-family: var(--font-sans,\"Inter\", ui-sans-serif, system-ui, sans-serif); font-size: var(--text-base,13px); min-width: 200px; color: var(--color-node-text,#e8e6e1); background: lab(6.04091 1.53229 -6.89823); border: 1px solid rgba(0, 0, 0, 0); transition: border-color 0.15s, box-shadow 0.15s; box-shadow: lab(0 0 0 / 0.4) 0px 1px 4px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-node:hover { box-shadow: lab(0 0 0 / 0.5) 0px 2px 12px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "button[data-navigable] { color-scheme: unset; forced-color-adjust: unset; math-depth: unset; position: unset; position-anchor: unset; text-size-adjust: unset; appearance: unset; color: unset; font: unset; font-palette: unset; font-synthesis: unset; position-area: unset; text-orientation: unset; text-rendering: unset; text-spacing-trim: unset; -webkit-font-smoothing: unset; -webkit-locale: unset; -webkit-text-orientation: unset; -webkit-writing-mode: unset; writing-mode: unset; zoom: unset; accent-color: unset; place-content: unset; place-items: unset; place-self: unset; alignment-baseline: unset; anchor-name: unset; anchor-scope: unset; animation-composition: unset; animation: unset; animation-trigger: unset; app-region: unset; aspect-ratio: unset; backdrop-filter: unset; backface-visibility: unset; background: unset; background-blend-mode: unset; baseline-shift: unset; baseline-source: unset; block-size: unset; border-block: unset; border: unset; border-radius: unset; border-collapse:"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-edge-label { font-size: var(--text-xs,11px); background: var(--color-edge-label-bg,#181824); padding: var(--space-1,1px) var(--space-2,4px); border-radius: var(--radius-sm,3px); border: 1px solid var(--color-edge-label-border,#ffffff0f); color: var(--color-node-text,#e8e6e1); pointer-events: all; transition: border-color 0.14s, box-shadow 0.14s, background-color 0.14s; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg,6px); box-shadow: var(--shadow-lg,0 2px 8px #00000014); padding: var(--space-6,12px); font-family: var(--font-sans,-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif); font-size: var(--text-base,13px); color: var(--foreground); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-node-selected { background: lab(76.7242 -59.4924 13.1421 / 0.08); border-color: lab(76.7242 -59.4924 13.1421 / 0.5); box-shadow: lab(76.7242 -59.4924 13.1421 / 0.12) 0px 0px 20px, lab(0 0 0 / 0.3) 0px 2px 8px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".rune-node-search-match { box-shadow: 0 0 0 2px var(--color-warning,#ecc94b); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-dark { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f6368; --dv-"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-light { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f6368; --dv"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-light { --dv-group-view-background-color: white; --dv-tabs-and-actions-container-background-color: #f3f3f3; --dv-activegroup-visiblepanel-tab-background-color: white; --dv-activegroup-hiddenpanel-tab-background-color: #ececec; --dv-inactivegroup-visiblepanel-tab-background-color: white; --dv-inactivegroup-hiddenpanel-tab-background-color: #ececec; --dv-tab-divider-color: white; --dv-activegroup-visiblepanel-tab-color: #333; --dv-activegroup-hiddenpanel-tab-color: #333333b3; --dv-inactivegroup-visiblepanel-tab-color: #333333b3; --dv-inactivegroup-hiddenpanel-tab-color: #33333359; --dv-separator-border: #80808059; --dv-paneview-header-border-color: #333; --dv-scrollbar-background-color: #00000040; --dv-floating-box-shadow: 0 8px 32px #0000001f, 0 2px 8px #00000014; --dv-floating-border: 1px solid #0000001a; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-vs { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f6368; --dv-ta"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-abyss { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f6368; --dv"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-dracula { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f6368; --"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-nord { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f6368; --dv-"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-nord-spaced { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 44px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: 12px; --dv-border-radius: 20px; --dv-tab-margin: .5rem .25rem; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 10px; --dv-tab-border-radius: 8px; --dv-sash-border-radius: 4px; --dv-dropdown-border-radius: 8px; --dv-tab-close-icon-size: 8px; --dv-floating-group-border: 2px solid var(--dv-group-view-background-color); --dv-drag-over-border: none; --dv-floating-group-draggin"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-catppuccin-mocha { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-catppuccin-mocha-spaced { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 44px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: 12px; --dv-border-radius: 20px; --dv-tab-margin: .5rem .25rem; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 10px; --dv-tab-border-radius: 8px; --dv-sash-border-radius: 4px; --dv-dropdown-border-radius: 8px; --dv-tab-close-icon-size: 8px; --dv-floating-group-border: 2px solid var(--dv-group-view-background-color); --dv-drag-over-border: none; --dv-floating-g"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-monokai { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f6368; --"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-solarized-light { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-solarized-light { --dv-color-sol-base3: #fdf6e3; --dv-color-sol-base2: #eee8d5; --dv-color-sol-base1: #93a1a1; --dv-color-sol-base00: #657b83; --dv-color-sol-base01: #586e75; --dv-color-sol-blue: #268bd2; --dv-group-view-background-color: var(--dv-color-sol-base3); --dv-tabs-and-actions-container-background-color: var(--dv-color-sol-base2); --dv-activegroup-visiblepanel-tab-background-color: var(--dv-color-sol-base3); --dv-activegroup-hiddenpanel-tab-background-color: #e8e2d0; --dv-inactivegroup-visiblepanel-tab-background-color: var(--dv-color-sol-base3); --dv-inactivegroup-hiddenpanel-tab-background-color: #e8e2d0; --dv-activegroup-visiblepanel-tab-color: var(--dv-color-sol-base01); --dv-activegroup-hiddenpanel-tab-color: var(--dv-color-sol-base00); --dv-inactivegroup-visiblepanel-tab-color: var(--dv-color-sol-base1); --dv-inactivegroup-hiddenpanel-tab-color: #93a1a199; --dv-separator-border: var(--dv-color-sol-base2); --dv-paneview-active-outline-color: var(--dv-colo"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-solarized-light-spaced { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 44px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: 12px; --dv-border-radius: 20px; --dv-tab-margin: .5rem .25rem; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 10px; --dv-tab-border-radius: 8px; --dv-sash-border-radius: 4px; --dv-dropdown-border-radius: 8px; --dv-tab-close-icon-size: 8px; --dv-floating-group-border: 2px solid var(--dv-group-view-background-color); --dv-drag-over-border: none; --dv-floating-gr"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-solarized-light-spaced { --dv-color-sol-base3: #fdf6e3; --dv-color-sol-base2: #eee8d5; --dv-color-sol-base1: #93a1a1; --dv-color-sol-base00: #657b83; --dv-color-sol-base01: #586e75; --dv-color-sol-blue: #268bd2; --dv-drag-over-background-color: #268bd21a; --dv-group-view-background-color: var(--dv-color-sol-base2); --dv-tabs-and-actions-container-background-color: var(--dv-color-sol-base3); --dv-activegroup-visiblepanel-tab-background-color: #e8e2d0; --dv-activegroup-hiddenpanel-tab-background-color: var(--dv-color-sol-base3); --dv-inactivegroup-visiblepanel-tab-background-color: #e8e2d0; --dv-inactivegroup-hiddenpanel-tab-background-color: var(--dv-color-sol-base3); --dv-activegroup-visiblepanel-tab-color: var(--dv-color-sol-base01); --dv-activegroup-hiddenpanel-tab-color: var(--dv-color-sol-base00); --dv-inactivegroup-visiblepanel-tab-color: var(--dv-color-sol-base1); --dv-inactivegroup-hiddenpanel-tab-color: #93a1a199; --dv-separator-border: transparent; --dv-panevie"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-github-dark { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f6368"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-github-dark-spaced { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 44px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: 12px; --dv-border-radius: 20px; --dv-tab-margin: .5rem .25rem; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 10px; --dv-tab-border-radius: 8px; --dv-sash-border-radius: 4px; --dv-dropdown-border-radius: 8px; --dv-tab-close-icon-size: 8px; --dv-floating-group-border: 2px solid var(--dv-group-view-background-color); --dv-drag-over-border: none; --dv-floating-group-"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-github-light { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 35px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: inherit; --dv-border-radius: 0px; --dv-tab-margin: 0; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 0px; --dv-tab-border-radius: 0px; --dv-sash-border-radius: 0px; --dv-dropdown-border-radius: 0px; --dv-tab-close-icon-size: inherit; --dv-floating-group-border: none; --dv-drag-over-border: none; --dv-floating-group-dragging-opacity: .5; --dv-tab-group-color-grey: #5f636"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-github-light { --dv-color-gh-light-canvas-default: #fff; --dv-color-gh-light-canvas-subtle: #f6f8fa; --dv-color-gh-light-canvas-inset: #f0f6ff; --dv-color-gh-light-border: #d0d7de; --dv-color-gh-light-fg-default: #1f2328; --dv-color-gh-light-fg-muted: #656d76; --dv-color-gh-light-fg-subtle: #6e7781; --dv-color-gh-light-accent: #0969da; --dv-group-view-background-color: var(--dv-color-gh-light-canvas-default); --dv-tabs-and-actions-container-background-color: var(--dv-color-gh-light-canvas-subtle); --dv-activegroup-visiblepanel-tab-background-color: var(--dv-color-gh-light-canvas-default); --dv-activegroup-hiddenpanel-tab-background-color: var(--dv-color-gh-light-canvas-subtle); --dv-inactivegroup-visiblepanel-tab-background-color: var(--dv-color-gh-light-canvas-default); --dv-inactivegroup-hiddenpanel-tab-background-color: var(--dv-color-gh-light-canvas-subtle); --dv-activegroup-visiblepanel-tab-color: var(--dv-color-gh-light-fg-default); --dv-activegroup-hiddenpanel-ta"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-github-light-spaced { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 44px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: 12px; --dv-border-radius: 20px; --dv-tab-margin: .5rem .25rem; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 10px; --dv-tab-border-radius: 8px; --dv-sash-border-radius: 4px; --dv-dropdown-border-radius: 8px; --dv-tab-close-icon-size: 8px; --dv-floating-group-border: 2px solid var(--dv-group-view-background-color); --dv-drag-over-border: none; --dv-floating-group"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-github-light-spaced { --dv-color-gh-light-canvas-default: #fff; --dv-color-gh-light-canvas-subtle: #f6f8fa; --dv-color-gh-light-border: #d0d7de; --dv-color-gh-light-fg-default: #1f2328; --dv-color-gh-light-fg-muted: #656d76; --dv-color-gh-light-fg-subtle: #6e7781; --dv-color-gh-light-accent: #0969da; --dv-drag-over-background-color: #0969da14; --dv-group-view-background-color: var(--dv-color-gh-light-canvas-subtle); --dv-tabs-and-actions-container-background-color: var(--dv-color-gh-light-canvas-default); --dv-activegroup-visiblepanel-tab-background-color: var(--dv-color-gh-light-border); --dv-activegroup-hiddenpanel-tab-background-color: var(--dv-color-gh-light-canvas-default); --dv-inactivegroup-visiblepanel-tab-background-color: var(--dv-color-gh-light-border); --dv-inactivegroup-hiddenpanel-tab-background-color: var(--dv-color-gh-light-canvas-default); --dv-activegroup-visiblepanel-tab-color: var(--dv-color-gh-light-fg-default); --dv-activegroup-hiddenpanel-tab-colo"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-abyss-spaced { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 44px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: 12px; --dv-border-radius: 20px; --dv-tab-margin: .5rem .25rem; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 10px; --dv-tab-border-radius: 8px; --dv-sash-border-radius: 4px; --dv-dropdown-border-radius: 8px; --dv-tab-close-icon-size: 8px; --dv-floating-group-border: 2px solid var(--dv-group-view-background-color); --dv-drag-over-border: none; --dv-floating-group-draggi"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-light-spaced { --dv-paneview-active-outline-color: dodgerblue; --dv-tabs-and-actions-container-font-size: 13px; --dv-tabs-and-actions-container-height: 44px; --dv-drag-over-background-color: #53595d80; --dv-drag-over-border-color: transparent; --dv-tabs-container-scrollbar-color: #888; --dv-icon-hover-background-color: #5a5d5e4f; --dv-floating-box-shadow: 0 8px 32px #0006, 0 2px 8px #00000040; --dv-floating-border: 1px solid #ffffff1a; --dv-overlay-z-index: 999; --dv-tab-font-size: 12px; --dv-border-radius: 20px; --dv-tab-margin: .5rem .25rem; --dv-sash-color: transparent; --dv-active-sash-color: transparent; --dv-active-sash-transition-duration: .1s; --dv-active-sash-transition-delay: .5s; --dv-spacing-padding: 10px; --dv-tab-border-radius: 8px; --dv-sash-border-radius: 4px; --dv-dropdown-border-radius: 8px; --dv-tab-close-icon-size: 8px; --dv-floating-group-border: 2px solid var(--dv-group-view-background-color); --dv-drag-over-border: none; --dv-floating-group-draggi"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dockview-theme-light-spaced { --dv-drag-over-background-color: \"\"; --dv-group-view-background-color: #f6f5f9; --dv-tabs-and-actions-container-background-color: white; --dv-activegroup-visiblepanel-tab-background-color: #ededf0; --dv-activegroup-hiddenpanel-tab-background-color: #f9f9fa; --dv-inactivegroup-visiblepanel-tab-background-color: #ededf0; --dv-inactivegroup-hiddenpanel-tab-background-color: #f9f9fa; --dv-tab-divider-color: transparent; --dv-activegroup-visiblepanel-tab-color: #686b82; --dv-activegroup-hiddenpanel-tab-color: #9497a9; --dv-inactivegroup-visiblepanel-tab-color: #686b82; --dv-inactivegroup-hiddenpanel-tab-color: #9497a9; --dv-separator-border: transparent; --dv-paneview-header-border-color: #333; --dv-active-sash-color: #5b1ecf; --dv-floating-box-shadow: 0 8px 32px #0000001f, 0 2px 8px #00000014; --dv-floating-border: 1px solid #0000001a; --dv-scrollbar-background-color: #00000040; --dv-floating-group-border: 2px solid #ffffff1a; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dv-context-menu { background: var(--dv-context-menu-background-color,var(--dv-activegroup-hiddenpanel-tab-background-color)); min-width: 160px; color: var(--dv-context-menu-color,var(--dv-activegroup-hiddenpanel-tab-color)); border: 1px solid var(--dv-tab-divider-color); border-radius: var(--dv-border-radius); box-shadow: var(--dv-floating-box-shadow); padding: 4px 0px; overflow: hidden; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".dv-resize-container { --dv-overlay-z-index: var(--dv-overlay-z-index,999); z-index: calc(var(--dv-overlay-z-index) - 2); border: var(--dv-floating-border); box-shadow: var(--dv-floating-box-shadow); will-change: transform, opacity; backface-visibility: hidden; position: absolute; transform: translate(0px, 0px); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@layer properties {\n  @supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))) {\n  *, ::before, ::after { --tw-translate-x: 0; --tw-translate-y: 0; --tw-translate-z: 0; --tw-rotate-x: initial; --tw-rotate-y: initial; --tw-rotate-z: initial; --tw-skew-x: initial; --tw-skew-y: initial; --tw-space-y-reverse: 0; --tw-border-style: solid; --tw-gradient-position: initial; --tw-gradient-from: #0000; --tw-gradient-via: #0000; --tw-gradient-to: #0000; --tw-gradient-stops: initial; --tw-gradient-via-stops: initial; --tw-gradient-from-position: 0%; --tw-gradient-via-position: 50%; --tw-gradient-to-position: 100%; --tw-leading: initial; --tw-font-weight: initial; --tw-tracking: initial; --tw-shadow: 0 0 #0000; --tw-shadow-color: initial; --tw-shadow-alpha: 100%; --tw-inset-shadow: 0 0 #0000; --tw-inset-shadow-color: initial; --tw-inset-shadow-alpha: 100%; --tw-ring-color: initial; --tw-ring-shadow: 0 0 #0000; --tw-inset-rin"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@layer theme {\n  :root, :host { --font-sans: ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"; --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace; --color-red-500: #fb2c36; --color-amber-300: #ffd236; --color-amber-500: #f99c00; --color-green-300: #7bf1a8; --color-green-500: #00c758; --color-teal-300: #46ecd5; --color-teal-500: #00baa7; --color-blue-300: #90c5ff; --color-blue-500: #3080ff; --color-purple-300: #d9b3ff; --color-purple-500: #ac4bff; --color-rose-300: #ffa2ae; --color-rose-500: #ff2357; --color-slate-300: #cad5e2; --color-slate-500: #62748e; --color-gray-300: #d1d5dc; --color-gray-500: #6a7282; --color-black: #000; --color-white: #fff; --spacing: .25rem; --container-md: 28rem; --container-lg: 32rem; --text-xs: .75rem; --text-xs--line-height: calc(1 / .75); --text-sm: .875rem; --text-sm--line-height: calc(1.25 / .875); --text-base: 1rem; --text-base"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@layer components {\n  .studio-app, .studio-app button, .studio-app input, .studio-app select, .studio-app textarea, .studio-app label, .studio-app legend, .studio-app fieldset, .studio-app [data-slot] { font-family: var(--font-sans); }\n  .studio-app h1, .studio-app h2, .studio-app h3, .studio-app h4, .studio-app h5, .studio-app h6 { font-family: var(--font-sans), system-ui, sans-serif; }\n  .studio-app [data-slot=\"button\"] { cursor: pointer; transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.16s, border-color 0.16s, color 0.16s, box-shadow 0.16s, opacity 0.16s; }\n  .studio-app [data-slot=\"button\"]:not(:disabled):hover { transform: translateY(-1px); }\n  .studio-app [data-slot=\"button\"]:not(:disabled):active { transform: translateY(0px); }\n  .studio-app [data-slot=\"button\"][data-size=\"default\"] { min-height: 2rem; padding-inline: 0.875rem; font-size: 0.8125rem; }\n  .studio-app [data-slot=\"button\"][data-size=\"sm\"] { gap: 0.375rem; min-height: 1.875rem; padding-i"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@layer utilities {\n  .\\@container\\/field-group { container: field-group / inline-size; }\n  .pointer-events-none { pointer-events: none; }\n  .collapse { visibility: collapse; }\n  .invisible { visibility: hidden; }\n  .visible { visibility: visible; }\n  .sr-only { clip-path: inset(50%); white-space: nowrap; border-width: 0px; width: 1px; height: 1px; margin: -1px; padding: 0px; position: absolute; overflow: hidden; }\n  .absolute { position: absolute; }\n  .fixed { position: fixed; }\n  .relative { position: relative; }\n  .static { position: static; }\n  .sticky { position: sticky; }\n  .inset-0 { inset: calc(var(--spacing) * 0); }\n  .start:not(:-webkit-any(:lang(ae), :lang(ar), :lang(arc), :lang(bcc), :lang(bqi), :lang(ckb), :lang(dv), :lang(fa), :lang(glk), :lang(he), :lang(ku), :lang(mzn), :lang(nqo), :lang(pnb), :lang(ps), :lang(sd), :lang(ug), :lang(ur), :lang(yi))) { left: var(--spacing); }\n  .start:not(:is(:lang(ae), :lang(ar), :lang(arc), :lang(bcc), :lang(bqi), :lang(ckb), :lang(dv), "
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-enter-blur { syntax: \"*\"; inherits: false; initial-value: 0; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-exit-blur { syntax: \"*\"; inherits: false; initial-value: 0; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ":root { --color-surface-1: #fff; --color-surface-2: #f8fafc; --color-surface-3: #f1f5f9; --color-foreground-primary: #0f172a; --color-foreground-secondary: #475569; --color-foreground-muted: #94a3b8; --color-accent-base: #6366f1; --color-accent-hover: #4f46e5; --color-accent-subtle: #eef2ff; --color-danger-base: #dc2626; --color-danger-hover: #b91c1c; --color-warning-base: #d97706; --color-warning-hover: #b45309; --color-success-base: #16a34a; --color-success-hover: #15803d; --color-border-subtle: #e2e8f0; --color-border-default: #cbd5e1; --color-border-strong: #94a3b8; --font-family-sans: Inter, system-ui, -apple-system, sans-serif; --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; --font-display: \"Outfit\", system-ui, sans-serif; --font-mono: \"JetBrains Mono\", ui-monospace, monospace; --font-size-xs: .75rem; --font-size-sm: .875rem; --font-size-base: 1rem; --font-size-lg: 1.125rem; --font-size-xl: 1.25rem; --font-size-2xl: 1.5rem; --font-size-3xl: 1"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "[data-theme=\"daikonic\"] .studio-brand__mark { color: rgba(0, 0, 0, 0); background: linear-gradient(rgb(25, 68, 84) 0px, rgb(25, 68, 84) 18%, rgb(65, 184, 170) 18%, rgb(65, 184, 170) 42%, rgb(250, 153, 74) 42%, rgb(250, 153, 74) 66%, rgb(240, 54, 48) 66%, rgb(240, 54, 48) 100%); border-color: rgba(0, 0, 0, 0); position: relative; box-shadow: rgba(255, 255, 255, 0.1) 0px 0px 0px 0.5px inset; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "[data-theme=\"daikonic\"] [data-slot=\"button\"][data-variant=\"default\"] { box-shadow: 0 0 0 .5px var(--primary), 0 6px 18px -6px var(--primary); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@supports (color:color-mix(in lab, red, red)) {\n  [data-theme=\"daikonic\"] [data-slot=\"button\"][data-variant=\"default\"] { box-shadow: 0 0 0 .5px color-mix(in oklch, var(--primary), transparent 60%), 0 6px 18px -6px color-mix(in oklch, var(--primary), transparent 50%); }\n}"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".studio-editor-page__source .cm-editor .cm-tooltip { background: var(--card); border: 1px solid var(--input); color: var(--foreground); border-radius: var(--radius-md); box-shadow: rgba(0, 0, 0, 0.4) 0px 4px 12px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".studio-app .react-flow__controls { box-shadow: var(--shadow-lg); border-radius: var(--radius-lg); overflow: hidden; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".studio-app .react-flow__minimap { background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "[data-slot=\"enum-form\"] input:focus, [data-slot=\"function-form\"] input:focus, [data-slot=\"data-type-form\"] input:focus, [data-slot=\"expression-editor\"]:focus { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".glass-toolbar [data-slot=\"button\"], .glass-toolbar [data-slot=\"button\"][data-variant=\"secondary\"] { transition: 0.2s; box-shadow: lab(0 0 0 / 0.2) 0px 1px 2px; color: lab(70.9238 0.6603 -3.72039) !important; background: lab(100 0 0 / 0.04) !important; border: 1px solid lab(100 0 0 / 0.08) !important; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".glass-toolbar [data-slot=\"button\"]:hover, .glass-toolbar [data-slot=\"button\"][data-variant=\"secondary\"]:hover { transform: translateY(-1px); box-shadow: lab(0 0 0 / 0.3) 0px 2px 8px, lab(76.7242 -59.4924 13.1421 / 0.08) 0px 0px 12px; color: lab(90.6442 0.653893 -3.72428) !important; background: lab(100 0 0 / 0.08) !important; border-color: lab(100 0 0 / 0.15) !important; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".glass-toolbar [data-slot=\"button\"]:active { transform: translateY(0px); box-shadow: lab(0 0 0 / 0.2) 0px 1px 2px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".glass-toolbar [data-slot=\"button\"][data-variant=\"default\"] { box-shadow: lab(0 0 0 / 0.2) 0px 1px 2px, lab(76.7242 -59.4924 13.1421 / 0.15) 0px 0px 8px, lab(76.7242 -59.4924 13.1421 / 0.06) 0px 0px 12px inset; color: lab(76.7242 -59.4924 13.1421) !important; background: lab(76.7242 -59.4924 13.1421 / 0.12) !important; border-color: lab(76.7242 -59.4924 13.1421 / 0.35) !important; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".glass-toolbar [data-slot=\"button\"][data-variant=\"default\"]:hover { box-shadow: lab(0 0 0 / 0.3) 0px 2px 8px, lab(76.7242 -59.4924 13.1421 / 0.25) 0px 0px 16px, lab(76.7242 -59.4924 13.1421 / 0.08) 0px 0px 16px inset; color: lab(84.5853 -51.8795 11.5526) !important; background: lab(76.7242 -59.4924 13.1421 / 0.18) !important; border-color: lab(76.7242 -59.4924 13.1421 / 0.5) !important; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".glass-header [data-slot=\"button\"] { transition: 0.2s; box-shadow: lab(0 0 0 / 0.2) 0px 1px 2px; color: lab(70.9238 0.6603 -3.72039) !important; background: lab(100 0 0 / 0.04) !important; border: 1px solid lab(100 0 0 / 0.08) !important; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".glass-header [data-slot=\"button\"]:hover { transform: translateY(-1px); box-shadow: lab(0 0 0 / 0.3) 0px 2px 8px, lab(76.7242 -59.4924 13.1421 / 0.08) 0px 0px 10px; color: lab(90.6442 0.653893 -3.72428) !important; background: lab(100 0 0 / 0.08) !important; border-color: lab(100 0 0 / 0.15) !important; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "[data-slot=\"popover-content\"] { box-shadow: lab(0 0 0 / 0.5) 0px 8px 32px, lab(100 0 0 / 0.1) 0px 0px 1px; background: lab(2.38844 0.92943 -4.09593 / 0.92) !important; border-color: lab(100 0 0 / 0.1) !important; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".preview-panel { background: linear-gradient(180deg, var(--card), transparent 32%), var(--background); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@supports (color:color-mix(in lab, red, red)) {\n  .preview-panel { background: linear-gradient(180deg, color-mix(in srgb, var(--card) 92%, transparent), transparent 32%), color-mix(in srgb, var(--background) 88%, transparent); }\n}"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".preview-panel__editor { background: linear-gradient(180deg, var(--muted), transparent 18%), var(--background); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@supports (color:color-mix(in lab, red, red)) {\n  .preview-panel__editor { background: linear-gradient(180deg, color-mix(in srgb, var(--muted) 22%, transparent), transparent 18%), color-mix(in srgb, var(--background) 95%, black 5%); }\n}"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".preview-panel__target-button { letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-foreground); background: 0px 0px; border: 0px; border-radius: 999px; padding: 0.35rem 0.75rem; font-size: 0.75rem; font-weight: 600; transition: background-color 0.16s, color 0.16s, box-shadow 0.16s; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".preview-panel__target-button[data-state=\"active\"] { box-shadow: 0 0 0 1px var(--border); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@supports (color:color-mix(in lab, red, red)) {\n  .preview-panel__target-button[data-state=\"active\"] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 75%, transparent); }\n}"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".preview-panel__select, .preview-panel__input { color: var(--foreground); box-shadow: rgba(255, 255, 255, 0.04) 0px 1px inset; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".preview-panel__body { background: linear-gradient(180deg, var(--muted), transparent 24%); }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@supports (color:color-mix(in lab, red, red)) {\n  .preview-panel__body { background: linear-gradient(180deg, color-mix(in srgb, var(--muted) 12%, transparent), transparent 24%); }\n}"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".preview-panel__group, .preview-panel__array-item, .preview-panel__sample { box-shadow: rgba(0, 0, 0, 0.18) 0px 1px 2px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".refactory-grid-bg { background-image: linear-gradient(rgba(255, 255, 255, 0.016) 1px, rgba(0, 0, 0, 0) 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.016) 1px, rgba(0, 0, 0, 0) 1px); background-size: 80px 80px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".studio-app .dockview-theme-abyss .dv-groupview { background: var(--card); box-shadow: 0 0 0 .5px var(--border); border-radius: 12px; overflow: hidden; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::after { content: \"\"; background: var(--dv-sash-color); border-radius: 999px; width: 2px; transition: background-color 0.12s, box-shadow 0.12s, transform 0.12s; position: absolute; top: 16px; bottom: 16px; left: 50%; transform: translate(-50%); box-shadow: rgba(15, 23, 42, 0.22) 0px 0px 0px 1px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::after { content: \"\"; background: var(--dv-sash-color); border-radius: 999px; height: 2px; transition: background-color 0.12s, box-shadow 0.12s, transform 0.12s; position: absolute; top: 50%; left: 16px; right: 16px; transform: translateY(-50%); box-shadow: rgba(15, 23, 42, 0.22) 0px 0px 0px 1px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": ".studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash.dv-enabled:hover::after, .studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash.dv-enabled:active::after { background: var(--dv-active-sash-color); box-shadow: rgba(94, 234, 212, 0.18) 0px 0px 0px 2px; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-gradient-position { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-gradient-from { syntax: \"<color>\"; inherits: false; initial-value: #0000; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-gradient-via { syntax: \"<color>\"; inherits: false; initial-value: #0000; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-gradient-to { syntax: \"<color>\"; inherits: false; initial-value: #0000; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-gradient-stops { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-gradient-via-stops { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-gradient-from-position { syntax: \"<length-percentage>\"; inherits: false; initial-value: 0%; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-gradient-via-position { syntax: \"<length-percentage>\"; inherits: false; initial-value: 50%; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-gradient-to-position { syntax: \"<length-percentage>\"; inherits: false; initial-value: 100%; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-shadow { syntax: \"*\"; inherits: false; initial-value: 0 0 #0000; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-shadow-color { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-shadow-alpha { syntax: \"<percentage>\"; inherits: false; initial-value: 100%; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-inset-shadow { syntax: \"*\"; inherits: false; initial-value: 0 0 #0000; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-inset-shadow-color { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-inset-shadow-alpha { syntax: \"<percentage>\"; inherits: false; initial-value: 100%; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-ring-shadow { syntax: \"*\"; inherits: false; initial-value: 0 0 #0000; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-inset-ring-shadow { syntax: \"*\"; inherits: false; initial-value: 0 0 #0000; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-ring-offset-shadow { syntax: \"*\"; inherits: false; initial-value: 0 0 #0000; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-blur { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-drop-shadow { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-drop-shadow-color { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-drop-shadow-alpha { syntax: \"<percentage>\"; inherits: false; initial-value: 100%; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-drop-shadow-size { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@property --tw-backdrop-blur { syntax: \"*\"; inherits: false; }"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@keyframes enter { \n  0% { opacity: var(--tw-enter-opacity,1); transform: translate3d(var(--tw-enter-translate-x,0),var(--tw-enter-translate-y,0),0)scale3d(var(--tw-enter-scale,1),var(--tw-enter-scale,1),var(--tw-enter-scale,1))rotate(var(--tw-enter-rotate,0)); filter: blur(var(--tw-enter-blur,0)); }\n}"
+  },
+  {
+    "sheet": "https://www.daikonic.dev/rune-studio/studio/assets/index-Bg7wYNXi.css",
+    "rule": "@keyframes exit { \n  100% { opacity: var(--tw-exit-opacity,1); transform: translate3d(var(--tw-exit-translate-x,0),var(--tw-exit-translate-y,0),0)scale3d(var(--tw-exit-scale,1),var(--tw-exit-scale,1),var(--tw-exit-scale,1))rotate(var(--tw-exit-rotate,0)); filter: blur(var(--tw-exit-blur,0)); }\n}"
+  }
+]
