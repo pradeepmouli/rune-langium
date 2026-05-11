@@ -1629,7 +1629,6 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         isolateNode(nodeId: string) {
           const focusNodeIds = collectFocusClusterNodeIds(nodeId, get().edges);
-          if (focusNodeIds.size <= 1) return;
           get().showOnly(focusNodeIds);
         },
 

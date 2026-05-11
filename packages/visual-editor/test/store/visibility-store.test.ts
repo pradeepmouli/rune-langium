@@ -277,5 +277,27 @@ describe('EditorStore — Namespace Visibility', () => {
       expect(hiddenNodeIds.has(base.id)).toBe(false);
       expect(hiddenNodeIds.has(event.id)).toBe(false);
     });
+
+    it('isolates a standalone node when no focused neighbors exist', () => {
+      const trade = makeNode('test.focus', 'Trade');
+      const standalone = makeNode('test.focus', 'Standalone');
+
+      store.setState((state) => ({
+        ...state,
+        nodes: [trade, standalone],
+        edges: [],
+        visibility: {
+          ...state.visibility,
+          expandedNamespaces: new Set(['test.focus']),
+          hiddenNodeIds: new Set<string>()
+        }
+      }));
+
+      store.getState().isolateNode(standalone.id);
+
+      const hiddenNodeIds = store.getState().visibility.hiddenNodeIds;
+      expect(hiddenNodeIds.has(standalone.id)).toBe(false);
+      expect(hiddenNodeIds.has(trade.id)).toBe(true);
+    });
   });
 });

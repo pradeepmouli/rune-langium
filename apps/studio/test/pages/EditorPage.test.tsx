@@ -20,6 +20,7 @@ const {
       id: string;
       data: { namespace?: string; name?: string; $type?: string };
     }>,
+    edges: [] as Array<{ source: string; target: string }>,
     selectedNodeId: undefined as string | undefined,
     detailPanelOpen: false,
     visibility: { expandedNamespaces: new Set<string>(), hiddenNodeIds: new Set<string>() },
@@ -934,6 +935,7 @@ describe('EditorPage workspace chrome', () => {
   });
 
   it('selects explorer nodes without re-centering the graph view', () => {
+    editorStoreState.edges = [];
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime::AdjustableDate',
@@ -965,6 +967,39 @@ describe('EditorPage workspace chrome', () => {
       reapplyFocusMode: true
     });
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
+  });
+
+  it('re-centers navigation targets that have no graph edges', () => {
+    editorStoreState.edges = [];
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::Standalone',
+        data: { namespace: 'cdm.base.datetime', name: 'Standalone', $type: 'data' }
+      }
+    ];
+
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::Standalone');
+    });
+
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::Standalone', {
+      reapplyFocusMode: true
+    });
+    expect(runeTypeGraphMockState.focusNode).toHaveBeenCalledWith('cdm.base.datetime::Standalone');
   });
 
   it('shows a destructive toast when navigating back to a node that is no longer in the graph', () => {

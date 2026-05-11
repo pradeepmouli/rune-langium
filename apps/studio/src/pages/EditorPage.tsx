@@ -239,6 +239,7 @@ export function EditorPage({
   );
 
   const storeNodes = useEditorStore((s) => s.nodes);
+  const storeEdges = useEditorStore((s) => s.edges);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const visibility = useEditorStore((s) => s.visibility);
   const expandedNamespaces = visibility.expandedNamespaces;
@@ -734,11 +735,12 @@ export function EditorPage({
         if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
       }
       storeSelectNode(nodeId, { reapplyFocusMode: true });
-      if (!focusMode) {
+      const hasIncidentEdge = storeEdges.some((edge) => edge.source === nodeId || edge.target === nodeId);
+      if (!focusMode || !hasIncidentEdge) {
         graphRef.current?.focusNode(nodeId);
       }
     },
-    [focusMode, showToast, storeNodes, storeSelectNode]
+    [focusMode, showToast, storeEdges, storeNodes, storeSelectNode]
   );
 
   const navigateBack = useCallback(() => {
@@ -754,10 +756,11 @@ export function EditorPage({
       return;
     }
     storeSelectNode(prev, { reapplyFocusMode: true });
-    if (!focusMode) {
+    const hasIncidentEdge = storeEdges.some((edge) => edge.source === prev || edge.target === prev);
+    if (!focusMode || !hasIncidentEdge) {
       graphRef.current?.focusNode(prev);
     }
-  }, [focusMode, showToast, storeSelectNode, storeNodes]);
+  }, [focusMode, showToast, storeEdges, storeSelectNode, storeNodes]);
 
   const handleEditorPageKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
