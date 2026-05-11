@@ -2,7 +2,7 @@
   "lspServers": {
     "typescript": {
       "command": "pnpm",
-      "args": ["exec", "typescript-language-server", "--stdio"],
+      "args": ["dlx", "typescript-language-server@5.2.0", "--stdio"],
       "fileExtensions": {
         ".ts": "typescript",
         ".tsx": "typescriptreact",
