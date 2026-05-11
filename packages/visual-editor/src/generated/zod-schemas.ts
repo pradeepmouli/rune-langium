@@ -16,9 +16,7 @@ export const RosettaQualifiableTypeSchema = z.union([z.literal('isEvent'), z.lit
 
 export const RosettaSynonymRefSchema = z.union([z.literal('tag'), z.literal('componentID')]);
 
-export const BigDecimalSchema = z
-  .string()
-  .regex(new RegExp('^[+-]?(\\.[0-9]+|[0-9]+(\\.[0-9]*)?)([eE][+-]?[0-9]+)?$'));
+export const BigDecimalSchema = z.string().regex(new RegExp('^[+-]?(\\.[0-9]+|[0-9]+(\\.[0-9]*)?)([eE][+-]?[0-9]+)?$'));
 
 export const ValidIDSchema = z.union([
   z.string().regex(new RegExp('\\^?[a-zA-Z_][a-zA-Z_0-9]*')),
@@ -252,10 +250,7 @@ export const ChoiceOperationSchema = z.looseObject({
   attributes: z.array(ReferenceSchema)
 });
 
-export const ClosureParameterSchema = z.looseObject({
-  $type: z.literal('ClosureParameter'),
-  name: z.string()
-});
+export const ClosureParameterSchema = z.looseObject({ $type: z.literal('ClosureParameter'), name: z.string() });
 
 export const ComparisonOperationSchema = z.looseObject({
   $type: z.literal('ComparisonOperation'),
@@ -646,15 +641,9 @@ export const RosettaImplicitVariableSchema = z.looseObject({
   name: z.literal('item')
 });
 
-export const RosettaIntLiteralSchema = z.looseObject({
-  $type: z.literal('RosettaIntLiteral'),
-  value: IntegerSchema
-});
+export const RosettaIntLiteralSchema = z.looseObject({ $type: z.literal('RosettaIntLiteral'), value: IntegerSchema });
 
-export const RosettaMapPathValueSchema = z.looseObject({
-  $type: z.literal('RosettaMapPathValue'),
-  path: z.string()
-});
+export const RosettaMapPathValueSchema = z.looseObject({ $type: z.literal('RosettaMapPathValue'), path: z.string() });
 
 export const RosettaMapPathSchema = z.looseObject({
   $type: z.literal('RosettaMapPath'),
@@ -916,15 +905,9 @@ export const AnnotationPathExpressionSchema = z.discriminatedUnion('$type', [
   AnnotationPathAttributeReferenceSchema
 ]);
 
-export const AssignPathRootSchema = z.discriminatedUnion('$type', [
-  AttributeSchema,
-  ShortcutDeclarationSchema
-]);
+export const AssignPathRootSchema = z.discriminatedUnion('$type', [AttributeSchema, ShortcutDeclarationSchema]);
 
-export const AttributeOrChoiceOptionSchema = z.discriminatedUnion('$type', [
-  AttributeSchema,
-  ChoiceOptionSchema
-]);
+export const AttributeOrChoiceOptionSchema = z.discriminatedUnion('$type', [AttributeSchema, ChoiceOptionSchema]);
 
 export const DataOrChoiceSchema = z.discriminatedUnion('$type', [DataSchema, ChoiceSchema]);
 
@@ -1245,9 +1228,7 @@ export interface AnnotationPathAttributeReferenceSchemaRefs {
   AttributeOrChoiceOption?: string[];
 }
 
-export function createAnnotationPathAttributeReferenceSchema(
-  refs: AnnotationPathAttributeReferenceSchemaRefs = {}
-) {
+export function createAnnotationPathAttributeReferenceSchema(refs: AnnotationPathAttributeReferenceSchemaRefs = {}) {
   return AnnotationPathAttributeReferenceSchema.extend({
     attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
@@ -1267,9 +1248,7 @@ export interface RosettaAttributeReferenceSchemaRefs {
   AttributeOrChoiceOption?: string[];
 }
 
-export function createRosettaAttributeReferenceSchema(
-  refs: RosettaAttributeReferenceSchemaRefs = {}
-) {
+export function createRosettaAttributeReferenceSchema(refs: RosettaAttributeReferenceSchemaRefs = {}) {
   return RosettaAttributeReferenceSchema.extend({
     attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
@@ -1302,9 +1281,7 @@ export interface RegulatoryDocumentReferenceSchemaRefs {
   RosettaCorpus?: string[];
 }
 
-export function createRegulatoryDocumentReferenceSchema(
-  refs: RegulatoryDocumentReferenceSchemaRefs = {}
-) {
+export function createRegulatoryDocumentReferenceSchema(refs: RegulatoryDocumentReferenceSchemaRefs = {}) {
   return RegulatoryDocumentReferenceSchema.extend({
     body: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaBody ?? []) }),
     corpusList: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaCorpus ?? []) }))
@@ -1317,9 +1294,7 @@ export interface RosettaSynonymSchemaRefs {
 
 export function createRosettaSynonymSchema(refs: RosettaSynonymSchemaRefs = {}) {
   return RosettaSynonymSchema.extend({
-    sources: z.array(
-      ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) })
-    )
+    sources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) }))
   });
 }
 
@@ -1329,9 +1304,7 @@ export interface RuleReferenceAnnotationSchemaRefs {
 
 export function createRuleReferenceAnnotationSchema(refs: RuleReferenceAnnotationSchemaRefs = {}) {
   return RuleReferenceAnnotationSchema.extend({
-    reportingRule: ReferenceSchema.extend({
-      $refText: zRef(() => refs.RosettaRule ?? [])
-    }).optional()
+    reportingRule: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaRule ?? []) }).optional()
   });
 }
 
@@ -1391,9 +1364,7 @@ export interface RosettaClassSynonymSchemaRefs {
 
 export function createRosettaClassSynonymSchema(refs: RosettaClassSynonymSchemaRefs = {}) {
   return RosettaClassSynonymSchema.extend({
-    sources: z.array(
-      ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) })
-    )
+    sources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) }))
   });
 }
 
@@ -1433,9 +1404,7 @@ export interface RosettaEnumSynonymSchemaRefs {
 
 export function createRosettaEnumSynonymSchema(refs: RosettaEnumSynonymSchemaRefs = {}) {
   return RosettaEnumSynonymSchema.extend({
-    sources: z
-      .array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) }))
-      .optional()
+    sources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) })).optional()
   });
 }
 
@@ -1445,9 +1414,7 @@ export interface RosettaEnumerationSchemaRefs {
 
 export function createRosettaEnumerationSchema(refs: RosettaEnumerationSchemaRefs = {}) {
   return RosettaEnumerationSchema.extend({
-    parent: ReferenceSchema.extend({
-      $refText: zRef(() => refs.RosettaEnumeration ?? [])
-    }).optional()
+    parent: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumeration ?? []) }).optional()
   });
 }
 
@@ -1456,9 +1423,7 @@ export interface RosettaEnumValueReferenceSchemaRefs {
   RosettaEnumValue?: string[];
 }
 
-export function createRosettaEnumValueReferenceSchema(
-  refs: RosettaEnumValueReferenceSchemaRefs = {}
-) {
+export function createRosettaEnumValueReferenceSchema(refs: RosettaEnumValueReferenceSchemaRefs = {}) {
   return RosettaEnumValueReferenceSchema.extend({
     enumeration: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumeration ?? []) }),
     value: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumValue ?? []) })
@@ -1469,9 +1434,7 @@ export interface RosettaExternalRegularAttributeSchemaRefs {
   RosettaFeature?: string[];
 }
 
-export function createRosettaExternalRegularAttributeSchema(
-  refs: RosettaExternalRegularAttributeSchemaRefs = {}
-) {
+export function createRosettaExternalRegularAttributeSchema(refs: RosettaExternalRegularAttributeSchemaRefs = {}) {
   return RosettaExternalRegularAttributeSchema.extend({
     attributeRef: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaFeature ?? []) })
   });
@@ -1491,9 +1454,7 @@ export interface RosettaExternalEnumValueSchemaRefs {
   RosettaEnumValue?: string[];
 }
 
-export function createRosettaExternalEnumValueSchema(
-  refs: RosettaExternalEnumValueSchemaRefs = {}
-) {
+export function createRosettaExternalEnumValueSchema(refs: RosettaExternalEnumValueSchemaRefs = {}) {
   return RosettaExternalEnumValueSchema.extend({
     enumRef: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumValue ?? []) })
   });
@@ -1513,9 +1474,7 @@ export interface RosettaExternalRuleSourceSchemaRefs {
   RosettaExternalRuleSource?: string[];
 }
 
-export function createRosettaExternalRuleSourceSchema(
-  refs: RosettaExternalRuleSourceSchemaRefs = {}
-) {
+export function createRosettaExternalRuleSourceSchema(refs: RosettaExternalRuleSourceSchemaRefs = {}) {
   return RosettaExternalRuleSourceSchema.extend({
     superSources: z
       .array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaExternalRuleSource ?? []) }))
@@ -1547,9 +1506,7 @@ export interface RosettaQualifiableConfigurationSchemaRefs {
   Data?: string[];
 }
 
-export function createRosettaQualifiableConfigurationSchema(
-  refs: RosettaQualifiableConfigurationSchemaRefs = {}
-) {
+export function createRosettaQualifiableConfigurationSchema(refs: RosettaQualifiableConfigurationSchemaRefs = {}) {
   return RosettaQualifiableConfigurationSchema.extend({
     rosettaClass: ReferenceSchema.extend({ $refText: zRef(() => refs.Data ?? []) })
   });
@@ -1564,16 +1521,10 @@ export interface RosettaReportSchemaRefs {
 
 export function createRosettaReportSchema(refs: RosettaReportSchemaRefs = {}) {
   return RosettaReportSchema.extend({
-    eligibilityRules: z.array(
-      ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaRule ?? []) })
-    ),
-    reportingStandard: ReferenceSchema.extend({
-      $refText: zRef(() => refs.RosettaCorpus ?? [])
-    }).optional(),
+    eligibilityRules: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaRule ?? []) })),
+    reportingStandard: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaCorpus ?? []) }).optional(),
     reportType: ReferenceSchema.extend({ $refText: zRef(() => refs.Data ?? []) }),
-    ruleSource: ReferenceSchema.extend({
-      $refText: zRef(() => refs.RosettaExternalRuleSource ?? [])
-    }).optional()
+    ruleSource: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaExternalRuleSource ?? []) }).optional()
   });
 }
 
@@ -1583,9 +1534,7 @@ export interface RosettaSynonymSourceSchemaRefs {
 
 export function createRosettaSynonymSourceSchema(refs: RosettaSynonymSourceSchemaRefs = {}) {
   return RosettaSynonymSourceSchema.extend({
-    superSources: z
-      .array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) }))
-      .optional()
+    superSources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) })).optional()
   });
 }
 
@@ -1595,9 +1544,7 @@ export interface SwitchCaseGuardSchemaRefs {
 
 export function createSwitchCaseGuardSchema(refs: SwitchCaseGuardSchemaRefs = {}) {
   return SwitchCaseGuardSchema.extend({
-    referenceGuard: ReferenceSchema.extend({
-      $refText: zRef(() => refs.SwitchCaseTarget ?? [])
-    }).optional()
+    referenceGuard: ReferenceSchema.extend({ $refText: zRef(() => refs.SwitchCaseTarget ?? []) }).optional()
   });
 }
 

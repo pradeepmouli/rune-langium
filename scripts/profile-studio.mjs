@@ -11,10 +11,8 @@
 //   node scripts/profile-studio.mjs [--url http://localhost:5173] [--out profile.json]
 
 import { createRequire } from 'module';
-const _require = createRequire(import.meta.url);
-const { chromium } = _require(
-  '/Users/pmouli/GitHub.nosync/active/ts/rune-langium/node_modules/.pnpm/@playwright+test@1.59.1/node_modules/@playwright/test/index.js'
-);
+const studioRequire = createRequire(new URL('../apps/studio/package.json', import.meta.url));
+const { chromium } = studioRequire('@playwright/test');
 import { writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';

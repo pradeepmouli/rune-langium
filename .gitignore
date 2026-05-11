@@ -39,6 +39,7 @@ docs/api/
 # Generated llms.txt / llms-full.txt — emitted by typedoc-plugin-to-skills
 # at repo root on every docs build.
 /public/
+/lsp.json
 
 # CF Pages deploy staging — moved WIP from the pre-CF-Pages unified build
 .attic/

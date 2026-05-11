@@ -102,9 +102,9 @@
   "pnpm": {
     "overrides": {
       "x-to-zod": "^0.8.0",
-      "@zod-to-form/core": "^0.8.1",
-      "@zod-to-form/react": "^0.8.1",
-      "@zod-to-form/vite": "^0.3.0",
+      "@zod-to-form/core": "^0.9.1",
+      "@zod-to-form/react": "^0.9.1",
+      "@zod-to-form/vite": "^0.4.1",
       "codemirror": "6.0.2",
       "@radix-ui/react-compose-refs": "1.1.2",
       "@radix-ui/react-primitive": "2.1.4",
