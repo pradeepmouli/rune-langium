@@ -1041,6 +1041,49 @@ describe('EditorPage workspace chrome', () => {
     expect(runeTypeGraphMockState.focusNode).toHaveBeenCalledWith('cdm.base.datetime::Standalone');
   });
 
+  it('re-centers connected navigation targets when focus mode hides nothing', () => {
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
+      },
+      {
+        id: 'cdm.base.datetime::BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }
+      }
+    ];
+    editorStoreState.edges = [
+      { source: 'cdm.base.datetime::AdjustableDate', target: 'cdm.base.datetime::BusinessCenter' }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
+
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::BusinessCenter');
+    });
+
+    expect(runeTypeGraphMockState.focusNode).toHaveBeenCalledWith('cdm.base.datetime::BusinessCenter');
+
+    runeTypeGraphMockState.focusNode.mockClear();
+
+    fireEvent.keyDown(screen.getByTestId('editor-page'), { key: 'ArrowLeft', altKey: true });
+
+    expect(runeTypeGraphMockState.focusNode).toHaveBeenCalledWith('cdm.base.datetime::AdjustableDate');
+  });
+
   it('shows a destructive toast when navigating back to a node that is no longer in the graph', () => {
     editorStoreState.nodes = [
       {

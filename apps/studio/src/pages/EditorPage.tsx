@@ -722,6 +722,16 @@ export function EditorPage({
     [storeSelectNode]
   );
 
+  const shouldCenterNavigationTarget = useCallback(
+    (nodeId: string) => {
+      if (!focusMode) return true;
+      const hasIncidentEdge = storeEdges.some((edge) => edge.source === nodeId || edge.target === nodeId);
+      if (!hasIncidentEdge) return true;
+      return useEditorStore.getState().visibility.hiddenNodeIds.size === 0;
+    },
+    [focusMode, storeEdges]
+  );
+
   const navigateToNode = useCallback(
     (nodeId: string) => {
       const exists = storeNodes.some((n) => n.id === nodeId);
@@ -740,12 +750,11 @@ export function EditorPage({
         if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
       }
       storeSelectNode(nodeId, { reapplyFocusMode: true });
-      const hasIncidentEdge = storeEdges.some((edge) => edge.source === nodeId || edge.target === nodeId);
-      if (!focusMode || !hasIncidentEdge) {
+      if (shouldCenterNavigationTarget(nodeId)) {
         graphRef.current?.focusNode(nodeId);
       }
     },
-    [focusMode, showToast, storeEdges, storeNodes, storeSelectNode]
+    [showToast, shouldCenterNavigationTarget, storeNodes, storeSelectNode]
   );
 
   const navigateBack = useCallback(() => {
@@ -761,11 +770,10 @@ export function EditorPage({
       return;
     }
     storeSelectNode(prev, { reapplyFocusMode: true });
-    const hasIncidentEdge = storeEdges.some((edge) => edge.source === prev || edge.target === prev);
-    if (!focusMode || !hasIncidentEdge) {
+    if (shouldCenterNavigationTarget(prev)) {
       graphRef.current?.focusNode(prev);
     }
-  }, [focusMode, showToast, storeEdges, storeSelectNode, storeNodes]);
+  }, [showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes]);
 
   const handleEditorPageKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
