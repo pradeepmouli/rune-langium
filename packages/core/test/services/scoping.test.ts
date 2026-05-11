@@ -514,9 +514,7 @@ describe('Scoping', () => {
       ]);
 
       // Only check RosettaFeature errors (not type reference errors for int/string)
-      const featureErrors = results.flatMap((r) =>
-        r.errors.filter((d) => d.message.includes('RosettaFeature'))
-      );
+      const featureErrors = results.flatMap((r) => r.errors.filter((d) => d.message.includes('RosettaFeature')));
       expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
     });
 
@@ -567,9 +565,7 @@ describe('Scoping', () => {
         }
       ]);
 
-      const featureErrors = results.flatMap((r) =>
-        r.errors.filter((d) => d.message.includes('RosettaFeature'))
-      );
+      const featureErrors = results.flatMap((r) => r.errors.filter((d) => d.message.includes('RosettaFeature')));
       expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
     });
 
@@ -612,9 +608,7 @@ describe('Scoping', () => {
         }
       ]);
 
-      const featureErrors = results.flatMap((r) =>
-        r.errors.filter((d) => d.message.includes('RosettaFeature'))
-      );
+      const featureErrors = results.flatMap((r) => r.errors.filter((d) => d.message.includes('RosettaFeature')));
       expect(featureErrors, featureErrors.map((d) => d.message).join('\n')).toHaveLength(0);
     });
 

@@ -43,6 +43,45 @@ Necessary when documents are deleted and not referenceable anymore.
 identified by the given URIs (second parameter). The document is typically regarded as
 affected if it contains a reference to any of the changed files.
 
+### `RuneDslLinker`
+Langium linker that lazily materializes corpus documents stored in a
+`DeferredModelProvider` the first time a cross-reference to them is resolved.
+
+Without a `deferredProvider` this behaves identically to `DefaultLinker`.
+*extends `DefaultLinker`*
+```ts
+constructor(services: LangiumCoreServices, deferredProvider?: DeferredModelProvider): RuneDslLinker
+```
+**Properties:**
+- `reflection: AstReflection`
+- `scopeProvider: ScopeProvider`
+- `astNodeLocator: AstNodeLocator`
+- `langiumDocuments: () => LangiumDocuments`
+- `profiler: LangiumProfiler | undefined`
+- `languageId: string`
+**Methods:**
+- `loadAstNode(nodeDescription: AstNodeDescription): AstNode | undefined`
+- `link(document: LangiumDocument, cancelToken?: CancellationToken): Promise<void>` — Links all cross-references within the specified document. The default implementation loads only target
+elements from documents that are present in the `LangiumDocuments` service. The linked references are
+stored in the document's `references` property.
+- `doLink(refInfo: ReferenceInfo, document: LangiumDocument): void`
+- `unlink(document: LangiumDocument): void` — Unlinks all references within the specified document and removes them from the list of `references`.
+- `getCandidate(refInfo: ReferenceInfo): AstNodeDescription | LinkingError` — Determines a candidate AST node description for linking the given reference.
+- `getCandidates(refInfo: ReferenceInfo): AstNodeDescription[] | LinkingError` — Determines a candidate AST node description for linking the given reference.
+- `buildReference(node: AstNode, property: string, refNode: CstNode | undefined, refText: string): Reference` — Creates a cross reference node being aware of its containing AstNode, the corresponding CstNode,
+the cross reference text denoting the target AstNode being already extracted of the document text,
+as well as the unique cross reference identifier.
+
+Default behavior:
+ - The returned Reference's 'ref' property pointing to the target AstNode is populated lazily on its
+   first visit.
+ - If the target AstNode cannot be resolved on the first visit, an error indicator will be installed
+   and further resolution attempts will *not* be performed.
+- `buildMultiReference(node: AstNode, property: string, refNode: CstNode | undefined, refText: string): MultiReference`
+- `throwCyclicReferenceError(node: AstNode, property: string, refText: string): never`
+- `getLinkedNode(refInfo: ReferenceInfo): { node?: AstNode; descr?: AstNodeDescription; error?: LinkingError }`
+- `createLinkingError(refInfo: ReferenceInfo, targetDescription?: AstNodeDescription): LinkingError`
+
 ### `RuneDslScopeProvider`
 Custom scope provider for the Rune DSL.
 
@@ -130,7 +169,7 @@ Exempt: attributes inside Annotation blocks and ChoiceOptions (matching Xtext be
 - `checkChoiceNaming(node: Choice, accept: ValidationAcceptor): void` — N-05: Choice names should start with uppercase.
 - `checkConditionNaming(node: Condition, accept: ValidationAcceptor): void` — N-06: Condition names should start with uppercase.
 - `checkEnumValueNaming(_node: RosettaEnumeration, _accept: ValidationAcceptor): void` — N-07: Enum value names should start with an uppercase letter (convention: PascalCase or UPPER_CASE).
-- `checkEnumValueNamingRule(node: RosettaEnumValue, accept: ValidationAcceptor): void` — N-08: Standalone enum value naming (used from ChoiceOption context).
+- `checkEnumValueNamingRule(_node: RosettaEnumValue, _accept: ValidationAcceptor): void` — N-08: Standalone enum value naming (used from ChoiceOption context).
 - `checkShortcutNaming(_node: ShortcutDeclaration, _accept: ValidationAcceptor): void` — N-09: Shortcut names should start with lowercase.
 - `checkRuleNaming(node: RosettaRule, accept: ValidationAcceptor): void` — N-10: Rule names should start with uppercase.
 - `checkRuleHasExpression(node: RosettaRule, accept: ValidationAcceptor): void` — R-01: Rule must have an expression body.

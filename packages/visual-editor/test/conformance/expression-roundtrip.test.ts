@@ -30,9 +30,7 @@ function extractExpressions(
       const expr = op['expression'];
       if (expr) {
         // Extract source text from CST node if available
-        const cstNode = (expr as Record<string, unknown>)['$cstNode'] as
-          | Record<string, unknown>
-          | undefined;
+        const cstNode = (expr as Record<string, unknown>)['$cstNode'] as Record<string, unknown> | undefined;
         const sourceText = cstNode ? String(cstNode['text'] ?? '') : '';
         results.push({ name, expr, sourceText });
       }

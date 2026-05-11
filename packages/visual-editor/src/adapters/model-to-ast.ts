@@ -39,14 +39,7 @@ export type SyntheticElement = unknown;
 // ---------------------------------------------------------------------------
 
 /** GraphMetadata keys to strip when extracting the AST model. */
-const GRAPH_META_KEYS = new Set([
-  'namespace',
-  'position',
-  'errors',
-  'isReadOnly',
-  'hasExternalRefs',
-  'comments'
-]);
+const GRAPH_META_KEYS = new Set(['namespace', 'position', 'errors', 'isReadOnly', 'hasExternalRefs', 'comments']);
 
 /**
  * Strip GraphMetadata fields from a GraphNode to get the AST model.

@@ -2,7 +2,6 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { useCallback, useMemo } from 'react';
-import { ArrowUpRight } from 'lucide-react';
 import { getKindDotClass, TypeSelector } from './TypeSelector.js';
 import { resolveNodeId } from './TypeLink.js';
 import type { NavigateToNodeCallback, TypeKind, TypeOption } from '../../types.js';
@@ -73,6 +72,36 @@ export function TypeReferenceField({
       data-readonly={readOnly ? 'true' : 'false'}
       className={`rune-type-reference ${className ?? ''}`.trim()}
     >
+      {typeLabel ? (
+        canNavigate ? (
+          <button
+            type="button"
+            data-slot="type-link"
+            onClick={handleNavigate}
+            className="rune-type-reference__link rune-type-reference__link--navigable"
+            title={`Go to ${typeLabel}`}
+            aria-label={`Go to ${typeLabel}`}
+          >
+            <span className="rune-type-reference__navbox" aria-hidden="true">
+              ...
+            </span>
+            {dotClass && <span className={`rune-type-reference__dot ${dotClass}`} aria-hidden="true" />}
+            <span className="rune-type-reference__label">{typeLabel}</span>
+          </button>
+        ) : (
+          <span
+            data-slot="type-link"
+            className="rune-type-reference__link rune-type-reference__link--static"
+            title={typeLabel}
+          >
+            {dotClass && <span className={`rune-type-reference__dot ${dotClass}`} aria-hidden="true" />}
+            <span className="rune-type-reference__label">{typeLabel}</span>
+          </span>
+        )
+      ) : (
+        <span className="rune-type-reference__placeholder">{emptyLabel ?? placeholder}</span>
+      )}
+
       {!readOnly && (
         <div className="rune-type-reference__picker-wrap">
           <TypeSelector
@@ -83,32 +112,9 @@ export function TypeReferenceField({
             allowClear={allowClear}
             filterKinds={filterKinds}
             placeholder={placeholder}
-            triggerClassName="rune-type-reference__picker w-7 min-w-7 px-0 justify-center border-0 bg-transparent shadow-none focus-visible:ring-2 focus-visible:ring-ring/60 [&_[data-slot=select-value]]:sr-only"
+            triggerClassName="rune-type-reference__picker w-5 min-w-5 justify-center border-0 bg-transparent px-0 shadow-none focus-visible:ring-2 focus-visible:ring-ring/60 [&_[data-slot=select-value]]:sr-only"
           />
         </div>
-      )}
-
-      {typeLabel ? (
-        canNavigate ? (
-          <button
-            type="button"
-            data-slot="type-link"
-            onClick={handleNavigate}
-            className="rune-type-reference__link rune-type-reference__link--navigable"
-            title={`Go to ${typeLabel}`}
-          >
-            {dotClass && <span className={`rune-type-reference__dot ${dotClass}`} aria-hidden="true" />}
-            <span className="rune-type-reference__label">{typeLabel}</span>
-            <ArrowUpRight className="rune-type-reference__icon" aria-hidden="true" />
-          </button>
-        ) : (
-          <span data-slot="type-link" className="rune-type-reference__link rune-type-reference__link--static">
-            {dotClass && <span className={`rune-type-reference__dot ${dotClass}`} aria-hidden="true" />}
-            <span className="rune-type-reference__label">{typeLabel}</span>
-          </span>
-        )
-      ) : (
-        <span className="rune-type-reference__placeholder">{emptyLabel ?? placeholder}</span>
       )}
     </div>
   );

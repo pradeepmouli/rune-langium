@@ -50,11 +50,7 @@ export function WorkspaceSwitcher({ onOpen, onCreate: _onCreate, onDelete }: Pro
                 {row.name}
                 <span> ({KIND_LABEL[row.kind]})</span>
               </button>
-              <Button
-                variant="ghost"
-                onClick={() => handleDelete(row)}
-                aria-label={`Delete ${row.name}`}
-              >
+              <Button variant="ghost" onClick={() => handleDelete(row)} aria-label={`Delete ${row.name}`}>
                 ×
               </Button>
             </li>

@@ -42,3 +42,6 @@ docs/api/
 
 # CF Pages deploy staging — moved WIP from the pre-CF-Pages unified build
 .attic/
+apps/docs/.vitepress/.temp/
+apps/docs/.vitepress/dist/
+apps/docs/.vitepress/cache/

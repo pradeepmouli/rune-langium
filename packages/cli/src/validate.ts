@@ -36,10 +36,7 @@ async function discoverFiles(paths: string[]): Promise<string[]> {
 /**
  * Validate one or more Rosetta DSL files and report diagnostics.
  */
-export async function runValidate(
-  paths: string[],
-  options: ValidateCommandOptions
-): Promise<number> {
+export async function runValidate(paths: string[], options: ValidateCommandOptions): Promise<number> {
   const files = await discoverFiles(paths);
   if (files.length === 0) {
     console.error('No .rosetta files found.');
@@ -87,8 +84,7 @@ export async function runValidate(
         console.log(`${r.file}: OK`);
       } else {
         for (const d of r.diagnostics) {
-          const prefix =
-            d.severity === 'error' ? 'ERROR' : d.severity === 'warning' ? 'WARN' : 'INFO';
+          const prefix = d.severity === 'error' ? 'ERROR' : d.severity === 'warning' ? 'WARN' : 'INFO';
           console.log(`${r.file}:${d.line}: [${prefix}] ${d.message}`);
         }
       }

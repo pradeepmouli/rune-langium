@@ -1,27 +1,13 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useState,
-  type ChangeEvent,
-  type ReactElement
-} from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
 import { z } from 'zod';
 import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { FieldSet, FieldLegend } from '@rune-langium/design-system/ui/field';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@rune-langium/design-system/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import {
   usePreviewStore,
@@ -55,9 +41,7 @@ export function FormPreviewPanel({
   const [executionError, setExecutionError] = useState<string | null>(null);
 
   const funcName = schema?.kind === 'function' ? schema.title : undefined;
-  const storeExecResult = usePreviewStore((s) =>
-    funcName ? s.executionResults.get(funcName) : undefined
-  );
+  const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
 
   useEffect(() => {
     if (!storeExecResult) return;
@@ -81,8 +65,7 @@ export function FormPreviewPanel({
   );
   const lookupFieldSource = useCallback(
     (fieldPath: string) =>
-      getFieldSource?.(fieldPath) ??
-      schema?.sourceMap?.find((entry) => entry.fieldPath === fieldPath),
+      getFieldSource?.(fieldPath) ?? schema?.sourceMap?.find((entry) => entry.fieldPath === fieldPath),
     [getFieldSource, schema]
   );
 
@@ -127,11 +110,10 @@ export function FormPreviewPanel({
   const handleFieldChange = useCallback(
     (fieldPath: string, value: unknown, arrayIndices?: number[]) => {
       if (!schema || !activeSample) return;
-      const nextValues = setValueAtPath(
-        activeSample.values,
-        pathToSegments(fieldPath, arrayIndices),
-        value
-      ) as Record<string, unknown>;
+      const nextValues = setValueAtPath(activeSample.values, pathToSegments(fieldPath, arrayIndices), value) as Record<
+        string,
+        unknown
+      >;
       applyValidation(nextValues, activeSample.validated);
     },
     [activeSample, applyValidation, schema]
@@ -151,10 +133,7 @@ export function FormPreviewPanel({
         return;
       }
       items.push(buildDefaultValue(child));
-      const nextValues = setValueAtPath(activeSample.values, segments, items) as Record<
-        string,
-        unknown
-      >;
+      const nextValues = setValueAtPath(activeSample.values, segments, items) as Record<string, unknown>;
       applyValidation(nextValues, true);
     },
     [activeSample, applyValidation, schema]
@@ -167,10 +146,7 @@ export function FormPreviewPanel({
       const current = getValueAtPath(activeSample.values, segments);
       const items = Array.isArray(current) ? [...current] : [];
       items.splice(index, 1);
-      const nextValues = setValueAtPath(activeSample.values, segments, items) as Record<
-        string,
-        unknown
-      >;
+      const nextValues = setValueAtPath(activeSample.values, segments, items) as Record<string, unknown>;
       applyValidation(nextValues, true);
     },
     [activeSample, applyValidation, schema]
@@ -307,13 +283,7 @@ export function FormPreviewPanel({
         ) : null}
         {schema.kind === 'function' ? (
           <div className="preview-panel__function-controls border-t border-border pt-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              disabled={executionState === 'running'}
-              onClick={handleRun}
-            >
+            <Button type="button" variant="ghost" size="xs" disabled={executionState === 'running'} onClick={handleRun}>
               {executionState === 'running' ? 'Executing…' : 'Run'}
             </Button>
             {executionError ? (
@@ -333,9 +303,7 @@ export function FormPreviewPanel({
           </div>
         ) : null}
         <details className="preview-panel__sample" data-testid="sample-data-view" open>
-          <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">
-            Sample data
-          </summary>
+          <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">Sample data</summary>
           <div className="space-y-2 border-t border-border p-2">
             <pre
               aria-label="Sample data output"
@@ -513,9 +481,7 @@ function PreviewFieldControl({
                 : `Add ${resolvedFieldLabel(field, arrayIndices)}`}
             </Button>
             {!isPresent ? (
-              <span className="text-[11px] text-muted-foreground">
-                Section omitted from the sample.
-              </span>
+              <span className="text-[11px] text-muted-foreground">Section omitted from the sample.</span>
             ) : null}
           </div>
         ) : null}
@@ -542,9 +508,7 @@ function PreviewFieldControl({
   if (field.kind === 'array') {
     const values = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
     const items = Array.isArray(values) ? values : [];
-    const arrayError = sample?.validated
-      ? sample.errors[formatFieldPath(field.path, arrayIndices)]
-      : undefined;
+    const arrayError = sample?.validated ? sample.errors[formatFieldPath(field.path, arrayIndices)] : undefined;
     const [child] = field.children ?? [];
 
     return (
@@ -552,12 +516,7 @@ function PreviewFieldControl({
         <FieldLegend variant="label" className="text-muted-foreground">
           {field.label}
         </FieldLegend>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() => onArrayAdd(field, arrayIndices)}
-        >
+        <Button type="button" variant="ghost" size="xs" onClick={() => onArrayAdd(field, arrayIndices)}>
           Add {field.label} item
         </Button>
         {arrayError ? <FieldError message={arrayError} /> : null}
@@ -643,8 +602,7 @@ function PreviewFieldControl({
   }
 
   const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
-  const inputType =
-    field.kind === 'number' ? 'number' : field.kind === 'boolean' ? 'checkbox' : 'text';
+  const inputType = field.kind === 'number' ? 'number' : field.kind === 'boolean' ? 'checkbox' : 'text';
 
   if (field.kind === 'boolean') {
     return (
@@ -687,10 +645,7 @@ function FieldError({ message }: { message: string }): ReactElement {
   );
 }
 
-function getStatusOnlyMessage(
-  schema: FormPreviewSchema | undefined,
-  status: PreviewStatus
-): string {
+function getStatusOnlyMessage(schema: FormPreviewSchema | undefined, status: PreviewStatus): string {
   if (!schema) {
     if (status.state === 'waiting' && status.targetId) {
       return 'Generating preview for the selected type…';
@@ -706,11 +661,7 @@ function getStatusOnlyMessage(
   return status.state === 'unavailable' ? status.message : 'Preview unavailable.';
 }
 
-function getSummaryMessage(
-  schema: FormPreviewSchema,
-  status: PreviewStatus,
-  sample?: PreviewSampleState
-): string {
+function getSummaryMessage(schema: FormPreviewSchema, status: PreviewStatus, sample?: PreviewSampleState): string {
   if (schema.status === 'unsupported') {
     return 'Limited preview — unsupported features are listed below.';
   }
@@ -725,18 +676,14 @@ function getSummaryMessage(
 
   if (status.state === 'invalid' || !sample.valid) {
     const count = Object.keys(sample.errors).length;
-    return count > 0
-      ? `Invalid sample (${count} issue${count === 1 ? '' : 's'})`
-      : 'Invalid sample';
+    return count > 0 ? `Invalid sample (${count} issue${count === 1 ? '' : 's'})` : 'Invalid sample';
   }
 
   return 'Valid sample';
 }
 
 function buildDefaultValues(fields: PreviewField[]): Record<string, unknown> {
-  return Object.fromEntries(
-    fields.map((field) => [fieldRootKey(field.path), buildDefaultValue(field)])
-  );
+  return Object.fromEntries(fields.map((field) => [fieldRootKey(field.path), buildDefaultValue(field)]));
 }
 
 function buildDefaultValue(field: PreviewField): unknown {
@@ -748,10 +695,7 @@ function buildDefaultValue(field: PreviewField): unknown {
     case 'object':
       return field.required
         ? Object.fromEntries(
-            (field.children ?? []).map((child) => [
-              fieldLeafKey(child.path),
-              buildDefaultValue(child)
-            ])
+            (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildDefaultValue(child)])
           )
         : undefined;
     case 'array':
@@ -782,8 +726,7 @@ function basenameFromUri(uri: string): string {
 }
 
 function resolvedFieldLabel(field: PreviewField, arrayIndices?: number[]): string {
-  const arrayIndex =
-    arrayIndices && arrayIndices.length > 0 ? arrayIndices[arrayIndices.length - 1] : undefined;
+  const arrayIndex = arrayIndices && arrayIndices.length > 0 ? arrayIndices[arrayIndices.length - 1] : undefined;
   return arrayIndex === undefined ? field.label : `${field.label} ${arrayIndex + 1}`;
 }
 
@@ -842,11 +785,7 @@ function getValueAtPath(value: unknown, segments: Array<string | number>): unkno
   return current;
 }
 
-function setValueAtPath(
-  value: unknown,
-  segments: Array<string | number>,
-  nextValue: unknown
-): unknown {
+function setValueAtPath(value: unknown, segments: Array<string | number>, nextValue: unknown): unknown {
   if (segments.length === 0) return nextValue;
   const [head, ...rest] = segments;
   if (head === undefined) {
@@ -860,9 +799,7 @@ function setValueAtPath(
   }
 
   const record =
-    value && typeof value === 'object' && !Array.isArray(value)
-      ? { ...(value as Record<string, unknown>) }
-      : {};
+    value && typeof value === 'object' && !Array.isArray(value) ? { ...(value as Record<string, unknown>) } : {};
   record[head] = setValueAtPath(record[head], rest, nextValue);
   return record;
 }
@@ -919,11 +856,7 @@ function validatePreviewSample(
 }
 
 function buildSchemaValidator(fields: PreviewField[]): z.ZodObject<Record<string, z.ZodTypeAny>> {
-  return z.object(
-    Object.fromEntries(
-      fields.map((field) => [fieldRootKey(field.path), buildFieldValidator(field)])
-    )
-  );
+  return z.object(Object.fromEntries(fields.map((field) => [fieldRootKey(field.path), buildFieldValidator(field)])));
 }
 
 function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
@@ -960,10 +893,7 @@ function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
     }
     case 'object': {
       const childShape = Object.fromEntries(
-        (field.children ?? []).map((child) => [
-          fieldLeafKey(child.path),
-          buildFieldValidator(child)
-        ])
+        (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildFieldValidator(child)])
       );
       const objectSchema = z.object(childShape);
       return field.required ? objectSchema : objectSchema.optional();
@@ -993,10 +923,7 @@ function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
 
 function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
   return path
-    .filter(
-      (segment): segment is string | number =>
-        typeof segment === 'string' || typeof segment === 'number'
-    )
+    .filter((segment): segment is string | number => typeof segment === 'string' || typeof segment === 'number')
     .map((segment) => (typeof segment === 'number' ? `[${segment}]` : segment))
     .join('.')
     .replace('.[', '[');

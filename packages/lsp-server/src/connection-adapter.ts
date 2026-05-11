@@ -149,10 +149,8 @@ function createLanguagesProxy(server: LSPServer<ServerCapabilities>): any {
 function createWorkspaceProxy(server: LSPServer<ServerCapabilities>): any {
   return {
     connection: undefined,
-    getConfiguration: (params: any) =>
-      server.sendRequest('workspace/configuration' as any, params).catch(() => ({})),
-    getWorkspaceFolders: () =>
-      server.sendRequest('workspace/workspaceFolders' as any).catch(() => null),
+    getConfiguration: (params: any) => server.sendRequest('workspace/configuration' as any, params).catch(() => ({})),
+    getWorkspaceFolders: () => server.sendRequest('workspace/workspaceFolders' as any).catch(() => null),
     applyEdit: (params: any) =>
       server.sendRequest('workspace/applyEdit' as any, params).catch(() => ({ applied: false })),
 
@@ -183,17 +181,11 @@ function createWindowProxy(server: LSPServer<ServerCapabilities>): any {
   return {
     connection: undefined,
     showErrorMessage: (msg: string) =>
-      server
-        .sendRequest('window/showMessageRequest' as any, { type: 1, message: msg })
-        .catch(() => undefined),
+      server.sendRequest('window/showMessageRequest' as any, { type: 1, message: msg }).catch(() => undefined),
     showWarningMessage: (msg: string) =>
-      server
-        .sendRequest('window/showMessageRequest' as any, { type: 2, message: msg })
-        .catch(() => undefined),
+      server.sendRequest('window/showMessageRequest' as any, { type: 2, message: msg }).catch(() => undefined),
     showInformationMessage: (msg: string) =>
-      server
-        .sendRequest('window/showMessageRequest' as any, { type: 3, message: msg })
-        .catch(() => undefined),
+      server.sendRequest('window/showMessageRequest' as any, { type: 3, message: msg }).catch(() => undefined),
     showDocument: (params: any) =>
       server.sendRequest('window/showDocument' as any, params).catch(() => ({ success: false })),
     createWorkDoneProgress: () => Promise.resolve({ begin() {}, report() {}, done() {} })
@@ -230,10 +222,7 @@ function createClientProxy(server: LSPServer<ServerCapabilities>): any {
               registrations: [
                 {
                   id: String(Date.now()),
-                  method:
-                    typeof typeOrRegistrations === 'string'
-                      ? typeOrRegistrations
-                      : typeOrRegistrations?.method,
+                  method: typeof typeOrRegistrations === 'string' ? typeOrRegistrations : typeOrRegistrations?.method,
                   registerOptions
                 }
               ]
@@ -388,8 +377,7 @@ export function createConnectionAdapter(server: LSPServer<ServerCapabilities>): 
       // Typed notification-handler shortcuts (e.g. connection.onDidOpenTextDocument)
       if (name in NOTIFICATION_MAP) {
         const method = NOTIFICATION_MAP[name];
-        return (handler: any) =>
-          server.onNotification(method as any, (params: any) => handler(params));
+        return (handler: any) => server.onNotification(method as any, (params: any) => handler(params));
       }
 
       // Typed send shortcuts (e.g. connection.sendDiagnostics)

@@ -98,11 +98,7 @@ export function Select({
   children?: ReactNode;
 }) {
   return (
-    <RadixSelect
-      value={(value as string) ?? ''}
-      onValueChange={onChange as (v: string) => void}
-      disabled={disabled}
-    >
+    <RadixSelect value={(value as string) ?? ''} onValueChange={onChange as (v: string) => void} disabled={disabled}>
       <SelectTrigger id={id}>
         <SelectValue placeholder="Select..." />
       </SelectTrigger>
@@ -130,10 +126,5 @@ export function TypeSelector({ value, onChange, ..._rest }: ControlledProps) {
 }
 
 export function CardinalitySelector({ value, onChange, ..._rest }: ControlledProps) {
-  return (
-    <CardinalityPicker
-      value={(value as string) ?? ''}
-      onChange={onChange as (v: unknown) => void}
-    />
-  );
+  return <CardinalityPicker value={(value as string) ?? ''} onChange={onChange as (v: unknown) => void} />;
 }

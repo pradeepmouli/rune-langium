@@ -88,9 +88,7 @@ describe('parseArgs (port validation)', () => {
 
   it('rejects NaN-producing port values', () => {
     expect(() => parseArgsForTest(['--port', 'foo'])).toThrow('process.exit(1)');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Port must be a number between 1 and 65535')
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Port must be a number between 1 and 65535'));
   });
 
   it('rejects negative port values', () => {
@@ -115,8 +113,6 @@ describe('parseArgs (port validation)', () => {
 
   it('shows helpful error message for invalid ports', () => {
     expect(() => parseArgsForTest(['--port', 'invalid'])).toThrow();
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Port must be a number between 1 and 65535')
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Port must be a number between 1 and 65535'));
   });
 });

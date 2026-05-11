@@ -45,9 +45,7 @@ interface SiteVerifyResponse {
  * Never rejects — any error path resolves to `{valid: false, reason: '...'}`
  * with a safe reason code that does not include the token.
  */
-export async function verifyTurnstile(
-  options: TurnstileVerifyOptions
-): Promise<TurnstileVerifyResult> {
+export async function verifyTurnstile(options: TurnstileVerifyOptions): Promise<TurnstileVerifyResult> {
   const body = new URLSearchParams();
   body.set('secret', options.secret);
   body.set('response', options.token);

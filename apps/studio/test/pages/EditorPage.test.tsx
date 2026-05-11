@@ -12,6 +12,7 @@ const {
   useEditorStore,
   useDiagnosticsStore,
   runeTypeGraphMockState,
+  resizeObserverMockState,
   namespaceExplorerMockState,
   showToastSpy
 } = vi.hoisted(() => {
@@ -20,14 +21,16 @@ const {
       id: string;
       data: { namespace?: string; name?: string; $type?: string };
     }>,
+    edges: [] as Array<{ source: string; target: string }>,
     selectedNodeId: undefined as string | undefined,
     detailPanelOpen: false,
     visibility: { expandedNamespaces: new Set<string>(), hiddenNodeIds: new Set<string>() },
-    selectNode: vi.fn((nodeId: string, _options?: { isolateInFocusMode?: boolean }) => {
+    focusMode: true,
+    selectNode: vi.fn((nodeId: string, _options?: { isolateInFocusMode?: boolean; reapplyFocusMode?: boolean }) => {
       editorStoreState.selectedNodeId = nodeId;
+      editorStoreState.detailPanelOpen = nodeId !== null;
     }),
     toggleNamespace: vi.fn(),
-    toggleNodeVisibility: vi.fn(),
     expandAllNamespaces: vi.fn(),
     collapseAllNamespaces: vi.fn(),
     loadModels: vi.fn()
@@ -51,11 +54,23 @@ const {
 
   const runeTypeGraphMockState = {
     focusNode: vi.fn(),
+    latestConfig: undefined as
+      | {
+          layout?: { direction?: 'LR' | 'TB'; groupByInheritance?: boolean };
+        }
+      | undefined,
     latestCallbacks: undefined as
       | {
           onNavigateToType?: (nodeId: string) => void;
         }
       | undefined
+  };
+
+  const resizeObserverMockState = {
+    instances: [] as Array<{
+      callback: ResizeObserverCallback;
+      targets: Element[];
+    }>
   };
 
   const namespaceExplorerMockState = {
@@ -74,6 +89,7 @@ const {
     diagnosticsState,
     useDiagnosticsStore,
     runeTypeGraphMockState,
+    resizeObserverMockState,
     namespaceExplorerMockState,
     showToastSpy
   };
@@ -125,7 +141,13 @@ class MockWorker {
 vi.mock('@rune-langium/visual-editor', () => ({
   RuneTypeGraph: React.forwardRef(
     (
-      { callbacks }: { callbacks?: { onNavigateToType?: (nodeId: string) => void } },
+      {
+        callbacks,
+        config
+      }: {
+        callbacks?: { onNavigateToType?: (nodeId: string) => void };
+        config?: { layout?: { direction?: 'LR' | 'TB'; groupByInheritance?: boolean } };
+      },
       ref: React.ForwardedRef<{
         fitView(): void;
         focusNode(nodeId: string): void;
@@ -133,6 +155,7 @@ vi.mock('@rune-langium/visual-editor', () => ({
         exportRosetta(): Map<string, string>;
       }>
     ) => {
+      runeTypeGraphMockState.latestConfig = config;
       runeTypeGraphMockState.latestCallbacks = callbacks;
       useImperativeHandle(ref, () => ({
         fitView: vi.fn(),
@@ -323,15 +346,33 @@ function modelWithType(typeName: string) {
 describe('EditorPage preview target identity', () => {
   beforeEach(() => {
     vi.stubGlobal('Worker', MockWorker);
+    vi.stubGlobal(
+      'ResizeObserver',
+      class MockResizeObserver {
+        private instance: { callback: ResizeObserverCallback; targets: Element[] };
+        constructor(callback: ResizeObserverCallback) {
+          this.instance = { callback, targets: [] };
+          resizeObserverMockState.instances.push(this.instance);
+        }
+        observe(target: Element) {
+          this.instance.targets.push(target);
+        }
+        disconnect() {}
+        unobserve() {}
+      }
+    );
     MockWorker.instances = [];
     setRuneStudioTestApi(() => undefined);
     usePreviewStore.getState().resetPreviewState();
     editorStoreState.nodes = [];
+    editorStoreState.edges = [];
     editorStoreState.selectedNodeId = undefined;
     vi.clearAllMocks();
     sourceEditorMockState.latestProps = undefined;
     dockShellMockState.latestProps = undefined;
+    runeTypeGraphMockState.latestConfig = undefined;
     runeTypeGraphMockState.latestCallbacks = undefined;
+    resizeObserverMockState.instances = [];
     namespaceExplorerMockState.latestProps = undefined;
   });
 
@@ -933,6 +974,7 @@ describe('EditorPage workspace chrome', () => {
   });
 
   it('selects explorer nodes without re-centering the graph view', () => {
+    editorStoreState.edges = [];
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime::AdjustableDate',
@@ -960,7 +1002,86 @@ describe('EditorPage workspace chrome', () => {
 
     expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime::AdjustableDate');
     expect(editorStoreState.detailPanelOpen).toBe(true);
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::AdjustableDate', {
+      reapplyFocusMode: true
+    });
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
+  });
+
+  it('re-centers navigation targets that have no graph edges', () => {
+    editorStoreState.edges = [];
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::Standalone',
+        data: { namespace: 'cdm.base.datetime', name: 'Standalone', $type: 'data' }
+      }
+    ];
+
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::Standalone');
+    });
+
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::Standalone', {
+      reapplyFocusMode: true
+    });
+    expect(runeTypeGraphMockState.focusNode).toHaveBeenCalledWith('cdm.base.datetime::Standalone');
+  });
+
+  it('re-centers connected navigation targets when focus mode hides nothing', () => {
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
+      },
+      {
+        id: 'cdm.base.datetime::BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }
+      }
+    ];
+    editorStoreState.edges = [
+      { source: 'cdm.base.datetime::AdjustableDate', target: 'cdm.base.datetime::BusinessCenter' }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
+
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::BusinessCenter');
+    });
+
+    expect(runeTypeGraphMockState.focusNode).toHaveBeenCalledWith('cdm.base.datetime::BusinessCenter');
+
+    runeTypeGraphMockState.focusNode.mockClear();
+
+    fireEvent.keyDown(screen.getByTestId('editor-page'), { key: 'ArrowLeft', altKey: true });
+
+    expect(runeTypeGraphMockState.focusNode).toHaveBeenCalledWith('cdm.base.datetime::AdjustableDate');
   });
 
   it('shows a destructive toast when navigating back to a node that is no longer in the graph', () => {
@@ -1020,6 +1141,37 @@ describe('EditorPage workspace chrome', () => {
       description: 'Previous node "cdm.base.datetime::AdjustableDate" is no longer in the graph',
       variant: 'destructive',
       duration: 3000
+    });
+  });
+
+  it('updates graph config direction when responsive relayout flips orientation', async () => {
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    expect(runeTypeGraphMockState.latestConfig?.layout?.direction).toBe('LR');
+
+    const graphCanvas = document.querySelector('.studio-graph-canvas') as HTMLDivElement | null;
+    expect(graphCanvas).not.toBeNull();
+    vi.spyOn(graphCanvas!, 'getBoundingClientRect').mockReturnValue({
+      width: 480,
+      height: 960
+    } as DOMRect);
+
+    fireEvent.click(screen.getByTitle('Re-run auto layout'));
+
+    await waitFor(() => {
+      expect(runeTypeGraphMockState.latestConfig?.layout?.direction).toBe('TB');
     });
   });
 });

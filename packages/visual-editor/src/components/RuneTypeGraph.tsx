@@ -43,15 +43,7 @@
  * @see {@link createEditorStore}
  */
 
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useCallback,
-  useMemo,
-  useState
-} from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useCallback, useMemo, useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -134,10 +126,7 @@ function estimateNodeHeight(node: TypeGraphNode): number {
   return Math.max(ESTIMATED_NODE_MIN_HEIGHT, 40 + members.length * 24 + 16);
 }
 
-function buildInheritanceDisplayNodes(
-  nodes: TypeGraphNode[],
-  edges: TypeGraphEdge[]
-): InheritanceDisplayModel {
+function buildInheritanceDisplayNodes(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): InheritanceDisplayModel {
   const groups = findInheritanceGroups(nodes, edges).filter((group) => group.nodes.length > 1);
   if (groups.length === 0) return { nodes, groupLabelsByNodeId: new Map() };
 
@@ -217,543 +206,541 @@ function buildInheritanceDisplayNodes(
 // Inner component (needs ReactFlowProvider context)
 // ---------------------------------------------------------------------------
 
-const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
-  function RuneTypeGraphInner({ config, callbacks, className }, ref) {
-    const mergedConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
-    const { fitView, setCenter, setViewport } = useReactFlow();
+const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(function RuneTypeGraphInner(
+  { config, callbacks, className },
+  ref
+) {
+  const mergedConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
+  const { fitView, setCenter, setViewport } = useReactFlow();
 
-    // Subscribe to store state
-    const storeNodes = useEditorStore((s) => s.nodes);
-    const storeEdges = useEditorStore((s) => s.edges);
-    const visibility = useEditorStore((s) => s.visibility);
-    const selectNode = useEditorStore((s) => s.selectNode);
-    const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
+  // Subscribe to store state
+  const storeNodes = useEditorStore((s) => s.nodes);
+  const storeEdges = useEditorStore((s) => s.edges);
+  const visibility = useEditorStore((s) => s.visibility);
+  const selectNode = useEditorStore((s) => s.selectNode);
+  const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
+  const focusMode = useEditorStore((s) => s.focusMode);
 
-    // Derive visible nodes/edges from store, respecting namespace, kind, and individual visibility
-    const { visibleNodes, visibleEdges } = useMemo(() => {
-      const { expandedNamespaces, hiddenNodeIds, visibleNodeKinds, visibleEdgeKinds } = visibility;
-      const vNodes = storeNodes.filter(
-        (n) =>
-          expandedNamespaces.has(n.data.namespace) &&
-          !hiddenNodeIds.has(n.id) &&
-          visibleNodeKinds.has(n.type as import('../types.js').TypeKind)
-      );
-      const visibleIds = new Set(vNodes.map((n) => n.id));
-      const vEdges = storeEdges.filter(
-        (e) =>
-          visibleIds.has(e.source) &&
-          visibleIds.has(e.target) &&
-          visibleEdgeKinds.has((e.data as import('../types.js').EdgeData).kind)
-      );
-      return { visibleNodes: vNodes, visibleEdges: vEdges };
-    }, [storeNodes, storeEdges, visibility]);
+  // Derive visible nodes/edges from store, respecting namespace, kind, and individual visibility
+  const { visibleNodes, visibleEdges } = useMemo(() => {
+    const { expandedNamespaces, hiddenNodeIds, visibleNodeKinds, visibleEdgeKinds } = visibility;
+    const vNodes = storeNodes.filter(
+      (n) =>
+        expandedNamespaces.has(n.data.namespace) &&
+        !hiddenNodeIds.has(n.id) &&
+        visibleNodeKinds.has(n.type as import('../types.js').TypeKind)
+    );
+    const visibleIds = new Set(vNodes.map((n) => n.id));
+    const vEdges = storeEdges.filter(
+      (e) =>
+        visibleIds.has(e.source) &&
+        visibleIds.has(e.target) &&
+        visibleEdgeKinds.has((e.data as import('../types.js').EdgeData).kind)
+    );
+    return { visibleNodes: vNodes, visibleEdges: vEdges };
+  }, [storeNodes, storeEdges, visibility]);
 
-    // Apply layout to visible nodes.
-    // Small graphs (<500 nodes): synchronous incremental layout (cache-first).
-    // Large graphs (>=500 nodes): async layout off the main thread.
-    const isInitialLoad = useRef(true);
-    const ASYNC_LAYOUT_THRESHOLD = 500;
-    const [asyncLayoutResult, setAsyncLayoutResult] = useState<TypeGraphNode[]>([]);
+  // Apply layout to visible nodes.
+  // Small graphs (<500 nodes): synchronous incremental layout (cache-first).
+  // Large graphs (>=500 nodes): async layout off the main thread.
+  const isInitialLoad = useRef(true);
+  const ASYNC_LAYOUT_THRESHOLD = 500;
+  const [asyncLayoutResult, setAsyncLayoutResult] = useState<TypeGraphNode[]>([]);
 
-    // Synchronous path for small/medium graphs
-    const syncLayoutedNodes = useMemo(() => {
-      if (visibleNodes.length === 0 || visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD) return [];
-      if (isInitialLoad.current) {
+  // Synchronous path for small/medium graphs
+  const syncLayoutedNodes = useMemo(() => {
+    if (visibleNodes.length === 0 || visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD) return [];
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false;
+      return computeLayout(visibleNodes, visibleEdges, mergedConfig.layout);
+    }
+    return computeLayoutIncremental(visibleNodes, visibleEdges, mergedConfig.layout);
+  }, [visibleNodes, visibleEdges, mergedConfig.layout]);
+
+  // Async path for large graphs
+  useEffect(() => {
+    if (visibleNodes.length < ASYNC_LAYOUT_THRESHOLD) return;
+    cancelAsyncLayout();
+    computeLayoutAsync(visibleNodes, visibleEdges, mergedConfig.layout).then((result) => {
+      if (result) {
+        setAsyncLayoutResult(result);
         isInitialLoad.current = false;
-        return computeLayout(visibleNodes, visibleEdges, mergedConfig.layout);
       }
-      return computeLayoutIncremental(visibleNodes, visibleEdges, mergedConfig.layout);
-    }, [visibleNodes, visibleEdges, mergedConfig.layout]);
+    });
+    return () => cancelAsyncLayout();
+  }, [visibleNodes, visibleEdges, mergedConfig.layout]);
 
-    // Async path for large graphs
-    useEffect(() => {
-      if (visibleNodes.length < ASYNC_LAYOUT_THRESHOLD) return;
-      cancelAsyncLayout();
-      computeLayoutAsync(visibleNodes, visibleEdges, mergedConfig.layout).then((result) => {
-        if (result) {
-          setAsyncLayoutResult(result);
-          isInitialLoad.current = false;
-        }
-      });
-      return () => cancelAsyncLayout();
-    }, [visibleNodes, visibleEdges, mergedConfig.layout]);
+  const layoutedNodes = visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD ? asyncLayoutResult : syncLayoutedNodes;
 
-    const layoutedNodes =
-      visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD ? asyncLayoutResult : syncLayoutedNodes;
+  const [nodes, setNodes, onNodesChange] = useNodesState<DisplayGraphNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<TypeGraphEdge>([]);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
-    const [nodes, setNodes, onNodesChange] = useNodesState<DisplayGraphNode>([]);
-    const [edges, setEdges, onEdgesChange] = useEdgesState<TypeGraphEdge>([]);
-    const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-    const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
-    const [zoomLevel, setZoomLevel] = useState(1);
+  // Track current filters
+  const filtersRef = useRef<GraphFilters>(mergedConfig.initialFilters ?? {});
 
-    // Track current filters
-    const filtersRef = useRef<GraphFilters>(mergedConfig.initialFilters ?? {});
+  // Sync store data into local ReactFlow state, preserving drag positions
+  const prevVisibleRef = useRef<TypeGraphNode[]>([]);
+  useEffect(() => {
+    const prev = prevVisibleRef.current;
+    prevVisibleRef.current = layoutedNodes;
 
-    // Sync store data into local ReactFlow state, preserving drag positions
-    const prevVisibleRef = useRef<TypeGraphNode[]>([]);
-    useEffect(() => {
-      const prev = prevVisibleRef.current;
-      prevVisibleRef.current = layoutedNodes;
-
-      if (prev.length === 0) {
-        // Initial load — set everything
-        setNodes(layoutedNodes);
-        setEdges(visibleEdges);
-        if (layoutedNodes.length > 0) {
-          setTimeout(() => {
-            try {
-              const rawViewport = window.localStorage.getItem(VIEWPORT_STORAGE_KEY);
-              if (rawViewport) {
-                const viewport = JSON.parse(rawViewport) as {
-                  x: number;
-                  y: number;
-                  zoom: number;
-                };
-                void setViewport(viewport, { duration: 180 });
-              } else {
-                fitView({ duration: 200, padding: 0.16 });
-              }
-            } catch {
-              /* SSR/test guard */
-            }
-          }, 50);
-        }
-        return;
-      }
-
-      // Merge: preserve local positions, update data from store
-      setNodes((localNodes: DisplayGraphNode[]) => {
-        const localTypeNodes = localNodes.filter(isTypeGraphNode);
-        const storeMap = new Map(layoutedNodes.map((n) => [n.id, n]));
-        const merged: DisplayGraphNode[] = [];
-        for (const n of localTypeNodes) {
-          const sn = storeMap.get(n.id);
-          if (!sn) continue;
-          // Preserve position from local state, update data from store
-          merged.push(sn.data === n.data ? n : { ...n, data: sn.data });
-        }
-
-        // Add new nodes not yet in local state
-        const localIds = new Set(localTypeNodes.map((n) => n.id));
-        for (const sn of layoutedNodes) {
-          if (!localIds.has(sn.id)) merged.push(sn);
-        }
-        return merged;
-      });
+    if (prev.length === 0) {
+      // Initial load — set everything
+      setNodes(layoutedNodes);
       setEdges(visibleEdges);
-    }, [layoutedNodes, visibleEdges, setNodes, setEdges, fitView, setViewport]);
-
-    const graphNodes = useMemo(() => nodes.filter(isTypeGraphNode), [nodes]);
-
-    const hoveredEdge = useMemo(
-      () => (hoveredEdgeId ? (edges.find((edge) => edge.id === hoveredEdgeId) ?? null) : null),
-      [edges, hoveredEdgeId]
-    );
-
-    const focusNodeId = hoveredNodeId ?? selectedNodeId;
-
-    // Precompute adjacency map so emphasis lookups are O(1) per focus change
-    const adjacencyMap = useMemo(() => {
-      const map = new Map<string, { nodeIds: Set<string>; edgeIds: Set<string> }>();
-      for (const edge of edges) {
-        if (!map.has(edge.source)) map.set(edge.source, { nodeIds: new Set(), edgeIds: new Set() });
-        if (!map.has(edge.target)) map.set(edge.target, { nodeIds: new Set(), edgeIds: new Set() });
-        map.get(edge.source)!.nodeIds.add(edge.target);
-        map.get(edge.source)!.edgeIds.add(edge.id);
-        map.get(edge.target)!.nodeIds.add(edge.source);
-        map.get(edge.target)!.edgeIds.add(edge.id);
-      }
-      return map;
-    }, [edges]);
-
-    const emphasis = useMemo(() => {
-      if (hoveredEdge) {
-        return {
-          focusedNodeIds: new Set<string>([hoveredEdge.source, hoveredEdge.target]),
-          focusedEdgeIds: new Set<string>([hoveredEdge.id])
-        };
-      }
-      if (!focusNodeId) return null;
-      const focusedNodeIds = new Set<string>([focusNodeId]);
-      const focusedEdgeIds = new Set<string>();
-      const adjacent = adjacencyMap.get(focusNodeId);
-      if (adjacent) {
-        for (const nodeId of adjacent.nodeIds) focusedNodeIds.add(nodeId);
-        for (const edgeId of adjacent.edgeIds) focusedEdgeIds.add(edgeId);
-      }
-      return { focusedNodeIds, focusedEdgeIds };
-    }, [adjacencyMap, focusNodeId, hoveredEdge]);
-
-    const inheritanceDisplay = useMemo<InheritanceDisplayModel>(
-      () =>
-        mergedConfig.layout.groupByInheritance
-          ? buildInheritanceDisplayNodes(graphNodes, edges)
-          : { nodes: graphNodes, groupLabelsByNodeId: new Map() },
-      [graphNodes, edges, mergedConfig.layout.groupByInheritance]
-    );
-
-    const baseDisplayNodes = inheritanceDisplay.nodes;
-
-    const displayNodes = useMemo(
-      () =>
-        baseDisplayNodes.map((node) => {
-          if (node.type === 'groupContainer') {
-            return {
-              ...node,
-              className: cn(
-                'rune-graph-group-shell',
-                emphasis && 'rune-graph-group-shell--contextual'
-              )
-            };
+      if (layoutedNodes.length > 0) {
+        setTimeout(() => {
+          try {
+            const rawViewport = window.localStorage.getItem(VIEWPORT_STORAGE_KEY);
+            if (rawViewport) {
+              const viewport = JSON.parse(rawViewport) as {
+                x: number;
+                y: number;
+                zoom: number;
+              };
+              void setViewport(viewport, { duration: 180 });
+            } else {
+              fitView({ duration: 200, padding: 0.16 });
+            }
+          } catch {
+            /* SSR/test guard */
           }
-          const isFocus = focusNodeId === node.id;
-          const isRelated = emphasis?.focusedNodeIds.has(node.id) ?? false;
-          const isDimmed = emphasis ? !isRelated : false;
+        }, 50);
+      }
+      return;
+    }
+
+    // Merge: preserve local positions, update data from store
+    setNodes((localNodes: DisplayGraphNode[]) => {
+      const localTypeNodes = localNodes.filter(isTypeGraphNode);
+      const storeMap = new Map(layoutedNodes.map((n) => [n.id, n]));
+      const merged: DisplayGraphNode[] = [];
+      for (const n of localTypeNodes) {
+        const sn = storeMap.get(n.id);
+        if (!sn) continue;
+        // Preserve position from local state, update data from store
+        merged.push(sn.data === n.data ? n : { ...n, data: sn.data });
+      }
+
+      // Add new nodes not yet in local state
+      const localIds = new Set(localTypeNodes.map((n) => n.id));
+      for (const sn of layoutedNodes) {
+        if (!localIds.has(sn.id)) merged.push(sn);
+      }
+      return merged;
+    });
+    setEdges(visibleEdges);
+  }, [layoutedNodes, visibleEdges, setNodes, setEdges, fitView, setViewport]);
+
+  const graphNodes = useMemo(() => nodes.filter(isTypeGraphNode), [nodes]);
+  const focusFitKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!focusMode || !selectedNodeId || visibility.hiddenNodeIds.size === 0) {
+      focusFitKeyRef.current = null;
+      return;
+    }
+    if (!graphNodes.some((node) => node.id === selectedNodeId)) return;
+    const focusKey = `${selectedNodeId}:${graphNodes
+      .map((node) => node.id)
+      .sort()
+      .join('|')}`;
+    if (focusFitKeyRef.current === focusKey) return;
+    focusFitKeyRef.current = focusKey;
+    if (typeof window === 'undefined') return;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const frameId = window.requestAnimationFrame(() => {
+      timeoutId = window.setTimeout(() => {
+        void fitView({ duration: 220, padding: 0.22, maxZoom: 1.08 });
+      }, 0);
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [fitView, focusMode, graphNodes, selectedNodeId, visibility.hiddenNodeIds.size]);
+
+  const hoveredEdge = useMemo(
+    () => (hoveredEdgeId ? (edges.find((edge) => edge.id === hoveredEdgeId) ?? null) : null),
+    [edges, hoveredEdgeId]
+  );
+
+  const focusNodeId = hoveredNodeId ?? selectedNodeId;
+
+  // Precompute adjacency map so emphasis lookups are O(1) per focus change
+  const adjacencyMap = useMemo(() => {
+    const map = new Map<string, { nodeIds: Set<string>; edgeIds: Set<string> }>();
+    for (const edge of edges) {
+      if (!map.has(edge.source)) map.set(edge.source, { nodeIds: new Set(), edgeIds: new Set() });
+      if (!map.has(edge.target)) map.set(edge.target, { nodeIds: new Set(), edgeIds: new Set() });
+      map.get(edge.source)!.nodeIds.add(edge.target);
+      map.get(edge.source)!.edgeIds.add(edge.id);
+      map.get(edge.target)!.nodeIds.add(edge.source);
+      map.get(edge.target)!.edgeIds.add(edge.id);
+    }
+    return map;
+  }, [edges]);
+
+  const emphasis = useMemo(() => {
+    if (hoveredEdge) {
+      return {
+        focusedNodeIds: new Set<string>([hoveredEdge.source, hoveredEdge.target]),
+        focusedEdgeIds: new Set<string>([hoveredEdge.id])
+      };
+    }
+    if (!focusNodeId) return null;
+    const focusedNodeIds = new Set<string>([focusNodeId]);
+    const focusedEdgeIds = new Set<string>();
+    const adjacent = adjacencyMap.get(focusNodeId);
+    if (adjacent) {
+      for (const nodeId of adjacent.nodeIds) focusedNodeIds.add(nodeId);
+      for (const edgeId of adjacent.edgeIds) focusedEdgeIds.add(edgeId);
+    }
+    return { focusedNodeIds, focusedEdgeIds };
+  }, [adjacencyMap, focusNodeId, hoveredEdge]);
+
+  const inheritanceDisplay = useMemo<InheritanceDisplayModel>(
+    () =>
+      mergedConfig.layout.groupByInheritance
+        ? buildInheritanceDisplayNodes(graphNodes, edges)
+        : { nodes: graphNodes, groupLabelsByNodeId: new Map() },
+    [graphNodes, edges, mergedConfig.layout.groupByInheritance]
+  );
+
+  const baseDisplayNodes = inheritanceDisplay.nodes;
+
+  const displayNodes = useMemo(
+    () =>
+      baseDisplayNodes.map((node) => {
+        if (node.type === 'groupContainer') {
           return {
             ...node,
-            className: cn(
-              'rune-flow-node-shell',
-              isFocus && 'rune-flow-node-shell--focus',
-              isRelated && !isFocus && 'rune-flow-node-shell--related',
-              isDimmed && 'rune-flow-node-shell--dimmed'
-            )
+            className: cn('rune-graph-group-shell', emphasis && 'rune-graph-group-shell--contextual')
           };
-        }),
-      [baseDisplayNodes, emphasis, focusNodeId]
-    );
-
-    const displayEdges = useMemo(
-      () =>
-        edges.map((edge): TypeGraphEdge => {
-          const edgeData = edge.data as EdgeData;
-          const isRelated = emphasis?.focusedEdgeIds.has(edge.id) ?? false;
-          const isDimmed = emphasis ? !isRelated : false;
-          const shouldShowLabel = zoomLevel >= 0.9 || isRelated;
-          return {
-            ...edge,
-            data: {
-              ...edgeData,
-              showLabel: shouldShowLabel
-            },
-            style: {
-              ...edge.style,
-              opacity: isDimmed ? 0.16 : 1,
-              strokeWidth: isRelated ? 2.35 : edge.style?.strokeWidth
-            }
-          };
-        }),
-      [edges, emphasis, zoomLevel]
-    );
-
-    const activeNode = useMemo(
-      () => graphNodes.find((node) => node.id === (hoveredNodeId ?? selectedNodeId)) ?? null,
-      [graphNodes, hoveredNodeId, selectedNodeId]
-    );
-
-    const breadcrumbItems = useMemo(() => {
-      if (!activeNode) return [];
-      const items: Array<{ key: string; label: string }> = [];
-      const groupLabel = inheritanceDisplay.groupLabelsByNodeId.get(activeNode.id);
-      if (groupLabel) {
-        items.push({ key: 'group', label: groupLabel });
-      }
-      items.push({ key: 'node', label: activeNode.data.name as string });
-      const neighborCount = edges.filter(
-        (edge) => edge.source === activeNode.id || edge.target === activeNode.id
-      ).length;
-      if (neighborCount > 0) {
-        items.push({
-          key: 'neighbors',
-          label: `${neighborCount} related ${neighborCount === 1 ? 'edge' : 'edges'}`
-        });
-      }
-      return items;
-    }, [activeNode, inheritanceDisplay.groupLabelsByNodeId, edges]);
-
-    // Selection handler — writes to store
-    const handleSelectionChange = useCallback(
-      ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
-        if (selectedNodes.length > 0) {
-          const node = selectedNodes[0] as Node;
-          if (node.type === 'groupContainer') return;
-          selectNode(node.id);
-        } else {
-          callbacks?.onSelectionClear?.();
         }
-      },
-      [selectNode, callbacks]
-    );
-
-    // Navigation context value for clickable type references in nodes
-    const navigationCtx = useMemo(() => {
-      const allNodeIds = new Set(storeNodes.map((n) => n.id));
-      return {
-        onNavigateToType: callbacks?.onNavigateToType,
-        allNodeIds,
-        layoutDirection: mergedConfig.layout.direction ?? 'TB'
-      };
-    }, [storeNodes, callbacks?.onNavigateToType, mergedConfig.layout.direction]);
-
-    // Node double-click handler
-    const handleNodeDoubleClick = useCallback(
-      (_event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
-        if (isGroupContainerNode(node)) return;
-        callbacks?.onNodeDoubleClick?.(node.id, node.data);
-      },
-      [callbacks]
-    );
-
-    // Imperative ref API — view operations only
-    useImperativeHandle(
-      ref,
-      () => ({
-        fitView() {
-          fitView({ duration: 200 });
-        },
-
-        focusNode(nodeId: string) {
-          const node = graphNodes.find((n) => n.id === nodeId);
-          if (node) {
-            setCenter(node.position.x + 110, node.position.y + 60, { zoom: 1.5, duration: 300 });
-            // Programmatically select the target node in React Flow
-            setNodes((prev) => {
-              let changed = false;
-              const next = prev.map((n) => {
-                const isSelected = n.id === nodeId;
-                if ((n.selected ?? false) === isSelected) {
-                  return n;
-                }
-                changed = true;
-                return {
-                  ...n,
-                  selected: isSelected
-                };
-              });
-              return changed ? next : prev;
-            });
-          }
-        },
-
-        search(query: string): string[] {
-          const results: string[] = [];
-          if (!query.trim()) return results;
-          const regex = new RegExp(query, 'i');
-          for (const node of graphNodes) {
-            if (regex.test((node.data as AnyGraphNode).name as string)) {
-              results.push(node.id);
-            }
-          }
-          return results;
-        },
-
-        setFilters(filters: GraphFilters) {
-          filtersRef.current = filters;
-        },
-
-        getFilters(): GraphFilters {
-          return { ...filtersRef.current };
-        },
-
-        relayout(options?: LayoutOptions) {
-          const opts = options ?? mergedConfig.layout;
-          const layouted = computeLayout(graphNodes, edges, opts);
-          setNodes(layouted);
-        },
-
-        async exportImage(_format: 'svg' | 'png'): Promise<Blob> {
-          // TODO: Implement with html-to-image
-          return new Blob([''], { type: 'text/plain' });
-        },
-
-        exportRosetta(): Map<string, string> {
-          const outputModels = modelsToAst(storeNodes, storeEdges);
-          const result = new Map<string, string>();
-          for (const model of outputModels) {
-            try {
-              result.set(model.name, `// ${model.name} (${model.elements.length} elements)`);
-            } catch {
-              result.set(model.name, `// Error serializing ${model.name}`);
-            }
-          }
-          callbacks?.onModelChanged?.(result);
-          return result;
-        },
-
-        getNodeData(nodeId: string): AnyGraphNode | null {
-          const node = storeNodes.find((n) => n.id === nodeId);
-          return node?.data ?? null;
-        },
-
-        getNodes(): TypeGraphNode[] {
-          return storeNodes;
-        },
-
-        validate(): ValidationError[] {
-          return validateGraph(storeNodes, storeEdges);
-        }
+        const isFocus = focusNodeId === node.id;
+        const isRelated = emphasis?.focusedNodeIds.has(node.id) ?? false;
+        const isDimmed = emphasis ? !isRelated : false;
+        return {
+          ...node,
+          className: cn(
+            'rune-flow-node-shell',
+            isFocus && 'rune-flow-node-shell--focus',
+            isRelated && !isFocus && 'rune-flow-node-shell--related',
+            isDimmed && 'rune-flow-node-shell--dimmed'
+          )
+        };
       }),
-      [
-        graphNodes,
-        edges,
-        storeNodes,
-        storeEdges,
-        mergedConfig,
-        fitView,
-        setCenter,
-        setNodes,
-        callbacks
-      ]
-    );
+    [baseDisplayNodes, emphasis, focusNodeId]
+  );
 
-    // Context menu state
-    const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const displayEdges = useMemo(
+    () =>
+      edges.map((edge): TypeGraphEdge => {
+        const edgeData = edge.data as EdgeData;
+        const isRelated = emphasis?.focusedEdgeIds.has(edge.id) ?? false;
+        const isDimmed = emphasis ? !isRelated : false;
+        const shouldShowLabel = zoomLevel >= 0.9 || isRelated;
+        return {
+          ...edge,
+          data: {
+            ...edgeData,
+            showLabel: shouldShowLabel
+          },
+          style: {
+            ...edge.style,
+            opacity: isDimmed ? 0.16 : 1,
+            strokeWidth: isRelated ? 2.35 : edge.style?.strokeWidth
+          }
+        };
+      }),
+    [edges, emphasis, zoomLevel]
+  );
 
-    const handleNodeContextMenu = useCallback(
-      (event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
-        if (isGroupContainerNode(node)) return;
-        event.preventDefault();
-        setContextMenu({ x: event.clientX, y: event.clientY, node });
-      },
-      []
-    );
+  const activeNode = useMemo(
+    () => graphNodes.find((node) => node.id === (hoveredNodeId ?? selectedNodeId)) ?? null,
+    [graphNodes, hoveredNodeId, selectedNodeId]
+  );
 
-    const handlePaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
-      event.preventDefault();
-      setContextMenu({ x: event.clientX, y: event.clientY, node: null });
-    }, []);
+  const breadcrumbItems = useMemo(() => {
+    if (!activeNode) return [];
+    const items: Array<{ key: string; label: string }> = [];
+    const groupLabel = inheritanceDisplay.groupLabelsByNodeId.get(activeNode.id);
+    if (groupLabel) {
+      items.push({ key: 'group', label: groupLabel });
+    }
+    items.push({ key: 'node', label: activeNode.data.name as string });
+    const neighborCount = edges.filter((edge) => edge.source === activeNode.id || edge.target === activeNode.id).length;
+    if (neighborCount > 0) {
+      items.push({
+        key: 'neighbors',
+        label: `${neighborCount} related ${neighborCount === 1 ? 'edge' : 'edges'}`
+      });
+    }
+    return items;
+  }, [activeNode, inheritanceDisplay.groupLabelsByNodeId, edges]);
 
-    const handleCloseContextMenu = useCallback(() => {
-      setContextMenu(null);
-    }, []);
-
-    // Close context menu on pane click
-    const handlePaneClick = useCallback(() => {
-      setContextMenu(null);
-      setHoveredNodeId(null);
-      setHoveredEdgeId(null);
-    }, []);
-
-    const handleNodeMouseEnter = useCallback(
-      (_event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
+  // Selection handler — writes to store
+  const handleSelectionChange = useCallback(
+    ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
+      if (selectedNodes.length > 0) {
+        const node = selectedNodes[0] as Node;
         if (node.type === 'groupContainer') return;
-        setHoveredNodeId(node.id);
+        selectNode(node.id);
+      } else {
+        callbacks?.onSelectionClear?.();
+      }
+    },
+    [selectNode, callbacks]
+  );
+
+  // Navigation context value for clickable type references in nodes
+  const navigationCtx = useMemo(() => {
+    const allNodeIds = new Set(storeNodes.map((n) => n.id));
+    return {
+      onNavigateToType: callbacks?.onNavigateToType,
+      allNodeIds,
+      layoutDirection: mergedConfig.layout.direction ?? 'TB'
+    };
+  }, [storeNodes, callbacks?.onNavigateToType, mergedConfig.layout.direction]);
+
+  // Node double-click handler
+  const handleNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
+      if (isGroupContainerNode(node)) return;
+      callbacks?.onNodeDoubleClick?.(node.id, node.data);
+    },
+    [callbacks]
+  );
+
+  // Imperative ref API — view operations only
+  useImperativeHandle(
+    ref,
+    () => ({
+      fitView() {
+        fitView({ duration: 200 });
       },
-      []
-    );
 
-    const handleMove = useCallback(
-      (
-        _event: MouseEvent | TouchEvent | null,
-        viewport: { x: number; y: number; zoom: number }
-      ) => {
-        setZoomLevel((prev) => (Math.abs(prev - viewport.zoom) > 0.02 ? viewport.zoom : prev));
-      },
-      []
-    );
-
-    const densityClass =
-      zoomLevel < 0.58
-        ? 'rune-type-graph--zoom-low'
-        : zoomLevel < 0.86
-          ? 'rune-type-graph--zoom-mid'
-          : 'rune-type-graph--zoom-full';
-
-    const handleNodeMouseLeave = useCallback(() => {
-      setHoveredNodeId(null);
-    }, []);
-
-    const handleEdgeMouseEnter = useCallback((_event: React.MouseEvent, edge: TypeGraphEdge) => {
-      setHoveredEdgeId(edge.id);
-    }, []);
-
-    const handleEdgeMouseLeave = useCallback(() => {
-      setHoveredEdgeId(null);
-    }, []);
-
-    const handleEdgeClick = useCallback(
-      (_event: React.MouseEvent, edge: TypeGraphEdge) => {
-        if (!edge.data) return;
-        callbacks?.onEdgeSelect?.(edge.id, edge.data);
-      },
-      [callbacks]
-    );
-
-    const handleMoveEnd = useCallback(
-      (
-        _event: MouseEvent | TouchEvent | null,
-        viewport: { x: number; y: number; zoom: number }
-      ) => {
-        try {
-          window.localStorage.setItem(VIEWPORT_STORAGE_KEY, JSON.stringify(viewport));
-        } catch {
-          /* storage unavailable */
+      focusNode(nodeId: string) {
+        const node = graphNodes.find((n) => n.id === nodeId);
+        if (node) {
+          setCenter(node.position.x + 110, node.position.y + 60, { zoom: 1.5, duration: 300 });
+          // Programmatically select the target node in React Flow
+          setNodes((prev) => {
+            let changed = false;
+            const next = prev.map((n) => {
+              const isSelected = n.id === nodeId;
+              if ((n.selected ?? false) === isSelected) {
+                return n;
+              }
+              changed = true;
+              return {
+                ...n,
+                selected: isSelected
+              };
+            });
+            return changed ? next : prev;
+          });
         }
       },
-      []
-    );
 
-    return (
-      <div className={cn('rune-type-graph', densityClass, className)}>
-        {breadcrumbItems.length > 0 && (
-          <div className="rune-graph-breadcrumbs" aria-label="Graph navigation context">
-            {breadcrumbItems.map((item, index) => (
-              <span key={item.key} className="rune-graph-breadcrumbs__item">
-                {index > 0 && <span className="rune-graph-breadcrumbs__sep">/</span>}
-                <span>{item.label}</span>
-              </span>
-            ))}
-          </div>
-        )}
-        <NavigationContext.Provider value={navigationCtx}>
-          <ReactFlow<DisplayGraphNode, TypeGraphEdge>
-            // Display nodes include synthetic group containers; domain nodes remain in the store.
-            nodes={displayNodes}
-            edges={displayEdges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onSelectionChange={handleSelectionChange}
-            onNodeDoubleClick={handleNodeDoubleClick}
-            onNodeContextMenu={handleNodeContextMenu}
-            onNodeMouseEnter={handleNodeMouseEnter}
-            onNodeMouseLeave={handleNodeMouseLeave}
-            onEdgeMouseEnter={handleEdgeMouseEnter}
-            onEdgeMouseLeave={handleEdgeMouseLeave}
-            onEdgeClick={handleEdgeClick}
-            onPaneContextMenu={handlePaneContextMenu}
-            onPaneClick={handlePaneClick}
-            onMove={handleMove}
-            onMoveEnd={handleMoveEnd}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            fitView
-            onlyRenderVisibleElements
-            nodesDraggable={!mergedConfig.readOnly}
-            nodesConnectable={!mergedConfig.readOnly}
-            elementsSelectable
-            proOptions={{ hideAttribution: true }}
-          >
-            {mergedConfig.showControls && <Controls />}
-            {mergedConfig.showMinimap && <MiniMap />}
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-          </ReactFlow>
-        </NavigationContext.Provider>
-        <GraphContextMenu state={contextMenu} onClose={handleCloseContextMenu} />
-      </div>
-    );
-  }
-);
+      search(query: string): string[] {
+        const results: string[] = [];
+        if (!query.trim()) return results;
+        const regex = new RegExp(query, 'i');
+        for (const node of graphNodes) {
+          if (regex.test((node.data as AnyGraphNode).name as string)) {
+            results.push(node.id);
+          }
+        }
+        return results;
+      },
+
+      setFilters(filters: GraphFilters) {
+        filtersRef.current = filters;
+      },
+
+      getFilters(): GraphFilters {
+        return { ...filtersRef.current };
+      },
+
+      relayout(options?: LayoutOptions) {
+        const opts = options ?? mergedConfig.layout;
+        const layouted = computeLayout(graphNodes, edges, opts);
+        setNodes(layouted);
+      },
+
+      async exportImage(_format: 'svg' | 'png'): Promise<Blob> {
+        // TODO: Implement with html-to-image
+        return new Blob([''], { type: 'text/plain' });
+      },
+
+      exportRosetta(): Map<string, string> {
+        const outputModels = modelsToAst(storeNodes, storeEdges);
+        const result = new Map<string, string>();
+        for (const model of outputModels) {
+          try {
+            result.set(model.name, `// ${model.name} (${model.elements.length} elements)`);
+          } catch {
+            result.set(model.name, `// Error serializing ${model.name}`);
+          }
+        }
+        callbacks?.onModelChanged?.(result);
+        return result;
+      },
+
+      getNodeData(nodeId: string): AnyGraphNode | null {
+        const node = storeNodes.find((n) => n.id === nodeId);
+        return node?.data ?? null;
+      },
+
+      getNodes(): TypeGraphNode[] {
+        return storeNodes;
+      },
+
+      validate(): ValidationError[] {
+        return validateGraph(storeNodes, storeEdges);
+      }
+    }),
+    [graphNodes, edges, storeNodes, storeEdges, mergedConfig, fitView, setCenter, setNodes, callbacks]
+  );
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
+    if (isGroupContainerNode(node)) return;
+    event.preventDefault();
+    setContextMenu({ x: event.clientX, y: event.clientY, node });
+  }, []);
+
+  const handlePaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
+    event.preventDefault();
+    setContextMenu({ x: event.clientX, y: event.clientY, node: null });
+  }, []);
+
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  // Close context menu on pane click
+  const handlePaneClick = useCallback(() => {
+    setContextMenu(null);
+    setHoveredNodeId(null);
+    setHoveredEdgeId(null);
+  }, []);
+
+  const handleNodeMouseEnter = useCallback((_event: React.MouseEvent, node: TypeGraphNode | GroupContainerNodeType) => {
+    if (node.type === 'groupContainer') return;
+    setHoveredNodeId(node.id);
+  }, []);
+
+  const handleMove = useCallback(
+    (_event: MouseEvent | TouchEvent | null, viewport: { x: number; y: number; zoom: number }) => {
+      setZoomLevel((prev) => (Math.abs(prev - viewport.zoom) > 0.02 ? viewport.zoom : prev));
+    },
+    []
+  );
+
+  const densityClass =
+    zoomLevel < 0.58
+      ? 'rune-type-graph--zoom-low'
+      : zoomLevel < 0.86
+        ? 'rune-type-graph--zoom-mid'
+        : 'rune-type-graph--zoom-full';
+
+  const handleNodeMouseLeave = useCallback(() => {
+    setHoveredNodeId(null);
+  }, []);
+
+  const handleEdgeMouseEnter = useCallback((_event: React.MouseEvent, edge: TypeGraphEdge) => {
+    setHoveredEdgeId(edge.id);
+  }, []);
+
+  const handleEdgeMouseLeave = useCallback(() => {
+    setHoveredEdgeId(null);
+  }, []);
+
+  const handleEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: TypeGraphEdge) => {
+      if (!edge.data) return;
+      callbacks?.onEdgeSelect?.(edge.id, edge.data);
+    },
+    [callbacks]
+  );
+
+  const handleMoveEnd = useCallback(
+    (_event: MouseEvent | TouchEvent | null, viewport: { x: number; y: number; zoom: number }) => {
+      try {
+        window.localStorage.setItem(VIEWPORT_STORAGE_KEY, JSON.stringify(viewport));
+      } catch {
+        /* storage unavailable */
+      }
+    },
+    []
+  );
+
+  return (
+    <div className={cn('rune-type-graph', densityClass, className)}>
+      {breadcrumbItems.length > 0 && (
+        <div className="rune-graph-breadcrumbs" aria-label="Graph navigation context">
+          {breadcrumbItems.map((item, index) => (
+            <span key={item.key} className="rune-graph-breadcrumbs__item">
+              {index > 0 && <span className="rune-graph-breadcrumbs__sep">/</span>}
+              <span>{item.label}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      <NavigationContext.Provider value={navigationCtx}>
+        <ReactFlow<DisplayGraphNode, TypeGraphEdge>
+          // Display nodes include synthetic group containers; domain nodes remain in the store.
+          nodes={displayNodes}
+          edges={displayEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onSelectionChange={handleSelectionChange}
+          onNodeDoubleClick={handleNodeDoubleClick}
+          onNodeContextMenu={handleNodeContextMenu}
+          onNodeMouseEnter={handleNodeMouseEnter}
+          onNodeMouseLeave={handleNodeMouseLeave}
+          onEdgeMouseEnter={handleEdgeMouseEnter}
+          onEdgeMouseLeave={handleEdgeMouseLeave}
+          onEdgeClick={handleEdgeClick}
+          onPaneContextMenu={handlePaneContextMenu}
+          onPaneClick={handlePaneClick}
+          onMove={handleMove}
+          onMoveEnd={handleMoveEnd}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          onlyRenderVisibleElements
+          nodesDraggable={!mergedConfig.readOnly}
+          nodesConnectable={!mergedConfig.readOnly}
+          elementsSelectable
+          proOptions={{ hideAttribution: true }}
+        >
+          {mergedConfig.showControls && <Controls />}
+          {mergedConfig.showMinimap && <MiniMap />}
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+        </ReactFlow>
+      </NavigationContext.Provider>
+      <GraphContextMenu state={contextMenu} onClose={handleCloseContextMenu} />
+    </div>
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Public component (wraps with ReactFlowProvider)
 // ---------------------------------------------------------------------------
 
-export const RuneTypeGraph = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(
-  function RuneTypeGraph(props, ref) {
-    return (
-      <ReactFlowProvider>
-        <RuneTypeGraphInner {...props} ref={ref} />
-      </ReactFlowProvider>
-    );
-  }
-);
+export const RuneTypeGraph = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(function RuneTypeGraph(props, ref) {
+  return (
+    <ReactFlowProvider>
+      <RuneTypeGraphInner {...props} ref={ref} />
+    </ReactFlowProvider>
+  );
+});

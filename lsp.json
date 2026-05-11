@@ -1,0 +1,14 @@
+{
+  "lspServers": {
+    "typescript": {
+      "command": "pnpm",
+      "args": ["dlx", "typescript-language-server@5.2.0", "--stdio"],
+      "fileExtensions": {
+        ".ts": "typescript",
+        ".tsx": "typescriptreact",
+        ".js": "javascript",
+        ".jsx": "javascriptreact"
+      }
+    }
+  }
+}

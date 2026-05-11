@@ -73,8 +73,8 @@
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
-    "@to-skills/cli": "^0.3.13",
-    "@to-skills/vitepress": "^0.2.25",
+    "@to-skills/cli": "^0.3.14",
+    "@to-skills/vitepress": "^0.2.26",
     "@types/node": "^25.6.2",
     "@typescript/native-preview": "beta",
     "@vitest/coverage-v8": "^4.1.5",
@@ -85,7 +85,7 @@
     "simple-git-hooks": "^2.13.1",
     "typedoc": "^0.28.19",
     "typedoc-plugin-markdown": "^4.11.0",
-    "typedoc-plugin-to-skills": "^1.3.0",
+    "typedoc-plugin-to-skills": "^1.3.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
@@ -102,9 +102,9 @@
   "pnpm": {
     "overrides": {
       "x-to-zod": "^0.8.0",
-      "@zod-to-form/core": "^0.8.1",
-      "@zod-to-form/react": "^0.8.1",
-      "@zod-to-form/vite": "^0.3.0",
+      "@zod-to-form/core": "^0.9.1",
+      "@zod-to-form/react": "^0.9.1",
+      "@zod-to-form/vite": "^0.4.1",
       "codemirror": "6.0.2",
       "@radix-ui/react-compose-refs": "1.1.2",
       "@radix-ui/react-primitive": "2.1.4",

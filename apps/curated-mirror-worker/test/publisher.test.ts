@@ -87,9 +87,7 @@ describe('publishCuratedMirrors (T025)', () => {
   it('downloads each source from the codeload archive endpoint', async () => {
     await publishCuratedMirrors({ sources: SOURCES, bucket, retention: 14 });
     const urls = fetchSpy.mock.calls.map((c: unknown[]) => String(c[0]));
-    expect(urls).toContain(
-      'https://codeload.github.com/REGnosys/rosetta-cdm/tar.gz/refs/heads/master'
-    );
+    expect(urls).toContain('https://codeload.github.com/REGnosys/rosetta-cdm/tar.gz/refs/heads/master');
     expect(urls).toContain('https://codeload.github.com/finos/rune-fpml/tar.gz/refs/heads/main');
   });
 
@@ -129,9 +127,7 @@ describe('publishCuratedMirrors (T025)', () => {
     const remaining = bucket.keys('curated/cdm/archives/');
     expect(remaining.length).toBe(14);
     // Verify the kept set is the chronological tail, not a random selection.
-    const kept = remaining
-      .map((k) => k.replace('curated/cdm/archives/', '').replace('.tar.gz', ''))
-      .sort();
+    const kept = remaining.map((k) => k.replace('curated/cdm/archives/', '').replace('.tar.gz', '')).sort();
     expect(kept[0]).toBe('2026-04-04'); // 13 most-recent of seeded `01..16` is `04..16`
     expect(kept).toContain(new Date().toISOString().slice(0, 10));
   });

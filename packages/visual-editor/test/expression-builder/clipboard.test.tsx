@@ -104,10 +104,7 @@ describe('clipboard: copy and paste', () => {
 
       store.getState().pasteNode('left-ph');
       // Tree should be unchanged
-      const left = (store.getState().tree as Record<string, unknown>)['left'] as Record<
-        string,
-        unknown
-      >;
+      const left = (store.getState().tree as Record<string, unknown>)['left'] as Record<string, unknown>;
       expect(left['$type']).toBe('Placeholder');
     });
 
@@ -195,10 +192,7 @@ describe('clipboard: copy and paste', () => {
 
       // Should be back to placeholder
       const afterUndo = store.getState().tree;
-      const rightAfterUndo = (afterUndo as Record<string, unknown>)['right'] as Record<
-        string,
-        unknown
-      >;
+      const rightAfterUndo = (afterUndo as Record<string, unknown>)['right'] as Record<string, unknown>;
       expect(rightAfterUndo['$type']).toBe('Placeholder');
     });
   });

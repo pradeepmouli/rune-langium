@@ -99,9 +99,7 @@ describe('Edit Commands', () => {
 
       // Delete the child — edges should be cleaned up
       state.deleteType(childNode!.id);
-      const remaining = store
-        .getState()
-        .edges.filter((e) => e.source === childNode!.id || e.target === childNode!.id);
+      const remaining = store.getState().edges.filter((e) => e.source === childNode!.id || e.target === childNode!.id);
       expect(remaining.length).toBe(0);
     });
 
@@ -147,9 +145,7 @@ describe('Edit Commands', () => {
       const updatedNode = updated.nodes.find((n) => n.id === dataNode!.id);
       expect(((updatedNode!.data as any).attributes ?? []).length).toBe(initialAttrs + 1);
 
-      const newMember = ((updatedNode!.data as any).attributes ?? []).find(
-        (m: any) => m.name === 'newAttr'
-      );
+      const newMember = ((updatedNode!.data as any).attributes ?? []).find((m: any) => m.name === 'newAttr');
       expect(newMember).toBeDefined();
       expect(newMember!.typeCall?.type?.$refText).toBe('string');
       expect(newMember!.card).toMatchObject({ inf: 1, sup: 1, unbounded: false });
@@ -168,9 +164,7 @@ describe('Edit Commands', () => {
 
       const updated = store.getState();
       const updatedNode = updated.nodes.find((n) => n.id === dataNode!.id);
-      expect(
-        ((updatedNode!.data as any).attributes ?? []).find((m: any) => m.name === attrName)
-      ).toBeUndefined();
+      expect(((updatedNode!.data as any).attributes ?? []).find((m: any) => m.name === attrName)).toBeUndefined();
     });
   });
 
@@ -202,14 +196,10 @@ describe('Edit Commands', () => {
       const parent = store.getState().nodes.find((n) => n.data.name === 'Parent');
 
       state.setInheritance(child!.id, parent!.id);
-      expect(
-        store.getState().edges.filter((e) => e.data?.kind === 'extends').length
-      ).toBeGreaterThan(0);
+      expect(store.getState().edges.filter((e) => e.data?.kind === 'extends').length).toBeGreaterThan(0);
 
       state.setInheritance(child!.id, null);
-      const inhEdges = store
-        .getState()
-        .edges.filter((e) => e.source === child!.id && e.data?.kind === 'extends');
+      const inhEdges = store.getState().edges.filter((e) => e.source === child!.id && e.data?.kind === 'extends');
       expect(inhEdges.length).toBe(0);
     });
   });
@@ -224,9 +214,7 @@ describe('Edit Commands', () => {
 
       const updated = store.getState();
       const updatedNode = updated.nodes.find((n) => n.id === dataNode!.id);
-      const member = ((updatedNode!.data as any).attributes ?? []).find(
-        (m: any) => m.name === attrName
-      );
+      const member = ((updatedNode!.data as any).attributes ?? []).find((m: any) => m.name === attrName);
       expect(member!.card).toMatchObject({ inf: 0, unbounded: true });
     });
   });

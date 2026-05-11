@@ -16,7 +16,7 @@
     "pino": "^10.3.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260509.1",
+    "@cloudflare/workers-types": "^4.20260511.1",
     "miniflare": "^4.20260507.1",
     "vitest": "^4.1.5",
     "wrangler": "^4.90.0"

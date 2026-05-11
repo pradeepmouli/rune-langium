@@ -14,10 +14,12 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { Position } from '@xyflow/react';
 import {
   NavigationContext,
   useNavigation,
-  resolveTypeNodeId
+  resolveTypeNodeId,
+  getHandlePositions
 } from '../../src/components/nodes/NavigationContext.js';
 
 // ---------------------------------------------------------------------------
@@ -77,15 +79,11 @@ describe('NavigationContext', () => {
     });
 
     it('finds suffix match for "AdjustableDate"', () => {
-      expect(resolveTypeNodeId('AdjustableDate', nodeIds)).toBe(
-        'cdm.base.datetime::AdjustableDate'
-      );
+      expect(resolveTypeNodeId('AdjustableDate', nodeIds)).toBe('cdm.base.datetime::AdjustableDate');
     });
 
     it('finds suffix match for "EconomicTerms"', () => {
-      expect(resolveTypeNodeId('EconomicTerms', nodeIds)).toBe(
-        'cdm.product.template::EconomicTerms'
-      );
+      expect(resolveTypeNodeId('EconomicTerms', nodeIds)).toBe('cdm.product.template::EconomicTerms');
     });
 
     it('returns undefined for unresolvable names', () => {
@@ -98,6 +96,27 @@ describe('NavigationContext', () => {
 
     it('does not match partial suffixes (e.g., "antity" should not match "::Quantity")', () => {
       expect(resolveTypeNodeId('antity', nodeIds)).toBeUndefined();
+    });
+  });
+
+  describe('getHandlePositions', () => {
+    it('uses horizontal handles for tall layouts and vertical handles for wide layouts', () => {
+      expect(getHandlePositions('TB')).toEqual({
+        target: Position.Left,
+        source: Position.Right
+      });
+      expect(getHandlePositions('BT')).toEqual({
+        target: Position.Right,
+        source: Position.Left
+      });
+      expect(getHandlePositions('LR')).toEqual({
+        target: Position.Top,
+        source: Position.Bottom
+      });
+      expect(getHandlePositions('RL')).toEqual({
+        target: Position.Bottom,
+        source: Position.Top
+      });
     });
   });
 });

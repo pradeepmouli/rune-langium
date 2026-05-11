@@ -57,9 +57,7 @@ export interface LspClientService {
    *
    * Returns an unsubscribe function.
    */
-  onDisplayFile(
-    handler: (uri: string) => Promise<import('@codemirror/view').EditorView | null>
-  ): () => void;
+  onDisplayFile(handler: (uri: string) => Promise<import('@codemirror/view').EditorView | null>): () => void;
   /** Force reconnect (tries WebSocket first). */
   reconnect(): Promise<void>;
   /** Clean up all resources. */
@@ -157,8 +155,7 @@ class StudioWorkspace extends Workspace {
 // ────────────────────────────────────────────────────────────────────────────
 
 export function createLspClientService(opts?: LspClientOptions): LspClientService {
-  let provider: TransportProvider =
-    opts?.transportProvider ?? createTransportProvider(opts?.transportOptions);
+  let provider: TransportProvider = opts?.transportProvider ?? createTransportProvider(opts?.transportOptions);
   let client: LSPClient | null = null;
   let initialized = false;
   const workspaceSnapshot = new Map<string, { version: number; content: string }>();

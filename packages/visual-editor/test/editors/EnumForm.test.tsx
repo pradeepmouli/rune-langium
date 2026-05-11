@@ -15,12 +15,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { EnumForm } from '../../src/components/editors/EnumForm.js';
-import type {
-  AnyGraphNode,
-  TypeOption,
-  EditorFormActions,
-  TypeGraphNode
-} from '../../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -87,41 +82,20 @@ describe('EnumForm', () => {
   });
 
   it('renders enum name in header', () => {
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
 
     const nameInput = screen.getByLabelText(/type name/i);
     expect((nameInput as HTMLInputElement).value).toBe('CurrencyEnum');
   });
 
   it('renders "Enum" badge', () => {
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
 
     expect(screen.getByText('Enum')).toBeDefined();
   });
 
   it('renders all enum value rows', () => {
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
 
     const nameInputs = screen.getAllByLabelText(/value name/i);
     expect(nameInputs.length).toBe(3);
@@ -130,14 +104,7 @@ describe('EnumForm', () => {
   it('triggers addEnumValue when "Add Value" is clicked', () => {
     const actions = makeActions();
 
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const addBtn = screen.getByText(/Add Value/);
     fireEvent.click(addBtn);
@@ -148,14 +115,7 @@ describe('EnumForm', () => {
   it('triggers removeEnumValue when remove button is clicked', () => {
     const actions = makeActions();
 
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const removeBtns = screen.getAllByLabelText(/remove value/i);
     fireEvent.click(removeBtns[0]!);
@@ -166,14 +126,7 @@ describe('EnumForm', () => {
   it('triggers renameType after debounce on name change', () => {
     const actions = makeActions();
 
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const nameInput = screen.getByLabelText(/type name/i);
     fireEvent.change(nameInput, { target: { value: 'StatusEnum' } });
@@ -188,14 +141,7 @@ describe('EnumForm', () => {
   });
 
   it('shows count label for enum values', () => {
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
 
     expect(screen.getByText(/3/)).toBeDefined();
   });
@@ -215,9 +161,7 @@ vi.mock('@zod-to-form/react', async (importOriginal) => {
     ...actual,
     useExternalSync: (...args: unknown[]) => {
       useExternalSyncSpy(...args);
-      return (actual as any).useExternalSync(
-        ...(args as Parameters<typeof actual.useExternalSync>)
-      );
+      return (actual as any).useExternalSync(...(args as Parameters<typeof actual.useExternalSync>));
     },
     useZodForm: (...args: unknown[]) => {
       useZodFormSpy(...args);
@@ -242,14 +186,7 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
   it('uses the canonical RosettaEnumerationSchema (R11) for useZodForm', async () => {
     const { RosettaEnumerationSchema } = await import('../../src/generated/zod-schemas.js');
 
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
 
     expect(useZodFormSpy).toHaveBeenCalled();
     const firstCall = useZodFormSpy.mock.calls[0];
@@ -259,12 +196,7 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
   // ET1 — leaf field labels + tab order
   it('renders leaf fields (name, value rows with name + display) in the documented tab order', () => {
     const { container } = render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
+      <EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
     );
 
     // Name must be the first text input in the form-header slot.
@@ -284,9 +216,7 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
       const ariaLabel = inputs[0]!.getAttribute('aria-label') ?? '';
       expect(ariaLabel.toLowerCase()).toContain('value name');
       // Document order: name input precedes display input within each row
-      expect(
-        row.compareDocumentPosition(inputs[1]!) & Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy();
+      expect(row.compareDocumentPosition(inputs[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       void idx;
     });
   });
@@ -296,14 +226,7 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
     const renameType = vi.fn();
     const actions = { ...makeActions(), renameType };
 
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const nameInput = screen.getByLabelText(/enum type name/i);
 
@@ -340,15 +263,11 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
       <EnumForm nodeId="node-1" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
-    const initialName = container.querySelector(
-      '[data-slot="type-name-input"]'
-    ) as HTMLInputElement;
+    const initialName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
     expect(initialName.value).toBe('CurrencyEnum');
 
     // Swap to nodeB (different reference identity)
-    rerender(
-      <EnumForm nodeId="node-1" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />
-    );
+    rerender(<EnumForm nodeId="node-1" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     act(() => {
       vi.advanceTimersByTime(500);
@@ -378,12 +297,7 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
     const actions = { ...makeActions(), addEnumValue, updateEnumValue };
 
     const { container } = render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // Click "Add Value" — the addEnumValue action fires immediately with the
@@ -426,10 +340,7 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
 
 describe('EnumForm – merged inherited enum value list', () => {
   /** Build parent and child enum nodes for inheritance tests. */
-  function makeEnumInheritanceNodes(
-    childData: AnyGraphNode,
-    parentValues: Record<string, unknown>[]
-  ): TypeGraphNode[] {
+  function makeEnumInheritanceNodes(childData: AnyGraphNode, parentValues: Record<string, unknown>[]): TypeGraphNode[] {
     const parentNode = {
       id: 'test::BaseEnum',
       type: 'enum',
@@ -462,9 +373,7 @@ describe('EnumForm – merged inherited enum value list', () => {
 
   it('renders inherited enum value rows when allNodes provided', () => {
     const childData = makeChildEnum();
-    const allNodes = makeEnumInheritanceNodes(childData, [
-      { $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }
-    ]);
+    const allNodes = makeEnumInheritanceNodes(childData, [{ $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }]);
     const { container } = render(
       <EnumForm
         nodeId="node-1"
@@ -480,9 +389,7 @@ describe('EnumForm – merged inherited enum value list', () => {
 
   it('shows inherited-from label with ancestor name', () => {
     const childData = makeChildEnum();
-    const allNodes = makeEnumInheritanceNodes(childData, [
-      { $type: 'RosettaEnumValue', name: 'JPY', display: '' }
-    ]);
+    const allNodes = makeEnumInheritanceNodes(childData, [{ $type: 'RosettaEnumValue', name: 'JPY', display: '' }]);
     render(
       <EnumForm
         nodeId="node-1"
@@ -539,9 +446,7 @@ describe('EnumForm – merged inherited enum value list', () => {
   it('Override button calls addEnumValue', () => {
     const addEnumValue = vi.fn();
     const childData = makeChildEnum();
-    const allNodes = makeEnumInheritanceNodes(childData, [
-      { $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }
-    ]);
+    const allNodes = makeEnumInheritanceNodes(childData, [{ $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }]);
     const { container } = render(
       <EnumForm
         nodeId="node-1"
@@ -558,9 +463,7 @@ describe('EnumForm – merged inherited enum value list', () => {
 
   it('inherited rows have no remove control', () => {
     const childData = makeChildEnum();
-    const allNodes = makeEnumInheritanceNodes(childData, [
-      { $type: 'RosettaEnumValue', name: 'JPY', display: '' }
-    ]);
+    const allNodes = makeEnumInheritanceNodes(childData, [{ $type: 'RosettaEnumValue', name: 'JPY', display: '' }]);
     const { container } = render(
       <EnumForm
         nodeId="node-1"

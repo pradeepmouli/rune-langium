@@ -17,11 +17,7 @@ export interface FormPreviewTarget {
   };
 }
 
-export type PreviewStaleReason =
-  | 'parse-error'
-  | 'generation-error'
-  | 'unsupported-target'
-  | 'no-files';
+export type PreviewStaleReason = 'parse-error' | 'generation-error' | 'unsupported-target' | 'no-files';
 
 export type PreviewStatus =
   | { state: 'waiting'; targetId?: string }
@@ -55,15 +51,8 @@ interface PreviewStoreActions {
   setAvailableTargets(targets: FormPreviewTarget[]): void;
   selectTarget(targetId: string | undefined): void;
   receivePreviewResult(schema: FormPreviewSchema): void;
-  receivePreviewStale(input: {
-    targetId?: string;
-    reason: PreviewStaleReason;
-    message: string;
-  }): void;
-  getFieldSource(
-    targetId: string | undefined,
-    fieldPath: string
-  ): PreviewSourceMapEntry | undefined;
+  receivePreviewStale(input: { targetId?: string; reason: PreviewStaleReason; message: string }): void;
+  getFieldSource(targetId: string | undefined, fieldPath: string): PreviewSourceMapEntry | undefined;
   ensureSample(targetId: string, values: Record<string, unknown>): void;
   updateSample(
     targetId: string,
@@ -122,10 +111,7 @@ function buildDefaultValue(field: PreviewField): unknown {
     case 'object':
       return field.required
         ? Object.fromEntries(
-            (field.children ?? []).map((child) => [
-              fieldLeafKey(child.path),
-              buildDefaultValue(child)
-            ])
+            (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildDefaultValue(child)])
           )
         : undefined;
     case 'array':
@@ -136,9 +122,7 @@ function buildDefaultValue(field: PreviewField): unknown {
 }
 
 function buildDefaultValues(fields: PreviewField[]): Record<string, unknown> {
-  return Object.fromEntries(
-    fields.map((field) => [fieldRootKey(field.path), buildDefaultValue(field)])
-  );
+  return Object.fromEntries(fields.map((field) => [fieldRootKey(field.path), buildDefaultValue(field)]));
 }
 
 function reconcileScalarValue(field: PreviewField, current: unknown): unknown {
@@ -171,8 +155,7 @@ function reconcileFieldValue(field: PreviewField, current: unknown): unknown {
       if (current === undefined && !field.required) {
         return undefined;
       }
-      const record =
-        current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+      const record = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
       return Object.fromEntries(
         (field.children ?? []).map((child) => [
           fieldLeafKey(child.path),
@@ -196,17 +179,11 @@ function reconcileSampleValues(
 ): Record<string, unknown> {
   const current = values ?? {};
   return Object.fromEntries(
-    fields.map((field) => [
-      fieldRootKey(field.path),
-      reconcileFieldValue(field, current[fieldRootKey(field.path)])
-    ])
+    fields.map((field) => [fieldRootKey(field.path), reconcileFieldValue(field, current[fieldRootKey(field.path)])])
   );
 }
 
-function sameSourceRange(
-  left: FormPreviewTarget['sourceRange'],
-  right: FormPreviewTarget['sourceRange']
-): boolean {
+function sameSourceRange(left: FormPreviewTarget['sourceRange'], right: FormPreviewTarget['sourceRange']): boolean {
   if (!left || !right) {
     return false;
   }
@@ -231,11 +208,7 @@ function findRenamedTarget(
   );
 }
 
-function remapTargetState<T>(
-  map: Map<string, T>,
-  fromTargetId: string,
-  toTargetId: string
-): Map<string, T> {
+function remapTargetState<T>(map: Map<string, T>, fromTargetId: string, toTargetId: string): Map<string, T> {
   if (fromTargetId === toTargetId || !map.has(fromTargetId)) {
     return map;
   }
@@ -255,12 +228,7 @@ function mergeTargetIdentity(
   if (!target) {
     return target;
   }
-  if (
-    target.sourceUri ||
-    target.sourceIndex !== undefined ||
-    target.sourceRange ||
-    !previousTarget
-  ) {
+  if (target.sourceUri || target.sourceIndex !== undefined || target.sourceRange || !previousTarget) {
     return target;
   }
   return {

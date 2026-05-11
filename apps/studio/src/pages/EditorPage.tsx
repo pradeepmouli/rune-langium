@@ -37,7 +37,8 @@ import type {
   TypeOption,
   EditorFormActions,
   ExpressionEditorSlotProps,
-  FunctionScope
+  FunctionScope,
+  LayoutDirection
 } from '@rune-langium/visual-editor';
 import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
@@ -103,6 +104,7 @@ export interface EditorPageProps {
 }
 
 const DECL_KEYWORDS = /^(type|enum|func|choice|annotation|metaType|typeAlias|library\s+function|reporting\s+rule)\s+/;
+const GRAPH_LAYOUT_HYSTERESIS = 1.08;
 
 function findDeclarationLine(content: string, name: string): number {
   const lines = content.split('\n');
@@ -147,6 +149,17 @@ function getFileKindBadge(name: string): string {
     default:
       return ext ? ext.slice(0, 4).toUpperCase() : 'FILE';
   }
+}
+
+function resolveResponsiveLayoutDirection(
+  width: number,
+  height: number,
+  previous: Extract<LayoutDirection, 'LR' | 'TB'>
+): Extract<LayoutDirection, 'LR' | 'TB'> {
+  if (width <= 0 || height <= 0) return previous;
+  if (width / height >= GRAPH_LAYOUT_HYSTERESIS) return 'LR';
+  if (height / width >= GRAPH_LAYOUT_HYSTERESIS) return 'TB';
+  return previous;
 }
 
 function FileTabStrip({
@@ -203,9 +216,11 @@ export function EditorPage({
   const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [groupedLayout, setGroupedLayout] = useState(false);
+  const [graphLayoutDirection, setGraphLayoutDirection] = useState<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
   // Ref so ResizeObserver callbacks always see the latest value without stale closures.
   const groupedLayoutRef = useRef(groupedLayout);
   groupedLayoutRef.current = groupedLayout;
+  const graphLayoutDirectionRef = useRef<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
@@ -225,6 +240,7 @@ export function EditorPage({
   );
 
   const storeNodes = useEditorStore((s) => s.nodes);
+  const storeEdges = useEditorStore((s) => s.edges);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const visibility = useEditorStore((s) => s.visibility);
   const expandedNamespaces = visibility.expandedNamespaces;
@@ -232,7 +248,6 @@ export function EditorPage({
 
   const storeSelectNode = useEditorStore((s) => s.selectNode);
   const storeToggleNamespace = useEditorStore((s) => s.toggleNamespace);
-  const storeToggleNodeVisibility = useEditorStore((s) => s.toggleNodeVisibility);
   const storeExpandAllNamespaces = useEditorStore((s) => s.expandAllNamespaces);
   const storeCollapseAllNamespaces = useEditorStore((s) => s.collapseAllNamespaces);
   const previewSelectedTargetId = usePreviewStore((s) => s.selectedTargetId);
@@ -244,18 +259,32 @@ export function EditorPage({
   const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
   const receiveExecutionError = usePreviewStore((s) => s.receiveExecutionError);
   const setWorkerRef = usePreviewStore((s) => s.setWorkerRef);
+  const updateGraphLayoutDirection = useCallback((nextDirection: Extract<LayoutDirection, 'LR' | 'TB'>) => {
+    graphLayoutDirectionRef.current = nextDirection;
+    setGraphLayoutDirection((prev) => (prev === nextDirection ? prev : nextDirection));
+    return nextDirection;
+  }, []);
+  const getResponsiveGraphDirection = useCallback((): Extract<LayoutDirection, 'LR' | 'TB'> => {
+    const rect = graphContainerRef.current?.getBoundingClientRect();
+    if (!rect) return graphLayoutDirectionRef.current;
+    const nextDirection = resolveResponsiveLayoutDirection(rect.width, rect.height, graphLayoutDirectionRef.current);
+    return updateGraphLayoutDirection(nextDirection);
+  }, [updateGraphLayoutDirection]);
+
   useEffect(() => {
     const el = graphContainerRef.current;
     if (!el) return;
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
       const { width, height } = entry.contentRect;
-      const direction = width >= height ? 'LR' : 'TB';
+      const direction = resolveResponsiveLayoutDirection(width, height, graphLayoutDirectionRef.current);
+      if (direction === graphLayoutDirectionRef.current) return;
+      updateGraphLayoutDirection(direction);
       graphRef.current?.relayout({ direction, groupByInheritance: groupedLayoutRef.current });
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [updateGraphLayoutDirection]);
 
   const resolvedModelFiles = useMemo(() => {
     if (parsedModels && parsedModels.length > 0) {
@@ -686,14 +715,22 @@ export function EditorPage({
     setActiveEditorFile(filePath);
   }, []);
 
-  const handleExplorerSelectNode = useCallback((nodeId: string) => {
-    const nextDetailPanelOpen = nodeId !== null;
-    const { selectedNodeId, detailPanelOpen } = useEditorStore.getState();
-    if (selectedNodeId === nodeId && detailPanelOpen === nextDetailPanelOpen) {
-      return;
-    }
-    useEditorStore.setState({ selectedNodeId: nodeId, detailPanelOpen: nextDetailPanelOpen });
-  }, []);
+  const handleExplorerSelectNode = useCallback(
+    (nodeId: string) => {
+      storeSelectNode(nodeId, { reapplyFocusMode: true });
+    },
+    [storeSelectNode]
+  );
+
+  const shouldCenterNavigationTarget = useCallback(
+    (nodeId: string) => {
+      if (!focusMode) return true;
+      const hasIncidentEdge = storeEdges.some((edge) => edge.source === nodeId || edge.target === nodeId);
+      if (!hasIncidentEdge) return true;
+      return useEditorStore.getState().visibility.hiddenNodeIds.size === 0;
+    },
+    [focusMode, storeEdges]
+  );
 
   const navigateToNode = useCallback(
     (nodeId: string) => {
@@ -712,10 +749,12 @@ export function EditorPage({
         navigationHistoryRef.current.push(current);
         if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
       }
-      graphRef.current?.focusNode(nodeId);
-      storeSelectNode(nodeId);
+      storeSelectNode(nodeId, { reapplyFocusMode: true });
+      if (shouldCenterNavigationTarget(nodeId)) {
+        graphRef.current?.focusNode(nodeId);
+      }
     },
-    [showToast, storeNodes, storeSelectNode]
+    [showToast, shouldCenterNavigationTarget, storeNodes, storeSelectNode]
   );
 
   const navigateBack = useCallback(() => {
@@ -730,9 +769,11 @@ export function EditorPage({
       });
       return;
     }
-    graphRef.current?.focusNode(prev);
-    storeSelectNode(prev);
-  }, [showToast, storeSelectNode, storeNodes]);
+    storeSelectNode(prev, { reapplyFocusMode: true });
+    if (shouldCenterNavigationTarget(prev)) {
+      graphRef.current?.focusNode(prev);
+    }
+  }, [showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes]);
 
   const handleEditorPageKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
@@ -894,8 +935,11 @@ export function EditorPage({
     graphRef.current?.fitView();
   }, []);
   const handleRelayout = useCallback(() => {
-    graphRef.current?.relayout({ groupByInheritance: groupedLayout });
-  }, [groupedLayout]);
+    graphRef.current?.relayout({
+      direction: getResponsiveGraphDirection(),
+      groupByInheritance: groupedLayout
+    });
+  }, [getResponsiveGraphDirection, groupedLayout]);
   const handleToggleFocusMode = useCallback(() => {
     storeToggleFocusMode();
   }, [storeToggleFocusMode]);
@@ -903,11 +947,14 @@ export function EditorPage({
     setGroupedLayout((prev) => {
       const next = !prev;
       setTimeout(() => {
-        graphRef.current?.relayout({ groupByInheritance: next });
+        graphRef.current?.relayout({
+          direction: getResponsiveGraphDirection(),
+          groupByInheritance: next
+        });
       }, 0);
       return next;
     });
-  }, []);
+  }, [getResponsiveGraphDirection]);
 
   // ---------- panel components rendered inside dockview ----------
 
@@ -920,7 +967,6 @@ export function EditorPage({
           hiddenNodeIds={hiddenNodeIds}
           selectedNodeId={selectedNodeId}
           onToggleNamespace={storeToggleNamespace}
-          onToggleNode={storeToggleNodeVisibility}
           onExpandAll={storeExpandAllNamespaces}
           onCollapseAll={storeCollapseAllNamespaces}
           onSelectNode={handleExplorerSelectNode}
@@ -933,7 +979,6 @@ export function EditorPage({
       hiddenNodeIds,
       selectedNodeId,
       storeToggleNamespace,
-      storeToggleNodeVisibility,
       storeExpandAllNamespaces,
       storeCollapseAllNamespaces,
       handleExplorerSelectNode
@@ -1008,7 +1053,7 @@ export function EditorPage({
             aria-pressed={focusMode}
             size="xs"
             onClick={handleToggleFocusMode}
-            title="Show selected node and its direct connections only"
+            title="Show the selected type, its inheritance chain, and its direct references only"
           >
             <Network />
             Focus
@@ -1031,7 +1076,7 @@ export function EditorPage({
             config={{
               // 'LR' is a safe default — the ResizeObserver corrects direction on the first frame
               // once the container is measured. The container dimensions aren't available yet here.
-              layout: { direction: 'LR', groupByInheritance: groupedLayout },
+              layout: { direction: graphLayoutDirection, groupByInheritance: groupedLayout },
               showControls: true,
               showMinimap: true,
               readOnly: false
@@ -1048,6 +1093,7 @@ export function EditorPage({
     [
       focusMode,
       groupedLayout,
+      graphLayoutDirection,
       handleFitView,
       handleModelChanged,
       handleRelayout,

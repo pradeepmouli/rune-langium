@@ -94,11 +94,7 @@ export class RuneDslValidator {
         this.checkEnumExtendsCycle,
         this.checkEnumValueNaming
       ],
-      Choice: [
-        this.checkChoiceNoDuplicateOptions,
-        this.checkChoiceNaming,
-        this.checkChoiceMinOptions
-      ],
+      Choice: [this.checkChoiceNoDuplicateOptions, this.checkChoiceNaming, this.checkChoiceMinOptions],
       RosettaModel: [this.checkModelNoDuplicateElements, this.checkModelNamespaceValid],
       Condition: [this.checkConditionNaming, this.checkConditionHasExpression],
       ChoiceOption: [],
@@ -258,14 +254,10 @@ export class RuneDslValidator {
     const superAttrs = this.collectInheritedAttributeNames(node.superType.ref as Data);
     for (const attr of node.attributes) {
       if (attr.override && !superAttrs.has(attr.name)) {
-        accept(
-          'error',
-          `Attribute '${attr.name}' is marked override but does not exist in supertype.`,
-          {
-            node: attr,
-            property: 'name'
-          }
-        );
+        accept('error', `Attribute '${attr.name}' is marked override but does not exist in supertype.`, {
+          node: attr,
+          property: 'name'
+        });
       }
     }
   }

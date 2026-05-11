@@ -12,11 +12,10 @@ import type { LangiumDocument } from 'langium';
  */
 async function parseAndValidate(input: string) {
   const { RuneDsl } = createRuneDslServices();
-  const document: LangiumDocument<RosettaModel> =
-    RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
-      input,
-      URI.parse('inmemory:///test.rosetta')
-    );
+  const document: LangiumDocument<RosettaModel> = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+    input,
+    URI.parse('inmemory:///test.rosetta')
+  );
 
   await RuneDsl.shared.workspace.DocumentBuilder.build([document], {
     validation: true
@@ -28,8 +27,7 @@ async function parseAndValidate(input: string) {
     diagnostics,
     errors: diagnostics.filter((d) => d.severity === 1),
     warnings: diagnostics.filter((d) => d.severity === 2),
-    hasErrors:
-      document.parseResult.lexerErrors.length > 0 || document.parseResult.parserErrors.length > 0
+    hasErrors: document.parseResult.lexerErrors.length > 0 || document.parseResult.parserErrors.length > 0
   };
 }
 
@@ -60,10 +58,7 @@ describe('Validation', () => {
       // Only linker errors (unresolved int/string) are acceptable,
       // no structural validation errors should be present.
       const structuralErrors = result.errors.filter(
-        (e) =>
-          e.message.includes('Duplicate') ||
-          e.message.includes('Lower bound') ||
-          e.message.includes('Circular')
+        (e) => e.message.includes('Duplicate') || e.message.includes('Lower bound') || e.message.includes('Circular')
       );
       expect(structuralErrors).toHaveLength(0);
     });
@@ -138,9 +133,7 @@ describe('Validation', () => {
           bar int (1..1)
       `);
       expect(result.warnings.length).toBeGreaterThan(0);
-      expect(
-        result.warnings.some((e) => e.message.includes('should start with an uppercase letter'))
-      ).toBe(true);
+      expect(result.warnings.some((e) => e.message.includes('should start with an uppercase letter'))).toBe(true);
     });
 
     it('should warn if attribute starts with uppercase', async () => {
@@ -152,9 +145,7 @@ describe('Validation', () => {
           Bar int (1..1)
       `);
       expect(result.warnings.length).toBeGreaterThan(0);
-      expect(
-        result.warnings.some((e) => e.message.includes('should start with a lowercase letter'))
-      ).toBe(true);
+      expect(result.warnings.some((e) => e.message.includes('should start with a lowercase letter'))).toBe(true);
     });
 
     it('should warn if function starts with lowercase', async () => {
@@ -169,9 +160,7 @@ describe('Validation', () => {
             42
       `);
       expect(result.warnings.length).toBeGreaterThan(0);
-      expect(
-        result.warnings.some((e) => e.message.includes('should start with an uppercase letter'))
-      ).toBe(true);
+      expect(result.warnings.some((e) => e.message.includes('should start with an uppercase letter'))).toBe(true);
     });
 
     it('should warn if enum starts with lowercase', async () => {
@@ -184,9 +173,7 @@ describe('Validation', () => {
           B
       `);
       expect(result.warnings.length).toBeGreaterThan(0);
-      expect(
-        result.warnings.some((e) => e.message.includes('should start with an uppercase letter'))
-      ).toBe(true);
+      expect(result.warnings.some((e) => e.message.includes('should start with an uppercase letter'))).toBe(true);
     });
 
     it('should not warn for properly named elements', async () => {
@@ -255,9 +242,7 @@ describe('Validation', () => {
             bar > 0
       `);
       expect(result.warnings.length).toBeGreaterThan(0);
-      expect(
-        result.warnings.some((e) => e.message.includes('should start with an uppercase letter'))
-      ).toBe(true);
+      expect(result.warnings.some((e) => e.message.includes('should start with an uppercase letter'))).toBe(true);
     });
   });
 });

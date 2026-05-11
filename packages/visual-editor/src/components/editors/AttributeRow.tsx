@@ -64,6 +64,9 @@ export interface AttributeRowProps {
   onRevert?: () => void;
 }
 
+const ATTRIBUTE_ROW_LAYOUT =
+  'grid w-full items-center gap-x-1 [grid-template-columns:12px_minmax(0,1.18fr)_minmax(7.5rem,1fr)_auto_minmax(0,max-content)]';
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -197,7 +200,7 @@ function AttributeRow({
     <div
       data-slot="attribute-row"
       data-index={index}
-      className={`flex items-center gap-1.5 py-1 px-1.5 rounded border border-transparent
+      className={`${ATTRIBUTE_ROW_LAYOUT} rounded border border-transparent px-1 py-0.5
         hover:border-border hover:bg-background/50 ${isOverride ? 'opacity-60' : ''}`}
       draggable={!disabled}
       onDragStart={handleDragStart}
@@ -207,7 +210,7 @@ function AttributeRow({
       {/* Drag handle */}
       <span
         data-slot="drag-handle"
-        className="cursor-grab text-muted-foreground select-none text-xs shrink-0"
+        className="cursor-grab justify-self-center text-muted-foreground select-none text-xs shrink-0"
         aria-hidden="true"
       >
         ⠿
@@ -228,7 +231,7 @@ function AttributeRow({
             }}
             onBlur={field.onBlur}
             disabled={disabled}
-            className="flex-1 min-w-0 px-1.5 py-0.5 text-sm border border-transparent rounded
+            className="w-full min-w-0 px-1.5 py-0.5 text-xs border border-transparent rounded
               focus:border-input focus:outline-none bg-transparent"
             placeholder="name"
             aria-label={`Attribute name: ${field.value}`}
@@ -237,7 +240,7 @@ function AttributeRow({
       />
 
       {/* Type selector + navigation link */}
-      <div data-slot="attribute-type" className="w-36 shrink-0">
+      <div data-slot="attribute-type" className="min-w-0">
         <TypeReferenceField
           value={typeValue}
           displayName={typeName}
@@ -257,40 +260,41 @@ function AttributeRow({
         <CardinalityPicker value={cardinalityString} onChange={handleCardinalityChange} disabled={disabled} />
       </div>
 
-      {/* Override badge */}
-      {isOverride && (
-        <span data-slot="override-badge" className="text-xs text-muted-foreground italic whitespace-nowrap">
-          override
-        </span>
-      )}
+      <div className="min-w-0 justify-self-end flex items-center gap-1">
+        {isOverride && (
+          <span data-slot="override-badge" className="text-[11px] text-muted-foreground italic whitespace-nowrap">
+            override
+          </span>
+        )}
 
-      {/* Remove / Revert button */}
-      {isOverride && onRevert ? (
-        <button
-          data-slot="attribute-revert"
-          type="button"
-          onClick={onRevert}
-          disabled={disabled}
-          className="ml-auto shrink-0 text-xs px-2 py-0.5 border border-border rounded
-            text-muted-foreground hover:text-foreground hover:border-input transition-colors
-            disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label={`Revert override for attribute ${committedName || 'unnamed'}`}
-        >
-          Revert
-        </button>
-      ) : (
-        <button
-          data-slot="attribute-remove"
-          type="button"
-          onClick={() => onRemove(index)}
-          disabled={disabled}
-          className="ml-auto shrink-0 p-0.5 text-muted-foreground hover:text-destructive
-            disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label={`Remove attribute ${committedName || 'unnamed'}`}
-        >
-          ✕
-        </button>
-      )}
+        {/* Remove / Revert button */}
+        {isOverride && onRevert ? (
+          <button
+            data-slot="attribute-revert"
+            type="button"
+            onClick={onRevert}
+            disabled={disabled}
+            className="shrink-0 rounded border border-border px-2 py-0.5 text-[11px]
+              text-muted-foreground transition-colors hover:text-foreground hover:border-input
+              disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label={`Revert override for attribute ${committedName || 'unnamed'}`}
+          >
+            Revert
+          </button>
+        ) : (
+          <button
+            data-slot="attribute-remove"
+            type="button"
+            onClick={() => onRemove(index)}
+            disabled={disabled}
+            className="shrink-0 p-0.5 text-muted-foreground hover:text-destructive
+              disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label={`Remove attribute ${committedName || 'unnamed'}`}
+          >
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -324,20 +328,20 @@ function InheritedAttributeRow({
     <div
       data-slot="inherited-attribute-row"
       data-name={name}
-      className="flex items-center gap-1.5 py-1 px-1.5 rounded border border-transparent
-        bg-muted/20 opacity-70"
+      className={`${ATTRIBUTE_ROW_LAYOUT} rounded border border-transparent px-1 py-0.5
+        bg-muted/20 opacity-70`}
     >
       {/* Spacer aligns with drag handle */}
-      <span className="w-3 shrink-0" />
+      <span className="w-3 shrink-0 justify-self-center" />
 
       <span
         data-slot="attribute-name"
-        className="flex-1 min-w-0 px-1.5 py-0.5 text-sm font-mono text-muted-foreground truncate"
+        className="min-w-0 px-1.5 py-0.5 text-xs font-mono text-muted-foreground truncate"
       >
         {name}
       </span>
 
-      <div data-slot="attribute-type" className="w-36 shrink-0">
+      <div data-slot="attribute-type" className="min-w-0">
         <TypeReferenceField
           value={null}
           displayName={typeName}
@@ -351,24 +355,26 @@ function InheritedAttributeRow({
         />
       </div>
 
-      <span data-slot="attribute-cardinality" className="shrink-0 text-xs text-muted-foreground">
+      <span data-slot="attribute-cardinality" className="shrink-0 text-[11px] text-muted-foreground">
         {cardinality}
       </span>
 
-      <span data-slot="inherited-from-label" className="text-xs text-muted-foreground italic whitespace-nowrap">
-        inherited from {ancestorName}
-      </span>
+      <div className="min-w-0 justify-self-end flex items-center gap-1">
+        <span data-slot="inherited-from-label" className="text-[11px] text-muted-foreground italic whitespace-nowrap">
+          inherited from {ancestorName}
+        </span>
 
-      <button
-        data-slot="attribute-override"
-        type="button"
-        onClick={onOverride}
-        aria-label={`Override inherited attribute ${name} from ${ancestorName}`}
-        className="ml-auto shrink-0 text-xs px-2 py-0.5 border border-border rounded
-          text-muted-foreground hover:text-foreground hover:border-input transition-colors"
-      >
-        Override
-      </button>
+        <button
+          data-slot="attribute-override"
+          type="button"
+          onClick={onOverride}
+          aria-label={`Override inherited attribute ${name} from ${ancestorName}`}
+          className="shrink-0 rounded border border-border px-2 py-0.5 text-[11px]
+            text-muted-foreground transition-colors hover:text-foreground hover:border-input"
+        >
+          Override
+        </button>
+      </div>
     </div>
   );
 }

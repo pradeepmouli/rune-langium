@@ -9,6 +9,37 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import { COMBINED_MODEL_SOURCE } from '../helpers/fixture-loader.js';
+import type { AnyGraphNode, EdgeData, TypeGraphEdge, TypeGraphNode } from '../../src/types.js';
+
+function makeNode(namespace: string, name: string): TypeGraphNode {
+  return {
+    id: `${namespace}::${name}`,
+    type: 'data',
+    position: { x: 0, y: 0 },
+    data: {
+      $type: 'Data',
+      name,
+      namespace,
+      position: { x: 0, y: 0 },
+      hasExternalRefs: false,
+      errors: [],
+      attributes: [],
+      conditions: [],
+      annotations: [],
+      synonyms: []
+    } as AnyGraphNode
+  };
+}
+
+function makeEdge(source: string, target: string, kind: EdgeData['kind']): TypeGraphEdge {
+  return {
+    id: `${source}--${kind}--${target}`,
+    source,
+    target,
+    type: kind,
+    data: { kind } satisfies EdgeData
+  };
+}
 
 describe('EditorStore — Namespace Visibility', () => {
   let store: ReturnType<typeof createEditorStore>;
@@ -178,6 +209,117 @@ describe('EditorStore — Namespace Visibility', () => {
 
       store.getState().setInitialVisibility(50);
       expect(store.getState().visibility.expandedNamespaces.size).toBeGreaterThan(0);
+    });
+  });
+
+  describe('focus mode isolation', () => {
+    it('keeps inheritance parents and direct references while hiding unrelated nodes', () => {
+      const trade = makeNode('test.focus', 'Trade');
+      const base = makeNode('test.focus', 'BaseTrade');
+      const event = makeNode('test.focus', 'Event');
+      const pricing = makeNode('test.focus', 'Pricing');
+      const child = makeNode('test.focus', 'ChildTrade');
+      const standalone = makeNode('test.focus', 'Standalone');
+      const nodes = [trade, base, event, pricing, child, standalone];
+      const edges = [
+        makeEdge(trade.id, base.id, 'extends'),
+        makeEdge(trade.id, event.id, 'attribute-ref'),
+        makeEdge(pricing.id, trade.id, 'type-alias-ref'),
+        makeEdge(child.id, trade.id, 'extends')
+      ];
+
+      store.setState((state) => ({
+        ...state,
+        nodes,
+        edges,
+        visibility: {
+          ...state.visibility,
+          expandedNamespaces: new Set(['test.focus']),
+          hiddenNodeIds: new Set<string>()
+        }
+      }));
+
+      store.getState().selectNode(trade.id);
+
+      const hiddenNodeIds = store.getState().visibility.hiddenNodeIds;
+      expect(hiddenNodeIds.has(base.id)).toBe(false);
+      expect(hiddenNodeIds.has(event.id)).toBe(false);
+      expect(hiddenNodeIds.has(pricing.id)).toBe(false);
+      expect(hiddenNodeIds.has(child.id)).toBe(true);
+      expect(hiddenNodeIds.has(standalone.id)).toBe(true);
+    });
+
+    it('reapplies the focused cluster when requested for the same node', () => {
+      const trade = makeNode('test.focus', 'Trade');
+      const base = makeNode('test.focus', 'BaseTrade');
+      const event = makeNode('test.focus', 'Event');
+      const nodes = [trade, base, event];
+      const edges = [makeEdge(trade.id, base.id, 'extends'), makeEdge(trade.id, event.id, 'attribute-ref')];
+
+      store.setState((state) => ({
+        ...state,
+        nodes,
+        edges,
+        selectedNodeId: trade.id,
+        visibility: {
+          ...state.visibility,
+          expandedNamespaces: new Set(['test.focus']),
+          hiddenNodeIds: new Set<string>()
+        }
+      }));
+
+      store.getState().showAllNodes();
+      store.getState().selectNode(trade.id, { reapplyFocusMode: true });
+
+      const hiddenNodeIds = store.getState().visibility.hiddenNodeIds;
+      expect(hiddenNodeIds.size).toBe(0);
+      expect(hiddenNodeIds.has(trade.id)).toBe(false);
+      expect(hiddenNodeIds.has(base.id)).toBe(false);
+      expect(hiddenNodeIds.has(event.id)).toBe(false);
+    });
+
+    it('isolates a standalone node when no focused neighbors exist', () => {
+      const trade = makeNode('test.focus', 'Trade');
+      const standalone = makeNode('test.focus', 'Standalone');
+
+      store.setState((state) => ({
+        ...state,
+        nodes: [trade, standalone],
+        edges: [],
+        visibility: {
+          ...state.visibility,
+          expandedNamespaces: new Set(['test.focus']),
+          hiddenNodeIds: new Set<string>()
+        }
+      }));
+
+      store.getState().isolateNode(standalone.id);
+
+      const hiddenNodeIds = store.getState().visibility.hiddenNodeIds;
+      expect(hiddenNodeIds.has(standalone.id)).toBe(false);
+      expect(hiddenNodeIds.has(trade.id)).toBe(true);
+    });
+
+    it('keeps singleton focus selections isolated when focus mode is enabled', () => {
+      const trade = makeNode('test.focus', 'Trade');
+      const standalone = makeNode('test.focus', 'Standalone');
+
+      store.setState((state) => ({
+        ...state,
+        nodes: [trade, standalone],
+        edges: [],
+        visibility: {
+          ...state.visibility,
+          expandedNamespaces: new Set(['test.focus']),
+          hiddenNodeIds: new Set<string>()
+        }
+      }));
+
+      store.getState().selectNode(standalone.id);
+
+      const hiddenNodeIds = store.getState().visibility.hiddenNodeIds;
+      expect(hiddenNodeIds.has(standalone.id)).toBe(false);
+      expect(hiddenNodeIds.has(trade.id)).toBe(true);
     });
   });
 });

@@ -204,11 +204,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
     // RosettaAttributeReference.attribute — scope is attributes of the receiver Data type
     // Used in: [metadata address "pointsTo"=PriceQuantity->price]
-    if (
-      isRosettaAttributeReference(container) &&
-      !isRosettaDataReference(container) &&
-      property === 'attribute'
-    ) {
+    if (isRosettaAttributeReference(container) && !isRosettaDataReference(container) && property === 'attribute') {
       return this.getRosettaAttributeRefScope(container);
     }
 
@@ -268,9 +264,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * Resolve the type produced by an expression.
    * Returns a Data, RosettaRecordType, or Choice node if the expression's type can be determined.
    */
-  private resolveExpressionType(
-    expr: RosettaExpression
-  ): Data | RosettaRecordType | Choice | undefined {
+  private resolveExpressionType(expr: RosettaExpression): Data | RosettaRecordType | Choice | undefined {
     // Symbol reference → look up the symbol to determine its type
     if (isRosettaSymbolReference(expr)) {
       const sym = expr.symbol?.ref;
@@ -342,10 +336,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     // Feature call → resolve the feature to get its type
     if (isRosettaFeatureCall(expr)) {
       const feature = expr.feature?.ref;
-      if (
-        feature &&
-        (isAttribute(feature) || isRosettaRecordFeature(feature) || isChoiceOption(feature))
-      ) {
+      if (feature && (isAttribute(feature) || isRosettaRecordFeature(feature) || isChoiceOption(feature))) {
         return this.resolveTypeCallToData(feature.typeCall);
       }
       return undefined;
@@ -354,10 +345,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     // Deep feature call → same logic
     if (isRosettaDeepFeatureCall(expr)) {
       const feature = expr.feature?.ref;
-      if (
-        feature &&
-        (isAttribute(feature) || isRosettaRecordFeature(feature) || isChoiceOption(feature))
-      ) {
+      if (feature && (isAttribute(feature) || isRosettaRecordFeature(feature) || isChoiceOption(feature))) {
         return this.resolveTypeCallToData(feature.typeCall);
       }
       return undefined;
@@ -511,9 +499,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * Falls back to a global-index lookup when `.ref` is not yet linked (e.g. when the
    * containing document is processed before the file that defines the referenced type).
    */
-  private resolveTypeCallToData(
-    typeCall: TypeCall | undefined
-  ): Data | RosettaRecordType | Choice | undefined {
+  private resolveTypeCallToData(typeCall: TypeCall | undefined): Data | RosettaRecordType | Choice | undefined {
     if (!typeCall) return undefined;
     const ref = typeCall.type?.ref;
     if (ref) {
@@ -748,10 +734,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * Build a scope from a Data, RosettaRecordType, or Choice's features.
    * Falls back to the global attribute scope if the type cannot be resolved.
    */
-  private buildTypedScope(
-    data: Data | RosettaRecordType | Choice | undefined,
-    fallbackNode: AstNode
-  ): Scope {
+  private buildTypedScope(data: Data | RosettaRecordType | Choice | undefined, fallbackNode: AstNode): Scope {
     if (!data) {
       return this.getAllAttributesScope(fallbackNode);
     }
@@ -903,8 +886,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return result;
     }
 
-    const attrs: (Attribute | RosettaRecordFeature | ChoiceOption)[] =
-      this.collectDataAttributes(data);
+    const attrs: (Attribute | RosettaRecordFeature | ChoiceOption)[] = this.collectDataAttributes(data);
     // eslint-disable-next-line unicorn/no-useless-spread
     for (const attr of [...attrs]) {
       if (isAttribute(attr)) {
@@ -949,10 +931,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     for (const seg of segments) {
       if (!currentType) break;
       const feature = seg.feature?.ref;
-      if (
-        feature &&
-        (isAttribute(feature) || isRosettaRecordFeature(feature) || isChoiceOption(feature))
-      ) {
+      if (feature && (isAttribute(feature) || isRosettaRecordFeature(feature) || isChoiceOption(feature))) {
         lastAttribute = isAttribute(feature) ? feature : undefined;
         currentType = this.resolveTypeCallToData(feature.typeCall);
       } else {
@@ -1002,10 +981,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    */
   private getDispatchAttributeScope(node: AstNode): Scope {
     if (!isRosettaFunction(node)) return EMPTY_SCOPE;
-    const model = AstUtils.getContainerOfType(
-      node,
-      (n): n is RosettaModel => n.$type === 'RosettaModel'
-    );
+    const model = AstUtils.getContainerOfType(node, (n): n is RosettaModel => n.$type === 'RosettaModel');
     if (!model) return EMPTY_SCOPE;
 
     // Collect inputs from all functions with the same name (base + other overloads)
@@ -1215,10 +1191,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     const seen = new Set<string>();
 
     // First, collect annotation attributes from the local model
-    const model = AstUtils.getContainerOfType(
-      node,
-      (n): n is RosettaModel => n.$type === 'RosettaModel'
-    );
+    const model = AstUtils.getContainerOfType(node, (n): n is RosettaModel => n.$type === 'RosettaModel');
     if (model) {
       for (const element of model.elements) {
         if (isAnnotation(element)) {
@@ -1260,9 +1233,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (!enumRef || !isRosettaEnumeration(enumRef)) {
       return EMPTY_SCOPE;
     }
-    const descriptions = this.collectEnumValues(enumRef).map((v) =>
-      this.createDescription(v, v.name)
-    );
+    const descriptions = this.collectEnumValues(enumRef).map((v) => this.createDescription(v, v.name));
     return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
   }
 
@@ -1270,10 +1241,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * Collect all enum values from an enumeration including inherited ones
    * via its `extends` parent chain.
    */
-  private collectEnumValues(
-    enumeration: RosettaEnumeration,
-    visited?: Set<string>
-  ): RosettaEnumValue[] {
+  private collectEnumValues(enumeration: RosettaEnumeration, visited?: Set<string>): RosettaEnumValue[] {
     if (!visited) visited = new Set();
     if (visited.has(enumeration.name)) return [];
     visited.add(enumeration.name);
@@ -1311,9 +1279,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     // Handle Data type references (the common case).
     const dataRef = externalClass.data?.ref;
     if (dataRef && isData(dataRef)) {
-      descriptions.push(
-        ...this.collectDataAttributes(dataRef).map((a) => this.createDescription(a, a.name))
-      );
+      descriptions.push(...this.collectDataAttributes(dataRef).map((a) => this.createDescription(a, a.name)));
     }
 
     // Also handle Choice types — the grammar declares data=[Data] but CDM synonym blocks
@@ -1325,9 +1291,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       if (choice) {
         for (const option of choice.attributes) {
           const optionRefText = option.typeCall?.type?.$refText ?? '';
-          const simpleName = optionRefText.includes('.')
-            ? optionRefText.split('.').pop()!
-            : optionRefText;
+          const simpleName = optionRefText.includes('.') ? optionRefText.split('.').pop()! : optionRefText;
           if (simpleName) {
             descriptions.push(this.createDescription(option, simpleName));
           }
@@ -1345,10 +1309,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * Used as a fallback when the receiver type cannot be resolved.
    */
   private getAllAttributesScope(node: AstNode): Scope {
-    const model = AstUtils.getContainerOfType(
-      node,
-      (n): n is RosettaModel => n.$type === 'RosettaModel'
-    );
+    const model = AstUtils.getContainerOfType(node, (n): n is RosettaModel => n.$type === 'RosettaModel');
     if (!model) {
       return EMPTY_SCOPE;
     }
@@ -1377,10 +1338,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   protected override getGlobalScope(referenceType: string, context: ReferenceInfo): Scope {
     const base = super.getGlobalScope(referenceType, context);
 
-    const model = AstUtils.getContainerOfType(
-      context.container,
-      (n): n is RosettaModel => n.$type === 'RosettaModel'
-    );
+    const model = AstUtils.getContainerOfType(context.container, (n): n is RosettaModel => n.$type === 'RosettaModel');
     if (!model) return base;
 
     // Build alias → namespace list from the document's imports.
@@ -1428,9 +1386,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * Resolve the type produced by a RosettaAttributeReference expression.
    * Returns a Data, Choice, or RosettaRecordType node.
    */
-  private resolveRosettaAttributeRefType(
-    node: AstNode
-  ): Data | RosettaRecordType | Choice | undefined {
+  private resolveRosettaAttributeRefType(node: AstNode): Data | RosettaRecordType | Choice | undefined {
     if (isRosettaDataReference(node)) {
       const ref = node.data?.ref;
       if (ref && isData(ref)) return ref;
@@ -1502,9 +1458,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
   /**
    * Resolve the type produced by an AnnotationPathExpression.
    */
-  private resolveAnnotationPathType(
-    expr: AnnotationPathExpression
-  ): Data | RosettaRecordType | Choice | undefined {
+  private resolveAnnotationPathType(expr: AnnotationPathExpression): Data | RosettaRecordType | Choice | undefined {
     if (isAnnotationPathAttributeReference(expr)) {
       // The starting attribute — its type
       const attr = expr.attribute?.ref;

@@ -86,7 +86,7 @@ export interface EditorState {
   layoutOptions: LayoutOptions;
 
   // --- Focus mode ---
-  /** When true, selecting a node auto-isolates it + direct neighbors. */
+  /** When true, selecting a node auto-isolates its focused cluster. */
   focusMode: boolean;
 
   // --- Namespace visibility ---
@@ -106,7 +106,7 @@ export interface EditorActions {
   loadDeferredExports(entries: DeferredExportEntry[]): void;
 
   // --- Navigation ---
-  selectNode(nodeId: string | null, options?: { isolateInFocusMode?: boolean }): void;
+  selectNode(nodeId: string | null, options?: { isolateInFocusMode?: boolean; reapplyFocusMode?: boolean }): void;
   setSearchQuery(query: string): void;
   setFilters(filters: GraphFilters): void;
   toggleDetailPanel(): void;
@@ -135,9 +135,9 @@ export interface EditorActions {
   showAllEdgeKinds(): void;
 
   // --- Isolation / focus ---
-  /** Hide all nodes except the given node and its directly connected neighbors. */
+  /** Hide all nodes except the given node's focused cluster. */
   isolateNode(nodeId: string): void;
-  /** Unhide the direct neighbors of a node (expand their namespaces too). */
+  /** Unhide a node's focused cluster (expand their namespaces too). */
   revealNeighbors(nodeId: string): void;
   /** Hide all nodes except the given set. */
   showOnly(nodeIds: Set<string>): void;
@@ -210,6 +210,44 @@ export interface EditorActions {
   // --- ReactFlow integration ---
   applyReactFlowNodeChanges(changes: NodeChange<TypeGraphNode>[]): void;
   applyReactFlowEdgeChanges(changes: EdgeChange<TypeGraphEdge>[]): void;
+}
+
+const INHERITANCE_EDGE_KINDS = new Set<EdgeKind>(['extends', 'enum-extends']);
+
+function isInheritanceEdgeKind(kind: EdgeKind | undefined): boolean {
+  return kind !== undefined && INHERITANCE_EDGE_KINDS.has(kind);
+}
+
+function getEdgeKind(edge: TypeGraphEdge): EdgeKind | undefined {
+  return (edge.data as EdgeData | undefined)?.kind;
+}
+
+function buildNodeMap(nodes: TypeGraphNode[]): Map<string, TypeGraphNode> {
+  return new Map(nodes.map((node) => [node.id, node]));
+}
+
+function collectFocusClusterNodeIds(nodeId: string, edges: TypeGraphEdge[]): Set<string> {
+  const focusNodeIds = new Set<string>([nodeId]);
+  const parentStack = [nodeId];
+
+  while (parentStack.length > 0) {
+    const currentId = parentStack.pop()!;
+    for (const edge of edges) {
+      if (!isInheritanceEdgeKind(getEdgeKind(edge)) || edge.source !== currentId) continue;
+      if (focusNodeIds.has(edge.target)) continue;
+      focusNodeIds.add(edge.target);
+      parentStack.push(edge.target);
+    }
+  }
+
+  for (const edge of edges) {
+    const kind = getEdgeKind(edge);
+    if (isInheritanceEdgeKind(kind)) continue;
+    if (edge.source === nodeId) focusNodeIds.add(edge.target);
+    if (edge.target === nodeId) focusNodeIds.add(edge.source);
+  }
+
+  return focusNodeIds;
 }
 
 /**
@@ -514,19 +552,19 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         selectNode(nodeId, options) {
           const nextDetailPanelOpen = nodeId !== null;
-          const { selectedNodeId, detailPanelOpen } = get();
+          const { selectedNodeId, detailPanelOpen, focusMode, edges } = get();
           const selectionChanged = selectedNodeId !== nodeId;
           if (selectionChanged || detailPanelOpen !== nextDetailPanelOpen) {
             set({ selectedNodeId: nodeId, detailPanelOpen: nextDetailPanelOpen });
           }
-          if (nodeId && get().focusMode && selectionChanged && options?.isolateInFocusMode !== false) {
-            // Only isolate if the node has at least one edge — stub nodes
-            // from deferred exports have no edges and crash ReactFlow when
-            // isolated (no layout, no measured dimensions).
-            const hasEdges = get().edges.some((e) => e.source === nodeId || e.target === nodeId);
-            if (hasEdges) {
-              get().isolateNode(nodeId);
-            }
+          const shouldApplyFocusMode =
+            nodeId &&
+            focusMode &&
+            options?.isolateInFocusMode !== false &&
+            (selectionChanged || options?.reapplyFocusMode);
+          if (shouldApplyFocusMode) {
+            const focusNodeIds = collectFocusClusterNodeIds(nodeId, edges);
+            get().showOnly(focusNodeIds);
           }
         },
 
@@ -1586,47 +1624,19 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // -----------------------------------------------------------------------
 
         isolateNode(nodeId: string) {
-          const { nodes, edges } = get();
-          // Find directly connected neighbors via all edge types
-          const neighbors = new Set<string>([nodeId]);
-          for (const edge of edges) {
-            if (edge.source === nodeId) neighbors.add(edge.target);
-            if (edge.target === nodeId) neighbors.add(edge.source);
-          }
-          // Hide everything except neighbors
-          const hiddenNodeIds = new Set<string>();
-          for (const n of nodes) {
-            if (!neighbors.has(n.id)) hiddenNodeIds.add(n.id);
-          }
-          // Ensure namespaces of visible nodes are expanded
-          const expandedNamespaces = new Set(get().visibility.expandedNamespaces);
-          for (const id of neighbors) {
-            const node = nodes.find((n) => n.id === id);
-            if (node) expandedNamespaces.add(node.data.namespace);
-          }
-          set((state) => ({
-            visibility: {
-              ...state.visibility,
-              hiddenNodeIds,
-              expandedNamespaces
-            }
-          }));
+          const focusNodeIds = collectFocusClusterNodeIds(nodeId, get().edges);
+          get().showOnly(focusNodeIds);
         },
 
         revealNeighbors(nodeId: string) {
           const { nodes, edges, visibility } = get();
-          // Find directly connected neighbors
-          const neighbors = new Set<string>([nodeId]);
-          for (const edge of edges) {
-            if (edge.source === nodeId) neighbors.add(edge.target);
-            if (edge.target === nodeId) neighbors.add(edge.source);
-          }
-          // Unhide neighbors and expand their namespaces
+          const focusNodeIds = collectFocusClusterNodeIds(nodeId, edges);
+          const nodeMap = buildNodeMap(nodes);
           const hiddenNodeIds = new Set(visibility.hiddenNodeIds);
           const expandedNamespaces = new Set(visibility.expandedNamespaces);
-          for (const id of neighbors) {
+          for (const id of focusNodeIds) {
             hiddenNodeIds.delete(id);
-            const node = nodes.find((n) => n.id === id);
+            const node = nodeMap.get(id);
             if (node) expandedNamespaces.add(node.data.namespace);
           }
           set((state) => ({
@@ -1640,13 +1650,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         showOnly(nodeIds: Set<string>) {
           const { nodes } = get();
+          const nodeMap = buildNodeMap(nodes);
           const hiddenNodeIds = new Set<string>();
           for (const n of nodes) {
             if (!nodeIds.has(n.id)) hiddenNodeIds.add(n.id);
           }
           const expandedNamespaces = new Set(get().visibility.expandedNamespaces);
           for (const id of nodeIds) {
-            const node = nodes.find((n) => n.id === id);
+            const node = nodeMap.get(id);
             if (node) expandedNamespaces.add(node.data.namespace);
           }
           set((state) => ({
@@ -1671,8 +1682,15 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const next = !get().focusMode;
           set({ focusMode: next });
           if (next) {
-            const { selectedNodeId } = get();
-            if (selectedNodeId) get().isolateNode(selectedNodeId);
+            const { selectedNodeId, edges } = get();
+            if (selectedNodeId) {
+              const focusNodeIds = collectFocusClusterNodeIds(selectedNodeId, edges);
+              if (focusNodeIds.size > 1) {
+                get().showOnly(focusNodeIds);
+              } else {
+                get().showAllNodes();
+              }
+            }
           } else {
             get().showAllNodes();
           }

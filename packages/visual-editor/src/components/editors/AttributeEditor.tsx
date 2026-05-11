@@ -72,11 +72,7 @@ export const AttributeEditor = memo(function AttributeEditor({
           className="rune-attribute-editor__card"
           aria-label="Cardinality"
         />
-        <button
-          onClick={handleAdd}
-          disabled={!name.trim()}
-          className="rune-attribute-editor__submit"
-        >
+        <button onClick={handleAdd} disabled={!name.trim()} className="rune-attribute-editor__submit">
           Add
         </button>
         {onCancel && (
