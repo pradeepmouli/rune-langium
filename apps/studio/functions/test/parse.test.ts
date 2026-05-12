@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { onRequestPost } from '../api/parse.js';
 
 function makeRequest(body: unknown): Request {
@@ -87,5 +87,74 @@ describe('POST /api/parse', () => {
     const body = (await res.json()) as { errors: Record<string, string[]> };
     expect(body.errors['broken.rune']).toBeDefined();
     expect(body.errors['broken.rune'].length).toBeGreaterThan(0);
+  });
+});
+
+describe('POST /api/parse — curatedBundles', () => {
+  it('accepts an empty curatedBundles array', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ name: 'x.rune', content: SIMPLE_RUNE }],
+        curatedBundles: []
+      })
+    } as never);
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 502 with structured error when a curated bundle is unavailable', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue(new Response('not found', { status: 404 }));
+    try {
+      const res = await onRequestPost({
+        request: makeRequest({
+          files: [{ name: 'x.rune', content: SIMPLE_RUNE }],
+          curatedBundles: [{ id: 'cdm', version: 'latest' }]
+        })
+      } as never);
+      expect(res.status).toBe(502);
+      const body = (await res.json()) as { ok: boolean; error: string; bundleId?: string };
+      expect(body.ok).toBe(false);
+      expect(body.error).toMatch(/curated_bundle_unavailable/);
+      expect(body.bundleId).toBe('cdm');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('merges curated bundle documents into hydrationState on success', async () => {
+    // Spy on fetchCuratedBundle to return a synthetic doc set.
+    const curatedFetchModule = await import('../lib/curated-fetch.js');
+    const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
+      {
+        uri: 'file:///cdm/base/math.rosetta',
+        content: '', // archive may not include source; ok to be empty
+        serializedModel: JSON.stringify({
+          $type: 'RosettaModel',
+          name: 'cdm.base.math',
+          elements: [{ $type: 'Data', name: 'Quantity' }]
+        }),
+        exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.base.math.Quantity' }]
+      }
+    ]);
+    try {
+      const res = await onRequestPost({
+        request: makeRequest({
+          files: [{ name: 'x.rune', content: SIMPLE_RUNE }],
+          curatedBundles: [{ id: 'cdm', version: 'latest' }]
+        })
+      } as never);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        hydrationState: { documents: Array<{ uri: string; exports: Array<{ name: string }> }> };
+      };
+      // Should contain BOTH the user file and the corpus document.
+      const uris = body.hydrationState.documents.map((d) => d.uri);
+      expect(uris).toContain('file:///x.rune');
+      expect(uris).toContain('file:///cdm/base/math.rosetta');
+      const corpusDoc = body.hydrationState.documents.find((d) => d.uri === 'file:///cdm/base/math.rosetta');
+      expect(corpusDoc?.exports.some((e) => e.name === 'Quantity')).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

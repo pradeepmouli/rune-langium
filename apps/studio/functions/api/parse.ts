@@ -18,9 +18,11 @@
 import { createRuneDslServices } from '@rune-langium/core';
 import type { RosettaModel } from '@rune-langium/core';
 import { EmptyFileSystem, URI, type LangiumDocument, type AstNode } from 'langium';
+import { fetchCuratedBundle, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 
 type ParseRequestBody = {
   files: Array<{ name: string; content: string }>;
+  curatedBundles?: Array<{ id: string; version: string }>;
 };
 
 function badRequest(error: string): Response {
@@ -127,6 +129,32 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
         const existing = deferredExportsByNamespace[namespace] ?? { filePath, entries: [] };
         for (const e of exports) existing.entries.push({ type: e.type, name: e.name });
         deferredExportsByNamespace[namespace] = existing;
+      }
+    }
+
+    // Fetch curated bundles server-to-server and merge into hydration state.
+    if (Array.isArray(body.curatedBundles) && body.curatedBundles.length > 0) {
+      for (const bundle of body.curatedBundles) {
+        try {
+          const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version);
+          for (const doc of curatedDocs) {
+            documentsForHydration.push(doc);
+          }
+        } catch (err) {
+          if (err instanceof CuratedBundleUnavailableError) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: 'curated_bundle_unavailable',
+                bundleId: err.bundleId,
+                version: err.version,
+                upstreamStatus: err.status
+              }),
+              { status: 502, headers: { 'Content-Type': 'application/json' } }
+            );
+          }
+          throw err;
+        }
       }
     }
 
