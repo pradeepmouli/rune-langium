@@ -424,27 +424,61 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
   }
 }
 
+async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
+  try {
+    // Register each document's serialized model with the deferred-model store
+    // (same mechanism used by the curated-corpus path: deferredModelJson map).
+    for (const doc of req.documents) {
+      deferredModelJson.set(doc.uri, doc.serializedModel);
+    }
+    // Register exports so RuneDslIndexManager can resolve cross-namespace refs.
+    for (const [namespace, exports] of Object.entries(req.exportsByNamespace)) {
+      const uri = URI.parse(`file:///${namespace.replace(/\./g, '/')}.rune`);
+      const descriptions: AstNodeDescription[] = exports.map((e) => ({
+        type: e.type,
+        name: e.name,
+        path: e.path,
+        documentUri: uri
+      }));
+      indexManager.registerExports(uri, descriptions);
+    }
+    return { type: 'hydrateResult', id: req.id, ok: true };
+  } catch (err) {
+    return {
+      type: 'hydrateResult',
+      id: req.id,
+      ok: false,
+      error: err instanceof Error ? err.message : String(err)
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Exported dispatcher — testable in Node without spinning up a Web Worker
+// ---------------------------------------------------------------------------
+
+export async function dispatchWorkerRequest(req: WorkerRequest): Promise<WorkerResponse> {
+  switch (req.type) {
+    case 'parse':
+      return handleParse(req);
+    case 'parseWorkspace':
+      return handleParseWorkspace(req);
+    case 'linkDocument':
+      return handleLinkDocument(req);
+    case 'hydrate':
+      return handleHydrate(req);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Register message listener (only when running as a worker)
 // ---------------------------------------------------------------------------
 
-if (typeof self !== 'undefined' && typeof self.onmessage !== 'undefined') {
-  self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
-    const req = event.data;
-    let response: WorkerResponse;
-
-    if (req.type === 'parse') {
-      response = await handleParse(req);
-    } else if (req.type === 'parseWorkspace') {
-      response = await handleParseWorkspace(req);
-    } else if (req.type === 'linkDocument') {
-      response = await handleLinkDocument(req);
-    } else {
-      return;
-    }
-
+if (typeof self !== 'undefined' && typeof self.postMessage === 'function') {
+  self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
+    const response = await dispatchWorkerRequest(e.data);
     self.postMessage(response);
-  };
+  });
 }
 
 export function isLinkDocumentResponse(value: unknown): value is LinkDocumentResponse {
