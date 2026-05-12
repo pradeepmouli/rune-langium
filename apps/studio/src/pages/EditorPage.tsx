@@ -44,6 +44,7 @@ import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
+import { LspConnectionBadge } from '../components/LspConnectionBadge.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -1355,6 +1356,7 @@ export function EditorPage({
             {totalErrors} err / {totalWarnings} warn
           </span>
         )}
+        {transportState && <LspConnectionBadge state={transportState} onRetry={onReconnect} />}
         {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
       </footer>
 
