@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: FSL-1.1-ALv2
+# Copyright (c) 2026 Pradeep Mouli
+#
+# Cloudflare Pages project config for the Rune Studio.
+# Pages serves apps/studio/dist as static assets; functions in
+# apps/studio/functions/ are deployed alongside (see spec 019 + 018).
+
+name = "rune-studio"
+compatibility_date = "2025-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
