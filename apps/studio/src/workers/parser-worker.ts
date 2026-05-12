@@ -16,13 +16,7 @@ import {
   type RosettaModel
 } from '@rune-langium/core';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
-import {
-  URI,
-  EmptyFileSystem,
-  type AstNode,
-  type AstNodeDescription,
-  type LangiumDocument
-} from 'langium';
+import { URI, EmptyFileSystem, type AstNode, type AstNodeDescription, type LangiumDocument } from 'langium';
 
 export interface ParseRequest {
   type: 'parse';
@@ -58,7 +52,28 @@ export interface LinkDocumentResponse {
   newModels: RosettaModel[];
 }
 
-export type WorkerRequest = ParseRequest | ParseWorkspaceRequest | LinkDocumentRequest;
+export interface HydrateRequest {
+  type: 'hydrate';
+  id: string;
+  /** Documents to register with the deferred-model provider. */
+  documents: Array<{
+    uri: string;
+    content: string;
+    /** Serialized langium AST as JSON string (from JsonSerializer.serialize). */
+    serializedModel: string;
+  }>;
+  /** Pre-computed export descriptions per namespace, for RuneDslIndexManager.registerExports. */
+  exportsByNamespace: Record<string, Array<{ type: string; name: string; path: string }>>;
+}
+
+export interface HydrateResponse {
+  type: 'hydrateResult';
+  id: string;
+  ok: boolean;
+  error?: string;
+}
+
+export type WorkerRequest = ParseRequest | ParseWorkspaceRequest | LinkDocumentRequest | HydrateRequest;
 
 export interface ParseResponse {
   type: 'parseResult';
@@ -82,7 +97,7 @@ export interface ParseWorkspaceResponse {
   deferredExports: DeferredExportEntry[];
 }
 
-export type WorkerResponse = ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse;
+export type WorkerResponse = ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse;
 
 // Deferred corpus model map: URI string → raw JSON (never deserialized until needed).
 // Populated by handleParseWorkspace, consumed lazily by RuneDslLinker.loadAstNode
@@ -147,9 +162,7 @@ export function isParseWorkspaceResponse(value: unknown): value is ParseWorkspac
   }
   if (
     !Array.isArray(value.parsedModels) ||
-    !value.parsedModels.every(
-      (entry) => isRecord(entry) && typeof entry.filePath === 'string' && isRecord(entry.model)
-    )
+    !value.parsedModels.every((entry) => isRecord(entry) && typeof entry.filePath === 'string' && isRecord(entry.model))
   ) {
     return false;
   }
@@ -212,10 +225,7 @@ function preserveCstText(model: any): void {
 
 async function handleParse(req: ParseRequest): Promise<ParseResponse> {
   try {
-    const document = await factory.fromString(
-      req.content,
-      URI.parse(req.uri ?? 'inmemory:///model.rosetta')
-    );
+    const document = await factory.fromString(req.content, URI.parse(req.uri ?? 'inmemory:///model.rosetta'));
     await builder.build([document], { validation: false, eagerLinking: false });
     const errors: string[] = [];
     if (document.parseResult.parserErrors.length > 0) {
@@ -331,9 +341,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
       if (document.parseResult.parserErrors.length > 0) {
         const docUri = document.uri?.toString() ?? '';
         const fileName = uriToFileName.get(docUri) ?? docUri;
-        errors[fileName] = document.parseResult.parserErrors.map(
-          (e: { message: string }) => e.message
-        );
+        errors[fileName] = document.parseResult.parserErrors.map((e: { message: string }) => e.message);
       }
     }
 
@@ -352,9 +360,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
       error
     });
     const detail =
-      error instanceof Error
-        ? [error.message, error.stack].filter(Boolean).join('\n')
-        : 'Workspace parsing failed.';
+      error instanceof Error ? [error.message, error.stack].filter(Boolean).join('\n') : 'Workspace parsing failed.';
     return {
       type: 'parseWorkspaceResult',
       id: req.id,
