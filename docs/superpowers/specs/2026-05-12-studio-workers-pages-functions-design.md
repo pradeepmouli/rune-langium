@@ -74,14 +74,21 @@ A developer opens the studio and loads a workspace containing 50+ Rune files plu
 
 **Route**: `POST /api/parse` (Pages Function at `apps/studio/functions/api/parse.ts`).
 
+**Architectural directive: no browser-side corpus parsing.** Curated CDM corpus content is never parsed or unpacked in the browser. The studio sends **bundle metadata** (id + version) for any curated imports; the `/api/parse` Pages Function fetches the corresponding archives from the curated-mirror Worker (`GET /curated/<id>/archives/<version>.tar.gz` or `latest.tar.gz`), unpacks server-side, and includes the pre-serialized documents in the response's `hydrationState`. The browser never sees `.tar.gz` archives, never untars, never deserializes corpus archives — it only consumes the JSON-shaped hydrationState the Pages Function returns.
+
 **Request**:
 
 ```ts
 type ParseRequest = {
+  /** User-authored Rune source files (the only thing the browser sends as content). */
   files: Array<{ name: string; content: string }>;
-  // Optional: which curated documents the workspace imports. The server
-  // pre-loads these. Empty array means use server defaults.
-  curated?: Array<{ namespace: string; modelJson: CuratedSerializedDocument['modelJson'] }>;
+  /** Curated bundle metadata the workspace imports. Server fetches archives from curated-mirror. */
+  curatedBundles?: Array<{
+    /** CuratedModelId — must be in CURATED_MODEL_IDS. */
+    id: string;
+    /** Specific version (e.g. "6.2.3") or "latest". */
+    version: string;
+  }>;
 };
 ```
 
@@ -90,22 +97,28 @@ type ParseRequest = {
 ```ts
 type ParseResponse = {
   ok: true;
-  models: RosettaModel[];                       // top-level models keyed by namespace
-  parsedModels: Array<{ filePath: string; model: RosettaModel }>;
-  exports: Array<{ filePath: string; namespace: string; exports: Array<{ type: string; name: string }> }>;
-  errors: string[];                             // parse errors (non-fatal)
-  hydrationState: HydrationBlob;                // see below
+  /** Empty — Langium AST nodes have circular $container refs and cannot be JSON-serialized.
+   *  Consumers reconstruct models from hydrationState.documents[].serializedModel as needed. */
+  models: [];
+  /** Per-namespace export summary for the studio UI (graph nodes etc). */
+  deferredExports: Array<{ filePath: string; namespace: string; exports: Array<{ type: string; name: string }> }>;
+  /** Parser errors keyed by source filePath. */
+  errors: Record<string, string[]>;
+  hydrationState: HydrationBlob;
 };
 
 type HydrationBlob = {
+  /** Includes BOTH user-authored files (parsed from request) AND curated corpus files (fetched server-side from curated-mirror). */
   documents: Array<{
     uri: string;
-    content: string;
-    serializedModel: CuratedSerializedDocument['modelJson'];
+    content: string;                                          // user files: original request content. Corpus files: source content from the archive (or empty if archive only ships modelJson).
+    serializedModel: CuratedSerializedDocument['modelJson'];  // JSON-serialized Langium AST.
+    exports: Array<{ type: string; name: string; path: string }>;
   }>;
-  exportsByNamespace: Record<string, Array<{ type: string; name: string; path: string }>>;
 };
 ```
+
+The `hydrationState.documents` array is a flat merge of user files and corpus files. The browser worker hydrates from this array uniformly — it has no way to tell (and no need to know) which entries came from user content versus the curated-mirror server-to-server fetch.
 
 **Error response** (JSON envelope, same shape as `/api/codegen`):
 
@@ -199,6 +212,19 @@ The hydration mechanism reuses the existing `DeferredModelProvider` (from `packa
 | Network unreachable | Same as 5xx — fall through to browser worker |
 | `/api/parse` returns 200 but `hydrate` postMessage to browser worker fails | Studio discards the server response and retries via the browser worker |
 | Hydration succeeds but later `linkDocument` request fails | Standard error path — surfaced through existing parse-store diagnostics |
+
+### 3.6 Studio-side corpus path cleanup
+
+The "no browser-side corpus parsing" directive collapses several existing studio surfaces:
+
+| File | Today | After |
+|------|-------|-------|
+| `apps/studio/src/store/model-store.ts` | Fetches curated archive via `loadCuratedModel`, walks unpacked files, populates `WorkspaceFile.serializedModelJson` per file. | Tracks bundle metadata only (`{ id, version }` per imported bundle). Does NOT fetch the archive. |
+| `apps/studio/src/services/curated-loader.ts` | Unpacks `.tar.gz`, parses manifests, returns `WorkspaceFile[]` with pre-serialized model JSON populated. | Removed (or shrunk to bundle-metadata utilities). |
+| `apps/studio/src/services/workspace.ts` (`parseWorkspaceFiles`) | Builds worker request with `serializedModelJson` + `exports` metadata per file. | Splits the workspace: user files (no `serializedModelJson`) and curated bundle IDs. Calls `parseWorkspaceViaRouter({ files: userFiles, curatedBundles })`. |
+| `apps/studio/src/workers/parser-worker.ts` (`handleParseWorkspace`) | Honors `serializedModelJson` pass-through — registers pre-parsed entries directly into `deferredModelJson`. | Pass-through path stays as a transition shim during Phase 0 but is removed in a follow-up once all callers route via the server. |
+
+The `WorkspaceFile` type may also lose `serializedModelJson` and `exports` fields in the future — for v1 we keep them on the type (transition compat) but production code paths no longer populate them.
 
 ### 3.5 Acceptance scenarios
 
@@ -339,6 +365,8 @@ No simplification in this spec. Removing or simplifying auth is reversible later
 | Risk | Mitigation |
 |------|-----------|
 | Hydration blob may not capture all langium state needed for downstream `linkDocument` requests. | Phase 0 includes a Playwright test that exercises `parseWorkspace server-side → add new file → linkDocument browser-side` against the CDM corpus. |
+| Server-to-server fetch from `/api/parse` to curated-mirror Worker may fail (curated-mirror outage, archive missing for the requested version). | The Pages Function returns a structured `{ ok: false, error: "curated_bundle_unavailable", bundleId, version }` 502/503 on curated-mirror failures. Studio falls back to the browser parse-worker path (which today still has the `serializedModelJson` pass-through during the transition). Once that shim is removed, the failure mode becomes "user must retry when curated-mirror is back" — same posture as the rest of the studio (it doesn't function offline either, per spec 018). |
+| Tar.gz unpacking inside a Cloudflare Workers runtime (Pages Function) — different from Node.js stream APIs. | The curated-mirror Worker already does this with `pako` (see `apps/curated-mirror-worker/src/pako.d.ts`); the same library works in Pages Functions under `nodejs_compat`. Reuse via shared package, or duplicate the small parse logic in `apps/studio/functions/lib/`. |
 | Pages Functions WebSocket Hibernation may behave differently from the standalone CF Worker. | Phase 1 runs `apps/lsp-worker/test/*` suites against the new endpoint. Hibernation is a Workers-runtime feature; should be identical, but we verify rather than assume. |
 | Network unavailability fully disables LSP. | Phase 2 ships the `Language services unavailable` UI state. Editor still loads, edits still save, basic CodeMirror highlighting works. We don't lose user data or productivity — only semantic LSP features. |
 | Same-origin Pages Function LSP becomes a single point of failure. | Cloudflare Pages 99.99% SLA. WebSocket Hibernation reduces idle cost. Operational monitoring via Cloudflare Analytics. The in-browser LSP code remains in git; if reliability becomes a real concern, resurrection is a follow-up spec, not a code rewrite. |

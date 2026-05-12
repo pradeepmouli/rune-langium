@@ -1073,6 +1073,364 @@ git add apps/studio/src/services/workspace.ts apps/studio/test/services/workspac
 git commit -m "feat(studio): route parseWorkspace to /api/parse with browser fallback (019 Phase 0)"
 ```
 
+## Task 0.5a: Extend `/api/parse` to fetch curated bundles server-to-server
+
+**Files:**
+- Modify: `apps/studio/functions/api/parse.ts`
+- Modify: `apps/studio/functions/test/parse.test.ts`
+- (Possibly) Create: `apps/studio/functions/lib/curated-fetch.ts` — tar.gz unpack helper
+
+The "no browser-side corpus parsing" directive added in spec 019 §3.1 / §3.6 requires `/api/parse` to accept `curatedBundles: [{ id, version }]` and fetch the corresponding archives from the curated-mirror Worker. The studio never sends pre-serialized corpus content — it only sends bundle metadata + user files.
+
+- [ ] **Step 1: Write the failing tests** for the new contract
+
+Add to `apps/studio/functions/test/parse.test.ts` (preserve existing tests):
+
+```ts
+describe('POST /api/parse — curatedBundles', () => {
+  it('accepts an empty curatedBundles array', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ name: 'x.rune', content: SIMPLE_RUNE }],
+        curatedBundles: []
+      })
+    } as never);
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 502 with structured error when a curated bundle is unavailable', async () => {
+    // The Pages Function should attempt to fetch from curated-mirror.
+    // Mock global.fetch to simulate failure.
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue(new Response('not found', { status: 404 }));
+
+    try {
+      const res = await onRequestPost({
+        request: makeRequest({
+          files: [{ name: 'x.rune', content: SIMPLE_RUNE }],
+          curatedBundles: [{ id: 'cdm', version: 'latest' }]
+        })
+      } as never);
+      expect(res.status).toBe(502);
+      const body = await res.json() as { ok: boolean; error: string; bundleId?: string };
+      expect(body.ok).toBe(false);
+      expect(body.error).toMatch(/curated_bundle_unavailable/);
+      expect(body.bundleId).toBe('cdm');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('merges curated bundle documents into hydrationState on success', async () => {
+    const originalFetch = global.fetch;
+    // Construct a minimal pako-gzipped tar archive with one document, or mock
+    // the unpacker. For unit-test simplicity, mock the curated-fetch helper
+    // (export it from lib/curated-fetch.ts so tests can stub it). The
+    // alternative is to construct a real tar.gz fixture — feasible but
+    // adds complexity.
+    // The simplest path: have curated-fetch.ts export a function we can vi.spyOn.
+    // ...
+
+    // Assert that the response's hydrationState.documents includes:
+    //   - The user file (x.rune)
+    //   - At least one corpus document from the mocked bundle
+  });
+});
+```
+
+The third test (merging) is complex to assert without a real tar.gz fixture. **Either** spy on the curated-fetch helper (recommended), **or** construct a minimal tar.gz fixture using `pako` directly in the test setup. Discuss with the controller if the fixture approach is preferred — for v1 the spy approach is sufficient.
+
+- [ ] **Step 2: Run failing test**
+
+```bash
+pnpm --filter @rune-langium/studio test -- functions/test/parse.test.ts
+```
+
+Expected: the new tests fail because `curatedBundles` handling and the 502 path don't exist yet.
+
+- [ ] **Step 3: Implement curated-fetch helper**
+
+Create `apps/studio/functions/lib/curated-fetch.ts`:
+
+```ts
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
+import { inflate } from 'pako';
+
+const CURATED_MIRROR_BASE = 'https://www.daikonic.dev/curated';
+
+export interface CuratedDocument {
+  uri: string;
+  content: string;
+  serializedModel: string;  // JSON string from the bundle's modelJson sidecar
+  exports: Array<{ type: string; name: string; path: string }>;
+}
+
+/**
+ * Fetches a curated bundle archive from the curated-mirror Worker and
+ * extracts the per-document serialized model JSON.
+ *
+ * Throws if the bundle is unavailable (network error, 4xx/5xx from mirror),
+ * if the archive is malformed, or if no documents are found.
+ */
+export async function fetchCuratedBundle(
+  id: string,
+  version: string
+): Promise<CuratedDocument[]> {
+  const url = version === 'latest'
+    ? `${CURATED_MIRROR_BASE}/${id}/latest.tar.gz`
+    : `${CURATED_MIRROR_BASE}/${id}/archives/${version}.tar.gz`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw Object.assign(new Error(`curated_bundle_unavailable`), {
+      bundleId: id, version, status: res.status
+    });
+  }
+
+  const gzBuffer = new Uint8Array(await res.arrayBuffer());
+  const tarBuffer = inflate(gzBuffer);
+
+  // Walk the tar entries. Each curated bundle ships .rosetta source files
+  // AND .modelJson sidecar files at predictable paths.
+  // See apps/curated-mirror-worker/src/publisher.ts for the layout.
+  // ...
+  // (Implementation detail: use the same tar-walking logic the curated
+  // mirror or curated-loader uses. Pseudocode here; the real impl reuses
+  // existing helpers where possible.)
+
+  return /* parsed CuratedDocument[] */ [];
+}
+```
+
+The actual tar-walking implementation can either:
+- Lift code from `apps/studio/src/services/curated-loader.ts` (currently does the same parsing in the browser).
+- Lift from `apps/curated-mirror-worker/src/publisher.ts` (does the inverse — packs the archive — but has the file layout reference).
+- Use a minimal tar parser (the `pako` library handles gzip; tar is a simple block format).
+
+Whichever path: keep the logic **identical** to what the browser-side `curated-loader.ts` produces so the hydration documents are byte-compatible with what the browser worker expects.
+
+- [ ] **Step 4: Update `apps/studio/functions/api/parse.ts`**
+
+Extend the request type to accept `curatedBundles`. After parsing user files, fetch each curated bundle via `fetchCuratedBundle`, merge the resulting documents into `documentsForHydration`. On curated-mirror failure return 502 with structured error envelope `{ ok: false, error: 'curated_bundle_unavailable', bundleId, version }`.
+
+Specifically modify the section that builds `documentsForHydration`:
+
+```ts
+// Existing user-file loop produces documentsForHydration entries.
+
+// NEW: fetch curated bundles server-to-server.
+if (Array.isArray(body.curatedBundles)) {
+  for (const bundle of body.curatedBundles) {
+    try {
+      const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version);
+      for (const doc of curatedDocs) {
+        documentsForHydration.push(doc);
+      }
+    } catch (err) {
+      const e = err as { bundleId?: string; version?: string; status?: number; message: string };
+      return new Response(JSON.stringify({
+        ok: false,
+        error: 'curated_bundle_unavailable',
+        bundleId: e.bundleId ?? bundle.id,
+        version: e.version ?? bundle.version,
+        upstreamStatus: e.status
+      }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+}
+```
+
+- [ ] **Step 5: Run tests + regression**
+
+```bash
+pnpm --filter @rune-langium/studio test -- functions/test/parse.test.ts
+pnpm --filter @rune-langium/studio test
+```
+
+Both pass.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add apps/studio/functions/api/parse.ts apps/studio/functions/test/parse.test.ts apps/studio/functions/lib/curated-fetch.ts
+git commit -m "feat(studio): /api/parse fetches curated bundles server-to-server (019 Phase 0)"
+```
+
+## Task 0.5b: Update `parseWorkspaceFiles` to delegate to `parseWorkspaceViaRouter`
+
+**Files:**
+- Modify: `apps/studio/src/services/workspace.ts`
+- Modify: `apps/studio/test/services/workspace.test.ts` (if exists)
+
+`parseWorkspaceFiles` currently routes to the browser parse-worker with `serializedModelJson` pass-through. After this task it delegates to `parseWorkspaceViaRouter`, splitting the workspace into user files (sent as content) and curated bundles (sent as metadata).
+
+- [ ] **Step 1: Read current `parseWorkspaceFiles` shape**
+
+```bash
+grep -n "parseWorkspaceFiles\|WorkspaceFile " apps/studio/src/services/workspace.ts | head -10
+```
+
+Note the `WorkspaceFile` shape — at minimum has `path`, `content`. May have `serializedModelJson` (pre-parsed corpus marker) and `exports`. Files WITH `serializedModelJson` are curated corpus entries; files WITHOUT are user-authored.
+
+The studio also needs to know **which curated bundle** each curated file belongs to (id + version). If this metadata isn't on `WorkspaceFile`, it lives on the workspace store (or `model-store.ts`). Find it before continuing.
+
+- [ ] **Step 2: Update `parseWorkspaceFiles`**
+
+```ts
+export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<ParseWorkspaceFilesResult> {
+  if (files.length === 0) {
+    return { models: [], parsedModels: [], errors: new Map(), parseMode: 'router' };
+  }
+
+  // Split: user files (no serializedModelJson) go as content; curated bundles
+  // (have serializedModelJson) become curatedBundles metadata.
+  const userFiles = files
+    .filter((f) => !f.serializedModelJson)
+    .map((f) => ({ name: f.path, content: f.content }));
+
+  // Derive curated bundles from the workspace's curated imports. Source TBD —
+  // either from a sidecar field on WorkspaceFile or from a separate workspace
+  // metadata store. For Task 0.5b, look at what model-store.ts knows about
+  // active bundles and surface that here.
+  const curatedBundles: Array<{ id: string; version: string }> = collectCuratedBundlesFromWorkspace(files);
+
+  try {
+    const response = await parseWorkspaceViaRouter(userFiles, { curatedBundles });
+    return {
+      models: response.models,
+      parsedModels: response.parsedModels,
+      errors: mapErrors(response.errors),
+      parseMode: 'router',
+      deferredExports: response.deferredExports
+    };
+  } catch (error) {
+    console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
+    return parseWorkspaceFilesOnMainThread(files, {
+      parseMode: 'main-thread-fallback',
+      fallbackMessage: formatWorkerFallbackMessage(error)
+    });
+  }
+}
+```
+
+The signature of `parseWorkspaceViaRouter` from Task 0.5 was `(files: Array<{ name, content }>) => Promise<ParseWorkspaceResponse>`. Extend it to accept an optional second argument:
+
+```ts
+export async function parseWorkspaceViaRouter(
+  files: Array<{ name: string; content: string }>,
+  options: { curatedBundles?: Array<{ id: string; version: string }> } = {}
+): Promise<ParseWorkspaceResponse>
+```
+
+The router POSTs `{ files, curatedBundles: options.curatedBundles ?? [] }` to `/api/parse`.
+
+- [ ] **Step 3: Add `collectCuratedBundlesFromWorkspace`**
+
+A small helper that walks the workspace files and emits unique `{ id, version }` entries. Source depends on where curated metadata lives in the studio today. Read `apps/studio/src/store/model-store.ts` for the canonical answer.
+
+If the metadata lives in the `WorkspaceFile.serializedModelJson` itself (each entry tagged with bundle id/version), iterate and dedupe. If it lives in a separate store, read it from there.
+
+- [ ] **Step 4: Run tests + regression**
+
+```bash
+pnpm --filter @rune-langium/studio test
+```
+
+If any tests fail because they assert on `parseMode: 'worker'`, update them to expect `'router'` (or whatever new value you chose).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/studio/src/services/workspace.ts apps/studio/test/services
+git commit -m "feat(studio): parseWorkspaceFiles delegates to /api/parse via router (019 Phase 0)"
+```
+
+## Task 0.5c: Trim `model-store.ts` and `curated-loader.ts` to bundle-metadata-only
+
+**Files:**
+- Modify: `apps/studio/src/store/model-store.ts`
+- Modify: `apps/studio/src/services/curated-loader.ts` (possibly delete)
+
+Per the directive, the studio no longer fetches or unpacks curated archives in-browser. It only tracks which bundle IDs + versions a workspace imports.
+
+- [ ] **Step 1: Identify the in-browser fetch/unpack code path**
+
+```bash
+grep -nE "loadCuratedModel|fetchCurated|curated-mirror|untar|inflate" apps/studio/src/store/model-store.ts apps/studio/src/services/curated-loader.ts
+```
+
+- [ ] **Step 2: Refactor `loadCuratedModel` (or equivalent) to populate bundle metadata only**
+
+Replace the archive fetch + unpack + per-file population with: track the bundle's `{ id, version }` in the workspace's curated-imports list. The studio store carries this metadata; `parseWorkspaceFiles` reads it and passes to `parseWorkspaceViaRouter`.
+
+The exact shape depends on what `model-store.ts` already exposes. The minimal change: where it previously called `curated-loader` to get `WorkspaceFile[]` with `serializedModelJson` populated, now it appends `{ id, version }` to an `importedBundles` array on the workspace store.
+
+- [ ] **Step 3: Delete or shrink `curated-loader.ts`**
+
+If `curated-loader.ts` was solely an unpacker for the in-browser path and has no other callers, delete it. If it has bundle-metadata utilities (manifest parsing, version validation) that are still useful, keep those.
+
+```bash
+grep -rn "curated-loader" apps/studio/src/ apps/studio/test/
+```
+
+Verify no orphan imports. Delete cleanly.
+
+- [ ] **Step 4: Verify the studio still loads a curated workspace end-to-end**
+
+This is the integration test. With Task 0.5a (server fetch) + Task 0.5b (router delegation) + Task 0.5c (browser cleanup), loading a workspace with the CDM corpus should:
+- Studio sends `{ files: userFiles, curatedBundles: [{ id: 'cdm', version: 'latest' }] }` to `/api/parse`.
+- Server fetches the CDM bundle from curated-mirror, parses, returns hydrationState.
+- Browser hydrates from the response.
+- No archive ever touches the browser.
+
+Verify by running the studio locally:
+
+```bash
+pnpm --filter @rune-langium/studio dev &
+pnpm --filter @rune-langium/studio dev:pages &
+# Open http://localhost:8788/, load a workspace that imports CDM, verify it works.
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/studio/src/store/model-store.ts apps/studio/src/services
+git commit -m "refactor(studio): model-store tracks bundle metadata only; remove curated-loader (019 Phase 0)"
+```
+
+## Task 0.5d: Deprecate `serializedModelJson` pass-through in `handleParseWorkspace`
+
+**Files:**
+- Modify: `apps/studio/src/workers/parser-worker.ts`
+
+`handleParseWorkspace` still honors the `serializedModelJson` field on incoming files as a fast-path that skips parsing. After Task 0.5b, production no longer populates this field — but the path stays as a transition shim. This task marks the path deprecated for removal in a follow-up spec.
+
+- [ ] **Step 1: Add a deprecation comment**
+
+In `apps/studio/src/workers/parser-worker.ts`, find the `if (file.serializedModelJson)` branch inside `handleParseWorkspace`. Add a comment above it:
+
+```ts
+// DEPRECATED (019 Phase 0): pre-parsed corpus content no longer flows through
+// this path. The server-side /api/parse Pages Function fetches curated bundles
+// from curated-mirror directly and returns them in hydrationState. This branch
+// remains as a transition shim during 019 rollout; remove in a follow-up spec
+// once the router is the only production path for parseWorkspace.
+if (file.serializedModelJson) {
+  // existing fast-path
+}
+```
+
+- [ ] **Step 2: No test changes needed** — the branch still works for any caller that still uses it.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/studio/src/workers/parser-worker.ts
+git commit -m "chore(studio): mark serializedModelJson pass-through deprecated (019 Phase 0)"
+```
+
 ## Task 0.6: e2e — parseWorkspace → server → hydrate → linkDocument
 
 **Files:**
