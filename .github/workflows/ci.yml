@@ -88,10 +88,11 @@ jobs:
         run: pnpm audit --audit-level moderate
         continue-on-error: true
 
-      - name: Check Bundle Size
-        run: pnpm dlx size-limit
+      - name: Check Studio Bundle Size (019 Phase 2)
+        run: pnpm --filter @rune-langium/studio run bundle-size
         if: matrix.node-version == '22.x'
-        continue-on-error: true
+        env:
+          STUDIO_MAX_BUNDLE_BYTES: ${{ vars.STUDIO_MAX_BUNDLE_BYTES }}
 
   # ---------------------------------------------------------------------------
   # studio-a11y: axe-core gate against the studio's main routes (T088 / T115).

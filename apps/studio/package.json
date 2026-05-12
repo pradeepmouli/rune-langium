@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "bundle-size": "node scripts/check-bundle-size.mjs",
     "check-env": "node scripts/check-env.mjs",
     "clean": "rm -rf dist",
     "dev": "vite",
