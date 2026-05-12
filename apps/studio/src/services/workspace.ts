@@ -6,7 +6,8 @@
  * and cross-file resolution for the studio app (T083, T098, T100, T102).
  */
 
-import { parse, parseWorkspace, type RosettaModel } from '@rune-langium/core';
+import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import type {
   WorkerRequest,
@@ -470,20 +471,47 @@ export async function parseWorkspaceViaRouter(
       return browserParseImpl(files);
     }
 
-    // Hydrate the browser worker with the server-parsed documents + exports.
-    await workerRequest({
-      type: 'hydrate',
-      id: `hydrate:${Date.now()}`,
-      documents: data.hydrationState.documents
-    });
+    // Deserialize hydration documents into RosettaModel instances for downstream
+    // consumers (e.g. the visual editor's graph view). The server cannot send
+    // Langium ASTs directly (circular $container refs break JSON), but the
+    // hydration state includes serializedModel JSON strings that Langium's
+    // JsonSerializer can round-trip back to full AST nodes.
+    // This step is done before hydrating the worker so that model data is
+    // always returned even if the worker is unavailable (e.g. in tests).
+    const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
+    const models: RosettaModel[] = [];
+    const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+    for (const doc of data.hydrationState.documents) {
+      try {
+        const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
+        models.push(model);
+        // Derive filePath from the URI (strip "file:///").
+        const filePath = doc.uri.replace(/^file:\/\/\//, '');
+        parsedModels.push({ filePath, model });
+      } catch (err) {
+        console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
+      }
+    }
+
+    // Hydrate the browser worker with the server-parsed documents + exports so
+    // that subsequent linkDocument calls can resolve cross-references.
+    // A hydration failure is non-fatal: the graph view will still render from
+    // the deserialized models above; only cross-ref resolution will be degraded.
+    try {
+      await workerRequest({
+        type: 'hydrate',
+        id: `hydrate:${Date.now()}`,
+        documents: data.hydrationState.documents
+      });
+    } catch (err) {
+      console.warn('[workspace] browser worker hydration failed (cross-ref resolution may be degraded):', err);
+    }
 
     return {
       type: 'parseWorkspaceResult',
       id: `routed:${Date.now()}`,
-      models: data.models,
-      // Server cannot send Langium ASTs (circular $container refs).
-      // Consumers that need parsedModels should reconstruct from hydrationState if needed.
-      parsedModels: [],
+      models,
+      parsedModels,
       deferredExports: data.deferredExports,
       errors: data.errors
     };

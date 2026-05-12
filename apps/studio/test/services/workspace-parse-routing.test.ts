@@ -109,6 +109,51 @@ describe('parseWorkspace routing', () => {
 
     expect(browserSpy).toHaveBeenCalled();
   });
+
+  it('deserializes hydration models so router result populates models[]', async () => {
+    // Build a real serialized model using Langium's JsonSerializer so the
+    // deserialization path in parseWorkspaceViaRouter has a valid fixture.
+    // Use the .rosetta extension since that is the registered grammar extension.
+    const { createRuneDslServices } = await import('@rune-langium/core');
+    const { EmptyFileSystem, URI } = await import('langium');
+    const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
+    const content = 'namespace x\ntype T:\n  a string (1..1)\n';
+    const doc = services.shared.workspace.LangiumDocumentFactory.fromString(content, URI.parse('file:///x.rosetta'));
+    await services.shared.workspace.DocumentBuilder.build([doc], { validation: false });
+    const serializedModel = services.serializer.JsonSerializer.serialize(doc.parseResult.value);
+
+    const fetchMock = vi.mocked(global.fetch);
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          models: [],
+          deferredExports: [],
+          errors: {},
+          hydrationState: {
+            documents: [
+              {
+                uri: 'file:///x.rosetta',
+                content,
+                serializedModel,
+                exports: [{ type: 'Data', name: 'T', path: 'x.T' }]
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    // Stub the browser-worker hydrate to avoid touching a real Worker.
+    setBrowserParseImpl(async () => stubParseResponse);
+
+    const result = await parseWorkspaceViaRouter([{ name: 'x.rosetta', content }]);
+
+    expect(result.models).toHaveLength(1);
+    expect(result.parsedModels).toHaveLength(1);
+    expect(result.parsedModels[0]!.filePath).toBe('x.rosetta');
+  });
 });
 
 describe('parseWorkspaceFiles — curated bundle collection', () => {
