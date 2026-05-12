@@ -13,13 +13,11 @@ import type {
   ParseResponse,
   ParseWorkspaceResponse,
   LinkDocumentRequest,
-  LinkDocumentResponse
+  LinkDocumentResponse,
+  HydrateRequest,
+  HydrateResponse
 } from '../workers/parser-worker.js';
-import {
-  isParseResponse,
-  isParseWorkspaceResponse,
-  isLinkDocumentResponse
-} from '../workers/parser-worker.js';
+import { isParseResponse, isParseWorkspaceResponse, isLinkDocumentResponse } from '../workers/parser-worker.js';
 
 export interface WorkspaceFile {
   name: string;
@@ -157,13 +155,12 @@ function resetWorkerState(nextError: Error): void {
 }
 
 function workerRequest(msg: Extract<WorkerRequest, { type: 'parse' }>): Promise<ParseResponse>;
-function workerRequest(
-  msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>
-): Promise<ParseWorkspaceResponse>;
+function workerRequest(msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>): Promise<ParseWorkspaceResponse>;
 function workerRequest(msg: LinkDocumentRequest): Promise<LinkDocumentResponse>;
+function workerRequest(msg: HydrateRequest): Promise<HydrateResponse>;
 function workerRequest(
   msg: WorkerRequest
-): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse> {
+): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse> {
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (!w) {
@@ -208,6 +205,18 @@ function workerRequest(
           resolve(e.data);
           return;
         }
+        if (msg.type === 'hydrate') {
+          // HydrateResponse: { type: 'hydrateResult', id, ok, error? }
+          const data = e.data as HydrateResponse;
+          if (data.type !== 'hydrateResult') {
+            const error = new Error('Worker returned an invalid hydrate response');
+            resetWorkerState(error);
+            reject(error);
+            return;
+          }
+          resolve(data);
+          return;
+        }
         if (!isParseWorkspaceResponse(e.data)) {
           const error = new Error('Worker returned an invalid workspace parse response');
           resetWorkerState(error);
@@ -240,9 +249,7 @@ function workerRequest(
       clearPendingTimeout();
       cleanupListeners();
       const workerError =
-        error instanceof Error
-          ? error
-          : new Error(error ? String(error) : 'Worker postMessage failed');
+        error instanceof Error ? error : new Error(error ? String(error) : 'Worker postMessage failed');
       resetWorkerState(workerError);
       reject(workerError);
       return;
@@ -308,9 +315,7 @@ export async function parseFile(content: string, uri?: string): Promise<ParseFil
  * Tries the web worker first; falls back to main-thread parsing.
  * Supports cross-file resolution via sequential parsing (T100).
  */
-export async function parseWorkspaceFiles(
-  files: WorkspaceFile[]
-): Promise<ParseWorkspaceFilesResult> {
+export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<ParseWorkspaceFilesResult> {
   if (files.length === 0) {
     return { models: [], parsedModels: [], errors: new Map(), parseMode: 'worker' };
   }
@@ -360,6 +365,93 @@ export function _resetParserWorkerForTests(): void {
   worker = null;
   requestId = 0;
   workerInitError = null;
+}
+
+// ---------------------------------------------------------------------------
+// Server-side parse routing (019 Phase 0) — POST /api/parse with hydration
+// ---------------------------------------------------------------------------
+
+/**
+ * Default browser-worker parse implementation.
+ * Exported so tests can save and restore the original impl after injection.
+ */
+export async function _defaultBrowserParse(
+  files: Array<{ name: string; content: string }>
+): Promise<ParseWorkspaceResponse> {
+  return workerRequest({
+    type: 'parseWorkspace',
+    id: `ws:${Date.now()}`,
+    files
+  });
+}
+
+// Module-level injection point; starts pointing at the default impl.
+let browserParseImpl: (files: Array<{ name: string; content: string }>) => Promise<ParseWorkspaceResponse> =
+  _defaultBrowserParse;
+
+/**
+ * Test-only: replace the browser-worker parse implementation with a spy/stub.
+ * Call with `_defaultBrowserParse` in afterEach to restore.
+ */
+export function setBrowserParseImpl(
+  impl: (files: Array<{ name: string; content: string }>) => Promise<ParseWorkspaceResponse>
+): void {
+  browserParseImpl = impl;
+}
+
+/**
+ * Route a parseWorkspace request through the /api/parse Pages Function.
+ *
+ * 1. POSTs the file list to /api/parse.
+ * 2. On success, hydrates the browser worker with the returned hydration state
+ *    so subsequent linkDocument requests work without re-parsing locally.
+ * 3. Falls back to the browser worker on any failure (non-2xx, network error, or
+ *    when the server response signals ok:false).
+ */
+export async function parseWorkspaceViaRouter(
+  files: Array<{ name: string; content: string }>
+): Promise<ParseWorkspaceResponse> {
+  try {
+    const response = await fetch('/api/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files })
+    });
+    if (!response.ok) {
+      return browserParseImpl(files);
+    }
+    const data = (await response.json()) as {
+      ok: boolean;
+      models: ParseWorkspaceResponse['models'];
+      deferredExports: ParseWorkspaceResponse['deferredExports'];
+      errors: ParseWorkspaceResponse['errors'];
+      hydrationState: { documents: HydrateRequest['documents'] };
+    };
+
+    if (!data.ok) {
+      return browserParseImpl(files);
+    }
+
+    // Hydrate the browser worker with the server-parsed documents + exports.
+    await workerRequest({
+      type: 'hydrate',
+      id: `hydrate:${Date.now()}`,
+      documents: data.hydrationState.documents
+    });
+
+    return {
+      type: 'parseWorkspaceResult',
+      id: `routed:${Date.now()}`,
+      models: data.models,
+      // Server cannot send Langium ASTs (circular $container refs).
+      // Consumers that need parsedModels should reconstruct from hydrationState if needed.
+      parsedModels: [],
+      deferredExports: data.deferredExports,
+      errors: data.errors
+    };
+  } catch {
+    return browserParseImpl(files);
+  }
 }
 
 /**
@@ -436,11 +528,7 @@ export async function readFileList(
 /**
  * Update a file's content and mark it dirty.
  */
-export function updateFileContent(
-  files: WorkspaceFile[],
-  path: string,
-  newContent: string
-): WorkspaceFile[] {
+export function updateFileContent(files: WorkspaceFile[], path: string, newContent: string): WorkspaceFile[] {
   return files.map((f) => (f.path === path ? { ...f, content: newContent, dirty: true } : f));
 }
 
@@ -476,9 +564,7 @@ const BLANK_TEMPLATE = `namespace example
  * with an existing user file. Read-only model files are ignored since they
  * live under a `[model-id]/` prefix and never shadow user-editable paths.
  */
-export function createBlankWorkspaceFile(
-  existingFiles: ReadonlyArray<WorkspaceFile>
-): WorkspaceFile {
+export function createBlankWorkspaceFile(existingFiles: ReadonlyArray<WorkspaceFile>): WorkspaceFile {
   const userPaths = new Set(existingFiles.filter((f) => !f.readOnly).map((f) => f.path));
   let candidate = 'untitled.rosetta';
   let n = 2;
@@ -500,10 +586,7 @@ import type { CachedFile, LoadedModel } from '../types/model-types.js';
  * Model files are prefixed with the model source ID to avoid path collisions.
  * Existing user files are preserved; model files are appended.
  */
-export function mergeModelFiles(
-  currentFiles: WorkspaceFile[],
-  model: LoadedModel
-): WorkspaceFile[] {
+export function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedModel): WorkspaceFile[] {
   // Remove any previous files from this model source
   const userFiles = currentFiles.filter((f) => !f.path.startsWith(`[${model.source.id}]/`));
 
