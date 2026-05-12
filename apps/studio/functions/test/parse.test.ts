@@ -102,8 +102,8 @@ describe('POST /api/parse — curatedBundles', () => {
   });
 
   it('returns 502 with structured error when a curated bundle is unavailable', async () => {
-    const originalFetch = global.fetch;
-    global.fetch = vi.fn().mockResolvedValue(new Response('not found', { status: 404 }));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response('not found', { status: 404 }));
     try {
       const res = await onRequestPost({
         request: makeRequest({
@@ -117,7 +117,7 @@ describe('POST /api/parse — curatedBundles', () => {
       expect(body.error).toMatch(/curated_bundle_unavailable/);
       expect(body.bundleId).toBe('cdm');
     } finally {
-      global.fetch = originalFetch;
+      globalThis.fetch = originalFetch;
     }
   });
 
