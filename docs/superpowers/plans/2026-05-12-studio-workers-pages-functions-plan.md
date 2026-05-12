@@ -10,7 +10,10 @@
 
 **Spec:** [`docs/superpowers/specs/2026-05-12-studio-workers-pages-functions-design.md`](../specs/2026-05-12-studio-workers-pages-functions-design.md)
 
-**Hard prerequisite:** This plan **depends on spec 018 (`codegen-additional-targets`) having been implemented**. 018 introduces `apps/studio/functions/`, `apps/studio/wrangler.toml`, and the `wrangler pages dev` local-dev tooling that 019 builds on. If 018 has not been executed, execute its plan first: [`docs/superpowers/plans/2026-05-12-codegen-additional-targets-plan.md`](2026-05-12-codegen-additional-targets-plan.md).
+**Execution order note:** This plan is **self-contained** and can run before or after spec 018 (`codegen-additional-targets`). Phase -1 below establishes the Pages Functions infrastructure (`apps/studio/functions/` directory, `apps/studio/wrangler.toml`, `wrangler` devDep, `dev:pages` script) that both this plan and 018 share.
+
+- If 019 runs **first** (recommended — "optimize before adding features"): Phase -1 creates the infra. When 018 later lands, its Tasks 0.10 and 0.13 should be treated as **verify-only**: assert the files exist with the required content; do not overwrite.
+- If 018 has **already** shipped: Phase -1's tasks are idempotent (each checks for existing content before creating). Engineer can skim Phase -1 to confirm and proceed to Phase 0.
 
 ---
 
@@ -54,6 +57,177 @@
 | `apps/studio/test/workers/lsp-worker.test.ts` (if present) | 2 | Stale |
 | `apps/studio/test/services/worker-transport.test.ts` (if present) | 2 | Stale |
 | `apps/lsp-worker/` (entire package) | 3 | Standalone CF Worker deploy retired |
+
+---
+
+# Phase -1 — Pages Functions Infrastructure
+
+**Outcome:** `apps/studio/functions/` directory exists. `apps/studio/wrangler.toml` declares `nodejs_compat`. `wrangler` is a devDep of studio. `pnpm --filter @rune-langium/studio dev:pages` serves the SPA + Functions on `localhost:8788`. Functions directory is empty (no route handlers yet — those come in Phase 0).
+
+This phase is **shared with spec 018**. If 018 has already shipped, each task here is verify-only — confirm the file/content exists and skip.
+
+## Task -1.1: Create `apps/studio/wrangler.toml`
+
+**Files:**
+- Create (or verify): `apps/studio/wrangler.toml`
+
+- [ ] **Step 1: Check whether the file already exists**
+
+```bash
+test -f apps/studio/wrangler.toml && echo "exists" || echo "missing"
+```
+
+- [ ] **Step 2: If missing, create it**
+
+Create `apps/studio/wrangler.toml`:
+
+```toml
+# SPDX-License-Identifier: FSL-1.1-ALv2
+# Copyright (c) 2026 Pradeep Mouli
+#
+# Cloudflare Pages project config for the Rune Studio.
+# Pages serves apps/studio/dist as static assets; functions in
+# apps/studio/functions/ are deployed alongside (see spec 019 + 018).
+
+name = "rune-studio"
+compatibility_date = "2025-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
+```
+
+- [ ] **Step 3: If it already exists, verify content**
+
+```bash
+grep -q "name = \"rune-studio\"" apps/studio/wrangler.toml && \
+  grep -q "nodejs_compat" apps/studio/wrangler.toml && \
+  grep -q "pages_build_output_dir" apps/studio/wrangler.toml && \
+  echo "ok"
+```
+
+Expected: `ok`. If anything is missing, edit the file to add it (do not overwrite the whole file).
+
+- [ ] **Step 4: Commit (only if file was created or modified)**
+
+```bash
+git status --short apps/studio/wrangler.toml
+# If shows a change:
+git add apps/studio/wrangler.toml
+git commit -m "build(studio): wrangler.toml for Pages project (019 Phase -1)"
+```
+
+## Task -1.2: Create the `apps/studio/functions/` directory and empty middleware
+
+**Files:**
+- Create: `apps/studio/functions/_middleware.ts` (placeholder, empty middleware)
+
+- [ ] **Step 1: Check whether the directory exists**
+
+```bash
+test -d apps/studio/functions && echo "exists" || echo "missing"
+```
+
+- [ ] **Step 2: If missing, create the directory and a placeholder middleware**
+
+```bash
+mkdir -p apps/studio/functions
+```
+
+Create `apps/studio/functions/_middleware.ts`:
+
+```ts
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
+/**
+ * Pages Functions middleware. Currently a no-op pass-through;
+ * placeholder so the functions/ directory is non-empty and version-controlled.
+ *
+ * Add cross-cutting concerns (error envelopes, request logging) here as needed.
+ */
+
+export const onRequest: PagesFunction = ({ next }) => next();
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/studio/functions/_middleware.ts
+git commit -m "build(studio): scaffold functions/ directory (019 Phase -1)"
+```
+
+## Task -1.3: Add `wrangler` devDep and `dev:pages` script
+
+**Files:**
+- Modify: `apps/studio/package.json`
+- Modify: `apps/studio/README.md`
+
+- [ ] **Step 1: Check current state**
+
+```bash
+grep -q '"wrangler"' apps/studio/package.json && echo "wrangler-present" || echo "missing"
+grep -q '"dev:pages"' apps/studio/package.json && echo "script-present" || echo "missing"
+```
+
+- [ ] **Step 2: Add wrangler devDep if missing**
+
+In `apps/studio/package.json`, ensure `devDependencies` includes:
+
+```json
+"wrangler": "^4.0.0"
+```
+
+- [ ] **Step 3: Add `dev:pages` script if missing**
+
+In `apps/studio/package.json`, ensure `scripts` includes:
+
+```json
+"dev:pages": "wrangler pages dev http://localhost:5173 --port 8788 --compatibility-date 2025-09-23 --compatibility-flags nodejs_compat"
+```
+
+- [ ] **Step 4: Install**
+
+```bash
+pnpm install
+```
+
+- [ ] **Step 5: Smoke-check `wrangler` resolves**
+
+```bash
+pnpm --filter @rune-langium/studio exec wrangler --version
+```
+
+Expected: prints a version (4.x).
+
+- [ ] **Step 6: Document the dev flow in studio README**
+
+If `apps/studio/README.md` does not already document the `dev:pages` workflow, append:
+
+```markdown
+## Local development with Pages Functions
+
+The studio's Download (spec 018) and LSP (spec 019) endpoints are hosted as
+Cloudflare Pages Functions under `apps/studio/functions/api/`. To exercise
+them locally:
+
+1. Start Vite (the SPA dev server):
+   ```bash
+   pnpm dev
+   ```
+2. In a second terminal, start the Pages dev proxy:
+   ```bash
+   pnpm dev:pages
+   ```
+3. Open `http://localhost:8788/` — the SPA from Vite plus `/api/*` from the Functions.
+
+Preview features (per-namespace LSP, code preview) run client-side and do not need the Pages dev proxy. Network features (Download, parseWorkspace fallback) do.
+```
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add apps/studio/package.json apps/studio/README.md pnpm-lock.yaml
+git commit -m "build(studio): add wrangler devDep + dev:pages script (019 Phase -1)"
+```
 
 ---
 
@@ -2244,6 +2418,142 @@ Expected: PASS.
 ```bash
 git add apps/studio/test/e2e/lsp-states.spec.ts
 git commit -m "test(studio): e2e for LSP unavailable state (019 Phase 2)"
+```
+
+## Task 2.7: Browser memory-footprint regression guard
+
+**Files:**
+- Create: `apps/studio/test/e2e/memory-baseline.spec.ts`
+- Modify: `apps/studio/playwright.config.ts` (Chromium launch args)
+- Create: `apps/studio/scripts/capture-memory-baseline.mjs`
+
+This task implements US2 acceptance criterion #7: the post-migration `performance.memory.usedJSHeapSize` against the CDM corpus must not exceed the captured baseline by more than 5%.
+
+- [ ] **Step 1: Enable precise memory info in Playwright**
+
+In `apps/studio/playwright.config.ts`, ensure the `chromium` project launches with `--enable-precise-memory-info`:
+
+```ts
+// inside projects: [{ name: 'chromium', use: { ... } }]
+use: {
+  ...devices['Desktop Chrome'],
+  launchOptions: {
+    args: ['--enable-precise-memory-info']
+  }
+}
+```
+
+- [ ] **Step 2: Capture the baseline (one-shot)**
+
+Create `apps/studio/scripts/capture-memory-baseline.mjs`:
+
+```js
+#!/usr/bin/env node
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
+import { chromium } from 'playwright';
+
+const url = process.env.STUDIO_URL ?? 'http://localhost:8788/?fixture=cdm';
+const browser = await chromium.launch({ args: ['--enable-precise-memory-info'] });
+const page = await browser.newPage();
+await page.goto(url);
+await page.waitForSelector('[data-testid="workspace-loaded"]', { timeout: 60_000 });
+// Allow GC to settle.
+await page.waitForTimeout(2000);
+const heap = await page.evaluate(() => (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0);
+console.log(JSON.stringify({ heapBytes: heap }, null, 2));
+await browser.close();
+```
+
+Pre-migration: check out the commit just before Task 2.3 (in-browser LSP deletion) and run:
+
+```bash
+pnpm --filter @rune-langium/studio build
+pnpm --filter @rune-langium/studio dev &
+pnpm --filter @rune-langium/studio dev:pages &
+sleep 5
+pnpm --filter @rune-langium/studio exec node scripts/capture-memory-baseline.mjs > baseline.json
+```
+
+Record the `heapBytes` value. Call this `BASELINE`.
+
+- [ ] **Step 3: Write the regression test**
+
+Create `apps/studio/test/e2e/memory-baseline.spec.ts`:
+
+```ts
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
+import { test, expect } from '@playwright/test';
+
+// BASELINE is set in CI via the STUDIO_MEMORY_BASELINE_BYTES env var.
+// Captured per Phase 2 Task 2.7 step 2.
+const BASELINE = Number(process.env.STUDIO_MEMORY_BASELINE_BYTES ?? '0');
+const HEADROOM_PCT = 5;
+
+test.describe('browser memory regression', () => {
+  test.skip(BASELINE === 0, 'STUDIO_MEMORY_BASELINE_BYTES not set');
+
+  test('used JS heap after CDM workspace parse is at or below baseline (+5% headroom)', async ({ page }) => {
+    await page.goto('/?fixture=cdm');
+    await page.waitForSelector('[data-testid="workspace-loaded"]', { timeout: 60_000 });
+    await page.waitForTimeout(2000); // let GC settle
+
+    const heap = await page.evaluate(() =>
+      (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0
+    );
+
+    expect(heap).toBeGreaterThan(0);
+    const max = Math.floor(BASELINE * (1 + HEADROOM_PCT / 100));
+    expect(heap).toBeLessThanOrEqual(max);
+    console.log(`Memory: heap=${heap} bytes, baseline=${BASELINE}, max=${max} (headroom ${HEADROOM_PCT}%)`);
+  });
+});
+```
+
+- [ ] **Step 4: Capture post-migration measurement and set the CI variable**
+
+After Task 2.3 deletions land:
+
+```bash
+pnpm --filter @rune-langium/studio build
+pnpm --filter @rune-langium/studio dev &
+pnpm --filter @rune-langium/studio dev:pages &
+sleep 5
+pnpm --filter @rune-langium/studio exec node scripts/capture-memory-baseline.mjs
+```
+
+The post-migration `heapBytes` value should be **smaller** than `BASELINE`. Set `STUDIO_MEMORY_BASELINE_BYTES` in CI to the **post-migration** value (so future regressions fail if memory grows back).
+
+- [ ] **Step 5: Run the regression test**
+
+```bash
+STUDIO_MEMORY_BASELINE_BYTES=<post-migration-value> \
+  pnpm --filter @rune-langium/studio test:e2e -- memory-baseline.spec.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Wire into CI**
+
+In `.github/workflows/ci.yml` studio job, add:
+
+```yaml
+- name: Studio memory regression check
+  run: pnpm --filter @rune-langium/studio test:e2e -- memory-baseline.spec.ts
+  env:
+    STUDIO_MEMORY_BASELINE_BYTES: ${{ vars.STUDIO_MEMORY_BASELINE_BYTES }}
+```
+
+`vars.STUDIO_MEMORY_BASELINE_BYTES` is set to the post-migration value (from step 4).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add apps/studio/test/e2e/memory-baseline.spec.ts apps/studio/playwright.config.ts apps/studio/scripts/capture-memory-baseline.mjs .github/workflows/ci.yml
+git commit -m "test(studio): browser memory regression guard after LSP retirement (019 Phase 2)"
 ```
 
 ---

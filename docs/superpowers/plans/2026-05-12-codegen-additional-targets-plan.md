@@ -10,6 +10,8 @@
 
 **Spec:** [`docs/superpowers/specs/2026-05-12-codegen-additional-targets-design.md`](../specs/2026-05-12-codegen-additional-targets-design.md)
 
+**Execution-order note:** Spec 019 (`studio-workers-pages-functions`) shares the same Pages Functions infrastructure (`apps/studio/functions/`, `apps/studio/wrangler.toml`, `wrangler` devDep, `dev:pages` script). If 019 has shipped first (recommended ordering — "optimize before adding features"), **treat Task 0.10 and Task 0.13 below as verify-only**: confirm the files exist with the expected content and skip the creation steps. The rest of the plan (Tasks 0.1–0.9, 0.11, 0.12, and Phases 1–3) is independent of 019.
+
 ---
 
 ## File Structure
