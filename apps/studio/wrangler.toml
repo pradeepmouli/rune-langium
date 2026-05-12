@@ -9,3 +9,17 @@ name = "rune-studio"
 compatibility_date = "2025-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "./dist"
+
+# LSP session Durable Object (migrated from apps/lsp-worker/, spec 019 Phase 1).
+[[durable_objects.bindings]]
+name = "LSP_SESSION"
+class_name = "RuneLspSession"
+script_name = "rune-studio"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RuneLspSession"]
+
+# Allowlist for LSP session origin gating (default; override per environment).
+[vars]
+ALLOWED_ORIGIN = "https://www.daikonic.dev"
