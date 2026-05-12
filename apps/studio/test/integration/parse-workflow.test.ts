@@ -11,27 +11,17 @@
  * client-side deserialization re-builds RosettaModel instances.
  *
  * Does NOT exercise: the curated-mirror server-to-server fetch (mocked) or
- * the browser parse-worker hydrate path (mocked via setBrowserParseImpl).
- * Those are covered by their own focused unit tests.
+ * the browser parse-worker hydrate path (worker is absent in jsdom; the
+ * hydration step's errors are swallowed by the inner try/catch in
+ * parseWorkspaceViaRouter so test assertions still hold).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { onRequestPost } from '../../functions/api/parse.js';
-import { parseWorkspaceViaRouter, setBrowserParseImpl, _defaultBrowserParse } from '../../src/services/workspace.js';
-import type { ParseWorkspaceResponse } from '../../src/workers/parser-worker.js';
+import { parseWorkspaceViaRouter } from '../../src/services/workspace.js';
 
 // A valid Rune DSL snippet with a namespace and one type declaration.
 const SIMPLE_RUNE = 'namespace integration.test\ntype Quantity:\n  amount number (1..1)\n  currency string (0..1)\n';
-
-// Stub ParseWorkspaceResponse used as the fallback browser-worker result.
-const stubHydrate: ParseWorkspaceResponse = {
-  type: 'parseWorkspaceResult',
-  id: 'stub',
-  models: [],
-  parsedModels: [],
-  deferredExports: [],
-  errors: {}
-};
 
 describe('Phase 0 integration: workspace router → /api/parse handler', () => {
   const originalFetch = globalThis.fetch;
@@ -46,15 +36,10 @@ describe('Phase 0 integration: workspace router → /api/parse handler', () => {
       }
       return new Response('Not Found', { status: 404 });
     }) as typeof fetch;
-
-    // Stub the browser worker fallback so we don't need a real Worker.
-    setBrowserParseImpl(async () => stubHydrate);
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    // Restore the real browser parse implementation.
-    setBrowserParseImpl(_defaultBrowserParse);
   });
 
   it('parses user files via Pages Function and returns RosettaModel via deserialization', async () => {
@@ -82,28 +67,23 @@ describe('Phase 0 integration: workspace router → /api/parse handler', () => {
     expect(result.errors['broken.rune']!.length).toBeGreaterThan(0);
   });
 
-  it('handles empty workspace gracefully via browser fallback', async () => {
-    // parseWorkspaceViaRouter still POSTs when files is empty — the Pages Function
-    // returns 400, which causes the router to fall back to the browser parse impl.
-    const fallbackSpy = vi.fn().mockResolvedValue(stubHydrate);
-    setBrowserParseImpl(fallbackSpy);
-
-    const result = await parseWorkspaceViaRouter([]);
-
-    // 400 from Pages Function triggers browser fallback → stubHydrate.
-    expect(result.type).toBe('parseWorkspaceResult');
-    expect(fallbackSpy).toHaveBeenCalled();
+  it('rejects empty file list at the Pages Function (400) — caller falls back', async () => {
+    // parseWorkspaceViaRouter still POSTs even when files is empty; the
+    // Pages Function returns 400, which the router surfaces as a thrown
+    // error. The outer parseWorkspaceFiles is responsible for falling back
+    // with the original WorkspaceFile[] (this test covers only the router).
+    await expect(parseWorkspaceViaRouter([])).rejects.toThrow(/api\/parse HTTP 400/);
   });
 
-  it('falls back to browser parse impl when Pages Function returns non-2xx', async () => {
-    // Override fetch to return 500 instead of routing to the handler.
+  it('throws when Pages Function returns non-2xx so the caller can fall back', async () => {
+    // Override fetch to return 500. The router throws — the OUTER
+    // parseWorkspaceFiles catch is responsible for routing to the main-
+    // thread fallback with the full WorkspaceFile[] (curated entries
+    // included), instead of dropping the corpus on every transient failure.
     globalThis.fetch = vi.fn().mockResolvedValue(new Response('down', { status: 500 })) as typeof fetch;
 
-    const fallbackSpy = vi.fn().mockResolvedValue(stubHydrate);
-    setBrowserParseImpl(fallbackSpy);
-
-    await parseWorkspaceViaRouter([{ name: 'x.rune', content: SIMPLE_RUNE }]);
-
-    expect(fallbackSpy).toHaveBeenCalled();
+    await expect(parseWorkspaceViaRouter([{ name: 'x.rune', content: SIMPLE_RUNE }])).rejects.toThrow(
+      /api\/parse HTTP 500/
+    );
   });
 });

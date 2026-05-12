@@ -2,23 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  parseWorkspaceViaRouter,
-  parseWorkspaceFiles,
-  setBrowserParseImpl,
-  _defaultBrowserParse
-} from '../../src/services/workspace.js';
+import { parseWorkspaceViaRouter, parseWorkspaceFiles } from '../../src/services/workspace.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
-import type { ParseWorkspaceResponse } from '../../src/workers/parser-worker.js';
-
-const stubParseResponse: ParseWorkspaceResponse = {
-  type: 'parseWorkspaceResult',
-  id: 'stub',
-  models: [],
-  parsedModels: [],
-  deferredExports: [],
-  errors: {}
-};
 
 describe('parseWorkspace routing', () => {
   const originalFetch = global.fetch;
@@ -29,8 +14,6 @@ describe('parseWorkspace routing', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
-    // Restore default browser-parse impl in case a test injected a spy.
-    if (_defaultBrowserParse) setBrowserParseImpl(_defaultBrowserParse);
   });
 
   it('POSTs to /api/parse for parseWorkspace requests', async () => {
@@ -47,9 +30,6 @@ describe('parseWorkspace routing', () => {
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
     );
-
-    // Inject a no-op browser-parse impl so the hydrate step doesn't try to talk to a real worker.
-    setBrowserParseImpl(async () => stubParseResponse);
 
     await parseWorkspaceViaRouter([{ name: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)' }]);
 
@@ -73,8 +53,6 @@ describe('parseWorkspace routing', () => {
       )
     );
 
-    setBrowserParseImpl(async () => stubParseResponse);
-
     await parseWorkspaceViaRouter([{ name: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)' }], {
       curatedBundles: [{ id: 'cdm', version: '2026-04-25' }]
     });
@@ -86,28 +64,27 @@ describe('parseWorkspace routing', () => {
     expect(body.curatedBundles).toEqual([{ id: 'cdm', version: '2026-04-25' }]);
   });
 
-  it('falls back to browser worker when /api/parse returns 5xx', async () => {
+  it('throws on /api/parse 5xx so the caller can fall back with the FULL workspace', async () => {
+    // Previously this called browserParseImpl(files) in place — but `files`
+    // here only has user docs (curated entries are filtered out before this
+    // call), so a transient 5xx silently dropped the corpus from the result.
+    // The router now throws; parseWorkspaceFiles' outer catch handles the
+    // fallback with the original WorkspaceFile[] (including curated).
     const fetchMock = vi.mocked(global.fetch);
     fetchMock.mockResolvedValue(new Response('{}', { status: 503 }));
 
-    const browserSpy = vi.fn().mockResolvedValue(stubParseResponse);
-    setBrowserParseImpl(browserSpy);
-
-    await parseWorkspaceViaRouter([{ name: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)' }]);
-
-    expect(browserSpy).toHaveBeenCalled();
+    await expect(
+      parseWorkspaceViaRouter([{ name: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)' }])
+    ).rejects.toThrow(/api\/parse HTTP 503/);
   });
 
-  it('falls back to browser worker when /api/parse fetch throws', async () => {
+  it('throws when /api/parse fetch errors so the caller can fall back', async () => {
     const fetchMock = vi.mocked(global.fetch);
     fetchMock.mockRejectedValue(new TypeError('Network down'));
 
-    const browserSpy = vi.fn().mockResolvedValue(stubParseResponse);
-    setBrowserParseImpl(browserSpy);
-
-    await parseWorkspaceViaRouter([{ name: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)' }]);
-
-    expect(browserSpy).toHaveBeenCalled();
+    await expect(
+      parseWorkspaceViaRouter([{ name: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)' }])
+    ).rejects.toThrow(/Network down/);
   });
 
   it('deserializes hydration models so router result populates models[]', async () => {
@@ -145,9 +122,6 @@ describe('parseWorkspace routing', () => {
       )
     );
 
-    // Stub the browser-worker hydrate to avoid touching a real Worker.
-    setBrowserParseImpl(async () => stubParseResponse);
-
     const result = await parseWorkspaceViaRouter([{ name: 'x.rosetta', content }]);
 
     expect(result.models).toHaveLength(1);
@@ -161,7 +135,6 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
-    if (_defaultBrowserParse) setBrowserParseImpl(_defaultBrowserParse);
   });
 
   it('sends curatedBundles derived from bundleId/bundleVersion on WorkspaceFile', async () => {
@@ -178,7 +151,6 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
       )
     );
     global.fetch = fetchMock;
-    setBrowserParseImpl(async () => stubParseResponse);
 
     // Simulate a workspace with one user file + two curated corpus files (same bundle).
     const files: WorkspaceFile[] = [
@@ -246,7 +218,6 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
       )
     );
     global.fetch = fetchMock;
-    setBrowserParseImpl(async () => stubParseResponse);
 
     const files: WorkspaceFile[] = [
       {
@@ -266,14 +237,10 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
   });
 
   it('falls back to main-thread when the router fetch fails', async () => {
-    // Stub fetch to simulate a network failure. Also inject a browser-parse
-    // stub that re-throws the same error so the router's inner fallback
-    // (browserParseImpl) doesn't try to start a real Worker (unavailable in
-    // jsdom) and contaminate the error message received by parseWorkspaceFiles.
+    // Stub fetch to simulate a network failure. The router now throws on
+    // fetch errors and parseWorkspaceFiles' outer catch routes to the
+    // main-thread fallback with the full WorkspaceFile[].
     global.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
-    setBrowserParseImpl(async () => {
-      throw new TypeError('fetch failed');
-    });
 
     const result = await parseWorkspaceFiles([
       {

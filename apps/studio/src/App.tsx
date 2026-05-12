@@ -53,6 +53,38 @@ function makeWorkspaceId(): string {
   return `ws-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+/**
+ * Per-tab opaque ID used as the LSP Durable Object identity (019 Phase 2).
+ *
+ * The DO is keyed by this value, and it stores per-document state (`docs:<uri>`,
+ * shutdown handling, etc.) under that key. Until the active-workspace identifier
+ * is properly threaded through to `createTransportProvider`, this avoids the
+ * worst case where every browser tab/user routes to the same fixed
+ * DEFAULT_WORKSPACE_ID DO and stomps on each other's LSP documents.
+ *
+ * Stored in sessionStorage so a tab refresh keeps the same DO (preserving open
+ * documents across refresh) while different tabs / windows / users get
+ * isolated instances. The crypto.randomUUID fallback keeps tests + non-window
+ * environments deterministic enough not to crash.
+ */
+const LSP_SESSION_ID_KEY = 'rune-studio:lsp-session-id';
+function getLspSessionId(): string {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
+    return makeWorkspaceId();
+  }
+  const existing = window.sessionStorage.getItem(LSP_SESSION_ID_KEY);
+  if (existing && existing.length > 0) return existing;
+  const fresh = makeWorkspaceId();
+  try {
+    window.sessionStorage.setItem(LSP_SESSION_ID_KEY, fresh);
+  } catch {
+    // sessionStorage may throw under privacy modes; non-fatal — the caller
+    // still gets a unique-for-this-call id, it just won't persist across
+    // reloads. The DO will be isolated per-mount instead of per-tab.
+  }
+  return fresh;
+}
+
 function deriveWorkspaceName(files: readonly WorkspaceFile[]): string {
   const firstFile = files[0];
   if (!firstFile) {
@@ -314,7 +346,10 @@ function AppContent() {
       return undefined;
     }
 
-    const provider = createTransportProvider();
+    // Tag the LSP Durable Object with a per-tab session id so multi-tenancy
+    // works (without this, every studio tab/user routed to the same DO and
+    // shared its docs:<uri> state).
+    const provider = createTransportProvider({ workspaceId: getLspSessionId() });
     providerRef.current = provider;
 
     const unsub = provider.onStateChange((state) => {

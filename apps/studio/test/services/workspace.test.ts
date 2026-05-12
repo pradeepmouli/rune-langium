@@ -10,8 +10,6 @@ import {
   _resetParserWorkerForTests,
   parseFile,
   parseWorkspaceFiles,
-  setBrowserParseImpl,
-  _defaultBrowserParse,
   updateFileContent,
   createWorkspaceFile,
   createBlankWorkspaceFile,
@@ -24,8 +22,6 @@ import type { LoadedModel } from '../../src/types/model-types.js';
 afterEach(() => {
   vi.unstubAllGlobals();
   _resetParserWorkerForTests();
-  // Restore the default browser-parse impl in case a test injected a stub.
-  if (_defaultBrowserParse) setBrowserParseImpl(_defaultBrowserParse);
 });
 
 // ---------------------------------------------------------------------------
@@ -142,13 +138,10 @@ type Trade:
   });
 
   it('surfaces when parsing falls back to the main thread (router fails)', async () => {
-    // Stub fetch so /api/parse returns a network-style failure. Also inject a
-    // browser-parse stub so the router's inner fallback doesn't try to start a
-    // real Worker (unavailable in jsdom) and contaminate the error message.
+    // Stub fetch so /api/parse rejects — the router throws, and
+    // parseWorkspaceFiles' outer catch routes to the main-thread fallback
+    // with the full WorkspaceFile[].
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
-    setBrowserParseImpl(async () => {
-      throw new TypeError('fetch failed');
-    });
 
     const result = await parseWorkspaceFiles([
       {

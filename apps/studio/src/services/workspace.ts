@@ -357,10 +357,13 @@ function collectCuratedBundlesFromWorkspace(files: WorkspaceFile[]): Array<{ id:
  * server-to-server. Only user-authored files (no serializedModelJson) are POSTed
  * as raw content.
  *
- * Fallback: if the router call fails (network error, 5xx, etc.), the function
- * falls back to main-thread parsing via `parseWorkspaceFilesOnMainThread`.
- * The old browser-worker path (T098) is no longer the primary; it remains
- * available via `_defaultBrowserParse` / `setBrowserParseImpl` for testing.
+ * Fallback: if the router call fails (network error, 5xx, ok:false), the
+ * function falls back to main-thread parsing via
+ * `parseWorkspaceFilesOnMainThread` with the FULL WorkspaceFile[] (including
+ * curated bundle entries) so the corpus isn't dropped on transient Pages
+ * Function failures. The old browser-worker `parseWorkspace` path (T098)
+ * is invoked through `parseWorkspaceFilesOnMainThread` and remains the
+ * fallback-only code path.
  */
 export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<ParseWorkspaceFilesResult> {
   if (files.length === 0) {
@@ -409,123 +412,101 @@ export function _resetParserWorkerForTests(): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Default browser-worker parse implementation.
- * Exported so tests can save and restore the original impl after injection.
- */
-export async function _defaultBrowserParse(
-  files: Array<{ name: string; content: string }>
-): Promise<ParseWorkspaceResponse> {
-  return workerRequest({
-    type: 'parseWorkspace',
-    id: `ws:${Date.now()}`,
-    files
-  });
-}
-
-// Module-level injection point; starts pointing at the default impl.
-let browserParseImpl: (files: Array<{ name: string; content: string }>) => Promise<ParseWorkspaceResponse> =
-  _defaultBrowserParse;
-
-/**
- * Test-only: replace the browser-worker parse implementation with a spy/stub.
- * Call with `_defaultBrowserParse` in afterEach to restore.
- */
-export function setBrowserParseImpl(
-  impl: (files: Array<{ name: string; content: string }>) => Promise<ParseWorkspaceResponse>
-): void {
-  browserParseImpl = impl;
-}
-
-/**
  * Route a parseWorkspace request through the /api/parse Pages Function.
  *
  * 1. POSTs the file list to /api/parse (with optional curatedBundles metadata
  *    so the server can fetch corpus documents server-to-server).
  * 2. On success, hydrates the browser worker with the returned hydration state
  *    so subsequent linkDocument requests work without re-parsing locally.
- * 3. Falls back to the browser worker on any failure (non-2xx, network error, or
- *    when the server response signals ok:false).
+ * 3. Throws on any failure (non-2xx, network error, or ok:false). The caller
+ *    (`parseWorkspaceFiles`) is responsible for falling back to the main-
+ *    thread parser with the FULL WorkspaceFile[] — including curated bundle
+ *    serialized models that were filtered out before this call. Doing the
+ *    fallback in-place here would silently drop the corpus, since this
+ *    function only receives user files + bundle metadata.
  */
 export async function parseWorkspaceViaRouter(
   files: Array<{ name: string; content: string }>,
   options: { curatedBundles?: Array<{ id: string; version: string }> } = {}
 ): Promise<ParseWorkspaceResponse> {
-  try {
-    const response = await fetch('/api/parse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files, curatedBundles: options.curatedBundles ?? [] })
-    });
-    if (!response.ok) {
-      return browserParseImpl(files);
-    }
-    const data = (await response.json()) as {
-      ok: boolean;
-      models: ParseWorkspaceResponse['models'];
-      deferredExports: ParseWorkspaceResponse['deferredExports'];
-      errors: ParseWorkspaceResponse['errors'];
-      hydrationState: { documents: HydrateRequest['documents'] };
-    };
-
-    if (!data.ok) {
-      return browserParseImpl(files);
-    }
-
-    // Deserialize hydration documents into RosettaModel instances for downstream
-    // consumers (e.g. the visual editor's graph view). The server cannot send
-    // Langium ASTs directly (circular $container refs break JSON), but the
-    // hydration state includes serializedModel JSON strings that Langium's
-    // JsonSerializer can round-trip back to full AST nodes.
-    // This step is done before hydrating the worker so that model data is
-    // always returned even if the worker is unavailable (e.g. in tests).
-    const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
-    const models: RosettaModel[] = [];
-    const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
-    for (const doc of data.hydrationState.documents) {
-      try {
-        const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
-        models.push(model);
-        // doc.uri is the bare filePath emitted by /api/parse + curated-fetch
-        // (no `file://` prefix). The legacy `file:///` strip is retained for
-        // backwards compatibility with any in-flight payloads.
-        const filePath = doc.uri.replace(/^file:\/\/\//, '');
-        parsedModels.push({ filePath, model });
-      } catch (err) {
-        console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
-      }
-    }
-
-    // Hydrate the browser worker with the server-parsed documents + exports so
-    // that subsequent linkDocument calls can resolve cross-references.
-    // A hydration failure is non-fatal: the graph view will still render from
-    // the deserialized models above; only cross-ref resolution will be degraded.
-    try {
-      const hydrateResponse = (await workerRequest({
-        type: 'hydrate',
-        id: `hydrate:${Date.now()}`,
-        documents: data.hydrationState.documents
-      })) as HydrateResponse;
-      if (hydrateResponse.type === 'hydrateResult' && !hydrateResponse.ok) {
-        console.warn(
-          '[workspace] browser worker reported hydration failure (cross-ref resolution may be degraded):',
-          hydrateResponse.error
-        );
-      }
-    } catch (err) {
-      console.warn('[workspace] browser worker hydration failed (cross-ref resolution may be degraded):', err);
-    }
-
-    return {
-      type: 'parseWorkspaceResult',
-      id: `routed:${Date.now()}`,
-      models,
-      parsedModels,
-      deferredExports: data.deferredExports,
-      errors: data.errors
-    };
-  } catch {
-    return browserParseImpl(files);
+  const response = await fetch('/api/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, curatedBundles: options.curatedBundles ?? [] })
+  });
+  if (!response.ok) {
+    throw new Error(`/api/parse HTTP ${response.status}`);
   }
+  const data = (await response.json()) as {
+    ok: boolean;
+    models: ParseWorkspaceResponse['models'];
+    deferredExports: ParseWorkspaceResponse['deferredExports'];
+    errors: ParseWorkspaceResponse['errors'];
+    hydrationState: { documents: HydrateRequest['documents'] };
+  };
+
+  if (!data.ok) {
+    // Same reason as above: bubble up to the outer fallback with the full
+    // workspace inputs rather than reparsing only user files in-place.
+    throw new Error('/api/parse returned ok:false');
+  }
+
+  // Deserialize ONLY the user-document hydration entries into RosettaModel
+  // instances for the graph view. Curated corpus documents stay in
+  // hydrationState so the worker hydrate path can register their exports
+  // for cross-reference resolution, but we deliberately keep them out of
+  // `models[]` / `parsedModels[]` — pushing them through here defeats the
+  // lazy/deferred-corpus design (the whole reason curated docs serialize to
+  // JSON in the first place) and reintroduces multi-megabyte main-thread
+  // deserialization on every debounced edit parse.
+  const userFileNames = new Set(files.map((f) => f.name));
+  const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
+  const models: RosettaModel[] = [];
+  const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+  for (const doc of data.hydrationState.documents) {
+    // doc.uri is the bare filePath emitted by /api/parse + curated-fetch
+    // (no `file://` prefix). The legacy `file:///` strip is retained for
+    // backwards compatibility with any in-flight payloads.
+    const filePath = doc.uri.replace(/^file:\/\/\//, '');
+    if (!userFileNames.has(filePath)) continue;
+    try {
+      const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
+      models.push(model);
+      parsedModels.push({ filePath, model });
+    } catch (err) {
+      console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
+    }
+  }
+
+  // Hydrate the browser worker with ALL server-parsed documents + exports
+  // (user AND curated) so subsequent linkDocument calls can resolve
+  // cross-references. A hydration failure is non-fatal: the graph view
+  // still renders from the user models above; only cross-ref resolution
+  // is degraded.
+  try {
+    const hydrateResponse = (await workerRequest({
+      type: 'hydrate',
+      id: `hydrate:${Date.now()}`,
+      documents: data.hydrationState.documents
+    })) as HydrateResponse;
+    if (hydrateResponse.type === 'hydrateResult' && !hydrateResponse.ok) {
+      console.warn(
+        '[workspace] browser worker reported hydration failure (cross-ref resolution may be degraded):',
+        hydrateResponse.error
+      );
+    }
+  } catch (err) {
+    console.warn('[workspace] browser worker hydration failed (cross-ref resolution may be degraded):', err);
+  }
+
+  return {
+    type: 'parseWorkspaceResult',
+    id: `routed:${Date.now()}`,
+    models,
+    parsedModels,
+    deferredExports: data.deferredExports,
+    errors: data.errors
+  };
 }
 
 /**
