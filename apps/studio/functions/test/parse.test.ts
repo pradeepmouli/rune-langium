@@ -122,11 +122,13 @@ describe('POST /api/parse — curatedBundles', () => {
   });
 
   it('merges curated bundle documents into hydrationState on success', async () => {
-    // Spy on fetchCuratedBundle to return a synthetic doc set.
+    // Spy on fetchCuratedBundle to return a synthetic doc set. The mock
+    // returns bare-path URIs (matching the real curated-fetch contract); the
+    // browser worker keys deferredModelJson off these via URI.parse().
     const curatedFetchModule = await import('../lib/curated-fetch.js');
     const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
       {
-        uri: 'file:///cdm/base/math.rosetta',
+        uri: 'cdm/base/math.rosetta',
         content: '', // archive may not include source; ok to be empty
         serializedModel: JSON.stringify({
           $type: 'RosettaModel',
@@ -147,11 +149,13 @@ describe('POST /api/parse — curatedBundles', () => {
       const body = (await res.json()) as {
         hydrationState: { documents: Array<{ uri: string; exports: Array<{ name: string }> }> };
       };
-      // Should contain BOTH the user file and the corpus document.
+      // Should contain BOTH the user file and the corpus document, both as
+      // bare paths so the browser worker's URI.parse(filePath).toString()
+      // lookup matches what /api/parse and curated-fetch register under.
       const uris = body.hydrationState.documents.map((d) => d.uri);
-      expect(uris).toContain('file:///x.rune');
-      expect(uris).toContain('file:///cdm/base/math.rosetta');
-      const corpusDoc = body.hydrationState.documents.find((d) => d.uri === 'file:///cdm/base/math.rosetta');
+      expect(uris).toContain('x.rune');
+      expect(uris).toContain('cdm/base/math.rosetta');
+      const corpusDoc = body.hydrationState.documents.find((d) => d.uri === 'cdm/base/math.rosetta');
       expect(corpusDoc?.exports.some((e) => e.name === 'Quantity')).toBe(true);
     } finally {
       spy.mockRestore();

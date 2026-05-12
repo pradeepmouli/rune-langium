@@ -485,7 +485,9 @@ export async function parseWorkspaceViaRouter(
       try {
         const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
         models.push(model);
-        // Derive filePath from the URI (strip "file:///").
+        // doc.uri is the bare filePath emitted by /api/parse + curated-fetch
+        // (no `file://` prefix). The legacy `file:///` strip is retained for
+        // backwards compatibility with any in-flight payloads.
         const filePath = doc.uri.replace(/^file:\/\/\//, '');
         parsedModels.push({ filePath, model });
       } catch (err) {
@@ -498,11 +500,17 @@ export async function parseWorkspaceViaRouter(
     // A hydration failure is non-fatal: the graph view will still render from
     // the deserialized models above; only cross-ref resolution will be degraded.
     try {
-      await workerRequest({
+      const hydrateResponse = (await workerRequest({
         type: 'hydrate',
         id: `hydrate:${Date.now()}`,
         documents: data.hydrationState.documents
-      });
+      })) as HydrateResponse;
+      if (hydrateResponse.type === 'hydrateResult' && !hydrateResponse.ok) {
+        console.warn(
+          '[workspace] browser worker reported hydration failure (cross-ref resolution may be degraded):',
+          hydrateResponse.error
+        );
+      }
     } catch (err) {
       console.warn('[workspace] browser worker hydration failed (cross-ref resolution may be degraded):', err);
     }

@@ -434,6 +434,22 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
 
 async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
   try {
+    // Hydrate has REPLACEMENT semantics (mirror handleParseWorkspace's reset).
+    // Without this, switching/reloading workspaces leaves stale entries in
+    // deferredModelJson, the symbol index, and LangiumDocuments — and
+    // linkDocument can still resolve symbols for files that disappeared from
+    // the workspace. Reset state first, then register the new set.
+    const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
+    if (langiumDocs.all) {
+      for (const doc of langiumDocs.all.toArray()) {
+        langiumDocs.deleteDocument(doc.uri);
+      }
+    }
+    for (const previousUri of deferredModelJson.keys()) {
+      indexManager.clearExports(URI.parse(previousUri));
+    }
+    deferredModelJson.clear();
+
     // Register each document using a single canonical URI for both the deferred-model
     // store and the symbol index, so deferredProvider.getModel() and registerExports()
     // always agree on the key.

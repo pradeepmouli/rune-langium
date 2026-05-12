@@ -41,7 +41,45 @@ export class CuratedBundleUnavailableError extends Error {
   }
 }
 
+/**
+ * Per-isolate cache keyed by `${id}@${version}`. Cloudflare Pages Functions
+ * reuse the same isolate across many requests, so without a cache the
+ * debounced editor reparse (~every keystroke) would re-fetch + re-inflate +
+ * re-parse the entire CDM corpus on every call, exceeding Pages CPU/memory
+ * budgets and hanging the editor.
+ *
+ * Pinned versions are content-addressable (immutable) so we cache the parsed
+ * result indefinitely for the isolate's lifetime. `latest` is intentionally
+ * NOT cached because its content can shift under us.
+ *
+ * We cache the Promise (not the resolved value) so concurrent requests for
+ * the same bundle dedupe to a single fetch+parse instead of stampeding the
+ * curated-mirror. On failure we evict the entry so the next request retries.
+ */
+const bundleCache = new Map<string, Promise<CuratedDocument[]>>();
+
 export async function fetchCuratedBundle(id: string, version: string): Promise<CuratedDocument[]> {
+  const cacheable = version !== 'latest';
+  const cacheKey = `${id}@${version}`;
+  if (cacheable) {
+    const hit = bundleCache.get(cacheKey);
+    if (hit) return hit;
+  }
+
+  const work = fetchAndParseBundle(id, version);
+  if (cacheable) {
+    bundleCache.set(cacheKey, work);
+    work.catch(() => {
+      // Don't pin a failed fetch in the cache — let the next request retry.
+      if (bundleCache.get(cacheKey) === work) {
+        bundleCache.delete(cacheKey);
+      }
+    });
+  }
+  return work;
+}
+
+async function fetchAndParseBundle(id: string, version: string): Promise<CuratedDocument[]> {
   const url =
     version === 'latest'
       ? `${CURATED_MIRROR_BASE}/${id}/latest.tar.gz`
@@ -204,8 +242,10 @@ async function walkTarEntries(tarBuffer: Uint8Array, bundleId: string, _version:
       }
     }
 
+    // Emit the URI as a bare path (no `file://`) so the browser worker's
+    // deferredModelJson key matches what linkDocument(filePath) looks up.
     result.push({
-      uri: `file:///${bundleId}/${file.path}`,
+      uri: `${bundleId}/${file.path}`,
       content: file.content,
       serializedModel,
       exports

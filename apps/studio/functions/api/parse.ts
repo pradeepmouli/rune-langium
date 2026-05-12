@@ -34,11 +34,21 @@ function badRequest(error: string): Response {
 
 /**
  * Remap a file name to a `.rosetta` URI so the Langium service registry
- * (which only knows about `.rosetta`) can find the correct parser.
- * We keep the original name for all external-facing fields.
+ * (which only knows about `.rosetta`) can find the correct parser. This
+ * URI is INTERNAL to the server-side parse — it's the document handle
+ * inside the Langium services, not what we send to the browser.
+ *
+ * The browser worker keys `deferredModelJson` off the raw filePath
+ * (`URI.parse(filePath).toString()`) because that's what
+ * `linkDocument(filePath)` from EditorPage sends. The hydration payload
+ * therefore emits `doc.uri = filePath` (no scheme), not a `file://` URI.
  */
 function toRosettaUri(name: string): URI {
-  // Replace trailing extension (e.g. `.rune`) with `.rosetta`, or append it.
+  // Replace trailing extension (e.g. `.rune`) with `.rosetta`. Files without an
+  // extension keep their bare name; the Langium service registry uses the
+  // remapped suffix to dispatch to the correct parser, and the bare-name case
+  // is exercised by tests with paths like `inmemory:///model` that already
+  // resolve to the `.rosetta` parser via Langium's default routing.
   const remapped = name.replace(/\.[^./\\]+$/, '.rosetta');
   return URI.parse(`file:///${remapped}`);
 }
@@ -116,10 +126,15 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
       }
 
       // The hydration URI must match what the browser worker will use to look up
-      // documents. Use the original (possibly `.rune`) name as the URI path so
-      // callers don't have to translate extension names back.
+      // documents. The worker keys `deferredModelJson` off
+      // `URI.parse(filePath).toString()` (handleLinkDocument and the old
+      // handleParseWorkspace both use this shape), and `linkDocument(filePath)`
+      // from EditorPage sends the raw filePath. Emit the filePath verbatim so
+      // both register and lookup produce the same key — adding a `file://`
+      // prefix here would silently break cross-reference resolution after a
+      // router-based parse.
       documentsForHydration.push({
-        uri: `file:///${filePath}`,
+        uri: filePath,
         content: body.files[i].content,
         serializedModel,
         exports

@@ -139,11 +139,12 @@ export const onRequestGet: PagesFunction<Env, 'token'> = async ({ request, env, 
   const id = env.LSP_SESSION.idFromName(verified.token.workspaceId);
   const stub = env.LSP_SESSION.get(id);
 
+  const doResponse = await stub.fetch(request);
   logRequest({
     route: '/api/lsp/ws',
-    status: 101,
+    status: doResponse.status,
     durationMs: Date.now() - startedAt
   });
 
-  return stub.fetch(request);
+  return doResponse;
 };

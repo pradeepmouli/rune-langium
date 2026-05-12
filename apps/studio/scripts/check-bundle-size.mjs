@@ -22,10 +22,15 @@ import { join } from 'node:path';
 
 const DIST = fileURLToPath(new URL('../dist/assets', import.meta.url));
 const DEFAULT_MAX_BYTES = 6_593_600;
-const MAX_BYTES = Number(process.env.STUDIO_MAX_BUNDLE_BYTES ?? DEFAULT_MAX_BYTES);
+// GitHub Actions expands `${{ vars.X }}` to an empty string when the variable
+// is unset, not undefined — so `??` doesn't fall through. Treat empty/whitespace
+// the same as unset so CI uses the default ceiling without manual configuration.
+const rawLimit = process.env.STUDIO_MAX_BUNDLE_BYTES;
+const limitOverride = rawLimit && rawLimit.trim().length > 0 ? Number(rawLimit) : undefined;
+const MAX_BYTES = limitOverride ?? DEFAULT_MAX_BYTES;
 
 if (!Number.isFinite(MAX_BYTES) || MAX_BYTES <= 0) {
-  console.error(`STUDIO_MAX_BUNDLE_BYTES must be a positive integer, got: ${process.env.STUDIO_MAX_BUNDLE_BYTES}`);
+  console.error(`STUDIO_MAX_BUNDLE_BYTES must be a positive integer, got: ${rawLimit}`);
   process.exit(2);
 }
 
