@@ -143,6 +143,15 @@ jobs:
         # playwright interpret "--grep" as a test-file path).
         run: pnpm --filter @rune-langium/studio exec playwright test --grep "Studio a11y"
 
+      - name: Studio memory regression check (019 Phase 2)
+        # Skipped at runtime when STUDIO_MEMORY_BASELINE_BYTES is unset
+        # (e.g. before the first capture). Once set in repo vars, the
+        # gate fires and compares CDM-corpus heap usage against
+        # baseline + 5% headroom.
+        run: pnpm --filter @rune-langium/studio exec playwright test --grep "Studio browser memory regression"
+        env:
+          STUDIO_MEMORY_BASELINE_BYTES: ${{ vars.STUDIO_MEMORY_BASELINE_BYTES }}
+
   # ---------------------------------------------------------------------------
   # check-generated: Verify generated schema files don't drift from source (T039, FR-018, SC-008)
   #
