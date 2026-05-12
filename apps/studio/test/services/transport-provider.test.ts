@@ -2,33 +2,28 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Unit tests for transport provider / failover logic (T011 + T044).
+ * Unit tests for transport provider / failover logic (T011 + T044 + 019 Phase 2).
  *
- * Step 1 = embedded browser worker transport.
- * Step 2 = direct dev WebSocket when explicitly configured/preferred.
- * Step 3 = CF Worker LSP — POST /api/lsp/session for a token, then open
- *          WebSocket(${cfWsBase}/ws/${token}). On 401 from the mint we
- *          retry once; on 429 / 5xx we surface "language services
- *          unavailable" with the dev-mode-gated copy from FR-014.
+ * Two-tier strategy:
+ *  - Tier A: direct WebSocket when wsUri is explicit OR session endpoint is
+ *    cross-origin.
+ *  - Tier B: Pages Function LSP (same-origin) — POST /api/lsp/session for a
+ *    token, then open WebSocket(${cfWsBase}/ws/${token}). On 401 from the
+ *    mint we retry once; on 429 / 5xx we surface "language services
+ *    unavailable" with the dev-mode-gated copy from FR-014.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createTransportProvider } from '../../src/services/transport-provider.js';
 
-// Mock the transport factories
+// Mock the WebSocket transport factory.
 vi.mock('../../src/services/ws-transport.js', () => ({
   createWebSocketTransport: vi.fn()
 }));
 
-vi.mock('../../src/services/worker-transport.js', () => ({
-  createWorkerTransport: vi.fn()
-}));
-
 import { createWebSocketTransport } from '../../src/services/ws-transport.js';
-import { createWorkerTransport } from '../../src/services/worker-transport.js';
 
 const mockWsTransport = vi.mocked(createWebSocketTransport);
-const mockEmbeddedTransport = vi.mocked(createWorkerTransport);
 
 function makeFakeTransport() {
   return {
@@ -102,32 +97,25 @@ describe('createTransportProvider', () => {
     expect(state.status).toBe('disconnected');
   });
 
+  it('TransportMode no longer includes "embedded" or "cf-worker"', () => {
+    // Type-level: this array compiles only if those modes are not in the union.
+    const validModes: Array<'disconnected' | 'websocket' | 'pages-function'> = [
+      'disconnected',
+      'websocket',
+      'pages-function'
+    ];
+    expect(validModes).toHaveLength(3);
+  });
+
   it('uses WebSocket when wsUri is explicitly configured', async () => {
     const wsTransport = makeFakeTransport();
-    mockEmbeddedTransport.mockReturnValueOnce(makeFakeTransport());
     mockWsTransport.mockResolvedValueOnce(wsTransport);
 
     const provider = createTransportProvider({ wsUri: 'ws://localhost:3001' });
     const transport = await provider.getTransport();
 
     expect(transport).toBe(wsTransport);
-    expect(mockEmbeddedTransport).not.toHaveBeenCalled();
     expect(provider.getState().mode).toBe('websocket');
-    expect(provider.getState().status).toBe('connected');
-
-    provider.dispose();
-  });
-
-  it('uses the embedded worker transport by default when available', async () => {
-    const embeddedTransport = makeFakeTransport();
-    mockEmbeddedTransport.mockReturnValueOnce(embeddedTransport);
-
-    const provider = createTransportProvider();
-    await provider.getTransport();
-
-    expect(mockEmbeddedTransport).toHaveBeenCalledTimes(1);
-    expect(mockWsTransport).not.toHaveBeenCalled();
-    expect(provider.getState().mode).toBe('embedded');
     expect(provider.getState().status).toBe('connected');
 
     provider.dispose();
@@ -141,7 +129,6 @@ describe('createTransportProvider', () => {
     mint.next({ status: 200, body: { token: 'cf-token', expiresAt: Date.now() + 60_000 } });
 
     const provider = createTransportProvider({
-      preferEmbedded: false,
       sessionUrl: '/api/lsp/session',
       cfWsBase: 'ws://localhost/api/lsp'
     });
@@ -151,22 +138,22 @@ describe('createTransportProvider', () => {
     expect(mockWsTransport).toHaveBeenCalledTimes(1);
     expect(mockWsTransport).toHaveBeenCalledWith('ws://localhost/api/lsp/ws/cf-token', 2000);
     expect(mint.callCount()).toBe(1);
+    expect(provider.getState().mode).toBe('pages-function');
 
     provider.dispose();
   });
 
-  it('falls back to CF Worker (Step 3) when dev WS fails — happy path', async () => {
+  it('falls back to Pages Function (Tier B) when dev WS fails — happy path', async () => {
     const cfTransport = makeFakeTransport();
-    // Step 2: dev WS rejects
+    // Tier A: dev WS rejects
     mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
-    // Step 3: CF Worker WS resolves after the mint
+    // Tier B: Pages Function WS resolves after the mint
     mockWsTransport.mockResolvedValueOnce(cfTransport);
 
     const mint = installMintMock();
     mint.next({ status: 200, body: { token: 'cf-token', expiresAt: Date.now() + 60_000 } });
 
     const provider = createTransportProvider({
-      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -177,10 +164,10 @@ describe('createTransportProvider', () => {
     const transport = await provider.getTransport();
 
     expect(transport).toBe(cfTransport);
-    expect(provider.getState().mode).toBe('cf-worker');
+    expect(provider.getState().mode).toBe('pages-function');
     expect(provider.getState().status).toBe('connected');
 
-    // The CF WS URL must have the token appended.
+    // The Pages Function WS URL must have the token appended.
     expect(mockWsTransport).toHaveBeenLastCalledWith(`${CF_WS_BASE}/ws/cf-token`, 100);
     provider.dispose();
   });
@@ -195,7 +182,6 @@ describe('createTransportProvider', () => {
     mint.next({ status: 200, body: { token: 'fresh', expiresAt: Date.now() + 60_000 } });
 
     const provider = createTransportProvider({
-      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -205,7 +191,7 @@ describe('createTransportProvider', () => {
     const transport = await provider.getTransport();
 
     expect(transport).toBe(cfTransport);
-    expect(provider.getState().mode).toBe('cf-worker');
+    expect(provider.getState().mode).toBe('pages-function');
     expect(mint.callCount()).toBe(2);
     provider.dispose();
   });
@@ -217,7 +203,6 @@ describe('createTransportProvider', () => {
     mint.next({ status: 429, body: { error: 'rate_limited', retry_after_s: 60 } });
 
     const provider = createTransportProvider({
-      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -225,7 +210,7 @@ describe('createTransportProvider', () => {
       cfWsBase: CF_WS_BASE
     });
     await expect(provider.getTransport()).rejects.toThrow(
-      /language services unavailable|CF LSP worker unreachable/i
+      /language services unavailable|Pages Function LSP unreachable/i
     );
     expect(provider.getState().mode).toBe('disconnected');
     expect(provider.getState().status).toBe('error');
@@ -239,7 +224,6 @@ describe('createTransportProvider', () => {
     mint.next({ status: 500, body: { error: 'internal_error' } });
 
     const provider = createTransportProvider({
-      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -247,7 +231,7 @@ describe('createTransportProvider', () => {
       cfWsBase: CF_WS_BASE
     });
     await expect(provider.getTransport()).rejects.toThrow(
-      /language services unavailable|CF LSP worker unreachable/i
+      /language services unavailable|Pages Function LSP unreachable/i
     );
     expect(provider.getState().mode).toBe('disconnected');
     expect(provider.getState().status).toBe('error');
@@ -257,15 +241,14 @@ describe('createTransportProvider', () => {
   it('retries the mint when the WS connect itself returns 401-equivalent', async () => {
     const cfTransport = makeFakeTransport();
     mockWsTransport.mockRejectedValueOnce(new Error('Connection refused')); // dev WS fails
-    mockWsTransport.mockRejectedValueOnce(new Error('WebSocket closed: 1008 invalid_session')); // first CF WS open fails
-    mockWsTransport.mockResolvedValueOnce(cfTransport); // retry CF WS open succeeds
+    mockWsTransport.mockRejectedValueOnce(new Error('WebSocket closed: 1008 invalid_session')); // first Pages Function WS open fails
+    mockWsTransport.mockResolvedValueOnce(cfTransport); // retry Pages Function WS open succeeds
 
     const mint = installMintMock();
     mint.next({ status: 200, body: { token: 'first', expiresAt: Date.now() + 60_000 } });
     mint.next({ status: 200, body: { token: 'second', expiresAt: Date.now() + 60_000 } });
 
     const provider = createTransportProvider({
-      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -275,16 +258,13 @@ describe('createTransportProvider', () => {
     const transport = await provider.getTransport();
 
     expect(transport).toBe(cfTransport);
-    expect(provider.getState().mode).toBe('cf-worker');
+    expect(provider.getState().mode).toBe('pages-function');
     expect(mint.callCount()).toBe(2);
     provider.dispose();
   });
 
   it('notifies state change listeners', async () => {
     const wsTransport = makeFakeTransport();
-    mockEmbeddedTransport.mockImplementationOnce(() => {
-      throw new Error('embedded unavailable');
-    });
     mockWsTransport.mockResolvedValueOnce(wsTransport);
 
     const provider = createTransportProvider({ wsUri: 'ws://localhost:3001' });
@@ -302,9 +282,6 @@ describe('createTransportProvider', () => {
 
   it('unsubscribes state change listeners on dispose return', async () => {
     const wsTransport = makeFakeTransport();
-    mockEmbeddedTransport.mockImplementationOnce(() => {
-      throw new Error('embedded unavailable');
-    });
     mockWsTransport.mockResolvedValueOnce(wsTransport);
 
     const provider = createTransportProvider({ wsUri: 'ws://localhost:3001' });
@@ -330,7 +307,6 @@ describe('createTransportProvider', () => {
     mint.next({ status: 500, body: { error: 'internal_error' } });
 
     const provider = createTransportProvider({
-      preferEmbedded: false,
       wsUri: 'ws://localhost:3001',
       connectionTimeout: 100,
       maxReconnectAttempts: 0,
@@ -338,7 +314,7 @@ describe('createTransportProvider', () => {
       cfWsBase: CF_WS_BASE
     });
     await expect(provider.getTransport()).rejects.toThrow(
-      /language services unavailable|CF LSP worker unreachable/i
+      /language services unavailable|Pages Function LSP unreachable/i
     );
     expect(provider.getState().mode).toBe('disconnected');
     expect(provider.getState().status).toBe('error');

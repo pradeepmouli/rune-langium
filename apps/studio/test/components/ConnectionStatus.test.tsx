@@ -30,11 +30,11 @@ describe('ConnectionStatus', () => {
     expect(screen.getByText(/websocket/i)).toBeInTheDocument();
   });
 
-  it('shows embedded connected', () => {
-    const state: TransportState = { mode: 'embedded', status: 'connected' };
+  it('shows pages-function connected as "Same-origin"', () => {
+    const state: TransportState = { mode: 'pages-function', status: 'connected' };
     render(<ConnectionStatus state={state} />);
     expect(screen.getByText(/connected/i)).toBeInTheDocument();
-    expect(screen.getByText(/embedded/i)).toBeInTheDocument();
+    expect(screen.getByText(/same-origin/i)).toBeInTheDocument();
   });
 
   it('shows error state', () => {
