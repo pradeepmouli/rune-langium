@@ -51,11 +51,13 @@ function boolFromEnv(value: string | undefined, fallback: boolean): boolean {
 }
 
 // Same-origin LSP defaults (019 Phase 2): the Pages Function endpoints live
-// on the studio origin under `/api/lsp/*`. SSR/Node fallback uses the wrangler
+// on the studio origin under `/api/lsp/*`. The value here is the WS BASE; the
+// transport provider appends `/ws/${token}` to reach the
+// `functions/api/lsp/ws/[token].ts` route. SSR/Node fallback uses the wrangler
 // dev port so type-check builds without `window` don't fail Zod URL validation.
 function defaultLspWsUrl(): string {
-  if (typeof window === 'undefined') return 'ws://localhost:8788/api/lsp/ws';
-  return window.location.origin.replace(/^http/, 'ws') + '/api/lsp/ws';
+  if (typeof window === 'undefined') return 'ws://localhost:8788/api/lsp';
+  return window.location.origin.replace(/^http/, 'ws') + '/api/lsp';
 }
 
 function defaultLspSessionUrl(): string {

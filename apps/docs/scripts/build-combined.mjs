@@ -4,6 +4,11 @@
  * `apps/docs/.vitepress/dist/` containing:
  *
  *   _redirects                    → SPA fallback for /rune-studio/studio/*
+ *   functions/                    → Pages Functions copied from apps/studio/
+ *                                   functions/ (spec 019). Mounted at the
+ *                                   deploy origin root, so the studio's
+ *                                   same-origin LSP/parse calls to
+ *                                   `${origin}/api/...` land here.
  *   rune-studio/                  → public subpath (www.daikonic.dev/rune-studio/)
  *     ├── <site/*>                → static landing page from `site/`
  *     ├── docs/                   → VitePress docs (base='/rune-studio/docs/')
@@ -12,6 +17,16 @@
  * Both sub-builds run with CF_PAGES=1 so their configs pick the right base.
  * CF Pages' git integration points at `apps/docs/.vitepress/dist/` as the
  * output directory; no GitHub Actions workflow is required.
+ *
+ * REQUIRED CF Pages dashboard configuration (one-time, spec 019 Phase 1):
+ *   - Compatibility flag:  nodejs_compat
+ *   - Durable Object binding:  LSP_SESSION  →  class RuneLspSession (same project)
+ *   - Migration:  v1 / new_sqlite_classes: [RuneLspSession]
+ *   - Var:  ALLOWED_ORIGIN = https://www.daikonic.dev
+ * (These come from apps/studio/wrangler.toml. The wrangler.toml is NOT copied
+ *  into the deploy root because the existing dashboard config already
+ *  holds bindings/vars for the rest of the site; mirroring them here would
+ *  risk drift.)
  */
 
 import { execSync } from 'node:child_process';
@@ -25,9 +40,11 @@ const repoRoot = resolve(docsRoot, '..', '..');
 
 const siteRoot = join(repoRoot, 'site');
 const studioDist = join(repoRoot, 'apps', 'studio', 'dist');
+const studioFunctionsSrc = join(repoRoot, 'apps', 'studio', 'functions');
 const docsRawDist = join(docsRoot, '.vitepress', 'dist-docs-raw');
 const combinedDist = join(docsRoot, '.vitepress', 'dist');
 const subpathDist = join(combinedDist, 'rune-studio');
+const combinedFunctions = join(combinedDist, 'functions');
 
 const env = {
   ...process.env,
@@ -88,6 +105,16 @@ run(
 copyDir(siteRoot, subpathDist, 'site → /rune-studio/');
 copyDir(docsRawDist, join(subpathDist, 'docs'), 'vitepress → /rune-studio/docs/');
 copyDir(studioDist, join(subpathDist, 'studio'), 'studio → /rune-studio/studio/');
+
+// Copy the studio's Pages Functions into the deploy-root `functions/` dir
+// where CF Pages discovers them (spec 019 Phase 1). The source is
+// apps/studio/functions/ — same tree the local `pnpm dev:pages` reads from
+// — minus the test/ + tsconfig artifacts that don't ship to production.
+copyDir(studioFunctionsSrc, combinedFunctions, 'studio functions → /functions/');
+for (const stripped of ['test', 'tsconfig.json', 'tsconfig.tsbuildinfo']) {
+  rmSync(join(combinedFunctions, stripped), { recursive: true, force: true });
+}
+console.log('[build-combined] Stripped test/ + tsconfig artifacts from functions copy');
 
 writeFileSync(
   join(combinedDist, '_redirects'),

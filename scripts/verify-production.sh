@@ -280,6 +280,79 @@ case "$status" in
     ;;
 esac
 
+# ---------- 8. Spec 019 Pages Functions — same-origin LSP + parse (Phase 1) ----------
+# These probes target the NEW endpoints deployed via apps/docs/.vitepress/dist/
+# functions/ (see apps/docs/scripts/build-combined.mjs). They run at the ROOT
+# of the origin (not under /rune-studio/), since CF Pages mounts functions at
+# the project root. The OLD apps/lsp-worker at $BASE/api/lsp/* is still
+# checked above and remains the active production LSP until Phase 3.
+#
+# Skip this section when targeting a non-daikonic.dev BASE (e.g. a staging
+# preview URL with a different routing prefix) by setting SKIP_019=1.
+
+if [ "${SKIP_019:-0}" != "1" ]; then
+  status=$(http_status GET "$ROOT_BASE/api/lsp/health")
+  case "$status" in
+    200)
+      body=$(http_body GET "$ROOT_BASE/api/lsp/health")
+      if printf '%s' "$body" | grep -q '"langium_loaded":true'; then
+        pass "019 /api/lsp/health ($status, langium_loaded:true)"
+      else
+        fail "019 /api/lsp/health" \
+             "200 but missing langium_loaded:true — Pages Function live but langium import failed (bundle regression). Body: ${body:0:160}"
+      fi
+      ;;
+    404)
+      warn "019 /api/lsp/health" \
+           "404 — Pages Function not yet deployed at $ROOT_BASE/api/lsp/health. Either the build-combined functions/ copy didn't ship, or the CF Pages project hasn't picked it up. Push to trigger autodeploy, then re-run."
+      ;;
+    *)
+      fail "019 /api/lsp/health" \
+           "expected 200, got $status from $ROOT_BASE/api/lsp/health"
+      ;;
+  esac
+
+  # /api/lsp/session: POST without Origin should be rejected (origin gating).
+  # We expect 400/403 here — a 200 would indicate the origin allowlist is off.
+  # 404/405 both mean "no Pages Function deployed at this path" (CF Pages
+  # falls through to its static-asset 405 when the route is unhandled).
+  status=$(http_status POST "$ROOT_BASE/api/lsp/session" '{"workspaceId":"verify"}')
+  case "$status" in
+    200)
+      warn "019 /api/lsp/session origin gating" \
+           "200 with no Origin header — token mint should reject cross-origin / null-origin requests (lsp-auth.ts). Check ALLOWED_ORIGIN var in CF dashboard."
+      ;;
+    400|401|403)
+      pass "019 /api/lsp/session origin gate ($status without Origin header)"
+      ;;
+    404|405)
+      warn "019 /api/lsp/session" \
+           "$status — Pages Function not deployed yet at $ROOT_BASE/api/lsp/session (CF static-asset fallthrough)."
+      ;;
+    *)
+      fail "019 /api/lsp/session origin gate" \
+           "expected 400/401/403 from no-Origin POST, got $status"
+      ;;
+  esac
+
+  # /api/parse: empty body should be rejected with 400.
+  # 404/405 both mean "no Pages Function deployed at this path".
+  status=$(http_status POST "$ROOT_BASE/api/parse" '{}')
+  case "$status" in
+    400)
+      pass "019 /api/parse rejects empty body ($status)"
+      ;;
+    404|405)
+      warn "019 /api/parse" \
+           "$status — Pages Function not deployed yet at $ROOT_BASE/api/parse (CF static-asset fallthrough)."
+      ;;
+    *)
+      fail "019 /api/parse" \
+           "expected 400 from empty-body POST, got $status"
+      ;;
+  esac
+fi
+
 # ---------- summary ----------
 
 echo

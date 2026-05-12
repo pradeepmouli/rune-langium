@@ -69,7 +69,7 @@ describe('studio config singleton (014 T009/T011)', () => {
     vi.resetModules();
   });
 
-  it('(a) production defaults route LSP same-origin to /api/lsp/ws', async () => {
+  it('(a) production defaults route LSP same-origin to /api/lsp (base; provider appends /ws/<token>)', async () => {
     const { config } = await loadConfig({
       DEV: false,
       PROD: true,
@@ -77,19 +77,19 @@ describe('studio config singleton (014 T009/T011)', () => {
     });
     // jsdom default origin is http://localhost:3000 in vitest's jsdom env.
     const expectedWsOrigin = window.location.origin.replace(/^http/, 'ws');
-    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/api/lsp/ws`);
+    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/api/lsp`);
     expect(config.lspEnabled).toBe(true);
     expect(config.devMode).toBe(false);
   });
 
-  it('(b) dev defaults route LSP same-origin to /api/lsp/ws', async () => {
+  it('(b) dev defaults route LSP same-origin to /api/lsp (base; provider appends /ws/<token>)', async () => {
     const { config } = await loadConfig({
       DEV: true,
       PROD: false,
       MODE: 'development'
     });
     const expectedWsOrigin = window.location.origin.replace(/^http/, 'ws');
-    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/api/lsp/ws`);
+    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/api/lsp`);
     expect(config.lspEnabled).toBe(true);
     expect(config.devMode).toBe(true);
   });
