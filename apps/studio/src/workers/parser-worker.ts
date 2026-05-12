@@ -280,6 +280,14 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
       const uri = URI.parse(file.name);
       if (langiumDocs.hasDocument(uri)) langiumDocs.deleteDocument(uri);
 
+      // DEPRECATED (019 Phase 0): pre-parsed corpus content no longer flows through
+      // this path. The server-side /api/parse Pages Function fetches curated bundles
+      // from curated-mirror directly and returns them in hydrationState. This branch
+      // remains as a transition shim during 019 rollout; remove in a follow-up spec
+      // once the router is the only production path for parseWorkspace. The
+      // `.bundle-marker` synthetic file entries (workspace.ts BUNDLE_MARKER_SUFFIX)
+      // also flow through this branch with `serializedModelJson: '{}'` and content '',
+      // which the deferred-model machinery handles harmlessly.
       if (file.serializedModelJson) {
         // Corpus file — store raw JSON for lazy deserialization by RuneDslLinker.
         // Nothing is deserialized or added to LangiumDocuments here.
