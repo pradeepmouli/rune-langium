@@ -55,15 +55,15 @@ export interface LinkDocumentResponse {
 export interface HydrateRequest {
   type: 'hydrate';
   id: string;
-  /** Documents to register with the deferred-model provider. */
+  /** Documents to register with the deferred-model provider, each with its own exports for the index. */
   documents: Array<{
     uri: string;
     content: string;
     /** Serialized langium AST as JSON string (from JsonSerializer.serialize). */
     serializedModel: string;
+    /** Export descriptions for the symbol index, scoped to this document. */
+    exports: Array<{ type: string; name: string; path: string }>;
   }>;
-  /** Pre-computed export descriptions per namespace, for RuneDslIndexManager.registerExports. */
-  exportsByNamespace: Record<string, Array<{ type: string; name: string; path: string }>>;
 }
 
 export interface HydrateResponse {
@@ -426,21 +426,21 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
 
 async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
   try {
-    // Register each document's serialized model with the deferred-model store
-    // (same mechanism used by the curated-corpus path: deferredModelJson map).
+    // Register each document using a single canonical URI for both the deferred-model
+    // store and the symbol index, so deferredProvider.getModel() and registerExports()
+    // always agree on the key.
     for (const doc of req.documents) {
-      deferredModelJson.set(doc.uri, doc.serializedModel);
-    }
-    // Register exports so RuneDslIndexManager can resolve cross-namespace refs.
-    for (const [namespace, exports] of Object.entries(req.exportsByNamespace)) {
-      const uri = URI.parse(`file:///${namespace.replace(/\./g, '/')}.rune`);
-      const descriptions: AstNodeDescription[] = exports.map((e) => ({
-        type: e.type,
-        name: e.name,
-        path: e.path,
-        documentUri: uri
-      }));
-      indexManager.registerExports(uri, descriptions);
+      const uri = URI.parse(doc.uri);
+      deferredModelJson.set(uri.toString(), doc.serializedModel);
+      if (doc.exports?.length) {
+        const descriptions: AstNodeDescription[] = doc.exports.map((e) => ({
+          type: e.type,
+          name: e.name,
+          path: e.path,
+          documentUri: uri
+        }));
+        indexManager.registerExports(uri, descriptions);
+      }
     }
     return { type: 'hydrateResult', id: req.id, ok: true };
   } catch (err) {
@@ -494,3 +494,12 @@ export function isLinkDocumentResponse(value: unknown): value is LinkDocumentRes
 }
 
 export { handleParse, handleParseWorkspace, handleLinkDocument };
+
+// Test-only accessors. Exported for use by parser-worker-harness.ts.
+// Not part of the worker's public message API.
+export function _testInternals() {
+  return {
+    deferredModelJson,
+    services: RuneDsl
+  };
+}
