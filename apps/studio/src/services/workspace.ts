@@ -34,6 +34,19 @@ export interface WorkspaceFile {
    * these symbols in the IndexManager without deserializing the full AST.
    */
   exports?: Array<{ type: string; name: string; path: string }>;
+  /**
+   * The curated bundle id this file belongs to (e.g. "cdm", "fpml").
+   * Set by mergeModelFiles from LoadedModel.source.id. Used by
+   * collectCuratedBundlesFromWorkspace to build the curatedBundles list for
+   * the /api/parse router. Absent on user-authored files.
+   */
+  bundleId?: string;
+  /**
+   * The curated bundle version (commitHash / date stamp) for this file,
+   * e.g. "2026-04-25". Set by mergeModelFiles from LoadedModel.commitHash.
+   * Used alongside bundleId to form { id, version } entries for /api/parse.
+   */
+  bundleVersion?: string;
 }
 
 export interface WorkspaceLoadProgress {
@@ -55,7 +68,7 @@ export interface ParsedWorkspaceModel {
   model: RosettaModel;
 }
 
-export type ParseMode = 'worker' | 'main-thread-fallback';
+export type ParseMode = 'worker' | 'router' | 'main-thread-fallback';
 
 export interface ParseFileResult {
   model: RosettaModel | null;
@@ -311,31 +324,54 @@ export async function parseFile(content: string, uri?: string): Promise<ParseFil
 }
 
 /**
+ * Walks the workspace's WorkspaceFile[] and collects unique curated bundle
+ * metadata from files that carry bundleId + bundleVersion (set by
+ * mergeModelFiles from LoadedModel.source.id and LoadedModel.commitHash).
+ *
+ * Returns deduped { id, version } entries suitable for the /api/parse
+ * curatedBundles field (server fetches the corpus server-to-server).
+ *
+ * Design note: We read bundleId/bundleVersion from WorkspaceFile rather than
+ * the model-store Zustand state so that parseWorkspaceFiles remains a pure
+ * function that doesn't depend on the store. mergeModelFiles populates these
+ * fields whenever it merges corpus files into the workspace.
+ */
+function collectCuratedBundlesFromWorkspace(files: WorkspaceFile[]): Array<{ id: string; version: string }> {
+  const seen = new Map<string, string>(); // id → version
+  for (const file of files) {
+    if (file.bundleId && file.bundleVersion && !seen.has(file.bundleId)) {
+      seen.set(file.bundleId, file.bundleVersion);
+    }
+  }
+  return Array.from(seen.entries()).map(([id, version]) => ({ id, version }));
+}
+
+/**
  * Parse all files in the workspace and return models.
- * Tries the web worker first; falls back to main-thread parsing.
- * Supports cross-file resolution via sequential parsing (T100).
+ *
+ * Primary path (019 Phase 0): delegates to the /api/parse Pages Function via
+ * `parseWorkspaceViaRouter`. Curated corpus files (readOnly, serializedModelJson
+ * set) are NOT sent as file content — instead their bundle id+version are
+ * collected and sent as `curatedBundles` so the server can fetch them
+ * server-to-server. Only user-authored files (no serializedModelJson) are POSTed
+ * as raw content.
+ *
+ * Fallback: if the router call fails (network error, 5xx, etc.), the function
+ * falls back to main-thread parsing via `parseWorkspaceFilesOnMainThread`.
+ * The old browser-worker path (T098) is no longer the primary; it remains
+ * available via `_defaultBrowserParse` / `setBrowserParseImpl` for testing.
  */
 export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<ParseWorkspaceFilesResult> {
   if (files.length === 0) {
-    return { models: [], parsedModels: [], errors: new Map(), parseMode: 'worker' };
+    return { models: [], parsedModels: [], errors: new Map(), parseMode: 'router' };
   }
 
-  // Try worker batch parse first (T098)
+  // User files go as raw content; curated/read-only files become bundle metadata.
+  const userFiles = files.filter((f) => !f.serializedModelJson).map((f) => ({ name: f.path, content: f.content }));
+  const curatedBundles = collectCuratedBundlesFromWorkspace(files);
+
   try {
-    const id = String(++requestId);
-    const response = await workerRequest({
-      type: 'parseWorkspace',
-      id,
-      files: files.map((f) => ({
-        name: f.path,
-        content: f.content,
-        serializedModelJson: f.serializedModelJson,
-        exports: f.exports
-      }))
-    });
-    if (response.errors.__worker__?.length) {
-      throw new Error(response.errors.__worker__.join('; '));
-    }
+    const response = await parseWorkspaceViaRouter(userFiles, { curatedBundles });
     const errMap = new Map<string, string[]>();
     for (const [k, v] of Object.entries(response.errors)) {
       errMap.set(k, v);
@@ -344,16 +380,16 @@ export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<Parse
       models: response.models,
       parsedModels: response.parsedModels,
       errors: errMap,
-      parseMode: 'worker',
+      parseMode: 'router',
       deferredExports: response.deferredExports
     };
   } catch (error) {
-    // Fallback to main thread
-    console.warn('[workspace] parseWorkspaceFiles worker fallback:', error);
-    const fallbackMessage = formatWorkerFallbackMessage(error);
+    // Router failed (network error, Pages Function unavailable, etc.) — fall back
+    // to synchronous main-thread parsing so the editor stays functional.
+    console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
     return parseWorkspaceFilesOnMainThread(files, {
       parseMode: 'main-thread-fallback',
-      fallbackMessage
+      fallbackMessage: formatWorkerFallbackMessage(error)
     });
   }
 }
@@ -402,20 +438,22 @@ export function setBrowserParseImpl(
 /**
  * Route a parseWorkspace request through the /api/parse Pages Function.
  *
- * 1. POSTs the file list to /api/parse.
+ * 1. POSTs the file list to /api/parse (with optional curatedBundles metadata
+ *    so the server can fetch corpus documents server-to-server).
  * 2. On success, hydrates the browser worker with the returned hydration state
  *    so subsequent linkDocument requests work without re-parsing locally.
  * 3. Falls back to the browser worker on any failure (non-2xx, network error, or
  *    when the server response signals ok:false).
  */
 export async function parseWorkspaceViaRouter(
-  files: Array<{ name: string; content: string }>
+  files: Array<{ name: string; content: string }>,
+  options: { curatedBundles?: Array<{ id: string; version: string }> } = {}
 ): Promise<ParseWorkspaceResponse> {
   try {
     const response = await fetch('/api/parse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files })
+      body: JSON.stringify({ files, curatedBundles: options.curatedBundles ?? [] })
     });
     if (!response.ok) {
       return browserParseImpl(files);
@@ -590,7 +628,10 @@ export function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedMode
   // Remove any previous files from this model source
   const userFiles = currentFiles.filter((f) => !f.path.startsWith(`[${model.source.id}]/`));
 
-  // Convert model files to read-only workspace files
+  // Convert model files to read-only workspace files.
+  // bundleId and bundleVersion are propagated from the LoadedModel so that
+  // parseWorkspaceFiles / collectCuratedBundlesFromWorkspace can build the
+  // curatedBundles list for /api/parse without touching the model-store.
   const modelFiles: WorkspaceFile[] = model.files.map((f: CachedFile) => ({
     name: f.path.split('/').pop() ?? f.path,
     path: `[${model.source.id}]/${f.path}`,
@@ -598,7 +639,9 @@ export function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedMode
     dirty: false,
     readOnly: true,
     serializedModelJson: f.serializedModelJson,
-    exports: f.exports
+    exports: f.exports,
+    bundleId: model.source.id,
+    bundleVersion: model.commitHash
   }));
 
   return [...userFiles, ...modelFiles];
