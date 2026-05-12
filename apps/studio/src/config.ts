@@ -70,7 +70,6 @@ function defaultLspSessionUrl(): string {
 const env = import.meta.env;
 // Use MODE as the authoritative signal (DEV/PROD can both report true under
 // vitest where stubEnv toggles one without clearing the other).
-const isProd = env.MODE === 'production' || (env.PROD === true && env.MODE !== 'development');
 const isDev = env.MODE === 'development' || (env.DEV === true && env.MODE !== 'production');
 
 const lspWsUrl = env.VITE_LSP_WS_URL ?? defaultLspWsUrl();

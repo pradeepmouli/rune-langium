@@ -162,7 +162,7 @@ function readRosettaFilesFromTar(tar: Uint8Array): Array<{ path: string; content
   return files;
 }
 
-async function walkTarEntries(tarBuffer: Uint8Array, bundleId: string, version: string): Promise<CuratedDocument[]> {
+async function walkTarEntries(tarBuffer: Uint8Array, bundleId: string, _version: string): Promise<CuratedDocument[]> {
   const rosettaFiles = readRosettaFilesFromTar(tarBuffer);
   if (rosettaFiles.length === 0) {
     return [];
