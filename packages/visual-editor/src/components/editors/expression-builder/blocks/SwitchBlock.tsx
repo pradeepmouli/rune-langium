@@ -31,13 +31,11 @@ export function SwitchBlock({ node, renderChild }: SwitchBlockProps) {
 
   return (
     <span
-      className="inline-flex flex-col gap-1 rounded border border-[var(--color-expr-control)]/30 px-2 py-1 bg-[var(--color-expr-control-bg)]"
+      className="inline-flex flex-col gap-1 rounded border border-(--color-expr-control)/30 px-2 py-1 bg-(--color-expr-control-bg)"
       data-block="switch"
     >
       <span className="inline-flex items-baseline gap-1">
-        <span className="font-mono text-xs font-semibold text-[var(--color-expr-control)]">
-          switch
-        </span>
+        <span className="font-mono text-xs font-semibold text-(--color-expr-control)">switch</span>
         {renderChild(argument)}
       </span>
       {cases.map((c, i) => {

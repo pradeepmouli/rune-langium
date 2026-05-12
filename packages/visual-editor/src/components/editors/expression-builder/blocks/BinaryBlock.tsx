@@ -15,16 +15,16 @@ import type { ExpressionNode } from '../../../../schemas/expression-node-schema.
 function categoryClass($type: string): string {
   switch ($type) {
     case 'ArithmeticOperation':
-      return 'text-[var(--color-expr-arithmetic)] bg-[var(--color-expr-arithmetic-bg)]';
+      return 'text-(--color-expr-arithmetic) bg-(--color-expr-arithmetic-bg)';
     case 'ComparisonOperation':
     case 'EqualityOperation':
     case 'RosettaContainsExpression':
     case 'RosettaDisjointExpression':
-      return 'text-[var(--color-expr-comparison)] bg-[var(--color-expr-comparison-bg)]';
+      return 'text-(--color-expr-comparison) bg-(--color-expr-comparison-bg)';
     case 'LogicalOperation':
-      return 'text-[var(--color-expr-logic)] bg-[var(--color-expr-logic-bg)]';
+      return 'text-(--color-expr-logic) bg-(--color-expr-logic-bg)';
     default:
-      return 'text-[var(--color-expr-arithmetic)] bg-[var(--color-expr-arithmetic-bg)]';
+      return 'text-(--color-expr-arithmetic) bg-(--color-expr-arithmetic-bg)';
   }
 }
 

@@ -50,6 +50,9 @@ export function GraphFilterMenu({ compact = false, className, align = 'start' }:
   const toggleEdgeKind = useEditorStore((s) => s.toggleEdgeKind);
   const showAllNodeKinds = useEditorStore((s) => s.showAllNodeKinds);
   const showAllEdgeKinds = useEditorStore((s) => s.showAllEdgeKinds);
+  const focusMode = useEditorStore((s) => s.focusMode ?? false);
+  const focusRelatedExcludedKinds = useEditorStore((s) => s.focusRelatedExcludedKinds ?? new Set());
+  const toggleFocusRelatedExcludedKind = useEditorStore((s) => s.toggleFocusRelatedExcludedKind ?? (() => {}));
 
   const { visibleNodeKinds, visibleEdgeKinds } = visibility;
 
@@ -61,6 +64,17 @@ export function GraphFilterMenu({ compact = false, className, align = 'start' }:
     showAllNodeKinds();
     showAllEdgeKinds();
   }, [showAllNodeKinds, showAllEdgeKinds]);
+
+  const includeBasicTypesInFocus = !focusRelatedExcludedKinds.has('basicType');
+  const includeTypeAliasesInFocus = !focusRelatedExcludedKinds.has('typeAlias');
+
+  const handleToggleBasicTypesInFocus = useCallback(() => {
+    toggleFocusRelatedExcludedKind('basicType');
+  }, [toggleFocusRelatedExcludedKind]);
+
+  const handleToggleTypeAliasesInFocus = useCallback(() => {
+    toggleFocusRelatedExcludedKind('typeAlias');
+  }, [toggleFocusRelatedExcludedKind]);
 
   return (
     <Popover>
@@ -113,13 +127,13 @@ export function GraphFilterMenu({ compact = false, className, align = 'start' }:
                   type="button"
                 >
                   <span
-                    className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                    className="w-2.5 h-2.5 rounded-sm shrink-0"
                     style={{
                       backgroundColor: active ? color : 'transparent',
                       border: `1.5px solid ${active ? color : 'currentColor'}`
                     }}
                   />
-                  <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ opacity: active ? 1 : 0.4 }} />
+                  <Icon className="w-3.5 h-3.5 shrink-0" style={{ opacity: active ? 1 : 0.4 }} />
                   <span>{label}</span>
                 </button>
               );
@@ -151,7 +165,7 @@ export function GraphFilterMenu({ compact = false, className, align = 'start' }:
                   type="button"
                   onClick={() => toggleEdgeKind(kind)}
                 >
-                  <span className="w-4 flex-shrink-0 flex items-center">
+                  <span className="w-4 shrink-0 flex items-center">
                     <span
                       className="w-full h-0"
                       style={{
@@ -164,6 +178,61 @@ export function GraphFilterMenu({ compact = false, className, align = 'start' }:
                 </button>
               );
             })}
+          </div>
+
+          <Separator className="my-2" />
+
+          {/* Focus-related type behavior */}
+          <div className="space-y-1">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Focus Mode</div>
+            <button
+              type="button"
+              className={cn(
+                'flex items-center justify-between w-full px-2 py-1.5 rounded text-sm transition-colors',
+                focusMode ? 'hover:bg-accent text-foreground' : 'text-muted-foreground'
+              )}
+              onClick={handleToggleBasicTypesInFocus}
+              title="When off, Basic Types are removed from focus-related neighbors"
+            >
+              <span>Include Basic Types In Related</span>
+              <span
+                className={cn(
+                  'inline-flex h-4 w-8 items-center rounded-full border transition-colors',
+                  includeBasicTypesInFocus ? 'bg-primary/20 border-primary/40' : 'bg-muted border-border'
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-3 w-3 rounded-full bg-current transition-transform',
+                    includeBasicTypesInFocus ? 'translate-x-4 text-primary' : 'translate-x-0.5 text-muted-foreground'
+                  )}
+                />
+              </span>
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'flex items-center justify-between w-full px-2 py-1.5 rounded text-sm transition-colors',
+                focusMode ? 'hover:bg-accent text-foreground' : 'text-muted-foreground'
+              )}
+              onClick={handleToggleTypeAliasesInFocus}
+              title="When off, Type Alias nodes are removed from focus-related neighbors"
+            >
+              <span>Include Type Aliases In Related</span>
+              <span
+                className={cn(
+                  'inline-flex h-4 w-8 items-center rounded-full border transition-colors',
+                  includeTypeAliasesInFocus ? 'bg-primary/20 border-primary/40' : 'bg-muted border-border'
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-3 w-3 rounded-full bg-current transition-transform',
+                    includeTypeAliasesInFocus ? 'translate-x-4 text-primary' : 'translate-x-0.5 text-muted-foreground'
+                  )}
+                />
+              </span>
+            </button>
           </div>
 
           <Separator className="my-2" />

@@ -22,24 +22,20 @@ export function ConditionalBlock({ node, renderChild }: ConditionalBlockProps) {
 
   return (
     <span
-      className="inline-flex flex-col gap-1 rounded border border-[var(--color-expr-control)]/30 px-2 py-1 bg-[var(--color-expr-control-bg)]"
+      className="inline-flex flex-col gap-1 rounded border border-(--color-expr-control)/30 px-2 py-1 bg-(--color-expr-control-bg)"
       data-block="conditional"
     >
       <span className="inline-flex items-baseline gap-1">
-        <span className="font-mono text-xs font-semibold text-[var(--color-expr-control)]">if</span>
+        <span className="font-mono text-xs font-semibold text-(--color-expr-control)">if</span>
         {renderChild(ifExpr)}
       </span>
       <span className="inline-flex items-baseline gap-1">
-        <span className="font-mono text-xs font-semibold text-[var(--color-expr-control)]">
-          then
-        </span>
+        <span className="font-mono text-xs font-semibold text-(--color-expr-control)">then</span>
         {renderChild(thenExpr)}
       </span>
       {elseExpr && (
         <span className="inline-flex items-baseline gap-1">
-          <span className="font-mono text-xs font-semibold text-[var(--color-expr-control)]">
-            else
-          </span>
+          <span className="font-mono text-xs font-semibold text-(--color-expr-control)">else</span>
           {renderChild(elseExpr)}
         </span>
       )}

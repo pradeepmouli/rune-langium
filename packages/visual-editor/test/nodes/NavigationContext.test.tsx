@@ -102,20 +102,20 @@ describe('NavigationContext', () => {
   describe('getHandlePositions', () => {
     it('uses horizontal handles for tall layouts and vertical handles for wide layouts', () => {
       expect(getHandlePositions('TB')).toEqual({
-        target: Position.Left,
-        source: Position.Right
-      });
-      expect(getHandlePositions('BT')).toEqual({
-        target: Position.Right,
-        source: Position.Left
-      });
-      expect(getHandlePositions('LR')).toEqual({
         target: Position.Top,
         source: Position.Bottom
       });
-      expect(getHandlePositions('RL')).toEqual({
+      expect(getHandlePositions('BT')).toEqual({
         target: Position.Bottom,
         source: Position.Top
+      });
+      expect(getHandlePositions('LR')).toEqual({
+        target: Position.Left,
+        source: Position.Right
+      });
+      expect(getHandlePositions('RL')).toEqual({
+        target: Position.Right,
+        source: Position.Left
       });
     });
   });

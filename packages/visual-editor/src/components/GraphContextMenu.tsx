@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../store/editor-store.js';
-import type { TypeGraphNode } from '../types.js';
+import type { LayoutEngine, TypeGraphNode } from '../types.js';
 
 export interface ContextMenuState {
   /** Screen position for the menu. */
@@ -22,10 +22,12 @@ export interface ContextMenuState {
 
 export interface GraphContextMenuProps {
   state: ContextMenuState | null;
+  layoutEngine: LayoutEngine;
+  onLayoutEngineChange?: (engine: LayoutEngine) => void;
   onClose: () => void;
 }
 
-export function GraphContextMenu({ state, onClose }: GraphContextMenuProps) {
+export function GraphContextMenu({ state, layoutEngine, onLayoutEngineChange, onClose }: GraphContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const isolateNode = useEditorStore((s) => s.isolateNode);
   const revealNeighbors = useEditorStore((s) => s.revealNeighbors);
@@ -79,6 +81,14 @@ export function GraphContextMenu({ state, onClose }: GraphContextMenuProps) {
     onClose();
   }, [showAllNodes, onClose]);
 
+  const handleUseEngine = useCallback(
+    (engine: LayoutEngine) => {
+      onLayoutEngineChange?.(engine);
+      onClose();
+    },
+    [onClose, onLayoutEngineChange]
+  );
+
   if (!state) return null;
 
   const nodeName = state.node?.data?.name ?? 'Unknown';
@@ -129,6 +139,25 @@ export function GraphContextMenu({ state, onClose }: GraphContextMenuProps) {
       >
         <span className="w-4 mr-2 text-center">◎</span>
         Show all nodes
+      </button>
+      <div className="mx-2 my-1 h-px bg-border" />
+      <button
+        className="flex items-center w-full px-3 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
+        onClick={() => handleUseEngine('elk')}
+        role="menuitem"
+        aria-pressed={layoutEngine === 'elk'}
+      >
+        <span className="w-4 mr-2 text-center">{layoutEngine === 'elk' ? '●' : '○'}</span>
+        Use ELK layout
+      </button>
+      <button
+        className="flex items-center w-full px-3 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
+        onClick={() => handleUseEngine('dagre')}
+        role="menuitem"
+        aria-pressed={layoutEngine === 'dagre'}
+      >
+        <span className="w-4 mr-2 text-center">{layoutEngine === 'dagre' ? '●' : '○'}</span>
+        Use Dagre layout
       </button>
     </div>
   );

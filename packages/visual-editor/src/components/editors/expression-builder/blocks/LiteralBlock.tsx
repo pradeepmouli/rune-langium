@@ -29,7 +29,7 @@ export function LiteralBlock({ node }: LiteralBlockProps) {
 
   return (
     <span
-      className="inline-flex items-baseline rounded px-1 py-0.5 font-mono text-xs text-[var(--color-expr-literal)] bg-[var(--color-expr-literal-bg)]"
+      className="inline-flex items-baseline rounded px-1 py-0.5 font-mono text-xs text-(--color-expr-literal) bg-(--color-expr-literal-bg)"
       data-block="literal"
     >
       {display}

@@ -1,6 +1,6 @@
 ---
-name: rune-langium-lsp-server
 description: "Documentation site and generated agent skills for rune-langium APIs Use when: Embedding a Rune DSL language server in a web application via WebSocket."
+name: rune-langium-lsp-server
 ---
 
 # @rune-langium/lsp-server

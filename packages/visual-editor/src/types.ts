@@ -75,11 +75,7 @@ type ExcludedFields =
  * - Everything else (primitives, `Reference<T>`, unions) → passthrough
  */
 export type SerializeField<F> =
-  F extends Array<infer E extends AstNodeShape>
-    ? Array<AstNodeModel<E>>
-    : F extends AstNodeShape
-      ? AstNodeModel<F>
-      : F;
+  F extends Array<infer E extends AstNodeShape> ? Array<AstNodeModel<E>> : F extends AstNodeShape ? AstNodeModel<F> : F;
 
 /**
  * Mapped type that plucks and recursively serializes fields from any
@@ -162,22 +158,9 @@ export type AnyGraphNode =
 // ---------------------------------------------------------------------------
 
 /** Short kind strings used for UI dispatch, badge rendering, and form actions. */
-export type TypeKind =
-  | 'data'
-  | 'choice'
-  | 'enum'
-  | 'func'
-  | 'record'
-  | 'typeAlias'
-  | 'basicType'
-  | 'annotation';
+export type TypeKind = 'data' | 'choice' | 'enum' | 'func' | 'record' | 'typeAlias' | 'basicType' | 'annotation';
 
-export type EdgeKind =
-  | 'extends'
-  | 'attribute-ref'
-  | 'choice-option'
-  | 'enum-extends'
-  | 'type-alias-ref';
+export type EdgeKind = 'extends' | 'attribute-ref' | 'choice-option' | 'enum-extends' | 'type-alias-ref';
 
 /**
  * Data payload for graph edges.
@@ -293,13 +276,7 @@ export interface CommonFormActions {
 export interface DataFormActions extends CommonFormActions {
   addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string): void;
   removeAttribute(nodeId: string, attrName: string): void;
-  updateAttribute(
-    nodeId: string,
-    oldName: string,
-    newName: string,
-    typeName: string,
-    cardinality: string
-  ): void;
+  updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string): void;
   reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
   setInheritance(childId: string, parentId: string | null): void;
 }
@@ -340,10 +317,7 @@ export interface FormActionsKindMap {
 }
 
 /** Intersection of all kind-specific actions (every method available). */
-export type AllEditorFormActions = DataFormActions &
-  EnumFormActions &
-  ChoiceFormActions &
-  FuncFormActions;
+export type AllEditorFormActions = DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions;
 
 /**
  * Kind-aware editor form actions.
@@ -394,8 +368,10 @@ export interface GraphFilters {
 }
 
 export type LayoutDirection = 'TB' | 'LR' | 'BT' | 'RL';
+export type LayoutEngine = 'dagre' | 'elk';
 
 export interface LayoutOptions {
+  engine?: LayoutEngine;
   direction?: LayoutDirection;
   nodeSeparation?: number;
   rankSeparation?: number;
@@ -474,6 +450,8 @@ export interface RuneTypeGraphCallbacks {
   onNodeDoubleClick?: (nodeId: string, data: AnyGraphNode) => void;
   /** Called when a type reference is clicked within a graph node (e.g., attribute type name). */
   onNavigateToType?: NavigateToNodeCallback;
+  /** Called when the user switches layout engine from the graph context menu. */
+  onLayoutEngineChange?: (engine: LayoutEngine) => void;
   onEdgeSelect?: (edgeId: string, data: EdgeData) => void;
   onSelectionClear?: () => void;
   onContextMenu?: (position: { x: number; y: number }) => void;

@@ -24,16 +24,14 @@ export function ConstructorBlock({ node, renderChild }: ConstructorBlockProps) {
   const n = node as Record<string, unknown>;
   const typeRef = n['typeRef'] as Record<string, unknown> | undefined;
   const values = (n['values'] as ConstructorKVP[]) ?? [];
-  const typeName = typeRef
-    ? ((typeRef['name'] as string) ?? (typeRef['symbol'] as string) ?? '?')
-    : '?';
+  const typeName = typeRef ? ((typeRef['name'] as string) ?? (typeRef['symbol'] as string) ?? '?') : '?';
 
   return (
     <span
-      className="inline-flex flex-col gap-1 rounded border border-[var(--color-expr-reference)]/30 px-2 py-1 bg-[var(--color-expr-reference-bg)]"
+      className="inline-flex flex-col gap-1 rounded border border-(--color-expr-reference)/30 px-2 py-1 bg-(--color-expr-reference-bg)"
       data-block="constructor"
     >
-      <span className="font-mono text-xs font-semibold text-[var(--color-expr-reference)]">
+      <span className="font-mono text-xs font-semibold text-(--color-expr-reference)">
         {typeName} {'{}'}
       </span>
       {values.map((kvp, i) => (

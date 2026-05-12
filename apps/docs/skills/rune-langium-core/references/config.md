@@ -22,15 +22,11 @@ Every AST node has a type corresponding to what was specified in the grammar dec
 
 #### qType
 
-
-
 **Type:** `RosettaQualifiableType`
 
 **Required:** yes
 
 #### rosettaClass
-
-
 
 **Type:** `Reference<Data>`
 

@@ -15,11 +15,10 @@
 
 import dagre from '@dagrejs/dagre';
 import type { TypeGraphNode, TypeGraphEdge, LayoutOptions, EdgeData } from '../types.js';
-
-const DEFAULT_NODE_WIDTH = 220;
-const DEFAULT_NODE_HEIGHT = 120;
+import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, getNodeHeight, getNodeWidth } from './node-dimensions.js';
 
 const DEFAULT_LAYOUT_OPTIONS: Required<LayoutOptions> = {
+  engine: 'dagre',
   direction: 'TB',
   nodeSeparation: 50,
   rankSeparation: 100,
@@ -28,12 +27,6 @@ const DEFAULT_LAYOUT_OPTIONS: Required<LayoutOptions> = {
 
 /** Edge kinds that define inheritance (tree structure). */
 const INHERITANCE_EDGE_KINDS = new Set(['extends', 'enum-extends']);
-
-function estimateNodeHeight(node: TypeGraphNode): number {
-  const d = node.data as Record<string, unknown>;
-  const members = (d.attributes ?? d.enumValues ?? d.inputs ?? d.features ?? []) as unknown[];
-  return Math.max(DEFAULT_NODE_HEIGHT, 40 + members.length * 24 + 16);
-}
 
 /** Union-Find for grouping connected components. */
 class UnionFind {
@@ -170,8 +163,10 @@ export function computeGroupedLayout(
   for (const group of groups) {
     if (group.nodes.length === 1) {
       // Single node — no layout needed, just record dimensions
-      const h = estimateNodeHeight(group.nodes[0]!);
-      groupBounds.push({ width: DEFAULT_NODE_WIDTH, height: h });
+      groupBounds.push({
+        width: getNodeWidth(group.nodes[0]!),
+        height: getNodeHeight(group.nodes[0]!)
+      });
       allPositioned.push({
         ...group.nodes[0]!,
         position: { x: 0, y: 0 }
@@ -192,8 +187,8 @@ export function computeGroupedLayout(
 
     for (const node of group.nodes) {
       g.setNode(node.id, {
-        width: DEFAULT_NODE_WIDTH,
-        height: estimateNodeHeight(node)
+        width: getNodeWidth(node),
+        height: getNodeHeight(node)
       });
     }
 

@@ -13,27 +13,21 @@
  */
 
 import dagre from '@dagrejs/dagre';
+import ELK from 'elkjs/lib/elk.bundled.js';
 import type { TypeGraphNode, TypeGraphEdge, LayoutOptions } from '../types.js';
 import { computeGroupedLayout } from './grouped-layout.js';
 import type { WorkerRequest, WorkerResponse } from './dagre-worker-script.js';
-
-/** Default node dimensions (must match dagre-layout.ts). */
-const DEFAULT_NODE_WIDTH = 220;
-const DEFAULT_NODE_HEIGHT = 120;
+import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, getNodeHeight, getNodeWidth } from './node-dimensions.js';
 
 const DEFAULT_LAYOUT_OPTIONS: Required<LayoutOptions> = {
+  engine: 'dagre',
   direction: 'TB',
   nodeSeparation: 50,
   rankSeparation: 100,
   groupByInheritance: false
 };
 
-function estimateNodeHeight(node: TypeGraphNode): number {
-  const d = node.data as Record<string, unknown>;
-  const members = (d.attributes ?? d.enumValues ?? d.inputs ?? d.features ?? []) as unknown[];
-  const memberCount = members.length;
-  return Math.max(DEFAULT_NODE_HEIGHT, 40 + memberCount * 24 + 16);
-}
+const elk = new ELK();
 
 /** Sequence number to cancel stale async layout requests. */
 let layoutSeq = 0;
@@ -96,8 +90,8 @@ function runInWorker(
     id,
     nodes: nodes.map((n) => ({
       id: n.id,
-      width: DEFAULT_NODE_WIDTH,
-      height: estimateNodeHeight(n)
+      width: getNodeWidth(n),
+      height: getNodeHeight(n)
     })),
     edges: edges.map((e) => ({ source: e.source, target: e.target })),
     direction: opts.direction,
@@ -133,6 +127,12 @@ export async function computeLayoutAsync(
   const seq = ++layoutSeq;
   const opts = { ...DEFAULT_LAYOUT_OPTIONS, ...options };
 
+  if (opts.engine === 'elk' && !opts.groupByInheritance) {
+    const layouted = await computeLayoutWithElk(nodes, edges, opts);
+    if (layoutSeq !== seq) return null;
+    return layouted;
+  }
+
   // Delegate to grouped layout if requested (main thread with yielding)
   if (opts.groupByInheritance) {
     await yieldToMainThread();
@@ -156,6 +156,64 @@ export async function computeLayoutAsync(
 
   // Fallback: main-thread dagre with yielding
   return computeLayoutMainThread(nodes, edges, opts, seq);
+}
+
+async function computeLayoutWithElk(
+  nodes: TypeGraphNode[],
+  edges: TypeGraphEdge[],
+  opts: Required<LayoutOptions>
+): Promise<TypeGraphNode[]> {
+  type ElkChildPosition = {
+    id?: string;
+    x?: number;
+    y?: number;
+  };
+  type ElkLayoutResult = {
+    children?: ElkChildPosition[];
+  };
+
+  const isHorizontal = opts.direction === 'LR' || opts.direction === 'RL';
+  const elkDirection =
+    opts.direction === 'LR' ? 'RIGHT' : opts.direction === 'RL' ? 'LEFT' : opts.direction === 'BT' ? 'UP' : 'DOWN';
+
+  const graph = {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': elkDirection,
+      'elk.layered.spacing.nodeNodeBetweenLayers': String(opts.rankSeparation),
+      'elk.spacing.nodeNode': String(opts.nodeSeparation)
+    },
+    children: nodes.map((node) => ({
+      id: node.id,
+      width: getNodeWidth(node),
+      height: getNodeHeight(node),
+      targetPosition: isHorizontal ? 'left' : 'top',
+      sourcePosition: isHorizontal ? 'right' : 'bottom'
+    })),
+    edges: edges.map((edge) => ({
+      id: edge.id,
+      sources: [edge.source],
+      targets: [edge.target]
+    }))
+  };
+
+  const layoutedGraph = (await elk.layout(graph as never)) as ElkLayoutResult;
+  const positionById = new Map<string, { x: number; y: number }>();
+  for (const child of layoutedGraph.children ?? []) {
+    if (typeof child.id !== 'string') continue;
+    if (typeof child.x !== 'number' || typeof child.y !== 'number') continue;
+    positionById.set(child.id, { x: child.x, y: child.y });
+  }
+
+  return nodes.map((node) => {
+    const position = positionById.get(node.id);
+    if (!position) return node;
+    return {
+      ...node,
+      position
+    };
+  });
 }
 
 /** Cancel any in-flight async layout. */
@@ -185,8 +243,8 @@ async function computeLayoutMainThread(
 
   for (const node of nodes) {
     g.setNode(node.id, {
-      width: DEFAULT_NODE_WIDTH,
-      height: estimateNodeHeight(node)
+      width: getNodeWidth(node),
+      height: getNodeHeight(node)
     });
   }
 

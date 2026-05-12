@@ -11,14 +11,32 @@
  * not passed as props. The graph subscribes to the store.
  */
 
-import { describe, it, expect } from 'vitest';
-import { render, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, act, waitFor } from '@testing-library/react';
 import { createRef } from 'react';
 import { parse } from '@rune-langium/core';
 import { RuneTypeGraph } from '../../src/components/RuneTypeGraph.js';
 import { useEditorStore } from '../../src/store/editor-store.js';
 import type { RuneTypeGraphRef } from '../../src/types.js';
 import { COMBINED_MODEL_SOURCE } from '../helpers/fixture-loader.js';
+
+const { fitViewSpy, setCenterSpy, setViewportSpy } = vi.hoisted(() => ({
+  fitViewSpy: vi.fn(async () => true),
+  setCenterSpy: vi.fn(),
+  setViewportSpy: vi.fn(async () => true)
+}));
+
+vi.mock('@xyflow/react', async () => {
+  const actual = await vi.importActual<typeof import('@xyflow/react')>('@xyflow/react');
+  return {
+    ...actual,
+    useReactFlow: () => ({
+      fitView: fitViewSpy,
+      setCenter: setCenterSpy,
+      setViewport: setViewportSpy
+    })
+  };
+});
 
 /** Load models into the store before rendering the graph. */
 function loadModelsIntoStore(models: unknown) {
@@ -28,6 +46,12 @@ function loadModelsIntoStore(models: unknown) {
     useEditorStore.getState().expandAllNamespaces();
   });
 }
+
+beforeEach(() => {
+  fitViewSpy.mockClear();
+  setCenterSpy.mockClear();
+  setViewportSpy.mockClear();
+});
 
 describe('RuneTypeGraph ref API', () => {
   it('exposes fitView via ref', async () => {
@@ -97,9 +121,12 @@ describe('RuneTypeGraph ref API', () => {
     render(<RuneTypeGraph ref={ref} />);
 
     expect(typeof ref.current!.relayout).toBe('function');
-    // Should not throw
+    fitViewSpy.mockClear();
     act(() => {
       ref.current!.relayout({ direction: 'LR' });
+    });
+    await waitFor(() => {
+      expect(fitViewSpy).toHaveBeenCalled();
     });
   });
 
@@ -111,9 +138,14 @@ describe('RuneTypeGraph ref API', () => {
     render(<RuneTypeGraph ref={ref} />);
 
     expect(typeof ref.current!.focusNode).toBe('function');
-    // Should not throw even with unknown node ID
+    fitViewSpy.mockClear();
+    setCenterSpy.mockClear();
     act(() => {
       ref.current!.focusNode('test.combined::Trade');
+    });
+    expect(setCenterSpy).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(fitViewSpy).toHaveBeenCalled();
     });
   });
 

@@ -12,32 +12,16 @@
 import dagre from '@dagrejs/dagre';
 import type { TypeGraphNode, TypeGraphEdge, LayoutOptions } from '../types.js';
 import { computeGroupedLayout } from './grouped-layout.js';
-
-/** Default node dimensions for layout calculation. */
-const DEFAULT_NODE_WIDTH = 220;
-const DEFAULT_NODE_HEIGHT = 120;
+import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, getNodeHeight, getNodeWidth } from './node-dimensions.js';
 
 /** Default layout options. */
 const DEFAULT_LAYOUT_OPTIONS: Required<LayoutOptions> = {
+  engine: 'dagre',
   direction: 'TB',
   nodeSeparation: 50,
   rankSeparation: 100,
   groupByInheritance: false
 };
-
-/**
- * Estimate node height based on number of members.
- */
-function estimateNodeHeight(node: TypeGraphNode): number {
-  // Count members based on the AST type's field name
-  const d = node.data as Record<string, unknown>;
-  const members = (d.attributes ?? d.enumValues ?? d.inputs ?? d.features ?? []) as unknown[];
-  const memberCount = members.length;
-  const headerHeight = 40;
-  const memberHeight = 24;
-  const padding = 16;
-  return Math.max(DEFAULT_NODE_HEIGHT, headerHeight + memberCount * memberHeight + padding);
-}
 
 // ---------------------------------------------------------------------------
 // Layout position cache
@@ -55,10 +39,36 @@ interface CachedPosition {
  * Cleared on full model reload, reused across namespace toggles.
  */
 const positionCache = new Map<string, CachedPosition>();
+let lastLayoutCacheKey: string | null = null;
+
+function normalizeLayoutOptions(options?: LayoutOptions): Required<LayoutOptions> {
+  return { ...DEFAULT_LAYOUT_OPTIONS, ...options };
+}
+
+function getLayoutCacheKey(options: Required<LayoutOptions>): string {
+  return [
+    options.engine,
+    options.direction,
+    options.nodeSeparation,
+    options.rankSeparation,
+    options.groupByInheritance ? 'grouped' : 'flat'
+  ].join(':');
+}
+
+function ensureCompatibleLayoutCache(options?: LayoutOptions): Required<LayoutOptions> {
+  const normalized = normalizeLayoutOptions(options);
+  const nextKey = getLayoutCacheKey(normalized);
+  if (lastLayoutCacheKey !== nextKey) {
+    positionCache.clear();
+    lastLayoutCacheKey = nextKey;
+  }
+  return normalized;
+}
 
 /** Clear the entire position cache (call on model reload). */
 export function clearLayoutCache(): void {
   positionCache.clear();
+  lastLayoutCacheKey = null;
 }
 
 /** Get the current cache size (for diagnostics). */
@@ -81,6 +91,7 @@ export function computeLayout(
 
   // Delegate to grouped layout if requested
   if (options?.groupByInheritance) {
+    ensureCompatibleLayoutCache(options);
     const result = computeGroupedLayout(nodes, edges, options);
     // Update cache with grouped positions
     for (const node of result) {
@@ -89,7 +100,7 @@ export function computeLayout(
     return result;
   }
 
-  const opts = { ...DEFAULT_LAYOUT_OPTIONS, ...options };
+  const opts = ensureCompatibleLayoutCache(options);
 
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
@@ -103,10 +114,9 @@ export function computeLayout(
 
   // Add nodes with estimated dimensions
   for (const node of nodes) {
-    const height = estimateNodeHeight(node);
     g.setNode(node.id, {
-      width: DEFAULT_NODE_WIDTH,
-      height
+      width: getNodeWidth(node),
+      height: getNodeHeight(node)
     });
   }
 
@@ -156,6 +166,7 @@ export function computeLayoutIncremental(
   options?: LayoutOptions
 ): TypeGraphNode[] {
   if (nodes.length === 0) return [];
+  const opts = ensureCompatibleLayoutCache(options);
 
   // Check how many nodes have cached positions
   const uncached: TypeGraphNode[] = [];
@@ -178,7 +189,7 @@ export function computeLayoutIncremental(
 
   // If >30% are uncached or total nodes are small, run full dagre
   if (uncached.length / nodes.length > 0.3 || nodes.length < 50) {
-    return computeLayout(nodes, edges, options);
+    return computeLayout(nodes, edges, opts);
   }
 
   // Incremental: place cached nodes at old positions, run dagre only for uncached
@@ -192,23 +203,26 @@ export function computeLayoutIncremental(
   const uncachedEdges = edges.filter((e) => uncachedIds.has(e.source) && uncachedIds.has(e.target));
 
   // Run dagre on the uncached subset
-  const layouted = computeLayout(uncached, uncachedEdges, options);
+  const layouted = computeLayout(uncached, uncachedEdges, opts);
 
   // Offset uncached nodes to avoid overlapping with cached nodes
-  // Find the bounding box of cached nodes to place new ones below
+  const horizontalLayout = opts.direction === 'LR' || opts.direction === 'RL';
+  let maxX = 0;
   let maxY = 0;
   for (const node of result) {
-    const h = estimateNodeHeight(node);
-    maxY = Math.max(maxY, node.position.y + h);
+    maxX = Math.max(maxX, node.position.x + getNodeWidth(node));
+    maxY = Math.max(maxY, node.position.y + getNodeHeight(node));
   }
 
   for (const node of layouted) {
+    const position = horizontalLayout
+      ? { x: node.position.x + maxX + 50, y: node.position.y }
+      : { x: node.position.x, y: node.position.y + maxY + 50 };
     result.push({
       ...node,
-      position: { x: node.position.x, y: node.position.y + maxY + 50 }
+      position
     });
-    // Update cache with offset position
-    positionCache.set(node.id, { x: node.position.x, y: node.position.y + maxY + 50 });
+    positionCache.set(node.id, position);
   }
 
   return result;

@@ -22,7 +22,7 @@ export function FeatureCallBlock({ node, renderChild }: FeatureCallBlockProps) {
 
   return (
     <span
-      className="inline-flex items-baseline gap-1 rounded px-1 py-0.5 text-[var(--color-expr-navigation)] bg-[var(--color-expr-navigation-bg)]"
+      className="inline-flex items-baseline gap-1 rounded px-1 py-0.5 text-(--color-expr-navigation) bg-(--color-expr-navigation-bg)"
       data-block="feature-call"
     >
       {renderChild(receiver)}

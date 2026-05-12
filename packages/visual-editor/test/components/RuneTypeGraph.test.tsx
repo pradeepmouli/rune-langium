@@ -13,6 +13,7 @@ import { render } from '@testing-library/react';
 import { act } from '@testing-library/react';
 import { parse } from '@rune-langium/core';
 import { RuneTypeGraph } from '../../src/components/RuneTypeGraph.js';
+import { shouldReplaceLayoutPositions } from '../../src/components/layout-sync.js';
 import { useEditorStore } from '../../src/store/editor-store.js';
 import { SIMPLE_INHERITANCE_SOURCE, COMBINED_MODEL_SOURCE } from '../helpers/fixture-loader.js';
 
@@ -23,6 +24,24 @@ function loadModels(models: unknown) {
 }
 
 describe('RuneTypeGraph', () => {
+  it('replaces local positions when Dagre output changes', () => {
+    const previous = [
+      { id: 'a', position: { x: 0, y: 0 } },
+      { id: 'b', position: { x: 100, y: 100 } }
+    ];
+    const same = [
+      { id: 'a', position: { x: 0, y: 0 } },
+      { id: 'b', position: { x: 100, y: 100 } }
+    ];
+    const moved = [
+      { id: 'a', position: { x: 20, y: 0 } },
+      { id: 'b', position: { x: 100, y: 100 } }
+    ];
+
+    expect(shouldReplaceLayoutPositions(previous, same)).toBe(false);
+    expect(shouldReplaceLayoutPositions(previous, moved)).toBe(true);
+  });
+
   it('renders without crashing with a simple model', async () => {
     const result = await parse(SIMPLE_INHERITANCE_SOURCE);
     loadModels(result.value);

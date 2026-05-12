@@ -10,7 +10,8 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { astToModel } from '../../src/adapters/ast-to-model.js';
-import { computeLayout } from '../../src/layout/dagre-layout.js';
+import { clearLayoutCache, computeLayout, computeLayoutIncremental } from '../../src/layout/dagre-layout.js';
+import type { TypeGraphNode, TypeGraphEdge } from '../../src/types.js';
 import { SIMPLE_INHERITANCE_SOURCE, DEEP_INHERITANCE_SOURCE } from '../helpers/fixture-loader.js';
 
 describe('computeLayout', () => {
@@ -91,5 +92,66 @@ describe('computeLayout', () => {
       const wideSpan = Math.max(...wide.map((n) => n.position.x)) - Math.min(...wide.map((n) => n.position.x));
       expect(wideSpan).toBeGreaterThanOrEqual(tightSpan);
     }
+  });
+
+  it('invalidates cached positions when the layout direction changes', async () => {
+    clearLayoutCache();
+    const result = await parse(DEEP_INHERITANCE_SOURCE);
+    const { nodes, edges } = astToModel(result.value);
+
+    const vertical = computeLayoutIncremental(nodes, edges, { direction: 'TB' });
+    const horizontal = computeLayoutIncremental(nodes, edges, { direction: 'LR' });
+
+    const verticalXValues = new Set(vertical.map((node) => node.position.x));
+    const horizontalXValues = new Set(horizontal.map((node) => node.position.x));
+
+    expect(verticalXValues.size).toBeLessThan(horizontalXValues.size);
+    expect(horizontalXValues.size).toBeGreaterThan(1);
+  });
+
+  it('uses measured node dimensions when computing layout spacing', () => {
+    const nodes = [
+      {
+        id: 'wide',
+        type: 'data',
+        position: { x: 0, y: 0 },
+        measured: { width: 420, height: 120 },
+        data: {
+          $type: 'Data',
+          name: 'Wide',
+          namespace: 'test',
+          position: { x: 0, y: 0 },
+          errors: [],
+          hasExternalRefs: false,
+          attributes: []
+        }
+      },
+      {
+        id: 'narrow',
+        type: 'data',
+        position: { x: 0, y: 0 },
+        measured: { width: 220, height: 120 },
+        data: {
+          $type: 'Data',
+          name: 'Narrow',
+          namespace: 'test',
+          position: { x: 0, y: 0 },
+          errors: [],
+          hasExternalRefs: false,
+          attributes: []
+        }
+      }
+    ] as unknown as TypeGraphNode[];
+    const edges = [
+      { id: 'e1', source: 'wide', target: 'narrow', data: { kind: 'extends' } }
+    ] as unknown as TypeGraphEdge[];
+
+    const layouted = computeLayout(nodes, edges, { direction: 'LR' });
+    const wideNode = layouted.find((node) => node.id === 'wide');
+    const narrowNode = layouted.find((node) => node.id === 'narrow');
+
+    expect(wideNode).toBeDefined();
+    expect(narrowNode).toBeDefined();
+    expect(narrowNode!.position.x - wideNode!.position.x).toBeGreaterThanOrEqual(420);
   });
 });

@@ -333,10 +333,9 @@ function PanelHeader({
                         className={cn(
                           'size-2.5 rounded-full border',
                           severity === 'error' && 'border-destructive bg-destructive',
-                          severity === 'warning' &&
-                            'border-[color:var(--color-warning)] bg-[color:var(--color-warning)]',
-                          severity === 'info' && 'border-[color:var(--color-info)] bg-[color:var(--color-info)]',
-                          severity === 'hint' && 'border-[color:var(--color-data)] bg-[color:var(--color-data)]',
+                          severity === 'warning' && 'border-warning bg-warning',
+                          severity === 'info' && 'border-info bg-info',
+                          severity === 'hint' && 'border-data bg-data',
                           !active && 'bg-transparent opacity-60'
                         )}
                       />
@@ -410,15 +409,14 @@ function SeverityPill({ severity, count }: { severity: SeverityKind; count: numb
     warning: {
       icon: AlertTriangle,
       label: count === 1 ? 'warning' : 'warnings',
-      className:
-        'border-[color:var(--color-warning)]/25 bg-[color:var(--color-warning)]/10 text-[color:var(--color-warning)]',
-      iconClassName: 'text-[color:var(--color-warning)]'
+      className: 'border-warning/25 bg-warning/10 text-warning',
+      iconClassName: 'text-warning'
     },
     info: {
       icon: Info,
       label: count === 1 ? 'info' : 'info',
-      className: 'border-[color:var(--color-info)]/25 bg-[color:var(--color-info)]/10 text-[color:var(--color-info)]',
-      iconClassName: 'text-[color:var(--color-info)]'
+      className: 'border-info/25 bg-info/10 text-info',
+      iconClassName: 'text-info'
     },
     hint: {
       icon: Lightbulb,
@@ -490,10 +488,8 @@ function DiagnosticItemRow({ row, onNavigate }: DiagnosticItemRowProps) {
         className={cn(
           'inline-flex size-6 shrink-0 items-center justify-center rounded-full border',
           sev === 'error' && 'border-destructive/20 bg-destructive/10 text-destructive',
-          sev === 'warning' &&
-            'border-[color:var(--color-warning)]/20 bg-[color:var(--color-warning)]/10 text-[color:var(--color-warning)]',
-          sev === 'info' &&
-            'border-[color:var(--color-info)]/20 bg-[color:var(--color-info)]/10 text-[color:var(--color-info)]',
+          sev === 'warning' && 'border-warning/20 bg-warning/10 text-warning',
+          sev === 'info' && 'border-info/20 bg-info/10 text-info',
           sev === 'hint' && 'border-border/80 bg-muted/50 text-amber-400'
         )}
         aria-label={sev}

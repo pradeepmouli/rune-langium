@@ -68,6 +68,21 @@ describe('EditorStore', () => {
       expect(store.getState().selectedNodeId).toBeNull();
     });
 
+    it('clears focus-mode isolation when deselected', async () => {
+      const result = await parse(SIMPLE_INHERITANCE_SOURCE);
+      store.getState().loadModels(result.value);
+      const state = store.getState();
+      const targetNode = state.nodes.find((node) => node.id.includes('Child')) ?? state.nodes[0]!;
+
+      store.getState().selectNode(targetNode.id);
+      expect(store.getState().visibility.hiddenNodeIds.size).toBeGreaterThan(0);
+
+      store.getState().selectNode(null);
+
+      expect(store.getState().selectedNodeId).toBeNull();
+      expect(store.getState().visibility.hiddenNodeIds.size).toBe(0);
+    });
+
     it('does not notify subscribers when selecting the same node twice', async () => {
       const result = await parse(COMBINED_MODEL_SOURCE);
       store.getState().loadModels(result.value);

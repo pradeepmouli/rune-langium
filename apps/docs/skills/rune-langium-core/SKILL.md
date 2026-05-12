@@ -1,6 +1,6 @@
 ---
-name: rune-langium-core
 description: "Documentation site and generated agent skills for rune-langium APIs Use when: Validating a single `.rosetta` file or snippet in memory."
+name: rune-langium-core
 ---
 
 # @rune-langium/core
@@ -65,8 +65,8 @@ implicit `[` and `]` brackets around bare expressions after `extract`,
 
 Load these on demand — do NOT read all at once:
 
-- When calling any function → read `references/functions/` for full signatures, parameters, and return types
-- When using a class → read `references/classes/` for properties, methods, and inheritance
+- When calling any function → browse `references/functions/` for grouped indexes, full signatures, parameters, and return types
+- When using a class → browse `references/classes/` for grouped indexes, properties, methods, and inheritance
 - When defining typed variables or function parameters → read `references/types.md`
 - When using exported constants → read `references/variables.md`
 - When configuring options → read `references/config.md` for all settings and defaults

@@ -36,14 +36,14 @@ export function getHandlePositions(direction: GraphLayoutDirection): {
 } {
   switch (direction) {
     case 'BT':
-      return { target: Position.Right, source: Position.Left };
-    case 'LR':
-      return { target: Position.Top, source: Position.Bottom };
-    case 'RL':
       return { target: Position.Bottom, source: Position.Top };
+    case 'LR':
+      return { target: Position.Left, source: Position.Right };
+    case 'RL':
+      return { target: Position.Right, source: Position.Left };
     case 'TB':
     default:
-      return { target: Position.Left, source: Position.Right };
+      return { target: Position.Top, source: Position.Bottom };
   }
 }
 

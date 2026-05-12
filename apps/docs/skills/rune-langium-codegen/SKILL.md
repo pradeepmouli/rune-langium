@@ -1,6 +1,6 @@
 ---
-name: rune-langium-codegen
 description: Documentation site and generated agent skills for rune-langium APIs
+name: rune-langium-codegen
 ---
 
 # @rune-langium/codegen

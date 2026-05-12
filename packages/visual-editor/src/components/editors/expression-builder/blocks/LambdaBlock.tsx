@@ -32,14 +32,12 @@ export function LambdaBlock({ node, renderChild }: LambdaBlockProps) {
 
   return (
     <span
-      className="inline-flex flex-col gap-1 rounded border border-[var(--color-expr-collection)]/30 px-2 py-1 bg-[var(--color-expr-collection-bg)]"
+      className="inline-flex flex-col gap-1 rounded border border-(--color-expr-collection)/30 px-2 py-1 bg-(--color-expr-collection-bg)"
       data-block="lambda"
     >
       <span className="inline-flex items-baseline gap-1">
         {renderChild(argument)}
-        <span className="font-mono text-xs font-semibold text-[var(--color-expr-collection)]">
-          {operator}
-        </span>
+        <span className="font-mono text-xs font-semibold text-(--color-expr-collection)">{operator}</span>
         {params && <span className="font-mono text-xs opacity-70">[{params}]</span>}
       </span>
       {fn?.body && <span className="ml-3">{renderChild(fn.body)}</span>}

@@ -27,7 +27,6 @@ When omitted, FunctionForm renders a plain `<Textarea>` fallback.
 - `expandedNamespaces: Set<string>` — Set of currently expanded (visible) namespaces.
 - `hiddenNodeIds: Set<string>` — Set of individually hidden node IDs.
 - `onToggleNamespace: (namespace: string) => void` — Toggle a namespace's visibility on the graph.
-- `onToggleNode: (nodeId: string) => void` — Toggle an individual node's visibility.
 - `onExpandAll: () => void` — Expand all namespaces.
 - `onCollapseAll: () => void` — Collapse all namespaces.
 - `onSelectNode: (nodeId: string) => void` (optional) — Called when a node is clicked to select it in the graph.
@@ -303,5 +302,9 @@ the actual editor implementation (e.g. CodeMirror, Monaco) via a
 - `onBlur: () => void` — Called when the editor loses focus — triggers validation & commit.
 - `error: string | null` (optional) — Validation error message (null when valid).
 - `placeholder: string` (optional) — Placeholder text shown when the editor is empty.
+- `expressionAst: unknown` (optional) — Raw AST expression object — enables direct tree conversion without reparsing text.
+
+### `TypeOption`
+A type option for searchable type selectors.
 
 <!-- truncated -->

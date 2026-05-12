@@ -28,13 +28,11 @@ export function ReferenceBlock({ node }: ReferenceBlockProps) {
 
   return (
     <span
-      className="inline-flex items-baseline gap-1 rounded px-1 py-0.5 font-mono text-xs text-[var(--color-expr-reference)] bg-[var(--color-expr-reference-bg)]"
+      className="inline-flex items-baseline gap-1 rounded px-1 py-0.5 font-mono text-xs text-(--color-expr-reference) bg-(--color-expr-reference-bg)"
       data-block="reference"
     >
       <span className="font-medium">{name}</span>
-      {$type === 'RosettaImplicitVariable' && (
-        <span className="text-[10px] opacity-50">implicit</span>
-      )}
+      {$type === 'RosettaImplicitVariable' && <span className="text-[10px] opacity-50">implicit</span>}
     </span>
   );
 }

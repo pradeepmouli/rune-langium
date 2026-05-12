@@ -52,9 +52,11 @@ import {
   BackgroundVariant,
   useNodesState,
   useEdgesState,
+  useNodesInitialized,
   useReactFlow,
   ReactFlowProvider,
-  type Node
+  type Node,
+  ViewportPortal
 } from '@xyflow/react';
 import type { OnSelectionChangeParams } from '@xyflow/react';
 import { cn } from '@rune-langium/design-system/utils';
@@ -66,6 +68,8 @@ import type { ContextMenuState } from './GraphContextMenu.js';
 import { computeLayout, computeLayoutIncremental } from '../layout/dagre-layout.js';
 import { computeLayoutAsync, cancelAsyncLayout } from '../layout/layout-worker.js';
 import { findInheritanceGroups } from '../layout/grouped-layout.js';
+import { getNodeHeight, getNodeWidth } from '../layout/node-dimensions.js';
+import { shouldReplaceLayoutPositions } from './layout-sync.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
@@ -102,10 +106,14 @@ const VIEWPORT_STORAGE_KEY = 'rune-type-graph:viewport';
 const GROUP_HORIZONTAL_PADDING = 26;
 const GROUP_TOP_PADDING = 40;
 const GROUP_BOTTOM_PADDING = 18;
-const ESTIMATED_NODE_WIDTH = 220;
-const ESTIMATED_NODE_MIN_HEIGHT = 120;
 
 type DisplayGraphNode = TypeGraphNode | GroupContainerNodeType;
+type StoredViewport = { x: number; y: number; zoom: number };
+
+interface PersistedViewportRecord {
+  signature: string;
+  viewport: StoredViewport;
+}
 
 interface InheritanceDisplayModel {
   nodes: DisplayGraphNode[];
@@ -120,10 +128,32 @@ function isTypeGraphNode(node: DisplayGraphNode): node is TypeGraphNode {
   return !isGroupContainerNode(node);
 }
 
-function estimateNodeHeight(node: TypeGraphNode): number {
-  const d = node.data as Record<string, unknown>;
-  const members = (d.attributes ?? d.enumValues ?? d.inputs ?? d.features ?? []) as unknown[];
-  return Math.max(ESTIMATED_NODE_MIN_HEIGHT, 40 + members.length * 24 + 16);
+function createViewportSignature(
+  nodes: Array<{ id: string }>,
+  edges: Array<{ id: string }>,
+  layout: LayoutOptions
+): string {
+  const engine = layout.engine ?? 'dagre';
+  const direction = layout.direction ?? 'TB';
+  const grouping = layout.groupByInheritance ? 'grouped' : 'flat';
+  const nodeIds = nodes
+    .map((node) => node.id)
+    .sort()
+    .join('|');
+  const edgeIds = edges
+    .map((edge) => edge.id)
+    .sort()
+    .join('|');
+  return `engine:${engine};dir:${direction};group:${grouping};nodes:${nodeIds};edges:${edgeIds}`;
+}
+
+function restoreViewport(rawViewport: string | null, expectedSignature: string): StoredViewport | null {
+  if (!rawViewport) return null;
+  const parsed = JSON.parse(rawViewport) as Partial<PersistedViewportRecord> | StoredViewport;
+  if ('signature' in parsed && 'viewport' in parsed) {
+    return parsed.signature === expectedSignature ? (parsed.viewport ?? null) : null;
+  }
+  return null;
 }
 
 function buildInheritanceDisplayNodes(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): InheritanceDisplayModel {
@@ -141,10 +171,11 @@ function buildInheritanceDisplayNodes(nodes: TypeGraphNode[], edges: TypeGraphEd
     let maxY = -Infinity;
 
     for (const node of group.nodes) {
-      const height = estimateNodeHeight(node);
+      const width = getNodeWidth(node);
+      const height = getNodeHeight(node);
       minX = Math.min(minX, node.position.x);
       minY = Math.min(minY, node.position.y);
-      maxX = Math.max(maxX, node.position.x + ESTIMATED_NODE_WIDTH);
+      maxX = Math.max(maxX, node.position.x + width);
       maxY = Math.max(maxY, node.position.y + height);
       groupedNodeIds.add(node.id);
     }
@@ -211,6 +242,19 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   ref
 ) {
   const mergedConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
+  const [runtimeLayoutEngine, setRuntimeLayoutEngine] = useState<'dagre' | 'elk'>(
+    mergedConfig.layout.engine ?? 'dagre'
+  );
+  useEffect(() => {
+    setRuntimeLayoutEngine(mergedConfig.layout.engine ?? 'dagre');
+  }, [mergedConfig.layout.engine]);
+  const activeLayout = useMemo(
+    () => ({
+      ...mergedConfig.layout,
+      engine: runtimeLayoutEngine
+    }),
+    [mergedConfig.layout, runtimeLayoutEngine]
+  );
   const { fitView, setCenter, setViewport } = useReactFlow();
 
   // Subscribe to store state
@@ -245,32 +289,42 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   // Large graphs (>=500 nodes): async layout off the main thread.
   const isInitialLoad = useRef(true);
   const ASYNC_LAYOUT_THRESHOLD = 500;
+  const layoutEngine = activeLayout.engine ?? 'dagre';
+  const shouldUseAsyncLayout = layoutEngine === 'elk' || visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD;
   const [asyncLayoutResult, setAsyncLayoutResult] = useState<TypeGraphNode[]>([]);
 
   // Synchronous path for small/medium graphs
   const syncLayoutedNodes = useMemo(() => {
-    if (visibleNodes.length === 0 || visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD) return [];
+    if (visibleNodes.length === 0 || shouldUseAsyncLayout) return [];
     if (isInitialLoad.current) {
       isInitialLoad.current = false;
-      return computeLayout(visibleNodes, visibleEdges, mergedConfig.layout);
+      return computeLayout(visibleNodes, visibleEdges, activeLayout);
     }
-    return computeLayoutIncremental(visibleNodes, visibleEdges, mergedConfig.layout);
-  }, [visibleNodes, visibleEdges, mergedConfig.layout]);
+    return computeLayoutIncremental(visibleNodes, visibleEdges, activeLayout);
+  }, [activeLayout, shouldUseAsyncLayout, visibleEdges, visibleNodes]);
 
   // Async path for large graphs
   useEffect(() => {
-    if (visibleNodes.length < ASYNC_LAYOUT_THRESHOLD) return;
+    if (!shouldUseAsyncLayout) return;
+    if (visibleNodes.length === 0) {
+      setAsyncLayoutResult([]);
+      return;
+    }
     cancelAsyncLayout();
-    computeLayoutAsync(visibleNodes, visibleEdges, mergedConfig.layout).then((result) => {
+    computeLayoutAsync(visibleNodes, visibleEdges, activeLayout).then((result) => {
       if (result) {
         setAsyncLayoutResult(result);
         isInitialLoad.current = false;
       }
     });
     return () => cancelAsyncLayout();
-  }, [visibleNodes, visibleEdges, mergedConfig.layout]);
+  }, [activeLayout, shouldUseAsyncLayout, visibleEdges, visibleNodes]);
 
-  const layoutedNodes = visibleNodes.length >= ASYNC_LAYOUT_THRESHOLD ? asyncLayoutResult : syncLayoutedNodes;
+  const layoutedNodes = shouldUseAsyncLayout ? asyncLayoutResult : syncLayoutedNodes;
+  const viewportSignature = useMemo(
+    () => createViewportSignature(layoutedNodes, visibleEdges, activeLayout),
+    [activeLayout, layoutedNodes, visibleEdges]
+  );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<DisplayGraphNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<TypeGraphEdge>([]);
@@ -283,33 +337,20 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
 
   // Sync store data into local ReactFlow state, preserving drag positions
   const prevVisibleRef = useRef<TypeGraphNode[]>([]);
+  const prevLayoutedRef = useRef<TypeGraphNode[]>([]);
+  const initialLoadDoneRef = useRef(false);
   useEffect(() => {
     const prev = prevVisibleRef.current;
+    const prevLayouted = prevLayoutedRef.current;
     prevVisibleRef.current = layoutedNodes;
+    prevLayoutedRef.current = layoutedNodes;
 
-    if (prev.length === 0) {
-      // Initial load — set everything
+    const layoutChanged = shouldReplaceLayoutPositions(prevLayouted, layoutedNodes);
+
+    if (prev.length === 0 || layoutChanged) {
+      // Initial load — set nodes; viewport restore fires in the nodesInitialized effect below
       setNodes(layoutedNodes);
       setEdges(visibleEdges);
-      if (layoutedNodes.length > 0) {
-        setTimeout(() => {
-          try {
-            const rawViewport = window.localStorage.getItem(VIEWPORT_STORAGE_KEY);
-            if (rawViewport) {
-              const viewport = JSON.parse(rawViewport) as {
-                x: number;
-                y: number;
-                zoom: number;
-              };
-              void setViewport(viewport, { duration: 180 });
-            } else {
-              fitView({ duration: 200, padding: 0.16 });
-            }
-          } catch {
-            /* SSR/test guard */
-          }
-        }, 50);
-      }
       return;
     }
 
@@ -333,11 +374,166 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
       return merged;
     });
     setEdges(visibleEdges);
-  }, [layoutedNodes, visibleEdges, setNodes, setEdges, fitView, setViewport]);
+  }, [layoutedNodes, visibleEdges, setNodes, setEdges]);
 
   const graphNodes = useMemo(() => nodes.filter(isTypeGraphNode), [nodes]);
-  const focusFitKeyRef = useRef<string | null>(null);
+  const nodesInitialized = useNodesInitialized();
+  const measuredLayoutKey = useMemo(() => {
+    if (!nodesInitialized || graphNodes.length === 0) return null;
+    const nodeKey = graphNodes
+      .map((node) => `${node.id}:${Math.round(getNodeWidth(node))}x${Math.round(getNodeHeight(node))}`)
+      .sort()
+      .join('|');
+    return [
+      activeLayout.engine ?? 'dagre',
+      activeLayout.direction ?? 'TB',
+      activeLayout.groupByInheritance ? 'grouped' : 'flat',
+      nodeKey
+    ].join(':');
+  }, [activeLayout.direction, activeLayout.engine, activeLayout.groupByInheritance, graphNodes, nodesInitialized]);
+  const measuredLayoutKeyRef = useRef<string | null>(null);
 
+  useEffect(() => {
+    if (!measuredLayoutKey) {
+      measuredLayoutKeyRef.current = null;
+      return;
+    }
+    if (measuredLayoutKeyRef.current === measuredLayoutKey) return;
+    measuredLayoutKeyRef.current = measuredLayoutKey;
+    if ((activeLayout.engine ?? 'dagre') === 'elk') {
+      computeLayoutAsync(graphNodes, edges, activeLayout).then((relayoutedNodes) => {
+        if (!relayoutedNodes) return;
+        if (shouldReplaceLayoutPositions(graphNodes, relayoutedNodes)) {
+          setNodes(relayoutedNodes);
+        }
+      });
+      return;
+    }
+    const relayoutedNodes = computeLayout(graphNodes, edges, activeLayout);
+    if (shouldReplaceLayoutPositions(graphNodes, relayoutedNodes)) {
+      setNodes(relayoutedNodes);
+    }
+  }, [activeLayout, edges, graphNodes, measuredLayoutKey, setNodes]);
+
+  // Initial viewport restore — runs once after nodes are measured for the first time.
+  // Replaces the old setTimeout(50) approach which fired before dimensions were ready.
+  useEffect(() => {
+    if (!nodesInitialized || initialLoadDoneRef.current || nodes.length === 0) return;
+    initialLoadDoneRef.current = true;
+    try {
+      const rawViewport = window.localStorage.getItem(VIEWPORT_STORAGE_KEY);
+      const viewport = restoreViewport(rawViewport, viewportSignature);
+      if (viewport) {
+        void setViewport(viewport, { duration: 180 });
+      } else {
+        void fitView({ duration: 200, padding: 0.16 });
+      }
+    } catch {
+      /* SSR/test guard */
+    }
+  }, [nodesInitialized, nodes.length, viewportSignature, setViewport, fitView]);
+
+  const focusFitKeyRef = useRef<string | null>(null);
+  const selectionFitKeyRef = useRef<string | null>(null);
+  const scheduleFitView = useCallback(
+    (options?: Parameters<typeof fitView>[0]) => {
+      if (typeof window === 'undefined') return;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const frameId = window.requestAnimationFrame(() => {
+        timeoutId = window.setTimeout(() => {
+          void fitView(options);
+        }, 0);
+      });
+      return () => {
+        window.cancelAnimationFrame(frameId);
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      };
+    },
+    [fitView]
+  );
+
+  const runViewportAction = useCallback(
+    (params?: {
+      relayout?: boolean;
+      layoutOptions?: LayoutOptions;
+      focusNodeId?: string;
+      mode?: 'fit-graph' | 'fit-node' | 'center-and-fit-node';
+      fitOptions?: Parameters<typeof fitView>[0];
+    }) => {
+      const { relayout = false, layoutOptions, focusNodeId, mode = 'fit-graph', fitOptions } = params ?? {};
+      const effectiveLayout = layoutOptions ?? activeLayout;
+      const layoutEngine = effectiveLayout.engine ?? 'dagre';
+      const nextNodes =
+        relayout && layoutEngine !== 'elk' ? computeLayout(graphNodes, edges, effectiveLayout) : graphNodes;
+      if (relayout && layoutEngine === 'elk') {
+        computeLayoutAsync(graphNodes, edges, effectiveLayout).then((relayoutedNodes) => {
+          if (!relayoutedNodes) return;
+          setNodes(relayoutedNodes);
+          const focusedRelayoutedNode = focusNodeId
+            ? relayoutedNodes.find((node) => node.id === focusNodeId)
+            : undefined;
+          if (mode === 'center-and-fit-node' && focusedRelayoutedNode) {
+            setCenter(
+              focusedRelayoutedNode.position.x + getNodeWidth(focusedRelayoutedNode) / 2,
+              focusedRelayoutedNode.position.y + getNodeHeight(focusedRelayoutedNode) / 2,
+              {
+                zoom: 1.08,
+                duration: 220
+              }
+            );
+          }
+          if ((mode === 'fit-node' || mode === 'center-and-fit-node') && focusedRelayoutedNode) {
+            scheduleFitView(
+              fitOptions ?? {
+                duration: 200,
+                padding: 0.4,
+                maxZoom: 1.18,
+                nodes: [focusedRelayoutedNode]
+              }
+            );
+            return;
+          }
+          scheduleFitView(
+            fitOptions ??
+              (focusMode ? { duration: 220, padding: 0.22, maxZoom: 1.08 } : { duration: 200, padding: 0.16 })
+          );
+        });
+        return;
+      }
+      if (relayout) {
+        setNodes(nextNodes);
+      }
+      const focusedNode = focusNodeId ? nextNodes.find((node) => node.id === focusNodeId) : undefined;
+      if (mode === 'center-and-fit-node' && focusedNode) {
+        setCenter(
+          focusedNode.position.x + getNodeWidth(focusedNode) / 2,
+          focusedNode.position.y + getNodeHeight(focusedNode) / 2,
+          {
+            zoom: 1.08,
+            duration: 220
+          }
+        );
+      }
+      if ((mode === 'fit-node' || mode === 'center-and-fit-node') && focusedNode) {
+        return scheduleFitView(
+          fitOptions ?? {
+            duration: 200,
+            padding: 0.4,
+            maxZoom: 1.18,
+            nodes: [focusedNode]
+          }
+        );
+      }
+      return scheduleFitView(
+        fitOptions ?? (focusMode ? { duration: 220, padding: 0.22, maxZoom: 1.08 } : { duration: 200, padding: 0.16 })
+      );
+    },
+    [activeLayout, edges, focusMode, graphNodes, scheduleFitView, setCenter, setNodes]
+  );
+
+  // Re-layout and fit view whenever the focus subgraph changes.
+  // Guard with `nodesInitialized` (canonical React Flow pattern) so layout runs
+  // only after React Flow has measured actual node dimensions — not fallbacks.
   useEffect(() => {
     if (!focusMode || !selectedNodeId || visibility.hiddenNodeIds.size === 0) {
       focusFitKeyRef.current = null;
@@ -348,20 +544,60 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
       .map((node) => node.id)
       .sort()
       .join('|')}`;
+    // Same subgraph already laid out — skip.
     if (focusFitKeyRef.current === focusKey) return;
+    // Nodes not yet measured — wait for the next nodesInitialized → true transition.
+    if (!nodesInitialized) return;
     focusFitKeyRef.current = focusKey;
-    if (typeof window === 'undefined') return;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const frameId = window.requestAnimationFrame(() => {
-      timeoutId = window.setTimeout(() => {
-        void fitView({ duration: 220, padding: 0.22, maxZoom: 1.08 });
-      }, 0);
+    return runViewportAction({
+      relayout: true,
+      layoutOptions: {
+        ...activeLayout,
+        direction: 'TB'
+      },
+      focusNodeId: selectedNodeId,
+      mode: 'center-and-fit-node',
+      fitOptions: {
+        duration: 220,
+        padding: 0.22,
+        maxZoom: 1.9
+      }
     });
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-    };
-  }, [fitView, focusMode, graphNodes, selectedNodeId, visibility.hiddenNodeIds.size]);
+  }, [
+    activeLayout,
+    focusMode,
+    graphNodes,
+    nodesInitialized,
+    runViewportAction,
+    selectedNodeId,
+    visibility.hiddenNodeIds.size
+  ]);
+
+  useEffect(() => {
+    if (!selectedNodeId || !nodesInitialized) {
+      selectionFitKeyRef.current = null;
+      return;
+    }
+    if (focusMode && visibility.hiddenNodeIds.size > 0) {
+      selectionFitKeyRef.current = null;
+      return;
+    }
+    const selectedNode = graphNodes.find((node) => node.id === selectedNodeId);
+    if (!selectedNode) return;
+    const selectionKey = `${selectedNodeId}:${Math.round(selectedNode.position.x)}:${Math.round(selectedNode.position.y)}:${Math.round(getNodeWidth(selectedNode))}x${Math.round(getNodeHeight(selectedNode))}`;
+    if (selectionFitKeyRef.current === selectionKey) return;
+    selectionFitKeyRef.current = selectionKey;
+    return runViewportAction({
+      focusNodeId: selectedNodeId,
+      mode: 'fit-node',
+      fitOptions: {
+        duration: 180,
+        padding: 0.4,
+        maxZoom: 1.18,
+        nodes: [selectedNode]
+      }
+    });
+  }, [focusMode, graphNodes, nodesInitialized, runViewportAction, selectedNodeId, visibility.hiddenNodeIds.size]);
 
   const hoveredEdge = useMemo(
     () => (hoveredEdgeId ? (edges.find((edge) => edge.id === hoveredEdgeId) ?? null) : null),
@@ -404,10 +640,10 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
 
   const inheritanceDisplay = useMemo<InheritanceDisplayModel>(
     () =>
-      mergedConfig.layout.groupByInheritance
+      activeLayout.groupByInheritance
         ? buildInheritanceDisplayNodes(graphNodes, edges)
         : { nodes: graphNodes, groupLabelsByNodeId: new Map() },
-    [graphNodes, edges, mergedConfig.layout.groupByInheritance]
+    [activeLayout.groupByInheritance, edges, graphNodes]
   );
 
   const baseDisplayNodes = inheritanceDisplay.nodes;
@@ -503,9 +739,9 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     return {
       onNavigateToType: callbacks?.onNavigateToType,
       allNodeIds,
-      layoutDirection: mergedConfig.layout.direction ?? 'TB'
+      layoutDirection: activeLayout.direction ?? 'TB'
     };
-  }, [storeNodes, callbacks?.onNavigateToType, mergedConfig.layout.direction]);
+  }, [activeLayout.direction, storeNodes, callbacks?.onNavigateToType]);
 
   // Node double-click handler
   const handleNodeDoubleClick = useCallback(
@@ -521,13 +757,16 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     ref,
     () => ({
       fitView() {
-        fitView({ duration: 200 });
+        runViewportAction({ mode: 'fit-graph', fitOptions: { duration: 200 } });
       },
 
       focusNode(nodeId: string) {
         const node = graphNodes.find((n) => n.id === nodeId);
         if (node) {
-          setCenter(node.position.x + 110, node.position.y + 60, { zoom: 1.5, duration: 300 });
+          runViewportAction({
+            focusNodeId: nodeId,
+            mode: 'center-and-fit-node'
+          });
           // Programmatically select the target node in React Flow
           setNodes((prev) => {
             let changed = false;
@@ -568,9 +807,8 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
       },
 
       relayout(options?: LayoutOptions) {
-        const opts = options ?? mergedConfig.layout;
-        const layouted = computeLayout(graphNodes, edges, opts);
-        setNodes(layouted);
+        if (options?.engine) setRuntimeLayoutEngine(options.engine);
+        return runViewportAction({ relayout: true, layoutOptions: options ?? activeLayout, mode: 'fit-graph' });
       },
 
       async exportImage(_format: 'svg' | 'png'): Promise<Blob> {
@@ -605,7 +843,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         return validateGraph(storeNodes, storeEdges);
       }
     }),
-    [graphNodes, edges, storeNodes, storeEdges, mergedConfig, fitView, setCenter, setNodes, callbacks]
+    [activeLayout, graphNodes, storeNodes, storeEdges, mergedConfig, runViewportAction, setNodes, callbacks]
   );
 
   // Context menu state
@@ -625,6 +863,22 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   const handleCloseContextMenu = useCallback(() => {
     setContextMenu(null);
   }, []);
+
+  const handleLayoutEngineChange = useCallback(
+    (engine: 'dagre' | 'elk') => {
+      setRuntimeLayoutEngine(engine);
+      callbacks?.onLayoutEngineChange?.(engine);
+      runViewportAction({
+        relayout: true,
+        layoutOptions: {
+          ...activeLayout,
+          engine
+        },
+        mode: 'fit-graph'
+      });
+    },
+    [activeLayout, callbacks, runViewportAction]
+  );
 
   // Close context menu on pane click
   const handlePaneClick = useCallback(() => {
@@ -675,12 +929,13 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   const handleMoveEnd = useCallback(
     (_event: MouseEvent | TouchEvent | null, viewport: { x: number; y: number; zoom: number }) => {
       try {
-        window.localStorage.setItem(VIEWPORT_STORAGE_KEY, JSON.stringify(viewport));
+        const record: PersistedViewportRecord = { signature: viewportSignature, viewport };
+        window.localStorage.setItem(VIEWPORT_STORAGE_KEY, JSON.stringify(record));
       } catch {
         /* storage unavailable */
       }
     },
-    []
+    [viewportSignature]
   );
 
   return (
@@ -698,6 +953,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
       <NavigationContext.Provider value={navigationCtx}>
         <ReactFlow<DisplayGraphNode, TypeGraphEdge>
           // Display nodes include synthetic group containers; domain nodes remain in the store.
+
           nodes={displayNodes}
           edges={displayEdges}
           onNodesChange={onNodesChange}
@@ -728,7 +984,12 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         </ReactFlow>
       </NavigationContext.Provider>
-      <GraphContextMenu state={contextMenu} onClose={handleCloseContextMenu} />
+      <GraphContextMenu
+        state={contextMenu}
+        layoutEngine={runtimeLayoutEngine}
+        onLayoutEngineChange={handleLayoutEngineChange}
+        onClose={handleCloseContextMenu}
+      />
     </div>
   );
 });

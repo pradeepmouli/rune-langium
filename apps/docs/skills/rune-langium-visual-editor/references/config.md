@@ -8,25 +8,17 @@ Visibility filter state for the type graph.
 
 #### namespaces
 
-
-
 **Type:** `string[]`
 
 #### kinds
-
-
 
 **Type:** `TypeKind[]`
 
 #### namePattern
 
-
-
 **Type:** `string`
 
 #### hideOrphans
-
-
 
 **Type:** `boolean`
 
@@ -34,21 +26,19 @@ Visibility filter state for the type graph.
 
 ### Properties
 
+#### engine
+
+**Type:** `LayoutEngine`
+
 #### direction
-
-
 
 **Type:** `LayoutDirection`
 
 #### nodeSeparation
 
-
-
 **Type:** `number`
 
 #### rankSeparation
-
-
 
 **Type:** `number`
 
@@ -64,19 +54,13 @@ Group nodes into inheritance trees and lay out each tree independently.
 
 #### data
 
-
-
 **Type:** `{ headerColor?: string; borderColor?: string }`
 
 #### choice
 
-
-
 **Type:** `{ headerColor?: string; borderColor?: string }`
 
 #### enum
-
-
 
 **Type:** `{ headerColor?: string; borderColor?: string }`
 
@@ -86,25 +70,17 @@ Group nodes into inheritance trees and lay out each tree independently.
 
 #### extends
 
-
-
 **Type:** `{ color?: string; strokeWidth?: number }`
 
 #### attribute-ref
-
-
 
 **Type:** `{ color?: string; strokeWidth?: number; dashed?: boolean }`
 
 #### choice-option
 
-
-
 **Type:** `{ color?: string; strokeWidth?: number }`
 
 #### enum-extends
-
-
 
 **Type:** `{ color?: string; strokeWidth?: number }`
 
@@ -116,43 +92,29 @@ Configuration props for the `RuneTypeGraph` component.
 
 #### layout
 
-
-
 **Type:** `LayoutOptions`
 
 #### nodeStyles
-
-
 
 **Type:** `NodeStyleConfig`
 
 #### edgeStyles
 
-
-
 **Type:** `EdgeStyleConfig`
 
 #### initialFilters
-
-
 
 **Type:** `GraphFilters`
 
 #### showMinimap
 
-
-
 **Type:** `boolean`
 
 #### showControls
 
-
-
 **Type:** `boolean`
 
 #### readOnly
-
-
 
 **Type:** `boolean`
 
@@ -164,15 +126,11 @@ Snapshot of visual editor state tracked by the zustand store.
 
 #### nodes
 
-
-
 **Type:** `TypeGraphNode[]`
 
 **Required:** yes
 
 #### edges
-
-
 
 **Type:** `TypeGraphEdge[]`
 
@@ -180,15 +138,11 @@ Snapshot of visual editor state tracked by the zustand store.
 
 #### selectedNodeId
 
-
-
 **Type:** `string | null`
 
 **Required:** yes
 
 #### searchQuery
-
-
 
 **Type:** `string`
 
@@ -196,15 +150,11 @@ Snapshot of visual editor state tracked by the zustand store.
 
 #### searchResults
 
-
-
 **Type:** `string[]`
 
 **Required:** yes
 
 #### activeFilters
-
-
 
 **Type:** `GraphFilters`
 
@@ -212,15 +162,11 @@ Snapshot of visual editor state tracked by the zustand store.
 
 #### detailPanelOpen
 
-
-
 **Type:** `boolean`
 
 **Required:** yes
 
 #### validationErrors
-
-
 
 **Type:** `ValidationError[]`
 
@@ -228,23 +174,27 @@ Snapshot of visual editor state tracked by the zustand store.
 
 #### layoutOptions
 
-
-
 **Type:** `LayoutOptions`
 
 **Required:** yes
 
 #### focusMode
 
-When true, selecting a node auto-isolates it + direct neighbors.
+When true, selecting a node auto-isolates its focused cluster.
 
 **Type:** `boolean`
 
 **Required:** yes
 
+#### focusRelatedExcludedKinds
+
+Node kinds excluded from focus-mode related clusters (selected node is always retained).
+
+**Type:** `Set<TypeKind>`
+
+**Required:** yes
+
 #### visibility
-
-
 
 **Type:** `VisibilityState`
 

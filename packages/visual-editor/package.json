@@ -44,6 +44,7 @@
     "@xyflow/react": "^12.10.2",
     "@zod-to-form/core": "^0.9.1",
     "@zod-to-form/react": "^0.9.1",
+    "elkjs": "^0.11.1",
     "lucide-react": "^1.14.0",
     "react-hook-form": "^7.75.0",
     "zod": "^4.4.3",

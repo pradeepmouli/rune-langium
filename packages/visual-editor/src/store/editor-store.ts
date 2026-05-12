@@ -38,6 +38,7 @@ import type {
   ValidationError,
   EdgeData,
   LayoutOptions,
+  LayoutEngine,
   VisibilityState,
   AnyGraphNode,
   GraphNode
@@ -88,6 +89,8 @@ export interface EditorState {
   // --- Focus mode ---
   /** When true, selecting a node auto-isolates its focused cluster. */
   focusMode: boolean;
+  /** Node kinds excluded from focus-mode related clusters (selected node is always retained). */
+  focusRelatedExcludedKinds: Set<TypeKind>;
 
   // --- Namespace visibility ---
   visibility: VisibilityState;
@@ -113,6 +116,7 @@ export interface EditorActions {
 
   // --- Layout ---
   relayout(options?: LayoutOptions): void;
+  setLayoutEngine(engine: LayoutEngine): void;
 
   // --- Graph state access ---
   getNodes(): TypeGraphNode[];
@@ -145,6 +149,8 @@ export interface EditorActions {
   showAllNodes(): void;
   /** Toggle focus mode (auto-isolate selected node + neighbors). */
   toggleFocusMode(): void;
+  /** Toggle exclusion of a node kind from focus-mode related clusters. */
+  toggleFocusRelatedExcludedKind(kind: TypeKind): void;
 
   // --- Editing (P2) ---
   createType(kind: TypeKind, name: string, namespace: string): string;
@@ -226,7 +232,12 @@ function buildNodeMap(nodes: TypeGraphNode[]): Map<string, TypeGraphNode> {
   return new Map(nodes.map((node) => [node.id, node]));
 }
 
-function collectFocusClusterNodeIds(nodeId: string, edges: TypeGraphEdge[]): Set<string> {
+function collectFocusClusterNodeIds(
+  nodeId: string,
+  edges: TypeGraphEdge[],
+  nodeMap: Map<string, TypeGraphNode>,
+  excludedKinds: Set<TypeKind>
+): Set<string> {
   const focusNodeIds = new Set<string>([nodeId]);
   const parentStack = [nodeId];
 
@@ -245,6 +256,17 @@ function collectFocusClusterNodeIds(nodeId: string, edges: TypeGraphEdge[]): Set
     if (isInheritanceEdgeKind(kind)) continue;
     if (edge.source === nodeId) focusNodeIds.add(edge.target);
     if (edge.target === nodeId) focusNodeIds.add(edge.source);
+  }
+
+  if (excludedKinds.size > 0) {
+    for (const id of Array.from(focusNodeIds)) {
+      if (id === nodeId) continue;
+      const node = nodeMap.get(id);
+      if (!node) continue;
+      if (excludedKinds.has(node.type as TypeKind)) {
+        focusNodeIds.delete(id);
+      }
+    }
   }
 
   return focusNodeIds;
@@ -408,8 +430,9 @@ const initialState: EditorState = {
   activeFilters: {},
   detailPanelOpen: false,
   validationErrors: [],
-  layoutOptions: { direction: 'LR', nodeSeparation: 50, rankSeparation: 100 },
+  layoutOptions: { direction: 'LR', nodeSeparation: 50, rankSeparation: 100, engine: 'dagre' },
   focusMode: true,
+  focusRelatedExcludedKinds: new Set<TypeKind>(['basicType']),
   visibility: {
     expandedNamespaces: new Set<string>(),
     hiddenNodeIds: new Set<string>(),
@@ -552,10 +575,15 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         selectNode(nodeId, options) {
           const nextDetailPanelOpen = nodeId !== null;
-          const { selectedNodeId, detailPanelOpen, focusMode, edges } = get();
+          const { selectedNodeId, detailPanelOpen, focusMode, edges, visibility, nodes, focusRelatedExcludedKinds } =
+            get();
           const selectionChanged = selectedNodeId !== nodeId;
           if (selectionChanged || detailPanelOpen !== nextDetailPanelOpen) {
             set({ selectedNodeId: nodeId, detailPanelOpen: nextDetailPanelOpen });
+          }
+          if (nodeId === null && focusMode && visibility.hiddenNodeIds.size > 0) {
+            get().showAllNodes();
+            return;
           }
           const shouldApplyFocusMode =
             nodeId &&
@@ -563,7 +591,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             options?.isolateInFocusMode !== false &&
             (selectionChanged || options?.reapplyFocusMode);
           if (shouldApplyFocusMode) {
-            const focusNodeIds = collectFocusClusterNodeIds(nodeId, edges);
+            const focusNodeIds = collectFocusClusterNodeIds(
+              nodeId,
+              edges,
+              buildNodeMap(nodes),
+              focusRelatedExcludedKinds
+            );
             get().showOnly(focusNodeIds);
           }
         },
@@ -598,6 +631,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         relayout(options) {
           const opts = options ?? get().layoutOptions;
+          const nodes = computeLayout(get().nodes, get().edges, opts);
+          set({ nodes, layoutOptions: opts });
+        },
+
+        setLayoutEngine(engine) {
+          const opts = { ...get().layoutOptions, engine };
           const nodes = computeLayout(get().nodes, get().edges, opts);
           set({ nodes, layoutOptions: opts });
         },
@@ -1623,14 +1662,53 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // Isolation / focus
         // -----------------------------------------------------------------------
 
+        toggleFocusRelatedExcludedKind(kind: TypeKind) {
+          const { selectedNodeId, focusMode, edges, nodes } = get();
+          let nextExcludedKinds: Set<TypeKind> | null = null;
+
+          set((state) => {
+            nextExcludedKinds = new Set(state.focusRelatedExcludedKinds);
+            if (nextExcludedKinds.has(kind)) {
+              nextExcludedKinds.delete(kind);
+            } else {
+              nextExcludedKinds.add(kind);
+            }
+
+            return {
+              focusRelatedExcludedKinds: nextExcludedKinds
+            };
+          });
+
+          if (focusMode && selectedNodeId && nextExcludedKinds) {
+            const focusNodeIds = collectFocusClusterNodeIds(
+              selectedNodeId,
+              edges,
+              buildNodeMap(nodes),
+              nextExcludedKinds
+            );
+            get().showOnly(focusNodeIds);
+          }
+        },
+
         isolateNode(nodeId: string) {
-          const focusNodeIds = collectFocusClusterNodeIds(nodeId, get().edges);
+          const { edges, nodes, focusRelatedExcludedKinds } = get();
+          const focusNodeIds = collectFocusClusterNodeIds(
+            nodeId,
+            edges,
+            buildNodeMap(nodes),
+            focusRelatedExcludedKinds
+          );
           get().showOnly(focusNodeIds);
         },
 
         revealNeighbors(nodeId: string) {
-          const { nodes, edges, visibility } = get();
-          const focusNodeIds = collectFocusClusterNodeIds(nodeId, edges);
+          const { nodes, edges, visibility, focusRelatedExcludedKinds } = get();
+          const focusNodeIds = collectFocusClusterNodeIds(
+            nodeId,
+            edges,
+            buildNodeMap(nodes),
+            focusRelatedExcludedKinds
+          );
           const nodeMap = buildNodeMap(nodes);
           const hiddenNodeIds = new Set(visibility.hiddenNodeIds);
           const expandedNamespaces = new Set(visibility.expandedNamespaces);
@@ -1682,9 +1760,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const next = !get().focusMode;
           set({ focusMode: next });
           if (next) {
-            const { selectedNodeId, edges } = get();
+            const { selectedNodeId, edges, nodes, focusRelatedExcludedKinds } = get();
             if (selectedNodeId) {
-              const focusNodeIds = collectFocusClusterNodeIds(selectedNodeId, edges);
+              const focusNodeIds = collectFocusClusterNodeIds(
+                selectedNodeId,
+                edges,
+                buildNodeMap(nodes),
+                focusRelatedExcludedKinds
+              );
               if (focusNodeIds.size > 1) {
                 get().showOnly(focusNodeIds);
               } else {

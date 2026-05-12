@@ -79,7 +79,7 @@ export function PlaceholderBlock({ node, onActivate, onDragNode }: PlaceholderBl
       className={`inline-flex cursor-pointer items-center rounded border border-dashed px-2 py-0.5 text-xs transition-colors ${
         isDropTarget
           ? 'border-solid border-ring bg-accent text-accent-foreground'
-          : 'border-[var(--color-expr-placeholder)] text-[var(--color-expr-placeholder)] bg-[var(--color-expr-placeholder-bg)] hover:border-solid hover:opacity-80'
+          : 'border-(--color-expr-placeholder) text-(--color-expr-placeholder) bg-(--color-expr-placeholder-bg) hover:border-solid hover:opacity-80'
       }`}
       data-block="placeholder"
       data-drop-target={isDropTarget || undefined}

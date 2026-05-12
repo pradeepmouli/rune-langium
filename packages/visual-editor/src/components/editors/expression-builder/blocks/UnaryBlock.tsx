@@ -40,7 +40,7 @@ const OPERATOR_LABELS: Record<string, string> = {
 
 function categoryClass($type: string): string {
   if ($type.startsWith('To') && $type.endsWith('Operation')) {
-    return 'text-[var(--color-expr-collection)] bg-[var(--color-expr-collection-bg)]';
+    return 'text-(--color-expr-collection) bg-(--color-expr-collection-bg)';
   }
   if (
     $type === 'FlattenOperation' ||
@@ -53,9 +53,9 @@ function categoryClass($type: string): string {
     $type === 'RosettaCountOperation' ||
     $type === 'ChoiceOperation'
   ) {
-    return 'text-[var(--color-expr-collection)] bg-[var(--color-expr-collection-bg)]';
+    return 'text-(--color-expr-collection) bg-(--color-expr-collection-bg)';
   }
-  return 'text-[var(--color-expr-comparison)] bg-[var(--color-expr-comparison-bg)]';
+  return 'text-(--color-expr-comparison) bg-(--color-expr-comparison-bg)';
 }
 
 export interface UnaryBlockProps {

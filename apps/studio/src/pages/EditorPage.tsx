@@ -104,7 +104,6 @@ export interface EditorPageProps {
 }
 
 const DECL_KEYWORDS = /^(type|enum|func|choice|annotation|metaType|typeAlias|library\s+function|reporting\s+rule)\s+/;
-const GRAPH_LAYOUT_HYSTERESIS = 1.08;
 
 function findDeclarationLine(content: string, name: string): number {
   const lines = content.split('\n');
@@ -157,8 +156,8 @@ function resolveResponsiveLayoutDirection(
   previous: Extract<LayoutDirection, 'LR' | 'TB'>
 ): Extract<LayoutDirection, 'LR' | 'TB'> {
   if (width <= 0 || height <= 0) return previous;
-  if (width / height >= GRAPH_LAYOUT_HYSTERESIS) return 'LR';
-  if (height / width >= GRAPH_LAYOUT_HYSTERESIS) return 'TB';
+  if (width > height) return 'LR';
+  if (height > width) return 'TB';
   return previous;
 }
 
@@ -250,6 +249,10 @@ export function EditorPage({
   const storeToggleNamespace = useEditorStore((s) => s.toggleNamespace);
   const storeExpandAllNamespaces = useEditorStore((s) => s.expandAllNamespaces);
   const storeCollapseAllNamespaces = useEditorStore((s) => s.collapseAllNamespaces);
+  const storeLayoutEngine = useEditorStore((s) => s.layoutOptions.engine ?? 'elk');
+  const storeSetLayoutEngine = useEditorStore((s) => s.setLayoutEngine);
+  const layoutEngineRef = useRef(storeLayoutEngine);
+  layoutEngineRef.current = storeLayoutEngine;
   const previewSelectedTargetId = usePreviewStore((s) => s.selectedTargetId);
   const previewSelectedTarget = usePreviewStore((s) => s.selectedTarget);
   const setPreviewTargets = usePreviewStore((s) => s.setAvailableTargets);
@@ -270,21 +273,52 @@ export function EditorPage({
     const nextDirection = resolveResponsiveLayoutDirection(rect.width, rect.height, graphLayoutDirectionRef.current);
     return updateGraphLayoutDirection(nextDirection);
   }, [updateGraphLayoutDirection]);
+  const syncResponsiveGraphLayout = useCallback(() => {
+    const rect = graphContainerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const direction = resolveResponsiveLayoutDirection(rect.width, rect.height, graphLayoutDirectionRef.current);
+    if (direction !== graphLayoutDirectionRef.current) {
+      updateGraphLayoutDirection(direction);
+      graphRef.current?.relayout({
+        engine: layoutEngineRef.current,
+        direction,
+        groupByInheritance: groupedLayoutRef.current
+      });
+      return;
+    }
+    graphRef.current?.fitView();
+  }, [updateGraphLayoutDirection]);
 
   useEffect(() => {
     const el = graphContainerRef.current;
     if (!el) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return;
-      const { width, height } = entry.contentRect;
-      const direction = resolveResponsiveLayoutDirection(width, height, graphLayoutDirectionRef.current);
-      if (direction === graphLayoutDirectionRef.current) return;
-      updateGraphLayoutDirection(direction);
-      graphRef.current?.relayout({ direction, groupByInheritance: groupedLayoutRef.current });
+    const frameId = window.requestAnimationFrame(() => {
+      syncResponsiveGraphLayout();
     });
+    const observer = new ResizeObserver(() => {
+      syncResponsiveGraphLayout();
+    });
+    const handleWindowResize = () => {
+      syncResponsiveGraphLayout();
+    };
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [updateGraphLayoutDirection]);
+    window.addEventListener('resize', handleWindowResize);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      observer.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+    };
+  }, [syncResponsiveGraphLayout]);
+
+  useEffect(() => {
+    if (!selectedNodeId) return;
+    if (!storeNodes.some((node) => node.id === selectedNodeId)) return;
+    graphRef.current?.relayout({
+      engine: layoutEngineRef.current,
+      direction: getResponsiveGraphDirection(),
+      groupByInheritance: groupedLayoutRef.current
+    });
+  }, [getResponsiveGraphDirection, selectedNodeId, storeNodes]);
 
   const resolvedModelFiles = useMemo(() => {
     if (parsedModels && parsedModels.length > 0) {
@@ -750,11 +784,11 @@ export function EditorPage({
         if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
       }
       storeSelectNode(nodeId, { reapplyFocusMode: true });
-      if (shouldCenterNavigationTarget(nodeId)) {
+      if (!focusMode && shouldCenterNavigationTarget(nodeId)) {
         graphRef.current?.focusNode(nodeId);
       }
     },
-    [showToast, shouldCenterNavigationTarget, storeNodes, storeSelectNode]
+    [focusMode, showToast, shouldCenterNavigationTarget, storeNodes, storeSelectNode]
   );
 
   const navigateBack = useCallback(() => {
@@ -770,10 +804,10 @@ export function EditorPage({
       return;
     }
     storeSelectNode(prev, { reapplyFocusMode: true });
-    if (shouldCenterNavigationTarget(prev)) {
+    if (!focusMode && shouldCenterNavigationTarget(prev)) {
       graphRef.current?.focusNode(prev);
     }
-  }, [showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes]);
+  }, [focusMode, showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes]);
 
   const handleEditorPageKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
@@ -936,18 +970,30 @@ export function EditorPage({
   }, []);
   const handleRelayout = useCallback(() => {
     graphRef.current?.relayout({
+      engine: layoutEngineRef.current,
       direction: getResponsiveGraphDirection(),
       groupByInheritance: groupedLayout
     });
   }, [getResponsiveGraphDirection, groupedLayout]);
   const handleToggleFocusMode = useCallback(() => {
+    const nextFocusMode = !focusMode;
     storeToggleFocusMode();
-  }, [storeToggleFocusMode]);
+    if (!nextFocusMode) {
+      setTimeout(() => {
+        graphRef.current?.relayout({
+          engine: layoutEngineRef.current,
+          direction: graphLayoutDirectionRef.current,
+          groupByInheritance: groupedLayoutRef.current
+        });
+      }, 0);
+    }
+  }, [focusMode, storeToggleFocusMode]);
   const handleToggleGroupedLayout = useCallback(() => {
     setGroupedLayout((prev) => {
       const next = !prev;
       setTimeout(() => {
         graphRef.current?.relayout({
+          engine: layoutEngineRef.current,
           direction: getResponsiveGraphDirection(),
           groupByInheritance: next
         });
@@ -1076,14 +1122,15 @@ export function EditorPage({
             config={{
               // 'LR' is a safe default — the ResizeObserver corrects direction on the first frame
               // once the container is measured. The container dimensions aren't available yet here.
-              layout: { direction: graphLayoutDirection, groupByInheritance: groupedLayout },
+              layout: { engine: storeLayoutEngine, direction: graphLayoutDirection, groupByInheritance: groupedLayout },
               showControls: true,
-              showMinimap: true,
+              showMinimap: false,
               readOnly: false
             }}
             callbacks={{
               onNodeDoubleClick: () => {},
               onModelChanged: handleModelChanged,
+              onLayoutEngineChange: storeSetLayoutEngine,
               onNavigateToType: navigateToNode
             }}
           />
