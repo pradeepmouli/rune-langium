@@ -651,7 +651,18 @@ import type { CachedFile, LoadedModel } from '../types/model-types.js';
  * Merge loaded model files into the workspace as read-only entries.
  * Model files are prefixed with the model source ID to avoid path collisions.
  * Existing user files are preserved; model files are appended.
+ *
+ * 019 Phase 0: When a curated bundle was loaded via the server-side parse
+ * path (Task 0.5a), `model.files` will be empty. In that case a synthetic
+ * bundle-marker entry is inserted so that collectCuratedBundlesFromWorkspace
+ * can still find the bundle id+version to include in /api/parse requests.
+ * The marker is excluded from /api/parse's `userFiles` filter (via the
+ * truthy `serializedModelJson`) and from LSP sync in App.tsx (filtered by
+ * BUNDLE_MARKER_SUFFIX). Callers that iterate over model files for display
+ * (e.g. namespace explorer) should filter out bundle-marker paths.
  */
+export const BUNDLE_MARKER_SUFFIX = '/.bundle-marker';
+
 export function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedModel): WorkspaceFile[] {
   // Remove any previous files from this model source
   const userFiles = currentFiles.filter((f) => !f.path.startsWith(`[${model.source.id}]/`));
@@ -671,6 +682,26 @@ export function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedMode
     bundleId: model.source.id,
     bundleVersion: model.commitHash
   }));
+
+  // 019 Phase 0: when no files were extracted (server-side parse path),
+  // insert a synthetic bundle-marker so collectCuratedBundlesFromWorkspace
+  // can find the bundle id+version without the corpus files being present.
+  // The marker has a truthy serializedModelJson so parseWorkspaceFiles
+  // excludes it from the userFiles sent to the server. App.tsx filters it
+  // from syncWorkspaceFiles via BUNDLE_MARKER_SUFFIX to avoid LSP noise.
+  if (modelFiles.length === 0) {
+    modelFiles.push({
+      name: '.bundle-marker',
+      path: `[${model.source.id}]${BUNDLE_MARKER_SUFFIX}`,
+      content: '',
+      dirty: false,
+      readOnly: true,
+      // Non-empty string → excluded from userFiles by `!f.serializedModelJson` filter.
+      serializedModelJson: '{}' as CuratedSerializedDocument['modelJson'],
+      bundleId: model.source.id,
+      bundleVersion: model.commitHash
+    });
+  }
 
   return [...userFiles, ...modelFiles];
 }

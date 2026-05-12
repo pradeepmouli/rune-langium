@@ -18,7 +18,7 @@ import { WorkspaceSwitcher } from './components/WorkspaceSwitcher.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
-import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
+import { parseWorkspaceFiles, mergeModelFiles, BUNDLE_MARKER_SUFFIX } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
 import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
@@ -152,7 +152,9 @@ function AppContent() {
           mergedFiles = mergeModelFiles(mergedFiles, model);
         }
         setFiles(mergedFiles);
-        lspClientRef.current?.syncWorkspaceFiles(mergedFiles);
+        // 019: filter synthetic bundle-marker files so the LSP doesn't receive
+        // placeholder entries with empty content (bundle content arrives via /api/parse).
+        lspClientRef.current?.syncWorkspaceFiles(mergedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX)));
 
         const result = await parseWorkspaceFiles(mergedFiles);
         applyParseResult(result);
@@ -354,7 +356,7 @@ function AppContent() {
   const handleFilesChange = useCallback(
     (updatedFiles: WorkspaceFile[]) => {
       setFiles(updatedFiles);
-      lspClientRef.current?.syncWorkspaceFiles(updatedFiles);
+      lspClientRef.current?.syncWorkspaceFiles(updatedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX)));
 
       if (restoredWorkspace) {
         void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles).catch((err) => {
@@ -549,7 +551,9 @@ function AppContent() {
       merged = mergeModelFiles(merged, model);
     }
     setFiles(merged);
-    lspClientRef.current?.syncWorkspaceFiles(merged);
+    // 019: filter synthetic bundle-marker files so the LSP doesn't receive
+    // placeholder entries with empty content (bundle content arrives via /api/parse).
+    lspClientRef.current?.syncWorkspaceFiles(merged.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX)));
     modelParseTokenRef.current += 1;
     const token = modelParseTokenRef.current;
     parseWorkspaceFiles(merged)
