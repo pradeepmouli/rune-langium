@@ -16,9 +16,7 @@ export default defineConfig({
   reporter: process.env.CI ? 'list' : 'html',
   timeout: 30000,
   use: {
-    baseURL:
-      process.env.PLAYWRIGHT_BASE_URL ||
-      `http://localhost:${Number(process.env.STUDIO_DEV_PORT) || 5173}`,
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${Number(process.env.STUDIO_DEV_PORT) || 5173}`,
     trace: 'on-first-retry'
   },
   webServer: process.env.PLAYWRIGHT_BASE_URL
@@ -42,7 +40,11 @@ export default defineConfig({
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-gpu',
-            '--disable-dev-shm-usage'
+            '--disable-dev-shm-usage',
+            // Enables performance.memory.usedJSHeapSize for the memory
+            // regression guard (019 Phase 2 Task 2.7). Has no effect on
+            // tests that don't read performance.memory.
+            '--enable-precise-memory-info'
           ]
         }
       }
