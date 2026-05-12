@@ -53,101 +53,119 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
     return badRequest('files: must be a non-empty array');
   }
 
-  const { RuneDsl } = createRuneDslServices(EmptyFileSystem);
-  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
-  const builder = RuneDsl.shared.workspace.DocumentBuilder;
+  try {
+    const { RuneDsl } = createRuneDslServices(EmptyFileSystem);
+    const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+    const builder = RuneDsl.shared.workspace.DocumentBuilder;
 
-  const docs: LangiumDocument<AstNode>[] = body.files.map((f) => factory.fromString(f.content, toRosettaUri(f.name)));
-  await builder.build(docs, { validation: false });
+    const docs: LangiumDocument<AstNode>[] = body.files.map((f) => factory.fromString(f.content, toRosettaUri(f.name)));
+    await builder.build(docs, { validation: false });
 
-  // parsedModels accumulates file-path summaries (no raw AST — Langium nodes
-  // have circular $container refs and cannot be JSON-serialized directly).
-  const parsedModels: Array<{ filePath: string }> = [];
-  const errors: Record<string, string[]> = {};
-  const documentsForHydration: Array<{
-    uri: string;
-    content: string;
-    serializedModel: string;
-    exports: Array<{ type: string; name: string; path: string }>;
-  }> = [];
+    const errors: Record<string, string[]> = {};
+    const documentsForHydration: Array<{
+      uri: string;
+      content: string;
+      serializedModel: string;
+      exports: Array<{ type: string; name: string; path: string }>;
+    }> = [];
 
-  // The legacy deferredExports summary mirrors what handleParseWorkspace produces.
-  const deferredExportsByNamespace: Record<string, Array<{ type: string; name: string }>> = {};
+    // The legacy deferredExports summary mirrors what handleParseWorkspace produces.
+    // Carries the real file name so EditorPage's "click node → open in source"
+    // lookup (files.find(f => f.path === filePath)) can match it. If multiple
+    // files share a namespace the first file wins — same behaviour as the browser
+    // worker's handleParseWorkspace (Map keyed by namespace).
+    const deferredExportsByNamespace: Record<
+      string,
+      { filePath: string; entries: Array<{ type: string; name: string }> }
+    > = {};
 
-  for (let i = 0; i < docs.length; i++) {
-    const doc = docs[i];
-    const filePath = body.files[i].name;
-    const parseErrors = doc.parseResult.parserErrors.map((e) => e.message);
-    if (parseErrors.length > 0) {
-      errors[filePath] = parseErrors;
-    }
-    const model = doc.parseResult.value as RosettaModel | undefined;
-    if (!model) continue;
-    parsedModels.push({ filePath });
+    for (let i = 0; i < docs.length; i++) {
+      const doc = docs[i];
+      const filePath = body.files[i].name;
+      const parseErrors = doc.parseResult.parserErrors.map((e) => e.message);
+      if (parseErrors.length > 0) {
+        errors[filePath] = parseErrors;
+      }
+      const model = doc.parseResult.value as RosettaModel | undefined;
+      if (!model) continue;
 
-    // Serialize the model for hydration (Langium JSON serializer).
-    const serializedModel = RuneDsl.serializer.JsonSerializer.serialize(model);
+      // Serialize the model for hydration (Langium JSON serializer).
+      const serializedModel = RuneDsl.serializer.JsonSerializer.serialize(model);
 
-    // RosettaModel.name is QualifiedName (= string). Strip surrounding quotes
-    // that the Langium grammar/parser may add for string literals.
-    const rawName = model.name as string;
-    const namespace = rawName ? rawName.replace(/^"|"$/g, '') : '';
+      // RosettaModel.name is QualifiedName (= string). Strip surrounding quotes
+      // that the Langium grammar/parser may add for string literals.
+      const rawName = model.name as string;
+      const namespace = rawName ? rawName.replace(/^"|"$/g, '') : '';
 
-    // Iterate model.elements — the typed union Array<RosettaRootElement>.
-    // Each element has a $type and most have a name (ValidID = string).
-    const exports: Array<{ type: string; name: string; path: string }> = [];
-    if (namespace) {
-      for (const elem of model.elements) {
-        const elemWithName = elem as { $type: string; name?: string };
-        if (elemWithName.name) {
-          exports.push({
-            type: elemWithName.$type,
-            name: elemWithName.name,
-            path: `${namespace}.${elemWithName.name}`
-          });
+      // Iterate model.elements — the typed union Array<RosettaRootElement>.
+      // Each element has a $type and most have a name (ValidID = string).
+      const exports: Array<{ type: string; name: string; path: string }> = [];
+      if (namespace) {
+        for (const elem of model.elements) {
+          const elemWithName = elem as { $type: string; name?: string };
+          if (elemWithName.name) {
+            exports.push({
+              type: elemWithName.$type,
+              name: elemWithName.name,
+              path: `${namespace}.${elemWithName.name}`
+            });
+          }
         }
+      }
+
+      // The hydration URI must match what the browser worker will use to look up
+      // documents. Use the original (possibly `.rune`) name as the URI path so
+      // callers don't have to translate extension names back.
+      documentsForHydration.push({
+        uri: `file:///${filePath}`,
+        content: body.files[i].content,
+        serializedModel,
+        exports
+      });
+
+      if (namespace) {
+        const existing = deferredExportsByNamespace[namespace] ?? { filePath, entries: [] };
+        for (const e of exports) existing.entries.push({ type: e.type, name: e.name });
+        deferredExportsByNamespace[namespace] = existing;
       }
     }
 
-    // The hydration URI must match what the browser worker will use to look up
-    // documents. Use the original (possibly `.rune`) name as the URI path so
-    // callers don't have to translate extension names back.
-    documentsForHydration.push({
-      uri: `file:///${filePath}`,
-      content: body.files[i].content,
-      serializedModel,
-      exports
-    });
+    // Raw Langium AST nodes have circular $container refs and cannot be
+    // JSON-serialized. The HTTP response carries the serialized AST inside
+    // `hydrationState.documents[].serializedModel` (Langium JSON serializer
+    // output). `models` is intentionally empty; `parsedModels` is omitted
+    // entirely — the browser worker (Task 0.5) will reconstruct any model list
+    // it needs from hydrationState.documents.
 
-    if (namespace) {
-      const existing = deferredExportsByNamespace[namespace] ?? [];
-      for (const e of exports) existing.push({ type: e.type, name: e.name });
-      deferredExportsByNamespace[namespace] = existing;
-    }
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        models: [],
+        // parsedModels intentionally absent — server cannot send Langium ASTs
+        // (circular $container refs). Task 0.5 rebuilds this client-side from
+        // hydrationState.documents if needed.
+        deferredExports: Object.entries(deferredExportsByNamespace).map(
+          ([namespace, { filePath: nsFilePath, entries }]) => ({
+            filePath: nsFilePath,
+            namespace,
+            exports: entries
+          })
+        ),
+        errors,
+        hydrationState: { documents: documentsForHydration }
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: err instanceof Error ? err.message : String(err)
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
-
-  // Raw Langium AST nodes have circular $container refs and cannot be
-  // JSON-serialized. The HTTP response carries the serialized AST inside
-  // `hydrationState.documents[].serializedModel` (Langium JSON serializer
-  // output). `models` is sent as an empty array; `parsedModels` carries only
-  // file-path summaries so callers can see which files parsed successfully.
-
-  return new Response(
-    JSON.stringify({
-      ok: true,
-      models: [],
-      parsedModels,
-      deferredExports: Object.entries(deferredExportsByNamespace).map(([namespace, nsExports]) => ({
-        filePath: `${namespace.replace(/\./g, '/')}.rosetta`,
-        namespace,
-        exports: nsExports
-      })),
-      errors,
-      hydrationState: { documents: documentsForHydration }
-    }),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    }
-  );
 };

@@ -40,7 +40,10 @@ describe('POST /api/parse', () => {
     const body = (await res.json()) as {
       ok: boolean;
       models: unknown[];
-      parsedModels: unknown[];
+      // parsedModels is intentionally absent from the server response —
+      // Langium ASTs have circular $container refs and cannot be JSON-serialized.
+      // Task 0.5 rebuilds any model list client-side from hydrationState.documents.
+      parsedModels?: undefined;
       deferredExports: unknown[];
       errors: Record<string, string[]>;
       hydrationState: {
@@ -54,7 +57,7 @@ describe('POST /api/parse', () => {
     };
     expect(body.ok).toBe(true);
     expect(Array.isArray(body.models)).toBe(true);
-    expect(Array.isArray(body.parsedModels)).toBe(true);
+    expect(body.parsedModels).toBeUndefined();
     expect(body.hydrationState).toBeDefined();
     expect(Array.isArray(body.hydrationState.documents)).toBe(true);
     expect(body.hydrationState.documents.length).toBeGreaterThan(0);
