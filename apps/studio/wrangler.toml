@@ -1,24 +1,38 @@
 # SPDX-License-Identifier: FSL-1.1-ALv2
 # Copyright (c) 2026 Pradeep Mouli
 #
-# Cloudflare Pages project config for the Rune Studio.
+# Cloudflare Pages project config for the Rune Studio (spec 019 + 018).
 # Pages serves apps/studio/dist as static assets; functions in
-# apps/studio/functions/ are deployed alongside (see spec 019 + 018).
+# apps/studio/functions/ are deployed alongside.
+#
+# ARCHITECTURE NOTE (spec 019 review fix): Cloudflare Pages cannot CREATE or
+# host Durable Objects — only consume them via binding to a Worker that owns
+# the namespace. See
+# https://developers.cloudflare.com/pages/functions/bindings/#durable-objects
+#
+# The RuneLspSession DO is therefore owned by the existing `rune-lsp-worker`
+# Cloudflare Worker (see apps/lsp-worker/wrangler.toml, which has the
+# canonical class definition + migrations). Pages Functions in this project
+# bind LSP_SESSION → that Worker's namespace.
+#
+# This wrangler.toml is consumed by local dev (`pnpm dev:pages`); production
+# binding lives in the CF Pages dashboard (Settings → Functions → Bindings).
+# `script_name = "rune-lsp-worker"` keeps local + production in agreement.
 
 name = "rune-studio"
 compatibility_date = "2025-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "./dist"
 
-# LSP session Durable Object (migrated from apps/lsp-worker/, spec 019 Phase 1).
+# LSP session Durable Object binding — DO is owned by the rune-lsp-worker
+# Worker (apps/lsp-worker/), not by this Pages project. The class_name +
+# script_name pair tells CF to route env.LSP_SESSION calls there.
+# No [[migrations]] block here: DO migrations are owned by the worker that
+# hosts the class (see apps/lsp-worker/wrangler.toml).
 [[durable_objects.bindings]]
 name = "LSP_SESSION"
 class_name = "RuneLspSession"
-script_name = "rune-studio"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["RuneLspSession"]
+script_name = "rune-lsp-worker"
 
 # Allowlist for LSP session origin gating (default; override per environment).
 [vars]

@@ -20,13 +20,24 @@
  *
  * REQUIRED CF Pages dashboard configuration (one-time, spec 019 Phase 1):
  *   - Compatibility flag:  nodejs_compat
- *   - Durable Object binding:  LSP_SESSION  →  class RuneLspSession (same project)
- *   - Migration:  v1 / new_sqlite_classes: [RuneLspSession]
- *   - Var:  ALLOWED_ORIGIN = https://www.daikonic.dev
- * (These come from apps/studio/wrangler.toml. The wrangler.toml is NOT copied
- *  into the deploy root because the existing dashboard config already
- *  holds bindings/vars for the rest of the site; mirroring them here would
- *  risk drift.)
+ *   - Durable Object binding:  LSP_SESSION → existing rune-lsp-worker Worker
+ *     (class: RuneLspSession). CF Pages cannot host DOs — the DO is owned
+ *     by apps/lsp-worker/ (a separate CF Worker) and Pages Functions
+ *     consume it via this binding. See
+ *     https://developers.cloudflare.com/pages/functions/bindings/#durable-objects
+ *   - Vars:  ALLOWED_ORIGIN = https://www.daikonic.dev
+ *   - Secret: SESSION_SIGNING_KEY = <random 32-byte base64> (HMAC for tokens)
+ *
+ * apps/lsp-worker/ remains deployed even after spec 019's Phase 2 cutover —
+ * Pages can't take ownership of the DO. Phase 3 (deferred) was originally
+ * "delete apps/lsp-worker entirely"; that's now a narrower "strip its HTTP
+ * routes; keep the DO export."
+ *
+ * (The studio's wrangler.toml is NOT copied into the deploy root because
+ * the existing dashboard config already holds bindings/vars for the rest
+ * of the site; mirroring them here would risk drift. The local-dev
+ * wrangler.toml at apps/studio/wrangler.toml uses the same script_name so
+ * `pnpm dev:pages` matches the production routing.)
  */
 
 import { execSync } from 'node:child_process';
