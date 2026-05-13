@@ -2916,131 +2916,128 @@ git commit -m "test(studio): browser memory regression guard after LSP retiremen
 
 ---
 
-# Phase 3 — Retire `apps/lsp-worker/`
+# Phase 3 — Strip `apps/lsp-worker/` to DO-only
 
-**Outcome:** The standalone `apps/lsp-worker/` Cloudflare Worker is deleted from the repo and shut down in production. A one-release-cycle redirect from the old URL path to same-origin is in place to soften the transition for any direct consumers.
+**Outcome:** `apps/lsp-worker/`'s HTTP routes (`/api/lsp/session`, `/api/lsp/health`, `/api/lsp/ws/*`) are removed; the Worker keeps a single responsibility — **hosting the `RuneLspSession` Durable Object class** that the Pages Functions in `apps/studio/functions/api/lsp/*` bind to.
 
-## Task 3.1: Add redirect from old LSP URL to new same-origin path
+> **Architecture note (corrected from the original plan):** Cloudflare Pages
+> cannot create or host Durable Objects — only consume them via binding to a
+> Worker that owns the namespace. See
+> https://developers.cloudflare.com/pages/functions/bindings/#durable-objects
+>
+> The `apps/studio/wrangler.toml` DO binding has `script_name = "rune-lsp-worker"`
+> for exactly this reason: the DO class lives in `apps/lsp-worker/src/session.ts`,
+> and the Pages Functions consume it via the binding.
+>
+> The original Phase 3 plan ("delete `apps/lsp-worker/` entirely") was wrong on
+> this point and has been narrowed. The Worker stays deployed forever (or until
+> CF Pages eventually gains DO-hosting capability — not on their roadmap as of
+> 2026-05); only its now-redundant HTTP route handlers come out.
+
+## Task 3.1: Strip HTTP route handlers from `apps/lsp-worker/src/index.ts`
 
 **Files:**
-- Modify: `apps/lsp-worker/src/index.ts` (just the route handlers, until the deploy is retired)
+- Modify: `apps/lsp-worker/src/index.ts` — remove `handleSession`, `handleHealth`, `handleWsUpgrade` and their `URL.pathname` dispatch; keep the DO class export
+- Delete: `apps/lsp-worker/src/auth.ts` — already migrated to `apps/studio/functions/lib/lsp-auth.ts`
+- Delete: `apps/lsp-worker/src/log.ts` — already migrated to `apps/studio/functions/lib/lsp-log.ts`
+- Modify: `apps/lsp-worker/wrangler.toml` — remove `[[routes]]` block (Worker no longer serves HTTP)
+- Keep: `apps/lsp-worker/src/session.ts` — DO class, the whole point
+- Keep: `apps/lsp-worker/wrangler.toml` `[[durable_objects.bindings]]` + `[[migrations]]` — these declare the DO namespace at the edge
 
-- [ ] **Step 1: Replace all route handlers with a 308 redirect**
+- [ ] **Step 1: Rewrite `apps/lsp-worker/src/index.ts` to a DO-only export**
 
-In `apps/lsp-worker/src/index.ts`, replace each route's body with:
-
-```ts
-// All routes return 308 redirect to same-origin equivalent.
-const targetOrigin = 'https://www.daikonic.dev/rune-studio/studio';
-const targetPath = url.pathname.replace(/^\/rune-studio\/api/, '/api');
-return Response.redirect(targetOrigin + targetPath, 308);
-```
-
-This applies to `/api/lsp/session`, `/api/lsp/health`, and `/api/lsp/ws/*`.
-
-For the WS upgrade route, browser WebSocket clients **don't follow HTTP redirects automatically**. Add a more useful response:
+Replace the entire `fetch(request, env, ctx)` body with a stub that 404s anything that reaches the Worker directly. With `[[routes]]` removed the Worker shouldn't see HTTP traffic at all, but a 404 is cheap insurance against misconfiguration:
 
 ```ts
-if (url.pathname.startsWith('/rune-studio/api/lsp/ws/')) {
-  return new Response(JSON.stringify({
-    error: 'endpoint_moved',
-    new: targetOrigin + targetPath
-  }), { status: 410, headers: { 'Content-Type': 'application/json' } });
-}
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+//
+// apps/lsp-worker/ is now a DO-only Worker (spec 019 Phase 3).
+// All HTTP traffic that used to live here was migrated to Pages Functions
+// at apps/studio/functions/api/lsp/*. This Worker exists solely to host
+// the RuneLspSession Durable Object class that the Pages binding points at
+// (see apps/studio/wrangler.toml: script_name = "rune-lsp-worker").
+
+export { RuneLspSession } from './session.js';
+
+export default {
+  async fetch(): Promise<Response> {
+    return new Response('not_found', { status: 404 });
+  }
+} satisfies ExportedHandler;
 ```
 
-- [ ] **Step 2: Deploy the redirect**
+- [ ] **Step 2: Strip the `[[routes]]` block from `apps/lsp-worker/wrangler.toml`**
+
+The old block:
+
+```toml
+[[routes]]
+pattern = "www.daikonic.dev/rune-studio/api/lsp/*"
+zone_name = "daikonic.dev"
+```
+
+Delete it entirely. The Worker no longer needs a public route — it's accessed only via the Pages binding.
+
+- [ ] **Step 3: Delete the moved-to-Pages files**
+
+```bash
+git rm apps/lsp-worker/src/auth.ts apps/lsp-worker/src/log.ts
+# Test files that exercised the old HTTP handlers come out too:
+git rm apps/lsp-worker/test/upgrade.test.ts apps/lsp-worker/test/auth.test.ts \
+       apps/lsp-worker/test/handle-session.test.ts
+```
+
+(Keep any tests that exercise the DO directly — they're still relevant.)
+
+- [ ] **Step 4: Deploy the stripped Worker**
 
 ```bash
 pnpm --filter @rune-langium/lsp-worker run deploy
 ```
 
-- [ ] **Step 3: Verify**
+This re-deploys the same DO namespace (existing DO instances + their stored state are preserved because migrations are unchanged) but with no HTTP routes attached. The Pages binding from `apps/studio/wrangler.toml` keeps working.
+
+- [ ] **Step 5: Verify the old HTTP routes are gone**
 
 ```bash
 curl -i "https://www.daikonic.dev/rune-studio/api/lsp/health"
 ```
 
-Expected: `308 Permanent Redirect`, `Location: https://www.daikonic.dev/rune-studio/studio/api/lsp/health`.
+Expected: `404` or no response — the route binding is gone.
 
 ```bash
-curl -i "https://www.daikonic.dev/rune-studio/api/lsp/ws/sometoken"
+curl -i "https://www.daikonic.dev/api/lsp/health"
 ```
 
-Expected: `410 Gone` with `{"error":"endpoint_moved","new":"..."}` body.
+Expected: `200 {"ok":true,...}` — the Pages Function still serves.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 6: Verify LSP still works in the studio**
 
-```bash
-git add apps/lsp-worker/src/index.ts
-git commit -m "feat(lsp-worker): redirect old endpoint to same-origin (019 Phase 3 prep)"
-```
-
-## Task 3.2: After one release cycle — delete `apps/lsp-worker/`
-
-**Files:**
-- Delete: `apps/lsp-worker/` (entire package directory)
-- Modify: `pnpm-workspace.yaml` (remove if listed)
-- Modify: root `package.json` scripts (remove `deploy:lsp-worker` if present)
-
-- [ ] **Step 1: Verify no callers remain in the repo**
-
-```bash
-grep -rn "lsp-worker" --include='*.ts' --include='*.tsx' --include='*.json' --include='*.yaml' --include='*.toml' . | grep -v apps/lsp-worker/ | grep -v node_modules
-```
-
-Expected: no remaining references. (Documentation references in `docs/` are fine — they describe history.)
-
-- [ ] **Step 2: Run the existing CF Worker deploy retirement**
-
-```bash
-# This step is operational, not code. Use the Cloudflare dashboard or wrangler:
-pnpm --filter @rune-langium/lsp-worker exec wrangler delete
-```
-
-Confirm with the `?` prompt. This shuts down the Worker at the edge.
-
-- [ ] **Step 3: Delete the package directory**
-
-```bash
-git rm -r apps/lsp-worker
-```
-
-- [ ] **Step 4: Update workspace config**
-
-If `pnpm-workspace.yaml` lists `apps/lsp-worker`, remove the entry:
-
-```bash
-grep -n "lsp-worker" pnpm-workspace.yaml
-```
-
-If found, edit the file.
-
-- [ ] **Step 5: Update root scripts**
-
-In root `package.json`, remove any `deploy:lsp-worker` script entry:
-
-```bash
-grep -n "lsp-worker" package.json
-```
-
-Edit to remove the line if present.
-
-- [ ] **Step 6: Verify the repo builds**
-
-```bash
-pnpm install
-pnpm -r run build
-pnpm -r run test
-```
-
-Expected: PASS.
+Load `https://www.daikonic.dev/rune-studio/studio/`, click a model, watch network: `POST /api/lsp/session` → 200 mints a token, `GET /api/lsp/ws/<token>` → 101 upgrades. Editor footer shows "Connected (Same-origin)". The DO it routes to is the same one that's existed since spec 014 — Phase 3 didn't move it.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add -A apps/ pnpm-workspace.yaml package.json
-git commit -m "chore: retire apps/lsp-worker/ (019 Phase 3)"
+git add apps/lsp-worker/
+git commit -m "refactor(019 Phase 3): strip apps/lsp-worker HTTP routes; keep DO host"
+```
+
+## Task 3.2: Remove studio code references to the old route path
+
+The studio's `config.ts` and `transport-provider.ts` already point at the same-origin Pages Function URLs after Phase 2. Nothing further to do for the studio.
+
+The verify script `scripts/verify-production.sh` still probes the old `$BASE/api/lsp/health` route (which now 404s after Task 3.1 lands). That section was added under spec 014 and tested the OLD apps/lsp-worker.
+
+- [ ] **Step 1: Remove the legacy LSP /health probe**
+
+Open `scripts/verify-production.sh` and delete the entire "Section 7 — LSP Worker /health probe" block (around line 250). The "Section 8 — Spec 019 Pages Functions" block already covers the new endpoint.
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add scripts/verify-production.sh
+git commit -m "chore: drop legacy LSP /health probe from verify-production.sh"
 ```
 
 ---
