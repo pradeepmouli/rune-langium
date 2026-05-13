@@ -226,6 +226,17 @@ name = "LSP_SESSION"
 class_name = "RuneLspSession"
 script_name = "rune-lsp-worker"
 
+# Curated mirror service binding — /api/parse uses this to reach the
+# curated-mirror Worker without going through the daikonic.dev zone.
+# A same-zone HTTP subrequest from a Pages Function gets routed back to
+# the Pages project's static assets (cf-worker header + zone loop
+# prevention) instead of the curated-mirror Worker, which returns 404 to
+# the function and surfaces as a 502 to the client. The service binding
+# is a direct Worker-to-Worker in-process call that bypasses zone routing.
+[[services]]
+binding = "CURATED_MIRROR"
+service = "rune-curated-mirror-worker"
+
 # Allowlist for LSP session origin gating + parse-endpoint CORS.
 # Production origin first; the wildcard pattern matches CF Pages preview
 # subdomains (https://<hash>.daikonic-dev.pages.dev) so we don't need a

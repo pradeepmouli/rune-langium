@@ -34,6 +34,21 @@ name = "LSP_SESSION"
 class_name = "RuneLspSession"
 script_name = "rune-lsp-worker"
 
+# Curated mirror service binding — /api/parse calls into the curated-mirror
+# Worker via this binding instead of a same-zone HTTP fetch().
+#
+# Why a binding instead of fetch("https://www.daikonic.dev/curated/..."):
+# when a Pages Function does an HTTP subrequest to its own zone, CF stamps a
+# `cf-worker: daikonic-dev.pages.dev` header and the request gets routed
+# back to the Pages project's static assets (which 404 on /curated/...)
+# rather than to the curated-mirror Worker that owns the route binding —
+# CF's same-zone loop prevention. A service binding bypasses zone routing
+# entirely: env.CURATED_MIRROR.fetch(url) is a direct Worker-to-Worker
+# in-process call.
+[[services]]
+binding = "CURATED_MIRROR"
+service = "rune-curated-mirror-worker"
+
 # Allowlist for LSP session origin gating. This config is LOCAL DEV only
 # (`pnpm dev:pages` against `http://localhost:5173` + `http://localhost:8788`),
 # so we include the dev origins by default. Production binding lives in the
