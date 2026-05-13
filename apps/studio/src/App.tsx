@@ -64,17 +64,38 @@ function makeWorkspaceId(): string {
  *
  * Stored in sessionStorage so a tab refresh keeps the same DO (preserving open
  * documents across refresh) while different tabs / windows / users get
- * isolated instances. The crypto.randomUUID fallback keeps tests + non-window
- * environments deterministic enough not to crash.
+ * isolated instances.
+ *
+ * The session-mint endpoint (`/api/lsp/session`) validates workspaceId
+ * against a strict 26-char Crockford-base32 ULID regex, so this MUST emit a
+ * value matching `^[0-9A-HJKMNP-TV-Z]{26}$`. crypto.randomUUID() would
+ * produce a hyphenated lowercase UUID and fail that check with a 400
+ * schema_violation.
  */
 const LSP_SESSION_ID_KEY = 'rune-studio:lsp-session-id';
+const CROCKFORD_BASE32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+function makeLspSessionUlid(): string {
+  // 10-char time component + 16-char random component = 26 chars.
+  // Not monotonic across calls — single ULID per tab is fine for DO routing.
+  let time = '';
+  let now = Date.now();
+  for (let i = 0; i < 10; i++) {
+    time = CROCKFORD_BASE32[now & 31] + time;
+    now = Math.floor(now / 32);
+  }
+  const rand = new Uint8Array(16);
+  crypto.getRandomValues(rand);
+  let randPart = '';
+  for (const b of rand) randPart += CROCKFORD_BASE32[b & 31];
+  return time + randPart;
+}
 function getLspSessionId(): string {
   if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
-    return makeWorkspaceId();
+    return makeLspSessionUlid();
   }
   const existing = window.sessionStorage.getItem(LSP_SESSION_ID_KEY);
-  if (existing && existing.length > 0) return existing;
-  const fresh = makeWorkspaceId();
+  if (existing && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(existing)) return existing;
+  const fresh = makeLspSessionUlid();
   try {
     window.sessionStorage.setItem(LSP_SESSION_ID_KEY, fresh);
   } catch {
