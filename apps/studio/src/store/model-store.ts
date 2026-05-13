@@ -8,7 +8,7 @@
  */
 
 import { create } from 'zustand';
-import type { ModelSource, LoadProgress, LoadedModel, ModelLoadErrorCode } from '../types/model-types.js';
+import type { ModelSource, LoadProgress, LoadedModel, ModelLoadErrorCode, CachedFile } from '../types/model-types.js';
 import { loadModel } from '../services/model-loader.js';
 import { getModelSource } from '../services/model-registry.js';
 import { clearCache } from '../services/model-cache.js';
@@ -52,6 +52,14 @@ interface ModelStoreActions {
   clearModelCache(sourceId?: string): Promise<void>;
   /** Clear error for a source. */
   dismissError(sourceId: string): void;
+  /**
+   * Update a loaded model's `files` array. Used post-/api/parse to surface
+   * refOnly curated documents into `LoadedModel.files` so the ModelLoader
+   * count + curated file picker reflect bundle contents — buildArchiveLoader
+   * leaves files empty since the parsed payload only arrives via the routed
+   * parse response.
+   */
+  setCuratedFiles(sourceId: string, files: CachedFile[]): void;
 }
 
 type ModelStore = ModelStoreState & ModelStoreActions;
@@ -251,6 +259,21 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     const newErrors = new Map(errors);
     newErrors.delete(sourceId);
     set({ errors: newErrors });
+  },
+
+  setCuratedFiles(sourceId: string, files: CachedFile[]) {
+    const { models } = get();
+    const existing = models.get(sourceId);
+    if (!existing) return;
+    // Cheap idempotence: skip the set when nothing changes. parseWorkspaceFiles
+    // fires on every debounced edit; without this guard every keystroke
+    // would re-publish identical files and re-trigger downstream effects.
+    if (existing.files.length === files.length && existing.files.every((f, i) => f.path === files[i]?.path)) {
+      return;
+    }
+    const updated = new Map(models);
+    updated.set(sourceId, { ...existing, files });
+    set({ models: updated });
   }
 }));
 

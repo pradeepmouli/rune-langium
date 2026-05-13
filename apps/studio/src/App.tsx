@@ -191,6 +191,17 @@ function AppContent() {
     // Store deferred corpus types — they'll be registered in the editor
     // store by the EditorPage effect that watches models + deferredExports.
     setDeferredExports(result.deferredExports ?? []);
+    // Surface curated bundle contents into the model-store so ModelLoader's
+    // "(N files)" badge + the curated file picker reflect what /api/parse
+    // hydrated. The routed parse path is the only place the studio learns
+    // which docs belong to each curated bundle (the curated-loader stays
+    // metadata-only by design — see model-store.buildArchiveLoader).
+    if (result.curatedRefOnlyFiles) {
+      const setCuratedFiles = useModelStore.getState().setCuratedFiles;
+      for (const [bundleId, files] of Object.entries(result.curatedRefOnlyFiles)) {
+        setCuratedFiles(bundleId, files);
+      }
+    }
   }, []);
 
   const syncWorkspaceToEditor = useCallback(
