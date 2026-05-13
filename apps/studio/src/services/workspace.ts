@@ -6,20 +6,19 @@
  * and cross-file resolution for the studio app (T083, T098, T100, T102).
  */
 
-import { parse, parseWorkspace, type RosettaModel } from '@rune-langium/core';
+import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
+import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import type {
   WorkerRequest,
   ParseResponse,
   ParseWorkspaceResponse,
   LinkDocumentRequest,
-  LinkDocumentResponse
+  LinkDocumentResponse,
+  HydrateRequest,
+  HydrateResponse
 } from '../workers/parser-worker.js';
-import {
-  isParseResponse,
-  isParseWorkspaceResponse,
-  isLinkDocumentResponse
-} from '../workers/parser-worker.js';
+import { isParseResponse, isParseWorkspaceResponse, isLinkDocumentResponse } from '../workers/parser-worker.js';
 
 export interface WorkspaceFile {
   name: string;
@@ -36,6 +35,19 @@ export interface WorkspaceFile {
    * these symbols in the IndexManager without deserializing the full AST.
    */
   exports?: Array<{ type: string; name: string; path: string }>;
+  /**
+   * The curated bundle id this file belongs to (e.g. "cdm", "fpml").
+   * Set by mergeModelFiles from LoadedModel.source.id. Used by
+   * collectCuratedBundlesFromWorkspace to build the curatedBundles list for
+   * the /api/parse router. Absent on user-authored files.
+   */
+  bundleId?: string;
+  /**
+   * The curated bundle version (commitHash / date stamp) for this file,
+   * e.g. "2026-04-25". Set by mergeModelFiles from LoadedModel.commitHash.
+   * Used alongside bundleId to form { id, version } entries for /api/parse.
+   */
+  bundleVersion?: string;
 }
 
 export interface WorkspaceLoadProgress {
@@ -57,7 +69,7 @@ export interface ParsedWorkspaceModel {
   model: RosettaModel;
 }
 
-export type ParseMode = 'worker' | 'main-thread-fallback';
+export type ParseMode = 'worker' | 'router' | 'main-thread-fallback';
 
 export interface ParseFileResult {
   model: RosettaModel | null;
@@ -157,13 +169,12 @@ function resetWorkerState(nextError: Error): void {
 }
 
 function workerRequest(msg: Extract<WorkerRequest, { type: 'parse' }>): Promise<ParseResponse>;
-function workerRequest(
-  msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>
-): Promise<ParseWorkspaceResponse>;
+function workerRequest(msg: Extract<WorkerRequest, { type: 'parseWorkspace' }>): Promise<ParseWorkspaceResponse>;
 function workerRequest(msg: LinkDocumentRequest): Promise<LinkDocumentResponse>;
+function workerRequest(msg: HydrateRequest): Promise<HydrateResponse>;
 function workerRequest(
   msg: WorkerRequest
-): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse> {
+): Promise<ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse> {
   return new Promise((resolve, reject) => {
     const w = getWorker();
     if (!w) {
@@ -208,6 +219,18 @@ function workerRequest(
           resolve(e.data);
           return;
         }
+        if (msg.type === 'hydrate') {
+          // HydrateResponse: { type: 'hydrateResult', id, ok, error? }
+          const data = e.data as HydrateResponse;
+          if (data.type !== 'hydrateResult') {
+            const error = new Error('Worker returned an invalid hydrate response');
+            resetWorkerState(error);
+            reject(error);
+            return;
+          }
+          resolve(data);
+          return;
+        }
         if (!isParseWorkspaceResponse(e.data)) {
           const error = new Error('Worker returned an invalid workspace parse response');
           resetWorkerState(error);
@@ -240,9 +263,7 @@ function workerRequest(
       clearPendingTimeout();
       cleanupListeners();
       const workerError =
-        error instanceof Error
-          ? error
-          : new Error(error ? String(error) : 'Worker postMessage failed');
+        error instanceof Error ? error : new Error(error ? String(error) : 'Worker postMessage failed');
       resetWorkerState(workerError);
       reject(workerError);
       return;
@@ -304,33 +325,57 @@ export async function parseFile(content: string, uri?: string): Promise<ParseFil
 }
 
 /**
- * Parse all files in the workspace and return models.
- * Tries the web worker first; falls back to main-thread parsing.
- * Supports cross-file resolution via sequential parsing (T100).
+ * Walks the workspace's WorkspaceFile[] and collects unique curated bundle
+ * metadata from files that carry bundleId + bundleVersion (set by
+ * mergeModelFiles from LoadedModel.source.id and LoadedModel.commitHash).
+ *
+ * Returns deduped { id, version } entries suitable for the /api/parse
+ * curatedBundles field (server fetches the corpus server-to-server).
+ *
+ * Design note: We read bundleId/bundleVersion from WorkspaceFile rather than
+ * the model-store Zustand state so that parseWorkspaceFiles remains a pure
+ * function that doesn't depend on the store. mergeModelFiles populates these
+ * fields whenever it merges corpus files into the workspace.
  */
-export async function parseWorkspaceFiles(
-  files: WorkspaceFile[]
-): Promise<ParseWorkspaceFilesResult> {
+function collectCuratedBundlesFromWorkspace(files: WorkspaceFile[]): Array<{ id: string; version: string }> {
+  const seen = new Map<string, string>(); // id → version
+  for (const file of files) {
+    if (file.bundleId && file.bundleVersion && !seen.has(file.bundleId)) {
+      seen.set(file.bundleId, file.bundleVersion);
+    }
+  }
+  return Array.from(seen.entries()).map(([id, version]) => ({ id, version }));
+}
+
+/**
+ * Parse all files in the workspace and return models.
+ *
+ * Primary path (019 Phase 0): delegates to the /api/parse Pages Function via
+ * `parseWorkspaceViaRouter`. Curated corpus files (readOnly, serializedModelJson
+ * set) are NOT sent as file content — instead their bundle id+version are
+ * collected and sent as `curatedBundles` so the server can fetch them
+ * server-to-server. Only user-authored files (no serializedModelJson) are POSTed
+ * as raw content.
+ *
+ * Fallback: if the router call fails (network error, 5xx, ok:false), the
+ * function falls back to main-thread parsing via
+ * `parseWorkspaceFilesOnMainThread` with the FULL WorkspaceFile[] (including
+ * curated bundle entries) so the corpus isn't dropped on transient Pages
+ * Function failures. The old browser-worker `parseWorkspace` path (T098)
+ * is invoked through `parseWorkspaceFilesOnMainThread` and remains the
+ * fallback-only code path.
+ */
+export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<ParseWorkspaceFilesResult> {
   if (files.length === 0) {
-    return { models: [], parsedModels: [], errors: new Map(), parseMode: 'worker' };
+    return { models: [], parsedModels: [], errors: new Map(), parseMode: 'router' };
   }
 
-  // Try worker batch parse first (T098)
+  // User files go as raw content; curated/read-only files become bundle metadata.
+  const userFiles = files.filter((f) => !f.serializedModelJson).map((f) => ({ name: f.path, content: f.content }));
+  const curatedBundles = collectCuratedBundlesFromWorkspace(files);
+
   try {
-    const id = String(++requestId);
-    const response = await workerRequest({
-      type: 'parseWorkspace',
-      id,
-      files: files.map((f) => ({
-        name: f.path,
-        content: f.content,
-        serializedModelJson: f.serializedModelJson,
-        exports: f.exports
-      }))
-    });
-    if (response.errors.__worker__?.length) {
-      throw new Error(response.errors.__worker__.join('; '));
-    }
+    const response = await parseWorkspaceViaRouter(userFiles, { curatedBundles });
     const errMap = new Map<string, string[]>();
     for (const [k, v] of Object.entries(response.errors)) {
       errMap.set(k, v);
@@ -339,16 +384,16 @@ export async function parseWorkspaceFiles(
       models: response.models,
       parsedModels: response.parsedModels,
       errors: errMap,
-      parseMode: 'worker',
+      parseMode: 'router',
       deferredExports: response.deferredExports
     };
   } catch (error) {
-    // Fallback to main thread
-    console.warn('[workspace] parseWorkspaceFiles worker fallback:', error);
-    const fallbackMessage = formatWorkerFallbackMessage(error);
+    // Router failed (network error, Pages Function unavailable, etc.) — fall back
+    // to synchronous main-thread parsing so the editor stays functional.
+    console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
     return parseWorkspaceFilesOnMainThread(files, {
       parseMode: 'main-thread-fallback',
-      fallbackMessage
+      fallbackMessage: formatWorkerFallbackMessage(error)
     });
   }
 }
@@ -360,6 +405,119 @@ export function _resetParserWorkerForTests(): void {
   worker = null;
   requestId = 0;
   workerInitError = null;
+}
+
+// ---------------------------------------------------------------------------
+// Server-side parse routing (019 Phase 0) — POST /api/parse with hydration
+// ---------------------------------------------------------------------------
+
+/**
+ * Route a parseWorkspace request through the /api/parse Pages Function.
+ *
+ * 1. POSTs the file list to /api/parse (with optional curatedBundles metadata
+ *    so the server can fetch corpus documents server-to-server).
+ * 2. On success, hydrates the browser worker with the returned hydration state
+ *    so subsequent linkDocument requests work without re-parsing locally.
+ * 3. Throws on any failure (non-2xx, network error, or ok:false). The caller
+ *    (`parseWorkspaceFiles`) is responsible for falling back to the main-
+ *    thread parser with the FULL WorkspaceFile[] — including curated bundle
+ *    serialized models that were filtered out before this call. Doing the
+ *    fallback in-place here would silently drop the corpus, since this
+ *    function only receives user files + bundle metadata.
+ */
+export async function parseWorkspaceViaRouter(
+  files: Array<{ name: string; content: string }>,
+  options: { curatedBundles?: Array<{ id: string; version: string }> } = {}
+): Promise<ParseWorkspaceResponse> {
+  const response = await fetch('/api/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, curatedBundles: options.curatedBundles ?? [] })
+  });
+  if (!response.ok) {
+    throw new Error(`/api/parse HTTP ${response.status}`);
+  }
+  const data = (await response.json()) as {
+    ok: boolean;
+    models: ParseWorkspaceResponse['models'];
+    deferredExports: ParseWorkspaceResponse['deferredExports'];
+    errors: ParseWorkspaceResponse['errors'];
+    hydrationState: { documents: HydrateRequest['documents'] };
+  };
+
+  if (!data.ok) {
+    // Same reason as above: bubble up to the outer fallback with the full
+    // workspace inputs rather than reparsing only user files in-place.
+    throw new Error('/api/parse returned ok:false');
+  }
+
+  // Deserialize ONLY the user-document hydration entries into RosettaModel
+  // instances for the graph view. Curated corpus documents stay in
+  // hydrationState so the worker hydrate path can register their exports
+  // for cross-reference resolution, but we deliberately keep them out of
+  // `models[]` / `parsedModels[]` — pushing them through here defeats the
+  // lazy/deferred-corpus design (the whole reason curated docs serialize to
+  // JSON in the first place) and reintroduces multi-megabyte main-thread
+  // deserialization on every debounced edit parse.
+  const userFileNames = new Set(files.map((f) => f.name));
+  const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
+  const models: RosettaModel[] = [];
+  const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+  for (const doc of data.hydrationState.documents) {
+    // doc.uri is the bare filePath emitted by /api/parse + curated-fetch
+    // (no `file://` prefix). The legacy `file:///` strip is retained for
+    // backwards compatibility with any in-flight payloads.
+    const filePath = doc.uri.replace(/^file:\/\/\//, '');
+    if (!userFileNames.has(filePath)) continue;
+    try {
+      const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
+      models.push(model);
+      parsedModels.push({ filePath, model });
+    } catch (err) {
+      console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
+    }
+  }
+
+  // Hydrate the browser worker with ALL server-parsed documents + exports
+  // (user AND curated) so subsequent linkDocument calls can resolve cross-
+  // references. Two failure modes are distinguished:
+  //
+  //   1. Worker REACHABLE but reports `ok: false` — a real hydration
+  //      failure. linkDocument lookups would silently miss the affected
+  //      docs. Throw so parseWorkspaceFiles' outer catch reparses the
+  //      workspace through the main-thread fallback (Codex review P2).
+  //   2. Worker UNREACHABLE (e.g. running in jsdom without a real Worker,
+  //      worker crashed, postMessage timeout) — log + accept the degraded
+  //      state. linkDocument will fail downstream but the graph still
+  //      renders from the deserialized models above. Throwing here would
+  //      regress test envs that don't ship the parser worker.
+  try {
+    const hydrateResponse = (await workerRequest({
+      type: 'hydrate',
+      id: `hydrate:${Date.now()}`,
+      documents: data.hydrationState.documents
+    })) as HydrateResponse;
+    if (hydrateResponse.type === 'hydrateResult' && !hydrateResponse.ok) {
+      throw new Error(`worker hydration failed: ${hydrateResponse.error ?? 'unknown'}`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.startsWith('worker hydration failed')) {
+      // Case 1 — worker explicitly rejected. Bubble up.
+      throw err;
+    }
+    // Case 2 — worker unreachable. Log and continue with deserialized models.
+    console.warn('[workspace] browser worker unreachable during hydrate; cross-ref resolution may be degraded:', msg);
+  }
+
+  return {
+    type: 'parseWorkspaceResult',
+    id: `routed:${Date.now()}`,
+    models,
+    parsedModels,
+    deferredExports: data.deferredExports,
+    errors: data.errors
+  };
 }
 
 /**
@@ -436,11 +594,7 @@ export async function readFileList(
 /**
  * Update a file's content and mark it dirty.
  */
-export function updateFileContent(
-  files: WorkspaceFile[],
-  path: string,
-  newContent: string
-): WorkspaceFile[] {
+export function updateFileContent(files: WorkspaceFile[], path: string, newContent: string): WorkspaceFile[] {
   return files.map((f) => (f.path === path ? { ...f, content: newContent, dirty: true } : f));
 }
 
@@ -476,9 +630,7 @@ const BLANK_TEMPLATE = `namespace example
  * with an existing user file. Read-only model files are ignored since they
  * live under a `[model-id]/` prefix and never shadow user-editable paths.
  */
-export function createBlankWorkspaceFile(
-  existingFiles: ReadonlyArray<WorkspaceFile>
-): WorkspaceFile {
+export function createBlankWorkspaceFile(existingFiles: ReadonlyArray<WorkspaceFile>): WorkspaceFile {
   const userPaths = new Set(existingFiles.filter((f) => !f.readOnly).map((f) => f.path));
   let candidate = 'untitled.rosetta';
   let n = 2;
@@ -499,15 +651,26 @@ import type { CachedFile, LoadedModel } from '../types/model-types.js';
  * Merge loaded model files into the workspace as read-only entries.
  * Model files are prefixed with the model source ID to avoid path collisions.
  * Existing user files are preserved; model files are appended.
+ *
+ * 019 Phase 0: When a curated bundle was loaded via the server-side parse
+ * path (Task 0.5a), `model.files` will be empty. In that case a synthetic
+ * bundle-marker entry is inserted so that collectCuratedBundlesFromWorkspace
+ * can still find the bundle id+version to include in /api/parse requests.
+ * The marker is excluded from /api/parse's `userFiles` filter (via the
+ * truthy `serializedModelJson`) and from LSP sync in App.tsx (filtered by
+ * BUNDLE_MARKER_SUFFIX). Callers that iterate over model files for display
+ * (e.g. namespace explorer) should filter out bundle-marker paths.
  */
-export function mergeModelFiles(
-  currentFiles: WorkspaceFile[],
-  model: LoadedModel
-): WorkspaceFile[] {
+export const BUNDLE_MARKER_SUFFIX = '/.bundle-marker';
+
+export function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedModel): WorkspaceFile[] {
   // Remove any previous files from this model source
   const userFiles = currentFiles.filter((f) => !f.path.startsWith(`[${model.source.id}]/`));
 
-  // Convert model files to read-only workspace files
+  // Convert model files to read-only workspace files.
+  // bundleId and bundleVersion are propagated from the LoadedModel so that
+  // parseWorkspaceFiles / collectCuratedBundlesFromWorkspace can build the
+  // curatedBundles list for /api/parse without touching the model-store.
   const modelFiles: WorkspaceFile[] = model.files.map((f: CachedFile) => ({
     name: f.path.split('/').pop() ?? f.path,
     path: `[${model.source.id}]/${f.path}`,
@@ -515,8 +678,30 @@ export function mergeModelFiles(
     dirty: false,
     readOnly: true,
     serializedModelJson: f.serializedModelJson,
-    exports: f.exports
+    exports: f.exports,
+    bundleId: model.source.id,
+    bundleVersion: model.commitHash
   }));
+
+  // 019 Phase 0: when no files were extracted (server-side parse path),
+  // insert a synthetic bundle-marker so collectCuratedBundlesFromWorkspace
+  // can find the bundle id+version without the corpus files being present.
+  // The marker has a truthy serializedModelJson so parseWorkspaceFiles
+  // excludes it from the userFiles sent to the server. App.tsx filters it
+  // from syncWorkspaceFiles via BUNDLE_MARKER_SUFFIX to avoid LSP noise.
+  if (modelFiles.length === 0) {
+    modelFiles.push({
+      name: '.bundle-marker',
+      path: `[${model.source.id}]${BUNDLE_MARKER_SUFFIX}`,
+      content: '',
+      dirty: false,
+      readOnly: true,
+      // Non-empty string → excluded from userFiles by `!f.serializedModelJson` filter.
+      serializedModelJson: '{}' as CuratedSerializedDocument['modelJson'],
+      bundleId: model.source.id,
+      bundleVersion: model.commitHash
+    });
+  }
 
   return [...userFiles, ...modelFiles];
 }

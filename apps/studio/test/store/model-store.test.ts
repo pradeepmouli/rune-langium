@@ -4,13 +4,15 @@
 /**
  * T015 — model-store curated/legacy path DI tests (014, US1).
  *
- * Asserts the wiring landed in T014:
+ * Asserts the wiring landed in T014 and updated for 019 Phase 0:
  *   - When `source.archiveUrl` is set, `loadModel(...)` is called WITH an
- *     `archiveLoader` and that loader routes through `loadCuratedModel`.
+ *     `archiveLoader` (metadata-only path — no archive fetch, no OPFS write).
  *   - When `source.archiveUrl` is NOT set, `loadModel(...)` is called
  *     WITHOUT an archiveLoader (custom-URL git path stays available).
  *   - The legacy `git.clone` from isomorphic-git is NEVER invoked when
  *     `archiveUrl` is set (regression guard for FR-019).
+ *   - 019 Phase 0: the archiveLoader returns a LoadedModel with empty files[]
+ *     and commitHash='latest'; no network fetch or OPFS write occurs.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -37,7 +39,7 @@ vi.mock('isomorphic-git', () => {
 
 // Run the store import AFTER the mocks above so the store's transitive
 // loadModel binding picks up our spy.
-const { useModelStore, setModelStoreDeps } = await import('../../src/store/model-store.js');
+const { useModelStore } = await import('../../src/store/model-store.js');
 
 const CURATED_SOURCE: ModelSource = {
   id: 'cdm',
@@ -60,9 +62,7 @@ const CUSTOM_SOURCE: ModelSource = {
 const FAKE_MODEL: LoadedModel = {
   source: CURATED_SOURCE,
   commitHash: '2026-04-25',
-  files: [
-    { path: 'cdm/sample.rosetta', content: 'namespace cdm.sample\n', namespace: 'cdm.sample' }
-  ],
+  files: [{ path: 'cdm/sample.rosetta', content: 'namespace cdm.sample\n', namespace: 'cdm.sample' }],
   loadedAt: 0
 };
 
@@ -108,33 +108,16 @@ describe('useModelStore — archiveLoader DI (T015)', () => {
   });
 
   it('legacy git.clone is NOT invoked when archiveUrl is set', async () => {
-    // The DI seam injects a fake curated loader so the actual
-    // archiveLoader callback (when invoked by model-loader) returns a
-    // synthesised LoadedModel without touching OPFS or fetch.
-    setModelStoreDeps({
-      loadCuratedModelImpl: vi.fn().mockResolvedValue({
-        modelId: 'cdm',
-        version: '2026-04-25',
-        filesWritten: 1,
-        bytesUnpacked: 0
-      }),
-      getOpfsRoot: async () => ({}) as unknown as FileSystemDirectoryHandle
-    });
-
-    // Hand the archiveLoader our mock model directly so the legacy git path
-    // is provably bypassed without us having to drive OPFS here.
-    loadModelMock.mockImplementation(
-      async (source: ModelSource, options: { archiveLoader?: unknown }) => {
-        if (source.archiveUrl && typeof options.archiveLoader === 'function') {
-          // Skip invoking the real archiveLoader (it would hit OPFS); the
-          // wiring assertion is captured by mock.calls above.
-          return FAKE_MODEL;
-        }
-        // No archiveUrl → fall through; if model-loader's legacy code ran
-        // it would call git.clone, but we never let it run in this test.
+    // 019 Phase 0: the archive loader no longer fetches anything — it returns
+    // metadata only. git.clone must never be called for curated sources.
+    loadModelMock.mockImplementation(async (source: ModelSource, options: { archiveLoader?: unknown }) => {
+      if (source.archiveUrl && typeof options.archiveLoader === 'function') {
+        // Skip invoking the archiveLoader to keep the test synchronous;
+        // the wiring assertion is captured by mock.calls above.
         return FAKE_MODEL;
       }
-    );
+      return FAKE_MODEL;
+    });
 
     await useModelStore.getState().load(CURATED_SOURCE);
     expect(gitCloneSpy).not.toHaveBeenCalled();
@@ -172,71 +155,30 @@ describe('useModelStore — archiveLoader DI (T015)', () => {
     vi.doUnmock('../../src/config.js');
   });
 
-  it('archiveLoader callback delegates to the injected loadCuratedModelImpl', async () => {
-    const fakeLoadCurated = vi.fn().mockResolvedValue({
-      modelId: 'cdm',
-      version: '2026-04-25',
-      filesWritten: 1,
-      bytesUnpacked: 0
-    });
-    // Provide a tiny in-memory OPFS-shaped root so `walk()` reads zero
-    // entries and the archiveLoader throws on "no .rosetta files" — we
-    // catch it and assert the delegation regardless.
-    setModelStoreDeps({
-      loadCuratedModelImpl: fakeLoadCurated,
-      getOpfsRoot: async () => {
-        const empty = {
-          name: '/',
-          kind: 'directory',
-          getDirectoryHandle: async () => empty,
-          getFileHandle: async () => {
-            const err = new Error('not found');
-            err.name = 'NotFoundError';
-            throw err;
-          },
-          removeEntry: async () => undefined,
-          keys: async function* () {
-            yield* [];
-          }
-        };
-        return empty as unknown as FileSystemDirectoryHandle;
-      }
-    });
-
+  it('archiveLoader callback returns metadata-only LoadedModel without fetching (019 Phase 0)', async () => {
+    // 019 Phase 0: the archive loader no longer fetches the archive or writes
+    // to OPFS. It returns a LoadedModel with empty files[] and commitHash='latest'.
     let capturedArchiveLoader: unknown = undefined;
-    loadModelMock.mockImplementation(
-      async (_source: ModelSource, options: { archiveLoader?: unknown }) => {
-        capturedArchiveLoader = options.archiveLoader;
-        return FAKE_MODEL;
-      }
-    );
+    loadModelMock.mockImplementation(async (_source: ModelSource, options: { archiveLoader?: unknown }) => {
+      capturedArchiveLoader = options.archiveLoader;
+      return FAKE_MODEL;
+    });
 
     await useModelStore.getState().load(CURATED_SOURCE);
     expect(typeof capturedArchiveLoader).toBe('function');
 
-    // Invoke the captured loader — it should delegate to fakeLoadCurated
-    // with mirrorBase derived from the curated source's archiveUrl.
-    try {
-      await (
-        capturedArchiveLoader as (
-          s: ModelSource,
-          o: { signal?: AbortSignal; onProgress?: () => void }
-        ) => Promise<LoadedModel>
-      )(CURATED_SOURCE, { signal: new AbortController().signal });
-    } catch {
-      // The walk over the empty stub root yields zero .rosetta files; the
-      // loader throws after delegating, which is fine — we only need to
-      // verify delegation happened.
-    }
-    expect(fakeLoadCurated).toHaveBeenCalledTimes(1);
-    const arg = fakeLoadCurated.mock.calls[0]![0] as {
-      modelId: string;
-      mirrorBase: string;
-      writeRoot: string;
-    };
-    expect(arg.modelId).toBe('cdm');
-    expect(arg.mirrorBase).toBe('https://www.daikonic.dev/curated');
-    expect(arg.writeRoot).toMatch(/\/files\/cdm$/);
+    // Invoke the captured loader directly and verify the returned shape.
+    const result = await (
+      capturedArchiveLoader as (
+        s: ModelSource,
+        o: { signal?: AbortSignal; onProgress?: (p: unknown) => void }
+      ) => Promise<LoadedModel>
+    )(CURATED_SOURCE, { signal: new AbortController().signal });
+
+    // 019 Phase 0: no archive fetch — files[] is empty, commitHash is 'latest'.
+    expect(result.files).toEqual([]);
+    expect(result.commitHash).toBe('latest');
+    expect(result.source).toBe(CURATED_SOURCE);
   });
 
   it('resets preview and codegen state when the last loaded model is unloaded', () => {

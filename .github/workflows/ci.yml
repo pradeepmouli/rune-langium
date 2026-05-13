@@ -88,10 +88,11 @@ jobs:
         run: pnpm audit --audit-level moderate
         continue-on-error: true
 
-      - name: Check Bundle Size
-        run: pnpm dlx size-limit
+      - name: Check Studio Bundle Size (019 Phase 2)
+        run: pnpm --filter @rune-langium/studio run bundle-size
         if: matrix.node-version == '22.x'
-        continue-on-error: true
+        env:
+          STUDIO_MAX_BUNDLE_BYTES: ${{ vars.STUDIO_MAX_BUNDLE_BYTES }}
 
   # ---------------------------------------------------------------------------
   # studio-a11y: axe-core gate against the studio's main routes (T088 / T115).
@@ -141,6 +142,15 @@ jobs:
         # routed through the pnpm-script `--` boundary (which made
         # playwright interpret "--grep" as a test-file path).
         run: pnpm --filter @rune-langium/studio exec playwright test --grep "Studio a11y"
+
+      - name: Studio memory regression check (019 Phase 2)
+        # Skipped at runtime when STUDIO_MEMORY_BASELINE_BYTES is unset
+        # (e.g. before the first capture). Once set in repo vars, the
+        # gate fires and compares CDM-corpus heap usage against
+        # baseline + 5% headroom.
+        run: pnpm --filter @rune-langium/studio exec playwright test --grep "Studio browser memory regression"
+        env:
+          STUDIO_MEMORY_BASELINE_BYTES: ${{ vars.STUDIO_MEMORY_BASELINE_BYTES }}
 
   # ---------------------------------------------------------------------------
   # check-generated: Verify generated schema files don't drift from source (T039, FR-018, SC-008)

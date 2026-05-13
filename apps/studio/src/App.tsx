@@ -18,7 +18,7 @@ import { WorkspaceSwitcher } from './components/WorkspaceSwitcher.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
-import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
+import { parseWorkspaceFiles, mergeModelFiles, BUNDLE_MARKER_SUFFIX } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
 import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
@@ -51,6 +51,59 @@ function makeWorkspaceId(): string {
     return crypto.randomUUID();
   }
   return `ws-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Per-tab opaque ID used as the LSP Durable Object identity (019 Phase 2).
+ *
+ * The DO is keyed by this value, and it stores per-document state (`docs:<uri>`,
+ * shutdown handling, etc.) under that key. Until the active-workspace identifier
+ * is properly threaded through to `createTransportProvider`, this avoids the
+ * worst case where every browser tab/user routes to the same fixed
+ * DEFAULT_WORKSPACE_ID DO and stomps on each other's LSP documents.
+ *
+ * Stored in sessionStorage so a tab refresh keeps the same DO (preserving open
+ * documents across refresh) while different tabs / windows / users get
+ * isolated instances.
+ *
+ * The session-mint endpoint (`/api/lsp/session`) validates workspaceId
+ * against a strict 26-char Crockford-base32 ULID regex, so this MUST emit a
+ * value matching `^[0-9A-HJKMNP-TV-Z]{26}$`. crypto.randomUUID() would
+ * produce a hyphenated lowercase UUID and fail that check with a 400
+ * schema_violation.
+ */
+const LSP_SESSION_ID_KEY = 'rune-studio:lsp-session-id';
+const CROCKFORD_BASE32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+function makeLspSessionUlid(): string {
+  // 10-char time component + 16-char random component = 26 chars.
+  // Not monotonic across calls — single ULID per tab is fine for DO routing.
+  let time = '';
+  let now = Date.now();
+  for (let i = 0; i < 10; i++) {
+    time = CROCKFORD_BASE32[now & 31] + time;
+    now = Math.floor(now / 32);
+  }
+  const rand = new Uint8Array(16);
+  crypto.getRandomValues(rand);
+  let randPart = '';
+  for (const b of rand) randPart += CROCKFORD_BASE32[b & 31];
+  return time + randPart;
+}
+function getLspSessionId(): string {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
+    return makeLspSessionUlid();
+  }
+  const existing = window.sessionStorage.getItem(LSP_SESSION_ID_KEY);
+  if (existing && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(existing)) return existing;
+  const fresh = makeLspSessionUlid();
+  try {
+    window.sessionStorage.setItem(LSP_SESSION_ID_KEY, fresh);
+  } catch {
+    // sessionStorage may throw under privacy modes; non-fatal — the caller
+    // still gets a unique-for-this-call id, it just won't persist across
+    // reloads. The DO will be isolated per-mount instead of per-tab.
+  }
+  return fresh;
 }
 
 function deriveWorkspaceName(files: readonly WorkspaceFile[]): string {
@@ -152,7 +205,9 @@ function AppContent() {
           mergedFiles = mergeModelFiles(mergedFiles, model);
         }
         setFiles(mergedFiles);
-        lspClientRef.current?.syncWorkspaceFiles(mergedFiles);
+        // 019: filter synthetic bundle-marker files so the LSP doesn't receive
+        // placeholder entries with empty content (bundle content arrives via /api/parse).
+        lspClientRef.current?.syncWorkspaceFiles(mergedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX)));
 
         const result = await parseWorkspaceFiles(mergedFiles);
         applyParseResult(result);
@@ -312,7 +367,10 @@ function AppContent() {
       return undefined;
     }
 
-    const provider = createTransportProvider();
+    // Tag the LSP Durable Object with a per-tab session id so multi-tenancy
+    // works (without this, every studio tab/user routed to the same DO and
+    // shared its docs:<uri> state).
+    const provider = createTransportProvider({ workspaceId: getLspSessionId() });
     providerRef.current = provider;
 
     const unsub = provider.onStateChange((state) => {
@@ -354,7 +412,7 @@ function AppContent() {
   const handleFilesChange = useCallback(
     (updatedFiles: WorkspaceFile[]) => {
       setFiles(updatedFiles);
-      lspClientRef.current?.syncWorkspaceFiles(updatedFiles);
+      lspClientRef.current?.syncWorkspaceFiles(updatedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX)));
 
       if (restoredWorkspace) {
         void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles).catch((err) => {
@@ -549,7 +607,9 @@ function AppContent() {
       merged = mergeModelFiles(merged, model);
     }
     setFiles(merged);
-    lspClientRef.current?.syncWorkspaceFiles(merged);
+    // 019: filter synthetic bundle-marker files so the LSP doesn't receive
+    // placeholder entries with empty content (bundle content arrives via /api/parse).
+    lspClientRef.current?.syncWorkspaceFiles(merged.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX)));
     modelParseTokenRef.current += 1;
     const token = modelParseTokenRef.current;
     parseWorkspaceFiles(merged)

@@ -16,13 +16,7 @@ import {
   type RosettaModel
 } from '@rune-langium/core';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
-import {
-  URI,
-  EmptyFileSystem,
-  type AstNode,
-  type AstNodeDescription,
-  type LangiumDocument
-} from 'langium';
+import { URI, EmptyFileSystem, type AstNode, type AstNodeDescription, type LangiumDocument } from 'langium';
 
 export interface ParseRequest {
   type: 'parse';
@@ -58,7 +52,28 @@ export interface LinkDocumentResponse {
   newModels: RosettaModel[];
 }
 
-export type WorkerRequest = ParseRequest | ParseWorkspaceRequest | LinkDocumentRequest;
+export interface HydrateRequest {
+  type: 'hydrate';
+  id: string;
+  /** Documents to register with the deferred-model provider, each with its own exports for the index. */
+  documents: Array<{
+    uri: string;
+    content: string;
+    /** Serialized langium AST as JSON string (from JsonSerializer.serialize). */
+    serializedModel: string;
+    /** Export descriptions for the symbol index, scoped to this document. */
+    exports: Array<{ type: string; name: string; path: string }>;
+  }>;
+}
+
+export interface HydrateResponse {
+  type: 'hydrateResult';
+  id: string;
+  ok: boolean;
+  error?: string;
+}
+
+export type WorkerRequest = ParseRequest | ParseWorkspaceRequest | LinkDocumentRequest | HydrateRequest;
 
 export interface ParseResponse {
   type: 'parseResult';
@@ -82,7 +97,7 @@ export interface ParseWorkspaceResponse {
   deferredExports: DeferredExportEntry[];
 }
 
-export type WorkerResponse = ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse;
+export type WorkerResponse = ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse;
 
 // Deferred corpus model map: URI string → raw JSON (never deserialized until needed).
 // Populated by handleParseWorkspace, consumed lazily by RuneDslLinker.loadAstNode
@@ -147,9 +162,7 @@ export function isParseWorkspaceResponse(value: unknown): value is ParseWorkspac
   }
   if (
     !Array.isArray(value.parsedModels) ||
-    !value.parsedModels.every(
-      (entry) => isRecord(entry) && typeof entry.filePath === 'string' && isRecord(entry.model)
-    )
+    !value.parsedModels.every((entry) => isRecord(entry) && typeof entry.filePath === 'string' && isRecord(entry.model))
   ) {
     return false;
   }
@@ -212,10 +225,7 @@ function preserveCstText(model: any): void {
 
 async function handleParse(req: ParseRequest): Promise<ParseResponse> {
   try {
-    const document = await factory.fromString(
-      req.content,
-      URI.parse(req.uri ?? 'inmemory:///model.rosetta')
-    );
+    const document = await factory.fromString(req.content, URI.parse(req.uri ?? 'inmemory:///model.rosetta'));
     await builder.build([document], { validation: false, eagerLinking: false });
     const errors: string[] = [];
     if (document.parseResult.parserErrors.length > 0) {
@@ -270,6 +280,14 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
       const uri = URI.parse(file.name);
       if (langiumDocs.hasDocument(uri)) langiumDocs.deleteDocument(uri);
 
+      // DEPRECATED (019 Phase 0): pre-parsed corpus content no longer flows through
+      // this path. The server-side /api/parse Pages Function fetches curated bundles
+      // from curated-mirror directly and returns them in hydrationState. This branch
+      // remains as a transition shim during 019 rollout; remove in a follow-up spec
+      // once the router is the only production path for parseWorkspace. The
+      // `.bundle-marker` synthetic file entries (workspace.ts BUNDLE_MARKER_SUFFIX)
+      // also flow through this branch with `serializedModelJson: '{}'` and content '',
+      // which the deferred-model machinery handles harmlessly.
       if (file.serializedModelJson) {
         // Corpus file — store raw JSON for lazy deserialization by RuneDslLinker.
         // Nothing is deserialized or added to LangiumDocuments here.
@@ -331,9 +349,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
       if (document.parseResult.parserErrors.length > 0) {
         const docUri = document.uri?.toString() ?? '';
         const fileName = uriToFileName.get(docUri) ?? docUri;
-        errors[fileName] = document.parseResult.parserErrors.map(
-          (e: { message: string }) => e.message
-        );
+        errors[fileName] = document.parseResult.parserErrors.map((e: { message: string }) => e.message);
       }
     }
 
@@ -352,9 +368,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
       error
     });
     const detail =
-      error instanceof Error
-        ? [error.message, error.stack].filter(Boolean).join('\n')
-        : 'Workspace parsing failed.';
+      error instanceof Error ? [error.message, error.stack].filter(Boolean).join('\n') : 'Workspace parsing failed.';
     return {
       type: 'parseWorkspaceResult',
       id: req.id,
@@ -418,27 +432,77 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
   }
 }
 
+async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
+  try {
+    // Hydrate has REPLACEMENT semantics (mirror handleParseWorkspace's reset).
+    // Without this, switching/reloading workspaces leaves stale entries in
+    // deferredModelJson, the symbol index, and LangiumDocuments — and
+    // linkDocument can still resolve symbols for files that disappeared from
+    // the workspace. Reset state first, then register the new set.
+    const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
+    if (langiumDocs.all) {
+      for (const doc of langiumDocs.all.toArray()) {
+        langiumDocs.deleteDocument(doc.uri);
+      }
+    }
+    for (const previousUri of deferredModelJson.keys()) {
+      indexManager.clearExports(URI.parse(previousUri));
+    }
+    deferredModelJson.clear();
+
+    // Register each document using a single canonical URI for both the deferred-model
+    // store and the symbol index, so deferredProvider.getModel() and registerExports()
+    // always agree on the key.
+    for (const doc of req.documents) {
+      const uri = URI.parse(doc.uri);
+      deferredModelJson.set(uri.toString(), doc.serializedModel);
+      if (doc.exports?.length) {
+        const descriptions: AstNodeDescription[] = doc.exports.map((e) => ({
+          type: e.type,
+          name: e.name,
+          path: e.path,
+          documentUri: uri
+        }));
+        indexManager.registerExports(uri, descriptions);
+      }
+    }
+    return { type: 'hydrateResult', id: req.id, ok: true };
+  } catch (err) {
+    return {
+      type: 'hydrateResult',
+      id: req.id,
+      ok: false,
+      error: err instanceof Error ? err.message : String(err)
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Exported dispatcher — testable in Node without spinning up a Web Worker
+// ---------------------------------------------------------------------------
+
+export async function dispatchWorkerRequest(req: WorkerRequest): Promise<WorkerResponse> {
+  switch (req.type) {
+    case 'parse':
+      return handleParse(req);
+    case 'parseWorkspace':
+      return handleParseWorkspace(req);
+    case 'linkDocument':
+      return handleLinkDocument(req);
+    case 'hydrate':
+      return handleHydrate(req);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Register message listener (only when running as a worker)
 // ---------------------------------------------------------------------------
 
-if (typeof self !== 'undefined' && typeof self.onmessage !== 'undefined') {
-  self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
-    const req = event.data;
-    let response: WorkerResponse;
-
-    if (req.type === 'parse') {
-      response = await handleParse(req);
-    } else if (req.type === 'parseWorkspace') {
-      response = await handleParseWorkspace(req);
-    } else if (req.type === 'linkDocument') {
-      response = await handleLinkDocument(req);
-    } else {
-      return;
-    }
-
+if (typeof self !== 'undefined' && typeof self.postMessage === 'function') {
+  self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
+    const response = await dispatchWorkerRequest(e.data);
     self.postMessage(response);
-  };
+  });
 }
 
 export function isLinkDocumentResponse(value: unknown): value is LinkDocumentResponse {
@@ -454,3 +518,12 @@ export function isLinkDocumentResponse(value: unknown): value is LinkDocumentRes
 }
 
 export { handleParse, handleParseWorkspace, handleLinkDocument };
+
+// Test-only accessors. Exported for use by parser-worker-harness.ts.
+// Not part of the worker's public message API.
+export function _testInternals() {
+  return {
+    deferredModelJson,
+    services: RuneDsl
+  };
+}

@@ -29,8 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
 const MODE_LABELS: Record<string, string> = {
   disconnected: '',
   websocket: 'WebSocket',
-  'cf-worker': 'Cloudflare Worker',
-  embedded: 'Embedded'
+  'pages-function': 'Same-origin'
 };
 
 const DOT_COLORS: Record<string, string> = {
@@ -44,20 +43,11 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
   const statusLabel = STATUS_LABELS[state.status] ?? state.status;
   const modeLabel = MODE_LABELS[state.mode] ?? state.mode;
 
-  const showReconnect =
-    onReconnect !== undefined && state.status !== 'connected' && state.status !== 'connecting';
+  const showReconnect = onReconnect !== undefined && state.status !== 'connected' && state.status !== 'connecting';
 
   return (
-    <output
-      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-      role="status"
-    >
-      <span
-        className={cn(
-          'w-2 h-2 rounded-full shrink-0',
-          DOT_COLORS[state.status] ?? DOT_COLORS['disconnected']
-        )}
-      />
+    <output className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+      <span className={cn('w-2 h-2 rounded-full shrink-0', DOT_COLORS[state.status] ?? DOT_COLORS['disconnected'])} />
       <span>
         {statusLabel}
         {modeLabel && state.status === 'connected' ? ` (${modeLabel})` : ''}
@@ -66,13 +56,7 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
         <span className="text-destructive text-xs">{state.error.message}</span>
       )}
       {showReconnect && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onReconnect}
-          aria-label="Reconnect"
-          className="h-5 px-2 text-xs"
-        >
+        <Button variant="ghost" size="sm" onClick={onReconnect} aria-label="Reconnect" className="h-5 px-2 text-xs">
           Reconnect
         </Button>
       )}

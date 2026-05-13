@@ -137,16 +137,11 @@ type Trade:
     expect(result.errors.size).toBe(0);
   });
 
-  it('surfaces when parsing falls back to the main thread', async () => {
-    _resetParserWorkerForTests();
-    vi.stubGlobal(
-      'Worker',
-      class WorkerThatFails {
-        constructor() {
-          throw new Error('worker boot failed');
-        }
-      }
-    );
+  it('surfaces when parsing falls back to the main thread (router fails)', async () => {
+    // Stub fetch so /api/parse rejects — the router throws, and
+    // parseWorkspaceFiles' outer catch routes to the main-thread fallback
+    // with the full WorkspaceFile[].
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
 
     const result = await parseWorkspaceFiles([
       {
@@ -162,8 +157,7 @@ type Foo:
     ]);
 
     expect(result.parseMode).toBe('main-thread-fallback');
-    expect(result.fallbackMessage).toContain('Parser worker unavailable');
-    expect(result.fallbackMessage).toContain('worker boot failed');
+    expect(result.fallbackMessage).toContain('fetch failed');
   });
 });
 

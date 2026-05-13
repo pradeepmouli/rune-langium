@@ -8,21 +8,13 @@
  */
 
 import { create } from 'zustand';
-import type {
-  ModelSource,
-  LoadProgress,
-  LoadedModel,
-  ModelLoadErrorCode,
-  CachedFile
-} from '../types/model-types.js';
+import type { ModelSource, LoadProgress, LoadedModel, ModelLoadErrorCode } from '../types/model-types.js';
 import { loadModel } from '../services/model-loader.js';
 import { getModelSource } from '../services/model-registry.js';
 import { clearCache } from '../services/model-cache.js';
-import { loadCuratedModel, type LoadCuratedInput } from '../services/curated-loader.js';
-import { OpfsFs } from '../opfs/opfs-fs.js';
 import { createTelemetryClient, type TelemetryClient } from '../services/telemetry.js';
 import { config } from '../config.js';
-import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
+import { CURATED_MODEL_IDS, type CuratedModelId } from '@rune-langium/curated-schema';
 import { usePreviewStore } from './preview-store.js';
 import { useCodegenStore } from './codegen-store.js';
 
@@ -65,41 +57,35 @@ interface ModelStoreActions {
 type ModelStore = ModelStoreState & ModelStoreActions;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Curated archive bridge (014/T014)
+// Curated metadata bridge (019 Phase 0)
 //
-// When a curated `ModelSource` has `archiveUrl` set, route through the
-// curated-mirror path (FR-001) instead of the legacy isomorphic-git proxy
-// (FR-019). The bridge is dependency-injected so tests can mock the OPFS
-// root, the telemetry client, and the loader itself.
+// When a curated `ModelSource` has `archiveUrl` set, the store records
+// bundle metadata ({ id, version }) WITHOUT fetching the archive. The actual
+// corpus content is fetched server-to-server by /api/parse (Task 0.5a).
+// The bridge is dependency-injected so tests can override the telemetry
+// client without pulling in the real implementation.
+//
+// DEPRECATED 019: The previous archive-fetch path (loadCuratedModelImpl,
+// OpfsFs OPFS walk, extractTarGz) has been removed. See git history for
+// the pre-019 implementation.
 // ────────────────────────────────────────────────────────────────────────────
 
 interface ModelStoreDeps {
-  /** Lazy OPFS root accessor — `navigator.storage.getDirectory()` by default. */
-  getOpfsRoot: () => Promise<FileSystemDirectoryHandle>;
   telemetry: Pick<TelemetryClient, 'emit'>;
-  /** Override the curated loader (tests inject a mock). */
-  loadCuratedModelImpl: typeof loadCuratedModel;
 }
 
 let deps: ModelStoreDeps = {
-  getOpfsRoot: async () => {
-    if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) {
-      throw new Error('OPFS is not available in this environment');
-    }
-    return navigator.storage.getDirectory();
-  },
   telemetry: createTelemetryClient({
     endpoint: config.telemetryEndpoint,
     enabled: config.telemetryEnabled && !config.devMode,
     studioVersion: '0.1.0',
     uaClass: 'browser'
-  }),
-  loadCuratedModelImpl: loadCuratedModel
+  })
 };
 
 /**
- * Override the model-store's curated dependencies. Intended for tests; in
- * production the defaults pull the real OPFS root and telemetry client.
+ * Override the model-store's dependencies. Intended for tests; in
+ * production the defaults pull the real telemetry client.
  */
 export function setModelStoreDeps(next: Partial<ModelStoreDeps>): void {
   deps = { ...deps, ...next };
@@ -107,18 +93,19 @@ export function setModelStoreDeps(next: Partial<ModelStoreDeps>): void {
 
 const VALID_CURATED_IDS = new Set<string>(CURATED_MODEL_IDS);
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
  * Build the `archiveLoader` callback the model-loader DI hook expects.
  * Returns `undefined` when no curated archive URL is set on the source —
  * that way the legacy git path stays in scope for custom-URL flows.
+ *
+ * 019 Phase 0: The loader no longer fetches the .tar.gz archive or writes
+ * to OPFS. It records { id, version: 'latest' } as bundle metadata only.
+ * The corpus content is fetched server-to-server by /api/parse (Task 0.5a).
+ * The files[] on the returned LoadedModel are intentionally empty; workspace.ts
+ * mergeModelFiles inserts a synthetic bundle-marker so that
+ * collectCuratedBundlesFromWorkspace can find the bundle id+version.
  */
-function buildArchiveLoader(
-  workspaceId: string
-):
+function buildArchiveLoader():
   | ((
       source: ModelSource,
       opts: { signal?: AbortSignal; onProgress?: (p: LoadProgress) => void }
@@ -132,133 +119,28 @@ function buildArchiveLoader(
       throw new Error(`source.id "${source.id}" is not a known curated model`);
     }
 
-    const root = await deps.getOpfsRoot();
-    const fs = new OpfsFs(root);
-    const writeRoot = `/${workspaceId}/files/${source.id}`;
-
-    // The curated-mirror Worker is hosted at `${origin}/curated/...`; we hit
-    // the same origin in production so a same-site fetch handles CORS via
-    // the deployed Worker. (If `archiveUrl` ever points elsewhere, the
-    // mirror-base derivation has to track that — for now the single-mirror
-    // assumption is exactly what 012's deploy laid down.)
-    const archive = source.archiveUrl;
-    const mirrorBase = archive.replace(/\/[^/]+\/latest\.tar\.gz$/, '');
-
-    // Bridge curated-loader's progress callback (path, sizeBytes) to the
-    // model-loader's LoadProgress shape.
-    let written = 0;
-    const onProgress: LoadCuratedInput['onProgress'] = (_path, _size) => {
-      written += 1;
-      opts.onProgress?.({ phase: 'parsing', current: written, total: written });
-    };
-
-    opts.onProgress?.({ phase: 'fetching', current: 0, total: 1 });
-    const result = await deps.loadCuratedModelImpl({
-      modelId: source.id as LoadCuratedInput['modelId'],
-      mirrorBase,
-      fs,
-      writeRoot,
-      telemetry: deps.telemetry,
-      signal: opts.signal,
-      onProgress
-    });
     opts.onProgress?.({ phase: 'fetching', current: 1, total: 1 });
 
-    // Walk OPFS and harvest .rosetta files into the LoadedModel shape that
-    // the App-side merge code expects.
-    const files = await collectRosettaFiles(fs, writeRoot);
-    if (files.length === 0) {
-      throw new Error(`curated archive ${source.id}@${result.version} contained no .rosetta files`);
-    }
-
-    const serializedByPath = new Map(
-      result.serializedWorkspace?.documents.map((document) => [document.path, document]) ?? []
-    );
-    const serializedFiles =
-      serializedByPath.size === 0
-        ? files
-        : files.map((file) => {
-            const doc = serializedByPath.get(file.path);
-            if (!doc) return file;
-            return {
-              ...file,
-              serializedModelJson: doc.modelJson,
-              exports: doc.exports
-            };
-          });
+    // 019 Phase 0: bundle content is fetched server-to-server by /api/parse.
+    // We record metadata only — no archive download, no OPFS write.
+    // The 'latest' version sentinel is understood by fetchCuratedBundle()
+    // in functions/lib/curated-fetch.ts (which fetches the live latest archive).
+    void deps.telemetry
+      .emit({ event: 'curated_load_attempt', modelId: source.id as CuratedModelId })
+      .catch(() => undefined);
 
     return {
       source,
-      commitHash: result.version,
-      files: serializedFiles,
+      commitHash: 'latest',
+      files: [],
       loadedAt: Date.now()
     };
   };
 }
 
-async function collectRosettaFiles(fs: OpfsFs, root: string): Promise<CachedFile[]> {
-  const out: CachedFile[] = [];
-  await walk(fs, root, '', out);
-  return out;
-}
-
-async function walk(fs: OpfsFs, root: string, rel: string, out: CachedFile[]): Promise<void> {
-  const dirPath = rel ? `${root}/${rel}` : root;
-  let entries: string[];
-  try {
-    entries = await fs.readdir(dirPath);
-  } catch (error) {
-    throw new Error(
-      `[model-store] Failed to read curated archive directory "${dirPath}": ${errorMessage(error)}`
-    );
-  }
-  for (const entry of entries) {
-    const childRel = rel ? `${rel}/${entry}` : entry;
-    const childPath = `${root}/${childRel}`;
-    let stat;
-    try {
-      stat = await fs.stat(childPath);
-    } catch (error) {
-      throw new Error(
-        `[model-store] Failed to stat curated archive entry "${childPath}": ${errorMessage(error)}`
-      );
-    }
-    if (stat.isDirectory()) {
-      await walk(fs, root, childRel, out);
-    } else if (entry.endsWith('.rosetta')) {
-      let content: string;
-      try {
-        content = (await fs.readFile(childPath, 'utf8')) as string;
-      } catch (error) {
-        throw new Error(
-          `[model-store] Failed to read curated archive file "${childPath}": ${errorMessage(error)}`
-        );
-      }
-      out.push({
-        path: childRel,
-        content,
-        namespace: extractNamespace(content)
-      });
-    }
-  }
-}
-
-function extractNamespace(content: string): string {
-  const m = content.match(/^\s*namespace\s+([\w.]+)/m);
-  return m?.[1] ?? '';
-}
-
 // ────────────────────────────────────────────────────────────────────────────
 // Store
 // ────────────────────────────────────────────────────────────────────────────
-
-/**
- * Per-session workspace id used as the OPFS scope for curated unpacks.
- * `WorkspaceManager`-shaped restore is C4's job; for the curated load path
- * we just need a stable directory — Phase 5's restore work will replace
- * this with the actual active workspace id.
- */
-const CURATED_SESSION_WS_ID = 'curated-session';
 
 export const useModelStore = create<ModelStore>((set, get) => ({
   models: new Map(),
@@ -287,9 +169,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     set({ loading: newLoading, errors: newErrors });
 
     try {
-      const archiveLoader = source.archiveUrl
-        ? buildArchiveLoader(CURATED_SESSION_WS_ID)
-        : undefined;
+      const archiveLoader = source.archiveUrl ? buildArchiveLoader() : undefined;
 
       const model = await loadModel(source, {
         signal: abortController.signal,

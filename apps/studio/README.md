@@ -207,3 +207,21 @@ pnpm --filter @rune-langium/studio test
 # Run specific test file
 pnpm --filter @rune-langium/studio exec vitest run test/components/SourceEditor.test.tsx
 ```
+
+## Local development with Pages Functions
+
+The studio's Download (spec 018) and LSP (spec 019) endpoints are hosted as
+Cloudflare Pages Functions under `apps/studio/functions/api/`. To exercise
+them locally:
+
+1. Start Vite (the SPA dev server):
+   ```bash
+   pnpm dev
+   ```
+2. In a second terminal, start the Pages dev proxy:
+   ```bash
+   pnpm dev:pages
+   ```
+3. Open `http://localhost:8788/` — the SPA from Vite plus `/api/*` from the Functions.
+
+Preview features (per-namespace LSP, code preview) run client-side and do not need the Pages dev proxy. Network features (Download, parseWorkspace fallback) do.

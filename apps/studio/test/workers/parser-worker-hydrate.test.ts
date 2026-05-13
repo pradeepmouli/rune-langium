@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
+import { describe, it, expect, expectTypeOf } from 'vitest';
+import type {
+  HydrateRequest,
+  HydrateResponse,
+  WorkerRequest,
+  WorkerResponse
+} from '../../src/workers/parser-worker.js';
+
+describe('HydrateRequest type', () => {
+  it('is included in WorkerRequest union', () => {
+    expectTypeOf<HydrateRequest>().toMatchTypeOf<WorkerRequest>();
+  });
+
+  it('has documents array with embedded exports field', () => {
+    const req: HydrateRequest = {
+      type: 'hydrate',
+      id: 'h1',
+      documents: [
+        {
+          uri: 'file:///x.rune',
+          content: '',
+          serializedModel: '{}',
+          exports: [{ type: 'Data', name: 'T', path: 'x.T' }]
+        }
+      ]
+    };
+    expectTypeOf(req.documents).toBeArray();
+  });
+});
+
+describe('HydrateResponse type', () => {
+  it('is included in WorkerResponse union', () => {
+    expectTypeOf<HydrateResponse>().toMatchTypeOf<WorkerResponse>();
+  });
+});
+
+describe('hydrate handler', () => {
+  it("registers serialized models and exports in the worker's shared state", async () => {
+    const { createParserWorkerHarness } = await import('./parser-worker-harness.js');
+    const harness = createParserWorkerHarness();
+
+    const docUri = 'file:///cdm.base.math.rune';
+    const result = await harness.send({
+      type: 'hydrate',
+      id: 'h1',
+      documents: [
+        {
+          uri: docUri,
+          content: 'namespace cdm.base.math\ntype Quantity:\n  amount number (1..1)\n',
+          serializedModel: harness.serializeSample('cdm.base.math', 'Quantity'),
+          exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.base.math.Quantity' }]
+        }
+      ]
+    });
+
+    expect(result.type).toBe('hydrateResult');
+    expect((result as { ok: boolean }).ok).toBe(true);
+
+    // Directly verify side effects: the deferred-model map and index must be populated.
+    expect(harness.hasDeferredModel(docUri)).toBe(true);
+    expect(harness.findExport('Quantity')).toEqual(
+      expect.objectContaining({ name: 'Quantity', path: 'cdm.base.math.Quantity' })
+    );
+
+    harness.dispose();
+  });
+
+  it('reports ok: false when given a malformed documents array', async () => {
+    const { createParserWorkerHarness } = await import('./parser-worker-harness.js');
+    const harness = createParserWorkerHarness();
+
+    // Pass null as documents so handleHydrate throws when iterating.
+    const result = await harness.send({
+      type: 'hydrate',
+      id: 'h2',
+      documents: null as unknown as Array<never>
+    });
+
+    expect((result as { ok: boolean }).ok).toBe(false);
+
+    harness.dispose();
+  });
+});

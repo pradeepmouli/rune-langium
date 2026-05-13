@@ -2,35 +2,37 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Transport provider with automatic failover (T011 + T044).
+ * Transport provider with automatic failover (T011 + T044 + 019 Phase 2).
  *
- * Connection strategy:
- *   1. Try the embedded browser worker transport (primary Studio path).
- *   2. If embedded is disabled/unavailable and direct WebSocket is preferred,
- *      try WebSocket (external dev server — full Langium + OS access) with
- *      retry/backoff up to `maxReconnectAttempts`.
- *   3. Otherwise fall back to the **CF Worker LSP** (T044) — POST a
- *      same-origin token mint to `${config.lspSessionUrl}`, then open
- *      `WebSocket(\`${config.lspWsUrl}/ws/${token}\`)`. This path may be
- *      chosen immediately after embedded fails when the session endpoint is
- *      same-origin and no explicit `wsUri` override is provided. On 401 from
- *      the mint we retry once with a fresh token; on 429 / 5xx we surface
- *      "language services unavailable" with the dev-mode-gated copy from FR-014.
+ * Two-tier connection strategy:
+ *   1. Direct WebSocket (external dev server — full Langium + OS access)
+ *      with retry/backoff up to `maxReconnectAttempts`. Only attempted when
+ *      `wsUri` is explicitly configured or the session endpoint is
+ *      cross-origin (i.e. the studio cannot rely on the same-origin Pages
+ *      Function).
+ *   2. **Pages Function LSP** (same-origin) — POST a token mint to
+ *      `${config.lspSessionUrl}` (default: `/api/lsp/session`), then open
+ *      `WebSocket(\`${cfWsBase}/ws/${token}\`)`. On 401 from the mint we
+ *      retry once with a fresh token; on 429 / 5xx we surface "language
+ *      services unavailable" with the dev-mode-gated copy from FR-014.
  *
  * The provider exposes a reactive state so UI components can show
  * connection status without polling.
+ *
+ * Phase 2 removed the in-browser embedded worker transport entirely;
+ * `apps/studio/src/workers/lsp-worker.ts` and
+ * `apps/studio/src/services/worker-transport.ts` are gone.
  */
 
 import type { Transport } from '@codemirror/lsp-client';
 import { config } from '../config.js';
-import { createWorkerTransport } from './worker-transport.js';
 import { createWebSocketTransport } from './ws-transport.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
 // ────────────────────────────────────────────────────────────────────────────
 
-export type TransportMode = 'disconnected' | 'websocket' | 'cf-worker' | 'embedded';
+export type TransportMode = 'disconnected' | 'websocket' | 'pages-function';
 export type TransportStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export interface TransportState {
@@ -40,9 +42,7 @@ export interface TransportState {
 }
 
 export interface TransportProviderOptions {
-  /** Whether to try the in-browser worker transport first when wsUri is not explicitly set. */
-  preferEmbedded?: boolean;
-  /** WebSocket URI for the external LSP server. */
+  /** WebSocket URI for the external LSP server (dev override). */
   wsUri?: string;
   /** Connection timeout in ms (default: 2000). */
   connectionTimeout?: number;
@@ -56,12 +56,12 @@ export interface TransportProviderOptions {
    */
   sessionUrl?: string;
   /**
-   * WebSocket base for the CF LSP worker; the token is appended at
+   * WebSocket base for the Pages Function LSP; the token is appended at
    * `\`${cfWsBase}/ws/${token}\``. Defaults to `config.lspWsUrl`.
    */
   cfWsBase?: string;
   /**
-   * Opaque workspace identifier sent to the CF mint endpoint. Tests pass a
+   * Opaque workspace identifier sent to the mint endpoint. Tests pass a
    * fixed ULID; production callers will pull this from the active
    * workspace record.
    */
@@ -73,7 +73,7 @@ export interface TransportProvider {
   getTransport(): Promise<Transport>;
   /** Current connection state. */
   getState(): TransportState;
-  /** Force reconnection using the same embedded/network fallback order. */
+  /** Force reconnection using the same fallback order. */
   reconnect(): Promise<Transport>;
   /** Subscribe to state changes. Returns unsubscribe function. */
   onStateChange(listener: (state: TransportState) => void): () => void;
@@ -90,13 +90,10 @@ const DEFAULT_WS_URI = config.lspWsUrl;
 const DEFAULT_TIMEOUT = 2000;
 const DEFAULT_MAX_RECONNECT = 3;
 const DEFAULT_BACKOFF_BASE = 500;
-const DEFAULT_PREFER_EMBEDDED = true;
 /** Default workspaceId for the session mint until the active workspace is wired in. */
 const DEFAULT_WORKSPACE_ID = '01J7M8AAAAAAAAAAAAAAAAAAAA';
 
 export function createTransportProvider(opts?: TransportProviderOptions): TransportProvider {
-  const hasExplicitWsUri = opts?.wsUri !== undefined;
-  const preferEmbedded = !hasExplicitWsUri && (opts?.preferEmbedded ?? DEFAULT_PREFER_EMBEDDED);
   const wsUri = opts?.wsUri ?? DEFAULT_WS_URI;
   const connectionTimeout = opts?.connectionTimeout ?? DEFAULT_TIMEOUT;
   const maxReconnectAttempts = opts?.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT;
@@ -121,24 +118,7 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /** Attempt the embedded browser-worker transport. */
-  async function tryEmbedded(): Promise<Transport> {
-    setState({ mode: 'embedded', status: 'connecting' });
-    try {
-      const transport = createWorkerTransport();
-      setState({ mode: 'embedded', status: 'connected' });
-      currentTransport = transport;
-      return transport;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      if (config.devMode) {
-        console.warn('[TransportProvider] Embedded LSP worker unavailable:', error);
-      }
-      throw error;
-    }
-  }
-
-  /** Attempt a WebSocket connection with retries. */
+  /** Attempt a direct WebSocket connection with retries. */
   async function tryWebSocket(): Promise<Transport> {
     setState({ mode: 'disconnected', status: 'connecting' });
 
@@ -188,23 +168,23 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
   }
 
   /**
-   * Open a token-gated WS to the CF LSP worker. Returns a real Transport
-   * via `createWebSocketTransport`; surfaces the underlying WS error
-   * untouched so the caller's retry logic can branch.
+   * Open a token-gated WS to the Pages Function LSP. Returns a real
+   * Transport via `createWebSocketTransport`; surfaces the underlying WS
+   * error untouched so the caller's retry logic can branch.
    */
-  async function openCfWorkerWs(token: string): Promise<Transport> {
+  async function openPagesFunctionWs(token: string): Promise<Transport> {
     const wsUrl = `${cfWsBase.replace(/\/$/, '')}/ws/${encodeURIComponent(token)}`;
     return createWebSocketTransport(wsUrl, connectionTimeout);
   }
 
   /**
-   * Step 3 — CF Worker LSP via session token. On 401 from the mint, refreshes the token
-   * once and retries; on 429 / 5xx surfaces the documented "language
-   * services unavailable" copy from FR-014 and falls through to the
-   * disconnected error state.
+   * Pages Function LSP via session token. On 401 from the mint, refreshes
+   * the token once and retries; on 429 / 5xx surfaces the documented
+   * "language services unavailable" copy from FR-014 and falls through
+   * to the disconnected error state.
    */
-  async function tryCfWorker(): Promise<Transport> {
-    setState({ mode: 'cf-worker', status: 'connecting' });
+  async function tryPagesFunction(): Promise<Transport> {
+    setState({ mode: 'pages-function', status: 'connecting' });
     let token: string;
     try {
       token = await mintSessionToken();
@@ -212,21 +192,21 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
       const status = (err as { status?: number }).status;
       if (status === 401) {
         // Per the contract, a 401 from the mint is a stale/missing
-        // signing-key on the CF side OR a rotated key that invalidated
-        // the cached token; one retry buys us the happy-path on a fresh
-        // session.
+        // signing-key on the server side OR a rotated key that
+        // invalidated the cached token; one retry buys us the happy-path
+        // on a fresh session.
         try {
           token = await mintSessionToken();
         } catch (err2) {
-          throw createCfWorkerUnavailableError(err2);
+          throw createPagesFunctionUnavailableError(err2);
         }
       } else {
-        throw createCfWorkerUnavailableError(err);
+        throw createPagesFunctionUnavailableError(err);
       }
     }
     try {
-      const transport = await openCfWorkerWs(token);
-      setState({ mode: 'cf-worker', status: 'connected' });
+      const transport = await openPagesFunctionWs(token);
+      setState({ mode: 'pages-function', status: 'connected' });
       currentTransport = transport;
       return transport;
     } catch (err) {
@@ -235,12 +215,12 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
       // matching the documented state-machine.
       try {
         token = await mintSessionToken();
-        const transport = await openCfWorkerWs(token);
-        setState({ mode: 'cf-worker', status: 'connected' });
+        const transport = await openPagesFunctionWs(token);
+        setState({ mode: 'pages-function', status: 'connected' });
         currentTransport = transport;
         return transport;
       } catch (err2) {
-        throw createCfWorkerUnavailableError(err2 ?? err);
+        throw createPagesFunctionUnavailableError(err2 ?? err);
       }
     }
   }
@@ -250,12 +230,12 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
    * transport acquisition so the LSP client stays disconnected instead of
    * timing out on a no-op channel.
    */
-  function createCfWorkerUnavailableError(cause: unknown): Error {
+  function createPagesFunctionUnavailableError(cause: unknown): Error {
     const errorMessage = config.devMode
-      ? `CF LSP worker unreachable (${describeCause(cause)}) — verify ${config.lspSessionUrl} is deployed and CORS allows ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
+      ? `Pages Function LSP unreachable (${describeCause(cause)}) — verify ${config.lspSessionUrl} is deployed and CORS allows ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
       : 'Editor running offline — language services unavailable';
     if (config.devMode) {
-      console.warn('[TransportProvider] CF LSP worker step failed:', cause);
+      console.warn('[TransportProvider] Pages Function LSP step failed:', cause);
     }
     const error = new Error(errorMessage);
     setState({
@@ -271,22 +251,15 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
     return String(err);
   }
 
-  /** Main connection flow: embedded first unless wsUri explicitly selects WS, then CF fallback. */
+  /** Main connection flow: direct WS if explicitly preferred, otherwise Pages Function. */
   async function connect(): Promise<Transport> {
-    if (preferEmbedded) {
-      try {
-        return await tryEmbedded();
-      } catch {
-        // Fall through to remote transports.
-      }
-    }
     if (!preferDirectWebSocket) {
-      return tryCfWorker();
+      return tryPagesFunction();
     }
     try {
       return await tryWebSocket();
     } catch {
-      return tryCfWorker();
+      return tryPagesFunction();
     }
   }
 

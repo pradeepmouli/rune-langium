@@ -50,11 +50,19 @@ function boolFromEnv(value: string | undefined, fallback: boolean): boolean {
   return value === 'true' || value === '1';
 }
 
-/** Convert a ws(s):// URL to its http(s):// counterpart for the session POST. */
-function deriveSessionUrl(ws: string): string {
-  return ws.startsWith('wss://')
-    ? ws.replace(/^wss:\/\//, 'https://').replace(/\/lsp\/?$/, '/lsp/session')
-    : ws.replace(/^ws:\/\//, 'http://').replace(/\/lsp\/?$/, '/lsp/session');
+// Same-origin LSP defaults (019 Phase 2): the Pages Function endpoints live
+// on the studio origin under `/api/lsp/*`. The value here is the WS BASE; the
+// transport provider appends `/ws/${token}` to reach the
+// `functions/api/lsp/ws/[token].ts` route. SSR/Node fallback uses the wrangler
+// dev port so type-check builds without `window` don't fail Zod URL validation.
+function defaultLspWsUrl(): string {
+  if (typeof window === 'undefined') return 'ws://localhost:8788/api/lsp';
+  return window.location.origin.replace(/^http/, 'ws') + '/api/lsp';
+}
+
+function defaultLspSessionUrl(): string {
+  if (typeof window === 'undefined') return 'http://localhost:8788/api/lsp/session';
+  return window.location.origin + '/api/lsp/session';
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -64,15 +72,10 @@ function deriveSessionUrl(ws: string): string {
 const env = import.meta.env;
 // Use MODE as the authoritative signal (DEV/PROD can both report true under
 // vitest where stubEnv toggles one without clearing the other).
-const isProd = env.MODE === 'production' || (env.PROD === true && env.MODE !== 'development');
 const isDev = env.MODE === 'development' || (env.DEV === true && env.MODE !== 'production');
 
-const PROD_LSP_WS_URL = 'wss://www.daikonic.dev/rune-studio/api/lsp';
-const DEV_LSP_WS_URL = 'ws://localhost:3001';
-
-const lspWsDefault = isProd ? PROD_LSP_WS_URL : DEV_LSP_WS_URL;
-const lspWsUrl = env.VITE_LSP_WS_URL ?? lspWsDefault;
-const lspSessionUrl = env.VITE_LSP_SESSION_URL ?? deriveSessionUrl(lspWsUrl);
+const lspWsUrl = env.VITE_LSP_WS_URL ?? defaultLspWsUrl();
+const lspSessionUrl = env.VITE_LSP_SESSION_URL ?? defaultLspSessionUrl();
 
 const origin = typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin;
 const telemetryEndpoint = env.VITE_TELEMETRY_ENDPOINT ?? `${origin}/api/telemetry/v1/event`;

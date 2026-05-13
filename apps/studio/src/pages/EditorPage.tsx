@@ -44,6 +44,7 @@ import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
+import { LspConnectionBadge } from '../components/LspConnectionBadge.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -56,7 +57,7 @@ import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
 import type { WorkspaceFile } from '../services/workspace.js';
-import { linkDocument } from '../services/workspace.js';
+import { linkDocument, BUNDLE_MARKER_SUFFIX } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import type { TransportState } from '../services/transport-provider.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
@@ -594,7 +595,9 @@ export function EditorPage({
   useEffect(() => {
     if (!codegenWorker) return;
     const codegenFiles = files.filter((f) => !f.readOnly).map((f) => ({ uri: pathToUri(f.path), content: f.content }));
-    const allFiles = files.map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+    const allFiles = files
+      .filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX))
+      .map((f) => ({ uri: pathToUri(f.path), content: f.content }));
     const previewRequestId = `preview:files:${++previewRequestSequenceRef.current}`;
     const codegenRequestId = `codegen:files:${++codegenRequestSequenceRef.current}`;
     currentPreviewRequestIdRef.current = previewRequestId;
@@ -1353,6 +1356,7 @@ export function EditorPage({
             {totalErrors} err / {totalWarnings} warn
           </span>
         )}
+        {transportState && <LspConnectionBadge state={transportState} onRetry={onReconnect} />}
         {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
       </footer>
 

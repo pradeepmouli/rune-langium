@@ -2,16 +2,17 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * T009/T011 — Studio config singleton (014-studio-prod-ready Phase 2).
+ * T009/T011 — Studio config singleton (014-studio-prod-ready Phase 2 +
+ * 019 Phase 2 same-origin LSP defaults).
  *
- * Verifies the Zod-validated config from `apps/studio/src/config.ts`
- * per `specs/014-studio-prod-ready/contracts/studio-config.md`:
+ * Verifies the Zod-validated config from `apps/studio/src/config.ts`:
  *
- *  (a) production defaults route to `wss://www.daikonic.dev/rune-studio/api/lsp`
- *  (b) dev defaults route to `ws://localhost:3001`
+ *  (a) production defaults route LSP same-origin to `/api/lsp/ws`
+ *  (b) dev defaults route LSP same-origin to `/api/lsp/ws`
  *  (c) override via `VITE_LSP_WS_URL` wins
  *  (d) malformed URL throws at module load
  *  (e) `legacyGitPathEnabled` defaults to `false`
+ *  (i) lspSessionUrl defaults to same-origin `/api/lsp/session`
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -68,24 +69,27 @@ describe('studio config singleton (014 T009/T011)', () => {
     vi.resetModules();
   });
 
-  it('(a) production defaults route LSP to wss://www.daikonic.dev/rune-studio/api/lsp', async () => {
+  it('(a) production defaults route LSP same-origin to /api/lsp (base; provider appends /ws/<token>)', async () => {
     const { config } = await loadConfig({
       DEV: false,
       PROD: true,
       MODE: 'production'
     });
-    expect(config.lspWsUrl).toBe('wss://www.daikonic.dev/rune-studio/api/lsp');
+    // jsdom default origin is http://localhost:3000 in vitest's jsdom env.
+    const expectedWsOrigin = window.location.origin.replace(/^http/, 'ws');
+    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/api/lsp`);
     expect(config.lspEnabled).toBe(true);
     expect(config.devMode).toBe(false);
   });
 
-  it('(b) dev defaults route LSP to ws://localhost:3001', async () => {
+  it('(b) dev defaults route LSP same-origin to /api/lsp (base; provider appends /ws/<token>)', async () => {
     const { config } = await loadConfig({
       DEV: true,
       PROD: false,
       MODE: 'development'
     });
-    expect(config.lspWsUrl).toBe('ws://localhost:3001');
+    const expectedWsOrigin = window.location.origin.replace(/^http/, 'ws');
+    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/api/lsp`);
     expect(config.lspEnabled).toBe(true);
     expect(config.devMode).toBe(true);
   });
@@ -98,6 +102,15 @@ describe('studio config singleton (014 T009/T011)', () => {
       VITE_LSP_WS_URL: 'wss://custom.example/lsp'
     });
     expect(config.lspWsUrl).toBe('wss://custom.example/lsp');
+  });
+
+  it('(i) lspSessionUrl defaults to same-origin /api/lsp/session', async () => {
+    const { config } = await loadConfig({
+      DEV: false,
+      PROD: true,
+      MODE: 'production'
+    });
+    expect(config.lspSessionUrl).toBe(`${window.location.origin}/api/lsp/session`);
   });
 
   it('(d) malformed URL throws at module load', async () => {
