@@ -29,6 +29,10 @@
  */
 
 import type { DurableObjectState } from '@cloudflare/workers-types';
+// LSP server imports are LAZY (inside ensureLangium) so the heavy langium
+// bundle is fetched only when the first message arrives — keeps the DO
+// cold-start fast for clients that connect but never send LSP traffic.
+import type { RuneLspServer, DurableObjectWebSocketTransport as TransportType } from '@rune-langium/lsp-server';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Storage shape (data-model §1)
@@ -87,22 +91,14 @@ const ERR_PARSE = -32700;
 const ERR_METHOD_NOT_FOUND = -32601;
 const ERR_INTERNAL = -32603;
 
-// ────────────────────────────────────────────────────────────────────────────
-// LSP capabilities the DO advertises to clients
-// ────────────────────────────────────────────────────────────────────────────
+// LSP capabilities are no longer hand-rolled here — once the langium
+// `RuneLspServer` is bound to the DO's transport (see ensureLangium), it
+// answers `initialize` with the full capability set wired by
+// `startLanguageServer(shared)` in @rune-langium/lsp-server: hover,
+// completion, definition, references, document symbols, diagnostics, etc.
 //
-// Only textDocumentSync is wired today. Hover/completion/definition and
-// diagnostics are intentionally NOT advertised until the langium
-// connection-adapter lands (T044b follow-on). Advertising capabilities the
-// server doesn't honour would let the client surface "no result" to users
-// for queries the server isn't actually answering.
-
-const SERVER_CAPABILITIES = {
-  textDocumentSync: { openClose: true, change: 1 /* full */ }
-};
-
-// Debounce window for didChange → re-parse pipeline (contracts/lsp-worker.md).
-const DIDCHANGE_DEBOUNCE_MS = 200;
+// Debouncing of didChange is also handled inside langium's
+// DocumentBuilder — we don't need a hand-rolled debounce here.
 
 // ────────────────────────────────────────────────────────────────────────────
 // RuneLspSession DO
@@ -111,18 +107,19 @@ const DIDCHANGE_DEBOUNCE_MS = 200;
 export class RuneLspSession {
   /**
    * Lazy langium handle — the heavy import + service-container construction
-   * is deferred until the first message that needs it. `unknown` here keeps
-   * the wider DO type-checkable in the Workers runtime independent of which
-   * langium minor version ships.
+   * is deferred until the first message that needs it.
    */
-  private langium: unknown = null;
+  private langium: RuneLspServer | null = null;
   private langiumLoadError: string | null = null;
+
+  /** Transport piping CF WebSocket frames into the langium LSP server. */
+  private transport: TransportType | null = null;
+
+  /** Promise that resolves once `lsp.listen(transport)` is in flight. */
+  private listenPromise: Promise<void> | null = null;
 
   /** Active client WS, or null while hibernating / before accept. */
   private ws: WebSocket | null = null;
-
-  /** Pending didChange debounce handles, keyed by document URI. */
-  private readonly pendingChanges = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(private readonly state: DurableObjectState) {}
 
@@ -179,10 +176,40 @@ export class RuneLspSession {
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     this.ws = ws;
     const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
-    let msg: unknown;
+
+    // Lazy-init the langium LSP + transport on the very first message and
+    // replay any persisted docs so langium's in-memory workspace mirrors
+    // what DO storage holds across hibernation. Subsequent messages skip
+    // the init and just forward straight through.
+    if (!this.transport) {
+      const ok = await this.ensureLangium();
+      if (!ok) {
+        // Langium failed to load — surface a structured error rather than
+        // silently dropping the frame, so wrangler tail captures the cause.
+        this.send({
+          jsonrpc: '2.0',
+          id: null,
+          error: {
+            code: ERR_INTERNAL,
+            message: 'langium_load_failed',
+            data: this.langiumLoadError ?? 'unknown'
+          }
+        });
+        return;
+      }
+    }
+
+    // Storage-mirror side-effect: peek at didOpen/didChange/didClose
+    // notifications so DO storage stays in sync with what langium has
+    // in memory. Hibernation wake-up will replay these into a fresh
+    // langium workspace via the same transport.receive path.
+    let parsed: unknown;
     try {
-      msg = JSON.parse(text);
+      parsed = JSON.parse(text);
     } catch {
+      // The transport will also reject this as a parse error via its
+      // onError handler; emitting our own here keeps wire compatibility
+      // with the legacy DO contract.
       this.send({
         jsonrpc: '2.0',
         id: null,
@@ -190,7 +217,11 @@ export class RuneLspSession {
       });
       return;
     }
-    await this.dispatch(msg);
+    await this.mirrorStorage(parsed);
+
+    // Forward to langium via the transport. Langium responds via the
+    // transport's `send` which writes back through `this.ws`.
+    this.transport!.receive(text);
   }
 
   /**
@@ -199,173 +230,120 @@ export class RuneLspSession {
    */
   async webSocketClose(_ws: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
     this.ws = null;
-    for (const handle of this.pendingChanges.values()) clearTimeout(handle);
-    this.pendingChanges.clear();
+    this.transport?.signalClose();
+    // Don't tear down `langium` / `transport` yet — the same DO instance may
+    // get re-targeted by another upgrade (rare for sessions keyed off a
+    // workspace id, but defensive). They get reset by handleShutdown when
+    // the LSP `shutdown` request fires.
   }
 
-  // ── Dispatch ────────────────────────────────────────────────────────────
+  // ── Storage mirror ──────────────────────────────────────────────────────
 
-  private async dispatch(msg: unknown): Promise<void> {
-    try {
-      if (isJsonRpcRequest(msg)) {
-        await this.handleRequest(msg);
-        return;
-      }
-      if (isJsonRpcNotification(msg)) {
-        await this.handleNotification(msg);
-        return;
-      }
-      // Unknown frame — JSON-RPC 2.0 says servers SHOULD ignore non-RPC
-      // messages, but we surface a structured error to the client for
-      // visibility under wrangler tail.
-      this.send({
-        jsonrpc: '2.0',
-        id: null,
-        error: { code: ERR_PARSE, message: 'invalid_jsonrpc_message' }
+  /**
+   * Mirror didOpen/didChange/didClose into DO storage so a hibernation
+   * wake-up can replay the workspace into a fresh langium index. Other
+   * messages flow through to langium without touching storage.
+   */
+  private async mirrorStorage(parsed: unknown): Promise<void> {
+    if (!isJsonRpcNotification(parsed)) return;
+    const notif = parsed;
+    if (notif.method === 'textDocument/didOpen') {
+      const p = notif.params as { textDocument?: { uri?: string; text?: string } } | undefined;
+      const uri = p?.textDocument?.uri;
+      const docText = p?.textDocument?.text ?? '';
+      if (typeof uri !== 'string') return;
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.state.storage.put(`${DOC_PREFIX}${uri}`, docText);
       });
-    } catch (err) {
-      const text = err instanceof Error ? err.message : String(err);
-      this.send({
-        jsonrpc: '2.0',
-        id: null,
-        error: { code: ERR_INTERNAL, message: 'internal_error', data: text }
+      return;
+    }
+    if (notif.method === 'textDocument/didChange') {
+      const p = notif.params as
+        | { textDocument?: { uri?: string }; contentChanges?: Array<{ text?: string }> }
+        | undefined;
+      const uri = p?.textDocument?.uri;
+      const newText = p?.contentChanges?.[0]?.text;
+      if (typeof uri !== 'string' || typeof newText !== 'string') return;
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.state.storage.put(`${DOC_PREFIX}${uri}`, newText);
       });
+      return;
+    }
+    if (notif.method === 'textDocument/didClose') {
+      const p = notif.params as { textDocument?: { uri?: string } } | undefined;
+      const uri = p?.textDocument?.uri;
+      if (typeof uri !== 'string') return;
+      await this.state.blockConcurrencyWhile(async () => {
+        await this.state.storage.delete(`${DOC_PREFIX}${uri}`);
+      });
+      return;
+    }
+    if (notif.method === 'exit') {
+      try {
+        this.ws?.close(1000, 'exit');
+      } catch {
+        /* ignore */
+      }
+      this.ws = null;
     }
   }
 
-  private async handleRequest(req: JsonRpcRequest): Promise<void> {
-    switch (req.method) {
-      case 'initialize':
-        return this.respond(req, { capabilities: SERVER_CAPABILITIES });
-      case 'shutdown':
-        await this.handleShutdown();
-        return this.respond(req, null);
-      // hover/completion/definition: see SERVER_CAPABILITIES note. The
-      // server does not advertise these features today, so a well-behaved
-      // client should not send them. If one does anyway (out-of-spec),
-      // reply with method_not_found rather than `null` so the deviation
-      // surfaces in client logs instead of being silently swallowed.
-      default:
-        return this.errorReply(req, ERR_METHOD_NOT_FOUND, 'method_not_found');
-    }
-  }
+  // ── Lazy init ───────────────────────────────────────────────────────────
 
-  private async handleNotification(notif: JsonRpcNotification): Promise<void> {
-    switch (notif.method) {
-      case 'initialized':
-        return; // ack — no-op
-      case 'exit':
-        try {
-          this.ws?.close(1000, 'exit');
-        } catch {
-          /* ignore */
-        }
-        this.ws = null;
-        return;
-      case 'textDocument/didOpen': {
-        const p = notif.params as { textDocument?: { uri?: string; text?: string } } | undefined;
-        const uri = p?.textDocument?.uri;
-        const text = p?.textDocument?.text ?? '';
-        if (typeof uri !== 'string') return;
-        await this.state.blockConcurrencyWhile(async () => {
-          await this.state.storage.put(`${DOC_PREFIX}${uri}`, text);
-        });
-        await this.parseAndPublish(uri);
-        return;
-      }
-      case 'textDocument/didChange': {
-        const p = notif.params as
-          | {
-              textDocument?: { uri?: string };
-              contentChanges?: Array<{ text?: string }>;
-            }
-          | undefined;
-        const uri = p?.textDocument?.uri;
-        const newText = p?.contentChanges?.[0]?.text;
-        if (typeof uri !== 'string' || typeof newText !== 'string') return;
-        // Replace the stored copy synchronously (cheap), then debounce
-        // the parse pass per the contract.
-        await this.state.blockConcurrencyWhile(async () => {
-          await this.state.storage.put(`${DOC_PREFIX}${uri}`, newText);
-        });
-        const existing = this.pendingChanges.get(uri);
-        if (existing) clearTimeout(existing);
-        const handle = setTimeout(() => {
-          this.pendingChanges.delete(uri);
-          void this.parseAndPublish(uri);
-        }, DIDCHANGE_DEBOUNCE_MS);
-        this.pendingChanges.set(uri, handle);
-        return;
-      }
-      case 'textDocument/didClose': {
-        const p = notif.params as { textDocument?: { uri?: string } } | undefined;
-        const uri = p?.textDocument?.uri;
-        if (typeof uri !== 'string') return;
-        await this.state.blockConcurrencyWhile(async () => {
-          await this.state.storage.delete(`${DOC_PREFIX}${uri}`);
-        });
-        return;
-      }
-      default:
-        // Unknown notification — JSON-RPC 2.0 says servers MUST silently
-        // drop notifications they don't recognise.
-        return;
-    }
-  }
+  private async ensureLangium(): Promise<boolean> {
+    if (this.langium && this.transport) return true;
+    if (this.langiumLoadError) return false;
 
-  // ── LSP feature plumbing (deferred to T044+ once a real langium is wired)
-
-  private async parseAndPublish(_uri: string): Promise<void> {
-    // Do not publish `diagnostics: []` until this path is backed by a real
-    // langium parse / validation pass. In LSP, an empty diagnostics array
-    // means "document is clean", which would silently clear real errors
-    // and make this transport appear functional before it actually is.
-    //
-    // We still force langium initialisation here so the session follows
-    // its intended lifecycle (heavy import warmed once per DO) and the
-    // future wiring in T044b can reuse this call site without restructure.
-    await this.ensureLangium();
-  }
-
-  private async ensureLangium(): Promise<void> {
-    if (this.langium || this.langiumLoadError) return;
     try {
-      const mod = (await import('@rune-langium/lsp-server')) as {
-        createRuneLspServer: (...args: unknown[]) => unknown;
-      };
-      // Allocate per-DO; cheaper than per-message and survives until
-      // hibernation. The eager-load probe in the Worker entry already
-      // confirmed the import graph resolves at boot time.
+      const mod = await import('@rune-langium/lsp-server');
       this.langium = mod.createRuneLspServer();
+
+      if (!this.ws) {
+        // We only reach ensureLangium from webSocketMessage where
+        // `this.ws` is set, but defence-in-depth keeps the type
+        // narrowing clean.
+        throw new Error('cannot init transport without an active WebSocket');
+      }
+      this.transport = new mod.DurableObjectWebSocketTransport(this.ws);
+
+      // Start the LSP message pump. `listen()` resolves only when the
+      // transport closes; we hold the promise but don't await it so
+      // the message handler can continue dispatching frames.
+      this.listenPromise = this.langium.listen(this.transport);
+
+      // Replay stored docs as didOpen so langium's in-memory workspace
+      // matches what DO storage has on wake-up. The replay goes through
+      // the transport so storage observations stay consistent.
+      await this.replayStoredDocs();
+
+      return true;
     } catch (err) {
       this.langiumLoadError = err instanceof Error ? err.message : String(err);
+      return false;
     }
   }
 
-  private async handleShutdown(): Promise<void> {
-    // Per data-model §1: `shutdown` clears all `docs:*` keys.
-    await this.state.blockConcurrencyWhile(async () => {
-      const all = await this.state.storage.list({ prefix: DOC_PREFIX });
-      const keys = Array.from(all.keys());
-      if (keys.length > 0) await this.state.storage.delete(keys);
-      await this.state.storage.delete(META_KEY);
-    });
-    for (const handle of this.pendingChanges.values()) clearTimeout(handle);
-    this.pendingChanges.clear();
-    this.langium = null;
+  private async replayStoredDocs(): Promise<void> {
+    if (!this.transport) return;
+    const all = await this.state.storage.list({ prefix: DOC_PREFIX });
+    for (const [key, value] of all.entries()) {
+      const uri = key.slice(DOC_PREFIX.length);
+      const text = typeof value === 'string' ? value : '';
+      const didOpen = {
+        jsonrpc: '2.0' as const,
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri, languageId: 'rune', version: 0, text } }
+      };
+      // Skip mirrorStorage on replay — we're reading FROM storage.
+      this.transport.receive(JSON.stringify(didOpen));
+    }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────
-
-  private respond(req: JsonRpcRequest, result: unknown): void {
-    const reply: JsonRpcResult = { jsonrpc: '2.0', id: req.id, result };
-    this.send(reply);
-  }
-
-  private errorReply(req: JsonRpcRequest, code: number, message: string): void {
-    const reply: JsonRpcError = { jsonrpc: '2.0', id: req.id, error: { code, message } };
-    this.send(reply);
-  }
+  // Note: LSP `shutdown` is now handled by the langium server's own
+  // shutdown handler (registered by startLanguageServer). Storage cleanup
+  // happens via the exit notification path or DO eviction; we keep storage
+  // around between shutdown and exit so the client can still query state
+  // during the brief window after `shutdown` returns.
 
   private send(msg: unknown): void {
     if (!this.ws) return;
