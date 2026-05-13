@@ -25,11 +25,21 @@ describe('POST /api/parse', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when files array is missing or empty', async () => {
-    const res1 = await onRequestPost({ request: makeRequest({ files: [] }) } as never);
-    expect(res1.status).toBe(400);
-    const res2 = await onRequestPost({ request: makeRequest({}) } as never);
-    expect(res2.status).toBe(400);
+  it('returns 400 when files is not an array', async () => {
+    const res = await onRequestPost({ request: makeRequest({}) } as never);
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 200 with empty hydrationState when files [] + no curatedBundles', async () => {
+    // The studio calls /api/parse on every debounced edit, including before
+    // any user file exists in a freshly-opened workspace. Returning 400 here
+    // forces the client to special-case empty input; 200-with-empty-state
+    // keeps the parse pipeline uniform.
+    const res = await onRequestPost({ request: makeRequest({ files: [] }) } as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; hydrationState: { documents: unknown[] } };
+    expect(body.ok).toBe(true);
+    expect(body.hydrationState.documents).toEqual([]);
   });
 
   it('returns 200 with ParseResponse shape on success', async () => {

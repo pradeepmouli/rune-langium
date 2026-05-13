@@ -34,6 +34,10 @@ name = "LSP_SESSION"
 class_name = "RuneLspSession"
 script_name = "rune-lsp-worker"
 
-# Allowlist for LSP session origin gating (default; override per environment).
+# Allowlist for LSP session origin gating. This config is LOCAL DEV only
+# (`pnpm dev:pages` against `http://localhost:5173` + `http://localhost:8788`),
+# so we include the dev origins by default. Production binding lives in the
+# CF Pages dashboard / the generated <repo>/wrangler.toml (which has the
+# wildcard pattern for preview subdomains).
 [vars]
-ALLOWED_ORIGIN = "https://www.daikonic.dev"
+ALLOWED_ORIGIN = "http://localhost:5173,http://localhost:8788,https://www.daikonic.dev"

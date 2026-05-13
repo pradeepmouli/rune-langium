@@ -61,8 +61,27 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
     return badRequest('Malformed JSON');
   }
 
-  if (!Array.isArray(body.files) || body.files.length === 0) {
-    return badRequest('files: must be a non-empty array');
+  if (!Array.isArray(body.files)) {
+    return badRequest('files: must be an array');
+  }
+
+  // Empty workspace is a legitimate state (new tab, no user files yet, or
+  // user just opened the studio without loading anything). Return an empty
+  // hydrationState rather than 400 — clients shouldn't have to special-case
+  // this around their normal parse flow. The studio's parseWorkspaceFiles
+  // calls /api/parse on every debounced edit, including before any user
+  // file exists.
+  if (body.files.length === 0 && (!Array.isArray(body.curatedBundles) || body.curatedBundles.length === 0)) {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        models: [],
+        deferredExports: [],
+        errors: {},
+        hydrationState: { documents: [] }
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
   try {
@@ -181,7 +200,7 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
     // it needs from hydrationState.documents.
 
     return new Response(
-      JSON.stringify({
+      stringifyWithBigInt({
         ok: true,
         models: [],
         // parsedModels intentionally absent — server cannot send Langium ASTs
@@ -212,3 +231,16 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
     );
   }
 };
+
+/**
+ * `JSON.stringify` throws on BigInt by default. The Langium parser produces
+ * BigInt values for some numeric literals in the Rune grammar (e.g. very
+ * large integers parsed as bigint). Those leak into `documentsForHydration`
+ * via `serializedModel` and `exports`, so we need a replacer that converts
+ * them to strings. Browser-side deserialization treats them as strings —
+ * acceptable because nothing on the client currently depends on numeric
+ * comparison of these values.
+ */
+function stringifyWithBigInt(value: unknown): string {
+  return JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v));
+}

@@ -67,12 +67,16 @@ describe('Phase 0 integration: workspace router → /api/parse handler', () => {
     expect(result.errors['broken.rune']!.length).toBeGreaterThan(0);
   });
 
-  it('rejects empty file list at the Pages Function (400) — caller falls back', async () => {
-    // parseWorkspaceViaRouter still POSTs even when files is empty; the
-    // Pages Function returns 400, which the router surfaces as a thrown
-    // error. The outer parseWorkspaceFiles is responsible for falling back
-    // with the original WorkspaceFile[] (this test covers only the router).
-    await expect(parseWorkspaceViaRouter([])).rejects.toThrow(/api\/parse HTTP 400/);
+  it('returns an empty hydrationState for an empty file list (no fallback needed)', async () => {
+    // The studio's parseWorkspaceFiles calls /api/parse on every debounced
+    // edit, including before any user file exists (fresh workspace). The
+    // Pages Function returns 200 with an empty hydrationState rather than
+    // 400 so the client doesn't need a special case around it.
+    const result = await parseWorkspaceViaRouter([]);
+    expect(result.type).toBe('parseWorkspaceResult');
+    expect(result.errors).toEqual({});
+    expect(result.models).toEqual([]);
+    expect(result.parsedModels).toEqual([]);
   });
 
   it('throws when Pages Function returns non-2xx so the caller can fall back', async () => {

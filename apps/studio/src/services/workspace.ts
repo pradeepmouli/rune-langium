@@ -479,10 +479,18 @@ export async function parseWorkspaceViaRouter(
   }
 
   // Hydrate the browser worker with ALL server-parsed documents + exports
-  // (user AND curated) so subsequent linkDocument calls can resolve
-  // cross-references. A hydration failure is non-fatal: the graph view
-  // still renders from the user models above; only cross-ref resolution
-  // is degraded.
+  // (user AND curated) so subsequent linkDocument calls can resolve cross-
+  // references. Two failure modes are distinguished:
+  //
+  //   1. Worker REACHABLE but reports `ok: false` — a real hydration
+  //      failure. linkDocument lookups would silently miss the affected
+  //      docs. Throw so parseWorkspaceFiles' outer catch reparses the
+  //      workspace through the main-thread fallback (Codex review P2).
+  //   2. Worker UNREACHABLE (e.g. running in jsdom without a real Worker,
+  //      worker crashed, postMessage timeout) — log + accept the degraded
+  //      state. linkDocument will fail downstream but the graph still
+  //      renders from the deserialized models above. Throwing here would
+  //      regress test envs that don't ship the parser worker.
   try {
     const hydrateResponse = (await workerRequest({
       type: 'hydrate',
@@ -490,13 +498,16 @@ export async function parseWorkspaceViaRouter(
       documents: data.hydrationState.documents
     })) as HydrateResponse;
     if (hydrateResponse.type === 'hydrateResult' && !hydrateResponse.ok) {
-      console.warn(
-        '[workspace] browser worker reported hydration failure (cross-ref resolution may be degraded):',
-        hydrateResponse.error
-      );
+      throw new Error(`worker hydration failed: ${hydrateResponse.error ?? 'unknown'}`);
     }
   } catch (err) {
-    console.warn('[workspace] browser worker hydration failed (cross-ref resolution may be degraded):', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.startsWith('worker hydration failed')) {
+      // Case 1 — worker explicitly rejected. Bubble up.
+      throw err;
+    }
+    // Case 2 — worker unreachable. Log and continue with deserialized models.
+    console.warn('[workspace] browser worker unreachable during hydrate; cross-ref resolution may be degraded:', msg);
   }
 
   return {
