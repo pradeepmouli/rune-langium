@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Cloudflare Pages Function: POST /api/parse
+ * Cloudflare Pages Function: POST /api/parse — fix(019) lazy langium import
  *
  * Server-side `parseWorkspace`. Browser studio POSTs workspace files;
  * function runs Langium parse + builds the index, returns a hydration
