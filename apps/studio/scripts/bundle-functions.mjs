@@ -62,7 +62,13 @@ for (const entry of entries) {
   await build({
     entryPoints: [entry],
     bundle: true,
-    platform: 'neutral',
+    // `browser` is required (not `neutral`) so esbuild honors the `browser`
+    // field in package.json — that's how `vscode-jsonrpc` swaps its node-
+    // flavored entrypoint (`lib/node/main.js`, which does
+    // `require('util')` at module init) for the browser one. Without this,
+    // the bundle deploys but the Workers runtime throws
+    // "Dynamic require of 'util' is not supported" at first request.
+    platform: 'browser',
     // CF Pages Functions run in the Workers runtime — ES2022 + ESM.
     target: 'es2022',
     format: 'esm',
@@ -74,6 +80,9 @@ for (const entry of entries) {
       // Node built-ins — CF Pages `nodejs_compat` polyfills these. The
       // langium / pino / vscode-uri transitive imports use both the
       // `node:` prefix and the legacy bare names, so externalize both.
+      // Most won't actually be reached at runtime because we route
+      // through browser-variants of the upstream packages, but
+      // externalizing keeps esbuild from trying to polyfill them.
       'node:*',
       'fs',
       'path',
@@ -96,9 +105,10 @@ for (const entry of entries) {
       'assert',
       'querystring'
     ],
-    // Prefer workerd condition, then worker, then default.
-    conditions: ['workerd', 'worker'],
-    mainFields: ['module', 'main'],
+    // Prefer workerd condition, then worker, then browser. The `browser`
+    // condition also kicks in via `platform: 'browser'` above.
+    conditions: ['workerd', 'worker', 'browser'],
+    mainFields: ['browser', 'module', 'main'],
     // Keep names readable so error messages from production point at our
     // source rather than mangled identifiers.
     minifySyntax: false,
