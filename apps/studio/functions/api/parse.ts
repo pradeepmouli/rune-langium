@@ -122,6 +122,13 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
           const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version);
           for (const doc of curatedDocs) {
             documentsForHydration.push(doc);
+            // Surface curated namespaces in the deferredExports response so
+            // the studio's namespace explorer / graph view (which reads from
+            // deferredExports) lists CDM/FpML/rune-dsl entries alongside
+            // user-file namespaces (Codex P2 review). Without this the corpus
+            // hydrates correctly but its read-only nodes are invisible until
+            // an editor link triggers linkDocument and pulls them on-demand.
+            mergeCuratedDocIntoDeferredExports(doc, deferredExportsByNamespace);
           }
         } catch (err) {
           if (err instanceof CuratedBundleUnavailableError) {
@@ -221,7 +228,33 @@ async function parseUserFiles(
     const model = doc.parseResult.value as RosettaModel | undefined;
     if (!model) continue;
 
-    const serializedModel = RuneDsl.serializer.JsonSerializer.serialize(model);
+    // Copy CST source text into `$cstText` on Function/Data/Choice
+    // condition + expression nodes BEFORE serializing. The visual editor
+    // reads `$cstText` to render expression cells (functions with
+    // conditions, function bodies, function expressions). Without this
+    // pre-serialization step, the deserialized AST has no source text
+    // — langium's `$cstNode` lives only on the live AST, not in the
+    // serialized JSON — and the visual editor renders affected
+    // expressions as blank even though the parse succeeded (Codex P2).
+    //
+    // Mirrors apps/studio/src/workers/parser-worker.ts:preserveCstText,
+    // which the browser-side parse path already calls. Adding it here
+    // keeps the routed parse output equivalent to the in-worker output.
+    preserveCstText(model);
+
+    // textRegions + refText preserve text-region offsets so language-
+    // server features (e.g. go-to-definition, hover, code-action ranges)
+    // can map AST nodes back to source spans after deserialization.
+    // The BigInt replacer keeps large numeric literals JSON-safe — the
+    // outer stringifyWithBigInt also handles them, but doing it inside
+    // the langium serializer is more efficient (avoids one re-scan of
+    // the embedded model JSON).
+    const serializedModel = RuneDsl.serializer.JsonSerializer.serialize(model, {
+      refText: true,
+      textRegions: true,
+      replacer: (_key, value, defaultReplacer) =>
+        typeof value === 'bigint' ? Number(value) : defaultReplacer(_key, value)
+    });
     const rawName = model.name as string;
     const namespace = rawName ? rawName.replace(/^"|"$/g, '') : '';
 
@@ -248,6 +281,74 @@ async function parseUserFiles(
       deferredExportsByNamespace[namespace] = existing;
     }
   }
+}
+
+/**
+ * Walk the parsed RosettaModel and copy `$cstNode.text` into a sibling
+ * `$cstText` property on Function-body parts, condition nodes, and
+ * expression nodes. Mirrors `preserveCstText` in
+ * apps/studio/src/workers/parser-worker.ts — keep the two implementations
+ * in sync.
+ *
+ * Why this is needed: the visual editor's expression cells render from
+ * `$cstText` (a serializable string property) rather than `$cstNode`
+ * (the live CST tree, which is non-serializable and lost during JSON
+ * round-trip). The in-browser parse path attached `$cstText` before
+ * postMessage; the server-side parse path needs the same step so its
+ * downstream hydration payload contains the same source text.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function preserveCstText(model: any): void {
+  for (const elem of model?.elements ?? []) {
+    if (elem.$type === 'RosettaFunction') {
+      for (const arr of [elem.shortcuts, elem.conditions, elem.operations, elem.postConditions]) {
+        for (const part of arr ?? []) {
+          if (part?.$cstNode?.text) {
+            part.$cstText = part.$cstNode.text;
+          }
+          if (part?.expression?.$cstNode?.text) {
+            part.expression.$cstText = part.expression.$cstNode.text;
+          }
+        }
+      }
+    }
+    if (elem.conditions) {
+      for (const cond of elem.conditions) {
+        if (cond?.$cstNode?.text) {
+          cond.$cstText = cond.$cstNode.text;
+        }
+        if (cond?.expression?.$cstNode?.text) {
+          cond.expression.$cstText = cond.expression.$cstNode.text;
+        }
+      }
+    }
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
+ * Extract the curated doc's namespace from its serialized model and merge
+ * its exports into the per-namespace deferredExports map. Mutates the
+ * passed map in place to match the same shape user-file parses produce.
+ *
+ * Namespace comes from the top-level `name` field of the Langium-serialized
+ * RosettaModel. We slice off the model preamble and run a small regex
+ * rather than JSON.parse the whole body — the model bodies are large
+ * (~kilobytes each) but `name` always appears within the first ~256 bytes.
+ */
+function mergeCuratedDocIntoDeferredExports(
+  doc: { uri: string; serializedModel: string; exports: Array<{ type: string; name: string; path: string }> },
+  deferredExportsByNamespace: Record<string, { filePath: string; entries: Array<{ type: string; name: string }> }>
+): void {
+  const preamble = doc.serializedModel.slice(0, 256);
+  const nameMatch = /"name"\s*:\s*"([^"]+)"/.exec(preamble);
+  if (!nameMatch) return;
+  const namespace = nameMatch[1].replace(/^"|"$/g, '');
+  if (!namespace) return;
+
+  const existing = deferredExportsByNamespace[namespace] ?? { filePath: doc.uri, entries: [] };
+  for (const e of doc.exports) existing.entries.push({ type: e.type, name: e.name });
+  deferredExportsByNamespace[namespace] = existing;
 }
 
 /**

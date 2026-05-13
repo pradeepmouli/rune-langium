@@ -157,16 +157,24 @@ describe('POST /api/parse — curatedBundles', () => {
       } as never);
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
+        deferredExports: Array<{ filePath: string; namespace: string; exports: Array<{ name: string }> }>;
         hydrationState: { documents: Array<{ uri: string; exports: Array<{ name: string }> }> };
       };
-      // Should contain BOTH the user file and the corpus document, both as
-      // bare paths so the browser worker's URI.parse(filePath).toString()
-      // lookup matches what /api/parse and curated-fetch register under.
+      // hydrationState carries the documents themselves.
       const uris = body.hydrationState.documents.map((d) => d.uri);
       expect(uris).toContain('x.rune');
       expect(uris).toContain('cdm/base/math.rosetta');
       const corpusDoc = body.hydrationState.documents.find((d) => d.uri === 'cdm/base/math.rosetta');
       expect(corpusDoc?.exports.some((e) => e.name === 'Quantity')).toBe(true);
+
+      // deferredExports must include the curated namespace too (Codex P2):
+      // the namespace explorer / graph view reads from this response and
+      // would otherwise miss curated entries.
+      const namespaces = body.deferredExports.map((d) => d.namespace);
+      expect(namespaces).toContain('cdm.base.math');
+      const cdmEntry = body.deferredExports.find((d) => d.namespace === 'cdm.base.math');
+      expect(cdmEntry?.filePath).toBe('cdm/base/math.rosetta');
+      expect(cdmEntry?.exports.some((e) => e.name === 'Quantity')).toBe(true);
     } finally {
       spy.mockRestore();
     }
