@@ -63,6 +63,13 @@ export interface HydrateRequest {
     serializedModel: string;
     /** Export descriptions for the symbol index, scoped to this document. */
     exports: Array<{ type: string; name: string; path: string }>;
+    /**
+     * Set on curated-bundle entries (added by /api/parse:functions/api/parse.ts).
+     * Absent on user-file entries. The studio uses this to mark workspace
+     * files refOnly without parsing URI prefixes — prefix inference
+     * false-positives when a user file lives under `${bundleId}/...`.
+     */
+    bundleId?: string;
   }>;
 }
 

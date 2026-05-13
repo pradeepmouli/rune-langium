@@ -265,10 +265,22 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     const { models } = get();
     const existing = models.get(sourceId);
     if (!existing) return;
-    // Cheap idempotence: skip the set when nothing changes. parseWorkspaceFiles
-    // fires on every debounced edit; without this guard every keystroke
-    // would re-publish identical files and re-trigger downstream effects.
-    if (existing.files.length === files.length && existing.files.every((f, i) => f.path === files[i]?.path)) {
+    // Cheap idempotence — skip the set when nothing meaningful changes.
+    // parseWorkspaceFiles fires on every debounced edit; without a guard
+    // every keystroke would re-publish identical files and re-trigger
+    // downstream effects (model-watching useEffect → re-merge → another
+    // /api/parse round-trip → loop). The check compares path + the
+    // identity of `serializedModelJson` so a reparse with the same paths
+    // but updated AST content (e.g. bundle version bump) re-publishes
+    // and downstream consumers see fresh exports (Copilot review of
+    // PR #163: shallow path-only check let stale exports survive).
+    if (
+      existing.files.length === files.length &&
+      existing.files.every((f, i) => {
+        const next = files[i];
+        return next !== undefined && f.path === next.path && f.serializedModelJson === next.serializedModelJson;
+      })
+    ) {
       return;
     }
     const updated = new Map(models);

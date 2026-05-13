@@ -484,11 +484,20 @@ export async function parseWorkspaceViaRouter(
   const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
   const models: RosettaModel[] = [];
   const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+  // Build a quick lookup: filePath → namespace from the response's
+  // deferredExports so curated entries get a real namespace rather than
+  // an empty string (Copilot review: CachedFile.namespace is declared
+  // non-optional). User-file entries are handled in the same loop.
+  const namespaceByFilePath = new Map<string, string>();
+  for (const d of data.deferredExports ?? []) {
+    namespaceByFilePath.set(d.filePath, d.namespace);
+  }
   // Collect curated docs as refOnly CachedFile entries grouped by bundleId.
-  // curated-fetch emits URIs shaped `${bundleId}/${path-within-bundle}`,
-  // so `doc.uri.split('/')[0]` is the bundle id. User-file paths are
-  // arbitrary and don't follow that prefix convention; we identify them
-  // via membership in `userFileNames`.
+  // The server stamps each hydration doc with an explicit `bundleId` field
+  // (apps/studio/functions/api/parse.ts) so we don't infer bundle
+  // membership from the URI prefix — the previous prefix inference
+  // false-positive'd for user files under `${bundleId}/path` (Codex P2
+  // review of PR #163).
   const curatedRefOnlyFiles: Record<string, CachedFile[]> = {};
   for (const doc of data.hydrationState.documents) {
     // doc.uri is the bare filePath emitted by /api/parse + curated-fetch
@@ -505,21 +514,19 @@ export async function parseWorkspaceViaRouter(
       }
       continue;
     }
-    // Not a user file — treat as a curated reference. The first path
-    // segment is the bundle id (matches the prefix curated-fetch uses).
-    const sep = filePath.indexOf('/');
-    if (sep <= 0) continue;
-    const bundleId = filePath.slice(0, sep);
-    const pathInBundle = filePath.slice(sep + 1);
+    // Not a user file. Use the explicit bundleId stamped by the server;
+    // if it's missing (e.g. older deployments mid-rollout) we skip the
+    // entry rather than guess from the URI — silently grouping under
+    // the wrong key was the original Codex bug.
+    const bundleId = doc.bundleId;
+    if (!bundleId) continue;
+    // Strip the `${bundleId}/` prefix from the uri so the path within
+    // the bundle is preserved without the redundant id prefix on disk.
+    const pathInBundle = filePath.startsWith(`${bundleId}/`) ? filePath.slice(bundleId.length + 1) : filePath;
     const entry: CachedFile = {
       path: pathInBundle,
       content: '',
-      // Derive namespace from the first export's `path` (curated-fetch
-      // emits `${namespace}.${name}` for user-file exports; curated
-      // artifact exports use Langium JSONPath like `/elements@0` so
-      // namespace is not reliably present there — empty string is the
-      // safe default). Studio UI surfaces tolerate '' for the namespace.
-      namespace: '',
+      namespace: namespaceByFilePath.get(filePath) ?? '',
       serializedModelJson: doc.serializedModel as CachedFile['serializedModelJson'],
       exports: doc.exports,
       refOnly: true

@@ -1185,25 +1185,28 @@ export function EditorPage({
     );
   }, [sourceEditorFiles, activeEditorFile, lspClient, handleSourceChange, navigateToNode, handleEditorViewCreated]);
 
-  // Namespaces that belong to refOnly curated bundles. Cross-references
-  // the workspace files (which carry `refOnly` + `bundleId`) with the
-  // parse response's `deferredExports` (which maps filePath → namespace).
-  // The intersection gives us "which AST namespaces have no source text
-  // client-side" — surfaced as a Reference Only pill in the inspector.
+  // Namespaces that belong to refOnly curated files. Earlier revisions
+  // inferred this by matching `deferredExports[i].filePath.split('/')[0]`
+  // against loaded refOnly bundle ids — that false-positive'd for user
+  // files saved under `${bundleId}/foo.rosetta` paths (Codex P2 review
+  // of PR #163). The correct anchor is the workspace file's `refOnly`
+  // flag itself; we resolve each refOnly file's server-side filePath
+  // (the form the server emits in deferredExports, which is
+  // `${bundleId}/${pathInBundle}` without the studio's bracket prefix)
+  // and look up the matching deferredExports entry to recover the
+  // namespace. Pure intersection — no inference required.
   const refOnlyNamespaces = useMemo(() => {
-    const refOnlyBundleIds = new Set<string>();
+    if (deferredExports.length === 0) return new Set<string>();
+    const refOnlyServerPaths = new Set<string>();
     for (const f of files) {
-      if (f.refOnly && f.bundleId) refOnlyBundleIds.add(f.bundleId);
+      if (!f.refOnly) continue;
+      const m = /^\[([^\]]+)\]\/(.*)$/.exec(f.path);
+      if (m) refOnlyServerPaths.add(`${m[1]}/${m[2]}`);
     }
-    if (refOnlyBundleIds.size === 0) return new Set<string>();
+    if (refOnlyServerPaths.size === 0) return new Set<string>();
     const ns = new Set<string>();
     for (const d of deferredExports) {
-      // curated-fetch emits filePath shaped `${bundleId}/${rest}`; the
-      // first path segment is the bundle id.
-      const bundleId = d.filePath.split('/')[0];
-      if (bundleId && refOnlyBundleIds.has(bundleId)) {
-        ns.add(d.namespace);
-      }
+      if (refOnlyServerPaths.has(d.filePath)) ns.add(d.namespace);
     }
     return ns;
   }, [files, deferredExports]);

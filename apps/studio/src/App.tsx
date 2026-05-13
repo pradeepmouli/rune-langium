@@ -218,7 +218,9 @@ function AppContent() {
         setFiles(mergedFiles);
         // 019: filter synthetic bundle-marker files so the LSP doesn't receive
         // placeholder entries with empty content (bundle content arrives via /api/parse).
-        lspClientRef.current?.syncWorkspaceFiles(mergedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX)));
+        lspClientRef.current?.syncWorkspaceFiles(
+          mergedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly)
+        );
 
         const result = await parseWorkspaceFiles(mergedFiles);
         applyParseResult(result);
@@ -423,7 +425,9 @@ function AppContent() {
   const handleFilesChange = useCallback(
     (updatedFiles: WorkspaceFile[]) => {
       setFiles(updatedFiles);
-      lspClientRef.current?.syncWorkspaceFiles(updatedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX)));
+      lspClientRef.current?.syncWorkspaceFiles(
+        updatedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly)
+      );
 
       if (restoredWorkspace) {
         void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles).catch((err) => {
@@ -620,7 +624,9 @@ function AppContent() {
     setFiles(merged);
     // 019: filter synthetic bundle-marker files so the LSP doesn't receive
     // placeholder entries with empty content (bundle content arrives via /api/parse).
-    lspClientRef.current?.syncWorkspaceFiles(merged.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX)));
+    lspClientRef.current?.syncWorkspaceFiles(
+      merged.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly)
+    );
     modelParseTokenRef.current += 1;
     const token = modelParseTokenRef.current;
     parseWorkspaceFiles(merged)
