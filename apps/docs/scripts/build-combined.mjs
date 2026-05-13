@@ -227,8 +227,12 @@ class_name = "RuneLspSession"
 script_name = "rune-lsp-worker"
 
 # Allowlist for LSP session origin gating + parse-endpoint CORS.
+# Production origin first; the wildcard pattern matches CF Pages preview
+# subdomains (https://<hash>.daikonic-dev.pages.dev) so we don't need a
+# dashboard tweak per preview build. isOriginAllowed supports single
+# leading-wildcard form — see apps/studio/functions/lib/lsp-auth.ts.
 [vars]
-ALLOWED_ORIGIN = "https://www.daikonic.dev"
+ALLOWED_ORIGIN = "https://www.daikonic.dev,https://*.daikonic-dev.pages.dev"
 `;
 writeFileSync(repoWranglerToml, wranglerToml);
 console.log('[build-combined] Wrote <repo>/wrangler.toml (019: compat + pages_build_output_dir + LSP DO binding + vars)');

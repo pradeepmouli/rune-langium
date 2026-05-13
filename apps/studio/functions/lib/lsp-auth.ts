@@ -148,13 +148,41 @@ export async function verifySessionToken(secret: string, token: string, now = Da
 // Origin allowlist
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Test whether `origin` is on the comma-separated allowlist.
+ *
+ * Match semantics:
+ *  - `*`                        — allow any origin (escape hatch).
+ *  - `https://example.com`      — exact match.
+ *  - `https://*.example.com`    — single leading-wildcard for the subdomain
+ *                                  label. Matches `https://a.example.com` and
+ *                                  `https://b.c.example.com` but not the bare
+ *                                  `https://example.com`.
+ *
+ * The wildcard form exists so we can grant CF Pages preview deployments
+ * (subdomains like `https://<hash>.daikonic-dev.pages.dev`) access without
+ * having to update the allowlist every time a new preview lands.
+ */
 export function isOriginAllowed(origin: string | null, allowed: string): boolean {
   if (!origin) return false;
   if (allowed === '*') return true;
   return allowed
     .split(',')
     .map((s) => s.trim())
-    .includes(origin);
+    .filter((s) => s.length > 0)
+    .some((pattern) => matchesOriginPattern(origin, pattern));
+}
+
+function matchesOriginPattern(origin: string, pattern: string): boolean {
+  if (pattern === origin) return true;
+  // Wildcard form: protocol + "*." + suffix. Compare suffix only.
+  const wildcardPrefixMatch = pattern.match(/^([a-z]+:\/\/)\*\.(.+)$/);
+  if (!wildcardPrefixMatch) return false;
+  const [, scheme, suffix] = wildcardPrefixMatch;
+  if (!origin.startsWith(scheme!)) return false;
+  const host = origin.slice(scheme!.length);
+  // Require an actual subdomain — `*.example.com` must NOT match `example.com`.
+  return host.endsWith(`.${suffix}`) && host !== suffix;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
