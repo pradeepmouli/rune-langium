@@ -122,6 +122,26 @@ function copyDir(from, to, label) {
 rmSync(combinedDist, { recursive: true, force: true });
 rmSync(docsRawDist, { recursive: true, force: true });
 
+// Spec 019 Phase 1: the Pages Functions copied to <repo>/functions/ import
+// `@rune-langium/core` (parse.ts + curated-fetch.ts), which resolves to
+// `packages/core/dist/index.js` per its package.json exports. The studio's
+// vite build transpiles core/src directly so the studio bundle doesn't need
+// the dist, but CF Pages bundles the functions in a separate step and
+// resolves the import via its package.json exports — so the dist MUST exist
+// at deploy time or function bundling fails ("Cannot find module
+// '@rune-langium/core'"). Local builds work because dist/ persists from
+// prior `pnpm -r build` runs; CF Pages clones a fresh checkout each time.
+//
+// Building only the workspace packages the functions actually touch keeps
+// the build short. Functions reference @rune-langium/core; that pulls
+// langium-zod (already shipping built JS via npm) transitively but doesn't
+// touch other workspace pkgs at runtime.
+run(
+  'Building @rune-langium/core (workspace dep imported by Pages Functions)',
+  'pnpm --filter @rune-langium/core run build',
+  repoRoot
+);
+
 run('Generating typedoc API markdown', 'pnpm run docs:api', docsRoot);
 run(
   'Building VitePress docs (base=/rune-studio/docs/)',
