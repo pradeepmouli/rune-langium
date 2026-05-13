@@ -95,7 +95,13 @@ async function fetchSerializedArtifact(id: string, version: string): Promise<Cur
 
   let res: Response;
   try {
-    res = await fetch(url);
+    // Accept-Encoding: identity disables HTTP-level transport compression on
+    // the subrequest. The artifact body is a gzip FILE (Content-Type:
+    // application/gzip) that we inflate ourselves; if CF / the upstream
+    // applied Content-Encoding: gzip on top of it, fetch() would
+    // auto-decompress and our subsequent inflate() would fail on what
+    // looks like JSON bytes. Pinning identity keeps the wire bytes raw.
+    res = await fetch(url, { headers: { 'Accept-Encoding': 'identity' } });
   } catch (err) {
     throw new CuratedBundleUnavailableError(id, version, undefined, err);
   }
