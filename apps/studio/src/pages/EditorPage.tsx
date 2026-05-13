@@ -1185,12 +1185,41 @@ export function EditorPage({
     );
   }, [sourceEditorFiles, activeEditorFile, lspClient, handleSourceChange, navigateToNode, handleEditorViewCreated]);
 
+  // Namespaces that belong to refOnly curated bundles. Cross-references
+  // the workspace files (which carry `refOnly` + `bundleId`) with the
+  // parse response's `deferredExports` (which maps filePath → namespace).
+  // The intersection gives us "which AST namespaces have no source text
+  // client-side" — surfaced as a Reference Only pill in the inspector.
+  const refOnlyNamespaces = useMemo(() => {
+    const refOnlyBundleIds = new Set<string>();
+    for (const f of files) {
+      if (f.refOnly && f.bundleId) refOnlyBundleIds.add(f.bundleId);
+    }
+    if (refOnlyBundleIds.size === 0) return new Set<string>();
+    const ns = new Set<string>();
+    for (const d of deferredExports) {
+      // curated-fetch emits filePath shaped `${bundleId}/${rest}`; the
+      // first path segment is the bundle id.
+      const bundleId = d.filePath.split('/')[0];
+      if (bundleId && refOnlyBundleIds.has(bundleId)) {
+        ns.add(d.namespace);
+      }
+    }
+    return ns;
+  }, [files, deferredExports]);
+
+  const selectedNodeIsRefOnly = useMemo(() => {
+    const data = selectedNodeData as unknown as { namespace?: string } | null;
+    return !!(data?.namespace && refOnlyNamespaces.has(data.namespace));
+  }, [selectedNodeData, refOnlyNamespaces]);
+
   const renderInspectorPane = useCallback(
     () => (
       <div className="flex flex-col min-h-0 h-full overflow-auto">
         <EditorFormPanel
           nodeData={selectedNodeData}
           nodeId={selectedNodeId}
+          refOnly={selectedNodeIsRefOnly}
           availableTypes={availableTypes}
           actions={editorActions}
           allNodes={storeNodes}
@@ -1205,6 +1234,7 @@ export function EditorPage({
     [
       selectedNodeData,
       selectedNodeId,
+      selectedNodeIsRefOnly,
       availableTypes,
       editorActions,
       storeNodes,

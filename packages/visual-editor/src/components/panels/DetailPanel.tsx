@@ -12,12 +12,7 @@ import { AlertCircle, GitFork } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import {
-  AST_TYPE_TO_NODE_TYPE,
-  formatCardinality,
-  getTypeRefText,
-  getRefText
-} from '../../adapters/model-helpers.js';
+import { AST_TYPE_TO_NODE_TYPE, formatCardinality, getTypeRefText, getRefText } from '../../adapters/model-helpers.js';
 import { TypeLink } from '../editors/TypeLink.js';
 import type { AnyGraphNode, ValidationError, NavigateToNodeCallback } from '../../types.js';
 
@@ -27,6 +22,12 @@ export interface DetailPanelProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /**
+   * True when the node's source file is a curated reference-only entry
+   * (no client-side source text). Renders a "Reference Only" pill next
+   * to the kind badge so users understand why the panel is non-editable.
+   */
+  refOnly?: boolean;
 }
 
 /** Extract a flat list of {name, typeName, cardinality} from any node type. */
@@ -69,7 +70,7 @@ function extractMembers(d: any): Array<{ name: string; typeName?: string; cardin
   }
 }
 
-export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds }: DetailPanelProps) {
+export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds, refOnly }: DetailPanelProps) {
   if (!nodeData) return null;
 
   const d = nodeData as any;
@@ -85,6 +86,11 @@ export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds }: DetailPa
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold truncate">{d.name}</h3>
           <Badge variant={kind as 'data' | 'enum' | 'choice' | 'func'}>{kind}</Badge>
+          {refOnly && (
+            <Badge variant="outline" className="text-xs text-muted-foreground">
+              Reference Only
+            </Badge>
+          )}
         </div>
 
         <Separator />
@@ -116,9 +122,7 @@ export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds }: DetailPa
           <>
             <Separator />
             <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                Members ({members.length})
-              </span>
+              <span className="text-xs font-medium text-muted-foreground">Members ({members.length})</span>
               <div className="flex flex-col gap-1">
                 {members.map((member) => (
                   <div key={member.name} className="flex items-baseline gap-1 text-sm font-mono">
@@ -134,9 +138,7 @@ export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds }: DetailPa
                         />
                       </span>
                     )}
-                    {member.cardinality && (
-                      <span className="text-xs text-muted-foreground">{member.cardinality}</span>
-                    )}
+                    {member.cardinality && <span className="text-xs text-muted-foreground">{member.cardinality}</span>}
                   </div>
                 ))}
               </div>
