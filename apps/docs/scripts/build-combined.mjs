@@ -166,19 +166,20 @@ writeFileSync(
 );
 console.log('[build-combined] Wrote _redirects with SPA fallback for /rune-studio/studio/*');
 
-// Spec 019 Phase 1: copy Pages Functions to the REPO ROOT where CF Pages
-// git-integration scans for them. CF Pages scans `<Root Directory>/functions/`
-// (default: repo root). Placing them inside the build output dir does NOT
-// work for git-integration deploys — only direct `wrangler pages deploy`
-// CLI uploads scan the build output. The source tree at
-// apps/studio/functions/ is the canonical authoring location (used by
-// `pnpm dev:pages` for local development); this is just a deploy-time copy.
-rmSync(repoFunctions, { recursive: true, force: true });
-copyDir(studioFunctionsSrc, repoFunctions, 'studio functions → <repo>/functions/ (CF Pages discovery)');
-for (const stripped of ['test', 'tsconfig.json', 'tsconfig.tsbuildinfo']) {
-  rmSync(join(repoFunctions, stripped), { recursive: true, force: true });
-}
-console.log('[build-combined] Stripped test/ + tsconfig artifacts from functions copy');
+// Spec 019 Phase 1: pre-bundle Pages Functions to the REPO ROOT where CF Pages
+// git-integration scans for them. Plain copy of .ts source doesn't work
+// because CF's bundler walks node_modules from <repo>/functions/, but with
+// pnpm workspaces the function deps (langium, zod, pako, pino, etc.) live
+// in apps/studio/node_modules/, not at the repo root. Pre-bundling here
+// inlines all those imports so CF Pages just deploys the .js files as-is.
+//
+// The source tree at apps/studio/functions/ remains the canonical authoring
+// location (used by `pnpm dev:pages` for local development).
+run(
+  'Pre-bundling studio Pages Functions → <repo>/functions/ (CF Pages discovery)',
+  `pnpm --filter @rune-langium/studio exec node scripts/bundle-functions.mjs ${JSON.stringify(repoFunctions)}`,
+  repoRoot
+);
 
 // Generate <repo>/wrangler.toml so CF Pages picks up the compat flag, the
 // LSP_SESSION DO binding (consumed from the existing rune-lsp-worker Worker —
