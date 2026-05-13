@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Cloudflare Pages Function: POST /api/parse
+ * Cloudflare Pages Function: POST /api/parse — fix(019) lazy langium import
  *
  * Server-side `parseWorkspace`. Browser studio POSTs workspace files;
  * function runs Langium parse + builds the index, returns a hydration
@@ -15,9 +15,13 @@
  * then expose the original file name in the response.
  */
 
-import { createRuneDslServices } from '@rune-langium/core';
+// Langium services are imported LAZILY inside parseUserFiles below so a
+// curated-only request (files: [], curatedBundles: [...]) avoids the
+// ~1.8 MB langium runtime import + createRuneDslServices initialization
+// entirely. The curated path consumes a pre-parsed JSON artifact and
+// does not need any langium pipeline at runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { EmptyFileSystem, URI, type LangiumDocument, type AstNode } from 'langium';
+import { URI } from 'langium';
 import { fetchCuratedBundle, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 
 type ParseRequestBody = {
@@ -85,13 +89,6 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
   }
 
   try {
-    const { RuneDsl } = createRuneDslServices(EmptyFileSystem);
-    const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
-    const builder = RuneDsl.shared.workspace.DocumentBuilder;
-
-    const docs: LangiumDocument<AstNode>[] = body.files.map((f) => factory.fromString(f.content, toRosettaUri(f.name)));
-    await builder.build(docs, { validation: false });
-
     const errors: Record<string, string[]> = {};
     const documentsForHydration: Array<{
       uri: string;
@@ -110,60 +107,12 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
       { filePath: string; entries: Array<{ type: string; name: string }> }
     > = {};
 
-    for (let i = 0; i < docs.length; i++) {
-      const doc = docs[i];
-      const filePath = body.files[i].name;
-      const parseErrors = doc.parseResult.parserErrors.map((e) => e.message);
-      if (parseErrors.length > 0) {
-        errors[filePath] = parseErrors;
-      }
-      const model = doc.parseResult.value as RosettaModel | undefined;
-      if (!model) continue;
-
-      // Serialize the model for hydration (Langium JSON serializer).
-      const serializedModel = RuneDsl.serializer.JsonSerializer.serialize(model);
-
-      // RosettaModel.name is QualifiedName (= string). Strip surrounding quotes
-      // that the Langium grammar/parser may add for string literals.
-      const rawName = model.name as string;
-      const namespace = rawName ? rawName.replace(/^"|"$/g, '') : '';
-
-      // Iterate model.elements — the typed union Array<RosettaRootElement>.
-      // Each element has a $type and most have a name (ValidID = string).
-      const exports: Array<{ type: string; name: string; path: string }> = [];
-      if (namespace) {
-        for (const elem of model.elements) {
-          const elemWithName = elem as { $type: string; name?: string };
-          if (elemWithName.name) {
-            exports.push({
-              type: elemWithName.$type,
-              name: elemWithName.name,
-              path: `${namespace}.${elemWithName.name}`
-            });
-          }
-        }
-      }
-
-      // The hydration URI must match what the browser worker will use to look up
-      // documents. The worker keys `deferredModelJson` off
-      // `URI.parse(filePath).toString()` (handleLinkDocument and the old
-      // handleParseWorkspace both use this shape), and `linkDocument(filePath)`
-      // from EditorPage sends the raw filePath. Emit the filePath verbatim so
-      // both register and lookup produce the same key — adding a `file://`
-      // prefix here would silently break cross-reference resolution after a
-      // router-based parse.
-      documentsForHydration.push({
-        uri: filePath,
-        content: body.files[i].content,
-        serializedModel,
-        exports
-      });
-
-      if (namespace) {
-        const existing = deferredExportsByNamespace[namespace] ?? { filePath, entries: [] };
-        for (const e of exports) existing.entries.push({ type: e.type, name: e.name });
-        deferredExportsByNamespace[namespace] = existing;
-      }
+    // Only spin up Langium services when there are user files to parse.
+    // Curated-only requests (files: [], curatedBundles: [...]) skip the
+    // ~1.8 MB langium import + createRuneDslServices entirely — the
+    // curated path consumes pre-parsed JSON via curated-fetch.ts.
+    if (body.files.length > 0) {
+      await parseUserFiles(body.files, errors, documentsForHydration, deferredExportsByNamespace);
     }
 
     // Fetch curated bundles server-to-server and merge into hydration state.
@@ -231,6 +180,75 @@ export const onRequestPost: PagesFunction = async ({ request }) => {
     );
   }
 };
+
+/**
+ * Parse user-authored .rune files through Langium. Lazy-imports the
+ * @rune-langium/core module so curated-only requests don't pay the
+ * ~1.8 MB bundle init + service registration cost.
+ *
+ * Mutates the passed-in `errors`, `documentsForHydration`, and
+ * `deferredExportsByNamespace` collections rather than returning them.
+ */
+async function parseUserFiles(
+  files: ReadonlyArray<{ name: string; content: string }>,
+  errors: Record<string, string[]>,
+  documentsForHydration: Array<{
+    uri: string;
+    content: string;
+    serializedModel: string;
+    exports: Array<{ type: string; name: string; path: string }>;
+  }>,
+  deferredExportsByNamespace: Record<string, { filePath: string; entries: Array<{ type: string; name: string }> }>
+): Promise<void> {
+  const [{ createRuneDslServices }, { EmptyFileSystem }] = await Promise.all([
+    import('@rune-langium/core'),
+    import('langium')
+  ]);
+  const { RuneDsl } = createRuneDslServices(EmptyFileSystem);
+  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
+  const builder = RuneDsl.shared.workspace.DocumentBuilder;
+
+  const docs = files.map((f) => factory.fromString(f.content, toRosettaUri(f.name)));
+  await builder.build(docs, { validation: false });
+
+  for (let i = 0; i < docs.length; i++) {
+    const doc = docs[i];
+    const filePath = files[i].name;
+    const parseErrors = doc.parseResult.parserErrors.map((e) => e.message);
+    if (parseErrors.length > 0) {
+      errors[filePath] = parseErrors;
+    }
+    const model = doc.parseResult.value as RosettaModel | undefined;
+    if (!model) continue;
+
+    const serializedModel = RuneDsl.serializer.JsonSerializer.serialize(model);
+    const rawName = model.name as string;
+    const namespace = rawName ? rawName.replace(/^"|"$/g, '') : '';
+
+    const exports: Array<{ type: string; name: string; path: string }> = [];
+    if (namespace) {
+      for (const elem of model.elements) {
+        const e = elem as { $type: string; name?: string };
+        if (e.name) {
+          exports.push({ type: e.$type, name: e.name, path: `${namespace}.${e.name}` });
+        }
+      }
+    }
+
+    documentsForHydration.push({
+      uri: filePath,
+      content: files[i].content,
+      serializedModel,
+      exports
+    });
+
+    if (namespace) {
+      const existing = deferredExportsByNamespace[namespace] ?? { filePath, entries: [] };
+      for (const e of exports) existing.entries.push({ type: e.type, name: e.name });
+      deferredExportsByNamespace[namespace] = existing;
+    }
+  }
+}
 
 /**
  * `JSON.stringify` throws on BigInt by default. The Langium parser produces
