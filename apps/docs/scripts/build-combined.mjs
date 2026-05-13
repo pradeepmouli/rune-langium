@@ -4,40 +4,57 @@
  * `apps/docs/.vitepress/dist/` containing:
  *
  *   _redirects                    → SPA fallback for /rune-studio/studio/*
- *   functions/                    → Pages Functions copied from apps/studio/
- *                                   functions/ (spec 019). Mounted at the
- *                                   deploy origin root, so the studio's
- *                                   same-origin LSP/parse calls to
- *                                   `${origin}/api/...` land here.
  *   rune-studio/                  → public subpath (www.daikonic.dev/rune-studio/)
  *     ├── <site/*>                → static landing page from `site/`
  *     ├── docs/                   → VitePress docs (base='/rune-studio/docs/')
  *     └── studio/                 → Rune Studio SPA (base='/rune-studio/studio/')
+ *
+ * In ADDITION, the build writes two files at the REPO ROOT (both gitignored)
+ * that CF Pages git-integration picks up automatically:
+ *
+ *   <repo>/functions/             → Pages Functions copied from
+ *                                   apps/studio/functions/ (spec 019). CF
+ *                                   Pages scans <Root Directory>/functions/
+ *                                   for routes-based Functions; with default
+ *                                   Root Directory = "/", that's the repo
+ *                                   root. Placing them inside the build
+ *                                   output dir does NOT work for git-
+ *                                   integration deploys (only for direct
+ *                                   `wrangler pages deploy` uploads).
+ *   <repo>/wrangler.toml          → compat flags + LSP_SESSION DO binding +
+ *                                   ALLOWED_ORIGIN var. Takes precedence
+ *                                   over dashboard config for the keys it
+ *                                   defines (per CF Pages docs, deploy-root
+ *                                   wrangler.toml merges with dashboard
+ *                                   settings).
  *
  * Both sub-builds run with CF_PAGES=1 so their configs pick the right base.
  * CF Pages' git integration points at `apps/docs/.vitepress/dist/` as the
  * output directory; no GitHub Actions workflow is required.
  *
  * REQUIRED CF Pages dashboard configuration (one-time, spec 019 Phase 1):
- *   - Compatibility flag:  nodejs_compat
- *   - Durable Object binding:  LSP_SESSION → existing rune-lsp-worker Worker
- *     (class: RuneLspSession). CF Pages cannot host DOs — the DO is owned
- *     by apps/lsp-worker/ (a separate CF Worker) and Pages Functions
- *     consume it via this binding. See
- *     https://developers.cloudflare.com/pages/functions/bindings/#durable-objects
- *   - Vars:  ALLOWED_ORIGIN = https://www.daikonic.dev
- *   - Secret: SESSION_SIGNING_KEY = <random 32-byte base64> (HMAC for tokens)
+ *   - Durable Object namespace selection: bind LSP_SESSION → existing
+ *     rune-lsp-worker Worker (class: RuneLspSession). The CF dashboard
+ *     namespace picker has no CLI equivalent.
+ *     See https://developers.cloudflare.com/pages/functions/bindings/#durable-objects
+ *   - Secret: SESSION_SIGNING_KEY = <random 32-byte base64> for BOTH
+ *     production AND preview environments. Set via:
+ *       pnpm wrangler pages secret put SESSION_SIGNING_KEY \
+ *         --project-name=daikonic-dev --environment=preview
+ *       pnpm wrangler pages secret put SESSION_SIGNING_KEY \
+ *         --project-name=daikonic-dev --environment=production
+ *
+ * (Compat flag + ALLOWED_ORIGIN var + DO binding script_name come from the
+ * generated <repo>/wrangler.toml; no dashboard touch needed for those.)
  *
  * apps/lsp-worker/ remains deployed even after spec 019's Phase 2 cutover —
- * Pages can't take ownership of the DO. Phase 3 (deferred) was originally
- * "delete apps/lsp-worker entirely"; that's now a narrower "strip its HTTP
- * routes; keep the DO export."
+ * CF Pages cannot host DOs. Phase 3 (deferred) was originally "delete
+ * apps/lsp-worker entirely"; that's now a narrower "strip its HTTP routes;
+ * keep the DO export."
  *
- * (The studio's wrangler.toml is NOT copied into the deploy root because
- * the existing dashboard config already holds bindings/vars for the rest
- * of the site; mirroring them here would risk drift. The local-dev
- * wrangler.toml at apps/studio/wrangler.toml uses the same script_name so
- * `pnpm dev:pages` matches the production routing.)
+ * apps/studio/wrangler.toml is the LOCAL-DEV-only config (for `pnpm
+ * dev:pages` against apps/studio/functions/); it's not used by the CF
+ * Pages deploy.
  */
 
 import { execSync } from 'node:child_process';
@@ -55,7 +72,13 @@ const studioFunctionsSrc = join(repoRoot, 'apps', 'studio', 'functions');
 const docsRawDist = join(docsRoot, '.vitepress', 'dist-docs-raw');
 const combinedDist = join(docsRoot, '.vitepress', 'dist');
 const subpathDist = join(combinedDist, 'rune-studio');
-const combinedFunctions = join(combinedDist, 'functions');
+// CF Pages scans <Root Directory>/functions/ for routes-based Functions, where
+// Root Directory defaults to "/" (the repo root). The deploy-root wrangler.toml
+// also has to live at the repo root for CF Pages git-integration to apply its
+// settings during deploy. Both are gitignored at the repo root because they're
+// regenerated on every build.
+const repoFunctions = join(repoRoot, 'functions');
+const repoWranglerToml = join(repoRoot, 'wrangler.toml');
 
 const env = {
   ...process.env,
@@ -117,47 +140,55 @@ copyDir(siteRoot, subpathDist, 'site → /rune-studio/');
 copyDir(docsRawDist, join(subpathDist, 'docs'), 'vitepress → /rune-studio/docs/');
 copyDir(studioDist, join(subpathDist, 'studio'), 'studio → /rune-studio/studio/');
 
-// Copy the studio's Pages Functions into the deploy-root `functions/` dir
-// where CF Pages discovers them (spec 019 Phase 1). The source is
-// apps/studio/functions/ — same tree the local `pnpm dev:pages` reads from
-// — minus the test/ + tsconfig artifacts that don't ship to production.
-copyDir(studioFunctionsSrc, combinedFunctions, 'studio functions → /functions/');
-for (const stripped of ['test', 'tsconfig.json', 'tsconfig.tsbuildinfo']) {
-  rmSync(join(combinedFunctions, stripped), { recursive: true, force: true });
-}
-console.log('[build-combined] Stripped test/ + tsconfig artifacts from functions copy');
-
 writeFileSync(
   join(combinedDist, '_redirects'),
   '/rune-studio/studio/* /rune-studio/studio/index.html 200\n'
 );
 console.log('[build-combined] Wrote _redirects with SPA fallback for /rune-studio/studio/*');
 
-// Spec 019 Phase 1: emit a minimal wrangler.toml at the deploy root so the CF
-// Pages project picks up the nodejs_compat flag, the LSP_SESSION DO binding
-// (consumed from the existing rune-lsp-worker Worker — Pages cannot host DOs),
-// and the ALLOWED_ORIGIN runtime var without requiring a dashboard click.
+// Spec 019 Phase 1: copy Pages Functions to the REPO ROOT where CF Pages
+// git-integration scans for them. CF Pages scans `<Root Directory>/functions/`
+// (default: repo root). Placing them inside the build output dir does NOT
+// work for git-integration deploys — only direct `wrangler pages deploy`
+// CLI uploads scan the build output. The source tree at
+// apps/studio/functions/ is the canonical authoring location (used by
+// `pnpm dev:pages` for local development); this is just a deploy-time copy.
+rmSync(repoFunctions, { recursive: true, force: true });
+copyDir(studioFunctionsSrc, repoFunctions, 'studio functions → <repo>/functions/ (CF Pages discovery)');
+for (const stripped of ['test', 'tsconfig.json', 'tsconfig.tsbuildinfo']) {
+  rmSync(join(repoFunctions, stripped), { recursive: true, force: true });
+}
+console.log('[build-combined] Stripped test/ + tsconfig artifacts from functions copy');
+
+// Generate <repo>/wrangler.toml so CF Pages picks up the compat flag, the
+// LSP_SESSION DO binding (consumed from the existing rune-lsp-worker Worker —
+// Pages cannot host DOs), and the ALLOWED_ORIGIN runtime var declaratively
+// without requiring dashboard clicks for those fields.
 //
 // We intentionally OMIT:
-//   - `name`               (CF Pages project name is fixed by the dashboard;
-//                          setting it here risks a mismatch).
-//   - `pages_build_output_dir`  (we are already at the build output).
-//   - `[[migrations]]`     (DO migrations are owned by apps/lsp-worker/wrangler.toml;
-//                          binding consumers should not migrate someone else's DO).
+//   - `name`                    (CF Pages project name is fixed by the
+//                                dashboard; setting it here risks a mismatch).
+//   - `[[migrations]]`          (DO migrations are owned by
+//                                apps/lsp-worker/wrangler.toml; binding
+//                                consumers must not migrate someone else's DO).
 //
-// SESSION_SIGNING_KEY is intentionally NOT here — secrets are not
-// committable. Set it once via:
-//   pnpm wrangler pages secret put SESSION_SIGNING_KEY --project-name=<your-pages-project>
+// SESSION_SIGNING_KEY is intentionally NOT here — secrets must not be
+// committable. Set once per environment via:
+//   pnpm wrangler pages secret put SESSION_SIGNING_KEY \
+//     --project-name=daikonic-dev --environment=preview
+//   pnpm wrangler pages secret put SESSION_SIGNING_KEY \
+//     --project-name=daikonic-dev --environment=production
 //
-// Per CF Pages docs, wrangler.toml at the deployment root MERGES with
-// dashboard settings (with wrangler.toml taking precedence for conflicts) —
-// so this won't clobber unrelated dashboard vars/secrets.
+// Per CF Pages docs, wrangler.toml at the project root merges with dashboard
+// settings (wrangler.toml takes precedence for conflicts) — unrelated
+// dashboard vars/bindings the rest of the site relies on remain intact.
 const wranglerToml = `# Auto-generated by apps/docs/scripts/build-combined.mjs — do not edit.
 # Spec 019 Phase 1: CF Pages project config (compat + LSP DO binding + vars).
 # Edit the source script if you need to change this.
 
 compatibility_date = "2025-09-23"
 compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "apps/docs/.vitepress/dist"
 
 # Durable Object binding — DO is owned by the rune-lsp-worker Cloudflare
 # Worker (apps/lsp-worker/), not by this Pages project. CF Pages cannot
@@ -172,8 +203,8 @@ script_name = "rune-lsp-worker"
 [vars]
 ALLOWED_ORIGIN = "https://www.daikonic.dev"
 `;
-writeFileSync(join(combinedDist, 'wrangler.toml'), wranglerToml);
-console.log('[build-combined] Wrote deploy-root wrangler.toml (019: compat + LSP DO binding + vars)');
+writeFileSync(repoWranglerToml, wranglerToml);
+console.log('[build-combined] Wrote <repo>/wrangler.toml (019: compat + pages_build_output_dir + LSP DO binding + vars)');
 
 rmSync(docsRawDist, { recursive: true, force: true });
 
