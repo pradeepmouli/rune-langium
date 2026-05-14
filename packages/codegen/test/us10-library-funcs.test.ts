@@ -24,7 +24,7 @@ async function runFixture(fixtureName: string, target: 'typescript'): Promise<st
       `Parse errors in library-funcs/${fixtureName}: ${doc.parseResult.parserErrors.map((e) => e.message).join(', ')}`
     );
   }
-  const outputs = generate(doc, { target });
+  const outputs = await generate(doc, { target });
   if (outputs.length === 0) throw new Error(`No output for library-funcs/${fixtureName}`);
   return outputs[0]!.content;
 }
@@ -32,16 +32,12 @@ async function runFixture(fixtureName: string, target: 'typescript'): Promise<st
 async function assertFixture(fixtureName: string, target: 'typescript'): Promise<void> {
   const ext = '.ts';
   const expectedPath = join(FIXTURES_DIR, fixtureName, 'expected' + ext);
-  const [actual, expected] = await Promise.all([
-    runFixture(fixtureName, target),
-    readFile(expectedPath, 'utf-8')
-  ]);
+  const [actual, expected] = await Promise.all([runFixture(fixtureName, target), readFile(expectedPath, 'utf-8')]);
   expect(actual).toBe(expected);
 }
 
 describe('US10: Library Function Codegen — TypeScript', () => {
-  it('T076 basic library-funcs fixture matches snapshot', () =>
-    assertFixture('basic', 'typescript'));
+  it('T076 basic library-funcs fixture matches snapshot', () => assertFixture('basic', 'typescript'));
   it('T077 Sum emits array parameter type alias', async () => {
     const content = await runFixture('basic', 'typescript');
     expect(content).toContain('export type Sum = (values: number[]) => number;');

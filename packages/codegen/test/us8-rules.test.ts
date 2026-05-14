@@ -24,7 +24,7 @@ async function runFixture(fixtureName: string, target: 'zod' | 'typescript'): Pr
       `Parse errors in rules/${fixtureName}: ${doc.parseResult.parserErrors.map((e) => e.message).join(', ')}`
     );
   }
-  const outputs = generate(doc, { target });
+  const outputs = await generate(doc, { target });
   if (outputs.length === 0) throw new Error(`No output for rules/${fixtureName}`);
   return outputs[0]!.content;
 }
@@ -32,10 +32,7 @@ async function runFixture(fixtureName: string, target: 'zod' | 'typescript'): Pr
 async function assertFixture(fixtureName: string, target: 'zod' | 'typescript'): Promise<void> {
   const ext = target === 'zod' ? '.zod.ts' : '.ts';
   const expectedPath = join(FIXTURES_DIR, fixtureName, 'expected' + ext);
-  const [actual, expected] = await Promise.all([
-    runFixture(fixtureName, target),
-    readFile(expectedPath, 'utf-8')
-  ]);
+  const [actual, expected] = await Promise.all([runFixture(fixtureName, target), readFile(expectedPath, 'utf-8')]);
   expect(actual).toBe(expected);
 }
 

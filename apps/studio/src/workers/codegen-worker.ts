@@ -77,9 +77,7 @@ let lastPreviewRequestId: string | undefined;
 let cachedFuncCode = new Map<string, string>();
 
 function hasDocumentErrors(document: LangiumDocument): boolean {
-  const hasDiagnostics = (document.diagnostics ?? []).some(
-    (diagnostic) => diagnostic.severity === 1
-  );
+  const hasDiagnostics = (document.diagnostics ?? []).some((diagnostic) => diagnostic.severity === 1);
   const hasLexerErrors = document.parseResult.lexerErrors.length > 0;
   const hasParserErrors = document.parseResult.parserErrors.length > 0;
   return hasDiagnostics || hasLexerErrors || hasParserErrors;
@@ -121,7 +119,25 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
       return;
     }
 
-    const results = generate(documents, { target });
+    const results = await generate(documents, { target });
+
+    // 018 Task 0.7 follow-up — when every output carries an error
+    // diagnostic AND no content (the shape returned by `runGenerate`
+    // for not-yet-implemented targets), surface it as `codegen:error`
+    // so the panel shows "Preview unavailable" instead of misleading
+    // "Generated (X)" with empty content.
+    const allOutputsAreErrors =
+      results.length > 0 && results.every((r) => r.content === '' && r.diagnostics.some((d) => d.severity === 'error'));
+    if (allOutputsAreErrors) {
+      const firstError = results[0]!.diagnostics.find((d) => d.severity === 'error');
+      scope.postMessage({
+        type: 'codegen:error',
+        target,
+        requestId,
+        message: firstError?.message ?? 'Code generation produced only errors.'
+      });
+      return;
+    }
 
     // Cache generated function code for preview:execute, keyed by namespace.funcName.
     // Store func.fileContents (isolated function declaration only) rather than
@@ -264,10 +280,7 @@ function stripTypeAnnotations(tsCode: string): string {
     cleaned = cleaned.replace(/\)\s*:\s*\w+\s+is\s+\w+\s*\{/g, ') {');
 
     // Strip variable type annotations: let/const x: Type = or let x: Type;
-    cleaned = cleaned.replace(
-      /((?:const|let|var)\s+\w+)\s*:\s*[\w.<>()[\] |&?,]+\s*(=|;)/g,
-      '$1 $2'
-    );
+    cleaned = cleaned.replace(/((?:const|let|var)\s+\w+)\s*:\s*[\w.<>()[\] |&?,]+\s*(=|;)/g, '$1 $2');
 
     // Strip type casts
     cleaned = cleaned.replace(/\s+as\s+typeof\s+this\.\w+/g, '');
@@ -284,17 +297,13 @@ function stripTypeAnnotations(tsCode: string): string {
 // Function execution
 // ---------------------------------------------------------------------------
 
-async function executeFunction(
-  funcName: string,
-  inputs: Record<string, unknown>,
-  requestId: string
-): Promise<void> {
+async function executeFunction(funcName: string, inputs: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
   if (!cachedFuncCode.has(funcName)) {
     const documents = await buildDocuments();
     if (documents.length > 0) {
-      const results = generate(documents, { target: 'typescript' });
+      const results = await generate(documents, { target: 'typescript' });
       cachedFuncCode = new Map();
       for (const result of results) {
         for (const func of result.funcs) {
@@ -359,41 +368,38 @@ async function executeFunction(
 // Message handler
 // ---------------------------------------------------------------------------
 
-(self as unknown as DedicatedWorkerGlobalScope).addEventListener(
-  'message',
-  (e: MessageEvent<WorkerInboundMessage>) => {
-    const msg = e.data;
+(self as unknown as DedicatedWorkerGlobalScope).addEventListener('message', (e: MessageEvent<WorkerInboundMessage>) => {
+  const msg = e.data;
 
-    if (msg.type === 'codegen:setFiles') {
-      currentCodegenFiles = msg.files;
-      if (msg.requestId) {
-        lastCodegenRequestId = msg.requestId;
-      }
-      runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
-    } else if (msg.type === 'codegen:generate') {
-      if (msg.target !== undefined) {
-        lastTarget = msg.target;
-      }
-      if (msg.requestId) {
-        lastCodegenRequestId = msg.requestId;
-      }
-      runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
-    } else if (msg.type === 'preview:setFiles') {
-      currentPreviewFiles = msg.files;
-      if (msg.requestId) {
-        lastPreviewRequestId = msg.requestId;
-      }
-      const requestId = msg.requestId ?? lastPreviewRequestId;
-      if (lastPreviewTargetId && requestId) {
-        runPreview(lastPreviewTargetId, requestId).catch(console.error);
-      }
-    } else if (msg.type === 'preview:generate') {
-      lastPreviewTargetId = msg.targetId;
-      lastPreviewRequestId = msg.requestId;
-      runPreview(msg.targetId, msg.requestId).catch(console.error);
-    } else if (msg.type === 'preview:execute') {
-      const { funcName, inputs, requestId } = msg;
-      executeFunction(funcName, inputs, requestId).catch(console.error);
+  if (msg.type === 'codegen:setFiles') {
+    currentCodegenFiles = msg.files;
+    if (msg.requestId) {
+      lastCodegenRequestId = msg.requestId;
     }
+    runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
+  } else if (msg.type === 'codegen:generate') {
+    if (msg.target !== undefined) {
+      lastTarget = msg.target;
+    }
+    if (msg.requestId) {
+      lastCodegenRequestId = msg.requestId;
+    }
+    runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
+  } else if (msg.type === 'preview:setFiles') {
+    currentPreviewFiles = msg.files;
+    if (msg.requestId) {
+      lastPreviewRequestId = msg.requestId;
+    }
+    const requestId = msg.requestId ?? lastPreviewRequestId;
+    if (lastPreviewTargetId && requestId) {
+      runPreview(lastPreviewTargetId, requestId).catch(console.error);
+    }
+  } else if (msg.type === 'preview:generate') {
+    lastPreviewTargetId = msg.targetId;
+    lastPreviewRequestId = msg.requestId;
+    runPreview(msg.targetId, msg.requestId).catch(console.error);
+  } else if (msg.type === 'preview:execute') {
+    const { funcName, inputs, requestId } = msg;
+    executeFunction(funcName, inputs, requestId).catch(console.error);
   }
-);
+});

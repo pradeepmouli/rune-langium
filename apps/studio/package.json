@@ -48,6 +48,7 @@
     "dockview-react": "^6.0.7",
     "idb": "^8.0.3",
     "isomorphic-git": "^1.37.6",
+    "jszip": "^3.10.1",
     "langium": "^4.2.3",
     "lucide-react": "^1.14.0",
     "pako": "^2.1.0",

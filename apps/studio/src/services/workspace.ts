@@ -822,3 +822,120 @@ export function applyFileChanges(
     return f;
   });
 }
+
+/**
+ * Error raised by downloadTargetViaRouter so callers can read the
+ * per-diagnostic detail of an /api/codegen failure without re-parsing
+ * the response. Mirrors the function's JSON envelope (spec §7.6).
+ */
+export class CodegenDownloadError extends Error {
+  readonly status: number;
+  readonly diagnostics: ReadonlyArray<{ severity: string; code: string; message: string }>;
+  constructor(
+    message: string,
+    status: number,
+    diagnostics: ReadonlyArray<{ severity: string; code: string; message: string }> = []
+  ) {
+    super(message);
+    this.name = 'CodegenDownloadError';
+    this.status = status;
+    this.diagnostics = diagnostics;
+  }
+}
+
+/**
+ * Sanitize a filename so it's safe to assign to `<a download="...">`.
+ * Strips control chars (incl. CR/LF, which could enable header-style
+ * injection on rare browsers), reduces path-separator characters to
+ * the basename, and removes any embedded quotes. Falls back to the
+ * caller's default when the result is empty.
+ *
+ * Defense-in-depth: the server we control returns well-formed
+ * filenames, but a malicious or compromised response shouldn't be
+ * able to coerce the browser into saving with a path-traversal name.
+ */
+function sanitizeDownloadFilename(raw: string, fallback: string): string {
+  // Take the basename: drop everything up to and including the last
+  // slash or backslash. Handles posix, windows, and mixed separators.
+  const basename = raw.replace(/^.*[/\\]/, '');
+  // Strip control characters (including CR/LF) and quotes.
+  // eslint-disable-next-line no-control-regex
+  const cleaned = basename.replace(/[\x00-\x1f"]/g, '').trim();
+  return cleaned.length > 0 ? cleaned : fallback;
+}
+
+/**
+ * Pull the `filename="..."` value from a Content-Disposition header.
+ * Falls back to the given default when the header is missing or
+ * malformed. Always passes the extracted value through
+ * `sanitizeDownloadFilename` so a hostile server response can't inject
+ * control chars or path components into the browser's save dialog
+ * (Copilot review on PR #165).
+ */
+function parseContentDispositionFilename(header: string | null, fallback: string): string {
+  if (!header) return fallback;
+  // Matches filename="value" (preferred) or unquoted filename=value.
+  const match = /filename\*?=("([^"]+)"|([^;]+))/i.exec(header);
+  if (!match) return fallback;
+  const raw = (match[2] ?? match[3] ?? '').trim();
+  return sanitizeDownloadFilename(raw, fallback);
+}
+
+/**
+ * Trigger a browser save for `blob` using the document API. Creates a
+ * temporary anchor with an object URL, clicks it, then revokes the URL.
+ */
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * POST workspace files to /api/codegen and trigger a browser save for
+ * the response artifact (single file for whole-model and one-namespace
+ * generations; zip for multi-namespace per-namespace generations).
+ *
+ * Spec §7.6. Companion server lives at apps/studio/functions/api/codegen.ts.
+ *
+ * Throws CodegenDownloadError on any non-2xx response with the parsed
+ * diagnostics envelope; throws a plain Error on network failure.
+ *
+ * 018 Phase 0 Task 0.12.
+ */
+export async function downloadTargetViaRouter(
+  files: Array<{ path: string; content: string }>,
+  target: string,
+  options: Record<string, unknown> = {}
+): Promise<void> {
+  const response = await fetch('/api/codegen', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, target, options })
+  });
+
+  if (!response.ok) {
+    let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
+    try {
+      envelope = (await response.json()) as typeof envelope;
+    } catch {
+      // Non-JSON response (e.g. 502 from the edge before reaching the
+      // function). Keep the empty envelope; the status code alone is
+      // enough information for the user.
+    }
+    const diags = Array.isArray(envelope.diagnostics)
+      ? (envelope.diagnostics as ReadonlyArray<{ severity: string; code: string; message: string }>)
+      : [];
+    throw new CodegenDownloadError(envelope.error ?? `/api/codegen HTTP ${response.status}`, response.status, diags);
+  }
+
+  const blob = await response.blob();
+  const filename = parseContentDispositionFilename(response.headers.get('Content-Disposition'), `${target}-output`);
+  triggerBlobDownload(blob, filename);
+}

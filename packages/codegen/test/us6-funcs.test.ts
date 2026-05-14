@@ -46,7 +46,7 @@ async function generateFuncFixture(fixtureName: string): Promise<string> {
     throw new Error(`Parse errors in ${fixtureName}/input.rune: ${msgs}`);
   }
 
-  const outputs = generate(doc, { target: 'typescript' });
+  const outputs = await generate(doc, { target: 'typescript' });
   if (outputs.length === 0) {
     throw new Error(`Generator produced no output for ${fixtureName}`);
   }
@@ -80,7 +80,7 @@ describe('US6 funcs: add-two (T114)', () => {
       URI.parse('inmemory:///add-two-funcs.rosetta')
     );
     await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
-    const outputs = generate(doc, { target: 'typescript' });
+    const outputs = await generate(doc, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThan(0);
     expect(outputs[0]!.funcs.length).toBeGreaterThan(0);
   });
@@ -243,7 +243,7 @@ describe('US6 funcs: silent-skip on Zod and JSON Schema targets (T127, FR-031)',
     );
     await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
 
-    const outputs = generate(doc, { target: 'zod' });
+    const outputs = await generate(doc, { target: 'zod' });
     // Zod target must have empty funcs array
     expect(outputs.every((o) => o.funcs.length === 0)).toBe(true);
     // Zod target must not contain any export function declarations
@@ -261,7 +261,7 @@ describe('US6 funcs: silent-skip on Zod and JSON Schema targets (T127, FR-031)',
     );
     await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
 
-    const outputs = generate(doc, { target: 'json-schema' });
+    const outputs = await generate(doc, { target: 'json-schema' });
     // JSON Schema target must have empty funcs array
     expect(outputs.every((o) => o.funcs.length === 0)).toBe(true);
     // JSON Schema target must not contain any function declarations

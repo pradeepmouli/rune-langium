@@ -1,26 +1,19 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@rune-langium/design-system/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { ArrowLeft } from 'lucide-react';
 import { refactoryDark } from '../lang/refactory-dark-theme.js';
-import { TargetSwitcher } from './TargetSwitcher.js';
-import {
-  useCodegenStore,
-  type CodePreviewFile,
-  type CodePreviewSnapshot
-} from '../store/codegen-store.js';
+import { downloadTargetViaRouter, CodegenDownloadError, type WorkspaceFile } from '../services/workspace.js';
+import { CodegenTargetsTable } from './CodegenTargetsTable.js';
+import { useCodegenStore, type CodePreviewFile, type CodePreviewSnapshot } from '../store/codegen-store.js';
 import { usePreviewStore } from '../store/preview-store.js';
 import { CODE_PREVIEW_PANEL_ID, TARGET_LABELS } from './codegen-ui.js';
 import { uriToPath } from '../utils/uri.js';
@@ -77,23 +70,26 @@ function statusLabel(snapshot: CodePreviewSnapshot, target: Target): string {
 export interface CodePreviewPanelProps {
   worker: Worker;
   sourceEditorRef: SourceEditorHandle | null;
+  /**
+   * Workspace files (user-authored only — curated bundles are
+   * server-loaded). Used by the Download flow (018 Task 0.12) to
+   * POST `{ files, target }` to `/api/codegen`. Optional during the
+   * transition; absent → Download is disabled and logs a warning.
+   */
+  files?: ReadonlyArray<WorkspaceFile>;
 }
 
 function activeFileFromSnapshot(snapshot: CodePreviewSnapshot): CodePreviewFile | undefined {
   if (!('files' in snapshot) || !snapshot.files) {
     return undefined;
   }
-  return (
-    snapshot.files.find((file) => file.relativePath === snapshot.activeRelativePath) ??
-    snapshot.files[0]
-  );
+  return snapshot.files.find((file) => file.relativePath === snapshot.activeRelativePath) ?? snapshot.files[0];
 }
 
-export function CodePreviewPanel({
-  worker,
-  sourceEditorRef
-}: CodePreviewPanelProps): React.ReactElement {
+export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreviewPanelProps): React.ReactElement {
   const target = useCodegenStore((s) => s.codePreviewTarget);
+  const activeTarget = useCodegenStore((s) => s.activeTarget);
+  const setActiveTarget = useCodegenStore((s) => s.setActiveTarget);
   const currentRequestId = useCodegenStore((s) => s.currentRequestId);
   const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
   const snapshot = useCodegenStore((s) => s.snapshot);
@@ -135,10 +131,7 @@ export function CodePreviewPanel({
   useEffect(() => {
     function handleMessage(e: MessageEvent<CodegenWorkerMessage>) {
       const msg = e.data;
-      if (
-        msg.target !== currentTargetRef.current ||
-        msg.requestId !== currentRequestIdRef.current
-      ) {
+      if (msg.target !== currentTargetRef.current || msg.requestId !== currentRequestIdRef.current) {
         return;
       }
       switch (msg.type) {
@@ -173,16 +166,60 @@ export function CodePreviewPanel({
     };
   }, [markCodePreviewStale, markCodePreviewUnavailable, receiveCodePreviewResult, worker]);
 
+  // 018 Task 0.8 — only kick off codegen once the user has entered the
+  // viewer for a target. When `activeTarget` is undefined the targets
+  // table is shown and there is nothing to generate yet, so skipping the
+  // request avoids a wasted "default zod" generation on every mount.
   useEffect(() => {
+    if (activeTarget === undefined) return;
     requestGeneration(target);
-  }, [requestGeneration, target]);
+  }, [activeTarget, requestGeneration, target]);
 
-  const handleTargetChange = useCallback(
+  const handleViewTarget = useCallback(
     (newTarget: Target) => {
-      setCodePreviewTarget(newTarget);
+      setActiveTarget(newTarget);
+      if (newTarget !== target) {
+        setCodePreviewTarget(newTarget);
+      }
     },
-    [setCodePreviewTarget]
+    [setActiveTarget, setCodePreviewTarget, target]
   );
+
+  // 018 Task 0.12 — which target's Download is in flight, used to swap
+  // its row buttons for a spinner on the targets table while the POST
+  // to /api/codegen is outstanding. Panel-local state because no other
+  // component needs to observe it.
+  const [downloadingTarget, setDownloadingTarget] = useState<Target | undefined>(undefined);
+
+  const handleDownloadTarget = useCallback(
+    async (newTarget: Target) => {
+      if (!files || files.length === 0) {
+        console.warn('[CodePreviewPanel] Download skipped — no workspace files available for target:', newTarget);
+        return;
+      }
+      setDownloadingTarget(newTarget);
+      try {
+        const requestFiles = files.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
+        await downloadTargetViaRouter(requestFiles, newTarget);
+      } catch (err) {
+        if (err instanceof CodegenDownloadError) {
+          console.error(
+            `[CodePreviewPanel] /api/codegen ${err.status} for target ${newTarget}: ${err.message}`,
+            err.diagnostics
+          );
+        } else {
+          console.error('[CodePreviewPanel] Download failed for target', newTarget, err);
+        }
+      } finally {
+        setDownloadingTarget(undefined);
+      }
+    },
+    [files]
+  );
+
+  const handleReturnToTargets = useCallback(() => {
+    setActiveTarget(undefined);
+  }, [setActiveTarget]);
 
   const handleLineClick = useCallback((outputLine: number) => {
     const ref = sourceEditorRefRef.current;
@@ -190,12 +227,13 @@ export function CodePreviewPanel({
     if (!ref || !file) return;
     const entry = file.sourceMap.find((sourceMapEntry) => sourceMapEntry.outputLine === outputLine);
     if (!entry) return;
-    ref.revealPosition(
-      { line: entry.sourceLine, character: entry.sourceChar },
-      uriToPath(entry.sourceUri)
-    );
+    ref.revealPosition({ line: entry.sourceLine, character: entry.sourceChar }, uriToPath(entry.sourceUri));
   }, []);
 
+  // 018 Task 0.8 — `activeTarget` is a dep so the editor mounts on the
+  // first transition from the targets-table view (where the container
+  // ref is absent) to the viewer (where it exists), even when `target`
+  // didn't change because the user clicked View on the current default.
   useEffect(() => {
     if (!editorContainerRef.current) return;
 
@@ -227,7 +265,7 @@ export function CodePreviewPanel({
       view.destroy();
       editorViewRef.current = null;
     };
-  }, [handleLineClick, target]);
+  }, [activeTarget, handleLineClick, target]);
 
   useEffect(() => {
     const view = editorViewRef.current;
@@ -249,10 +287,7 @@ export function CodePreviewPanel({
     const lines = activeFile.content.split('\n');
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i]!.trimStart();
-      if (
-        trimmed.includes(typeName) &&
-        /^(export |const |class |interface |type |function )/.test(trimmed)
-      ) {
+      if (trimmed.includes(typeName) && /^(export |const |class |interface |type |function )/.test(trimmed)) {
         const lineInfo = view.state.doc.line(i + 1);
         view.dispatch({
           effects: EditorView.scrollIntoView(lineInfo.from, { y: 'start', yMargin: 40 })
@@ -262,32 +297,60 @@ export function CodePreviewPanel({
     }
   }, [selectedTargetId, activeFile]);
 
-  const statusMessage =
-    snapshot.status === 'stale' || snapshot.status === 'unavailable' ? snapshot.message : undefined;
-  const selectableFiles =
-    snapshot.status === 'ready' || snapshot.status === 'stale' ? snapshot.files : undefined;
+  const statusMessage = snapshot.status === 'stale' || snapshot.status === 'unavailable' ? snapshot.message : undefined;
+  const selectableFiles = snapshot.status === 'ready' || snapshot.status === 'stale' ? snapshot.files : undefined;
   const activeRelativePath =
-    snapshot.status === 'ready' || snapshot.status === 'stale'
-      ? snapshot.activeRelativePath
-      : undefined;
+    snapshot.status === 'ready' || snapshot.status === 'stale' ? snapshot.activeRelativePath : undefined;
+
+  // 018 Task 0.8 — landing state shows the targets table; the viewer
+  // mounts only after the user clicks View on a row. `inflightTarget`
+  // reflects the in-flight Download POST: 018 Task 0.12 set it via
+  // `downloadingTarget` so the clicked row shows a spinner while
+  // `/api/codegen` is outstanding. No namespace-emitter codegen is
+  // ever in flight here (that path is gated on `activeTarget !==
+  // undefined`), so the spinner is exclusively a Download signal.
+  if (activeTarget === undefined) {
+    return (
+      <section
+        id={CODE_PREVIEW_PANEL_ID}
+        aria-label="Code preview targets"
+        data-testid="panel-codePreview"
+        data-component="workspace.codePreview"
+        className="preview-panel preview-panel--code flex h-full flex-col overflow-hidden"
+      >
+        <CodegenTargetsTable
+          onView={handleViewTarget}
+          onDownload={handleDownloadTarget}
+          inflightTarget={downloadingTarget}
+        />
+      </section>
+    );
+  }
 
   return (
     <section
       id={CODE_PREVIEW_PANEL_ID}
       role="tabpanel"
       aria-label="Code preview"
-      aria-labelledby={`codegen-tab-${target}`}
       data-testid="panel-codePreview"
       data-component="workspace.codePreview"
       className="preview-panel preview-panel--code flex h-full flex-col overflow-hidden"
     >
       <div className="preview-panel__toolbar flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-1.5">
-        <TargetSwitcher value={target} onChange={handleTargetChange} />
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          data-testid="codegen-back-to-targets"
+          onClick={handleReturnToTargets}
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" /> Targets
+        </Button>
+        <span className="text-sm font-medium text-foreground" data-testid="codegen-active-target">
+          {TARGET_LABELS[activeTarget]}
+        </span>
         {selectableFiles && selectableFiles.length > 1 ? (
-          <Select
-            value={activeRelativePath}
-            onValueChange={(value) => setActiveCodePreviewFile(value)}
-          >
+          <Select value={activeRelativePath} onValueChange={(value) => setActiveCodePreviewFile(value)}>
             <SelectTrigger
               size="sm"
               aria-label="Generated file"
@@ -306,11 +369,7 @@ export function CodePreviewPanel({
           </Select>
         ) : null}
         <div className="ml-auto min-w-0 text-right">
-          <span
-            className="block text-xs text-muted-foreground"
-            data-testid="codegen-status"
-            aria-live="polite"
-          >
+          <span className="block text-xs text-muted-foreground" data-testid="codegen-status" aria-live="polite">
             {statusLabel(snapshot, target)}
           </span>
           {activeFile?.relativePath ? (
@@ -323,9 +382,7 @@ export function CodePreviewPanel({
             </span>
           ) : null}
           {statusMessage ? (
-            <span className="block max-w-[22rem] truncate text-[11px] text-muted-foreground">
-              {statusMessage}
-            </span>
+            <span className="block max-w-[22rem] truncate text-[11px] text-muted-foreground">{statusMessage}</span>
           ) : null}
         </div>
       </div>

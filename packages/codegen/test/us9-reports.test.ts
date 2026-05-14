@@ -24,7 +24,7 @@ async function runFixture(fixtureName: string, target: 'typescript'): Promise<st
       `Parse errors in reports/${fixtureName}: ${doc.parseResult.parserErrors.map((e) => e.message).join(', ')}`
     );
   }
-  const outputs = generate(doc, { target });
+  const outputs = await generate(doc, { target });
   if (outputs.length === 0) throw new Error(`No output for reports/${fixtureName}`);
   return outputs[0]!.content;
 }
@@ -32,21 +32,15 @@ async function runFixture(fixtureName: string, target: 'typescript'): Promise<st
 async function assertFixture(fixtureName: string, target: 'typescript'): Promise<void> {
   const ext = '.ts';
   const expectedPath = join(FIXTURES_DIR, fixtureName, 'expected' + ext);
-  const [actual, expected] = await Promise.all([
-    runFixture(fixtureName, target),
-    readFile(expectedPath, 'utf-8')
-  ]);
+  const [actual, expected] = await Promise.all([runFixture(fixtureName, target), readFile(expectedPath, 'utf-8')]);
   expect(actual).toBe(expected);
 }
 
 describe('US9: Report Codegen — TypeScript', () => {
-  it('T073 basic report fixture emits types, rules, and runeReportRules', () =>
-    assertFixture('basic', 'typescript'));
+  it('T073 basic report fixture emits types, rules, and runeReportRules', () => assertFixture('basic', 'typescript'));
   it('T074 runeReportRules contains eligibility entry', async () => {
     const content = await runFixture('basic', 'typescript');
-    expect(content).toContain(
-      "'IsLargeTrade': { kind: 'eligibility' as const, inputType: 'Trade' }"
-    );
+    expect(content).toContain("'IsLargeTrade': { kind: 'eligibility' as const, inputType: 'Trade' }");
   });
   it('T075 runeReportRules contains reporting entry', async () => {
     const content = await runFixture('basic', 'typescript');

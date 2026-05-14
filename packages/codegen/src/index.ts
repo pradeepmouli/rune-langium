@@ -26,8 +26,10 @@
 
 import type { LangiumDocument } from 'langium';
 import type { GeneratorOutput, GeneratorOptions, GeneratePreviewSchemaOptions } from './types.js';
-import { runGenerate } from './generator.js';
+import { runGenerate, IMPLEMENTED_TARGETS } from './generator.js';
 import { generatePreviewSchemas as runGeneratePreviewSchemas } from './preview-schema.js';
+
+export { IMPLEMENTED_TARGETS };
 
 export type {
   FormPreviewKind,
@@ -41,9 +43,23 @@ export type {
   PreviewSourceMapEntry,
   SourceMapEntry,
   Target,
+  TargetDescriptor,
   GeneratedFunc
 } from './types.js';
-export { GeneratorError } from './types.js';
+export { GeneratorError, TARGET_DESCRIPTORS } from './types.js';
+
+// 018 Phase 0 Task 0.2 — whole-model emitter contract + discriminator.
+// Re-exported alongside the existing namespace-emitter types so
+// downstream packages (the studio's codegen worker, future SQL/Excel/
+// Markdown/GraphQL emitter packages) can implement either contract
+// without reaching into the package's internals.
+export type {
+  WholeModelEmitter,
+  WholeModelEmitterConstructor,
+  NamespaceEmitter,
+  NamespaceEmitterConstructor
+} from './emit/namespace-emitter.js';
+export { isWholeModelEmitter } from './emit/namespace-emitter.js';
 
 export type { RuneTypeAlias, Condition, TypeParam } from './types/type-alias.js';
 export type { RuneRule } from './types/rule.js';
@@ -68,13 +84,13 @@ export { RUNTIME_HELPER_JS_SOURCE } from './helpers.js';
  * @example
  * ```ts
  * import { generate } from '@rune-langium/codegen';
- * const outputs = generate(doc, { target: 'zod' });
+ * const outputs = await generate(doc, { target: 'zod' });
  * ```
  */
-export function generate(
+export async function generate(
   documents: LangiumDocument | LangiumDocument[],
   options?: GeneratorOptions
-): GeneratorOutput[] {
+): Promise<GeneratorOutput[]> {
   const docs = Array.isArray(documents) ? documents : [documents];
   return runGenerate(docs, options ?? {});
 }

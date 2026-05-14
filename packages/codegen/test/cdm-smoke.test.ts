@@ -48,10 +48,7 @@ const PKG_DIR = resolve(new URL('.', import.meta.url).pathname, '..');
  * @param tsconfigPath - Path to the tsconfig file to use.
  * @param cwd - Working directory for the tsc invocation.
  */
-export async function runTscNoEmit(
-  tsconfigPath: string,
-  cwd: string
-): Promise<{ exitCode: number; stderr: string }> {
+export async function runTscNoEmit(tsconfigPath: string, cwd: string): Promise<{ exitCode: number; stderr: string }> {
   try {
     await execFileAsync('tsc', ['--project', tsconfigPath, '--noEmit'], { cwd });
     return { exitCode: 0, stderr: '' };
@@ -128,19 +125,12 @@ describe('cdm-smoke: Zod target', () => {
    * with tsc --noEmit (FR-023, SC-002).
    */
   it('generates Zod schemas for US1 fixture documents and tsc --noEmit exits 0 (FR-023)', async () => {
-    const fixtureNames = [
-      'basic-types',
-      'cardinality',
-      'enums',
-      'inheritance',
-      'circular',
-      'reserved-words'
-    ];
+    const fixtureNames = ['basic-types', 'cardinality', 'enums', 'inheritance', 'circular', 'reserved-words'];
 
     const services = createRuneDslServices();
     const docs = await Promise.all(fixtureNames.map((name) => parseFixture(name, services)));
 
-    const outputs = generate(docs, { target: 'zod' });
+    const outputs = await generate(docs, { target: 'zod' });
     expect(outputs.length).toBeGreaterThan(0);
 
     // Write outputs to a temp dir
@@ -203,8 +193,8 @@ describe('cdm-smoke: Zod target', () => {
     );
     await services2.RuneDsl.shared.workspace.DocumentBuilder.build([doc2]);
 
-    const outputs1 = generate(doc1, { target: 'zod' });
-    const outputs2 = generate(doc2, { target: 'zod' });
+    const outputs1 = await generate(doc1, { target: 'zod' });
+    const outputs2 = await generate(doc2, { target: 'zod' });
 
     expect(outputs1.length).toBe(outputs2.length);
     for (let i = 0; i < outputs1.length; i++) {
@@ -218,12 +208,8 @@ describe('cdm-smoke: Zod target', () => {
   it.todo(
     'generates Zod schemas for the full CDM curated schema (SC-002) — pending: CDM fixtures not present at packages/curated-schema/fixtures/cdm/'
   );
-  it.todo(
-    'generated Zod schemas parse valid CDM JSON payloads — pending: CDM fixtures not present'
-  );
-  it.todo(
-    'generated Zod schemas reject invalid CDM JSON payloads — pending: CDM fixtures not present'
-  );
+  it.todo('generated Zod schemas parse valid CDM JSON payloads — pending: CDM fixtures not present');
+  it.todo('generated Zod schemas reject invalid CDM JSON payloads — pending: CDM fixtures not present');
   it.todo(
     'generation completes in < 30s for the full CDM namespace set (SC-006) — pending: CDM fixtures not present at packages/curated-schema/fixtures/cdm/'
   );
@@ -244,19 +230,12 @@ describe('cdm-smoke: json-schema target', () => {
     // (avoids impacting tests that don't need it)
     const { default: Ajv } = await import('ajv/dist/2020.js');
 
-    const fixtureNames = [
-      'basic-types',
-      'cardinality',
-      'enums',
-      'inheritance',
-      'circular',
-      'reserved-words'
-    ];
+    const fixtureNames = ['basic-types', 'cardinality', 'enums', 'inheritance', 'circular', 'reserved-words'];
 
     const services = createRuneDslServices();
     const docs = await Promise.all(fixtureNames.map((name) => parseFixture(name, services)));
 
-    const outputs = generate(docs, { target: 'json-schema' });
+    const outputs = await generate(docs, { target: 'json-schema' });
     expect(outputs.length).toBeGreaterThan(0);
 
     const ajv = new Ajv({ strict: false });
@@ -285,12 +264,8 @@ describe('cdm-smoke: json-schema target', () => {
   it.todo(
     'generates JSON Schema for the full CDM curated schema — pending: CDM fixtures not present at packages/curated-schema/fixtures/cdm/'
   );
-  it.todo(
-    'generated JSON Schema accepts valid CDM JSON payloads (ajv) — pending: CDM fixtures not present'
-  );
-  it.todo(
-    'generated JSON Schema rejects invalid CDM JSON payloads (ajv) — pending: CDM fixtures not present'
-  );
+  it.todo('generated JSON Schema accepts valid CDM JSON payloads (ajv) — pending: CDM fixtures not present');
+  it.todo('generated JSON Schema rejects invalid CDM JSON payloads (ajv) — pending: CDM fixtures not present');
 });
 
 describe('cdm-smoke: typescript target', () => {
@@ -303,19 +278,12 @@ describe('cdm-smoke: typescript target', () => {
    * Also confirms zero `from 'zod'` imports in generated output.
    */
   it('generates TypeScript classes for US1 fixture documents and tsc --noEmit exits 0 (T112, SC-005)', async () => {
-    const fixtureNames = [
-      'basic-types',
-      'cardinality',
-      'enums',
-      'inheritance',
-      'circular',
-      'reserved-words'
-    ];
+    const fixtureNames = ['basic-types', 'cardinality', 'enums', 'inheritance', 'circular', 'reserved-words'];
 
     const services = createRuneDslServices();
     const docs = await Promise.all(fixtureNames.map((name) => parseFixture(name, services)));
 
-    const outputs = generate(docs, { target: 'typescript' });
+    const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThan(0);
 
     // Confirm zero `from 'zod'` imports in all generated files
@@ -378,7 +346,7 @@ describe('cdm-smoke: typescript target', () => {
     const services = createRuneDslServices();
     const docs = await Promise.all(fixtureNames.map((name) => parseFixture(name, services)));
 
-    const outputs = generate(docs, { target: 'typescript' });
+    const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThan(0);
 
     // Every output file must contain the Phase 8b marker
@@ -619,24 +587,22 @@ describe('cdm-smoke: json-battery (T078, FR-024)', () => {
   });
 
   // aggregations: z.superRefine — CountPositive, FirstExists
-  const AggCheckSchema = z
-    .object({ values: z.array(z.number().int()) })
-    .superRefine((data, ctx) => {
-      if (!(runeCount(data.values) > 0)) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'CountPositive: condition failed in AggCheck',
-          path: ['CountPositive']
-        });
-      }
-      if (!runeAttrExists((data.values ?? [])[0])) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'FirstExists: condition failed in AggCheck',
-          path: ['FirstExists']
-        });
-      }
-    });
+  const AggCheckSchema = z.object({ values: z.array(z.number().int()) }).superRefine((data, ctx) => {
+    if (!(runeCount(data.values) > 0)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'CountPositive: condition failed in AggCheck',
+        path: ['CountPositive']
+      });
+    }
+    if (!runeAttrExists((data.values ?? [])[0])) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'FirstExists: condition failed in AggCheck',
+        path: ['FirstExists']
+      });
+    }
+  });
 
   it('aggregations: valid payload passes', () => {
     const r = AggCheckSchema.safeParse({ values: [1, 2, 3] });

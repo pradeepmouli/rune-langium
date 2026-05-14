@@ -55,7 +55,9 @@ function makeWorker() {
 }
 
 afterEach(() => cleanup());
-beforeEach(() => useCodegenStore.setState({ codePreviewTarget: 'zod' }));
+// 018 Task 0.8 — set `activeTarget` so the panel renders the viewer
+// for these existing viewer tests instead of the new landing table.
+beforeEach(() => useCodegenStore.setState({ codePreviewTarget: 'zod', activeTarget: 'zod' }));
 
 describe('CodePreviewPanel — status transitions', () => {
   it('shows "Generating…" on initial mount', () => {
@@ -189,8 +191,7 @@ describe('CodePreviewPanel — status transitions', () => {
   it('ignores stale responses with an older request id for the same target', async () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
-    const currentRequestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })
-      ?.requestId;
+    const currentRequestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
 
     await act(async () => {
       const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
@@ -231,9 +232,7 @@ describe('CodePreviewPanel — status transitions', () => {
 
   it('removes worker listeners on unmount', () => {
     const w = makeWorker();
-    const { unmount } = render(
-      <CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />
-    );
+    const { unmount } = render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
     unmount();
     expect(w.removeEventListener).toHaveBeenCalledWith('message', expect.any(Function));
     expect(w.removeEventListener).toHaveBeenCalledWith('error', expect.any(Function));
