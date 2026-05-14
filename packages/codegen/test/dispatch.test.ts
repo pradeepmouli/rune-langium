@@ -68,7 +68,8 @@ describe('runGenerate dispatch (018 Task 0.4)', () => {
   // target whose emitter is registered, and only those. Phase 1/2/3
   // commits will add to this list as emitters land.
   it('IMPLEMENTED_TARGETS lists exactly the targets with a registered emitter', () => {
-    expect([...IMPLEMENTED_TARGETS].sort()).toEqual(['json-schema', 'typescript', 'zod']);
+    // 019 Phase 1 added 'excel'. Phase 2/3 will add sql, markdown, graphql.
+    expect([...IMPLEMENTED_TARGETS].sort()).toEqual(['excel', 'json-schema', 'typescript', 'zod']);
   });
 
   it('IMPLEMENTED_TARGETS is frozen so callers cannot mutate it', () => {
