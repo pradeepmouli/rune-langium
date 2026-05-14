@@ -79,14 +79,26 @@ import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
 import '../test-api.js';
 import { getRuneStudioTestApi } from '../test-api.js';
 
+type DeferredExportEntry = {
+  filePath: string;
+  namespace: string;
+  exports: Array<{ type: string; name: string }>;
+};
+
+/**
+ * Stable identity used as the default for the optional `deferredExports`
+ * prop. An inline `= []` default creates a fresh array on every render,
+ * which made the workspace-load effect's dependency list change every
+ * render and triggered an unconditional `loadModels` → re-render loop
+ * (Codex P2 review on PR #164). A module-level constant keeps the
+ * reference stable so `useEffect`'s shallow-equality dep check works.
+ */
+const EMPTY_DEFERRED_EXPORTS: ReadonlyArray<DeferredExportEntry> = Object.freeze([]);
+
 export interface EditorPageProps {
   models: RosettaModel[];
   parsedModels?: ParsedWorkspaceModel[];
-  deferredExports?: Array<{
-    filePath: string;
-    namespace: string;
-    exports: Array<{ type: string; name: string }>;
-  }>;
+  deferredExports?: DeferredExportEntry[];
   files: WorkspaceFile[];
   onFilesChange?: (files: WorkspaceFile[]) => void;
   lspClient?: LspClientService;
@@ -198,7 +210,7 @@ function FileTabStrip({
 export function EditorPage({
   models,
   parsedModels,
-  deferredExports = [],
+  deferredExports = EMPTY_DEFERRED_EXPORTS as DeferredExportEntry[],
   files,
   onFilesChange,
   lspClient,
