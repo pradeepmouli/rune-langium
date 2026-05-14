@@ -15,10 +15,7 @@ describe('TargetSwitcher', () => {
   it('marks active tab with aria-selected="true"', () => {
     render(<TargetSwitcher value="zod" onChange={vi.fn()} />);
     expect(screen.getByRole('tab', { name: 'Zod' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'JSON Schema' })).toHaveAttribute(
-      'aria-selected',
-      'false'
-    );
+    expect(screen.getByRole('tab', { name: 'JSON Schema' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('tab', { name: 'TypeScript' })).toHaveAttribute('aria-selected', 'false');
   });
 
@@ -53,16 +50,20 @@ describe('TargetSwitcher', () => {
     expect(screen.getByRole('tab', { name: 'Zod' })).toHaveAttribute('aria-controls', 'code-preview-panel');
   });
 
+  // 018 Task 0.8 — TARGET_OPTIONS is now derived from TARGET_DESCRIPTORS
+  // (7 entries). The last is `graphql`; index 1 is `typescript`. Task 0.9
+  // deletes this whole file, so these patches are just to keep the suite
+  // green until then.
   it('moves to the next tab with ArrowRight and wraps from the last tab', () => {
     const onChange = vi.fn();
-    render(<TargetSwitcher value="typescript" onChange={onChange} />);
+    render(<TargetSwitcher value="graphql" onChange={onChange} />);
     fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
     expect(onChange).toHaveBeenCalledWith('zod');
   });
 
   it('moves to the previous tab with ArrowLeft', () => {
     const onChange = vi.fn();
-    render(<TargetSwitcher value="json-schema" onChange={onChange} />);
+    render(<TargetSwitcher value="typescript" onChange={onChange} />);
     fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' });
     expect(onChange).toHaveBeenCalledWith('zod');
   });

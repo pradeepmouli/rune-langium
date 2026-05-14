@@ -48,7 +48,10 @@ import { useCodegenStore } from '../../src/store/codegen-store.js';
 
 afterEach(() => cleanup());
 beforeEach(() => {
-  useCodegenStore.setState({ codePreviewTarget: 'zod' });
+  // 018 Task 0.8 — `activeTarget` puts the panel in viewer mode so the
+  // source-map navigation tests see the CodeMirror editor instead of
+  // the landing targets table.
+  useCodegenStore.setState({ codePreviewTarget: 'zod', activeTarget: 'zod' });
   capturedHandlers.click = undefined;
 });
 
@@ -79,16 +82,9 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
   it('calls revealLineInCenter and setSelection on mapped line click', async () => {
     const w = makeWorker();
     const sourceEditorRef = { revealPosition: vi.fn() };
-    render(
-      <CodePreviewPanel
-        worker={w as unknown as Worker}
-        sourceEditorRef={sourceEditorRef as never}
-      />
-    );
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={sourceEditorRef as never} />);
     const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
-    const sourceMap = [
-      { outputLine: 2, sourceUri: 'file:///workspace/trade.rune', sourceLine: 5, sourceChar: 3 }
-    ];
+    const sourceMap = [{ outputLine: 2, sourceUri: 'file:///workspace/trade.rune', sourceLine: 5, sourceChar: 3 }];
     await act(async () => {
       getMessageHandler(w)?.({
         data: {
@@ -103,27 +99,16 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
     // Invoke the CodeMirror click handler — posAtCoords returns 2, lineAt(2)
     // returns { number: 3 }, so lineNumber = 3 - 1 = 2, matching outputLine 2.
     await act(async () => {
-      capturedHandlers.click?.(
-        new MouseEvent('click', { clientX: 0, clientY: 0 }),
-        makeFakeView(2)
-      );
+      capturedHandlers.click?.(new MouseEvent('click', { clientX: 0, clientY: 0 }), makeFakeView(2));
     });
 
-    expect(sourceEditorRef.revealPosition).toHaveBeenCalledWith(
-      { line: 5, character: 3 },
-      'trade.rune'
-    );
+    expect(sourceEditorRef.revealPosition).toHaveBeenCalledWith({ line: 5, character: 3 }, 'trade.rune');
   });
 
   it('does nothing when clicking with empty source map', async () => {
     const w = makeWorker();
     const sourceEditorRef = { revealPosition: vi.fn() };
-    render(
-      <CodePreviewPanel
-        worker={w as unknown as Worker}
-        sourceEditorRef={sourceEditorRef as never}
-      />
-    );
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={sourceEditorRef as never} />);
     const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     await act(async () => {
       getMessageHandler(w)?.({
@@ -136,10 +121,7 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
       } as MessageEvent);
     });
     await act(async () => {
-      capturedHandlers.click?.(
-        new MouseEvent('click', { clientX: 0, clientY: 0 }),
-        makeFakeView(0)
-      );
+      capturedHandlers.click?.(new MouseEvent('click', { clientX: 0, clientY: 0 }), makeFakeView(0));
     });
     expect(sourceEditorRef.revealPosition).not.toHaveBeenCalled();
   });
@@ -173,22 +155,14 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
     });
     // Invoking the click handler with a null ref must not throw.
     await act(async () => {
-      capturedHandlers.click?.(
-        new MouseEvent('click', { clientX: 0, clientY: 0 }),
-        makeFakeView(0)
-      );
+      capturedHandlers.click?.(new MouseEvent('click', { clientX: 0, clientY: 0 }), makeFakeView(0));
     });
   });
 
   it('opens the mapped source file when the source map points at a different file', async () => {
     const w = makeWorker();
     const sourceEditorRef = { revealPosition: vi.fn() };
-    render(
-      <CodePreviewPanel
-        worker={w as unknown as Worker}
-        sourceEditorRef={sourceEditorRef as never}
-      />
-    );
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={sourceEditorRef as never} />);
     const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
     await act(async () => {
       getMessageHandler(w)?.({
@@ -215,15 +189,9 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
     });
 
     await act(async () => {
-      capturedHandlers.click?.(
-        new MouseEvent('click', { clientX: 0, clientY: 0 }),
-        makeFakeView(0)
-      );
+      capturedHandlers.click?.(new MouseEvent('click', { clientX: 0, clientY: 0 }), makeFakeView(0));
     });
 
-    expect(sourceEditorRef.revealPosition).toHaveBeenCalledWith(
-      { line: 9, character: 2 },
-      'other-file.rosetta'
-    );
+    expect(sourceEditorRef.revealPosition).toHaveBeenCalledWith({ line: 9, character: 2 }, 'other-file.rosetta');
   });
 });
