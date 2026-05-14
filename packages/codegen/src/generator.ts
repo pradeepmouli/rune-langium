@@ -20,6 +20,7 @@ import type { LanguageProfile } from './emit/language-profile.js';
 import { GenericModelEmitter } from './emit/generic-model-emitter.js';
 import { zodProfile } from './emit/zod-profile.js';
 import { typescriptProfile } from './emit/typescript-profile.js';
+import { jsonSchemaProfile } from './emit/json-schema-profile.js';
 
 // 019 spec §3.2 — two-registry dispatch.
 //
@@ -51,8 +52,8 @@ const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>
 
 const PROFILES: Partial<Record<Target, LanguageProfile<Target>>> = {
   zod: zodProfile,
-  typescript: typescriptProfile
-  // Phase 0.5.4: 'json-schema': jsonSchemaProfile
+  typescript: typescriptProfile,
+  'json-schema': jsonSchemaProfile
 };
 
 /**
