@@ -96,14 +96,50 @@ describe('useCodegenStore', () => {
       files: [{ relativePath: 'alpha.zod.ts', content: 'alpha', sourceMap: [] }]
     });
 
-    useCodegenStore
-      .getState()
-      .markCodePreviewUnavailable({ target: 'zod', message: 'Code generation failed.' });
+    useCodegenStore.getState().markCodePreviewUnavailable({ target: 'zod', message: 'Code generation failed.' });
 
     expect(useCodegenStore.getState().snapshot).toEqual({
       status: 'unavailable',
       target: 'zod',
       message: 'Code generation failed.'
+    });
+  });
+
+  // 018 Phase 0 Task 0.6 — `activeTarget` drives the table-vs-viewer
+  // toggle in `CodePreviewPanel` (Task 0.8). `undefined` = show table;
+  // a target = render the viewer for that target. Independent of
+  // `codePreviewTarget`, which tracks what the worker most recently
+  // generated.
+  describe('activeTarget slice', () => {
+    it('starts undefined so the targets table is shown by default', () => {
+      expect(useCodegenStore.getState().activeTarget).toBeUndefined();
+    });
+
+    it('setActiveTarget switches the viewer to a specific target', () => {
+      useCodegenStore.getState().setActiveTarget('typescript');
+      expect(useCodegenStore.getState().activeTarget).toBe('typescript');
+    });
+
+    it('setActiveTarget(undefined) returns to the targets table', () => {
+      useCodegenStore.getState().setActiveTarget('zod');
+      useCodegenStore.getState().setActiveTarget(undefined);
+      expect(useCodegenStore.getState().activeTarget).toBeUndefined();
+    });
+
+    it('does not touch codePreviewTarget or the snapshot', () => {
+      useCodegenStore.getState().setCodePreviewTarget('typescript');
+      const before = useCodegenStore.getState();
+      useCodegenStore.getState().setActiveTarget('sql');
+      const after = useCodegenStore.getState();
+      expect(after.codePreviewTarget).toBe(before.codePreviewTarget);
+      expect(after.snapshot).toBe(before.snapshot);
+      expect(after.currentRequestId).toBe(before.currentRequestId);
+    });
+
+    it('resetCodegenState clears activeTarget back to undefined', () => {
+      useCodegenStore.getState().setActiveTarget('graphql');
+      useCodegenStore.getState().resetCodegenState();
+      expect(useCodegenStore.getState().activeTarget).toBeUndefined();
     });
   });
 });
