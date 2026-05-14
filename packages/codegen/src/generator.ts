@@ -13,11 +13,16 @@ import { TsNamespaceEmitter } from './emit/ts-emitter.js';
 import { buildNamespaceRegistry } from './emit/namespace-registry.js';
 import { walkNamespace } from './emit/namespace-walker.js';
 
+// 018 Task 0.1: loosened from `Record<Target, ...>` to `Partial<Record<...>>`
+// while Target carries the seven planned identifiers but only three have
+// per-namespace emitters registered. Task 0.4 lands the WholeModelEmitter
+// dispatch path and tightens the typing again — at that point a runtime
+// guard reports an unsupported target rather than a partial-record gap.
 const EMITTER_CLASSES = {
   zod: ZodNamespaceEmitter,
   'json-schema': JsonSchemaNamespaceEmitter,
   typescript: TsNamespaceEmitter
-} satisfies Record<Target, NamespaceEmitterConstructor>;
+} satisfies Partial<Record<Target, NamespaceEmitterConstructor>>;
 
 const EMITTER_CLASS_LOOKUP: Record<string, NamespaceEmitterConstructor | undefined> = EMITTER_CLASSES;
 

@@ -2,10 +2,22 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * The three supported generator targets.
- * FR-019 (json-schema), FR-020 (typescript), FR-002–FR-014 (zod).
+ * Supported generator targets.
+ * - `zod`         — FR-002–FR-014 (US1, per-namespace)
+ * - `json-schema` — FR-019 (per-namespace)
+ * - `typescript`  — FR-020 (per-namespace; includes `func` emission)
+ * - `sql`         — 018 Phase 2 (whole-model DDL emitter)
+ * - `markdown`    — 018 Phase 2 (whole-model docs emitter)
+ * - `excel`       — 018 Phase 1 (whole-model binary emitter, .xlsx)
+ * - `graphql`     — 018 Phase 3 (whole-model SDL emitter)
+ *
+ * Each target dispatches through one of two emitter contracts:
+ *   - NamespaceEmitter (current): one output file per namespace.
+ *   - WholeModelEmitter (018 Task 0.2): one output for the whole model.
+ *
+ * Task 0.4 wires the dispatch.
  */
-export type Target = 'zod' | 'json-schema' | 'typescript';
+export type Target = 'zod' | 'json-schema' | 'typescript' | 'sql' | 'markdown' | 'excel' | 'graphql';
 
 /**
  * Options for a generation run.
@@ -106,16 +118,22 @@ export interface GeneratorOutput {
    * skipped (FR-031).
    */
   funcs: GeneratedFunc[];
+  /**
+   * Optional binary payload (018 Task 0.1). When present, `content` may
+   * be empty and consumers should prefer `binary` for I/O — e.g. the
+   * Excel target emits a single `.xlsx` workbook as raw bytes, not text.
+   */
+  binary?: Uint8Array;
+  /**
+   * Optional MIME type hint for the output (018 Task 0.1). Used by
+   * download UIs and file writers to set Content-Type correctly. The
+   * three text targets ('zod', 'typescript', 'json-schema') omit this
+   * and rely on file-extension inference upstream.
+   */
+  mimeType?: string;
 }
 
-export type PreviewFieldKind =
-  | 'string'
-  | 'number'
-  | 'boolean'
-  | 'enum'
-  | 'object'
-  | 'array'
-  | 'unknown';
+export type PreviewFieldKind = 'string' | 'number' | 'boolean' | 'enum' | 'object' | 'array' | 'unknown';
 
 export interface PreviewFieldBase {
   path: string;
