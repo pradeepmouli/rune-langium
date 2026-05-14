@@ -36,6 +36,13 @@ import type { PreviewWorkerRequest } from '../services/codegen-service.js';
 interface FileEntry {
   uri: string;
   content: string;
+  /**
+   * Pre-serialized Langium AST for curated bundle files. When present,
+   * `buildDocuments` deserializes this directly instead of parsing
+   * `content` (which is empty for curated refOnly entries). 019
+   * Task #88 follow-up.
+   */
+  serializedModelJson?: string;
 }
 
 interface SetFilesMessage {
@@ -181,22 +188,58 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
     return [];
   }
 
-  const documents: LangiumDocument[] = currentPreviewFiles.map(({ uri, content }) =>
+  // 019 Task #88 follow-up: split into user files (parse path) and
+  // curated files (deserialize path). Curated entries arrive with
+  // `serializedModelJson` set (the pre-parsed Langium AST) and
+  // `content === ''` — parsing an empty string would produce a parse
+  // error and the doc would be filtered out, leaving form preview
+  // unable to find curated types. Hydrate them via the serializer
+  // instead.
+  const userEntries = currentPreviewFiles.filter((e) => !e.serializedModelJson);
+  const curatedEntries = currentPreviewFiles.filter((e) => Boolean(e.serializedModelJson));
+
+  const userDocuments: LangiumDocument[] = userEntries.map(({ uri, content }) =>
     factory.fromString(content, URI.parse(uri))
   );
+  if (userDocuments.length > 0) {
+    await builder.build(userDocuments, { validation: false, eagerLinking: false });
+  }
 
-  await builder.build(documents, { validation: false, eagerLinking: false });
+  // Curated docs come pre-linked from the curated-mirror build (CI runs
+  // Langium with a higher heap budget than the browser can spare). Build
+  // here would try to re-link and fail because the live Langium service
+  // hasn't indexed cross-references.
+  const curatedDocuments: LangiumDocument[] = [];
+  for (const entry of curatedEntries) {
+    try {
+      const model = RuneDsl.serializer.JsonSerializer.deserialize(
+        entry.serializedModelJson!
+      ) as unknown as import('@rune-langium/core').RosettaModel;
+      curatedDocuments.push({
+        uri: URI.parse(entry.uri),
+        parseResult: {
+          value: model,
+          parserErrors: [],
+          lexerErrors: []
+        }
+      } as unknown as LangiumDocument);
+    } catch (err) {
+      console.warn(`[codegen-worker] Failed to deserialize curated AST for ${entry.uri}; excluded from preview.`, err);
+    }
+  }
 
-  // Filter out files with parse/lex errors rather than aborting entirely.
-  // Corpus files may contain constructs the parser doesn't fully support;
-  // excluding them keeps the namespace index intact for the remaining files.
-  const valid = documents.filter((d) => !hasDocumentErrors(d));
-  if (valid.length < documents.length) {
+  // Filter out user files with parse/lex errors. Corpus files may
+  // contain constructs the parser doesn't fully support; excluding them
+  // keeps the namespace index intact for the remaining files.
+  const validUserDocuments = userDocuments.filter((d) => !hasDocumentErrors(d));
+  if (validUserDocuments.length < userDocuments.length) {
     console.warn(
-      `[codegen-worker] ${documents.length - valid.length} file(s) had parse errors and were excluded from preview.`
+      `[codegen-worker] ${
+        userDocuments.length - validUserDocuments.length
+      } user file(s) had parse errors and were excluded from preview.`
     );
   }
-  return valid;
+  return [...validUserDocuments, ...curatedDocuments];
 }
 
 async function runPreview(targetId: string, requestId: string): Promise<void> {

@@ -612,9 +612,16 @@ export function EditorPage({
   useEffect(() => {
     if (!codegenWorker) return;
     const codegenFiles = files.filter((f) => !f.readOnly).map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+    // 019 Task #88 follow-up: thread `serializedModelJson` through to
+    // the preview worker so curated bundle files (which ship pre-parsed
+    // ASTs and an empty `content`) can be hydrated and previewed.
     const allFiles = files
       .filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX))
-      .map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+      .map((f) => ({
+        uri: pathToUri(f.path),
+        content: f.content,
+        ...(f.serializedModelJson ? { serializedModelJson: f.serializedModelJson } : {})
+      }));
     const previewRequestId = `preview:files:${++previewRequestSequenceRef.current}`;
     const codegenRequestId = `codegen:files:${++codegenRequestSequenceRef.current}`;
     currentPreviewRequestIdRef.current = previewRequestId;
