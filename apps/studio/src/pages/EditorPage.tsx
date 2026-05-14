@@ -491,19 +491,11 @@ export function EditorPage({
         void linkDocument(filePath).then((result) => {
           if (result.newModels.length > 0) {
             corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
-            const editorStore = useEditorStore.getState();
-            editorStore.loadModels([...models, ...corpusModelsRef.current] as unknown[]);
-            // `loadModels` replaces the entire graph nodes array with what
-            // astToModel produces from the passed models. Curated namespaces
-            // that were rendered from deferredExports placeholder stubs
-            // (loadDeferredExports) are NOT in this list — only the user
-            // models + materialized corpus models that linkDocument
-            // deserialized are. Re-running loadDeferredExports merges the
-            // placeholders back in so the namespace explorer doesn't lose
-            // un-linked curated namespaces every time the user clicks a node.
-            if (deferredExports.length > 0) {
-              editorStore.loadDeferredExports(deferredExports);
-            }
+            // loadModels now re-merges the deferred-export placeholder nodes
+            // automatically from store state — no need to call
+            // loadDeferredExports after this. The store-owned deferredExports
+            // state was populated when /api/parse responded.
+            useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
           }
         });
       }, 150);

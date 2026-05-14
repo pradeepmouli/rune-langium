@@ -74,6 +74,15 @@ export interface EditorState {
   // --- Graph state ---
   nodes: TypeGraphNode[];
   edges: TypeGraphEdge[];
+  /**
+   * Curated-bundle deferred-export entries, stored on the store so
+   * `loadModels` can re-merge their placeholder graph nodes after
+   * replacing `nodes` with new RosettaModel-derived nodes. Without this
+   * state, every `loadModels` call (e.g. from EditorPage's linkDocument
+   * callback) would silently lose the curated namespaces that
+   * `loadDeferredExports` previously created.
+   */
+  deferredExports: DeferredExportEntry[];
 
   // --- UI state ---
   selectedNodeId: string | null;
@@ -424,6 +433,7 @@ const ALL_EDGE_KINDS = new Set<EdgeKind>([
 const initialState: EditorState = {
   nodes: [],
   edges: [],
+  deferredExports: [],
   selectedNodeId: null,
   searchQuery: '',
   searchResults: [],
@@ -494,19 +504,51 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const filters = get().activeFilters;
           const { nodes: rawNodes, edges } = astToModel(models, { filters });
 
+          // Merge deferred-export placeholder nodes for curated namespaces
+          // that haven't been materialized yet. This is the atomic version
+          // of "loadModels then loadDeferredExports" — keeps the API
+          // single-call so callers can't forget the merge step. Existing
+          // ids win (placeholders don't duplicate a now-materialized node).
+          const deferredExports = get().deferredExports;
+          const existingIds = new Set(rawNodes.map((n) => n.id));
+          const mergedNodes: TypeGraphNode[] = [...rawNodes];
+          for (const entry of deferredExports) {
+            for (const exp of entry.exports) {
+              if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
+              const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
+              const nodeId = `${entry.namespace}::${exp.name}`;
+              if (existingIds.has(nodeId)) continue;
+              existingIds.add(nodeId);
+              mergedNodes.push({
+                id: nodeId,
+                type: nodeType,
+                position: { x: 0, y: 0 },
+                data: {
+                  $type: exp.type,
+                  name: exp.name,
+                  namespace: entry.namespace,
+                  position: { x: 0, y: 0 },
+                  errors: [],
+                  isReadOnly: true,
+                  hasExternalRefs: false
+                } as unknown as AnyGraphNode
+              });
+            }
+          }
+
           // Determine initial visibility based on model size
-          const allNamespaces = new Set(rawNodes.map((n) => n.data.namespace));
-          const shouldCollapse = rawNodes.length > LARGE_MODEL_THRESHOLD;
+          const allNamespaces = new Set(mergedNodes.map((n) => n.data.namespace));
+          const shouldCollapse = mergedNodes.length > LARGE_MODEL_THRESHOLD;
 
           const expandedNamespaces = shouldCollapse ? new Set<string>() : new Set(allNamespaces);
 
           // Only layout visible nodes
-          const visibleNodes = shouldCollapse ? [] : rawNodes;
+          const visibleNodes = shouldCollapse ? [] : mergedNodes;
           const visibleEdges = shouldCollapse ? [] : edges;
           const _nodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : [];
 
           set({
-            nodes: rawNodes,
+            nodes: mergedNodes,
             edges,
             layoutOptions: opts,
             selectedNodeId: null,
@@ -523,7 +565,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         loadDeferredExports(entries) {
-          if (entries.length === 0) return;
+          // Store entries on the editor state so subsequent loadModels
+          // calls can re-merge them automatically. Without this, every
+          // loadModels that replaces `nodes` would lose the curated
+          // placeholder nodes added here.
           const existing = get().nodes;
           const existingIds = new Set(existing.map((n) => n.id));
           const newNodes: TypeGraphNode[] = [];
@@ -536,6 +581,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
               const nodeId = `${entry.namespace}::${exp.name}`;
               if (existingIds.has(nodeId)) continue;
+              existingIds.add(nodeId);
               newNodes.push({
                 id: nodeId,
                 type: nodeType,
@@ -553,20 +599,22 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             }
           }
 
-          if (newNodes.length > 0) {
-            const allNodes = [...existing, ...newNodes];
-            const allNamespaces = new Set(allNodes.map((n) => n.data.namespace));
-            const shouldCollapse = allNodes.length > LARGE_MODEL_THRESHOLD;
-            set((state) => ({
-              nodes: allNodes,
-              visibility: {
-                ...state.visibility,
-                expandedNamespaces: shouldCollapse
-                  ? state.visibility.expandedNamespaces
-                  : new Set([...state.visibility.expandedNamespaces, ...allNamespaces])
-              }
-            }));
-          }
+          const allNodes = newNodes.length > 0 ? [...existing, ...newNodes] : existing;
+          const allNamespaces = new Set(allNodes.map((n) => n.data.namespace));
+          const shouldCollapse = allNodes.length > LARGE_MODEL_THRESHOLD;
+          set((state) => ({
+            // Always stash the entries — even when newNodes is empty, the
+            // entries are still needed so a subsequent loadModels can
+            // re-derive placeholders after replacing nodes.
+            deferredExports: entries,
+            nodes: allNodes,
+            visibility: {
+              ...state.visibility,
+              expandedNamespaces: shouldCollapse
+                ? state.visibility.expandedNamespaces
+                : new Set([...state.visibility.expandedNamespaces, ...allNamespaces])
+            }
+          }));
         },
 
         // -----------------------------------------------------------------------
