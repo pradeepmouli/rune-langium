@@ -276,3 +276,67 @@ describe('EditorStore', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Zundo undo coverage for the new Structure View Phase 0 actions.
+// Both `renameAttribute` and `updateAttributeType` mutate via `set(...)`,
+// so zundo's temporal middleware should capture them. The `partialize`
+// at history.ts:28 tracks `nodes` + `edges` — exactly the slices these
+// actions touch.
+// ---------------------------------------------------------------------------
+
+describe('editor-store undo for Structure View Phase 0 actions', () => {
+  it('undoes renameAttribute back to the original attribute name', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(id, 'tradeDate', 'date', '0..1');
+
+    store.getState().renameAttribute(id, 'tradeDate', 'executionDate');
+    expect(
+      ((store.getState().nodes.find((n) => n.id === id)!.data as any).attributes as Array<{ name: string }>)[0].name
+    ).toBe('executionDate');
+
+    store.temporal.getState().undo();
+
+    expect(
+      ((store.getState().nodes.find((n) => n.id === id)!.data as any).attributes as Array<{ name: string }>)[0].name
+    ).toBe('tradeDate');
+  });
+
+  it('undoes updateAttributeType back to the original type ref', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(id, 'economics', 'OldType', '0..*');
+
+    store.getState().updateAttributeType(id, 'economics', 'Economics');
+    expect(
+      ((store.getState().nodes.find((n) => n.id === id)!.data as any).attributes as Array<any>)[0].typeCall.type
+        .$refText
+    ).toBe('Economics');
+
+    store.temporal.getState().undo();
+
+    expect(
+      ((store.getState().nodes.find((n) => n.id === id)!.data as any).attributes as Array<any>)[0].typeCall.type
+        .$refText
+    ).toBe('OldType');
+  });
+
+  it('undoes the attribute-ref edge rewrite that accompanies renameAttribute', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().createType('data', 'Economics', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'economics', 'Economics', '0..*');
+
+    store.getState().renameAttribute(tradeId, 'economics', 'econ');
+    expect(
+      store.getState().edges.find((e) => e.source === tradeId && e.data?.kind === 'attribute-ref')?.data?.label
+    ).toBe('econ');
+
+    store.temporal.getState().undo();
+
+    expect(
+      store.getState().edges.find((e) => e.source === tradeId && e.data?.kind === 'attribute-ref')?.data?.label
+    ).toBe('economics');
+  });
+});

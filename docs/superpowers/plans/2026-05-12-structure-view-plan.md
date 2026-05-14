@@ -55,8 +55,7 @@
 | `apps/studio/src/shell/panels/VisualPreviewPanel.tsx` | Replace stub with Radix Tabs: Graph (existing) + Structure (new) |
 | `apps/studio/src/components/SourceEditor.tsx` | Add CodeMirror `EditorView.domEventHandlers({drop, dragover})` extension that inserts qualified type name at drop position |
 | `packages/visual-editor/src/styles.css` | Universal visual tightening (gradient/radial/shadow/radius/padding/font; keep 3px accent; type chip + cardinality pill cell styling) |
-| `packages/visual-editor/package.json` | Add `idb-keyval` to dependencies |
-| `apps/studio/package.json` | Add `idb-keyval` to dependencies |
+| `apps/studio/src/workspace/persistence.ts` | Add optional `structureView` slot to `WorkspaceRecord`; bump `DB_VERSION`; export `loadStructureViewState` / `saveStructureViewState` helpers |
 
 ---
 
@@ -451,32 +450,119 @@ git add packages/visual-editor/src/types/structure-view.ts
 git commit -m "feat(visual-editor): add Structure View shared types"
 ```
 
-## Task 1.2: Add `idb-keyval` dependency
+## Task 1.2: Extend `WorkspaceRecord` with `structureView` slot + persistence helpers
+
+> **Reuses the existing IDB layer** (`apps/studio/src/workspace/persistence.ts`) rather than introducing `idb-keyval`. Per-workspace expansion state rides on the same connection that already holds workspace records, tabs, dockview layout, and curated bindings.
 
 **Files:**
-- Modify: `apps/studio/package.json`
-- Modify: `packages/visual-editor/package.json`
+- Modify: `apps/studio/src/workspace/persistence.ts`
+- Test: `apps/studio/test/workspace/structure-view-persistence.test.ts` (new)
 
-- [ ] **Step 1: Add the dep to both packages**
+- [ ] **Step 1: Write failing tests**
 
-```bash
-pnpm --filter @rune-langium/studio add idb-keyval
-pnpm --filter @rune-langium/visual-editor add idb-keyval
+Create `apps/studio/test/workspace/structure-view-persistence.test.ts`:
+
+```ts
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
+import { describe, it, expect, beforeEach } from 'vitest';
+import 'fake-indexeddb/auto';
+import {
+  _resetForTests,
+  saveWorkspace,
+  loadStructureViewState,
+  saveStructureViewState,
+} from '../../src/workspace/persistence.js';
+import type { WorkspaceRecord } from '../../src/workspace/persistence.js';
+
+const FRESH_WS: WorkspaceRecord = {
+  id: 'ws-1',
+  name: 'ws-1',
+  kind: 'browser-only',
+  createdAt: '2026-05-14T00:00:00Z',
+  lastOpenedAt: '2026-05-14T00:00:00Z',
+  layout: { version: 1, writtenBy: 'test', dockview: null },
+  tabs: [],
+  activeTabPath: null,
+  curatedModels: [],
+  schemaVersion: 2,
+};
+
+describe('structure-view persistence', () => {
+  beforeEach(async () => {
+    await _resetForTests();
+  });
+
+  it('returns an empty map for a workspace with no structureView slot', async () => {
+    await saveWorkspace(FRESH_WS);
+    const state = await loadStructureViewState('ws-1');
+    expect(state).toEqual({});
+  });
+
+  it('round-trips an expansion map', async () => {
+    await saveWorkspace(FRESH_WS);
+    await saveStructureViewState('ws-1', { 'cdm.trade::Trade::economics': true });
+    const state = await loadStructureViewState('ws-1');
+    expect(state).toEqual({ 'cdm.trade::Trade::economics': true });
+  });
+
+  it('returns an empty map for an unknown workspace id', async () => {
+    const state = await loadStructureViewState('does-not-exist');
+    expect(state).toEqual({});
+  });
+});
 ```
 
-- [ ] **Step 2: Confirm the lockfile updated and pnpm resolved cleanly**
+- [ ] **Step 2: Run and confirm it fails**
 
 ```bash
-pnpm install
+pnpm --filter @rune-langium/studio test -- structure-view-persistence
 ```
 
-Expected: no errors.
+Expected: FAIL — helpers not exported.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Implement**
+
+In `apps/studio/src/workspace/persistence.ts`:
+
+1. Add the new field to `BaseWorkspaceFields`:
+   ```ts
+   structureView?: { expansionMap: Record<string, boolean> };
+   ```
+2. Bump `DB_VERSION` from `1` → `2`. Add a no-op upgrade branch — the field is optional so existing records remain valid; nothing structural changes in the IDB schema itself.
+3. Append:
+   ```ts
+   export async function loadStructureViewState(
+     workspaceId: string
+   ): Promise<Record<string, boolean>> {
+     const ws = await loadWorkspace(workspaceId);
+     return ws?.structureView?.expansionMap ?? {};
+   }
+
+   export async function saveStructureViewState(
+     workspaceId: string,
+     expansionMap: Record<string, boolean>
+   ): Promise<void> {
+     const ws = await loadWorkspace(workspaceId);
+     if (!ws) return; // workspace gone — drop the write silently
+     await saveWorkspace({ ...ws, structureView: { expansionMap } });
+   }
+   ```
+
+- [ ] **Step 4: Run the tests and confirm they pass**
 
 ```bash
-git add apps/studio/package.json packages/visual-editor/package.json pnpm-lock.yaml
-git commit -m "chore: add idb-keyval for Structure View expansion persistence"
+pnpm --filter @rune-langium/studio test -- structure-view-persistence
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/studio/src/workspace/persistence.ts apps/studio/test/workspace/structure-view-persistence.test.ts
+git commit -m "feat(studio): add structureView slot + helpers to workspace persistence"
 ```
 
 ## Task 1.3: Create `useStructureViewStore` with `expansionMap` — failing test
@@ -571,23 +657,32 @@ Create `apps/studio/src/store/structure-view-store.ts`:
 /**
  * Structure View local state: per-attribute expansion + active drag source.
  *
- * Expansion state persists to IndexedDB via idb-keyval so it survives reloads.
- * Drag-source state is purely in-memory (cleared on session end).
+ * Expansion state persists to IndexedDB via the existing workspace-persistence
+ * layer (per-workspace `structureView` slot on `WorkspaceRecord`). Drag-source
+ * state is purely in-memory (cleared on session end).
+ *
+ * The active workspace id is supplied externally via `setWorkspaceId(id)`;
+ * callers should invoke that whenever the workspace switches so persistence
+ * is keyed correctly. Until a workspace id is set, persistence is a no-op
+ * (we keep the in-memory map but don't write through).
  */
 
 import { create } from 'zustand';
-import { get as idbGet, set as idbSet } from 'idb-keyval';
+import {
+  loadStructureViewState,
+  saveStructureViewState,
+} from '../workspace/persistence.js';
 import {
   type StructureExpansionKey,
   type TypeRefPayload,
   expansionKey,
 } from '@rune-langium/visual-editor';
 
-const IDB_KEY = 'rune-studio.structure-view.expansionMap';
-
 interface StructureViewState {
+  workspaceId: string | undefined;
   expansionMap: Map<string, boolean>;
   dragSource: TypeRefPayload | undefined;
+  setWorkspaceId: (id: string | undefined) => Promise<void>;
   isExpanded: (key: StructureExpansionKey) => boolean;
   toggleExpansion: (key: StructureExpansionKey) => void;
   collapseAll: (namespaceUri: string) => void;
@@ -597,27 +692,31 @@ interface StructureViewState {
 }
 
 export const useStructureViewStore = create<StructureViewState>((set, get) => {
-  // Hydrate from IDB on first construction. We don't block on this — initial
-  // reads see an empty map; once hydration completes, subscribers re-render.
-  idbGet<Array<[string, boolean]>>(IDB_KEY)
-    .then((entries) => {
-      if (entries && entries.length > 0) {
-        set({ expansionMap: new Map(entries) });
-      }
-    })
-    .catch(() => {
-      // IDB unavailable (private mode, tests). Continue with empty map.
-    });
-
-  const persist = (m: Map<string, boolean>) => {
-    idbSet(IDB_KEY, Array.from(m.entries())).catch(() => {
-      /* ignore */
+  const persist = (map: Map<string, boolean>) => {
+    const id = get().workspaceId;
+    if (!id) return;
+    const obj: Record<string, boolean> = {};
+    for (const [k, v] of map) obj[k] = v;
+    saveStructureViewState(id, obj).catch(() => {
+      /* IDB unavailable (private mode, tests) — silently skip */
     });
   };
 
   return {
+    workspaceId: undefined,
     expansionMap: new Map(),
     dragSource: undefined,
+
+    async setWorkspaceId(id) {
+      set({ workspaceId: id, expansionMap: new Map() });
+      if (!id) return;
+      try {
+        const persisted = await loadStructureViewState(id);
+        set({ expansionMap: new Map(Object.entries(persisted)) });
+      } catch {
+        // Persistence unavailable; stay with empty map.
+      }
+    },
 
     isExpanded(key) {
       return get().expansionMap.get(expansionKey(key)) === true;
