@@ -13,6 +13,25 @@ import type { GeneratorOptions, GeneratorOutput } from '../types.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import type { NamespaceWalkResult } from './namespace-walker.js';
 
+/**
+ * Options passed to a `NamespaceEmitter` constructor.
+ *
+ * Extends `GeneratorOptions` with one Phase-0.5 knob: `suppressBoilerplate`.
+ * When true, the emitter must NOT inline shared runtime helpers (e.g.,
+ * Zod's `runeCheckOneOf`, `runeCount`, `runeAttrExists`) in each per-
+ * namespace output — the wrapping `GenericModelEmitter` emits them once
+ * via the Profile's runtime sidecar instead. Default false; today's
+ * behavior is preserved when this flag is unset.
+ *
+ * Emitters that have no runtime helpers (TypeScript, JSON Schema) may
+ * ignore the flag — accepting it is enough to satisfy the contract.
+ *
+ * 019 spec §3.2.
+ */
+export interface NamespaceEmitterOptions extends GeneratorOptions {
+  suppressBoilerplate?: boolean;
+}
+
 export interface NamespaceEmitter {
   emitHeader?(): void;
   emitCrossNamespaceImports?(): void;
@@ -30,7 +49,7 @@ export interface NamespaceEmitter {
 }
 
 export interface NamespaceEmitterConstructor {
-  new (model: NamespaceWalkResult, options: GeneratorOptions, registry: NamespaceRegistry): NamespaceEmitter;
+  new (model: NamespaceWalkResult, options: NamespaceEmitterOptions, registry: NamespaceRegistry): NamespaceEmitter;
 }
 
 /**
@@ -90,7 +109,7 @@ function sortedNames(map: ReadonlyMap<string, unknown>): string[] {
 
 export function emitNamespaceWithContract(
   model: NamespaceWalkResult,
-  options: GeneratorOptions,
+  options: NamespaceEmitterOptions,
   registry: NamespaceRegistry,
   Emitter: NamespaceEmitterConstructor
 ): GeneratorOutput {
