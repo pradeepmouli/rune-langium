@@ -107,16 +107,18 @@ The existing node styling (`packages/visual-editor/src/styles.css`) is loaded wi
 
 These cell-level improvements (type chip, cardinality pill, hexagon-plus expander) inherit to the graph view as well — there is no `data-variant` gating on cell styling.
 
-## 5. Edit semantics — route through Inspector
+## 5. Edit semantics — route through `editor-store`
 
-Every inline edit on the Structure View canvas dispatches the same `inspectorStore` action the Inspector form would have dispatched:
+Every inline edit on the Structure View canvas dispatches an action on `packages/visual-editor/src/store/editor-store.ts` — the same store a future Inspector form will dispatch through (the Inspector form panel is currently a stub; it will land separately and inherit this same pipeline):
 
 | Surface | Action |
 |---|---|
-| NameCell blur | `inspectorStore.actions.updateName` |
-| TypePickerCell select / drop | `inspectorStore.actions.updateType` |
-| CardinalityCell commit | `inspectorStore.actions.updateCardinality` |
-| InheritanceCell commit | `inspectorStore.actions.updateExtends` |
+| NameCell blur | `editor-store.renameAttribute` |
+| TypePickerCell select / drop | `editor-store.updateAttributeType` |
+| CardinalityCell commit | `editor-store.updateCardinality` |
+| InheritanceCell commit | `editor-store.setInheritance` |
+
+`renameAttribute` and `updateAttributeType` are new granular actions added in Phase 0; the other two already exist on `editor-store` today.
 
 All actions:
 
@@ -135,7 +137,7 @@ Full structural editing is in scope:
 - **Inline value edits** — rename, retype, re-cardinality, re-extend.
 - **Add / remove / reorder attribute rows** — via UI controls on the row and in the type header (e.g., context menu, `+` / `−` buttons in the header gutter). Not via drag-reparent gestures in v1 (see §10).
 
-All structural ops use the same dispatch model — they route through `inspectorStore` actions. Any action that does not yet exist (e.g., `addAttribute`, `removeAttribute`, `moveAttribute`) is added once to the Inspector pipeline; both surfaces (Inspector form and Structure View) inherit the new capability.
+All structural ops use the same dispatch model — they route through `editor-store` actions. Any action that does not yet exist (e.g., `addAttribute`, `removeAttribute`, `moveAttribute`) is added once to `editor-store`; both surfaces (the future Inspector form and Structure View) inherit the new capability.
 
 ### 5.2 Expansion state
 
@@ -146,7 +148,7 @@ useStudioStore.structureView.expansionMap: Map<string, boolean>
 // key: `${namespaceUri}::${typeId}::${attrName}`
 ```
 
-Persisted to IndexedDB via studio's existing workspace-metadata layer; cleared on workspace switch; preserved across page reloads of the same workspace. A toolbar "Collapse all" action resets the map for the current namespace.
+Persisted to IndexedDB via studio's existing workspace-metadata layer (`apps/studio/src/workspace/persistence.ts` — the same `idb`-backed store that holds workspace records, tabs, and dockview layout). Expansion state lives as a new optional `structureView` field on `WorkspaceRecord`, so it travels with workspace switches automatically. No new IndexedDB connection or extra dependency. A toolbar "Collapse all" action resets the map for the current namespace.
 
 **Default: fully collapsed.** Only the focused type's rows are visible on first render. Every expandable row shows a hexagon-plus; nothing expands automatically.
 
@@ -186,8 +188,8 @@ useTypeRefDrop({
 
 | Surface | `onDrop` action |
 |---|---|
-| Structure View row (`DataNode` 2-column body) | `inspectorStore.actions.updateType(row.attrId, payload)` |
-| Inspector TypeSelectorField | `inspectorStore.actions.updateType(field.attrId, payload)` |
+| Structure View row (`DataNode` 2-column body) | `editor-store.updateAttributeType(row.nodeId, row.attrName, payload)` |
+| Inspector TypeSelectorField | **Deferred to a follow-up** — the Inspector form is a stub today; `useTypeRefDrop` is built and ready for this surface when the Inspector form lands. |
 | Source editor (CodeMirror 6) | Insert qualified name (`<namespace>.<typeId>`) at `EditorView.posAtCoords(event)` via a transaction |
 
 **Source-editor caveat (v1):** No auto-import. If the dropped type is in another namespace and not yet imported, the LSP surfaces an unresolved-reference diagnostic; the existing LSP quick-fix resolves it. Auto-import logic is deferred to v2.
