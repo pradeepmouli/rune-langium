@@ -41,9 +41,23 @@ export type {
   PreviewSourceMapEntry,
   SourceMapEntry,
   Target,
+  TargetDescriptor,
   GeneratedFunc
 } from './types.js';
-export { GeneratorError } from './types.js';
+export { GeneratorError, TARGET_DESCRIPTORS } from './types.js';
+
+// 018 Phase 0 Task 0.2 — whole-model emitter contract + discriminator.
+// Re-exported alongside the existing namespace-emitter types so
+// downstream packages (the studio's codegen worker, future SQL/Excel/
+// Markdown/GraphQL emitter packages) can implement either contract
+// without reaching into the package's internals.
+export type {
+  WholeModelEmitter,
+  WholeModelEmitterConstructor,
+  NamespaceEmitter,
+  NamespaceEmitterConstructor
+} from './emit/namespace-emitter.js';
+export { isWholeModelEmitter } from './emit/namespace-emitter.js';
 
 export type { RuneTypeAlias, Condition, TypeParam } from './types/type-alias.js';
 export type { RuneRule } from './types/rule.js';

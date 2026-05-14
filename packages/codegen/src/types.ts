@@ -208,6 +208,89 @@ export interface GeneratePreviewSchemaOptions {
 }
 
 /**
+ * Static descriptor for a generator target. Single source of truth used
+ * by UI surfaces (the studio targets table — 018 Task 0.7) to render
+ * labels + decide between Preview / Download affordances. The runtime
+ * `contract` mirrors which emitter interface the target implements
+ * (`NamespaceEmitter` vs `WholeModelEmitter` — see Task 0.2).
+ *
+ * @see TARGET_DESCRIPTORS for the registry of all seven targets.
+ */
+export type TargetDescriptor = {
+  /** Human-facing name (rendered in the studio targets table). */
+  label: string;
+  /** Which emitter contract this target implements. */
+  contract: 'namespace' | 'whole-model';
+  /** Short description for UI tooltips and downloads. */
+  desc: string;
+  /** File extension applied by `getTargetRelativePath`. */
+  extension: string;
+  /**
+   * Optional MIME type. Required for whole-model binary targets where
+   * file-extension inference isn't enough; omitted for text targets
+   * (consumers fall back to extension-based detection).
+   */
+  mimeType?: string;
+};
+
+/**
+ * Registry of all generator targets. The studio reads this to render
+ * the targets table; `runGenerate` reads it to pick the dispatch path.
+ * Keep in sync with the {@link Target} union — TS exhaustiveness check
+ * on `Record<Target, ...>` enforces this at compile time.
+ *
+ * 018 Phase 0 Task 0.3. Phases 1-3 add the missing emitter
+ * implementations; this registry is the contract those phases land
+ * against.
+ */
+export const TARGET_DESCRIPTORS: Record<Target, TargetDescriptor> = {
+  zod: {
+    label: 'Zod',
+    contract: 'namespace',
+    desc: 'Runtime validation schemas',
+    extension: '.zod.ts'
+  },
+  typescript: {
+    label: 'TypeScript',
+    contract: 'namespace',
+    desc: 'Type-only interfaces',
+    extension: '.ts'
+  },
+  'json-schema': {
+    label: 'JSON Schema',
+    contract: 'namespace',
+    desc: 'Draft 2020-12 schema documents',
+    extension: '.schema.json'
+  },
+  sql: {
+    label: 'SQL',
+    contract: 'namespace',
+    desc: 'DDL (Postgres / SQL Server)',
+    extension: '.sql'
+  },
+  markdown: {
+    label: 'Markdown',
+    contract: 'namespace',
+    desc: 'Reference documentation',
+    extension: '.md'
+  },
+  excel: {
+    label: 'Excel',
+    contract: 'whole-model',
+    desc: 'Data dictionary workbook',
+    extension: '.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  },
+  graphql: {
+    label: 'GraphQL SDL',
+    contract: 'whole-model',
+    desc: 'Schema definition language',
+    extension: '.graphql',
+    mimeType: 'application/graphql'
+  }
+};
+
+/**
  * Thrown when strict mode is enabled and any error diagnostic is produced.
  * FR-022.
  */
