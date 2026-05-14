@@ -15,7 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generate, IMPLEMENTED_TARGETS } from '../src/index.js';
+import { generate, GeneratorError, IMPLEMENTED_TARGETS } from '../src/index.js';
 
 const RUNE_SOURCE = `namespace cdm.base.math
 
@@ -73,5 +73,14 @@ describe('runGenerate dispatch (018 Task 0.4)', () => {
 
   it('IMPLEMENTED_TARGETS is frozen so callers cannot mutate it', () => {
     expect(Object.isFrozen(IMPLEMENTED_TARGETS)).toBe(true);
+  });
+
+  // Codex review on PR #165 — the not-implemented short-circuit used to
+  // return early and bypass the strict-mode GeneratorError check below.
+  // This locks the new behavior: strict: true throws on unimplemented
+  // targets so callers like the CLI can fail fast.
+  it('throws GeneratorError when strict: true and the target is not implemented', async () => {
+    const doc = await parseInput();
+    await expect(generate(doc, { target: 'sql', strict: true })).rejects.toBeInstanceOf(GeneratorError);
   });
 });

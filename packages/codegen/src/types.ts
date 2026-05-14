@@ -6,10 +6,14 @@
  * - `zod`         — FR-002–FR-014 (US1, per-namespace)
  * - `json-schema` — FR-019 (per-namespace)
  * - `typescript`  — FR-020 (per-namespace; includes `func` emission)
- * - `sql`         — 018 Phase 2 (whole-model DDL emitter)
- * - `markdown`    — 018 Phase 2 (whole-model docs emitter)
+ * - `sql`         — 018 Phase 2 (per-namespace DDL emitter)
+ * - `markdown`    — 018 Phase 2 (per-namespace docs emitter)
  * - `excel`       — 018 Phase 1 (whole-model binary emitter, .xlsx)
  * - `graphql`     — 018 Phase 3 (whole-model SDL emitter)
+ *
+ * The authoritative contract for each target is `TARGET_DESCRIPTORS[target].contract`;
+ * Copilot review on PR #165 caught that this header comment originally listed
+ * sql/markdown as whole-model, which contradicted the registry.
  *
  * Each target dispatches through one of two emitter contracts:
  *   - NamespaceEmitter (current): one output file per namespace.

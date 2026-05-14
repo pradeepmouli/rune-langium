@@ -132,6 +132,62 @@ describe('downloadTargetViaRouter', () => {
     });
   });
 
+  // Copilot review on PR #165 — a hostile server response must not be
+  // able to inject CR/LF, control chars, or path components into the
+  // browser's save dialog via the Content-Disposition filename.
+  it('reduces a path-traversal filename to its basename', async () => {
+    mockFetch(
+      () =>
+        new Response('body', {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain',
+            'Content-Disposition': 'attachment; filename="../../etc/payload.zip"'
+          }
+        })
+    );
+    const fakeAnchor = makeFakeAnchor();
+    vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'appendChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'removeChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
+
+    await downloadTargetViaRouter(FILES, 'zod');
+
+    expect(fakeAnchor.download).toBe('payload.zip');
+  });
+
+  // We can't test CR/LF injection end-to-end because the `Response`
+  // constructor itself rejects malformed header values — which is its
+  // own line of defense. The control-char strip in
+  // `sanitizeDownloadFilename` is belt-and-suspenders for any future
+  // path where the header reaches us through a non-Response source.
+  // Here we cover the other path-separator (backslash, used by
+  // Windows-style paths) to make sure it's also reduced to basename.
+  it('reduces a backslash-separated filename to its basename', async () => {
+    mockFetch(
+      () =>
+        new Response('body', {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain',
+            'Content-Disposition': 'attachment; filename="C:\\evil\\payload.zip"'
+          }
+        })
+    );
+    const fakeAnchor = makeFakeAnchor();
+    vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'appendChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'removeChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
+
+    await downloadTargetViaRouter(FILES, 'zod');
+
+    expect(fakeAnchor.download).toBe('payload.zip');
+  });
+
   it('throws CodegenDownloadError with empty diagnostics when the error body is non-JSON', async () => {
     mockFetch(() => new Response('<html>502 from edge</html>', { status: 502 }));
 

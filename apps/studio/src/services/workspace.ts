@@ -844,15 +844,41 @@ export class CodegenDownloadError extends Error {
 }
 
 /**
+ * Sanitize a filename so it's safe to assign to `<a download="...">`.
+ * Strips control chars (incl. CR/LF, which could enable header-style
+ * injection on rare browsers), reduces path-separator characters to
+ * the basename, and removes any embedded quotes. Falls back to the
+ * caller's default when the result is empty.
+ *
+ * Defense-in-depth: the server we control returns well-formed
+ * filenames, but a malicious or compromised response shouldn't be
+ * able to coerce the browser into saving with a path-traversal name.
+ */
+function sanitizeDownloadFilename(raw: string, fallback: string): string {
+  // Take the basename: drop everything up to and including the last
+  // slash or backslash. Handles posix, windows, and mixed separators.
+  const basename = raw.replace(/^.*[/\\]/, '');
+  // Strip control characters (including CR/LF) and quotes.
+  // eslint-disable-next-line no-control-regex
+  const cleaned = basename.replace(/[\x00-\x1f"]/g, '').trim();
+  return cleaned.length > 0 ? cleaned : fallback;
+}
+
+/**
  * Pull the `filename="..."` value from a Content-Disposition header.
  * Falls back to the given default when the header is missing or
- * malformed.
+ * malformed. Always passes the extracted value through
+ * `sanitizeDownloadFilename` so a hostile server response can't inject
+ * control chars or path components into the browser's save dialog
+ * (Copilot review on PR #165).
  */
 function parseContentDispositionFilename(header: string | null, fallback: string): string {
   if (!header) return fallback;
   // Matches filename="value" (preferred) or unquoted filename=value.
   const match = /filename\*?=("([^"]+)"|([^;]+))/i.exec(header);
-  return match ? (match[2] ?? match[3] ?? fallback).trim() : fallback;
+  if (!match) return fallback;
+  const raw = (match[2] ?? match[3] ?? '').trim();
+  return sanitizeDownloadFilename(raw, fallback);
 }
 
 /**

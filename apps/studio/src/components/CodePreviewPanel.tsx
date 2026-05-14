@@ -304,11 +304,11 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
 
   // 018 Task 0.8 — landing state shows the targets table; the viewer
   // mounts only after the user clicks View on a row. `inflightTarget`
-  // stays undefined here: the codegen-request useEffect is gated on
-  // `activeTarget !== undefined`, so no namespace-emitter generation
-  // can be running while the table is visible. Task 0.12 will set
-  // `inflightTarget` from async-download state once `/api/codegen`
-  // is wired.
+  // reflects the in-flight Download POST: 018 Task 0.12 set it via
+  // `downloadingTarget` so the clicked row shows a spinner while
+  // `/api/codegen` is outstanding. No namespace-emitter codegen is
+  // ever in flight here (that path is gated on `activeTarget !==
+  // undefined`), so the spinner is exclusively a Download signal.
   if (activeTarget === undefined) {
     return (
       <section

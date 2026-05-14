@@ -212,8 +212,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
 
     // Lazy-import `generate` so the function cold-start doesn't pay for
     // the codegen bundle on requests that fail at the parse step.
+    //
+    // Thread `body.options` through to the generator (Copilot review
+    // on PR #165). Phase 0 has no target-specific options yet, but
+    // Phase 2+ SQL emitter will use `options.sql.dialect` etc., and
+    // the contract is dead-on-arrival without this hookup.
     const { generate } = await import('@rune-langium/codegen');
-    const outputs = await generate(documents, { target: body.target });
+    const outputs = await generate(documents, { target: body.target, ...body.options });
 
     const errors = fatalDiagnostics(outputs);
     if (errors.length > 0) {

@@ -97,12 +97,16 @@ export async function runGenerate(docs: LangiumDocument[], options: GeneratorOpt
   const target = options.target ?? 'zod';
   const emitterClass = EMITTER_CLASSES[target];
 
+  let outputs: GeneratorOutput[];
   if (!emitterClass) {
     // Unknown / not-yet-implemented target. Return a single
     // not-implemented diagnostic rather than one per namespace —
     // simpler to surface in UI and matches the 018 dispatch test
-    // contract.
-    return [
+    // contract. Falls through to the strict-mode check below so
+    // `strict: true` callers still get the GeneratorError they
+    // expect for any fatal diagnostic, including not-implemented
+    // (Codex review on PR #165).
+    outputs = [
       {
         relativePath: `${target}.unknown`,
         content: '',
@@ -111,39 +115,40 @@ export async function runGenerate(docs: LangiumDocument[], options: GeneratorOpt
         funcs: []
       }
     ];
-  }
-
-  // Group by namespace
-  const byNamespace = groupByNamespace(docs);
-  if (byNamespace.size === 0) {
-    return [];
-  }
-
-  // Build cross-namespace registry before per-namespace emission
-  const registry: NamespaceRegistry = buildNamespaceRegistry(byNamespace);
-
-  // Walk every namespace once. The walks are reused across both contract
-  // types — WholeModelEmitter consumes the whole map, NamespaceEmitter
-  // loops over individual entries.
-  const walks = new Map<string, NamespaceWalkResult>();
-  for (const [namespace, namespaceDocs] of byNamespace) {
-    walks.set(namespace, walkNamespace(namespaceDocs, namespace));
-  }
-
-  let outputs: GeneratorOutput[];
-  if (isWholeModelEmitter(emitterClass)) {
-    outputs = await new emitterClass().emit(walks, registry, options);
   } else {
-    outputs = [];
-    for (const [, walked] of walks) {
-      outputs.push(emitNamespaceWithContract(walked, options, registry, emitterClass));
+    // Group by namespace
+    const byNamespace = groupByNamespace(docs);
+    if (byNamespace.size === 0) {
+      return [];
     }
+
+    // Build cross-namespace registry before per-namespace emission
+    const registry: NamespaceRegistry = buildNamespaceRegistry(byNamespace);
+
+    // Walk every namespace once. The walks are reused across both contract
+    // types — WholeModelEmitter consumes the whole map, NamespaceEmitter
+    // loops over individual entries.
+    const walks = new Map<string, NamespaceWalkResult>();
+    for (const [namespace, namespaceDocs] of byNamespace) {
+      walks.set(namespace, walkNamespace(namespaceDocs, namespace));
+    }
+
+    if (isWholeModelEmitter(emitterClass)) {
+      outputs = await new emitterClass().emit(walks, registry, options);
+    } else {
+      outputs = [];
+      for (const [, walked] of walks) {
+        outputs.push(emitNamespaceWithContract(walked, options, registry, emitterClass));
+      }
+    }
+
+    // Sort by relativePath for deterministic output (SC-007)
+    outputs.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
   }
 
-  // Sort by relativePath for deterministic output (SC-007)
-  outputs.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
-
-  // Strict mode: throw if any fatal diagnostics
+  // Strict mode: throw if any fatal diagnostics. Applies uniformly to
+  // both the not-implemented short-circuit above and the normal
+  // emit path.
   if (options.strict) {
     const allDiags = outputs.flatMap((o) => o.diagnostics);
     if (hasFatalDiagnostics(allDiags)) {

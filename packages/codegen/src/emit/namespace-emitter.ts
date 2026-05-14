@@ -37,9 +37,11 @@ export interface NamespaceEmitterConstructor {
  * Emitter contract for targets that consume the **entire model** as a
  * single input (rather than one namespace at a time). Used by targets
  * that need cross-namespace state — e.g. Excel produces one workbook
- * for the whole model with cross-sheet hyperlinks, GraphQL produces
- * one SDL file with the full type graph, SQL produces one DDL file
- * with cross-table foreign keys.
+ * for the whole model with cross-sheet hyperlinks, GraphQL SDL
+ * produces one schema file with the full type graph. SQL and Markdown
+ * are per-namespace targets (see TARGET_DESCRIPTORS) — Copilot review
+ * on PR #165 caught an earlier draft of this comment listing SQL as
+ * whole-model.
  *
  * Returns one or more {@link GeneratorOutput} entries. Most whole-model
  * emitters return a single entry (the single artifact); the array

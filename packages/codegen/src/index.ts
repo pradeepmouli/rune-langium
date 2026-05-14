@@ -84,7 +84,7 @@ export { RUNTIME_HELPER_JS_SOURCE } from './helpers.js';
  * @example
  * ```ts
  * import { generate } from '@rune-langium/codegen';
- * const outputs = generate(doc, { target: 'zod' });
+ * const outputs = await generate(doc, { target: 'zod' });
  * ```
  */
 export async function generate(
