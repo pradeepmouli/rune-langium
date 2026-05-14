@@ -463,3 +463,48 @@ describe('EditorStore — condition and expression operations', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// renameAttribute (Structure View Phase 0 — granular cell-level dispatch)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — renameAttribute', () => {
+  it('renames an attribute within a Data type and preserves order', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(id, 'tradeDate', 'date', '0..1');
+    store.getState().addAttribute(id, 'tradeID', 'string', '0..1');
+
+    store.getState().renameAttribute(id, 'tradeDate', 'executionDate');
+
+    const node = store.getState().nodes.find((n) => n.id === id)!;
+    const attrs = ((node.data as any).attributes ?? []) as Array<{ name: string }>;
+    expect(attrs.map((a) => a.name)).toEqual(['executionDate', 'tradeID']);
+  });
+
+  it('is a no-op when the attribute does not exist', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(id, 'tradeDate', 'date', '0..1');
+
+    expect(() => store.getState().renameAttribute(id, 'missing', 'newName')).not.toThrow();
+    const node = store.getState().nodes.find((n) => n.id === id)!;
+    const attrs = ((node.data as any).attributes ?? []) as Array<{ name: string }>;
+    expect(attrs.map((a) => a.name)).toEqual(['tradeDate']);
+  });
+
+  it('updates the attribute-ref edge label when one exists for the renamed attribute', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().createType('data', 'Economics', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'economics', 'Economics', '0..*');
+
+    const edgeBefore = store.getState().edges.find((e) => e.source === tradeId && e.data?.kind === 'attribute-ref');
+    expect(edgeBefore?.data?.label).toBe('economics');
+
+    store.getState().renameAttribute(tradeId, 'economics', 'econ');
+
+    const edgeAfter = store.getState().edges.find((e) => e.source === tradeId && e.data?.kind === 'attribute-ref');
+    expect(edgeAfter?.data?.label).toBe('econ');
+  });
+});

@@ -167,6 +167,7 @@ export interface EditorActions {
   renameType(nodeId: string, newName: string): void;
   addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string): void;
   removeAttribute(nodeId: string, attrName: string): void;
+  renameAttribute(nodeId: string, oldName: string, newName: string): void;
   updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string): void;
   reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
   updateCardinality(nodeId: string, attrName: string, cardinality: string): void;
@@ -884,6 +885,36 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName)
             )
           }));
+        },
+
+        renameAttribute(nodeId: string, oldName: string, newName: string) {
+          set((state) => {
+            let changed = false;
+            const updatedNodes = state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type !== 'Data' && d.$type !== 'Annotation') return n;
+              const attrs = ((d as any).attributes ?? []) as any[];
+              const idx = attrs.findIndex((a) => a.name === oldName);
+              if (idx < 0) return n;
+              changed = true;
+              const next = [...attrs];
+              next[idx] = { ...next[idx], name: newName };
+              return { ...n, data: { ...d, attributes: next } };
+            });
+            if (!changed) return state;
+            const updatedEdges = state.edges.map((e) => {
+              if (e.source !== nodeId || e.data?.kind !== 'attribute-ref' || e.data.label !== oldName) {
+                return e;
+              }
+              return {
+                ...e,
+                id: e.id.replace(`--attribute-ref--${oldName}--`, `--attribute-ref--${newName}--`),
+                data: { ...e.data, label: newName }
+              };
+            });
+            return { nodes: updatedNodes, edges: updatedEdges };
+          });
         },
 
         updateCardinality(nodeId: string, attrName: string, cardinality: string) {
