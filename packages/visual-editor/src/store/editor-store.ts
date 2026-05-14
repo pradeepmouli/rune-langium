@@ -54,7 +54,7 @@ import type {
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
-import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE } from '../adapters/model-helpers.js';
+import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from '../adapters/model-helpers.js';
 import type { TrackedState } from './history.js';
 
 // ---------------------------------------------------------------------------
@@ -889,27 +889,35 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         updateAttributeType(nodeId: string, attrName: string, newTypeName: string) {
+          const current = get();
+          const node = current.nodes.find((n) => n.id === nodeId);
+          if (!node) return;
+          const d0 = node.data as AnyGraphNode;
+          if (d0.$type !== 'Data' && d0.$type !== 'Annotation') return;
+          const attrs0 = ((d0 as any).attributes ?? []) as any[];
+          const firstMatch = attrs0.find((a) => a.name === attrName);
+          if (!firstMatch) return;
+          const preservedCardinality = formatCardinality(firstMatch.card);
+
           set((state) => {
-            let changed = false;
             const updatedNodes = state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
               if (d.$type !== 'Data' && d.$type !== 'Annotation') return n;
               const attrs = ((d as any).attributes ?? []) as any[];
-              const idx = attrs.findIndex((a) => a.name === attrName);
-              if (idx < 0) return n;
-              changed = true;
-              const next = [...attrs];
-              next[idx] = {
-                ...next[idx],
-                typeCall: {
-                  ...(next[idx].typeCall ?? { $type: 'TypeCall', arguments: [] }),
-                  type: { $refText: newTypeName }
-                }
-              };
+              const next = attrs.map((a) =>
+                a.name === attrName
+                  ? {
+                      ...a,
+                      typeCall: {
+                        ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
+                        type: { $refText: newTypeName }
+                      }
+                    }
+                  : a
+              );
               return { ...n, data: { ...d, attributes: next } };
             });
-            if (!changed) return state;
 
             const filteredEdges = state.edges.filter(
               (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName)
@@ -926,7 +934,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               data: {
                 kind: 'attribute-ref' as const,
                 label: attrName,
-                cardinality: ''
+                cardinality: preservedCardinality
               } as EdgeData
             };
             return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
@@ -934,21 +942,23 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         renameAttribute(nodeId: string, oldName: string, newName: string) {
+          const current = get();
+          const node = current.nodes.find((n) => n.id === nodeId);
+          if (!node) return;
+          const d0 = node.data as AnyGraphNode;
+          if (d0.$type !== 'Data' && d0.$type !== 'Annotation') return;
+          const attrs0 = ((d0 as any).attributes ?? []) as any[];
+          if (!attrs0.some((a) => a.name === oldName)) return;
+
           set((state) => {
-            let changed = false;
             const updatedNodes = state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
               if (d.$type !== 'Data' && d.$type !== 'Annotation') return n;
               const attrs = ((d as any).attributes ?? []) as any[];
-              const idx = attrs.findIndex((a) => a.name === oldName);
-              if (idx < 0) return n;
-              changed = true;
-              const next = [...attrs];
-              next[idx] = { ...next[idx], name: newName };
+              const next = attrs.map((a) => (a.name === oldName ? { ...a, name: newName } : a));
               return { ...n, data: { ...d, attributes: next } };
             });
-            if (!changed) return state;
             const updatedEdges = state.edges.map((e) => {
               if (e.source !== nodeId || e.data?.kind !== 'attribute-ref' || e.data.label !== oldName) {
                 return e;
