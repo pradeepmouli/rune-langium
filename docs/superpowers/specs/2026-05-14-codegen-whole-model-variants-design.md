@@ -56,11 +56,19 @@ export interface GeneratorOptions {
 }
 
 export interface ZodOptions {
-  /** Default: 'per-namespace' (library); '/api/codegen' Pages Function defaults to 'barrel'. */
+  /**
+   * Library default: `'per-namespace'` (preserves today's CLI behavior).
+   * The studio's `/api/codegen` Pages Function explicitly sends
+   * `layout: 'barrel'` to provide the opinionated bundled download —
+   * library consumers never get a surprise behavior change.
+   *
+   * Resolved per §10.1.
+   */
   layout?: 'per-namespace' | 'barrel' | 'single-file';
 }
 
 export interface TypescriptOptions {
+  /** Same library/server default split as `ZodOptions.layout`. */
   layout?: 'per-namespace' | 'barrel' | 'single-file';
 }
 
@@ -153,6 +161,23 @@ export interface LanguageProfile<T extends Target> {
     perNamespaceOutputs: ReadonlyArray<GeneratorOutput>,
     registry: NamespaceRegistry
   ): GeneratorOutput[];
+  /**
+   * Per-target guardrails for `single-file` layout. Resolved per §10.2 —
+   * when `concatenate()` is about to emit and either limit is exceeded,
+   * `GenericModelEmitter` returns a single GeneratorOutput with a fatal
+   * `error` diagnostic (`code: 'single-file-too-large'`) instead of the
+   * concatenated content. Callers in strict mode (CLI, /api/codegen)
+   * see a `GeneratorError`; non-strict callers see the diagnostic in
+   * the returned output. `undefined` = no limits.
+   *
+   * Defaults: { maxNamespaces: 50, maxBytes: 1_048_576 } for Zod / TS.
+   * JSON Schema / SQL omit limits (single-file is their canonical
+   * shape; bytes are reasonable for typical models).
+   */
+  readonly singleFileLimits?: {
+    maxNamespaces?: number;
+    maxBytes?: number;
+  };
 }
 ```
 
@@ -390,12 +415,12 @@ Phases 0.5.2 / 0.5.3 / 0.5.4 are independent and can ship as separate PRs agains
 
 ---
 
-## 10. Open questions
+## 10. Resolved decisions & deferred questions
 
-1. **Library default for Zod / TypeScript `layout`** — `'per-namespace'` (today's behavior; least-surprise for CLI users) or `'barrel'` (opinionated; matches the studio's Download default)? My lean: keep library default at `'per-namespace'`, make `/api/codegen` send `layout: 'barrel'` explicitly. Then `runGenerate(docs, { target: 'zod' })` from the CLI is unchanged, and the studio's bundled download is an opt-in by the Pages Function. **Decision needed.**
-2. **Large-model `single-file` Zod / TS guardrails** — CDM has ~80 namespaces; a `single-file` Zod artifact for that model is ~1MB and slow to type-check. Options: document as "use at your own risk" (simplest), emit a warning diagnostic above a threshold, or emit a fatal diagnostic. **Decision needed.**
-3. **Markdown `index.md` shape** — flat namespace list vs nested by type-kind. Defer to the Phase 2 Markdown spec; for now reserve `options.markdown.layout: 'barrel'` as the default with the rendering details TBD.
-4. **GraphQL `per-namespace` option** — should GraphQL SDL get a per-namespace variant? GraphQL schemas are typically one-file-per-service; per-namespace splits don't match how SDLs are consumed. Skip unless requested.
+1. **Library default for Zod / TypeScript `layout`** — **RESOLVED: `'per-namespace'`.** `runGenerate(docs, { target: 'zod' })` with no `options.zod.layout` preserves today's per-namespace output (`[x.zod.ts, y.zod.ts]`). The studio's `/api/codegen` Pages Function explicitly injects `layout: 'barrel'` on each download request so the bundled artifact (`[x.zod.ts, y.zod.ts, index.zod.ts, runtime.zod.ts]`) is opt-in at the API layer rather than a library default. CLI users and downstream codegen pipelines see no behavior change.
+2. **Large-model `single-file` guardrails** — **RESOLVED: fatal diagnostic above a configurable threshold.** Default per `LanguageProfile.singleFileLimits` is `{ maxNamespaces: 50, maxBytes: 1_048_576 }` for Zod / TypeScript. When `layout === 'single-file'` and either limit is exceeded, `GenericModelEmitter` returns a single output with a `severity: 'error'`, `code: 'single-file-too-large'` diagnostic instead of the concatenated content. Strict-mode callers (CLI, `/api/codegen`) get a `GeneratorError`; non-strict callers see the diagnostic and decide how to surface it. Limits are per-target via the Profile so JSON Schema / SQL (whose `single-file` is canonical) can omit them.
+3. **Markdown `index.md` shape** — DEFERRED to the Phase 2 Markdown spec. Phase 0.5 reserves `options.markdown.layout: 'barrel'` as the default; rendering details (flat list vs nested by type-kind) are owned by Phase 2.
+4. **GraphQL `per-namespace` option** — DEFERRED unless requested. GraphQL SDLs are typically one-file-per-service, so per-namespace splits don't match how SDLs are consumed. No `NamespaceEmitter` for GraphQL; it ships only via `WHOLE_MODEL_EMITTERS`.
 
 ---
 
