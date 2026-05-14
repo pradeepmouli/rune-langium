@@ -69,6 +69,12 @@ interface BaseWorkspaceFields {
   activeTabPath: string | null;
   curatedModels: CuratedModelBinding[];
   schemaVersion: number;
+  /**
+   * Per-workspace Structure View state. Optional so pre-`DB_VERSION=2`
+   * records remain valid without a data migration — readers default to
+   * an empty expansion map.
+   */
+  structureView?: { expansionMap: Record<string, boolean> };
 }
 
 /**
@@ -95,12 +101,7 @@ export interface FolderHandleRecord {
   lastPermission: 'granted' | 'prompt' | 'denied';
 }
 
-export type SettingKey =
-  | 'theme'
-  | 'telemetry-enabled'
-  | 'reduced-motion'
-  | 'editor.tab-size'
-  | 'design-system-version';
+export type SettingKey = 'theme' | 'telemetry-enabled' | 'reduced-motion' | 'editor.tab-size' | 'design-system-version';
 
 interface RuneStudioDB extends DBSchema {
   workspaces: { key: string; value: WorkspaceRecord };
@@ -114,7 +115,13 @@ interface RuneStudioDB extends DBSchema {
 }
 
 const DB_NAME = 'rune-studio';
-const DB_VERSION = 1;
+/**
+ * Bumped from 1 → 2 when the optional `structureView` slot was added to
+ * `WorkspaceRecord` (spec 020). The field is optional, so the upgrade is
+ * a no-op for the object-store schema; the bump exists only to invalidate
+ * older idb caches that asserted on the schema version.
+ */
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<RuneStudioDB>> | undefined;
 let closeInFlight: Promise<void> | undefined;
@@ -200,6 +207,32 @@ export async function listRecents(): Promise<RecentWorkspaceRecord[]> {
   const db = await getDb();
   const all = await db.getAllFromIndex('recents', 'by-lastOpenedAt');
   return all.reverse(); // index is ascending; we want most-recent first
+}
+
+// ---------- structure-view ----------
+
+/**
+ * Load the Structure View expansion map for a workspace. Returns `{}` for
+ * workspaces that don't exist or were saved before the `structureView`
+ * slot was introduced, so the store can hydrate unconditionally.
+ */
+export async function loadStructureViewState(workspaceId: string): Promise<Record<string, boolean>> {
+  const ws = await loadWorkspace(workspaceId);
+  return ws?.structureView?.expansionMap ?? {};
+}
+
+/**
+ * Write the Structure View expansion map for a workspace. Silently drops
+ * the write if the workspace has been deleted out from under us — keeps
+ * callers from having to special-case race conditions during teardown.
+ */
+export async function saveStructureViewState(
+  workspaceId: string,
+  expansionMap: Record<string, boolean>
+): Promise<void> {
+  const ws = await loadWorkspace(workspaceId);
+  if (!ws) return;
+  await saveWorkspace({ ...ws, structureView: { expansionMap } });
 }
 
 // ---------- settings ----------
