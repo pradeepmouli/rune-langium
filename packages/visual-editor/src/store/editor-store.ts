@@ -599,28 +599,16 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const current = get().deferredExports;
           if (entries === current) return;
           if (entries.length === 0 && current.length === 0) return;
-          // Stash the entries on the store regardless of length so
-          // subsequent loadModels calls re-merge against the current
-          // truth — including the "clear curated state on workspace
-          // switch" case where entries is [] (and the previous state
-          // had some). Codex P2 caught the previous skipping behaviour:
-          // it left stale curated namespaces lingering after a switch.
-          const existing = get().nodes;
-          const existingIds = new Set(existing.map((n) => n.id));
-          const newNodes = buildDeferredPlaceholderNodes(entries, existingIds);
-          const allNodes = newNodes.length > 0 ? [...existing, ...newNodes] : existing;
-          const allNamespaces = new Set(allNodes.map((n) => n.data.namespace));
-          const shouldCollapse = allNodes.length > LARGE_MODEL_THRESHOLD;
-          set((state) => ({
-            deferredExports: entries,
-            nodes: allNodes,
-            visibility: {
-              ...state.visibility,
-              expandedNamespaces: shouldCollapse
-                ? state.visibility.expandedNamespaces
-                : new Set([...state.visibility.expandedNamespaces, ...allNamespaces])
-            }
-          }));
+          // STATE-ONLY update (Codex P2 review on PR #164: "avoid recording
+          // a stale mixed graph before reload"). Touching `nodes` here would
+          // be tracked by zundo's temporal middleware — undo after a
+          // workspace switch would restore the intermediate "old workspace
+          // nodes + new curated placeholders" state. Instead, only stash
+          // the entries; loadModels is the single source of node mutation
+          // and reads these entries when it computes the merged graph.
+          // `deferredExports` is NOT in TrackedState (see history.ts) so
+          // this write doesn't pollute the undo history.
+          set({ deferredExports: entries });
         },
 
         // -----------------------------------------------------------------------

@@ -335,14 +335,15 @@ export function EditorPage({
     // New workspace — discard any previously accumulated corpus models.
     corpusModelsRef.current = [];
 
-    // Always push deferredExports (even when empty) so the editor-store's
-    // state is replaced atomically on workspace switches — Codex P2 review
-    // of PR #164. Pre-empty-array call clears stale curated placeholders
-    // from a previous workspace before loadModels merges the fresh ones.
+    // loadDeferredExports only stashes entries on the store (no node
+    // mutation) — Codex P2 review of PR #164: doing both in one set()
+    // avoids the "mixed stale graph in undo history" state. Then call
+    // loadModels unconditionally — even with `models: []` — so it
+    // materializes the curated placeholder nodes from the stashed
+    // deferredExports. Without this, a curated-only workspace would
+    // never show its placeholder nodes.
     useEditorStore.getState().loadDeferredExports(deferredExports);
-    if (models.length > 0) {
-      useEditorStore.getState().loadModels(models as unknown[]);
-    }
+    useEditorStore.getState().loadModels(models as unknown[]);
   }, [models, deferredExports]);
 
   const selectedNodeData: AnyGraphNode | null = useMemo(() => {

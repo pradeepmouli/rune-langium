@@ -194,8 +194,21 @@ describe('EditorStore', () => {
       expect(store.getState().deferredExports).toEqual(curatedEntries);
     });
 
-    it('creates placeholder nodes immediately on loadDeferredExports', () => {
+    it('does NOT mutate nodes on loadDeferredExports (Codex P2 #164)', () => {
+      // loadDeferredExports is state-only — it stashes entries for the
+      // next loadModels call to merge. Doing otherwise would pollute
+      // zundo's undo history with a mixed-state node array (see comment
+      // in editor-store.ts:loadDeferredExports).
+      const beforeNodes = store.getState().nodes;
       store.getState().loadDeferredExports(curatedEntries);
+      expect(store.getState().nodes).toBe(beforeNodes);
+    });
+
+    it('loadModels([]) after loadDeferredExports materializes placeholders', () => {
+      store.getState().loadDeferredExports(curatedEntries);
+      // Curated-only workspace: no user models. loadModels([]) still
+      // produces the placeholder nodes from stored deferredExports.
+      store.getState().loadModels([]);
       const nodeIds = new Set(store.getState().nodes.map((n) => n.id));
       expect(nodeIds.has('cdm.base.math::Quantity')).toBe(true);
       expect(nodeIds.has('cdm.base.math::NonNegativeQuantity')).toBe(true);
@@ -249,12 +262,14 @@ describe('EditorStore', () => {
     });
 
     it('clears placeholders on loadDeferredExports([]) — workspace switch', () => {
+      // Stage 1: load curated entries + materialize via loadModels.
       store.getState().loadDeferredExports(curatedEntries);
+      store.getState().loadModels([]);
       expect(store.getState().nodes.length).toBeGreaterThan(0);
+      // Stage 2: workspace switch — empty deferred + loadModels([]) should
+      // clear curated placeholders.
       store.getState().loadDeferredExports([]);
       expect(store.getState().deferredExports).toEqual([]);
-      // loadModels with no models + no deferredExports leaves no curated
-      // placeholders — confirms the stale-state scenario from review.
       store.getState().loadModels([]);
       const ids = new Set(store.getState().nodes.map((n) => n.id));
       expect(ids.has('cdm.base.math::Quantity'), 'old placeholder should be gone').toBe(false);
