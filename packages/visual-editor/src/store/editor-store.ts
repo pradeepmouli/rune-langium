@@ -74,6 +74,15 @@ export interface EditorState {
   // --- Graph state ---
   nodes: TypeGraphNode[];
   edges: TypeGraphEdge[];
+  /**
+   * Curated-bundle deferred-export entries, stored on the store so
+   * `loadModels` can re-merge their placeholder graph nodes after
+   * replacing `nodes` with new RosettaModel-derived nodes. Without this
+   * state, every `loadModels` call (e.g. from EditorPage's linkDocument
+   * callback) would silently lose the curated namespaces that
+   * `loadDeferredExports` previously created.
+   */
+  deferredExports: DeferredExportEntry[];
 
   // --- UI state ---
   selectedNodeId: string | null;
@@ -230,6 +239,47 @@ function getEdgeKind(edge: TypeGraphEdge): EdgeKind | undefined {
 
 function buildNodeMap(nodes: TypeGraphNode[]): Map<string, TypeGraphNode> {
   return new Map(nodes.map((node) => [node.id, node]));
+}
+
+/**
+ * Build placeholder TypeGraphNodes for deferred-export entries whose
+ * full RosettaModel hasn't been materialized yet. Both `loadModels`
+ * (post-replace merge) and `loadDeferredExports` (direct insert) share
+ * this — keeps the placeholder shape in one place so a change to
+ * `AnyGraphNode`'s required fields only happens once.
+ *
+ * Mutates `existingIds` by adding each newly-emitted node's id so
+ * callers can use the same set to track de-duplication across
+ * subsequent operations.
+ */
+function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingIds: Set<string>): TypeGraphNode[] {
+  const out: TypeGraphNode[] = [];
+  for (const entry of entries) {
+    for (const exp of entry.exports) {
+      // Only create graph nodes for top-level element kinds. Enum values
+      // are index-only (for cross-file reference resolution).
+      if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
+      const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
+      const nodeId = `${entry.namespace}::${exp.name}`;
+      if (existingIds.has(nodeId)) continue;
+      existingIds.add(nodeId);
+      out.push({
+        id: nodeId,
+        type: nodeType,
+        position: { x: 0, y: 0 },
+        data: {
+          $type: exp.type,
+          name: exp.name,
+          namespace: entry.namespace,
+          position: { x: 0, y: 0 },
+          errors: [],
+          isReadOnly: true,
+          hasExternalRefs: false
+        } as unknown as AnyGraphNode
+      });
+    }
+  }
+  return out;
 }
 
 function collectFocusClusterNodeIds(
@@ -424,6 +474,7 @@ const ALL_EDGE_KINDS = new Set<EdgeKind>([
 const initialState: EditorState = {
   nodes: [],
   edges: [],
+  deferredExports: [],
   selectedNodeId: null,
   searchQuery: '',
   searchResults: [],
@@ -494,19 +545,32 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const filters = get().activeFilters;
           const { nodes: rawNodes, edges } = astToModel(models, { filters });
 
+          // Merge deferred-export placeholder nodes for curated namespaces
+          // that haven't been materialized yet. This is the atomic version
+          // of "loadModels then loadDeferredExports" — keeps the API
+          // single-call so callers can't forget the merge step. Existing
+          // ids win (placeholders don't duplicate a now-materialized node).
+          const existingIds = new Set(rawNodes.map((n) => n.id));
+          const placeholders = buildDeferredPlaceholderNodes(get().deferredExports, existingIds);
+          const mergedNodes: TypeGraphNode[] = placeholders.length > 0 ? [...rawNodes, ...placeholders] : rawNodes;
+
           // Determine initial visibility based on model size
-          const allNamespaces = new Set(rawNodes.map((n) => n.data.namespace));
-          const shouldCollapse = rawNodes.length > LARGE_MODEL_THRESHOLD;
+          const allNamespaces = new Set(mergedNodes.map((n) => n.data.namespace));
+          const shouldCollapse = mergedNodes.length > LARGE_MODEL_THRESHOLD;
 
           const expandedNamespaces = shouldCollapse ? new Set<string>() : new Set(allNamespaces);
 
-          // Only layout visible nodes
-          const visibleNodes = shouldCollapse ? [] : rawNodes;
+          // Lay out the visible nodes so the graph renders in position
+          // form. Previous code stored the layout result on an unused
+          // local — review caught the wasted compute. Use the laid-out
+          // nodes when available; fall back to mergedNodes when
+          // shouldCollapse is true (large workspace: no layout yet).
+          const visibleNodes = shouldCollapse ? [] : mergedNodes;
           const visibleEdges = shouldCollapse ? [] : edges;
-          const _nodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : [];
+          const laidOutNodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : mergedNodes;
 
           set({
-            nodes: rawNodes,
+            nodes: laidOutNodes,
             edges,
             layoutOptions: opts,
             selectedNodeId: null,
@@ -523,50 +587,28 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         loadDeferredExports(entries) {
-          if (entries.length === 0) return;
-          const existing = get().nodes;
-          const existingIds = new Set(existing.map((n) => n.id));
-          const newNodes: TypeGraphNode[] = [];
-
-          for (const entry of entries) {
-            for (const exp of entry.exports) {
-              // Only create graph nodes for top-level element kinds.
-              // Enum values are index-only (for cross-file reference resolution).
-              if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
-              const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
-              const nodeId = `${entry.namespace}::${exp.name}`;
-              if (existingIds.has(nodeId)) continue;
-              newNodes.push({
-                id: nodeId,
-                type: nodeType,
-                position: { x: 0, y: 0 },
-                data: {
-                  $type: exp.type,
-                  name: exp.name,
-                  namespace: entry.namespace,
-                  position: { x: 0, y: 0 },
-                  errors: [],
-                  isReadOnly: true,
-                  hasExternalRefs: false
-                } as unknown as AnyGraphNode
-              });
-            }
-          }
-
-          if (newNodes.length > 0) {
-            const allNodes = [...existing, ...newNodes];
-            const allNamespaces = new Set(allNodes.map((n) => n.data.namespace));
-            const shouldCollapse = allNodes.length > LARGE_MODEL_THRESHOLD;
-            set((state) => ({
-              nodes: allNodes,
-              visibility: {
-                ...state.visibility,
-                expandedNamespaces: shouldCollapse
-                  ? state.visibility.expandedNamespaces
-                  : new Set([...state.visibility.expandedNamespaces, ...allNamespaces])
-              }
-            }));
-          }
+          // Idempotence guard (Codex P1 review on PR #164): EditorPage's
+          // effect re-fires whenever its `deferredExports` prop reference
+          // changes. The prop default is an inline `[]` which is a fresh
+          // array on every render → unconditional re-dispatch would
+          // re-emit visibility state on every render and trigger a
+          // subscriber re-render cascade. Short-circuit if entries is
+          // the same reference or both-empty: the contract for "clear
+          // stale state on workspace switch" only fires on a genuine
+          // transition from non-empty to empty, which this guard preserves.
+          const current = get().deferredExports;
+          if (entries === current) return;
+          if (entries.length === 0 && current.length === 0) return;
+          // STATE-ONLY update (Codex P2 review on PR #164: "avoid recording
+          // a stale mixed graph before reload"). Touching `nodes` here would
+          // be tracked by zundo's temporal middleware — undo after a
+          // workspace switch would restore the intermediate "old workspace
+          // nodes + new curated placeholders" state. Instead, only stash
+          // the entries; loadModels is the single source of node mutation
+          // and reads these entries when it computes the merged graph.
+          // `deferredExports` is NOT in TrackedState (see history.ts) so
+          // this write doesn't pollute the undo history.
+          set({ deferredExports: entries });
         },
 
         // -----------------------------------------------------------------------

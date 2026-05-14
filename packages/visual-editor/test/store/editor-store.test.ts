@@ -171,4 +171,108 @@ describe('EditorStore', () => {
       expect(store.getState().detailPanelOpen).toBe(false);
     });
   });
+
+  describe('loadDeferredExports + loadModels re-merge (fix/019 PR #164)', () => {
+    const curatedEntries = [
+      {
+        filePath: 'cdm/base/math.rosetta',
+        namespace: 'cdm.base.math',
+        exports: [
+          { type: 'Data', name: 'Quantity' },
+          { type: 'Data', name: 'NonNegativeQuantity' }
+        ]
+      },
+      {
+        filePath: 'cdm/product/asset.rosetta',
+        namespace: 'cdm.product.asset',
+        exports: [{ type: 'RosettaEnumeration', name: 'AssetClass' }]
+      }
+    ];
+
+    it('stores deferredExports on state for downstream re-merge', () => {
+      store.getState().loadDeferredExports(curatedEntries);
+      expect(store.getState().deferredExports).toEqual(curatedEntries);
+    });
+
+    it('does NOT mutate nodes on loadDeferredExports (Codex P2 #164)', () => {
+      // loadDeferredExports is state-only — it stashes entries for the
+      // next loadModels call to merge. Doing otherwise would pollute
+      // zundo's undo history with a mixed-state node array (see comment
+      // in editor-store.ts:loadDeferredExports).
+      const beforeNodes = store.getState().nodes;
+      store.getState().loadDeferredExports(curatedEntries);
+      expect(store.getState().nodes).toBe(beforeNodes);
+    });
+
+    it('loadModels([]) after loadDeferredExports materializes placeholders', () => {
+      store.getState().loadDeferredExports(curatedEntries);
+      // Curated-only workspace: no user models. loadModels([]) still
+      // produces the placeholder nodes from stored deferredExports.
+      store.getState().loadModels([]);
+      const nodeIds = new Set(store.getState().nodes.map((n) => n.id));
+      expect(nodeIds.has('cdm.base.math::Quantity')).toBe(true);
+      expect(nodeIds.has('cdm.base.math::NonNegativeQuantity')).toBe(true);
+      expect(nodeIds.has('cdm.product.asset::AssetClass')).toBe(true);
+    });
+
+    it('preserves placeholders when loadModels runs afterwards', async () => {
+      store.getState().loadDeferredExports(curatedEntries);
+      const result = await parse(SIMPLE_INHERITANCE_SOURCE);
+      store.getState().loadModels(result.value);
+      const ids = new Set(store.getState().nodes.map((n) => n.id));
+      expect(ids.has('cdm.base.math::Quantity'), 'curated placeholder survives loadModels').toBe(true);
+      expect(ids.has('cdm.product.asset::AssetClass'), 'all curated namespaces survive').toBe(true);
+    });
+
+    it('does not duplicate ids when loadModels runs', () => {
+      const entry = {
+        filePath: 'cdm/base/math.rosetta',
+        namespace: 'cdm.base.math',
+        exports: [{ type: 'Data', name: 'Dup' }]
+      };
+      store.getState().loadDeferredExports([entry]);
+      store.getState().loadModels([]);
+      const ids = store.getState().nodes.map((n) => n.id);
+      const dupCount = ids.filter((id) => id === 'cdm.base.math::Dup').length;
+      expect(dupCount).toBeLessThanOrEqual(1);
+    });
+
+    it('is idempotent when entries reference is unchanged (Codex P1 #164)', () => {
+      // EditorPage's effect can re-fire with a stable reference. Repeated
+      // calls with the SAME array must not mutate state.
+      const entries = curatedEntries;
+      store.getState().loadDeferredExports(entries);
+      const stateAfterFirst = store.getState();
+      store.getState().loadDeferredExports(entries);
+      expect(store.getState()).toBe(stateAfterFirst);
+    });
+
+    it('is idempotent when entries is empty AND store entries is empty', () => {
+      // The footgun Codex P1 caught: EditorPage's default `deferredExports
+      // = []` creates a fresh `[]` every render. Without this guard, every
+      // render would re-emit `set()` → visibility object replacement →
+      // subscriber re-renders → render loop.
+      expect(store.getState().deferredExports).toEqual([]);
+      const stateBefore = store.getState();
+      store.getState().loadDeferredExports([]);
+      expect(store.getState()).toBe(stateBefore);
+      // Different array identity, same content — still no-op.
+      store.getState().loadDeferredExports([]);
+      expect(store.getState()).toBe(stateBefore);
+    });
+
+    it('clears placeholders on loadDeferredExports([]) — workspace switch', () => {
+      // Stage 1: load curated entries + materialize via loadModels.
+      store.getState().loadDeferredExports(curatedEntries);
+      store.getState().loadModels([]);
+      expect(store.getState().nodes.length).toBeGreaterThan(0);
+      // Stage 2: workspace switch — empty deferred + loadModels([]) should
+      // clear curated placeholders.
+      store.getState().loadDeferredExports([]);
+      expect(store.getState().deferredExports).toEqual([]);
+      store.getState().loadModels([]);
+      const ids = new Set(store.getState().nodes.map((n) => n.id));
+      expect(ids.has('cdm.base.math::Quantity'), 'old placeholder should be gone').toBe(false);
+    });
+  });
 });

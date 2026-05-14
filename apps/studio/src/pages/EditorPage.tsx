@@ -79,14 +79,26 @@ import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
 import '../test-api.js';
 import { getRuneStudioTestApi } from '../test-api.js';
 
+type DeferredExportEntry = {
+  filePath: string;
+  namespace: string;
+  exports: Array<{ type: string; name: string }>;
+};
+
+/**
+ * Stable identity used as the default for the optional `deferredExports`
+ * prop. An inline `= []` default creates a fresh array on every render,
+ * which made the workspace-load effect's dependency list change every
+ * render and triggered an unconditional `loadModels` → re-render loop
+ * (Codex P2 review on PR #164). A module-level constant keeps the
+ * reference stable so `useEffect`'s shallow-equality dep check works.
+ */
+const EMPTY_DEFERRED_EXPORTS: ReadonlyArray<DeferredExportEntry> = Object.freeze([]);
+
 export interface EditorPageProps {
   models: RosettaModel[];
   parsedModels?: ParsedWorkspaceModel[];
-  deferredExports?: Array<{
-    filePath: string;
-    namespace: string;
-    exports: Array<{ type: string; name: string }>;
-  }>;
+  deferredExports?: DeferredExportEntry[];
   files: WorkspaceFile[];
   onFilesChange?: (files: WorkspaceFile[]) => void;
   lspClient?: LspClientService;
@@ -198,7 +210,7 @@ function FileTabStrip({
 export function EditorPage({
   models,
   parsedModels,
-  deferredExports = [],
+  deferredExports = EMPTY_DEFERRED_EXPORTS as DeferredExportEntry[],
   files,
   onFilesChange,
   lspClient,
@@ -335,14 +347,15 @@ export function EditorPage({
     // New workspace — discard any previously accumulated corpus models.
     corpusModelsRef.current = [];
 
-    if (models.length > 0 || deferredExports.length > 0) {
-      if (models.length > 0) {
-        useEditorStore.getState().loadModels(models as unknown[]);
-      }
-      if (deferredExports.length > 0) {
-        useEditorStore.getState().loadDeferredExports(deferredExports);
-      }
-    }
+    // loadDeferredExports only stashes entries on the store (no node
+    // mutation) — Codex P2 review of PR #164: doing both in one set()
+    // avoids the "mixed stale graph in undo history" state. Then call
+    // loadModels unconditionally — even with `models: []` — so it
+    // materializes the curated placeholder nodes from the stashed
+    // deferredExports. Without this, a curated-only workspace would
+    // never show its placeholder nodes.
+    useEditorStore.getState().loadDeferredExports(deferredExports);
+    useEditorStore.getState().loadModels(models as unknown[]);
   }, [models, deferredExports]);
 
   const selectedNodeData: AnyGraphNode | null = useMemo(() => {
@@ -491,6 +504,10 @@ export function EditorPage({
         void linkDocument(filePath).then((result) => {
           if (result.newModels.length > 0) {
             corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
+            // loadModels now re-merges the deferred-export placeholder nodes
+            // automatically from store state — no need to call
+            // loadDeferredExports after this. The store-owned deferredExports
+            // state was populated when /api/parse responded.
             useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
           }
         });

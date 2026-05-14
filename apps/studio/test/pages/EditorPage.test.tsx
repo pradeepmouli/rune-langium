@@ -35,7 +35,8 @@ const {
     expandAllNamespaces: vi.fn(),
     collapseAllNamespaces: vi.fn(),
     setLayoutEngine: vi.fn(),
-    loadModels: vi.fn()
+    loadModels: vi.fn(),
+    loadDeferredExports: vi.fn()
   };
 
   const useEditorStore = ((selector: (state: typeof editorStoreState) => unknown) =>
