@@ -12,6 +12,13 @@ const fromStringMock = vi.fn((content: string, uri: string) => ({
 }));
 const generateMock = vi.fn(() => []);
 const generatePreviewSchemasMock = vi.fn(() => []);
+// 019 Task #88 follow-up — curated entries hit `RuneDsl.serializer.JsonSerializer.deserialize`
+// in `buildDocuments`. Mock returns a marker object that the assertions
+// can identify in the deserialized-docs array.
+const deserializeMock = vi.fn((json: string) => ({
+  __deserialized: true,
+  json
+}));
 
 vi.mock('@rune-langium/core', () => ({
   createRuneDslServices: () => ({
@@ -21,6 +28,9 @@ vi.mock('@rune-langium/core', () => ({
           LangiumDocumentFactory: { fromString: fromStringMock },
           DocumentBuilder: { build: buildMock }
         }
+      },
+      serializer: {
+        JsonSerializer: { deserialize: deserializeMock }
       }
     }
   })
@@ -74,6 +84,8 @@ describe('codegen-worker preview messages', () => {
     fromStringMock.mockClear();
     generateMock.mockClear();
     generatePreviewSchemasMock.mockReset();
+    deserializeMock.mockClear();
+    deserializeMock.mockImplementation((json: string) => ({ __deserialized: true, json }));
   });
 
   afterEach(() => {
@@ -173,11 +185,9 @@ describe('codegen-worker preview messages', () => {
   });
 
   it('posts preview:stale with parse-error when preview files fail validation', async () => {
-    buildMock.mockImplementation(
-      async (documents: Array<{ diagnostics: Array<{ severity: number }> }>) => {
-        documents[0]!.diagnostics = [{ severity: 1 }];
-      }
-    );
+    buildMock.mockImplementation(async (documents: Array<{ diagnostics: Array<{ severity: number }> }>) => {
+      documents[0]!.diagnostics = [{ severity: 1 }];
+    });
 
     const { scope, dispatch } = await loadWorkerModule();
 
@@ -478,5 +488,106 @@ describe('codegen-worker code preview messages', () => {
       requestId: 'codegen:zod:syntax-error',
       message: 'Fix model errors to refresh the code preview.'
     });
+  });
+
+  // 019 Task #88 follow-up — preview was broken for curated workspaces
+  // because `buildDocuments` parsed empty `content` strings and filtered
+  // the resulting parse-error docs out. Now entries with
+  // `serializedModelJson` set take the deserialize path and reach the
+  // preview generator.
+  it('deserializes curated entries via JsonSerializer and forwards them to the preview generator', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      {
+        schemaVersion: 1,
+        targetId: 'cdm.base.math.Quantity',
+        title: 'Quantity',
+        status: 'ready',
+        fields: []
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [
+        // Curated entry — content empty, serializedModelJson set.
+        {
+          uri: 'file:///cdm/base/math.rosetta',
+          content: '',
+          serializedModelJson: '{"$type":"RosettaModel","name":"cdm.base.math"}'
+        }
+      ],
+      requestId: 'preview:curated:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'cdm.base.math.Quantity',
+      requestId: 'preview:curated:2'
+    });
+    await flushWorker();
+
+    // The deserializer was called with the curated JSON; the parser was
+    // NOT called for this entry (it would have hit `fromString` with an
+    // empty content otherwise).
+    expect(deserializeMock).toHaveBeenCalledWith('{"$type":"RosettaModel","name":"cdm.base.math"}');
+    expect(fromStringMock).not.toHaveBeenCalledWith('', 'file:///cdm/base/math.rosetta');
+
+    // The deserialized doc reached the preview generator.
+    const previewCall = generatePreviewSchemasMock.mock.calls.at(-1);
+    expect(previewCall).toBeDefined();
+    const [forwardedDocs] = previewCall!;
+    expect(forwardedDocs).toHaveLength(1);
+    expect((forwardedDocs as Array<{ parseResult: { value: unknown } }>)[0]!.parseResult.value).toMatchObject({
+      __deserialized: true
+    });
+
+    // Preview result posted back.
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'preview:result', targetId: 'cdm.base.math.Quantity' })
+    );
+  });
+
+  it('mixes curated and user entries in a single preview build', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'user.Trade', title: 'Trade', status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [
+        { uri: 'file:///user.rosetta', content: 'namespace user' },
+        {
+          uri: 'file:///cdm/base/math.rosetta',
+          content: '',
+          serializedModelJson: '{"$type":"RosettaModel","name":"cdm.base.math"}'
+        }
+      ],
+      requestId: 'preview:mixed:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'user.Trade',
+      requestId: 'preview:mixed:2'
+    });
+    await flushWorker();
+
+    expect(fromStringMock).toHaveBeenCalledWith('namespace user', 'file:///user.rosetta');
+    // The deserializer was called for the curated entry. Each
+    // `preview:setFiles` + `preview:generate` pair re-runs preview, so
+    // the count is ≥ 1 — what matters is the curated JSON was processed
+    // and the user file was NOT deserialized.
+    expect(deserializeMock).toHaveBeenCalledWith('{"$type":"RosettaModel","name":"cdm.base.math"}');
+    expect(deserializeMock).not.toHaveBeenCalledWith('namespace user');
+    const previewCall = generatePreviewSchemasMock.mock.calls.at(-1);
+    const [forwardedDocs] = previewCall!;
+    // Both docs reach the generator: 1 parsed user doc + 1 deserialized curated doc.
+    expect(forwardedDocs).toHaveLength(2);
   });
 });

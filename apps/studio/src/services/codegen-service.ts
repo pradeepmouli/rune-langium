@@ -32,6 +32,17 @@ export { KNOWN_GENERATORS };
 export interface PreviewFileEntry {
   uri: string;
   content: string;
+  /**
+   * Pre-serialized Langium AST for curated bundle files (CDM, FpML,
+   * rune-dsl). When present, the codegen worker deserializes this
+   * instead of parsing `content` (which is empty for curated refOnly
+   * entries — the raw .rune source isn't shipped client-side).
+   *
+   * 019 Task #88 follow-up — curated form preview was broken because
+   * the worker filtered empty-content docs as parse errors. Hydrating
+   * via this field gives the preview emitter a fully-typed AST.
+   */
+  serializedModelJson?: string;
 }
 
 export interface PreviewSetFilesMessage {
@@ -82,11 +93,7 @@ export function isPreviewExecuteResultMessage(msg: unknown): msg is {
   funcName: string;
   output: unknown;
 } {
-  return (
-    typeof msg === 'object' &&
-    msg !== null &&
-    (msg as Record<string, unknown>).type === 'preview:execute-result'
-  );
+  return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'preview:execute-result';
 }
 
 export function isPreviewExecuteErrorMessage(msg: unknown): msg is {
@@ -95,11 +102,7 @@ export function isPreviewExecuteErrorMessage(msg: unknown): msg is {
   funcName: string;
   error: string;
 } {
-  return (
-    typeof msg === 'object' &&
-    msg !== null &&
-    (msg as Record<string, unknown>).type === 'preview:execute-error'
-  );
+  return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'preview:execute-error';
 }
 
 export type PreviewWorkerRequest = PreviewSetFilesMessage | PreviewGenerateMessage;
@@ -116,17 +119,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
-export function createPreviewSetFilesMessage(
-  files: PreviewFileEntry[],
-  requestId?: string
-): PreviewSetFilesMessage {
+export function createPreviewSetFilesMessage(files: PreviewFileEntry[], requestId?: string): PreviewSetFilesMessage {
   return { type: 'preview:setFiles', files, ...(requestId ? { requestId } : {}) };
 }
 
-export function createPreviewGenerateMessage(
-  targetId: string,
-  requestId: string
-): PreviewGenerateMessage {
+export function createPreviewGenerateMessage(targetId: string, requestId: string): PreviewGenerateMessage {
   return { type: 'preview:generate', targetId, requestId };
 }
 
@@ -193,10 +190,7 @@ function isPreviewField(value: unknown): boolean {
   ) {
     return false;
   }
-  if (
-    candidate.cardinality !== undefined &&
-    !isPreviewCardinality(candidate.cardinality as Record<string, unknown>)
-  ) {
+  if (candidate.cardinality !== undefined && !isPreviewCardinality(candidate.cardinality as Record<string, unknown>)) {
     return false;
   }
   if (candidate.description !== undefined && typeof candidate.description !== 'string') {
@@ -209,9 +203,7 @@ function isPreviewField(value: unknown): boolean {
       return Array.isArray(candidate.children) && candidate.children.every(isPreviewField);
     case 'array':
       return (
-        Array.isArray(candidate.children) &&
-        candidate.children.length === 1 &&
-        candidate.children.every(isPreviewField)
+        Array.isArray(candidate.children) && candidate.children.length === 1 && candidate.children.every(isPreviewField)
       );
     default:
       return candidate.enumValues === undefined && candidate.children === undefined;
@@ -267,9 +259,7 @@ function isGenerationError(value: unknown): value is GenerationError {
   );
 }
 
-function parseCodeGenerationResultBody(
-  value: unknown
-): Omit<CodeGenerationResult, 'language'> | null {
+function parseCodeGenerationResultBody(value: unknown): Omit<CodeGenerationResult, 'language'> | null {
   if (
     !isRecord(value) ||
     !Array.isArray(value.files) ||
@@ -277,8 +267,7 @@ function parseCodeGenerationResultBody(
     !Array.isArray(value.errors) ||
     !value.errors.every(isGenerationError) ||
     (value.warnings !== undefined &&
-      (!Array.isArray(value.warnings) ||
-        !value.warnings.every((warning) => typeof warning === 'string')))
+      (!Array.isArray(value.warnings) || !value.warnings.every((warning) => typeof warning === 'string')))
   ) {
     return null;
   }
@@ -297,15 +286,11 @@ function isHostedLanguagesEnvelope(value: unknown): value is { languages?: strin
   );
 }
 
-function isLocalLanguagesEnvelope(
-  value: unknown
-): value is { languages: Array<{ id: string; class: string }> } {
+function isLocalLanguagesEnvelope(value: unknown): value is { languages: Array<{ id: string; class: string }> } {
   return (
     isRecord(value) &&
     Array.isArray(value.languages) &&
-    value.languages.every(
-      (item) => isRecord(item) && typeof item.id === 'string' && typeof item.class === 'string'
-    )
+    value.languages.every((item) => isRecord(item) && typeof item.id === 'string' && typeof item.class === 'string')
   );
 }
 
@@ -331,9 +316,7 @@ export class BrowserCodegenProxy {
   constructor(baseUrl?: string) {
     const envUrl =
       typeof import.meta !== 'undefined'
-        ? (import.meta as unknown as Record<string, Record<string, string>>).env?.[
-            'VITE_CODEGEN_URL'
-          ]
+        ? (import.meta as unknown as Record<string, Record<string, string>>).env?.['VITE_CODEGEN_URL']
         : undefined;
     this.baseUrl = baseUrl ?? envUrl ?? DEFAULT_CODEGEN_URL;
   }

@@ -2,6 +2,27 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Status (2026-05-14)
+
+| Phase | Status | PR(s) on master | Notes |
+|-------|--------|-----------------|-------|
+| **Phase 0** — contract + UI shell + `/api/codegen` | ✅ **Merged** | [#165](https://github.com/pradeepmouli/rune-langium/pull/165) (`d226996c`) | All 14 tasks done. Studio table replaces TargetSwitcher; per-target downloads stream from the Pages Function. |
+| **Phase 0.5** — whole-model variants for namespace targets | ✅ **Merged** | [#166](https://github.com/pradeepmouli/rune-langium/pull/166) (`581ced9d`) | `LanguageProfile` + `GenericModelEmitter` + per-target `layout` options. Zod, TypeScript, JSON Schema all support `per-namespace` (library default), `barrel`, and (text targets) `single-file`. Pages Function injects opinionated default per target. Spec: [`docs/superpowers/specs/2026-05-14-codegen-whole-model-variants-design.md`](../specs/2026-05-14-codegen-whole-model-variants-design.md). |
+| **Phase 1** — Excel emitter | ✅ **Merged** | [#167](https://github.com/pradeepmouli/rune-langium/pull/167) (`7fb790c8`) | `ExcelWholeModelEmitter` produces one `model.xlsx` with Types / Enums / TypeAliases / Conditions sheets. Deterministic timestamps; topo-sorted Types sheet; primitive-alias `$refText` fallback. |
+| **Task #88** — curated workspaces through `/api/codegen` | ✅ **Merged** | [#168](https://github.com/pradeepmouli/rune-langium/pull/168) (`b9414f3e`) | Pages Function accepts `curatedBundles: [{ id, version }]`. Fetches each via `CURATED_MIRROR` service binding, deserializes the pre-parsed AST, passes to `generate()` alongside user files. Validator covers the new field shape. |
+| **Phase 2** — SQL + Markdown emitters | ⏳ Pending | — | Both are per-namespace + `LanguageProfile` targets. Should plug into the Phase 0.5 dispatch architecture with no contract changes — Phase 2 work is the emitters themselves + their Profiles. |
+| **Phase 3** — GraphQL SDL emitter | ⏳ Pending | — | Whole-model target, like Excel. Hand-rolled `WholeModelEmitter` + a `LanguageProfile` for sidecar metadata if needed. |
+
+**Cumulative diff merged into master:** 4 squash-merged PRs over the course of this work. Codegen package at **~495 tests** (was ~440); studio at **~605 tests** (was ~570). Type-checks clean across all workspace packages.
+
+**Architectural decisions locked in:**
+- Library defaults stay `'per-namespace'` for every target with both contracts (spec 019 §10.1). Opinionated defaults live on the Pages Function only.
+- `IMPLEMENTED_TARGETS` is the single source of truth used by both the studio's table filter and the Pages Function's target gate. Phase 2/3 emitters self-register by adding to `EMITTER_CLASSES` / `WHOLE_MODEL_EMITTERS` / `PROFILES`.
+- Whole-model emitters can be either hand-rolled (Excel, GraphQL) or synthesized from a `NamespaceEmitter` + `LanguageProfile` via `GenericModelEmitter` (Zod, TypeScript, JSON Schema, future SQL/Markdown).
+- Curated bundles ride through the Pages Function's `CURATED_MIRROR` binding (same pattern as `/api/parse`); raw .rune source is never required server-side because curated bundles ship as pre-parsed Langium ASTs.
+
+---
+
 **Goal:** Extend `@rune-langium/codegen` with Excel/SQL/Markdown/GraphQL emitters and surface them in the studio via a targets-table UX backed by a server-side Cloudflare Pages Function.
 
 **Architecture:** A parallel `WholeModelEmitter` contract joins the existing `NamespaceEmitter`; `runGenerate()` dispatches on the contract. `GeneratorOutput` grows an optional `binary` field for `.xlsx` payloads. The studio's `CodePreviewPanel` is replaced with a targets table that runs **Preview** in the browser (existing codegen worker, per-namespace targets only) and **Download** server-side via `POST /api/codegen` (Cloudflare Pages Function under `apps/studio/functions/`).
@@ -59,7 +80,9 @@
 
 ---
 
-# Phase 0 — Contract, UI Shell, and Pages Function
+# Phase 0 — Contract, UI Shell, and Pages Function ✅ MERGED in PR #165
+
+> All 14 tasks below shipped in `d226996c`. The remaining content of this section is preserved as historical reference; it describes the state *as-of* the spec at design time. For the current state, see the registries (`NAMESPACE_EMITTERS`, `WHOLE_MODEL_EMITTERS`, `PROFILES`) in `packages/codegen/src/generator.ts` and the studio's `apps/studio/src/components/CodegenTargetsTable.tsx`.
 
 **Outcome:** All existing tests pass. `TARGET_DESCRIPTORS` is exported. Studio's Code panel shows the new table (filtered to registered emitters: zod, typescript, json-schema). Preview round-trips work for those three. Download works server-side via `/api/codegen` for those three (returning a zip of per-namespace files).
 
@@ -1802,7 +1825,13 @@ git commit -m "test(studio): e2e for codegen targets table (018 Phase 0)"
 
 ---
 
-# Phase 1 — Excel Emitter
+# Phase 1 — Excel Emitter ✅ MERGED in PR #167
+
+> Excel emitter shipped in `7fb790c8`. Tasks below describe the design as-planned; the current implementation lives in `packages/codegen/src/emit/excel-emitter.ts` and its fixture suite in `packages/codegen/test/emit/excel-emitter.test.ts`. Notable post-spec deltas:
+> - `workbook.modified` is also pinned to epoch 0 (not just `workbook.created`) for SC-007 byte determinism.
+> - Types sheet iterates `walk.emitOrder` (topo-sort) instead of `dataByName` insertion order.
+> - `superType` / `typeAlias` base-type cells fall back to `$refText` for primitive bases that don't resolve to an AST node.
+> - Conditions sheet's Expression column uses `condition.expression.$cstNode.text` (just the body), not the whole condition's text.
 
 ## Task 1.1: Add `exceljs` dependency
 
@@ -2540,7 +2569,14 @@ git commit -m "feat(studio): register Excel target (018 Phase 1)"
 
 ---
 
-# Phase 2 — SQL DDL + Markdown Emitters
+# Phase 2 — SQL DDL + Markdown Emitters ⏳ PENDING
+
+> **Architecture update vs spec:** both SQL and Markdown are now per-namespace targets dispatched via `GenericModelEmitter` + `LanguageProfile` (the abstraction introduced in Phase 0.5). Each ships:
+> - A `NamespaceEmitter` implementation (`SqlNamespaceEmitter`, `MarkdownNamespaceEmitter`) that respects `options.suppressBoilerplate`.
+> - A `LanguageProfile` (`sqlProfile`, `markdownProfile`) with `makeBarrel` / `concatenate` / `makeSharedArtifacts`.
+> - Registration in `NAMESPACE_EMITTERS` and `PROFILES`.
+>
+> The tasks below describe the design as-planned; refer to PR #167 (Excel) and the Phase 0.5 PRs for the post-LanguageProfile patterns to mirror.
 
 Tasks 2A.* and 2B.* are independent; either can land first.
 
@@ -3421,7 +3457,9 @@ git commit -m "feat(studio): register SQL and Markdown targets (018 Phase 2)"
 
 ---
 
-# Phase 3 — GraphQL SDL Emitter
+# Phase 3 — GraphQL SDL Emitter ⏳ PENDING
+
+> **Architecture update vs spec:** hand-rolled `WholeModelEmitter` (like Excel in Phase 1). Single `schema.graphql` output. Registration in `WHOLE_MODEL_EMITTERS['graphql']`. Optional `LanguageProfile` for sidecar metadata (e.g. a README explaining the schema layout) if useful — `GenericModelEmitter` is NOT used since GraphQL doesn't fit the per-namespace-then-aggregate pattern. The studio's targets table will pick it up automatically once registered (Download-only affordance per the whole-model contract).
 
 ## Task 3.1: GraphQL emitter
 

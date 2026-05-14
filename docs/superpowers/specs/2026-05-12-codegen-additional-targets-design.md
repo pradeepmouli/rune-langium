@@ -1,9 +1,22 @@
 # Additional Codegen Targets — Design Spec
 
 **Feature Branch**: `018-codegen-additional-targets`
-**Status**: Draft — design review
+**Status**: 🟡 **Partially shipped** — Phase 0 + Phase 1 merged; spec 019 supplements §6 with whole-model variants for namespace targets; Phases 2 + 3 pending
 **Created**: 2026-05-12
 **Author**: Pradeep Mouli (with brainstorming via Claude Code)
+
+## Implementation status (2026-05-14)
+
+| Phase | Status | Merged as | Notes |
+|-------|--------|-----------|-------|
+| **0** — Contract + UI shell + `/api/codegen` | ✅ Shipped | `d226996c` (PR #165) | Targets table, `WholeModelEmitter` contract, Pages Function, all 14 tasks per the plan. |
+| **0.5** — Whole-model variants for namespace targets | ✅ Shipped | `581ced9d` (PR #166) | Out-of-scope-in-this-spec follow-up. See [`2026-05-14-codegen-whole-model-variants-design.md`](./2026-05-14-codegen-whole-model-variants-design.md) for the architecture. Lands `LanguageProfile` + `GenericModelEmitter` + per-target `layout` options. |
+| **1** — Excel emitter | ✅ Shipped | `7fb790c8` (PR #167) | One `model.xlsx` with Types / Enums / TypeAliases / Conditions sheets. Deterministic timestamps. |
+| **Task #88** — Curated workspaces through `/api/codegen` | ✅ Shipped | `b9414f3e` (PR #168) | Pages Function accepts `curatedBundles`; deserializes pre-parsed Langium ASTs from the `CURATED_MIRROR` service binding alongside user files. |
+| **2** — SQL + Markdown emitters | ⏳ Pending | — | Each plugs into the Phase 0.5 dispatch as a per-namespace + Profile target — no new contract work needed. |
+| **3** — GraphQL SDL emitter | ⏳ Pending | — | Hand-rolled `WholeModelEmitter`, like Excel. |
+
+The §6 Phasing table below describes the *as-designed* plan; the §6/7 architecture descriptions still reflect the original spec. For the post-Phase-0.5 architecture (`LanguageProfile` + two-registry dispatch + opinionated Pages Function defaults), see the 019 spec linked above.
 
 ## 1. Goal
 
