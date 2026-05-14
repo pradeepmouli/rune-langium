@@ -1,10 +1,29 @@
 # Codegen Whole-Model Variants — Design Spec
 
-**Feature Branch**: `019-codegen-whole-model-variants` (proposed)
-**Status**: Draft — design review
+**Feature Branch**: `019-codegen-whole-model-variants`
+**Status**: ✅ **Shipped** — merged into master via PR #166 (`581ced9d`) on 2026-05-14
 **Created**: 2026-05-14
 **Author**: Pradeep Mouli (with Claude Code)
 **Depends on**: spec 018 Phase 0 (PR #165, merged)
+
+## Implementation status
+
+All five sub-phases of §8 are landed:
+
+- **0.5.1** — contract foundation (`LanguageProfile`, `GenericModelEmitter`, two-registry dispatch). Discriminator cleanup as planned.
+- **0.5.2** — Zod profile + `suppressBoilerplate`. `runtime.zod.ts` sidecar extracts the runtime helpers; `index.zod.ts` re-exports per-namespace modules.
+- **0.5.3** — TypeScript profile. Analogous to Zod with `runtime.ts` + `index.ts`.
+- **0.5.4** — JSON Schema profile. Single-file `$defs` document with `<namespace>.<TypeName>` keys; `$ref` rewrites preserve external refs.
+- **0.5.5** — `/api/codegen` Pages Function injects per-target opinionated defaults (`barrel` for Zod/TS, `single-file` for JSON Schema). Explicit `options.<target>.layout` from the request overrides.
+
+**Resolved decisions** (§10): library defaults universally `'per-namespace'`; single-file size guardrails as fatal `single-file-too-large` diagnostic at 50 namespaces / 1MB for Zod & TypeScript; Markdown TOC shape deferred to Phase 2; GraphQL per-namespace deferred.
+
+**Post-merge improvements landed in PR #166 review fixes:**
+- `resolveEmitter` returns `undefined` (→ structured `not-implemented` diagnostic) instead of silently falling back to NamespaceEmitter when a non-`per-namespace` layout requests a target without a Profile.
+- `GenericModelEmitter` validates the layout string (`'barrel' | 'single-file'`) instead of an unchecked cast; unknown layouts produce a fatal `invalid-layout` diagnostic.
+- Per-target option-block JSDoc clarifies the library/Pages-Function default split.
+
+This spec is preserved as historical reference. Subsequent work (Phase 1 Excel emitter, Task #88 curated bundles) builds on top of the architecture defined here.
 
 ---
 
