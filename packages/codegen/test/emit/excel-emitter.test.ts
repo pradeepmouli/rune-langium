@@ -137,6 +137,29 @@ describe('ExcelWholeModelEmitter (019 Phase 1)', () => {
     expect(row.getCell(COL.conditions.namespace).value).toBe('foo');
     expect(row.getCell(COL.conditions.owningType).value).toBe('Trade');
     expect(row.getCell(COL.conditions.condition).value).toBe('NonNegativeQuantity');
+    // Copilot review on PR #167: Expression cell should hold the
+    // expression body (`quantity >= 0`), NOT the full condition source
+    // text (`condition NonNegativeQuantity:\n    quantity >= 0`).
+    const expression = String(row.getCell(COL.conditions.expression).value);
+    expect(expression).toMatch(/quantity\s*>=\s*0/);
+    expect(expression).not.toMatch(/condition\s+NonNegativeQuantity/);
+  });
+
+  it('TypeAliases sheet captures aliases with their base type spelling', async () => {
+    const docs = await parseTwoNamespaces();
+    const outputs = await generate(docs, { target: 'excel' });
+    const wb = await loadWorkbook(outputs[0]!.binary!);
+
+    const aliases = wb.getWorksheet('TypeAliases')!;
+    // Fixture defines one alias: `typeAlias Label: string` under namespace foo.
+    expect(aliases.rowCount - 1).toBe(1);
+    const row = aliases.getRow(2);
+    expect(row.getCell(1).value).toBe('foo');
+    expect(row.getCell(2).value).toBe('Label');
+    // Codex review on PR #167: primitive aliases like `typeAlias Label: string`
+    // don't resolve `ref` (string has no AST node), so the Base Type cell
+    // must use the `$refText` fallback to surface the source-text spelling.
+    expect(row.getCell(3).value).toBe('string');
   });
 
   it('namespaces are listed in sorted order across all sheets (SC-007 determinism)', async () => {
@@ -153,12 +176,20 @@ describe('ExcelWholeModelEmitter (019 Phase 1)', () => {
     expect(namespacesInOrder).toEqual([...namespacesInOrder].sort());
   });
 
-  it('is registered as a whole-model emitter (per-namespace layout requests fall through to the registry)', async () => {
+  // Copilot review on PR #167: this test used to claim it exercised a
+  // per-namespace layout request, but the options object didn't actually
+  // set a layout, so it tested the default path twice. Now passes
+  // `layout: 'per-namespace'` explicitly through a cast — Excel has no
+  // namespace emitter, so the dispatch must still pick the registered
+  // WholeModelEmitter regardless of the layout value.
+  it('is registered as a whole-model emitter (an explicit per-namespace layout still resolves to it)', async () => {
     const docs = await parseTwoNamespaces();
-    // Even a per-namespace layout request hits the WholeModelEmitter
-    // dispatch path because Excel has no NamespaceEmitter — the dispatch
-    // picks WHOLE_MODEL_EMITTERS['excel'] regardless of layout.
-    const outputs = await generate(docs, { target: 'excel' });
+    const outputs = await generate(docs, {
+      target: 'excel',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      excel: { layout: 'per-namespace' } as any
+    });
     expect(outputs[0]?.binary).toBeDefined();
+    expect(outputs[0]?.relativePath).toBe('model.xlsx');
   });
 });

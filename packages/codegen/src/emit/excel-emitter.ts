@@ -67,28 +67,52 @@ function conditionCount(data: { conditions?: { length?: number } }): number {
   return data.conditions?.length ?? 0;
 }
 
-function superTypeName(data: { superType?: { ref?: { name?: unknown } | null } | null }): string {
+function superTypeName(data: { superType?: { ref?: { name?: unknown } | null; $refText?: string } | null }): string {
   const refName = data.superType?.ref?.name;
-  return typeof refName === 'string' ? refName : '';
+  if (typeof refName === 'string') return refName;
+  // Fall back to the source-text spelling when the ref didn't resolve to
+  // an in-scope AST node (e.g., a primitive parent type or a curated-
+  // bundle hydration that left $refText set). Mirrors what zod/ts
+  // emitters already do for unresolved refs.
+  return data.superType?.$refText ?? '';
 }
 
 function enumMemberNames(enumNode: { enumValues?: ReadonlyArray<{ name?: unknown }> }): string[] {
   return (enumNode.enumValues ?? []).map((v) => (typeof v.name === 'string' ? v.name : '')).filter((s) => s.length > 0);
 }
 
-function typeAliasBaseName(alias: { typeCall?: { type?: { ref?: { name?: unknown } | null } | null } | null }): string {
+function typeAliasBaseName(alias: {
+  typeCall?: {
+    type?: { ref?: { name?: unknown } | null; $refText?: string } | null;
+  } | null;
+}): string {
   const refName = alias.typeCall?.type?.ref?.name;
-  return typeof refName === 'string' ? refName : '';
+  if (typeof refName === 'string') return refName;
+  // Codex review on PR #167 — primitive aliases like `typeAlias Label: string`
+  // don't resolve `ref` (string has no AST node), so `ref.name` is undefined
+  // and the Base Type cell would be blank. The source-text spelling lives on
+  // the reference as `$refText`; other emitters already use this fallback.
+  return alias.typeCall?.type?.$refText ?? '';
 }
 
 /**
- * Best-effort extraction of the raw source text for a `condition`
- * node. `$cstNode.text` is set by the Langium parser; if absent (e.g.
- * deserialized AST without text-regions), we fall back to the
- * condition's name.
+ * Best-effort extraction of the raw source text for a condition's
+ * expression. Copilot review on PR #167: previously read the condition
+ * node's `$cstNode.text`, which includes the `condition <name>:` header
+ * — useful for source location but misleading in a column labeled
+ * "Expression". The expression node's own CST text gives just the
+ * expression body, which is what the column advertises.
+ *
+ * Falls back to the condition's name if the expression CST is missing
+ * (e.g. deserialized AST without text-regions on a curated bundle).
  */
-function conditionText(condition: { name?: unknown; $cstNode?: { text?: string } }): string {
-  return condition.$cstNode?.text ?? (typeof condition.name === 'string' ? condition.name : '');
+function conditionExpressionText(condition: {
+  name?: unknown;
+  expression?: { $cstNode?: { text?: string } } | null;
+}): string {
+  const exprText = condition.expression?.$cstNode?.text;
+  if (typeof exprText === 'string' && exprText.length > 0) return exprText;
+  return typeof condition.name === 'string' ? condition.name : '';
 }
 
 export class ExcelWholeModelEmitter implements WholeModelEmitter {
@@ -99,7 +123,12 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
   ): Promise<GeneratorOutput[]> {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = '@rune-langium/codegen';
-    workbook.created = new Date(0); // Deterministic timestamp (SC-007).
+    // SC-007 determinism: ExcelJS serializes BOTH `created` and `modified`
+    // into the workbook's core properties. Pin both to epoch 0 so the
+    // .xlsx bytes are stable across runs (Codex + Copilot review on PR #167).
+    const epoch = new Date(0);
+    workbook.created = epoch;
+    workbook.modified = epoch;
 
     const typesSheet = addSheet(workbook, 'Types', [
       { header: 'Namespace', key: 'namespace', width: 28 },
@@ -127,13 +156,29 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
     ]);
 
     // Sort namespaces for deterministic output (SC-007). Within each
-    // namespace, iterate the walker's declared maps; those preserve
-    // insertion order, which matches the emit-order topological sort.
+    // namespace, the walker's `emitOrder` is the authoritative topo-sort
+    // for data types (Copilot review on PR #167 — `dataByName` iteration
+    // order is source-insertion, not topo). For types not listed in
+    // emitOrder (cyclic + their dependencies, or any walker-skipped
+    // entries), append in `dataByName` insertion order.
     const sortedNamespaces = Array.from(walks.keys()).sort();
     for (const namespace of sortedNamespaces) {
       const walk = walks.get(namespace)!;
 
-      for (const [name, data] of walk.dataByName) {
+      const dataIterationOrder: string[] = [];
+      const seen = new Set<string>();
+      for (const typeName of walk.emitOrder) {
+        if (walk.dataByName.has(typeName)) {
+          dataIterationOrder.push(typeName);
+          seen.add(typeName);
+        }
+      }
+      for (const typeName of walk.dataByName.keys()) {
+        if (!seen.has(typeName)) dataIterationOrder.push(typeName);
+      }
+
+      for (const name of dataIterationOrder) {
+        const data = walk.dataByName.get(name)!;
         typesSheet.addRow({
           namespace,
           name,
@@ -141,15 +186,21 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
           attrCount: attributeCount(data as { attributes?: { length?: number } }),
           condCount: conditionCount(data as { conditions?: { length?: number } })
         });
-        const conditions = (data as { conditions?: ReadonlyArray<{ name?: unknown; $cstNode?: { text?: string } }> })
-          .conditions;
+        const conditions = (
+          data as {
+            conditions?: ReadonlyArray<{
+              name?: unknown;
+              expression?: { $cstNode?: { text?: string } } | null;
+            }>;
+          }
+        ).conditions;
         if (conditions) {
           for (const condition of conditions) {
             conditionsSheet.addRow({
               namespace,
               owningType: name,
               condition: typeof condition.name === 'string' ? condition.name : '',
-              expression: conditionText(condition)
+              expression: conditionExpressionText(condition)
             });
           }
         }
