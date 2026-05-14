@@ -122,17 +122,23 @@ function fatalDiagnostics(outputs: readonly GeneratorOutput[]): GeneratorDiagnos
 
 function downloadFilename(target: Target, outputs: readonly GeneratorOutput[]): string {
   const descriptor = TARGET_DESCRIPTORS[target];
-  // Whole-model emitters produce a single bundled file with a stable
-  // path like `model.xlsx` / `schema.graphql`.
+  // Multi-file results are always returned as a zip via `zipResponse`,
+  // regardless of contract. Codex review on PR #165 caught that a
+  // whole-model emitter returning workbook + sidecar manifest would
+  // previously have been served the zip's bytes under the `model.xlsx`
+  // filename — i.e., the browser would save a zip body as if it were
+  // a workbook. Length check takes precedence so the filename stays
+  // truthful to the body.
+  if (outputs.length > 1) {
+    return `${target}-output.zip`;
+  }
+  // Single-output path. Whole-model emitters embed the bundled path
+  // (`model.xlsx`, `schema.graphql`) in `relativePath`; per-namespace
+  // emitters embed `<ns>/<base><ext>`.
   if (descriptor.contract === 'whole-model') {
     return outputs[0]?.relativePath ?? `model${descriptor.extension}`;
   }
-  // Per-namespace: one namespace → use the actual generated path; many →
-  // bundle into `<target>-output.zip`.
-  if (outputs.length === 1) {
-    return outputs[0]!.relativePath.split('/').pop() ?? `${target}-output${descriptor.extension}`;
-  }
-  return `${target}-output.zip`;
+  return outputs[0]!.relativePath.split('/').pop() ?? `${target}-output${descriptor.extension}`;
 }
 
 function singleArtifactResponse(target: Target, output: GeneratorOutput, filename: string): Response {
@@ -158,7 +164,7 @@ function singleArtifactResponse(target: Target, output: GeneratorOutput, filenam
   });
 }
 
-async function zipResponse(target: Target, outputs: readonly GeneratorOutput[], filename: string): Promise<Response> {
+async function zipResponse(outputs: readonly GeneratorOutput[], filename: string): Promise<Response> {
   const zip = new JSZip();
   for (const output of outputs) {
     if (output.binary !== undefined) {
@@ -232,7 +238,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
     if (outputs.length === 1) {
       return singleArtifactResponse(body.target, outputs[0]!, filename);
     }
-    return zipResponse(body.target, outputs, filename);
+    return zipResponse(outputs, filename);
   } catch (err) {
     return new Response(
       JSON.stringify({
