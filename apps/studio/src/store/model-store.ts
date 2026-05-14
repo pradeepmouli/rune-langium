@@ -8,7 +8,7 @@
  */
 
 import { create } from 'zustand';
-import type { ModelSource, LoadProgress, LoadedModel, ModelLoadErrorCode } from '../types/model-types.js';
+import type { ModelSource, LoadProgress, LoadedModel, ModelLoadErrorCode, CachedFile } from '../types/model-types.js';
 import { loadModel } from '../services/model-loader.js';
 import { getModelSource } from '../services/model-registry.js';
 import { clearCache } from '../services/model-cache.js';
@@ -52,6 +52,14 @@ interface ModelStoreActions {
   clearModelCache(sourceId?: string): Promise<void>;
   /** Clear error for a source. */
   dismissError(sourceId: string): void;
+  /**
+   * Update a loaded model's `files` array. Used post-/api/parse to surface
+   * refOnly curated documents into `LoadedModel.files` so the ModelLoader
+   * count + curated file picker reflect bundle contents — buildArchiveLoader
+   * leaves files empty since the parsed payload only arrives via the routed
+   * parse response.
+   */
+  setCuratedFiles(sourceId: string, files: CachedFile[]): void;
 }
 
 type ModelStore = ModelStoreState & ModelStoreActions;
@@ -251,6 +259,33 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     const newErrors = new Map(errors);
     newErrors.delete(sourceId);
     set({ errors: newErrors });
+  },
+
+  setCuratedFiles(sourceId: string, files: CachedFile[]) {
+    const { models } = get();
+    const existing = models.get(sourceId);
+    if (!existing) return;
+    // Cheap idempotence — skip the set when nothing meaningful changes.
+    // parseWorkspaceFiles fires on every debounced edit; without a guard
+    // every keystroke would re-publish identical files and re-trigger
+    // downstream effects (model-watching useEffect → re-merge → another
+    // /api/parse round-trip → loop). The check compares path + the
+    // identity of `serializedModelJson` so a reparse with the same paths
+    // but updated AST content (e.g. bundle version bump) re-publishes
+    // and downstream consumers see fresh exports (Copilot review of
+    // PR #163: shallow path-only check let stale exports survive).
+    if (
+      existing.files.length === files.length &&
+      existing.files.every((f, i) => {
+        const next = files[i];
+        return next !== undefined && f.path === next.path && f.serializedModelJson === next.serializedModelJson;
+      })
+    ) {
+      return;
+    }
+    const updated = new Map(models);
+    updated.set(sourceId, { ...existing, files });
+    set({ models: updated });
   }
 }));
 

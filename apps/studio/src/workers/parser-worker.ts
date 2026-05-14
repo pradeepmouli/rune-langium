@@ -63,6 +63,13 @@ export interface HydrateRequest {
     serializedModel: string;
     /** Export descriptions for the symbol index, scoped to this document. */
     exports: Array<{ type: string; name: string; path: string }>;
+    /**
+     * Set on curated-bundle entries (added by /api/parse:functions/api/parse.ts).
+     * Absent on user-file entries. The studio uses this to mark workspace
+     * files refOnly without parsing URI prefixes — prefix inference
+     * false-positives when a user file lives under `${bundleId}/...`.
+     */
+    bundleId?: string;
   }>;
 }
 
@@ -95,6 +102,15 @@ export interface ParseWorkspaceResponse {
   parsedModels: Array<{ filePath: string; model: RosettaModel }>;
   errors: Record<string, string[]>;
   deferredExports: DeferredExportEntry[];
+  /**
+   * Optional curated-bundle file map produced ONLY by the routed parse path
+   * (workspace.ts:parseWorkspaceViaRouter). Lets the studio populate
+   * LoadedModel.files with reference-only entries so the file count and
+   * picker reflect curated bundle contents even though source text isn't
+   * available client-side. The in-worker parseWorkspace path doesn't set
+   * this — workers can't fetch curated bundles directly.
+   */
+  curatedRefOnlyFiles?: Record<string, import('../types/model-types.js').CachedFile[]>;
 }
 
 export type WorkerResponse = ParseResponse | ParseWorkspaceResponse | LinkDocumentResponse | HydrateResponse;

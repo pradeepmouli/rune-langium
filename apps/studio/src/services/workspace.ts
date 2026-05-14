@@ -9,6 +9,7 @@
 import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
 import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
+import type { CachedFile } from '../types/model-types.js';
 import type {
   WorkerRequest,
   ParseResponse,
@@ -48,6 +49,16 @@ export interface WorkspaceFile {
    * Used alongside bundleId to form { id, version } entries for /api/parse.
    */
   bundleVersion?: string;
+  /**
+   * Reference-only file from a curated bundle: present in the file list so
+   * counts + namespace listings reflect the bundle contents, but the source
+   * text is not available client-side (the curated artifact is pre-parsed
+   * and doesn't carry raw source). Distinct from `readOnly` (which only
+   * forbids edits): a refOnly file has no source to display. UI handlers:
+   * - SourceView click is a no-op (don't switch active source view).
+   * - Inspector renders a "Reference Only" pill + disables editing.
+   */
+  refOnly?: boolean;
 }
 
 export interface WorkspaceLoadProgress {
@@ -84,6 +95,15 @@ export interface ParseWorkspaceFilesResult {
   errors: Map<string, string[]>;
   parseMode: ParseMode;
   fallbackMessage?: string;
+  /**
+   * When the routed parse path succeeds, this carries the curated docs
+   * grouped by bundleId so callers can populate LoadedModel.files in the
+   * model-store with reference-only entries (path + serialized model,
+   * empty content). Drives the studio file count + curated file picker.
+   * Absent for main-thread fallback parses (curated source is unknown
+   * client-side in that path).
+   */
+  curatedRefOnlyFiles?: Record<string, CachedFile[]>;
   deferredExports?: Array<{
     filePath: string;
     namespace: string;
@@ -385,7 +405,8 @@ export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<Parse
       parsedModels: response.parsedModels,
       errors: errMap,
       parseMode: 'router',
-      deferredExports: response.deferredExports
+      deferredExports: response.deferredExports,
+      curatedRefOnlyFiles: response.curatedRefOnlyFiles
     };
   } catch (error) {
     // Router failed (network error, Pages Function unavailable, etc.) — fall back
@@ -463,19 +484,54 @@ export async function parseWorkspaceViaRouter(
   const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
   const models: RosettaModel[] = [];
   const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+  // Build a quick lookup: filePath → namespace from the response's
+  // deferredExports so curated entries get a real namespace rather than
+  // an empty string (Copilot review: CachedFile.namespace is declared
+  // non-optional). User-file entries are handled in the same loop.
+  const namespaceByFilePath = new Map<string, string>();
+  for (const d of data.deferredExports ?? []) {
+    namespaceByFilePath.set(d.filePath, d.namespace);
+  }
+  // Collect curated docs as refOnly CachedFile entries grouped by bundleId.
+  // The server stamps each hydration doc with an explicit `bundleId` field
+  // (apps/studio/functions/api/parse.ts) so we don't infer bundle
+  // membership from the URI prefix — the previous prefix inference
+  // false-positive'd for user files under `${bundleId}/path` (Codex P2
+  // review of PR #163).
+  const curatedRefOnlyFiles: Record<string, CachedFile[]> = {};
   for (const doc of data.hydrationState.documents) {
     // doc.uri is the bare filePath emitted by /api/parse + curated-fetch
     // (no `file://` prefix). The legacy `file:///` strip is retained for
     // backwards compatibility with any in-flight payloads.
     const filePath = doc.uri.replace(/^file:\/\/\//, '');
-    if (!userFileNames.has(filePath)) continue;
-    try {
-      const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
-      models.push(model);
-      parsedModels.push({ filePath, model });
-    } catch (err) {
-      console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
+    if (userFileNames.has(filePath)) {
+      try {
+        const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
+        models.push(model);
+        parsedModels.push({ filePath, model });
+      } catch (err) {
+        console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
+      }
+      continue;
     }
+    // Not a user file. Use the explicit bundleId stamped by the server;
+    // if it's missing (e.g. older deployments mid-rollout) we skip the
+    // entry rather than guess from the URI — silently grouping under
+    // the wrong key was the original Codex bug.
+    const bundleId = doc.bundleId;
+    if (!bundleId) continue;
+    // Strip the `${bundleId}/` prefix from the uri so the path within
+    // the bundle is preserved without the redundant id prefix on disk.
+    const pathInBundle = filePath.startsWith(`${bundleId}/`) ? filePath.slice(bundleId.length + 1) : filePath;
+    const entry: CachedFile = {
+      path: pathInBundle,
+      content: '',
+      namespace: namespaceByFilePath.get(filePath) ?? '',
+      serializedModelJson: doc.serializedModel as CachedFile['serializedModelJson'],
+      exports: doc.exports,
+      refOnly: true
+    };
+    (curatedRefOnlyFiles[bundleId] ??= []).push(entry);
   }
 
   // Hydrate the browser worker with ALL server-parsed documents + exports
@@ -516,7 +572,8 @@ export async function parseWorkspaceViaRouter(
     models,
     parsedModels,
     deferredExports: data.deferredExports,
-    errors: data.errors
+    errors: data.errors,
+    curatedRefOnlyFiles
   };
 }
 
@@ -645,7 +702,7 @@ export function createBlankWorkspaceFile(existingFiles: ReadonlyArray<WorkspaceF
 // Model file merging (T008) — integrate loaded reference models
 // ---------------------------------------------------------------------------
 
-import type { CachedFile, LoadedModel } from '../types/model-types.js';
+import type { LoadedModel } from '../types/model-types.js';
 
 /**
  * Merge loaded model files into the workspace as read-only entries.
@@ -680,7 +737,8 @@ export function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedMode
     serializedModelJson: f.serializedModelJson,
     exports: f.exports,
     bundleId: model.source.id,
-    bundleVersion: model.commitHash
+    bundleVersion: model.commitHash,
+    refOnly: f.refOnly
   }));
 
   // 019 Phase 0: when no files were extracted (server-side parse path),

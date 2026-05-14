@@ -62,6 +62,16 @@ export interface CachedFile {
    * symbols in the IndexManager without deserializing the full AST.
    */
   exports?: Array<{ type: string; name: string; path: string }>;
+  /**
+   * True when the file is a curated-bundle reference shipped without source
+   * content. Distinct from `readOnly` (which only forbids edits): a refOnly
+   * file's `content` is empty by design (the curated artifact pre-parses
+   * server-side, source text is not in the artifact today). UI surfaces:
+   * - SourceView ignores clicks on refOnly files (no source to switch to).
+   * - Inspector renders a "Reference Only" pill + disables form inputs.
+   * - ModelLoader counts include refOnly files toward the bundle total.
+   */
+  refOnly?: boolean;
 }
 
 /** Progress events yielded during model loading. */

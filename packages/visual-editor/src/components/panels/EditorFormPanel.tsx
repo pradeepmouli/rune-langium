@@ -90,6 +90,13 @@ export interface EditorFormPanelProps {
   nodeId: string | null;
   /** Whether the node is read-only (from external/locked source). */
   isReadOnly?: boolean;
+  /**
+   * True when the node's source file is a refOnly curated reference (no
+   * client-side source text). Forces the read-only fallback view and
+   * surfaces a "Reference Only" pill in the panel header so the user
+   * understands why edits are disabled.
+   */
+  refOnly?: boolean;
   /** Available type options for type selectors. */
   availableTypes: TypeOption[];
   /** All editor form actions. */
@@ -115,6 +122,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
   nodeData,
   nodeId,
   isReadOnly = false,
+  refOnly = false,
   availableTypes,
   actions,
   allNodes = [],
@@ -122,6 +130,10 @@ const EditorFormPanel = memo(function EditorFormPanel({
   onClose,
   onNavigateToNode
 }: EditorFormPanelProps) {
+  // refOnly entries always render the read-only DetailPanel — there's no
+  // source text to back form edits even if the kind would otherwise have
+  // a full editor (DataTypeForm, FunctionForm, etc.).
+  const effectivelyReadOnly = isReadOnly || refOnly;
   const panelRef = useRef<HTMLElement>(null);
 
   const inheritedGroups = useInheritedMembers(nodeData as AnyGraphNode | null, allNodes);
@@ -166,7 +178,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
 
   // ---- Read-only fallback --------------------------------------------------
 
-  if (isReadOnly || (nodeData as any).isReadOnly) {
+  if (effectivelyReadOnly || (nodeData as any).isReadOnly) {
     return (
       <aside
         ref={panelRef}
@@ -176,7 +188,12 @@ const EditorFormPanel = memo(function EditorFormPanel({
         className="flex flex-col h-full overflow-hidden"
         tabIndex={-1}
       >
-        <DetailPanel nodeData={nodeData} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
+        <DetailPanel
+          nodeData={nodeData}
+          onNavigateToNode={onNavigateToNode}
+          allNodeIds={allNodeIds}
+          refOnly={refOnly}
+        />
       </aside>
     );
   }

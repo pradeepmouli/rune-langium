@@ -216,3 +216,85 @@ describe('useModelStore — archiveLoader DI (T015)', () => {
     expect(useCodegenStore.getState().codePreviewTarget).toBe('zod');
   });
 });
+
+describe('useModelStore — setCuratedFiles (refOnly post-/api/parse)', () => {
+  beforeEach(() => {
+    useModelStore.setState({
+      models: new Map([
+        [
+          'cdm',
+          {
+            source: CURATED_SOURCE,
+            commitHash: '2026-05-13',
+            files: [],
+            loadedAt: 0
+          }
+        ]
+      ]),
+      loading: new Map(),
+      errors: new Map()
+    });
+  });
+
+  it("updates a loaded model's files", () => {
+    const files = [
+      {
+        path: 'sample.rosetta',
+        content: '',
+        namespace: 'cdm.sample',
+        refOnly: true,
+        serializedModelJson: '{"a":1}' as never
+      },
+      {
+        path: 'other.rosetta',
+        content: '',
+        namespace: 'cdm.other',
+        refOnly: true,
+        serializedModelJson: '{"b":2}' as never
+      }
+    ];
+    useModelStore.getState().setCuratedFiles('cdm', files);
+    expect(useModelStore.getState().models.get('cdm')?.files).toHaveLength(2);
+    expect(useModelStore.getState().models.get('cdm')?.files[0]?.path).toBe('sample.rosetta');
+  });
+
+  it('no-ops when the source is not loaded', () => {
+    const stateBefore = useModelStore.getState().models;
+    useModelStore
+      .getState()
+      .setCuratedFiles('unknown-bundle', [{ path: 'x.rosetta', content: '', namespace: 'x', refOnly: true }]);
+    expect(useModelStore.getState().models).toBe(stateBefore);
+  });
+
+  it('is idempotent when paths AND serializedModelJson identity match', () => {
+    const json1 = '{"a":1}' as never;
+    const files = [{ path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json1 }];
+    useModelStore.getState().setCuratedFiles('cdm', files);
+    const afterFirst = useModelStore.getState().models;
+    // Same paths + same serializedModelJson identity → no re-publish.
+    useModelStore
+      .getState()
+      .setCuratedFiles('cdm', [
+        { path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json1 }
+      ]);
+    expect(useModelStore.getState().models).toBe(afterFirst);
+  });
+
+  it('re-publishes when serializedModelJson identity changes (bundle version bump)', () => {
+    const json1 = '{"a":1}' as never;
+    const json2 = '{"a":2}' as never;
+    useModelStore
+      .getState()
+      .setCuratedFiles('cdm', [
+        { path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json1 }
+      ]);
+    const afterFirst = useModelStore.getState().models;
+    useModelStore
+      .getState()
+      .setCuratedFiles('cdm', [
+        { path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json2 }
+      ]);
+    expect(useModelStore.getState().models).not.toBe(afterFirst);
+    expect(useModelStore.getState().models.get('cdm')?.files[0]?.serializedModelJson).toBe(json2);
+  });
+});

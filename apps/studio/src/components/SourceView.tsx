@@ -20,12 +20,16 @@ export interface SourceViewProps {
 export function SourceView({ files, activeFile, onFileSelect }: SourceViewProps) {
   const [selectedPath, setSelectedPath] = useState<string>(activeFile ?? files[0]?.path ?? '');
 
-  const currentFile = useMemo(
-    () => files.find((f) => f.path === selectedPath),
-    [files, selectedPath]
-  );
+  const currentFile = useMemo(() => files.find((f) => f.path === selectedPath), [files, selectedPath]);
 
   const handleFileSelect = (path: string) => {
+    // refOnly files (curated bundle entries) have no source text client-side
+    // — the curated artifact ships pre-parsed without raw `.rosetta` content.
+    // Don't switch the active source view to a blank tab; leave whatever
+    // file is currently active in place. The tab is still rendered so the
+    // user can see the file exists in the bundle.
+    const target = files.find((f) => f.path === path);
+    if (target?.refOnly) return;
     setSelectedPath(path);
     onFileSelect?.(path);
   };
@@ -44,9 +48,7 @@ export function SourceView({ files, activeFile, onFileSelect }: SourceViewProps)
         {files.map((file) => (
           <button
             key={file.path}
-            className={`studio-source-view__tab ${
-              file.path === selectedPath ? 'studio-source-view__tab--active' : ''
-            }`}
+            className={`studio-source-view__tab ${file.path === selectedPath ? 'studio-source-view__tab--active' : ''}`}
             onClick={() => handleFileSelect(file.path)}
             title={file.path}
             type="button"

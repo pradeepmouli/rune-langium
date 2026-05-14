@@ -108,6 +108,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       content: string;
       serializedModel: string;
       exports: Array<{ type: string; name: string; path: string }>;
+      /**
+       * Set on curated bundle entries; absent on user-file entries. The
+       * studio uses this to mark workspace files refOnly without parsing
+       * URI prefixes (which would false-positive for user paths like
+       * `${bundleId}/foo.rosetta`).
+       */
+      bundleId?: string;
     }> = [];
 
     // The legacy deferredExports summary mirrors what handleParseWorkspace produces.
@@ -139,7 +146,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         try {
           const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version, curatedFetcher);
           for (const doc of curatedDocs) {
-            documentsForHydration.push(doc);
+            // Stamp the bundle id onto the hydration document explicitly so
+            // the studio doesn't have to infer bundle membership from the
+            // URI prefix (Copilot review: that inference was silently
+            // coupled to curated-fetch's URI convention and false-positive'd
+            // for user files saved under `${bundleId}/...` paths). The
+            // field is optional on the hydration shape so user-file
+            // entries omit it.
+            documentsForHydration.push({ ...doc, bundleId: bundle.id });
             // Surface curated namespaces in the deferredExports response so
             // the studio's namespace explorer / graph view (which reads from
             // deferredExports) lists CDM/FpML/rune-dsl entries alongside

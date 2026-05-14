@@ -1185,12 +1185,44 @@ export function EditorPage({
     );
   }, [sourceEditorFiles, activeEditorFile, lspClient, handleSourceChange, navigateToNode, handleEditorViewCreated]);
 
+  // Namespaces that belong to refOnly curated files. Earlier revisions
+  // inferred this by matching `deferredExports[i].filePath.split('/')[0]`
+  // against loaded refOnly bundle ids — that false-positive'd for user
+  // files saved under `${bundleId}/foo.rosetta` paths (Codex P2 review
+  // of PR #163). The correct anchor is the workspace file's `refOnly`
+  // flag itself; we resolve each refOnly file's server-side filePath
+  // (the form the server emits in deferredExports, which is
+  // `${bundleId}/${pathInBundle}` without the studio's bracket prefix)
+  // and look up the matching deferredExports entry to recover the
+  // namespace. Pure intersection — no inference required.
+  const refOnlyNamespaces = useMemo(() => {
+    if (deferredExports.length === 0) return new Set<string>();
+    const refOnlyServerPaths = new Set<string>();
+    for (const f of files) {
+      if (!f.refOnly) continue;
+      const m = /^\[([^\]]+)\]\/(.*)$/.exec(f.path);
+      if (m) refOnlyServerPaths.add(`${m[1]}/${m[2]}`);
+    }
+    if (refOnlyServerPaths.size === 0) return new Set<string>();
+    const ns = new Set<string>();
+    for (const d of deferredExports) {
+      if (refOnlyServerPaths.has(d.filePath)) ns.add(d.namespace);
+    }
+    return ns;
+  }, [files, deferredExports]);
+
+  const selectedNodeIsRefOnly = useMemo(() => {
+    const data = selectedNodeData as unknown as { namespace?: string } | null;
+    return !!(data?.namespace && refOnlyNamespaces.has(data.namespace));
+  }, [selectedNodeData, refOnlyNamespaces]);
+
   const renderInspectorPane = useCallback(
     () => (
       <div className="flex flex-col min-h-0 h-full overflow-auto">
         <EditorFormPanel
           nodeData={selectedNodeData}
           nodeId={selectedNodeId}
+          refOnly={selectedNodeIsRefOnly}
           availableTypes={availableTypes}
           actions={editorActions}
           allNodes={storeNodes}
@@ -1205,6 +1237,7 @@ export function EditorPage({
     [
       selectedNodeData,
       selectedNodeId,
+      selectedNodeIsRefOnly,
       availableTypes,
       editorActions,
       storeNodes,
