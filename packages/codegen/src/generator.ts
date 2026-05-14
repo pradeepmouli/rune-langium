@@ -21,6 +21,7 @@ import { GenericModelEmitter } from './emit/generic-model-emitter.js';
 import { zodProfile } from './emit/zod-profile.js';
 import { typescriptProfile } from './emit/typescript-profile.js';
 import { jsonSchemaProfile } from './emit/json-schema-profile.js';
+import { ExcelWholeModelEmitter } from './emit/excel-emitter.js';
 
 // 019 spec §3.2 — two-registry dispatch.
 //
@@ -46,7 +47,7 @@ const NAMESPACE_EMITTERS: Partial<Record<Target, NamespaceEmitterConstructor>> =
 };
 
 const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>> = {
-  // Phase 1: excel: ExcelWholeModelEmitter
+  excel: ExcelWholeModelEmitter
   // Phase 3: graphql: GraphqlSdlEmitter
 };
 
