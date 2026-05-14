@@ -335,13 +335,13 @@ export function EditorPage({
     // New workspace — discard any previously accumulated corpus models.
     corpusModelsRef.current = [];
 
-    if (models.length > 0 || deferredExports.length > 0) {
-      if (models.length > 0) {
-        useEditorStore.getState().loadModels(models as unknown[]);
-      }
-      if (deferredExports.length > 0) {
-        useEditorStore.getState().loadDeferredExports(deferredExports);
-      }
+    // Always push deferredExports (even when empty) so the editor-store's
+    // state is replaced atomically on workspace switches — Codex P2 review
+    // of PR #164. Pre-empty-array call clears stale curated placeholders
+    // from a previous workspace before loadModels merges the fresh ones.
+    useEditorStore.getState().loadDeferredExports(deferredExports);
+    if (models.length > 0) {
+      useEditorStore.getState().loadModels(models as unknown[]);
     }
   }, [models, deferredExports]);
 

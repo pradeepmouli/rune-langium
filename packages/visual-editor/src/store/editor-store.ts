@@ -241,6 +241,47 @@ function buildNodeMap(nodes: TypeGraphNode[]): Map<string, TypeGraphNode> {
   return new Map(nodes.map((node) => [node.id, node]));
 }
 
+/**
+ * Build placeholder TypeGraphNodes for deferred-export entries whose
+ * full RosettaModel hasn't been materialized yet. Both `loadModels`
+ * (post-replace merge) and `loadDeferredExports` (direct insert) share
+ * this — keeps the placeholder shape in one place so a change to
+ * `AnyGraphNode`'s required fields only happens once.
+ *
+ * Mutates `existingIds` by adding each newly-emitted node's id so
+ * callers can use the same set to track de-duplication across
+ * subsequent operations.
+ */
+function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingIds: Set<string>): TypeGraphNode[] {
+  const out: TypeGraphNode[] = [];
+  for (const entry of entries) {
+    for (const exp of entry.exports) {
+      // Only create graph nodes for top-level element kinds. Enum values
+      // are index-only (for cross-file reference resolution).
+      if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
+      const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
+      const nodeId = `${entry.namespace}::${exp.name}`;
+      if (existingIds.has(nodeId)) continue;
+      existingIds.add(nodeId);
+      out.push({
+        id: nodeId,
+        type: nodeType,
+        position: { x: 0, y: 0 },
+        data: {
+          $type: exp.type,
+          name: exp.name,
+          namespace: entry.namespace,
+          position: { x: 0, y: 0 },
+          errors: [],
+          isReadOnly: true,
+          hasExternalRefs: false
+        } as unknown as AnyGraphNode
+      });
+    }
+  }
+  return out;
+}
+
 function collectFocusClusterNodeIds(
   nodeId: string,
   edges: TypeGraphEdge[],
@@ -509,32 +550,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           // of "loadModels then loadDeferredExports" — keeps the API
           // single-call so callers can't forget the merge step. Existing
           // ids win (placeholders don't duplicate a now-materialized node).
-          const deferredExports = get().deferredExports;
           const existingIds = new Set(rawNodes.map((n) => n.id));
-          const mergedNodes: TypeGraphNode[] = [...rawNodes];
-          for (const entry of deferredExports) {
-            for (const exp of entry.exports) {
-              if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
-              const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
-              const nodeId = `${entry.namespace}::${exp.name}`;
-              if (existingIds.has(nodeId)) continue;
-              existingIds.add(nodeId);
-              mergedNodes.push({
-                id: nodeId,
-                type: nodeType,
-                position: { x: 0, y: 0 },
-                data: {
-                  $type: exp.type,
-                  name: exp.name,
-                  namespace: entry.namespace,
-                  position: { x: 0, y: 0 },
-                  errors: [],
-                  isReadOnly: true,
-                  hasExternalRefs: false
-                } as unknown as AnyGraphNode
-              });
-            }
-          }
+          const placeholders = buildDeferredPlaceholderNodes(get().deferredExports, existingIds);
+          const mergedNodes: TypeGraphNode[] = placeholders.length > 0 ? [...rawNodes, ...placeholders] : rawNodes;
 
           // Determine initial visibility based on model size
           const allNamespaces = new Set(mergedNodes.map((n) => n.data.namespace));
@@ -542,13 +560,17 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
           const expandedNamespaces = shouldCollapse ? new Set<string>() : new Set(allNamespaces);
 
-          // Only layout visible nodes
+          // Lay out the visible nodes so the graph renders in position
+          // form. Previous code stored the layout result on an unused
+          // local — review caught the wasted compute. Use the laid-out
+          // nodes when available; fall back to mergedNodes when
+          // shouldCollapse is true (large workspace: no layout yet).
           const visibleNodes = shouldCollapse ? [] : mergedNodes;
           const visibleEdges = shouldCollapse ? [] : edges;
-          const _nodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : [];
+          const laidOutNodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : mergedNodes;
 
           set({
-            nodes: mergedNodes,
+            nodes: laidOutNodes,
             edges,
             layoutOptions: opts,
             selectedNodeId: null,
@@ -565,47 +587,19 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         loadDeferredExports(entries) {
-          // Store entries on the editor state so subsequent loadModels
-          // calls can re-merge them automatically. Without this, every
-          // loadModels that replaces `nodes` would lose the curated
-          // placeholder nodes added here.
+          // Stash the entries on the store regardless of length so
+          // subsequent loadModels calls re-merge against the current
+          // truth — including the "clear curated state on workspace
+          // switch" case where entries is []. Codex P2 caught the
+          // previous behaviour: skipping the set on empty arrays left
+          // stale curated namespaces lingering after a workspace switch.
           const existing = get().nodes;
           const existingIds = new Set(existing.map((n) => n.id));
-          const newNodes: TypeGraphNode[] = [];
-
-          for (const entry of entries) {
-            for (const exp of entry.exports) {
-              // Only create graph nodes for top-level element kinds.
-              // Enum values are index-only (for cross-file reference resolution).
-              if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
-              const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
-              const nodeId = `${entry.namespace}::${exp.name}`;
-              if (existingIds.has(nodeId)) continue;
-              existingIds.add(nodeId);
-              newNodes.push({
-                id: nodeId,
-                type: nodeType,
-                position: { x: 0, y: 0 },
-                data: {
-                  $type: exp.type,
-                  name: exp.name,
-                  namespace: entry.namespace,
-                  position: { x: 0, y: 0 },
-                  errors: [],
-                  isReadOnly: true,
-                  hasExternalRefs: false
-                } as unknown as AnyGraphNode
-              });
-            }
-          }
-
+          const newNodes = buildDeferredPlaceholderNodes(entries, existingIds);
           const allNodes = newNodes.length > 0 ? [...existing, ...newNodes] : existing;
           const allNamespaces = new Set(allNodes.map((n) => n.data.namespace));
           const shouldCollapse = allNodes.length > LARGE_MODEL_THRESHOLD;
           set((state) => ({
-            // Always stash the entries — even when newNodes is empty, the
-            // entries are still needed so a subsequent loadModels can
-            // re-derive placeholders after replacing nodes.
             deferredExports: entries,
             nodes: allNodes,
             visibility: {

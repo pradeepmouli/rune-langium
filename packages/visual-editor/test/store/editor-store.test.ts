@@ -171,4 +171,69 @@ describe('EditorStore', () => {
       expect(store.getState().detailPanelOpen).toBe(false);
     });
   });
+
+  describe('loadDeferredExports + loadModels re-merge (fix/019 PR #164)', () => {
+    const curatedEntries = [
+      {
+        filePath: 'cdm/base/math.rosetta',
+        namespace: 'cdm.base.math',
+        exports: [
+          { type: 'Data', name: 'Quantity' },
+          { type: 'Data', name: 'NonNegativeQuantity' }
+        ]
+      },
+      {
+        filePath: 'cdm/product/asset.rosetta',
+        namespace: 'cdm.product.asset',
+        exports: [{ type: 'RosettaEnumeration', name: 'AssetClass' }]
+      }
+    ];
+
+    it('stores deferredExports on state for downstream re-merge', () => {
+      store.getState().loadDeferredExports(curatedEntries);
+      expect(store.getState().deferredExports).toEqual(curatedEntries);
+    });
+
+    it('creates placeholder nodes immediately on loadDeferredExports', () => {
+      store.getState().loadDeferredExports(curatedEntries);
+      const nodeIds = new Set(store.getState().nodes.map((n) => n.id));
+      expect(nodeIds.has('cdm.base.math::Quantity')).toBe(true);
+      expect(nodeIds.has('cdm.base.math::NonNegativeQuantity')).toBe(true);
+      expect(nodeIds.has('cdm.product.asset::AssetClass')).toBe(true);
+    });
+
+    it('preserves placeholders when loadModels runs afterwards', async () => {
+      store.getState().loadDeferredExports(curatedEntries);
+      const result = await parse(SIMPLE_INHERITANCE_SOURCE);
+      store.getState().loadModels(result.value);
+      const ids = new Set(store.getState().nodes.map((n) => n.id));
+      expect(ids.has('cdm.base.math::Quantity'), 'curated placeholder survives loadModels').toBe(true);
+      expect(ids.has('cdm.product.asset::AssetClass'), 'all curated namespaces survive').toBe(true);
+    });
+
+    it('does not duplicate ids when loadModels runs', () => {
+      const entry = {
+        filePath: 'cdm/base/math.rosetta',
+        namespace: 'cdm.base.math',
+        exports: [{ type: 'Data', name: 'Dup' }]
+      };
+      store.getState().loadDeferredExports([entry]);
+      store.getState().loadModels([]);
+      const ids = store.getState().nodes.map((n) => n.id);
+      const dupCount = ids.filter((id) => id === 'cdm.base.math::Dup').length;
+      expect(dupCount).toBeLessThanOrEqual(1);
+    });
+
+    it('clears placeholders on loadDeferredExports([]) — workspace switch', () => {
+      store.getState().loadDeferredExports(curatedEntries);
+      expect(store.getState().nodes.length).toBeGreaterThan(0);
+      store.getState().loadDeferredExports([]);
+      expect(store.getState().deferredExports).toEqual([]);
+      // loadModels with no models + no deferredExports leaves no curated
+      // placeholders — confirms the stale-state scenario from review.
+      store.getState().loadModels([]);
+      const ids = new Set(store.getState().nodes.map((n) => n.id));
+      expect(ids.has('cdm.base.math::Quantity'), 'old placeholder should be gone').toBe(false);
+    });
+  });
 });
