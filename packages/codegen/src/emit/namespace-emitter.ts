@@ -33,6 +33,55 @@ export interface NamespaceEmitterConstructor {
   new (model: NamespaceWalkResult, options: GeneratorOptions, registry: NamespaceRegistry): NamespaceEmitter;
 }
 
+/**
+ * Emitter contract for targets that consume the **entire model** as a
+ * single input (rather than one namespace at a time). Used by targets
+ * that need cross-namespace state — e.g. Excel produces one workbook
+ * for the whole model with cross-sheet hyperlinks, GraphQL produces
+ * one SDL file with the full type graph, SQL produces one DDL file
+ * with cross-table foreign keys.
+ *
+ * Returns one or more {@link GeneratorOutput} entries. Most whole-model
+ * emitters return a single entry (the single artifact); the array
+ * return type leaves room for emitters that want to split into
+ * multiple files (e.g. an Excel emitter that produces both the
+ * workbook AND a sidecar manifest).
+ *
+ * Async because binary emitters (ExcelJS) use stream APIs internally.
+ * The Task 0.4 dispatch in `generator.ts` awaits this method.
+ *
+ * @see {@link isWholeModelEmitter} — runtime discriminator.
+ * @see 018 Phase 0 Task 0.2.
+ */
+export interface WholeModelEmitter {
+  emit(
+    walks: ReadonlyMap<string, NamespaceWalkResult>,
+    registry: NamespaceRegistry,
+    options: GeneratorOptions
+  ): Promise<GeneratorOutput[]>;
+}
+
+export interface WholeModelEmitterConstructor {
+  new (): WholeModelEmitter;
+}
+
+/**
+ * Runtime discriminator between the two emitter contracts. Distinguishes
+ * by prototype shape: `NamespaceEmitter` exposes a `finalize()` method
+ * (plus the per-element `emitData` / `emitEnumeration` / etc. hooks);
+ * `WholeModelEmitter` exposes only a single async `emit()` method.
+ *
+ * Used by `generator.ts:runGenerate` (Task 0.4) to dispatch each
+ * target through the appropriate pipeline.
+ */
+export function isWholeModelEmitter(
+  c: NamespaceEmitterConstructor | WholeModelEmitterConstructor
+): c is WholeModelEmitterConstructor {
+  const proto = (c as { prototype?: Record<string, unknown> }).prototype;
+  if (!proto) return false;
+  return typeof proto.emit === 'function' && typeof proto.finalize !== 'function';
+}
+
 function sortedNames(map: ReadonlyMap<string, unknown>): string[] {
   return Array.from(map.keys()).sort();
 }
