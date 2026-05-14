@@ -19,6 +19,7 @@ import { walkNamespace, type NamespaceWalkResult } from './emit/namespace-walker
 import type { LanguageProfile } from './emit/language-profile.js';
 import { GenericModelEmitter } from './emit/generic-model-emitter.js';
 import { zodProfile } from './emit/zod-profile.js';
+import { typescriptProfile } from './emit/typescript-profile.js';
 
 // 019 spec §3.2 — two-registry dispatch.
 //
@@ -49,8 +50,8 @@ const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>
 };
 
 const PROFILES: Partial<Record<Target, LanguageProfile<Target>>> = {
-  zod: zodProfile
-  // Phase 0.5.3: typescript: typescriptProfile
+  zod: zodProfile,
+  typescript: typescriptProfile
   // Phase 0.5.4: 'json-schema': jsonSchemaProfile
 };
 
