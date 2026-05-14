@@ -168,6 +168,7 @@ export interface EditorActions {
   addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string): void;
   removeAttribute(nodeId: string, attrName: string): void;
   renameAttribute(nodeId: string, oldName: string, newName: string): void;
+  updateAttributeType(nodeId: string, attrName: string, newTypeName: string): void;
   updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string): void;
   reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
   updateCardinality(nodeId: string, attrName: string, cardinality: string): void;
@@ -885,6 +886,51 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName)
             )
           }));
+        },
+
+        updateAttributeType(nodeId: string, attrName: string, newTypeName: string) {
+          set((state) => {
+            let changed = false;
+            const updatedNodes = state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type !== 'Data' && d.$type !== 'Annotation') return n;
+              const attrs = ((d as any).attributes ?? []) as any[];
+              const idx = attrs.findIndex((a) => a.name === attrName);
+              if (idx < 0) return n;
+              changed = true;
+              const next = [...attrs];
+              next[idx] = {
+                ...next[idx],
+                typeCall: {
+                  ...(next[idx].typeCall ?? { $type: 'TypeCall', arguments: [] }),
+                  type: { $refText: newTypeName }
+                }
+              };
+              return { ...n, data: { ...d, attributes: next } };
+            });
+            if (!changed) return state;
+
+            const filteredEdges = state.edges.filter(
+              (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName)
+            );
+            const newTargetId = state.nodes.find((n) => (n.data as AnyGraphNode).name === newTypeName)?.id;
+            if (!newTargetId || newTargetId === nodeId) {
+              return { nodes: updatedNodes, edges: filteredEdges };
+            }
+            const newEdge: TypeGraphEdge = {
+              id: `${nodeId}--attribute-ref--${attrName}--${newTargetId}`,
+              source: nodeId,
+              target: newTargetId,
+              type: 'attribute-ref',
+              data: {
+                kind: 'attribute-ref' as const,
+                label: attrName,
+                cardinality: ''
+              } as EdgeData
+            };
+            return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
+          });
         },
 
         renameAttribute(nodeId: string, oldName: string, newName: string) {

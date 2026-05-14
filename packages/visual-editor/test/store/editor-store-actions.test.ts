@@ -508,3 +508,66 @@ describe('EditorStore — renameAttribute', () => {
     expect(edgeAfter?.data?.label).toBe('econ');
   });
 });
+
+// ---------------------------------------------------------------------------
+// updateAttributeType (Structure View Phase 0 — granular cell-level dispatch)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — updateAttributeType', () => {
+  it('rewrites the typeCall.type.$refText', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(id, 'economics', 'OldType', '0..*');
+
+    store.getState().updateAttributeType(id, 'economics', 'Economics');
+
+    const node = store.getState().nodes.find((n) => n.id === id)!;
+    const attrs = ((node.data as any).attributes ?? []) as Array<any>;
+    const target = attrs.find((a) => a.name === 'economics')!;
+    expect(target.typeCall.type.$refText).toBe('Economics');
+  });
+
+  it('is a no-op when the attribute does not exist', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(id, 'economics', 'OldType', '0..*');
+
+    expect(() => store.getState().updateAttributeType(id, 'missing', 'X')).not.toThrow();
+    const node = store.getState().nodes.find((n) => n.id === id)!;
+    const attrs = ((node.data as any).attributes ?? []) as Array<any>;
+    expect(attrs[0].name).toBe('economics');
+    expect(attrs[0].typeCall.type.$refText).toBe('OldType');
+  });
+
+  it('removes the stale attribute-ref edge when the old target was in the graph', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const oldId = store.getState().createType('data', 'OldEconomics', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'economics', 'OldEconomics', '0..1');
+
+    expect(
+      store.getState().edges.some((e) => e.source === tradeId && e.target === oldId && e.data?.kind === 'attribute-ref')
+    ).toBe(true);
+
+    store.getState().updateAttributeType(tradeId, 'economics', 'string');
+
+    expect(
+      store.getState().edges.some((e) => e.source === tradeId && e.target === oldId && e.data?.kind === 'attribute-ref')
+    ).toBe(false);
+  });
+
+  it('adds an attribute-ref edge when the new target exists in the graph', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'economics', 'string', '0..1');
+    const newId = store.getState().createType('data', 'Economics', 'cdm.trade');
+
+    store.getState().updateAttributeType(tradeId, 'economics', 'Economics');
+
+    const edge = store
+      .getState()
+      .edges.find((e) => e.source === tradeId && e.target === newId && e.data?.kind === 'attribute-ref');
+    expect(edge).toBeDefined();
+    expect(edge?.data?.label).toBe('economics');
+  });
+});
