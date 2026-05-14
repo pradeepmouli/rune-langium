@@ -19,13 +19,9 @@ import {
   type RosettaRule,
   type RosettaTypeAlias
 } from '@rune-langium/core';
-import {
-  buildTypeReferenceGraph,
-  findCyclicTypes,
-  type TypeReferenceGraph
-} from '../cycle-detector.js';
+import { buildTypeReferenceGraph, findCyclicTypes, type TypeReferenceGraph } from '../cycle-detector.js';
 import { topoSort } from '../topo-sort.js';
-import type { Target } from '../types.js';
+import { TARGET_DESCRIPTORS, type Target } from '../types.js';
 
 export interface NamespaceWalkResult {
   readonly docs: readonly LangiumDocument[];
@@ -100,14 +96,20 @@ export function walkNamespace(docs: LangiumDocument[], namespace: string): Names
 
 /**
  * Convert a dot-separated Rune namespace to the emitted relative file path for a target.
+ *
+ * Extensions are sourced from {@link TARGET_DESCRIPTORS} so the registry stays
+ * the single source of truth (018 Phase 0 Task 0.5).
+ *
+ * Whole-model targets (excel, graphql) emit a single bundled file rather than
+ * one-per-namespace, so the path is `model<ext>` and the `namespace` argument
+ * is ignored. Namespace-contract targets (zod, typescript, json-schema, sql,
+ * markdown) map `cdm.base.math` → `cdm/base/math<ext>`.
  */
 export function getTargetRelativePath(namespace: string, target: Target): string {
+  const descriptor = TARGET_DESCRIPTORS[target];
+  if (descriptor.contract === 'whole-model') {
+    return `model${descriptor.extension}`;
+  }
   const basePath = namespace.replace(/\./g, '/');
-  if (target === 'zod') {
-    return `${basePath}.zod.ts`;
-  }
-  if (target === 'json-schema') {
-    return `${basePath}.schema.json`;
-  }
-  return `${basePath}.ts`;
+  return `${basePath}${descriptor.extension}`;
 }
