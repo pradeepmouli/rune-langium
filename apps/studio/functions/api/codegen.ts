@@ -182,6 +182,7 @@ async function loadAllDocuments(
   const { RuneDsl } = createRuneDslServices(EmptyFileSystem);
   const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
   const builder = RuneDsl.shared.workspace.DocumentBuilder;
+  const langiumDocuments = RuneDsl.shared.workspace.LangiumDocuments;
   const serializer = RuneDsl.serializer.JsonSerializer;
 
   const docs: import('langium').LangiumDocument[] = [];
@@ -200,29 +201,23 @@ async function loadAllDocuments(
     try {
       const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version, curatedFetcher);
       for (const cd of curatedDocs) {
-        const model = serializer.deserialize(
-          cd.serializedModel
-        ) as unknown as import('@rune-langium/core').RosettaModel;
-        // The factory's `update` API isn't suitable for pre-parsed
-        // ASTs, but we can construct a minimal document literal that
-        // satisfies the codegen package's contract — it only reads
-        // `doc.uri` and `doc.parseResult.value`. Cast through `unknown`
-        // because LangiumDocument's full type includes fields we don't
-        // populate (state, references, etc.) that the codegen path
-        // never touches.
+        const model = serializer.deserialize(cd.serializedModel) as import('@rune-langium/core').RosettaModel;
         // `cd.uri` already includes the bundle-id prefix (curated-fetch's
         // toDocuments builds `${bundleId}/${doc.path}`). Copilot review
         // on PR #168 caught a previous double-prefix bug where we wrote
-        // `curated:///${bundle.id}/${cd.uri}` — that produced URIs like
-        // `curated:///cdm/cdm/base/math.rosetta`. Use cd.uri as-is.
-        docs.push({
-          uri: URI.parse(`curated:///${cd.uri}`),
-          parseResult: {
-            value: model,
-            parserErrors: [],
-            lexerErrors: []
-          }
-        } as unknown as import('langium').LangiumDocument);
+        // `curated:///${bundle.id}/${cd.uri}`. Use cd.uri as-is.
+        const uri = URI.parse(`curated:///${cd.uri}`);
+        // Codex review on PR #169: register with the document store via
+        // `factory.fromModel` so `RuneDslLinker.loadAstNode` can resolve
+        // cross-references through `.ref`. The previous synthetic doc
+        // literal skipped this and would have caused `.ref` resolution
+        // failures for curated models with typed cross-namespace fields.
+        const doc = factory.fromModel(model, uri);
+        const existing = langiumDocuments.getDocument(uri);
+        docs.push(existing ?? doc);
+        if (!existing) {
+          langiumDocuments.addDocument(doc);
+        }
       }
     } catch (err) {
       if (err instanceof CuratedBundleUnavailableError) {

@@ -74,6 +74,7 @@ type WorkerInboundMessage = InboundMessage | PreviewWorkerRequest | PreviewExecu
 const { RuneDsl } = createRuneDslServices();
 const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
 const builder = RuneDsl.shared.workspace.DocumentBuilder;
+const langiumDocuments = RuneDsl.shared.workspace.LangiumDocuments;
 
 let currentCodegenFiles: FileEntry[] = [];
 let currentPreviewFiles: FileEntry[] = [];
@@ -206,23 +207,33 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
   }
 
   // Curated docs come pre-linked from the curated-mirror build (CI runs
-  // Langium with a higher heap budget than the browser can spare). Build
-  // here would try to re-link and fail because the live Langium service
-  // hasn't indexed cross-references.
+  // Langium with a higher heap budget than the browser can spare).
+  // Build here would try to re-link and fail because the live Langium
+  // service hasn't indexed cross-references.
+  //
+  // Codex review on PR #169: use `factory.fromModel` + add to the
+  // service's document store. The earlier synthetic doc literal
+  // (`{ uri, parseResult: { value, [], [] } }`) skipped Langium's
+  // LangiumDocument ownership, which `RuneDslLinker.loadAstNode`
+  // relies on to resolve cross-references through `.ref`. For curated
+  // models with typed fields, refs would silently fail to resolve and
+  // the preview / codegen output would be missing typed children.
   const curatedDocuments: LangiumDocument[] = [];
   for (const entry of curatedEntries) {
     try {
       const model = RuneDsl.serializer.JsonSerializer.deserialize(
         entry.serializedModelJson!
-      ) as unknown as import('@rune-langium/core').RosettaModel;
-      curatedDocuments.push({
-        uri: URI.parse(entry.uri),
-        parseResult: {
-          value: model,
-          parserErrors: [],
-          lexerErrors: []
-        }
-      } as unknown as LangiumDocument);
+      ) as import('@rune-langium/core').RosettaModel;
+      const uri = URI.parse(entry.uri);
+      const doc = factory.fromModel(model, uri);
+      // Idempotent: re-running preview on the same workspace would
+      // double-register otherwise. `getDocument` returns the existing
+      // doc if any; otherwise add the new one.
+      const existing = langiumDocuments.getDocument(uri);
+      curatedDocuments.push(existing ?? doc);
+      if (!existing) {
+        langiumDocuments.addDocument(doc);
+      }
     } catch (err) {
       console.warn(`[codegen-worker] Failed to deserialize curated AST for ${entry.uri}; excluded from preview.`, err);
     }
