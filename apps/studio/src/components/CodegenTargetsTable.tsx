@@ -7,8 +7,8 @@
  * Renders all targets from {@link TARGET_DESCRIPTORS} as rows. The action
  * affordance follows the emitter contract:
  *   - `contract === 'namespace'` (zod, typescript, json-schema, sql, markdown)
- *     → two buttons: [View] [Download]
- *   - `contract === 'whole-model'` (excel, graphql) → [Download] only
+ *     → two icon buttons: View (eye) + Download (arrow)
+ *   - `contract === 'whole-model'` (excel, graphql) → Download only
  *
  * The component is intentionally presentational: callers pass `onView` /
  * `onDownload` plus an optional `inflightTarget` to swap that row's
@@ -20,11 +20,12 @@ import React from 'react';
 import { IMPLEMENTED_TARGETS, TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
+import { Eye, Download } from 'lucide-react';
 
 export interface CodegenTargetsTableProps {
-  /** Called when the user clicks the [View] button on a namespace-contract row. */
+  /** Called when the user clicks the View button on a namespace-contract row. */
   onView: (target: Target) => void;
-  /** Called when the user clicks the [Download] button on any row. */
+  /** Called when the user clicks the Download button on any row. */
   onDownload: (target: Target) => void;
   /**
    * If set, that target's row replaces its action buttons with a spinner
@@ -64,9 +65,6 @@ export function CodegenTargetsTable({
             <th scope="col" className="px-3 py-2 font-medium">
               Target
             </th>
-            <th scope="col" className="px-3 py-2 font-medium">
-              Description
-            </th>
             <th scope="col" className="px-3 py-2 text-right font-medium">
               Actions
             </th>
@@ -86,31 +84,34 @@ export function CodegenTargetsTable({
                 className="border-b border-border last:border-b-0 hover:bg-muted/20"
               >
                 <td className="px-3 py-2 font-medium">{descriptor.label}</td>
-                <td className="px-3 py-2 text-muted-foreground">{descriptor.desc}</td>
                 <td className="px-3 py-2 text-right">
                   {isLoading ? (
                     <Spinner data-testid={`codegen-targets-table__spinner-${target}`} className="ml-auto size-4" />
                   ) : (
-                    <div className="flex justify-end gap-1.5">
+                    <div className="flex justify-end gap-1">
                       {canView ? (
                         <Button
                           type="button"
-                          size="sm"
-                          variant="secondary"
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`View ${descriptor.label}`}
+                          title={`View ${descriptor.label}`}
                           data-testid={`codegen-targets-table__view-${target}`}
                           onClick={() => onView(target)}
                         >
-                          View
+                          <Eye className="size-4" aria-hidden="true" />
                         </Button>
                       ) : null}
                       <Button
                         type="button"
-                        size="sm"
-                        variant="outline"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Download ${descriptor.label}`}
+                        title={`Download ${descriptor.label}`}
                         data-testid={`codegen-targets-table__download-${target}`}
                         onClick={() => onDownload(target)}
                       >
-                        Download
+                        <Download className="size-4" aria-hidden="true" />
                       </Button>
                     </div>
                   )}
