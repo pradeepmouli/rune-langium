@@ -128,4 +128,70 @@ describe('CodePreviewPanel table-as-landing flow', () => {
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
     expect(screen.queryByTestId('target-switcher')).toBeNull();
   });
+
+  // 018 Task 0.12 — clicking [Download] should POST to /api/codegen,
+  // show a spinner on the clicked row while in-flight, then clear it
+  // once the fetch resolves. The download itself is exercised by
+  // workspace-download.test.ts; here we just verify the panel-level
+  // wiring: fetch is invoked with the workspace files, and the table's
+  // spinner reflects the in-flight state.
+  it('clicking [Download] posts to /api/codegen with the workspace files', async () => {
+    let resolveFetch: (res: Response) => void = () => {};
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    // Only stub URL.createObjectURL / revokeObjectURL — these aren't
+    // present in jsdom and would throw on the real download path. The
+    // actual anchor click is a no-op in jsdom, so leaving createElement
+    // / appendChild / removeChild alone keeps testing-library's own
+    // DOM mounts working.
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
+
+    const w = makeWorker();
+    const files = [
+      { name: 'x.rune', path: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)\n', dirty: false }
+    ];
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} files={files as never} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('codegen-targets-table__download-zod'));
+    });
+
+    // Spinner appears on the zod row while the fetch is pending.
+    expect(screen.getByTestId('codegen-targets-table__spinner-zod')).toBeTruthy();
+    expect(screen.queryByTestId('codegen-targets-table__view-zod')).toBeNull();
+
+    // Fetch was invoked with the right URL + body.
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('/api/codegen');
+    const body = JSON.parse((init as RequestInit).body as string) as {
+      files: Array<{ path: string; content: string }>;
+      target: string;
+    };
+    expect(body.target).toBe('zod');
+    expect(body.files).toEqual([{ path: 'x.rune', content: files[0]!.content }]);
+
+    // Resolve the fetch with a successful response so the spinner clears.
+    await act(async () => {
+      resolveFetch(
+        new Response('out', {
+          status: 200,
+          headers: { 'Content-Disposition': 'attachment; filename="x.zod.ts"' }
+        })
+      );
+    });
+
+    // Spinner gone; row buttons are back.
+    expect(screen.queryByTestId('codegen-targets-table__spinner-zod')).toBeNull();
+    expect(screen.getByTestId('codegen-targets-table__view-zod')).toBeTruthy();
+
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 });

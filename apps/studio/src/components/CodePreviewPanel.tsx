@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@rune-langium/design-system/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { refactoryDark } from '../lang/refactory-dark-theme.js';
+import { downloadTargetViaRouter, CodegenDownloadError, type WorkspaceFile } from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
 import { useCodegenStore, type CodePreviewFile, type CodePreviewSnapshot } from '../store/codegen-store.js';
 import { usePreviewStore } from '../store/preview-store.js';
@@ -69,6 +70,13 @@ function statusLabel(snapshot: CodePreviewSnapshot, target: Target): string {
 export interface CodePreviewPanelProps {
   worker: Worker;
   sourceEditorRef: SourceEditorHandle | null;
+  /**
+   * Workspace files (user-authored only — curated bundles are
+   * server-loaded). Used by the Download flow (018 Task 0.12) to
+   * POST `{ files, target }` to `/api/codegen`. Optional during the
+   * transition; absent → Download is disabled and logs a warning.
+   */
+  files?: ReadonlyArray<WorkspaceFile>;
 }
 
 function activeFileFromSnapshot(snapshot: CodePreviewSnapshot): CodePreviewFile | undefined {
@@ -78,7 +86,7 @@ function activeFileFromSnapshot(snapshot: CodePreviewSnapshot): CodePreviewFile 
   return snapshot.files.find((file) => file.relativePath === snapshot.activeRelativePath) ?? snapshot.files[0];
 }
 
-export function CodePreviewPanel({ worker, sourceEditorRef }: CodePreviewPanelProps): React.ReactElement {
+export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreviewPanelProps): React.ReactElement {
   const target = useCodegenStore((s) => s.codePreviewTarget);
   const activeTarget = useCodegenStore((s) => s.activeTarget);
   const setActiveTarget = useCodegenStore((s) => s.setActiveTarget);
@@ -177,11 +185,37 @@ export function CodePreviewPanel({ worker, sourceEditorRef }: CodePreviewPanelPr
     [setActiveTarget, setCodePreviewTarget, target]
   );
 
-  const handleDownloadTarget = useCallback((newTarget: Target) => {
-    // 018 Task 0.12 will wire this to `/api/codegen`. Until then the
-    // table simply records intent so we don't crash on click.
-    console.warn('[CodePreviewPanel] Download for target not yet implemented:', newTarget);
-  }, []);
+  // 018 Task 0.12 — which target's Download is in flight, used to swap
+  // its row buttons for a spinner on the targets table while the POST
+  // to /api/codegen is outstanding. Panel-local state because no other
+  // component needs to observe it.
+  const [downloadingTarget, setDownloadingTarget] = useState<Target | undefined>(undefined);
+
+  const handleDownloadTarget = useCallback(
+    async (newTarget: Target) => {
+      if (!files || files.length === 0) {
+        console.warn('[CodePreviewPanel] Download skipped — no workspace files available for target:', newTarget);
+        return;
+      }
+      setDownloadingTarget(newTarget);
+      try {
+        const requestFiles = files.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
+        await downloadTargetViaRouter(requestFiles, newTarget);
+      } catch (err) {
+        if (err instanceof CodegenDownloadError) {
+          console.error(
+            `[CodePreviewPanel] /api/codegen ${err.status} for target ${newTarget}: ${err.message}`,
+            err.diagnostics
+          );
+        } else {
+          console.error('[CodePreviewPanel] Download failed for target', newTarget, err);
+        }
+      } finally {
+        setDownloadingTarget(undefined);
+      }
+    },
+    [files]
+  );
 
   const handleReturnToTargets = useCallback(() => {
     setActiveTarget(undefined);
@@ -284,7 +318,11 @@ export function CodePreviewPanel({ worker, sourceEditorRef }: CodePreviewPanelPr
         data-component="workspace.codePreview"
         className="preview-panel preview-panel--code flex h-full flex-col overflow-hidden"
       >
-        <CodegenTargetsTable onView={handleViewTarget} onDownload={handleDownloadTarget} />
+        <CodegenTargetsTable
+          onView={handleViewTarget}
+          onDownload={handleDownloadTarget}
+          inflightTarget={downloadingTarget}
+        />
       </section>
     );
   }

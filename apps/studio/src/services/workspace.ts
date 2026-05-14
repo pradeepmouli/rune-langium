@@ -822,3 +822,94 @@ export function applyFileChanges(
     return f;
   });
 }
+
+/**
+ * Error raised by downloadTargetViaRouter so callers can read the
+ * per-diagnostic detail of an /api/codegen failure without re-parsing
+ * the response. Mirrors the function's JSON envelope (spec §7.6).
+ */
+export class CodegenDownloadError extends Error {
+  readonly status: number;
+  readonly diagnostics: ReadonlyArray<{ severity: string; code: string; message: string }>;
+  constructor(
+    message: string,
+    status: number,
+    diagnostics: ReadonlyArray<{ severity: string; code: string; message: string }> = []
+  ) {
+    super(message);
+    this.name = 'CodegenDownloadError';
+    this.status = status;
+    this.diagnostics = diagnostics;
+  }
+}
+
+/**
+ * Pull the `filename="..."` value from a Content-Disposition header.
+ * Falls back to the given default when the header is missing or
+ * malformed.
+ */
+function parseContentDispositionFilename(header: string | null, fallback: string): string {
+  if (!header) return fallback;
+  // Matches filename="value" (preferred) or unquoted filename=value.
+  const match = /filename\*?=("([^"]+)"|([^;]+))/i.exec(header);
+  return match ? (match[2] ?? match[3] ?? fallback).trim() : fallback;
+}
+
+/**
+ * Trigger a browser save for `blob` using the document API. Creates a
+ * temporary anchor with an object URL, clicks it, then revokes the URL.
+ */
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * POST workspace files to /api/codegen and trigger a browser save for
+ * the response artifact (single file for whole-model and one-namespace
+ * generations; zip for multi-namespace per-namespace generations).
+ *
+ * Spec §7.6. Companion server lives at apps/studio/functions/api/codegen.ts.
+ *
+ * Throws CodegenDownloadError on any non-2xx response with the parsed
+ * diagnostics envelope; throws a plain Error on network failure.
+ *
+ * 018 Phase 0 Task 0.12.
+ */
+export async function downloadTargetViaRouter(
+  files: Array<{ path: string; content: string }>,
+  target: string,
+  options: Record<string, unknown> = {}
+): Promise<void> {
+  const response = await fetch('/api/codegen', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, target, options })
+  });
+
+  if (!response.ok) {
+    let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
+    try {
+      envelope = (await response.json()) as typeof envelope;
+    } catch {
+      // Non-JSON response (e.g. 502 from the edge before reaching the
+      // function). Keep the empty envelope; the status code alone is
+      // enough information for the user.
+    }
+    const diags = Array.isArray(envelope.diagnostics)
+      ? (envelope.diagnostics as ReadonlyArray<{ severity: string; code: string; message: string }>)
+      : [];
+    throw new CodegenDownloadError(envelope.error ?? `/api/codegen HTTP ${response.status}`, response.status, diags);
+  }
+
+  const blob = await response.blob();
+  const filename = parseContentDispositionFilename(response.headers.get('Content-Disposition'), `${target}-output`);
+  triggerBlobDownload(blob, filename);
+}

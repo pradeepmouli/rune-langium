@@ -1085,8 +1085,8 @@ export function EditorPage({
 
   const CodePreviewPanelMounted = useCallback(() => {
     if (!codegenWorker) return null;
-    return <CodePreviewPanel worker={codegenWorker} sourceEditorRef={sourceEditorHandle} />;
-  }, [codegenWorker, sourceEditorHandle]);
+    return <CodePreviewPanel worker={codegenWorker} sourceEditorRef={sourceEditorHandle} files={files} />;
+  }, [codegenWorker, files, sourceEditorHandle]);
 
   const FormPreviewPanelMounted = useCallback(() => <FormPreviewPanelShell />, []);
 
