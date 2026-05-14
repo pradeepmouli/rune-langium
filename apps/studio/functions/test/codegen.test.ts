@@ -269,6 +269,32 @@ type Quantity:
     expect(body.error).toMatch(/files \/ curatedBundles/);
   });
 
+  // Copilot review on PR #168 — malformed curatedBundles used to pass
+  // the validator (which only checked files / target) and crash later
+  // in `fetchCuratedBundle(undefined, undefined)`. Now the validator
+  // rejects with a structured 400.
+  it('returns 400 when `curatedBundles` is malformed', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [],
+        target: 'zod',
+        curatedBundles: 'cdm' // not an array
+      })
+    } as never);
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when a curatedBundles entry is missing `version`', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [],
+        target: 'zod',
+        curatedBundles: [{ id: 'cdm' /* missing version */ }]
+      })
+    } as never);
+    expect(res.status).toBe(400);
+  });
+
   it('returns 502 with curated_bundle_unavailable when fetch fails', async () => {
     const { CuratedBundleUnavailableError } = await import('../lib/curated-fetch.js');
     fetchCuratedBundleMock.mockRejectedValueOnce(new CuratedBundleUnavailableError('cdm', 'latest', 404));

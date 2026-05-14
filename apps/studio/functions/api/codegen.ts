@@ -104,18 +104,40 @@ function jsonError(status: number, error: string, diagnostics: readonly Generato
 
 function isValidRequest(body: unknown): body is CodegenRequestBody {
   if (!body || typeof body !== 'object') return false;
-  const b = body as { files?: unknown; target?: unknown };
-  return (
-    Array.isArray(b.files) &&
-    b.files.every(
+  const b = body as { files?: unknown; target?: unknown; curatedBundles?: unknown };
+  if (
+    !Array.isArray(b.files) ||
+    !b.files.every(
       (f) =>
         f &&
         typeof f === 'object' &&
         typeof (f as { path?: unknown }).path === 'string' &&
         typeof (f as { content?: unknown }).content === 'string'
-    ) &&
-    typeof b.target === 'string'
-  );
+    ) ||
+    typeof b.target !== 'string'
+  ) {
+    return false;
+  }
+  // Copilot review on PR #168 — when `curatedBundles` is supplied, it
+  // must be an array of `{ id: string, version: string }`. A malformed
+  // value used to fall through to `fetchCuratedBundle(undefined, undefined)`
+  // and surface as an opaque 500; now it's a 400 with the validator's
+  // documented shape message.
+  if (b.curatedBundles !== undefined) {
+    if (
+      !Array.isArray(b.curatedBundles) ||
+      !b.curatedBundles.every(
+        (entry) =>
+          entry &&
+          typeof entry === 'object' &&
+          typeof (entry as { id?: unknown }).id === 'string' &&
+          typeof (entry as { version?: unknown }).version === 'string'
+      )
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -188,8 +210,13 @@ async function loadAllDocuments(
         // because LangiumDocument's full type includes fields we don't
         // populate (state, references, etc.) that the codegen path
         // never touches.
+        // `cd.uri` already includes the bundle-id prefix (curated-fetch's
+        // toDocuments builds `${bundleId}/${doc.path}`). Copilot review
+        // on PR #168 caught a previous double-prefix bug where we wrote
+        // `curated:///${bundle.id}/${cd.uri}` — that produced URIs like
+        // `curated:///cdm/cdm/base/math.rosetta`. Use cd.uri as-is.
         docs.push({
-          uri: URI.parse(`curated:///${bundle.id}/${cd.uri}`),
+          uri: URI.parse(`curated:///${cd.uri}`),
           parseResult: {
             value: model,
             parserErrors: [],
