@@ -587,12 +587,24 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         },
 
         loadDeferredExports(entries) {
+          // Idempotence guard (Codex P1 review on PR #164): EditorPage's
+          // effect re-fires whenever its `deferredExports` prop reference
+          // changes. The prop default is an inline `[]` which is a fresh
+          // array on every render → unconditional re-dispatch would
+          // re-emit visibility state on every render and trigger a
+          // subscriber re-render cascade. Short-circuit if entries is
+          // the same reference or both-empty: the contract for "clear
+          // stale state on workspace switch" only fires on a genuine
+          // transition from non-empty to empty, which this guard preserves.
+          const current = get().deferredExports;
+          if (entries === current) return;
+          if (entries.length === 0 && current.length === 0) return;
           // Stash the entries on the store regardless of length so
           // subsequent loadModels calls re-merge against the current
           // truth — including the "clear curated state on workspace
-          // switch" case where entries is []. Codex P2 caught the
-          // previous behaviour: skipping the set on empty arrays left
-          // stale curated namespaces lingering after a workspace switch.
+          // switch" case where entries is [] (and the previous state
+          // had some). Codex P2 caught the previous skipping behaviour:
+          // it left stale curated namespaces lingering after a switch.
           const existing = get().nodes;
           const existingIds = new Set(existing.map((n) => n.id));
           const newNodes = buildDeferredPlaceholderNodes(entries, existingIds);

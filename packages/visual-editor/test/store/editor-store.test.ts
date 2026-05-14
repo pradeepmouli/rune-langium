@@ -224,6 +224,30 @@ describe('EditorStore', () => {
       expect(dupCount).toBeLessThanOrEqual(1);
     });
 
+    it('is idempotent when entries reference is unchanged (Codex P1 #164)', () => {
+      // EditorPage's effect can re-fire with a stable reference. Repeated
+      // calls with the SAME array must not mutate state.
+      const entries = curatedEntries;
+      store.getState().loadDeferredExports(entries);
+      const stateAfterFirst = store.getState();
+      store.getState().loadDeferredExports(entries);
+      expect(store.getState()).toBe(stateAfterFirst);
+    });
+
+    it('is idempotent when entries is empty AND store entries is empty', () => {
+      // The footgun Codex P1 caught: EditorPage's default `deferredExports
+      // = []` creates a fresh `[]` every render. Without this guard, every
+      // render would re-emit `set()` → visibility object replacement →
+      // subscriber re-renders → render loop.
+      expect(store.getState().deferredExports).toEqual([]);
+      const stateBefore = store.getState();
+      store.getState().loadDeferredExports([]);
+      expect(store.getState()).toBe(stateBefore);
+      // Different array identity, same content — still no-op.
+      store.getState().loadDeferredExports([]);
+      expect(store.getState()).toBe(stateBefore);
+    });
+
     it('clears placeholders on loadDeferredExports([]) — workspace switch', () => {
       store.getState().loadDeferredExports(curatedEntries);
       expect(store.getState().nodes.length).toBeGreaterThan(0);
