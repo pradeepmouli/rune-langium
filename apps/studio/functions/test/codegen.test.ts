@@ -11,8 +11,24 @@
  *   - 200 zip response when generation produces multiple outputs.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import JSZip from 'jszip';
+
+// 019 Task #88 — `vi.mock` is hoisted to the top of the file before any
+// other code (including describe blocks) runs. Use `vi.hoisted` so the
+// shared mock function is created at hoist-time and captured by both
+// the factory below and the per-test `.mockResolvedValueOnce(...)`
+// configuration in `describe(... curated bundles)` further down.
+const { fetchCuratedBundleMock } = vi.hoisted(() => ({ fetchCuratedBundleMock: vi.fn() }));
+
+vi.mock('../lib/curated-fetch.js', async () => {
+  const actual = await vi.importActual<typeof import('../lib/curated-fetch.js')>('../lib/curated-fetch.js');
+  return {
+    ...actual,
+    fetchCuratedBundle: (id: string, version: string) => fetchCuratedBundleMock(id, version)
+  };
+});
+
 import { onRequestPost } from '../api/codegen.js';
 
 function makeRequest(body: unknown): Request {
@@ -157,5 +173,116 @@ describe('POST /api/codegen', () => {
     const zip = await JSZip.loadAsync(buf);
     const names = Object.keys(zip.files).sort();
     expect(names).toEqual(['x.schema.json', 'y.schema.json']);
+  });
+});
+
+// 019 Task #88 — curated-bundle hydration through /api/codegen.
+// Mock `fetchCuratedBundle` to return pre-serialized Langium models
+// built in-test from real Rune source. This exercises the
+// deserialize-and-codegen path without depending on the live curated
+// mirror.
+describe('POST /api/codegen — curated bundles (019 Task #88)', () => {
+  async function buildSerializedCuratedDoc(
+    uri: string,
+    source: string
+  ): Promise<{
+    uri: string;
+    content: string;
+    serializedModel: string;
+    exports: Array<{ type: string; name: string; path: string }>;
+  }> {
+    const { createRuneDslServices } = await import('@rune-langium/core');
+    const { URI } = await import('langium');
+    const { RuneDsl } = createRuneDslServices();
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(source, URI.parse(`inmemory:///${uri}`));
+    await RuneDsl.shared.workspace.DocumentBuilder.build([doc], { validation: false });
+    const serializedModel = RuneDsl.serializer.JsonSerializer.serialize(doc.parseResult.value, {
+      refText: true,
+      textRegions: true
+    });
+    return { uri, content: '', serializedModel, exports: [] };
+  }
+
+  it('hydrates curated bundles and generates output alongside user files', async () => {
+    const curatedDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      `namespace cdm.base.math
+
+type Quantity:
+  amount number (1..1)
+  currency string (0..1)
+`
+    );
+    fetchCuratedBundleMock.mockResolvedValueOnce([curatedDoc]);
+
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [], // pure curated workspace — no user-authored files
+        target: 'zod',
+        curatedBundles: [{ id: 'cdm', version: 'latest' }]
+      })
+    } as never);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('application/zip');
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const zip = await JSZip.loadAsync(buf);
+    const names = Object.keys(zip.files).sort();
+    // Zod default for /api/codegen is 'barrel' → per-ns + index + runtime.
+    expect(names).toContain('cdm/base/math.zod.ts');
+    expect(names).toContain('index.zod.ts');
+    expect(names).toContain('runtime.zod.ts');
+    const namespaceFile = await zip.files['cdm/base/math.zod.ts']!.async('string');
+    expect(namespaceFile).toMatch(/QuantitySchema/);
+  });
+
+  it('combines user files and curated bundles in one generation', async () => {
+    const curatedDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    fetchCuratedBundleMock.mockResolvedValueOnce([curatedDoc]);
+
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ path: 'user.rune', content: 'namespace user\n\ntype Trade:\n  id string (1..1)\n' }],
+        target: 'json-schema',
+        options: { 'json-schema': { layout: 'single-file' } },
+        curatedBundles: [{ id: 'cdm', version: 'latest' }]
+      })
+    } as never);
+
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    const parsed = JSON.parse(text) as { $defs: Record<string, unknown> };
+    // Both the user namespace AND the curated namespace appear under $defs.
+    expect(parsed.$defs).toHaveProperty('user.Trade');
+    expect(parsed.$defs).toHaveProperty('cdm.base.math.Quantity');
+  });
+
+  it('returns 400 when both files and curatedBundles are empty', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({ files: [], target: 'zod', curatedBundles: [] })
+    } as never);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/files \/ curatedBundles/);
+  });
+
+  it('returns 502 with curated_bundle_unavailable when fetch fails', async () => {
+    const { CuratedBundleUnavailableError } = await import('../lib/curated-fetch.js');
+    fetchCuratedBundleMock.mockRejectedValueOnce(new CuratedBundleUnavailableError('cdm', 'latest', 404));
+
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [],
+        target: 'zod',
+        curatedBundles: [{ id: 'cdm', version: 'latest' }]
+      })
+    } as never);
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error?: string; bundleId?: string };
+    expect(body.error).toBe('curated_bundle_unavailable');
+    expect(body.bundleId).toBe('cdm');
   });
 });

@@ -357,7 +357,9 @@ export async function parseFile(content: string, uri?: string): Promise<ParseFil
  * function that doesn't depend on the store. mergeModelFiles populates these
  * fields whenever it merges corpus files into the workspace.
  */
-function collectCuratedBundlesFromWorkspace(files: WorkspaceFile[]): Array<{ id: string; version: string }> {
+export function collectCuratedBundlesFromWorkspace(
+  files: ReadonlyArray<WorkspaceFile>
+): Array<{ id: string; version: string }> {
   const seen = new Map<string, string>(); // id → version
   for (const file of files) {
     if (file.bundleId && file.bundleVersion && !seen.has(file.bundleId)) {
@@ -912,12 +914,17 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
 export async function downloadTargetViaRouter(
   files: Array<{ path: string; content: string }>,
   target: string,
-  options: Record<string, unknown> = {}
+  options: Record<string, unknown> = {},
+  curatedBundles: ReadonlyArray<{ id: string; version: string }> = []
 ): Promise<void> {
+  const body: Record<string, unknown> = { files, target, options };
+  if (curatedBundles.length > 0) {
+    body.curatedBundles = curatedBundles;
+  }
   const response = await fetch('/api/codegen', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files, target, options })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {

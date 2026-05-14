@@ -32,6 +32,7 @@ import {
   type GeneratorOutput,
   type Target
 } from '@rune-langium/codegen';
+import { fetchCuratedBundle, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 
 interface CodegenRequestBody {
   files: Array<{ path: string; content: string }>;
@@ -56,6 +57,17 @@ interface CodegenRequestBody {
     };
     markdown?: { layout?: 'per-namespace' | 'barrel' };
   };
+  /**
+   * Optional curated-bundle hydration list. When present, the function
+   * fetches each bundle's pre-parsed serialized AST via the
+   * `CURATED_MIRROR` service binding (same pattern as /api/parse) and
+   * passes the deserialized documents alongside user files to
+   * `generate()`. Enables curated-only workspaces (CDM, FpML, rune-dsl)
+   * to be served by Download.
+   *
+   * 019 Task #88.
+   */
+  curatedBundles?: Array<{ id: string; version: string }>;
 }
 
 /**
@@ -73,9 +85,15 @@ const PAGES_FUNCTION_DEFAULT_LAYOUT: Partial<Record<Target, string>> = {
   markdown: 'barrel'
 };
 
-// No env bindings used yet — kept as a typed shape so future
-// rate-limiting / curated-bundle hydration can plug in cleanly.
-interface Env {}
+// 019 Task #88 — curated bundles ride through the `CURATED_MIRROR`
+// service binding (same wiring as /api/parse, declared in wrangler.toml).
+// Local dev and tests can omit the binding; the function falls back to
+// global fetch against the public curated-mirror URL.
+interface Env {
+  CURATED_MIRROR?: {
+    fetch: (input: string | Request, init?: RequestInit) => Promise<Response>;
+  };
+}
 
 function jsonError(status: number, error: string, diagnostics: readonly GeneratorDiagnostic[] = []): Response {
   return new Response(JSON.stringify({ ok: false, error, diagnostics }), {
@@ -112,9 +130,29 @@ function toRosettaUri(name: string, URI: typeof import('langium').URI): import('
   return URI.parse(`file:///${remapped}`);
 }
 
-async function parseDocuments(
-  files: ReadonlyArray<{ path: string; content: string }>
-): Promise<import('langium').LangiumDocument[]> {
+/**
+ * Combined loader for user-authored files + curated-bundle documents.
+ * Hydrates both into a single `LangiumDocument[]` that `generate()`
+ * can consume.
+ *
+ * User files take the parse path (raw .rune source → Langium parser →
+ * resolved AST). Curated bundles take the deserialize path: each
+ * pre-parsed `modelJson` is rebuilt into a Langium AST via
+ * `JsonSerializer.deserialize`, then wrapped in a synthetic
+ * `LangiumDocument` so it shares the same shape as the parsed
+ * user-file documents.
+ *
+ * The codegen package only reads `doc.uri` and `doc.parseResult.value`
+ * from each document — both fields are populated by the path above,
+ * so the emitters don't need to know which path produced each doc.
+ *
+ * 019 Task #88.
+ */
+async function loadAllDocuments(
+  files: ReadonlyArray<{ path: string; content: string }>,
+  curatedBundles: ReadonlyArray<{ id: string; version: string }>,
+  curatedFetcher: ((url: string, init?: RequestInit) => Promise<Response>) | undefined
+): Promise<{ docs: import('langium').LangiumDocument[]; curatedError?: Response }> {
   const [{ createRuneDslServices }, { EmptyFileSystem, URI }] = await Promise.all([
     import('@rune-langium/core'),
     import('langium')
@@ -122,10 +160,73 @@ async function parseDocuments(
   const { RuneDsl } = createRuneDslServices(EmptyFileSystem);
   const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
   const builder = RuneDsl.shared.workspace.DocumentBuilder;
+  const serializer = RuneDsl.serializer.JsonSerializer;
 
-  const docs = files.map((f) => factory.fromString(f.content, toRosettaUri(f.path, URI)));
-  await builder.build(docs, { validation: false });
-  return docs;
+  const docs: import('langium').LangiumDocument[] = [];
+
+  // User-authored files — parse via Langium.
+  if (files.length > 0) {
+    const parsed = files.map((f) => factory.fromString(f.content, toRosettaUri(f.path, URI)));
+    docs.push(...parsed);
+  }
+
+  // Curated bundles — fetch pre-parsed serialized models from the
+  // mirror and deserialize each one into a synthetic LangiumDocument.
+  // Fetch errors that surface as `CuratedBundleUnavailableError`
+  // bubble up to onRequestPost as a structured 502.
+  for (const bundle of curatedBundles) {
+    try {
+      const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version, curatedFetcher);
+      for (const cd of curatedDocs) {
+        const model = serializer.deserialize(
+          cd.serializedModel
+        ) as unknown as import('@rune-langium/core').RosettaModel;
+        // The factory's `update` API isn't suitable for pre-parsed
+        // ASTs, but we can construct a minimal document literal that
+        // satisfies the codegen package's contract — it only reads
+        // `doc.uri` and `doc.parseResult.value`. Cast through `unknown`
+        // because LangiumDocument's full type includes fields we don't
+        // populate (state, references, etc.) that the codegen path
+        // never touches.
+        docs.push({
+          uri: URI.parse(`curated:///${bundle.id}/${cd.uri}`),
+          parseResult: {
+            value: model,
+            parserErrors: [],
+            lexerErrors: []
+          }
+        } as unknown as import('langium').LangiumDocument);
+      }
+    } catch (err) {
+      if (err instanceof CuratedBundleUnavailableError) {
+        return {
+          docs: [],
+          curatedError: new Response(
+            JSON.stringify({
+              ok: false,
+              error: 'curated_bundle_unavailable',
+              bundleId: err.bundleId,
+              version: err.version,
+              upstreamStatus: err.status
+            }),
+            { status: 502, headers: { 'Content-Type': 'application/json' } }
+          )
+        };
+      }
+      throw err;
+    }
+  }
+
+  // Build only the user-file docs; the curated docs are pre-built and
+  // their cross-references resolved at serialization time on the mirror.
+  // Builder.build on a deserialized doc would try to re-link references
+  // and fail since the Langium service hasn't indexed them.
+  if (files.length > 0) {
+    const userDocs = docs.slice(0, files.length);
+    await builder.build(userDocs, { validation: false });
+  }
+
+  return { docs };
 }
 
 function hasParserErrors(docs: ReadonlyArray<import('langium').LangiumDocument>): GeneratorDiagnostic[] {
@@ -232,7 +333,7 @@ function applyPagesFunctionDefaults(body: CodegenRequestBody): Record<string, un
   return result;
 }
 
-export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   let raw: unknown;
   try {
     raw = await request.json();
@@ -240,7 +341,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
     return jsonError(400, 'Malformed JSON body');
   }
   if (!isValidRequest(raw)) {
-    return jsonError(400, 'Request must be { files: [{path, content}], target: <Target>, options? }');
+    return jsonError(400, 'Request must be { files: [{path, content}], target: <Target>, options?, curatedBundles? }');
   }
   const body = raw;
 
@@ -252,12 +353,21 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
     return jsonError(400, `Target '${body.target}' is not implemented in this build`);
   }
 
-  if (body.files.length === 0) {
-    return jsonError(400, 'files: must be a non-empty array');
+  const curatedBundles = body.curatedBundles ?? [];
+  // 019 Task #88 — a pure curated workspace ships zero user files but
+  // a non-empty curatedBundles list. Both being empty is the genuine
+  // bad-input case.
+  if (body.files.length === 0 && curatedBundles.length === 0) {
+    return jsonError(400, 'files / curatedBundles: at least one must be non-empty');
   }
 
   try {
-    const documents = await parseDocuments(body.files);
+    const curatedFetcher = env?.CURATED_MIRROR
+      ? (url: string, init?: RequestInit) => env.CURATED_MIRROR!.fetch(url, init)
+      : undefined;
+    const { docs: documents, curatedError } = await loadAllDocuments(body.files, curatedBundles, curatedFetcher);
+    if (curatedError) return curatedError;
+
     const parseErrors = hasParserErrors(documents);
     if (parseErrors.length > 0) {
       return jsonError(400, 'One or more files failed to parse', parseErrors);

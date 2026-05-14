@@ -9,7 +9,12 @@ import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { refactoryDark } from '../lang/refactory-dark-theme.js';
-import { downloadTargetViaRouter, CodegenDownloadError, type WorkspaceFile } from '../services/workspace.js';
+import {
+  downloadTargetViaRouter,
+  CodegenDownloadError,
+  collectCuratedBundlesFromWorkspace,
+  type WorkspaceFile
+} from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
 import { useCodegenStore, type CodePreviewFile, type CodePreviewSnapshot } from '../store/codegen-store.js';
 import { usePreviewStore } from '../store/preview-store.js';
@@ -197,14 +202,25 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
 
   const handleDownloadTarget = useCallback(
     async (newTarget: Target) => {
-      if (!files || files.length === 0) {
-        console.warn('[CodePreviewPanel] Download skipped — no workspace files available for target:', newTarget);
+      const fileList = files ?? [];
+      const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
+      // 019 Task #88 — curated bundles travel as `{ id, version }`
+      // tuples; the Pages Function fetches them server-to-server via
+      // the CURATED_MIRROR binding. A pure curated workspace (no
+      // user-authored files) is a legitimate download case, so we no
+      // longer bail when requestFiles is empty — only bail when the
+      // workspace has neither user files nor curated bundles.
+      const curatedBundles = collectCuratedBundlesFromWorkspace(fileList);
+      if (requestFiles.length === 0 && curatedBundles.length === 0) {
+        console.warn(
+          '[CodePreviewPanel] Download skipped — workspace has no user files and no curated bundles for target:',
+          newTarget
+        );
         return;
       }
       setDownloadingTarget(newTarget);
       try {
-        const requestFiles = files.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
-        await downloadTargetViaRouter(requestFiles, newTarget);
+        await downloadTargetViaRouter(requestFiles, newTarget, {}, curatedBundles);
       } catch (err) {
         if (err instanceof CodegenDownloadError) {
           console.error(
