@@ -44,7 +44,7 @@ async function runFixture(fixtureName: string, target: 'zod' | 'typescript'): Pr
     throw new Error(`Parse errors in annotations/${fixtureName}/input.rune: ${msgs}`);
   }
 
-  const outputs = generate(doc, { target });
+  const outputs = await generate(doc, { target });
   if (outputs.length === 0) {
     throw new Error(`Generator produced no output for annotations/${fixtureName}`);
   }
@@ -57,10 +57,7 @@ async function runFixture(fixtureName: string, target: 'zod' | 'typescript'): Pr
 async function assertFixture(fixtureName: string, target: 'zod' | 'typescript'): Promise<void> {
   const ext = target === 'zod' ? 'expected.zod.ts' : 'expected.ts';
   const expectedPath = join(FIXTURES_DIR, fixtureName, ext);
-  const [actual, expected] = await Promise.all([
-    runFixture(fixtureName, target),
-    readFile(expectedPath, 'utf-8')
-  ]);
+  const [actual, expected] = await Promise.all([runFixture(fixtureName, target), readFile(expectedPath, 'utf-8')]);
   expect(actual).toBe(expected);
 }
 
@@ -78,9 +75,7 @@ describe('T065: annotation declaration emits typed decorator factory (TypeScript
 
   it('emits export function <name>(args: <name>Args): ClassDecorator & PropertyDecorator', async () => {
     const output = await runFixture('declaration', 'typescript');
-    expect(output).toContain(
-      'export function source(args: sourceArgs): ClassDecorator & PropertyDecorator'
-    );
+    expect(output).toContain('export function source(args: sourceArgs): ClassDecorator & PropertyDecorator');
   });
 
   it('decorator factory body returns a no-op function', async () => {
@@ -153,34 +148,26 @@ describe('T069: Zod .meta() includes qualifier key=value pairs', () => {
 // ---------------------------------------------------------------------------
 
 describe('US11: byte-identical fixture-diff — TypeScript target', () => {
-  it('declaration: generates byte-identical output vs expected.ts', () =>
-    assertFixture('declaration', 'typescript'));
+  it('declaration: generates byte-identical output vs expected.ts', () => assertFixture('declaration', 'typescript'));
 
-  it('usage-type: generates byte-identical output vs expected.ts', () =>
-    assertFixture('usage-type', 'typescript'));
+  it('usage-type: generates byte-identical output vs expected.ts', () => assertFixture('usage-type', 'typescript'));
 
-  it('usage-attr: generates byte-identical output vs expected.ts', () =>
-    assertFixture('usage-attr', 'typescript'));
+  it('usage-attr: generates byte-identical output vs expected.ts', () => assertFixture('usage-attr', 'typescript'));
 
-  it('qualifiers: generates byte-identical output vs expected.ts', () =>
-    assertFixture('qualifiers', 'typescript'));
+  it('qualifiers: generates byte-identical output vs expected.ts', () => assertFixture('qualifiers', 'typescript'));
 
   it('T064b enum-value annotation (TS)', () => assertFixture('enum-value', 'typescript'));
   it('no-attrs annotation (TS)', () => assertFixture('no-attrs', 'typescript'));
 });
 
 describe('US11: byte-identical fixture-diff — Zod target', () => {
-  it('declaration: generates byte-identical output vs expected.zod.ts', () =>
-    assertFixture('declaration', 'zod'));
+  it('declaration: generates byte-identical output vs expected.zod.ts', () => assertFixture('declaration', 'zod'));
 
-  it('usage-type: generates byte-identical output vs expected.zod.ts', () =>
-    assertFixture('usage-type', 'zod'));
+  it('usage-type: generates byte-identical output vs expected.zod.ts', () => assertFixture('usage-type', 'zod'));
 
-  it('usage-attr: generates byte-identical output vs expected.zod.ts', () =>
-    assertFixture('usage-attr', 'zod'));
+  it('usage-attr: generates byte-identical output vs expected.zod.ts', () => assertFixture('usage-attr', 'zod'));
 
-  it('qualifiers: generates byte-identical output vs expected.zod.ts', () =>
-    assertFixture('qualifiers', 'zod'));
+  it('qualifiers: generates byte-identical output vs expected.zod.ts', () => assertFixture('qualifiers', 'zod'));
 
   it('T064b enum-value annotation (Zod)', () => assertFixture('enum-value', 'zod'));
   it('no-attrs annotation (Zod)', () => assertFixture('no-attrs', 'zod'));

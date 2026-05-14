@@ -39,13 +39,13 @@ async function parseFixtureFiles(fixtureName: string) {
 describe('US12: Cross-Namespace Import Resolution', () => {
   it('T042 inheritance — generates output for both namespaces', async () => {
     const docs = await parseFixtureFiles('inheritance');
-    const outputs = generate(docs, { target: 'typescript' });
+    const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThanOrEqual(2);
   });
 
   it('T042 inheritance — derived namespace references base types', async () => {
     const docs = await parseFixtureFiles('inheritance');
-    const outputs = generate(docs, { target: 'typescript' });
+    const outputs = await generate(docs, { target: 'typescript' });
     const derivedOutput = outputs.find((o) => o.relativePath.includes('derived'));
     expect(derivedOutput).toBeDefined();
     // The derived namespace should reference base types (import or inline)
@@ -54,7 +54,7 @@ describe('US12: Cross-Namespace Import Resolution', () => {
 
   it('T043 attribute-ref — usage namespace references types namespace', async () => {
     const docs = await parseFixtureFiles('attribute-ref');
-    const outputs = generate(docs, { target: 'typescript' });
+    const outputs = await generate(docs, { target: 'typescript' });
     const usageOutput = outputs.find((o) => o.relativePath.includes('usage'));
     expect(usageOutput).toBeDefined();
     expect(usageOutput!.content).toContain('Address');
@@ -62,7 +62,7 @@ describe('US12: Cross-Namespace Import Resolution', () => {
 
   it('T044 func-params — funcs namespace references models namespace', async () => {
     const docs = await parseFixtureFiles('func-params');
-    const outputs = generate(docs, { target: 'typescript' });
+    const outputs = await generate(docs, { target: 'typescript' });
     const funcsOutput = outputs.find((o) => o.relativePath.includes('funcs'));
     expect(funcsOutput).toBeDefined();
     expect(funcsOutput!.content).toContain('Amount');
@@ -70,7 +70,7 @@ describe('US12: Cross-Namespace Import Resolution', () => {
 
   it('T045 circular — both namespaces generate without errors', async () => {
     const docs = await parseFixtureFiles('circular');
-    const outputs = generate(docs, { target: 'typescript' });
+    const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThanOrEqual(2);
     // Neither should have error diagnostics
     for (const output of outputs) {
@@ -81,7 +81,7 @@ describe('US12: Cross-Namespace Import Resolution', () => {
 
   it('T045 circular — Zod target handles circular refs', async () => {
     const docs = await parseFixtureFiles('circular');
-    const outputs = generate(docs, { target: 'zod' });
+    const outputs = await generate(docs, { target: 'zod' });
     expect(outputs.length).toBeGreaterThanOrEqual(2);
     for (const output of outputs) {
       const errors = output.diagnostics.filter((d) => d.severity === 'error');

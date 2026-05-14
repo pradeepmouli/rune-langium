@@ -85,10 +85,10 @@ export { RUNTIME_HELPER_JS_SOURCE } from './helpers.js';
  * const outputs = generate(doc, { target: 'zod' });
  * ```
  */
-export function generate(
+export async function generate(
   documents: LangiumDocument | LangiumDocument[],
   options?: GeneratorOptions
-): GeneratorOutput[] {
+): Promise<GeneratorOutput[]> {
   const docs = Array.isArray(documents) ? documents : [documents];
   return runGenerate(docs, options ?? {});
 }

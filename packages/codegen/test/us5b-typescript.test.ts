@@ -44,7 +44,7 @@ async function runTsFixture(fixtureDir: string, fixtureName: string): Promise<st
     throw new Error(`Parse errors in ${fixtureName}/input.rune: ${msgs}`);
   }
 
-  const outputs = generate(doc, { target: 'typescript' });
+  const outputs = await generate(doc, { target: 'typescript' });
   if (outputs.length === 0) {
     throw new Error(`Generator produced no output for ${fixtureName}`);
   }

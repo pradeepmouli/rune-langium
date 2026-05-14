@@ -44,7 +44,7 @@ async function runFixture(fixtureName: string): Promise<string> {
     throw new Error(`Parse errors in ${fixtureName}/input.rune: ${msgs}`);
   }
 
-  const outputs = generate(doc, { target: 'zod' });
+  const outputs = await generate(doc, { target: 'zod' });
   if (outputs.length === 0) {
     throw new Error(`Generator produced no output for ${fixtureName}`);
   }
@@ -58,10 +58,7 @@ async function assertFixture(fixtureName: string): Promise<void> {
   const fixtureDir = join(FIXTURES_DIR, fixtureName);
   const expectedPath = join(fixtureDir, 'expected.zod.ts');
 
-  const [actual, expected] = await Promise.all([
-    runFixture(fixtureName),
-    readFile(expectedPath, 'utf-8')
-  ]);
+  const [actual, expected] = await Promise.all([runFixture(fixtureName), readFile(expectedPath, 'utf-8')]);
 
   expect(actual).toBe(expected);
 }

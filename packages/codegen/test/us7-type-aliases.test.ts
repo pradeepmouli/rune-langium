@@ -10,10 +10,7 @@ import { generate } from '../src/index.js';
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures/type-aliases');
 
-async function runFixture(
-  fixtureName: string,
-  target: 'zod' | 'typescript' | 'json-schema'
-): Promise<string> {
+async function runFixture(fixtureName: string, target: 'zod' | 'typescript' | 'json-schema'): Promise<string> {
   const inputPath = join(FIXTURES_DIR, fixtureName, 'input.rune');
   const content = await readFile(inputPath, 'utf-8');
   const { RuneDsl } = createRuneDslServices();
@@ -27,21 +24,15 @@ async function runFixture(
       `Parse errors in type-aliases/${fixtureName}: ${doc.parseResult.parserErrors.map((e) => e.message).join(', ')}`
     );
   }
-  const outputs = generate(doc, { target });
+  const outputs = await generate(doc, { target });
   if (outputs.length === 0) throw new Error(`No output for type-aliases/${fixtureName}`);
   return outputs[0]!.content;
 }
 
-async function assertFixture(
-  fixtureName: string,
-  target: 'zod' | 'typescript' | 'json-schema'
-): Promise<void> {
+async function assertFixture(fixtureName: string, target: 'zod' | 'typescript' | 'json-schema'): Promise<void> {
   const ext = target === 'zod' ? '.zod.ts' : target === 'typescript' ? '.ts' : '.schema.json';
   const expectedPath = join(FIXTURES_DIR, fixtureName, 'expected' + ext);
-  const [actual, expected] = await Promise.all([
-    runFixture(fixtureName, target),
-    readFile(expectedPath, 'utf-8')
-  ]);
+  const [actual, expected] = await Promise.all([runFixture(fixtureName, target), readFile(expectedPath, 'utf-8')]);
   expect(actual).toBe(expected);
 }
 

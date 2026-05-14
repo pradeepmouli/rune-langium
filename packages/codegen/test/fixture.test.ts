@@ -90,7 +90,7 @@ export function runFixtureTests(dir: string, target: Target = 'zod'): void {
       await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
       assertDocumentReady(doc, `${entry.name}/input.rune`);
 
-      const outputs = generate(doc, { target });
+      const outputs = await generate(doc, { target });
       if (outputs.length === 0) {
         throw new Error(`Generator produced no output for ${entry.name}`);
       }
@@ -129,44 +129,39 @@ export function describeFixture(name: string, dir: string, target: Target = 'zod
  * This catches any generator state leakage that would violate SC-007.
  */
 describe('fixture determinism (SC-007)', () => {
-  skipIfNodeLt22(
-    'all Tier 1 zod fixtures produce byte-identical output on repeated generation',
-    async () => {
-      const entries = await readdir(FIXTURES_DIR);
-      // Create services once — chevrotain@12 re-initialisation in the same
-      // process causes Object.groupBy errors on Node <22.
-      const { RuneDsl } = createRuneDslServices();
-      let checked = 0;
-      for (const entry of entries) {
-        const dir = join(FIXTURES_DIR, entry);
-        const s = await stat(dir);
-        if (!s.isDirectory()) continue;
-        const inputPath = join(dir, 'input.rune');
-        let input: string;
-        try {
-          input = await readFile(inputPath, 'utf-8');
-        } catch {
-          continue;
-        }
-        const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
-          input,
-          URI.parse(`inmemory:///${entry}.rosetta`)
-        );
-        await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
-        assertDocumentReady(doc, `${entry}/input.rune`);
-        const run1 = generate([doc], { target: 'zod' });
-        const run2 = generate([doc], { target: 'zod' });
-        expect(run2.length, `${entry}: second run produced different output count`).toBe(
-          run1.length
-        );
-        for (let i = 0; i < run1.length; i++) {
-          expect(run1[i]?.content, `${entry}[${i}]: second run differed`).toBe(run2[i]?.content);
-        }
-        checked++;
+  skipIfNodeLt22('all Tier 1 zod fixtures produce byte-identical output on repeated generation', async () => {
+    const entries = await readdir(FIXTURES_DIR);
+    // Create services once — chevrotain@12 re-initialisation in the same
+    // process causes Object.groupBy errors on Node <22.
+    const { RuneDsl } = createRuneDslServices();
+    let checked = 0;
+    for (const entry of entries) {
+      const dir = join(FIXTURES_DIR, entry);
+      const s = await stat(dir);
+      if (!s.isDirectory()) continue;
+      const inputPath = join(dir, 'input.rune');
+      let input: string;
+      try {
+        input = await readFile(inputPath, 'utf-8');
+      } catch {
+        continue;
       }
-      expect(checked, 'Expected at least one fixture to be checked').toBeGreaterThan(0);
+      const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+        input,
+        URI.parse(`inmemory:///${entry}.rosetta`)
+      );
+      await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+      assertDocumentReady(doc, `${entry}/input.rune`);
+      const run1 = await generate([doc], { target: 'zod' });
+      const run2 = await generate([doc], { target: 'zod' });
+      expect(run2.length, `${entry}: second run produced different output count`).toBe(run1.length);
+      for (let i = 0; i < run1.length; i++) {
+        expect(run1[i]?.content, `${entry}[${i}]: second run differed`).toBe(run2[i]?.content);
+      }
+      checked++;
     }
-  );
+    expect(checked, 'Expected at least one fixture to be checked').toBeGreaterThan(0);
+  });
 });
 
 function assertDocumentReady(
@@ -181,9 +176,7 @@ function assertDocumentReady(
     throw new Error(`Parse errors in ${label}: ${messages}`);
   }
 
-  const diagnostics =
-    doc.diagnostics?.filter((diagnostic) => diagnostic.severity === ERROR_DIAGNOSTIC_SEVERITY) ??
-    [];
+  const diagnostics = doc.diagnostics?.filter((diagnostic) => diagnostic.severity === ERROR_DIAGNOSTIC_SEVERITY) ?? [];
   if (diagnostics.length > 0) {
     const messages = diagnostics.map((diagnostic) => diagnostic.message).join(', ');
     throw new Error(`Diagnostic errors in ${label}: ${messages}`);

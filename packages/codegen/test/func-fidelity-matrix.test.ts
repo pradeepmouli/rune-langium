@@ -50,7 +50,7 @@ async function generateAndInspect(fixtureName: string) {
     URI.parse(`inmemory:///fidelity-${fixtureName}.rosetta`)
   );
   await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
-  return generate(doc, { target: 'typescript' });
+  return await generate(doc, { target: 'typescript' });
 }
 
 // ---------------------------------------------------------------------------

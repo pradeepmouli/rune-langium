@@ -73,7 +73,7 @@ describe.skipIf(!CDM_EXISTS)('US12: CDM Corpus Cross-Namespace Codegen (T082)', 
   it('generates TypeScript output for CDM namespaces (documents all error codes)', async () => {
     const { docs } = await loadCdmDocs();
 
-    const outputs = generate(docs, { target: 'typescript' });
+    const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThan(0);
 
     const errors = outputs.flatMap((o) => o.diagnostics.filter((d) => d.severity === 'error'));
@@ -95,16 +95,14 @@ describe.skipIf(!CDM_EXISTS)('US12: CDM Corpus Cross-Namespace Codegen (T082)', 
     expect(unknownAttr).toBeLessThan(20); // current: ~5
 
     // No other error codes should appear
-    const otherCodes = Object.keys(byCode).filter(
-      (c) => c !== 'unknown-expression-type' && c !== 'unknown-attribute'
-    );
+    const otherCodes = Object.keys(byCode).filter((c) => c !== 'unknown-expression-type' && c !== 'unknown-attribute');
     expect(otherCodes).toHaveLength(0);
   }, 60_000);
 
   it('generates Zod output for CDM namespaces (documents all error codes)', async () => {
     const { docs } = await loadCdmDocs();
 
-    const outputs = generate(docs, { target: 'zod' });
+    const outputs = await generate(docs, { target: 'zod' });
     expect(outputs.length).toBeGreaterThan(0);
 
     const errors = outputs.flatMap((o) => o.diagnostics.filter((d) => d.severity === 'error'));
@@ -124,16 +122,14 @@ describe.skipIf(!CDM_EXISTS)('US12: CDM Corpus Cross-Namespace Codegen (T082)', 
     expect(unknownAttr).toBeLessThan(20); // current: ~5
 
     // No other error codes should appear
-    const otherCodes = Object.keys(byCode).filter(
-      (c) => c !== 'unknown-expression-type' && c !== 'unknown-attribute'
-    );
+    const otherCodes = Object.keys(byCode).filter((c) => c !== 'unknown-expression-type' && c !== 'unknown-attribute');
     expect(otherCodes).toHaveLength(0);
   }, 60_000);
 
   it('CDM output includes cross-namespace type references', async () => {
     const { docs } = await loadCdmDocs();
 
-    const outputs = generate(docs, { target: 'typescript' });
+    const outputs = await generate(docs, { target: 'typescript' });
     // CDM uses inheritance across namespaces extensively — at least some outputs
     // must contain exported class/interface declarations.
     const outputsWithTypes = outputs.filter(

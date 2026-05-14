@@ -6,25 +6,28 @@ import { isRosettaModel } from '@rune-langium/core';
 import type { GeneratorOutput, GeneratorOptions, Target } from './types.js';
 import { GeneratorError } from './types.js';
 import { createDiagnostic, hasFatalDiagnostics } from './diagnostics.js';
-import { emitNamespaceWithContract, type NamespaceEmitterConstructor } from './emit/namespace-emitter.js';
+import {
+  emitNamespaceWithContract,
+  isWholeModelEmitter,
+  type NamespaceEmitterConstructor,
+  type WholeModelEmitterConstructor
+} from './emit/namespace-emitter.js';
 import { ZodNamespaceEmitter } from './emit/zod-emitter.js';
 import { JsonSchemaNamespaceEmitter } from './emit/json-schema-emitter.js';
 import { TsNamespaceEmitter } from './emit/ts-emitter.js';
-import { buildNamespaceRegistry } from './emit/namespace-registry.js';
-import { walkNamespace } from './emit/namespace-walker.js';
+import { buildNamespaceRegistry, type NamespaceRegistry } from './emit/namespace-registry.js';
+import { walkNamespace, type NamespaceWalkResult } from './emit/namespace-walker.js';
 
-// 018 Task 0.1: loosened from `Record<Target, ...>` to `Partial<Record<...>>`
-// while Target carries the seven planned identifiers but only three have
-// per-namespace emitters registered. Task 0.4 lands the WholeModelEmitter
-// dispatch path and tightens the typing again — at that point a runtime
-// guard reports an unsupported target rather than a partial-record gap.
-const EMITTER_CLASSES = {
+// 018 Task 0.4: registry holds both NamespaceEmitter and WholeModelEmitter
+// constructors. The discriminator `isWholeModelEmitter` picks the dispatch
+// path at runtime. Targets without a registered emitter (sql, markdown,
+// excel, graphql until Phases 1-3) return a single not-implemented
+// diagnostic from runGenerate.
+const EMITTER_CLASSES: Partial<Record<Target, NamespaceEmitterConstructor | WholeModelEmitterConstructor>> = {
   zod: ZodNamespaceEmitter,
   'json-schema': JsonSchemaNamespaceEmitter,
   typescript: TsNamespaceEmitter
-} satisfies Partial<Record<Target, NamespaceEmitterConstructor>>;
-
-const EMITTER_CLASS_LOOKUP: Record<string, NamespaceEmitterConstructor | undefined> = EMITTER_CLASSES;
+};
 
 /**
  * Group Langium documents by their namespace name.
@@ -58,21 +61,44 @@ function groupByNamespace(docs: LangiumDocument[]): Map<string, LangiumDocument[
 /**
  * Top-level orchestrator for the code generator.
  *
- * Groups documents by namespace, detects cycles, performs topo-sort,
- * dispatches to the selected emitter, and returns one GeneratorOutput
- * per namespace, sorted by relativePath.
+ * 018 Task 0.4: async + contract-aware. Groups documents by namespace,
+ * walks each namespace once, then dispatches by emitter contract:
+ * - NamespaceEmitter targets (zod, typescript, json-schema, sql, markdown)
+ *   loop per-namespace through `emitNamespaceWithContract`.
+ * - WholeModelEmitter targets (excel, graphql) get the whole walks map
+ *   in one async call.
+ *
+ * Async because WholeModelEmitter.emit() returns a Promise — binary
+ * emitters (ExcelJS) use stream APIs internally.
  *
  * @param docs - One or more parsed Langium documents.
  * @param options - Generator options.
- * @returns Array of GeneratorOutput, one per namespace, sorted by relativePath.
+ * @returns Array of GeneratorOutput, sorted by relativePath.
  * @throws GeneratorError when strict mode is enabled and any error diagnostic is produced.
  */
-export function runGenerate(docs: LangiumDocument[], options: GeneratorOptions): GeneratorOutput[] {
+export async function runGenerate(docs: LangiumDocument[], options: GeneratorOptions): Promise<GeneratorOutput[]> {
   if (docs.length === 0) {
     return [];
   }
 
   const target = options.target ?? 'zod';
+  const emitterClass = EMITTER_CLASSES[target];
+
+  if (!emitterClass) {
+    // Unknown / not-yet-implemented target. Return a single
+    // not-implemented diagnostic rather than one per namespace —
+    // simpler to surface in UI and matches the 018 dispatch test
+    // contract.
+    return [
+      {
+        relativePath: `${target}.unknown`,
+        content: '',
+        sourceMap: [],
+        diagnostics: [createDiagnostic('error', 'not-implemented', `Target '${target}' is not implemented.`)],
+        funcs: []
+      }
+    ];
+  }
 
   // Group by namespace
   const byNamespace = groupByNamespace(docs);
@@ -81,36 +107,24 @@ export function runGenerate(docs: LangiumDocument[], options: GeneratorOptions):
   }
 
   // Build cross-namespace registry before per-namespace emission
-  const registry = buildNamespaceRegistry(byNamespace);
+  const registry: NamespaceRegistry = buildNamespaceRegistry(byNamespace);
 
-  const outputs: GeneratorOutput[] = [];
-
+  // Walk every namespace once. The walks are reused across both contract
+  // types — WholeModelEmitter consumes the whole map, NamespaceEmitter
+  // loops over individual entries.
+  const walks = new Map<string, NamespaceWalkResult>();
   for (const [namespace, namespaceDocs] of byNamespace) {
-    const walkedNamespace = walkNamespace(namespaceDocs, namespace);
-    const emitterClass = EMITTER_CLASS_LOOKUP[target];
-    let output: GeneratorOutput;
+    walks.set(namespace, walkNamespace(namespaceDocs, namespace));
+  }
 
-    if (emitterClass) {
-      output = emitNamespaceWithContract(walkedNamespace, options, registry, emitterClass);
-    } else {
-      // Unknown target — should be unreachable given the Target union, but
-      // emit a structured diagnostic rather than crashing.
-      output = {
-        relativePath: namespace.replace(/\./g, '/') + '.unknown',
-        content: '',
-        sourceMap: [],
-        diagnostics: [
-          createDiagnostic(
-            'error',
-            'not-implemented',
-            `Target '${target}' is not implemented. Use 'zod', 'json-schema', or 'typescript'.`
-          )
-        ],
-        funcs: []
-      };
+  let outputs: GeneratorOutput[];
+  if (isWholeModelEmitter(emitterClass)) {
+    outputs = await new emitterClass().emit(walks, registry, options);
+  } else {
+    outputs = [];
+    for (const [, walked] of walks) {
+      outputs.push(emitNamespaceWithContract(walked, options, registry, emitterClass));
     }
-
-    outputs.push(output);
   }
 
   // Sort by relativePath for deterministic output (SC-007)

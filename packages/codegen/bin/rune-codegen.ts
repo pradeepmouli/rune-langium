@@ -162,7 +162,7 @@ async function runOnce(
   // Generate
   let outputs: GeneratorOutput[];
   try {
-    outputs = generate(docs, { target: opts.target, strict: opts.strict });
+    outputs = await generate(docs, { target: opts.target, strict: opts.strict });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     const durationMs = Date.now() - start;
@@ -198,9 +198,7 @@ function printHumanProgress(result: RunResult, opts: RunOptions): void {
   const errorCount = diagnostics.filter((d) => d.severity === 'error').length;
   const warnCount = diagnostics.filter((d) => d.severity === 'warning').length;
 
-  process.stdout.write(
-    `rune-codegen: generating '${opts.target}' for ${outputs.length} document(s)...\n`
-  );
+  process.stdout.write(`rune-codegen: generating '${opts.target}' for ${outputs.length} document(s)...\n`);
   for (const o of outputs) {
     process.stdout.write(`  ✓ ${o.relativePath}\n`);
   }
@@ -343,9 +341,7 @@ program
       const allFiles = await Promise.all(args.map((a) => findRuneFiles(resolve(a))));
       files = allFiles.flat();
     } catch (err: unknown) {
-      process.stderr.write(
-        `rune-codegen: error: ${err instanceof Error ? err.message : String(err)}\n`
-      );
+      process.stderr.write(`rune-codegen: error: ${err instanceof Error ? err.message : String(err)}\n`);
       process.exit(1);
     }
 
@@ -386,8 +382,6 @@ program
       // exitCode non-zero = usage error
       process.exit(exitCode === 0 ? 0 : 2);
     }
-    process.stderr.write(
-      `rune-codegen: unexpected error: ${err instanceof Error ? err.message : String(err)}\n`
-    );
+    process.stderr.write(`rune-codegen: unexpected error: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exit(1);
   });
