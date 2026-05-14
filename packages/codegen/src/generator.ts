@@ -146,13 +146,12 @@ function resolveEmitter(
     };
   }
 
-  // No path forward — fall back to the namespace emitter alone if it's
-  // registered (so non-'per-namespace' layout requests against targets
-  // without a Profile still emit *something*, just in the legacy shape).
-  if (nsCtor) {
-    return nsCtor;
-  }
-
+  // No path forward. Copilot review on PR #166: don't silently fall
+  // back to the namespace emitter when a non-'per-namespace' layout
+  // was requested — that ignores the caller's `options.<target>.layout`
+  // and silently produces legacy output. Return undefined so the
+  // top-level runGenerate emits a `not-implemented` diagnostic that
+  // strict-mode callers can turn into a GeneratorError.
   return undefined;
 }
 

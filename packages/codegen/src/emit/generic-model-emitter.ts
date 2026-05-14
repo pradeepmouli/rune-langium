@@ -40,7 +40,31 @@ export class GenericModelEmitter<T extends Target = Target> implements WholeMode
     options: GeneratorOptions
   ): Promise<GeneratorOutput[]> {
     const targetBlock = this.readTargetBlock(options);
-    const layout = (targetBlock?.layout ?? 'barrel') as 'barrel' | 'single-file';
+    const rawLayout = targetBlock?.layout ?? 'barrel';
+
+    // Copilot review on PR #166: validate the layout string instead of
+    // an unchecked cast — an unexpected value (e.g. from a malformed
+    // /api/codegen request body) used to be silently coerced to
+    // 'barrel'. Now it surfaces a fatal `invalid-layout` diagnostic
+    // that strict-mode callers turn into a GeneratorError.
+    if (rawLayout !== 'barrel' && rawLayout !== 'single-file') {
+      return [
+        {
+          relativePath: `${this.profile.target}-invalid-layout.error`,
+          content: '',
+          sourceMap: [],
+          diagnostics: [
+            createDiagnostic(
+              'error',
+              'invalid-layout',
+              `Invalid layout '${rawLayout}' for target '${this.profile.target}'. Expected 'per-namespace', 'barrel', or 'single-file'.`
+            )
+          ],
+          funcs: []
+        }
+      ];
+    }
+    const layout: 'barrel' | 'single-file' = rawLayout;
 
     // Step 1 — per-namespace emission with boilerplate suppressed.
     const perNs: GeneratorOutput[] = [];

@@ -45,10 +45,14 @@ export interface TypescriptOptions {
 
 export interface JsonSchemaOptions {
   /**
-   * Default: `'single-file'`. `$defs` is JSON Schema's idiomatic
-   * bundling; per-namespace is the opt-in for ingest pipelines that
-   * want file-per-schema. No `'barrel'` value — JSON Schema's barrel
-   * IS single-file.
+   * Library default: `'per-namespace'` (today's CLI behavior — no
+   * surprise file-count flip for existing scripts). The studio's
+   * `/api/codegen` Pages Function sends `'single-file'` explicitly so
+   * a Download produces one bundled document with all types in `$defs`
+   * keyed by `<namespace>.<TypeName>`. 019 spec §10.1.
+   *
+   * No `'barrel'` value — JSON has no module system, so the bundle IS
+   * single-file.
    */
   layout?: 'per-namespace' | 'single-file';
 }
@@ -57,12 +61,21 @@ export interface SqlOptions {
   dialect?: 'postgres' | 'sqlserver';
   inheritance?: 'single-table' | 'table-per-type';
   enumStrategy?: 'check' | 'table';
-  /** Default: `'single-file'` — cross-table FK ordering makes per-namespace brittle. */
+  /**
+   * Library default: `'per-namespace'`. `/api/codegen` sends
+   * `'single-file'` explicitly so downloaded DDL is one cross-table-FK-
+   * ordered script. 019 spec §10.1 (Phase 2 will land the SQL emitter
+   * + profile).
+   */
   layout?: 'per-namespace' | 'single-file';
 }
 
 export interface MarkdownOptions {
-  /** Default: `'barrel'` (per-namespace docs + `index.md` TOC). */
+  /**
+   * Library default: `'per-namespace'`. `/api/codegen` sends `'barrel'`
+   * explicitly so a downloaded docs bundle includes the `index.md` TOC.
+   * 019 spec §10.1 (Phase 2 will land the Markdown emitter + profile).
+   */
   layout?: 'per-namespace' | 'barrel';
 }
 
