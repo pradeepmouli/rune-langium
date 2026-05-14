@@ -78,15 +78,15 @@ describe('CodePreviewPanel table-as-landing flow', () => {
     expect(w.postMessage).not.toHaveBeenCalled();
   });
 
-  it('clicking [View] on a row enters the viewer and triggers codegen', () => {
+  it('clicking the eye on a row opens the preview below the table (table stays visible)', () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-typescript'));
     // store transitions to viewer mode
     expect(useCodegenStore.getState().activeTarget).toBe('typescript');
     expect(useCodegenStore.getState().codePreviewTarget).toBe('typescript');
-    // viewer is rendered, table is gone
-    expect(screen.queryByTestId('codegen-targets-table')).toBeNull();
+    // 019 polish — table stays mounted; viewer expands below it.
+    expect(screen.getByTestId('codegen-targets-table')).toBeTruthy();
     expect(screen.getByTestId('code-preview-editor')).toBeTruthy();
     // codegen dispatched for the chosen target
     expect(w.postMessage).toHaveBeenCalledWith(
@@ -94,30 +94,46 @@ describe('CodePreviewPanel table-as-landing flow', () => {
     );
   });
 
-  it('clicking the ← Targets button returns to the table', () => {
+  it('clicking the eye a second time on the active row toggles the preview off', () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
-    fireEvent.click(screen.getByTestId('codegen-back-to-targets'));
+    expect(useCodegenStore.getState().activeTarget).toBe('zod');
+    // Toggle off — second click on the same row's eye icon.
+    fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
     expect(useCodegenStore.getState().activeTarget).toBeUndefined();
+    // Table still visible; viewer is gone.
     expect(screen.getByTestId('codegen-targets-table')).toBeTruthy();
     expect(screen.queryByTestId('code-preview-editor')).toBeNull();
   });
 
-  it('does not re-trigger codegen when the user returns to the table and back to the same target', async () => {
+  it('clicking the eye on a different row swaps the preview without closing it', () => {
+    const w = makeWorker();
+    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
+    expect(useCodegenStore.getState().activeTarget).toBe('zod');
+    fireEvent.click(screen.getByTestId('codegen-targets-table__view-typescript'));
+    expect(useCodegenStore.getState().activeTarget).toBe('typescript');
+    expect(screen.getByTestId('code-preview-editor')).toBeTruthy();
+    // codegen ran for both targets.
+    expect(
+      w.postMessage.mock.calls.filter((c) => (c[0] as { target?: string })?.target === 'typescript')
+    ).not.toHaveLength(0);
+  });
+
+  it('toggling the eye off then back on re-triggers codegen for the same target', async () => {
     const w = makeWorker();
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
     const callsAfterFirstView = w.postMessage.mock.calls.length;
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('codegen-back-to-targets'));
-    });
+    // toggle off
     await act(async () => {
       fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
     });
-    // re-entering the viewer for the *same* target should trigger
-    // codegen again because the `activeTarget` dep on the request
-    // useEffect flips undefined → 'zod' a second time.
+    // toggle back on
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
+    });
     expect(w.postMessage.mock.calls.length).toBeGreaterThan(callsAfterFirstView);
   });
 

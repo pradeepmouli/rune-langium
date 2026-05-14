@@ -12,7 +12,8 @@
  *
  * The component is intentionally presentational: callers pass `onView` /
  * `onDownload` plus an optional `inflightTarget` to swap that row's
- * buttons for a spinner. State coordination lives in `CodePreviewPanel`
+ * action buttons for a spinner, and `activeTarget` to mark a row as
+ * currently expanded. State coordination lives in `CodePreviewPanel`
  * (Task 0.8); this file stays trivially testable as pure props.
  */
 
@@ -20,10 +21,10 @@ import React from 'react';
 import { IMPLEMENTED_TARGETS, TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
-import { Eye, Download } from 'lucide-react';
+import { Eye, EyeOff, Download } from 'lucide-react';
 
 export interface CodegenTargetsTableProps {
-  /** Called when the user clicks the View button on a namespace-contract row. */
+  /** Called when the user clicks the View (eye) button on a namespace-contract row. */
   onView: (target: Target) => void;
   /** Called when the user clicks the Download button on any row. */
   onDownload: (target: Target) => void;
@@ -32,6 +33,12 @@ export interface CodegenTargetsTableProps {
    * to indicate codegen is in flight for it.
    */
   inflightTarget?: Target;
+  /**
+   * If set, that target's row is marked as "active" — its preview is
+   * currently expanded below the table. The View icon flips to
+   * "currently visible" so a second click clearly reads as a toggle off.
+   */
+  activeTarget?: Target;
 }
 
 // 018 Task 0.7 follow-up — only render rows for targets whose emitter
@@ -52,20 +59,18 @@ const TARGET_KEYS = (Object.keys(TARGET_DESCRIPTORS) as Target[]).filter((t) =>
 export function CodegenTargetsTable({
   onView,
   onDownload,
-  inflightTarget
+  inflightTarget,
+  activeTarget
 }: CodegenTargetsTableProps): React.ReactElement {
   return (
-    <div
-      data-testid="codegen-targets-table"
-      className="preview-panel__targets-table flex h-full flex-col overflow-auto"
-    >
+    <div data-testid="codegen-targets-table" className="preview-panel__targets-table flex flex-col overflow-auto">
       <table className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+        <thead className="sticky top-0 border-b border-border/70 bg-card/40 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           <tr>
-            <th scope="col" className="px-3 py-2 font-medium">
+            <th scope="col" className="px-3 py-1.5 font-semibold">
               Target
             </th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">
+            <th scope="col" className="px-3 py-1.5 text-right font-semibold">
               Actions
             </th>
           </tr>
@@ -74,6 +79,7 @@ export function CodegenTargetsTable({
           {TARGET_KEYS.map((target) => {
             const descriptor = TARGET_DESCRIPTORS[target];
             const isLoading = inflightTarget === target;
+            const isActive = activeTarget === target;
             const canView = descriptor.contract === 'namespace';
             return (
               <tr
@@ -81,25 +87,34 @@ export function CodegenTargetsTable({
                 data-testid={`codegen-targets-table__row-${target}`}
                 data-target={target}
                 data-contract={descriptor.contract}
-                className="border-b border-border last:border-b-0 hover:bg-muted/20"
+                data-active={isActive ? 'true' : undefined}
+                className={
+                  'border-b border-border/70 transition-colors last:border-b-0 hover:bg-accent ' +
+                  (isActive ? 'bg-accent/60' : '')
+                }
               >
-                <td className="px-3 py-2 font-medium">{descriptor.label}</td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-1.5 font-medium text-foreground">{descriptor.label}</td>
+                <td className="px-3 py-1.5 text-right">
                   {isLoading ? (
                     <Spinner data-testid={`codegen-targets-table__spinner-${target}`} className="ml-auto size-4" />
                   ) : (
-                    <div className="flex justify-end gap-1">
+                    <div className="flex justify-end gap-0.5">
                       {canView ? (
                         <Button
                           type="button"
                           size="icon-sm"
                           variant="ghost"
-                          aria-label={`View ${descriptor.label}`}
-                          title={`View ${descriptor.label}`}
+                          aria-label={isActive ? `Hide ${descriptor.label} preview` : `View ${descriptor.label}`}
+                          aria-pressed={isActive}
+                          title={isActive ? `Hide ${descriptor.label} preview` : `View ${descriptor.label}`}
                           data-testid={`codegen-targets-table__view-${target}`}
                           onClick={() => onView(target)}
                         >
-                          <Eye className="size-4" aria-hidden="true" />
+                          {isActive ? (
+                            <EyeOff className="size-4" aria-hidden="true" />
+                          ) : (
+                            <Eye className="size-4" aria-hidden="true" />
+                          )}
                         </Button>
                       ) : null}
                       <Button
