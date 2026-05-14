@@ -30,6 +30,19 @@ const EMITTER_CLASSES: Partial<Record<Target, NamespaceEmitterConstructor | Whol
 };
 
 /**
+ * The targets `runGenerate` can actually produce output for in this build.
+ *
+ * Derived from {@link EMITTER_CLASSES} so it stays in sync as Phase 1/2/3
+ * land their emitter implementations: add the entry to `EMITTER_CLASSES`
+ * and this list updates automatically. UI surfaces such as the studio's
+ * `CodegenTargetsTable` use it to hide rows whose emitter would otherwise
+ * short-circuit to a `not-implemented` diagnostic.
+ *
+ * 018 Phase 0 Task 0.7 follow-up.
+ */
+export const IMPLEMENTED_TARGETS: readonly Target[] = Object.freeze(Object.keys(EMITTER_CLASSES) as Target[]);
+
+/**
  * Group Langium documents by their namespace name.
  * Documents without a parseable RosettaModel or without a namespace
  * are silently skipped.

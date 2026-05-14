@@ -15,7 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generate } from '../src/index.js';
+import { generate, IMPLEMENTED_TARGETS } from '../src/index.js';
 
 const RUNE_SOURCE = `namespace cdm.base.math
 
@@ -62,5 +62,16 @@ describe('runGenerate dispatch (018 Task 0.4)', () => {
     expect(typeof (result as Promise<unknown>).then).toBe('function');
     const resolved = await result;
     expect(Array.isArray(resolved)).toBe(true);
+  });
+
+  // 018 Task 0.7 follow-up — IMPLEMENTED_TARGETS must reflect every
+  // target whose emitter is registered, and only those. Phase 1/2/3
+  // commits will add to this list as emitters land.
+  it('IMPLEMENTED_TARGETS lists exactly the targets with a registered emitter', () => {
+    expect([...IMPLEMENTED_TARGETS].sort()).toEqual(['json-schema', 'typescript', 'zod']);
+  });
+
+  it('IMPLEMENTED_TARGETS is frozen so callers cannot mutate it', () => {
+    expect(Object.isFrozen(IMPLEMENTED_TARGETS)).toBe(true);
   });
 });

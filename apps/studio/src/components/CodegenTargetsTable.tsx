@@ -17,7 +17,7 @@
  */
 
 import React from 'react';
-import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen';
+import { IMPLEMENTED_TARGETS, TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 
@@ -33,7 +33,20 @@ export interface CodegenTargetsTableProps {
   inflightTarget?: Target;
 }
 
-const TARGET_KEYS = Object.keys(TARGET_DESCRIPTORS) as readonly Target[];
+// 018 Task 0.7 follow-up — only render rows for targets whose emitter
+// is registered in the codegen package. Phase 1/2/3 commits will extend
+// `IMPLEMENTED_TARGETS` as sql/markdown/excel/graphql emitters land, at
+// which point those rows appear automatically. Until then the table
+// would show targets that short-circuit to a `not-implemented`
+// diagnostic — confusing for users.
+//
+// Order is preserved from TARGET_DESCRIPTORS (the spec's declared
+// order), filtered through the implemented set, rather than from
+// IMPLEMENTED_TARGETS itself (which is keyed by EMITTER_CLASSES
+// declaration order — an implementation detail that could change).
+const TARGET_KEYS = (Object.keys(TARGET_DESCRIPTORS) as Target[]).filter((t) =>
+  (IMPLEMENTED_TARGETS as readonly Target[]).includes(t)
+) as readonly Target[];
 
 export function CodegenTargetsTable({
   onView,

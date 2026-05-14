@@ -121,6 +121,24 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
 
     const results = await generate(documents, { target });
 
+    // 018 Task 0.7 follow-up — when every output carries an error
+    // diagnostic AND no content (the shape returned by `runGenerate`
+    // for not-yet-implemented targets), surface it as `codegen:error`
+    // so the panel shows "Preview unavailable" instead of misleading
+    // "Generated (X)" with empty content.
+    const allOutputsAreErrors =
+      results.length > 0 && results.every((r) => r.content === '' && r.diagnostics.some((d) => d.severity === 'error'));
+    if (allOutputsAreErrors) {
+      const firstError = results[0]!.diagnostics.find((d) => d.severity === 'error');
+      scope.postMessage({
+        type: 'codegen:error',
+        target,
+        requestId,
+        message: firstError?.message ?? 'Code generation produced only errors.'
+      });
+      return;
+    }
+
     // Cache generated function code for preview:execute, keyed by namespace.funcName.
     // Store func.fileContents (isolated function declaration only) rather than
     // result.content (full file with imports, interfaces, helper declarations) so
