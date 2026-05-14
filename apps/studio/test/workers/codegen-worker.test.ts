@@ -19,14 +19,29 @@ const deserializeMock = vi.fn((json: string) => ({
   __deserialized: true,
   json
 }));
+// PR #169 follow-up — curated entries are wrapped via
+// `factory.fromModel(model, uri)` and registered through
+// `langiumDocuments.addDocument(doc)` so Langium's linker can resolve
+// cross-references through `.ref`. Mock both methods and a backing
+// `getDocument` lookup so the worker's idempotence check works.
+const fromModelMock = vi.fn((model: unknown, uri: string) => ({
+  uri,
+  parseResult: { value: model, lexerErrors: [], parserErrors: [] }
+}));
+const documentRegistry = new Map<string, unknown>();
+const getDocumentMock = vi.fn((uri: string) => documentRegistry.get(uri));
+const addDocumentMock = vi.fn((doc: { uri: string }) => {
+  documentRegistry.set(doc.uri, doc);
+});
 
 vi.mock('@rune-langium/core', () => ({
   createRuneDslServices: () => ({
     RuneDsl: {
       shared: {
         workspace: {
-          LangiumDocumentFactory: { fromString: fromStringMock },
-          DocumentBuilder: { build: buildMock }
+          LangiumDocumentFactory: { fromString: fromStringMock, fromModel: fromModelMock },
+          DocumentBuilder: { build: buildMock },
+          LangiumDocuments: { getDocument: getDocumentMock, addDocument: addDocumentMock }
         }
       },
       serializer: {
@@ -86,6 +101,14 @@ describe('codegen-worker preview messages', () => {
     generatePreviewSchemasMock.mockReset();
     deserializeMock.mockClear();
     deserializeMock.mockImplementation((json: string) => ({ __deserialized: true, json }));
+    fromModelMock.mockClear();
+    fromModelMock.mockImplementation((model: unknown, uri: string) => ({
+      uri,
+      parseResult: { value: model, lexerErrors: [], parserErrors: [] }
+    }));
+    documentRegistry.clear();
+    getDocumentMock.mockClear();
+    addDocumentMock.mockClear();
   });
 
   afterEach(() => {
