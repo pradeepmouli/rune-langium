@@ -76,7 +76,12 @@ describe('POST /api/codegen', () => {
     expect(body.diagnostics?.length).toBeGreaterThan(0);
   });
 
-  it('returns 200 with a single text artifact when one namespace is parsed', async () => {
+  // 019 Phase 0.5.5: Pages Function default flips to `layout: 'barrel'`
+  // for Zod / TypeScript and `layout: 'single-file'` for JSON Schema
+  // when the request body omits an explicit choice. The behavior
+  // tested below describes the post-default-injection contract.
+
+  it("Zod default ('barrel') for one namespace returns a zip with per-namespace + index + runtime sidecar", async () => {
     const res = await onRequestPost({
       request: makeRequest({
         files: [{ path: 'x.rune', content: ONE_NAMESPACE }],
@@ -84,35 +89,73 @@ describe('POST /api/codegen', () => {
       })
     } as never);
     expect(res.status).toBe(200);
-    expect(res.headers.get('Content-Type')).toMatch(/text\/plain/);
-    expect(res.headers.get('Content-Disposition')).toMatch(/attachment; filename="x\.zod\.ts"/);
-    const text = await res.text();
-    expect(text).toMatch(/import \{ z \} from 'zod'/);
+    expect(res.headers.get('Content-Type')).toBe('application/zip');
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const zip = await JSZip.loadAsync(buf);
+    const names = Object.keys(zip.files).sort();
+    expect(names).toEqual(['index.zod.ts', 'runtime.zod.ts', 'x.zod.ts']);
+    // Per-namespace file now imports helpers from the sidecar, not inlines them.
+    const perNs = await zip.files['x.zod.ts']!.async('string');
+    expect(perNs).toMatch(/from '\.\/runtime\.zod\.js'/);
   });
 
-  it('returns 200 with a zip when multiple namespaces are parsed', async () => {
+  it("Zod default ('barrel') for two namespaces returns a zip with both + index + runtime", async () => {
     const res = await onRequestPost({
       request: makeRequest({ files: TWO_NAMESPACES, target: 'zod' })
     } as never);
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('application/zip');
-    expect(res.headers.get('Content-Disposition')).toMatch(/zod-output\.zip/);
     const buf = new Uint8Array(await res.arrayBuffer());
     const zip = await JSZip.loadAsync(buf);
     const names = Object.keys(zip.files).sort();
-    expect(names).toEqual(['x.zod.ts', 'y.zod.ts']);
-    const xText = await zip.files['x.zod.ts']!.async('string');
-    expect(xText).toMatch(/import \{ z \} from 'zod'/);
+    expect(names).toEqual(['index.zod.ts', 'runtime.zod.ts', 'x.zod.ts', 'y.zod.ts']);
   });
 
-  it('uses the target-specific extension in single-namespace filename', async () => {
+  it("explicit `layout: 'per-namespace'` override is respected — returns just the per-namespace files", async () => {
     const res = await onRequestPost({
       request: makeRequest({
-        files: [{ path: 'x.rune', content: ONE_NAMESPACE }],
+        files: TWO_NAMESPACES,
+        target: 'zod',
+        options: { zod: { layout: 'per-namespace' } }
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const zip = await JSZip.loadAsync(buf);
+    const names = Object.keys(zip.files).sort();
+    // No index/runtime sidecars — caller asked for per-namespace explicitly.
+    expect(names).toEqual(['x.zod.ts', 'y.zod.ts']);
+  });
+
+  it("JSON Schema default ('single-file') returns one bundled model.schema.json", async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: TWO_NAMESPACES,
         target: 'json-schema'
       })
     } as never);
     expect(res.status).toBe(200);
-    expect(res.headers.get('Content-Disposition')).toMatch(/x\.schema\.json/);
+    expect(res.headers.get('Content-Disposition')).toMatch(/model\.schema\.json/);
+    const text = await res.text();
+    const parsed = JSON.parse(text) as { $defs: Record<string, unknown> };
+    // Both namespaces folded into a single $defs map.
+    expect(parsed.$defs).toHaveProperty('x.T');
+    expect(parsed.$defs).toHaveProperty('y.U');
+  });
+
+  it("explicit `layout: 'per-namespace'` for JSON Schema returns separate files", async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: TWO_NAMESPACES,
+        target: 'json-schema',
+        options: { 'json-schema': { layout: 'per-namespace' } }
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('application/zip');
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const zip = await JSZip.loadAsync(buf);
+    const names = Object.keys(zip.files).sort();
+    expect(names).toEqual(['x.schema.json', 'y.schema.json']);
   });
 });

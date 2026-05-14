@@ -57,9 +57,20 @@ export type {
   WholeModelEmitter,
   WholeModelEmitterConstructor,
   NamespaceEmitter,
-  NamespaceEmitterConstructor
+  NamespaceEmitterConstructor,
+  NamespaceEmitterOptions
 } from './emit/namespace-emitter.js';
 export { isWholeModelEmitter } from './emit/namespace-emitter.js';
+
+// 019 Phase 0.5.1 — LanguageProfile + GenericModelEmitter so future
+// emitter authors (Phase 0.5.2 Zod, 0.5.3 TypeScript, 0.5.4 JSON Schema,
+// Phase 2 SQL/Markdown) can register their per-target metadata without
+// reaching into the package's internals.
+export type { LanguageProfile } from './emit/language-profile.js';
+export { GenericModelEmitter } from './emit/generic-model-emitter.js';
+
+// Per-target option blocks (019 spec §3.1).
+export type { ZodOptions, TypescriptOptions, JsonSchemaOptions, SqlOptions, MarkdownOptions } from './types.js';
 
 export type { RuneTypeAlias, Condition, TypeParam } from './types/type-alias.js';
 export type { RuneRule } from './types/rule.js';

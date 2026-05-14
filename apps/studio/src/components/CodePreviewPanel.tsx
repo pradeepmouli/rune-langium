@@ -8,8 +8,6 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
-import { Button } from '@rune-langium/design-system/ui/button';
-import { ArrowLeft } from 'lucide-react';
 import { refactoryDark } from '../lang/refactory-dark-theme.js';
 import { downloadTargetViaRouter, CodegenDownloadError, type WorkspaceFile } from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
@@ -175,14 +173,20 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
     requestGeneration(target);
   }, [activeTarget, requestGeneration, target]);
 
+  // 019 polish — View toggles. Click the eye on the already-active row
+  // collapses the preview area; click on a different row swaps it.
   const handleViewTarget = useCallback(
     (newTarget: Target) => {
+      if (activeTarget === newTarget) {
+        setActiveTarget(undefined);
+        return;
+      }
       setActiveTarget(newTarget);
       if (newTarget !== target) {
         setCodePreviewTarget(newTarget);
       }
     },
-    [setActiveTarget, setCodePreviewTarget, target]
+    [activeTarget, setActiveTarget, setCodePreviewTarget, target]
   );
 
   // 018 Task 0.12 — which target's Download is in flight, used to swap
@@ -216,10 +220,6 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
     },
     [files]
   );
-
-  const handleReturnToTargets = useCallback(() => {
-    setActiveTarget(undefined);
-  }, [setActiveTarget]);
 
   const handleLineClick = useCallback((outputLine: number) => {
     const ref = sourceEditorRefRef.current;
@@ -302,95 +302,79 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
   const activeRelativePath =
     snapshot.status === 'ready' || snapshot.status === 'stale' ? snapshot.activeRelativePath : undefined;
 
-  // 018 Task 0.8 — landing state shows the targets table; the viewer
-  // mounts only after the user clicks View on a row. `inflightTarget`
-  // reflects the in-flight Download POST: 018 Task 0.12 set it via
-  // `downloadingTarget` so the clicked row shows a spinner while
-  // `/api/codegen` is outstanding. No namespace-emitter codegen is
-  // ever in flight here (that path is gated on `activeTarget !==
-  // undefined`), so the spinner is exclusively a Download signal.
-  if (activeTarget === undefined) {
-    return (
-      <section
-        id={CODE_PREVIEW_PANEL_ID}
-        aria-label="Code preview targets"
-        data-testid="panel-codePreview"
-        data-component="workspace.codePreview"
-        className="preview-panel preview-panel--code flex h-full flex-col overflow-hidden"
-      >
+  // 019 polish — stacked layout: targets table always at the top; when
+  // `activeTarget` is set, the viewer expands below it. Clicking the
+  // eye icon on a row toggles its preview open/closed. `inflightTarget`
+  // reflects the in-flight Download POST (Task 0.12) so the clicked
+  // row shows a spinner while `/api/codegen` is outstanding.
+  const viewerOpen = activeTarget !== undefined;
+  return (
+    <section
+      id={CODE_PREVIEW_PANEL_ID}
+      role={viewerOpen ? 'tabpanel' : undefined}
+      aria-label={viewerOpen ? 'Code preview' : 'Code preview targets'}
+      data-testid="panel-codePreview"
+      data-component="workspace.codePreview"
+      className="preview-panel preview-panel--code flex h-full min-h-0 flex-col overflow-hidden"
+    >
+      <div className="shrink-0 border-b border-border/70">
         <CodegenTargetsTable
           onView={handleViewTarget}
           onDownload={handleDownloadTarget}
           inflightTarget={downloadingTarget}
+          activeTarget={activeTarget}
         />
-      </section>
-    );
-  }
-
-  return (
-    <section
-      id={CODE_PREVIEW_PANEL_ID}
-      role="tabpanel"
-      aria-label="Code preview"
-      data-testid="panel-codePreview"
-      data-component="workspace.codePreview"
-      className="preview-panel preview-panel--code flex h-full flex-col overflow-hidden"
-    >
-      <div className="preview-panel__toolbar flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-1.5">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          data-testid="codegen-back-to-targets"
-          onClick={handleReturnToTargets}
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" /> Targets
-        </Button>
-        <span className="text-sm font-medium text-foreground" data-testid="codegen-active-target">
-          {TARGET_LABELS[activeTarget]}
-        </span>
-        {selectableFiles && selectableFiles.length > 1 ? (
-          <Select value={activeRelativePath} onValueChange={(value) => setActiveCodePreviewFile(value)}>
-            <SelectTrigger
-              size="sm"
-              aria-label="Generated file"
-              data-testid="codegen-file-select"
-              className="max-w-[18rem] text-xs"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {selectableFiles.map((file) => (
-                <SelectItem key={file.relativePath} value={file.relativePath} className="text-xs">
-                  {file.relativePath}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : null}
-        <div className="ml-auto min-w-0 text-right">
-          <span className="block text-xs text-muted-foreground" data-testid="codegen-status" aria-live="polite">
-            {statusLabel(snapshot, target)}
-          </span>
-          {activeFile?.relativePath ? (
-            <span
-              className="block max-w-[22rem] truncate text-[11px] text-muted-foreground"
-              data-testid="codegen-relative-path"
-              title={activeFile.relativePath}
-            >
-              {activeFile.relativePath}
-            </span>
-          ) : null}
-          {statusMessage ? (
-            <span className="block max-w-[22rem] truncate text-[11px] text-muted-foreground">{statusMessage}</span>
-          ) : null}
-        </div>
       </div>
-      <div
-        ref={editorContainerRef}
-        data-testid="code-preview-editor"
-        className="preview-panel__editor min-w-0 flex-1 overflow-auto"
-      />
+      {viewerOpen ? (
+        <>
+          <div className="preview-panel__toolbar flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 bg-card/40 px-3 py-1.5">
+            <span className="text-sm font-medium text-foreground" data-testid="codegen-active-target">
+              {TARGET_LABELS[activeTarget!]}
+            </span>
+            {selectableFiles && selectableFiles.length > 1 ? (
+              <Select value={activeRelativePath} onValueChange={(value) => setActiveCodePreviewFile(value)}>
+                <SelectTrigger
+                  size="sm"
+                  aria-label="Generated file"
+                  data-testid="codegen-file-select"
+                  className="max-w-[18rem] text-xs"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectableFiles.map((file) => (
+                    <SelectItem key={file.relativePath} value={file.relativePath} className="text-xs">
+                      {file.relativePath}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            <div className="ml-auto min-w-0 text-right">
+              <span className="block text-xs text-muted-foreground" data-testid="codegen-status" aria-live="polite">
+                {statusLabel(snapshot, target)}
+              </span>
+              {activeFile?.relativePath ? (
+                <span
+                  className="block max-w-[22rem] truncate text-[11px] text-muted-foreground"
+                  data-testid="codegen-relative-path"
+                  title={activeFile.relativePath}
+                >
+                  {activeFile.relativePath}
+                </span>
+              ) : null}
+              {statusMessage ? (
+                <span className="block max-w-[22rem] truncate text-[11px] text-muted-foreground">{statusMessage}</span>
+              ) : null}
+            </div>
+          </div>
+          <div
+            ref={editorContainerRef}
+            data-testid="code-preview-editor"
+            className="preview-panel__editor min-w-0 flex-1 overflow-auto"
+          />
+        </>
+      ) : null}
     </section>
   );
 }

@@ -36,14 +36,42 @@ import {
 interface CodegenRequestBody {
   files: Array<{ path: string; content: string }>;
   target: Target;
+  /**
+   * Per-target option blocks. Mirrors `GeneratorOptions` from
+   * @rune-langium/codegen — `options.<target>.layout` selects per-
+   * namespace vs whole-model emission per spec §3.1. When the layout
+   * is omitted, this function injects the opinionated Pages-Function
+   * default for the target (019 spec §10.1) — barrel for Zod/TS,
+   * single-file for JSON Schema.
+   */
   options?: {
+    zod?: { layout?: 'per-namespace' | 'barrel' | 'single-file' };
+    typescript?: { layout?: 'per-namespace' | 'barrel' | 'single-file' };
+    'json-schema'?: { layout?: 'per-namespace' | 'single-file' };
     sql?: {
       dialect?: 'postgres' | 'sqlserver';
       inheritance?: 'single-table' | 'table-per-type';
       enumStrategy?: 'check' | 'table';
+      layout?: 'per-namespace' | 'single-file';
     };
+    markdown?: { layout?: 'per-namespace' | 'barrel' };
   };
 }
+
+/**
+ * Per-target opinionated layout default applied by `/api/codegen` when
+ * the request omits `options.<target>.layout`. 019 spec §10.1: the
+ * library default stays `'per-namespace'` so CLI users see no change;
+ * the Pages Function flips to the bundled shape so the studio's
+ * Download button delivers a drop-in artifact.
+ */
+const PAGES_FUNCTION_DEFAULT_LAYOUT: Partial<Record<Target, string>> = {
+  zod: 'barrel',
+  typescript: 'barrel',
+  'json-schema': 'single-file',
+  sql: 'single-file',
+  markdown: 'barrel'
+};
 
 // No env bindings used yet — kept as a typed shape so future
 // rate-limiting / curated-bundle hydration can plug in cleanly.
@@ -185,6 +213,25 @@ async function zipResponse(outputs: readonly GeneratorOutput[], filename: string
   });
 }
 
+/**
+ * Build the `GeneratorOptions` to pass to `generate()`, filling in the
+ * Pages-Function-opinionated layout default for the target when the
+ * request omits one. The library default stays `'per-namespace'` so a
+ * direct caller (CLI / test fixture) that passes
+ * `options.<target>.layout: 'per-namespace'` keeps that choice — we
+ * only fill in when nothing was set.
+ */
+function applyPagesFunctionDefaults(body: CodegenRequestBody): Record<string, unknown> {
+  const result: Record<string, unknown> = { target: body.target, ...body.options };
+  const target = body.target;
+  const serverDefault = PAGES_FUNCTION_DEFAULT_LAYOUT[target];
+  if (!serverDefault) return result;
+  const existingBlock = (result[target] as { layout?: string } | undefined) ?? {};
+  if (existingBlock.layout) return result; // caller explicitly set it
+  result[target] = { ...existingBlock, layout: serverDefault };
+  return result;
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
   let raw: unknown;
   try {
@@ -216,15 +263,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
       return jsonError(400, 'One or more files failed to parse', parseErrors);
     }
 
-    // Lazy-import `generate` so the function cold-start doesn't pay for
-    // the codegen bundle on requests that fail at the parse step.
+    // Lazy-import `generate` so the function cold-start doesn't pay
+    // for the codegen bundle on requests that fail at the parse step.
     //
-    // Thread `body.options` through to the generator (Copilot review
-    // on PR #165). Phase 0 has no target-specific options yet, but
-    // Phase 2+ SQL emitter will use `options.sql.dialect` etc., and
-    // the contract is dead-on-arrival without this hookup.
+    // Apply the Pages Function's opinionated layout default for the
+    // target (019 Phase 0.5.5) — the studio's Download flow delegates
+    // its layout choice to the server, so `body.options.<target>.layout`
+    // is only set when a caller wants to override the server's choice.
     const { generate } = await import('@rune-langium/codegen');
-    const outputs = await generate(documents, { target: body.target, ...body.options });
+    const generatorOptions = applyPagesFunctionDefaults(body);
+    const outputs = await generate(documents, generatorOptions);
 
     const errors = fatalDiagnostics(outputs);
     if (errors.length > 0) {

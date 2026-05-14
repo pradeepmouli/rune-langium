@@ -8,7 +8,6 @@ import { GeneratorError } from './types.js';
 import { createDiagnostic, hasFatalDiagnostics } from './diagnostics.js';
 import {
   emitNamespaceWithContract,
-  isWholeModelEmitter,
   type NamespaceEmitterConstructor,
   type WholeModelEmitterConstructor
 } from './emit/namespace-emitter.js';
@@ -17,30 +16,144 @@ import { JsonSchemaNamespaceEmitter } from './emit/json-schema-emitter.js';
 import { TsNamespaceEmitter } from './emit/ts-emitter.js';
 import { buildNamespaceRegistry, type NamespaceRegistry } from './emit/namespace-registry.js';
 import { walkNamespace, type NamespaceWalkResult } from './emit/namespace-walker.js';
+import type { LanguageProfile } from './emit/language-profile.js';
+import { GenericModelEmitter } from './emit/generic-model-emitter.js';
+import { zodProfile } from './emit/zod-profile.js';
+import { typescriptProfile } from './emit/typescript-profile.js';
+import { jsonSchemaProfile } from './emit/json-schema-profile.js';
 
-// 018 Task 0.4: registry holds both NamespaceEmitter and WholeModelEmitter
-// constructors. The discriminator `isWholeModelEmitter` picks the dispatch
-// path at runtime. Targets without a registered emitter (sql, markdown,
-// excel, graphql until Phases 1-3) return a single not-implemented
-// diagnostic from runGenerate.
-const EMITTER_CLASSES: Partial<Record<Target, NamespaceEmitterConstructor | WholeModelEmitterConstructor>> = {
+// 019 spec §3.2 — two-registry dispatch.
+//
+// Each target lives in AT MOST one of:
+//   - NAMESPACE_EMITTERS  → has a per-namespace emitter; will be used when
+//                            options.<target>.layout === 'per-namespace'
+//                            (the library default).
+//   - WHOLE_MODEL_EMITTERS → has a hand-rolled WholeModelEmitter (Excel,
+//                            GraphQL); used regardless of layout because
+//                            the contract is whole-model only.
+//   - PROFILES            → defines packaging metadata. Combined with a
+//                            NAMESPACE_EMITTERS entry, the dispatch
+//                            synthesizes a GenericModelEmitter wrapper
+//                            for layouts other than 'per-namespace'.
+//
+// A target can appear in NAMESPACE_EMITTERS + PROFILES (Zod, TS, JSON
+// Schema, SQL, Markdown) OR in WHOLE_MODEL_EMITTERS (Excel, GraphQL).
+// Phase 0.5.1 ships the registries; Phase 0.5.2+ fills in PROFILES.
+const NAMESPACE_EMITTERS: Partial<Record<Target, NamespaceEmitterConstructor>> = {
   zod: ZodNamespaceEmitter,
   'json-schema': JsonSchemaNamespaceEmitter,
   typescript: TsNamespaceEmitter
 };
 
+const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>> = {
+  // Phase 1: excel: ExcelWholeModelEmitter
+  // Phase 3: graphql: GraphqlSdlEmitter
+};
+
+const PROFILES: Partial<Record<Target, LanguageProfile<Target>>> = {
+  zod: zodProfile,
+  typescript: typescriptProfile,
+  'json-schema': jsonSchemaProfile
+};
+
 /**
  * The targets `runGenerate` can actually produce output for in this build.
  *
- * Derived from {@link EMITTER_CLASSES} so it stays in sync as Phase 1/2/3
- * land their emitter implementations: add the entry to `EMITTER_CLASSES`
- * and this list updates automatically. UI surfaces such as the studio's
- * `CodegenTargetsTable` use it to hide rows whose emitter would otherwise
- * short-circuit to a `not-implemented` diagnostic.
+ * A target is "implemented" if any of:
+ *   - it has a NAMESPACE_EMITTERS entry (covers per-namespace dispatch);
+ *   - it has a WHOLE_MODEL_EMITTERS entry (covers hand-rolled whole-model);
+ *   - it has a NAMESPACE_EMITTERS entry AND a PROFILES entry (covers
+ *     synthesized whole-model dispatch).
  *
- * 018 Phase 0 Task 0.7 follow-up.
+ * Phase 0/0.5.1 only registers the three per-namespace emitters, so this
+ * resolves to ['zod', 'json-schema', 'typescript']. Phase 1/2/3 add to
+ * the appropriate registry and this list updates automatically.
+ *
+ * 018 Phase 0 Task 0.7 follow-up; expanded in 019 Phase 0.5.1.
  */
-export const IMPLEMENTED_TARGETS: readonly Target[] = Object.freeze(Object.keys(EMITTER_CLASSES) as Target[]);
+export const IMPLEMENTED_TARGETS: readonly Target[] = Object.freeze(
+  Array.from(
+    new Set<Target>([
+      ...(Object.keys(NAMESPACE_EMITTERS) as Target[]),
+      ...(Object.keys(WHOLE_MODEL_EMITTERS) as Target[])
+    ])
+  )
+);
+
+/**
+ * Library-default layout per target. The Pages Function (`/api/codegen`)
+ * picks its own opinionated default separately by sending an explicit
+ * `options.<target>.layout` in the request body — see 019 spec §10.1.
+ *
+ * Every per-namespace-capable target defaults to `'per-namespace'` here
+ * so CLI / library consumers see no behavior change.
+ */
+const LIBRARY_DEFAULT_LAYOUT: Record<Target, string> = {
+  zod: 'per-namespace',
+  typescript: 'per-namespace',
+  'json-schema': 'per-namespace',
+  sql: 'per-namespace',
+  markdown: 'per-namespace',
+  excel: 'single-file', // no per-namespace meaning; this default is decorative
+  graphql: 'single-file' // ditto
+};
+
+function resolveLayout(target: Target, options: GeneratorOptions): string {
+  const block = (options as unknown as Record<string, { layout?: string } | undefined>)[target];
+  return block?.layout ?? LIBRARY_DEFAULT_LAYOUT[target];
+}
+
+/**
+ * Pick the emitter constructor for a (target, layout) pair (019 spec §3.2).
+ *
+ * Returns one of:
+ *   - the registered `NamespaceEmitter` ctor when `layout === 'per-namespace'`;
+ *   - the registered `WholeModelEmitter` ctor when one exists;
+ *   - a synthesized `GenericModelEmitter` ctor that wraps the
+ *     `NamespaceEmitter` + `LanguageProfile` for the requested target;
+ *   - `undefined` when no dispatch path exists (caller emits the
+ *     not-implemented diagnostic).
+ */
+function resolveEmitter(
+  target: Target,
+  options: GeneratorOptions
+): NamespaceEmitterConstructor | WholeModelEmitterConstructor | undefined {
+  const layout = resolveLayout(target, options);
+  const nsCtor = NAMESPACE_EMITTERS[target];
+  const wmCtor = WHOLE_MODEL_EMITTERS[target];
+  const profile = PROFILES[target];
+
+  // Per-namespace request — go through the namespace emitter if we have one.
+  if (layout === 'per-namespace' && nsCtor) {
+    return nsCtor;
+  }
+
+  // Hand-rolled whole-model emitter takes priority over the generic wrapper.
+  if (wmCtor) {
+    return wmCtor;
+  }
+
+  // Synthesize the generic wrapper when we have both a NamespaceEmitter and a Profile.
+  // Bind the narrowed values to locals so the inner class can capture
+  // non-undefined references without TS losing the narrowing.
+  if (nsCtor && profile) {
+    const innerCtor: NamespaceEmitterConstructor = nsCtor;
+    const innerProfile: LanguageProfile<Target> = profile;
+    return class SynthesizedWholeModelEmitter extends GenericModelEmitter<Target> {
+      constructor() {
+        super(innerCtor, innerProfile);
+      }
+    };
+  }
+
+  // No path forward. Copilot review on PR #166: don't silently fall
+  // back to the namespace emitter when a non-'per-namespace' layout
+  // was requested — that ignores the caller's `options.<target>.layout`
+  // and silently produces legacy output. Return undefined so the
+  // top-level runGenerate emits a `not-implemented` diagnostic that
+  // strict-mode callers can turn into a GeneratorError.
+  return undefined;
+}
 
 /**
  * Group Langium documents by their namespace name.
@@ -74,15 +187,10 @@ function groupByNamespace(docs: LangiumDocument[]): Map<string, LangiumDocument[
 /**
  * Top-level orchestrator for the code generator.
  *
- * 018 Task 0.4: async + contract-aware. Groups documents by namespace,
- * walks each namespace once, then dispatches by emitter contract:
- * - NamespaceEmitter targets (zod, typescript, json-schema, sql, markdown)
- *   loop per-namespace through `emitNamespaceWithContract`.
- * - WholeModelEmitter targets (excel, graphql) get the whole walks map
- *   in one async call.
- *
- * Async because WholeModelEmitter.emit() returns a Promise — binary
- * emitters (ExcelJS) use stream APIs internally.
+ * 019 Phase 0.5.1: dispatch now uses `resolveEmitter`, which picks
+ * between a registered NamespaceEmitter, a registered WholeModelEmitter,
+ * and a synthesized GenericModelEmitter wrapper based on the resolved
+ * per-target layout option.
  *
  * @param docs - One or more parsed Langium documents.
  * @param options - Generator options.
@@ -95,17 +203,13 @@ export async function runGenerate(docs: LangiumDocument[], options: GeneratorOpt
   }
 
   const target = options.target ?? 'zod';
-  const emitterClass = EMITTER_CLASSES[target];
+  const emitterClass = resolveEmitter(target, options);
 
   let outputs: GeneratorOutput[];
   if (!emitterClass) {
-    // Unknown / not-yet-implemented target. Return a single
-    // not-implemented diagnostic rather than one per namespace —
-    // simpler to surface in UI and matches the 018 dispatch test
-    // contract. Falls through to the strict-mode check below so
-    // `strict: true` callers still get the GeneratorError they
-    // expect for any fatal diagnostic, including not-implemented
-    // (Codex review on PR #165).
+    // Unknown / not-yet-implemented target. Falls through to the
+    // strict-mode check below so `strict: true` callers still get the
+    // GeneratorError they expect (Codex review on PR #165).
     outputs = [
       {
         relativePath: `${target}.unknown`,
@@ -133,12 +237,20 @@ export async function runGenerate(docs: LangiumDocument[], options: GeneratorOpt
       walks.set(namespace, walkNamespace(namespaceDocs, namespace));
     }
 
-    if (isWholeModelEmitter(emitterClass)) {
-      outputs = await new emitterClass().emit(walks, registry, options);
+    // 019 §3.2 — registry membership disambiguates the contract; we
+    // don't need a runtime discriminator here. The synthesized
+    // GenericModelEmitter wrapper for (NamespaceEmitter + Profile) is
+    // also a WholeModelEmitter so it lands in the same branch.
+    const isWholeModelCtor =
+      target in WHOLE_MODEL_EMITTERS ||
+      (target in NAMESPACE_EMITTERS && target in PROFILES && resolveLayout(target, options) !== 'per-namespace');
+
+    if (isWholeModelCtor) {
+      outputs = await new (emitterClass as WholeModelEmitterConstructor)().emit(walks, registry, options);
     } else {
       outputs = [];
       for (const [, walked] of walks) {
-        outputs.push(emitNamespaceWithContract(walked, options, registry, emitterClass));
+        outputs.push(emitNamespaceWithContract(walked, options, registry, emitterClass as NamespaceEmitterConstructor));
       }
     }
 

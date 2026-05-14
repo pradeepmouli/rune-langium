@@ -25,15 +25,23 @@ const NAMESPACE_TARGETS = IMPLEMENTED.filter((t) => TARGET_DESCRIPTORS[t].contra
 const WHOLE_MODEL_TARGETS = IMPLEMENTED.filter((t) => TARGET_DESCRIPTORS[t].contract === 'whole-model');
 
 describe('CodegenTargetsTable', () => {
-  it('renders one row per implemented target with its label and description', () => {
+  it('renders one row per implemented target with its label', () => {
     render(<CodegenTargetsTable onView={vi.fn()} onDownload={vi.fn()} />);
     for (const target of IMPLEMENTED) {
       const row = screen.getByTestId(`codegen-targets-table__row-${target}`);
       expect(row).toBeTruthy();
       const descriptor = TARGET_DESCRIPTORS[target];
       expect(row.textContent).toContain(descriptor.label);
-      expect(row.textContent).toContain(descriptor.desc);
     }
+  });
+
+  it('exposes accessible button names via aria-label so screen readers still announce View / Download', () => {
+    render(<CodegenTargetsTable onView={vi.fn()} onDownload={vi.fn()} />);
+    // Sample one namespace target and verify both labels are present.
+    const viewBtn = screen.getByTestId('codegen-targets-table__view-zod');
+    const downloadBtn = screen.getByTestId('codegen-targets-table__download-zod');
+    expect(viewBtn.getAttribute('aria-label')).toMatch(/View Zod/);
+    expect(downloadBtn.getAttribute('aria-label')).toMatch(/Download Zod/);
   });
 
   it('does not render rows for targets without a registered emitter', () => {

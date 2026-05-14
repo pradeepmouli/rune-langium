@@ -83,4 +83,58 @@ describe('runGenerate dispatch (018 Task 0.4)', () => {
     const doc = await parseInput();
     await expect(generate(doc, { target: 'sql', strict: true })).rejects.toBeInstanceOf(GeneratorError);
   });
+
+  // 019 Phase 0.5.1 + Copilot review on PR #166 — dispatch on
+  // options.<target>.layout. Library default is 'per-namespace';
+  // 'barrel' / 'single-file' route through GenericModelEmitter when
+  // a Profile is registered; unknown layouts produce an invalid-layout
+  // diagnostic.
+
+  it('library default (`options.zod.layout` unset) returns per-namespace output unchanged', async () => {
+    const doc = await parseInput();
+    const outputs = await generate(doc, { target: 'zod' });
+    expect(outputs).toHaveLength(1);
+    expect(outputs[0]?.relativePath).toMatch(/cdm\/base\/math\.zod\.ts$/);
+  });
+
+  it("explicit `layout: 'barrel'` returns per-namespace + index + runtime sidecar", async () => {
+    const doc = await parseInput();
+    const outputs = await generate(doc, { target: 'zod', zod: { layout: 'barrel' } });
+    const paths = outputs.map((o) => o.relativePath).sort();
+    expect(paths).toContain('index.zod.ts');
+    expect(paths).toContain('runtime.zod.ts');
+  });
+
+  it("explicit `layout: 'single-file'` returns one model.zod.ts plus the runtime sidecar", async () => {
+    const doc = await parseInput();
+    const outputs = await generate(doc, { target: 'zod', zod: { layout: 'single-file' } });
+    const paths = outputs.map((o) => o.relativePath).sort();
+    expect(paths).toEqual(['model.zod.ts', 'runtime.zod.ts']);
+  });
+
+  it('invalid layout produces an `invalid-layout` fatal diagnostic', async () => {
+    const doc = await parseInput();
+    const outputs = await generate(doc, {
+      target: 'zod',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      zod: { layout: 'totally-bogus' as any }
+    });
+    expect(outputs).toHaveLength(1);
+    expect(outputs[0]?.diagnostics[0]).toMatchObject({
+      severity: 'error',
+      code: 'invalid-layout'
+    });
+  });
+
+  it('strict-mode invalid layout throws GeneratorError', async () => {
+    const doc = await parseInput();
+    await expect(
+      generate(doc, {
+        target: 'zod',
+        strict: true,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        zod: { layout: 'totally-bogus' as any }
+      })
+    ).rejects.toBeInstanceOf(GeneratorError);
+  });
 });

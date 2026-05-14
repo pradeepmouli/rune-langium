@@ -24,6 +24,62 @@
 export type Target = 'zod' | 'json-schema' | 'typescript' | 'sql' | 'markdown' | 'excel' | 'graphql';
 
 /**
+ * Per-target option blocks (019 spec §3.1). Each block carries
+ * target-specific knobs — `layout` selects per-namespace vs whole-model
+ * emission; per-target enums like SQL `dialect` and `inheritance`
+ * stay nested under their own block.
+ */
+export interface ZodOptions {
+  /**
+   * Library default: `'per-namespace'` (preserves today's CLI behavior).
+   * The studio's `/api/codegen` Pages Function sends `'barrel'` explicitly
+   * to provide the opinionated bundled download. 019 spec §10.1.
+   */
+  layout?: 'per-namespace' | 'barrel' | 'single-file';
+}
+
+export interface TypescriptOptions {
+  /** Same library/server default split as `ZodOptions.layout`. */
+  layout?: 'per-namespace' | 'barrel' | 'single-file';
+}
+
+export interface JsonSchemaOptions {
+  /**
+   * Library default: `'per-namespace'` (today's CLI behavior — no
+   * surprise file-count flip for existing scripts). The studio's
+   * `/api/codegen` Pages Function sends `'single-file'` explicitly so
+   * a Download produces one bundled document with all types in `$defs`
+   * keyed by `<namespace>.<TypeName>`. 019 spec §10.1.
+   *
+   * No `'barrel'` value — JSON has no module system, so the bundle IS
+   * single-file.
+   */
+  layout?: 'per-namespace' | 'single-file';
+}
+
+export interface SqlOptions {
+  dialect?: 'postgres' | 'sqlserver';
+  inheritance?: 'single-table' | 'table-per-type';
+  enumStrategy?: 'check' | 'table';
+  /**
+   * Library default: `'per-namespace'`. `/api/codegen` sends
+   * `'single-file'` explicitly so downloaded DDL is one cross-table-FK-
+   * ordered script. 019 spec §10.1 (Phase 2 will land the SQL emitter
+   * + profile).
+   */
+  layout?: 'per-namespace' | 'single-file';
+}
+
+export interface MarkdownOptions {
+  /**
+   * Library default: `'per-namespace'`. `/api/codegen` sends `'barrel'`
+   * explicitly so a downloaded docs bundle includes the `index.md` TOC.
+   * 019 spec §10.1 (Phase 2 will land the Markdown emitter + profile).
+   */
+  layout?: 'per-namespace' | 'barrel';
+}
+
+/**
  * Options for a generation run.
  * FR-001 (target selection), FR-022 (strict mode).
  */
@@ -41,6 +97,15 @@ export interface GeneratorOptions {
    * Do NOT set when requiring byte-identical output (SC-007).
    */
   headerComment?: string;
+
+  // 019 spec §3.1 — per-target option blocks. Each emitter reads its
+  // own slot. TS structural typing narrows access via `options[target]`
+  // when callers know the target ahead of time.
+  zod?: ZodOptions;
+  typescript?: TypescriptOptions;
+  'json-schema'?: JsonSchemaOptions;
+  sql?: SqlOptions;
+  markdown?: MarkdownOptions;
 }
 
 /**
