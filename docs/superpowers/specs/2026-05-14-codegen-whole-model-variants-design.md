@@ -56,17 +56,16 @@ export interface GeneratorOptions {
 }
 
 export interface ZodOptions {
-  /** Default: 'per-namespace+barrel'. */
-  layout?: 'per-namespace' | 'per-namespace+barrel' | 'single-file';
+  /** Default: 'per-namespace' (library); '/api/codegen' Pages Function defaults to 'barrel'. */
+  layout?: 'per-namespace' | 'barrel' | 'single-file';
 }
 
 export interface TypescriptOptions {
-  /** Default: 'per-namespace+barrel'. */
-  layout?: 'per-namespace' | 'per-namespace+barrel' | 'single-file';
+  layout?: 'per-namespace' | 'barrel' | 'single-file';
 }
 
 export interface JsonSchemaOptions {
-  /** Default: 'single-file' (preferred — JSON Schema's $defs is the idiomatic bundling). */
+  /** Default: 'single-file' (preferred — `$defs` is JSON Schema's idiomatic bundling). */
   layout?: 'per-namespace' | 'single-file';
 }
 
@@ -74,145 +73,241 @@ export interface SqlOptions {
   dialect?: 'postgres' | 'sqlserver';
   inheritance?: 'single-table' | 'table-per-type';
   enumStrategy?: 'check' | 'table';
-  /** Default: 'single-file' (one DDL file; the cross-table FK semantics make per-namespace splits brittle). */
+  /** Default: 'single-file' (cross-table FK semantics make per-namespace splits brittle). */
   layout?: 'per-namespace' | 'single-file';
 }
 
 export interface MarkdownOptions {
-  /** Default: 'per-namespace+index'. */
-  layout?: 'per-namespace' | 'per-namespace+index';
+  /** Default: 'barrel' (per-namespace + index.md TOC). */
+  layout?: 'per-namespace' | 'barrel';
 }
 ```
 
-**Why per-target options blocks** rather than a single top-level `layout: 'bundle' | 'split'`:
+**Dispatch is a one-bit decision** based on the resolved layout: `'per-namespace'` routes to that target's `NamespaceEmitter`; **any other value** routes to that target's `WholeModelEmitter`. The whole-model emitter reads the same `layout` value internally to pick its rendering style (e.g., for Zod: `'barrel'` vs `'single-file'`).
 
-- The Phase 0 spec already established `options.sql.dialect` as the right shape for target-specific knobs. Whole-model is just another knob.
-- Different emitters have different *names* for their bundling strategies. JSON Schema's options are about `$defs` placement; Markdown's are about TOC vs. flat. A shared enum across emitters either gets too abstract (`'bundle'`, ugh) or too coupled to one target's lingo.
-- TypeScript's structural type system narrows `options.zod.layout` to the right values when `target: 'zod'` — IDE autocomplete points users to the relevant choices.
+**Why per-target option blocks** rather than a single top-level `layout: 'bundle' | 'split'`:
 
-**Defaults are emitter-chosen**, listed in §4 below.
+- The Phase 0 spec already established `options.sql.dialect` as the right shape for target-specific knobs. Layout is just another knob.
+- Different emitters have different *values* — JSON Schema doesn't have a `'barrel'` (its bundle *is* `$defs`); SQL has no barrel concept. Per-target enums let each target expose only its valid values.
+- TypeScript narrows `options.zod.layout` against the declared union, so IDE autocomplete is target-specific.
 
-### 3.2 Contract changes — promote `NamespaceEmitter` to optionally see the registry
+### 3.2 Contract architecture — `NamespaceEmitter` + `LanguageProfile`, wrapped by `GenericModelEmitter`
 
-The current `NamespaceEmitter.emit` only sees one namespace at a time. Whole-model variants need cross-namespace information: barrel files reference every namespace's exports, JSON Schema `$defs` keys are `namespace.Type`, Markdown TOC links each namespace doc.
+The existing `NamespaceEmitter` / `WholeModelEmitter` contracts (from Phase 0 Task 0.2) stay as they are. Phase 0.5 adds two new pieces:
 
-Two ways to thread this:
-
-**Option A (chosen): augment `NamespaceEmitter` with a finalize step.**
+1. **`LanguageProfile<T>`** — declarative target-level metadata for packaging: file extension, how to make a barrel/index output, how to concatenate per-namespace outputs into one single-file artifact, and any shared sidecar files (runtime helpers, manifest, README) the target wants to ship alongside its core outputs. **Profiles exist independently of `NamespaceEmitter`** — Excel and GraphQL can ship a Profile to describe their packaging conventions (e.g., an Excel workbook plus a `manifest.json` sidecar) even though they have no per-namespace mode.
+2. **`GenericModelEmitter<T extends Target>`** — a parameterized `WholeModelEmitter` implementation that wraps any `NamespaceEmitter` plus its `LanguageProfile`. It runs the inner emitter per-namespace with `suppressBoilerplate: true`, then uses the Profile to assemble the whole-model artifact set (barrel + per-namespace + runtime sidecar; or single-file concat; etc.). This collapses the "barrel" / "single-file" pattern into one place for all targets that can be expressed as "per-namespace plus shared aggregation."
 
 ```ts
-// packages/codegen/src/emit/namespace-emitter.ts
+// packages/codegen/src/emit/namespace-emitter.ts (additions)
+
+export interface NamespaceEmitterOptions extends GeneratorOptions {
+  /**
+   * When true, the emitter must skip emitting shared runtime helpers
+   * inline in each per-namespace file. The wrapping `GenericModelEmitter`
+   * emits them once via the Profile's runtime sidecar instead. Default false.
+   */
+  suppressBoilerplate?: boolean;
+}
 
 export interface NamespaceEmitter {
   emit(
     walk: NamespaceWalkResult,
-    options: GeneratorOptions,
+    options: NamespaceEmitterOptions,
     registry: NamespaceRegistry
   ): GeneratorOutput;
+}
+```
 
+```ts
+// packages/codegen/src/emit/language-profile.ts (new)
+
+export interface LanguageProfile<T extends Target> {
+  readonly target: T;
+  /** Output extension for this target's primary files (also in TARGET_DESCRIPTORS — duplicated here for emitter convenience). */
+  readonly extension: string;
   /**
-   * Optional finalize step called once after every per-namespace
-   * `emit()` returns. Allows the emitter to append cross-cutting
-   * outputs (barrel files, TOCs, master `$defs` schemas, runtime
-   * helper sidecars) using the accumulated per-namespace outputs
-   * plus the full registry.
-   *
-   * If omitted, `runGenerate` skips the finalize step entirely —
-   * keeping the existing per-namespace-only behavior.
+   * Render an index/barrel that references every per-namespace output.
+   * Examples: Zod re-export module, TypeScript barrel, Markdown TOC.
+   * Return `undefined` to signal the target has no meaningful barrel
+   * (e.g., JSON Schema treats single-file as the canonical bundling).
    */
-  finalize?(
+  makeBarrel(
     perNamespaceOutputs: ReadonlyArray<GeneratorOutput>,
-    registry: NamespaceRegistry,
-    options: GeneratorOptions
+    registry: NamespaceRegistry
+  ): GeneratorOutput | undefined;
+  /**
+   * Concatenate per-namespace outputs into a single artifact. Used when
+   * the resolved layout is `'single-file'`.
+   */
+  concatenate(
+    perNamespaceOutputs: ReadonlyArray<GeneratorOutput>,
+    registry: NamespaceRegistry
+  ): GeneratorOutput;
+  /**
+   * Shared sidecar artifacts — runtime helpers (Zod's `runeCheckOneOf`
+   * et al.), manifests, READMEs, etc. Returned alongside core outputs
+   * in every whole-model emission. Empty array if none.
+   */
+  makeSharedArtifacts(
+    perNamespaceOutputs: ReadonlyArray<GeneratorOutput>,
+    registry: NamespaceRegistry
   ): GeneratorOutput[];
 }
 ```
 
-`runGenerate` dispatch:
-
 ```ts
-// Existing per-namespace loop produces N outputs.
-const perNs = [...walks.values()].map((w) =>
-  emitNamespaceWithContract(w, options, registry, EmitterCtor)
-);
+// packages/codegen/src/emit/generic-model-emitter.ts (new)
 
-// New finalize call — if the emitter implements it, append its outputs.
-const emitterInstance = new EmitterCtor();
-const finalized = emitterInstance.finalize?.(perNs, registry, options) ?? [];
-const outputs = [...perNs, ...finalized];
+export class GenericModelEmitter<T extends Target> implements WholeModelEmitter {
+  constructor(
+    private readonly inner: NamespaceEmitter,
+    private readonly profile: LanguageProfile<T>
+  ) {}
+
+  async emit(
+    walks: ReadonlyMap<string, NamespaceWalkResult>,
+    registry: NamespaceRegistry,
+    options: GeneratorOptions
+  ): Promise<GeneratorOutput[]> {
+    const targetOptions = (options as Record<string, unknown>)[this.profile.target] as
+      | { layout?: string }
+      | undefined;
+    const layout = targetOptions?.layout ?? 'barrel';
+
+    const perNs = [...walks.values()].map((walk) =>
+      this.inner.emit(walk, { ...options, suppressBoilerplate: true }, registry)
+    );
+
+    if (layout === 'single-file') {
+      return [this.profile.concatenate(perNs, registry)];
+    }
+
+    // 'barrel' (and any future per-namespace+aggregation layout).
+    const barrel = this.profile.makeBarrel(perNs, registry);
+    const sidecars = this.profile.makeSharedArtifacts(perNs, registry);
+    return [...perNs, ...(barrel ? [barrel] : []), ...sidecars];
+  }
+}
 ```
 
-**Why not Option B (have every namespace emitter implement `WholeModelEmitter` instead)?**
+**Dispatch in `runGenerate`** (replaces the EMITTER_CLASSES lookup):
 
-- Forces every emitter to manage its own per-namespace iteration (boilerplate duplicated 5x).
-- Loses the existing `emitNamespaceWithContract` adapter (which handles ordering, source-map merge, diagnostic aggregation).
-- Conflates "I want cross-namespace context" with "I want to bypass per-namespace iteration."
+```ts
+const NAMESPACE_EMITTERS: Partial<Record<Target, NamespaceEmitterConstructor>> = {
+  zod: ZodNamespaceEmitter,
+  typescript: TsNamespaceEmitter,
+  'json-schema': JsonSchemaNamespaceEmitter,
+  // Phase 2: sql, markdown
+};
 
-`finalize` keeps the per-namespace fast path untouched and adds the cross-cutting hook only where it's needed.
+const PROFILES: Partial<Record<Target, LanguageProfile<Target>>> = {
+  zod: zodProfile,
+  typescript: typescriptProfile,
+  'json-schema': jsonSchemaProfile,
+  // Phase 1: excel; Phase 2: sql, markdown; Phase 3: graphql
+};
 
-The `isWholeModelEmitter` discriminator from Task 0.2 keeps working — `finalize` is just a NamespaceEmitter extension. Excel / GraphQL still come in via the `WholeModelEmitter` path and don't gain a `finalize`.
+// Hand-rolled WholeModelEmitter classes for targets that aren't
+// per-namespace-then-aggregate (Excel, GraphQL).
+const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>> = {
+  // excel: ExcelWholeModelEmitter,   // Phase 1
+  // graphql: GraphqlSdlEmitter,      // Phase 3
+};
 
-### 3.3 Discriminator update
+function resolveEmitter(target: Target, options: GeneratorOptions): EmitterConstructor | undefined {
+  const layout = (options as Record<string, unknown>)[target] as { layout?: string } | undefined;
+  const NsCtor = NAMESPACE_EMITTERS[target];
+  const profile = PROFILES[target];
+  const WmCtor = WHOLE_MODEL_EMITTERS[target];
 
-`isWholeModelEmitter` from Task 0.2 currently uses `typeof proto.finalize !== 'function'` as a *negative* test for whole-model. Adding `finalize` to `NamespaceEmitter` breaks that heuristic.
+  // Per-namespace request → namespace emitter if we have one, else fall through.
+  if (layout?.layout === 'per-namespace' && NsCtor) return NsCtor;
 
-Fix: switch to a positive marker. Either:
+  // Hand-rolled whole-model emitter takes priority over the generic wrapper.
+  if (WmCtor) return WmCtor;
 
-- Add a static `__contract: 'whole-model'` field on `WholeModelEmitterConstructor` (third-party emitters opt in by setting this).
-- Or check `typeof proto.emit === 'function' && proto.emit.length === 3` (whole-model `emit` takes `(walks, registry, options)`, namespace `emit` takes `(walk, options, registry)`).
+  // Generic wrapping of NamespaceEmitter + Profile.
+  if (NsCtor && profile) {
+    return class extends GenericModelEmitter<Target> {
+      constructor() { super(new NsCtor(), profile); }
+    };
+  }
 
-The static field is more robust to future signature drift. We add it during this work and update the three Phase 0 namespace emitters (which don't have it) implicitly via the negation.
+  return undefined;
+}
+```
+
+**Two-registry separation eliminates the discriminator question.** Each emitter constructor is in exactly one of (NAMESPACE_EMITTERS, WHOLE_MODEL_EMITTERS, GenericModelEmitter-wrapped); the dispatch knows the contract from the registry, not from runtime introspection. Section 3.3 below details the cleanup.
+
+### 3.3 Discriminator cleanup
+
+The `isWholeModelEmitter` discriminator from Task 0.2 was a runtime sniff (`typeof proto.finalize !== 'function'`) used inside `runGenerate` to pick the dispatch path. With the two-registry approach above, dispatch knows the contract at lookup time, so the runtime discriminator is no longer load-bearing.
+
+**Action**: `isWholeModelEmitter` stays exported (third-party callers may have integrated against it), but it's no longer called from `runGenerate`. The internals switch to the two-registry lookup. A small follow-up Phase 1 commit can deprecate `isWholeModelEmitter` in a JSDoc note and remove it in a later major.
 
 ---
 
 ## 4. Per-emitter bundle shapes
 
-Each emitter defines its own opinionated default. Users override via `options.<target>.layout`.
+Every target's `options.<target>.layout` resolves to one of: `'per-namespace'`, `'barrel'`, or `'single-file'` (some targets expose only a subset). The dispatch (§3.2) picks `NamespaceEmitter` for `'per-namespace'` and `WholeModelEmitter` (via `GenericModelEmitter` for most targets) for the rest.
 
-### 4.1 Zod (`options.zod.layout`)
+Each target's `LanguageProfile` decides how `'barrel'` and `'single-file'` render. The tables below describe each profile's behavior.
 
-| Layout                       | Outputs                                                                                              |
-|------------------------------|------------------------------------------------------------------------------------------------------|
-| `per-namespace` (today)      | `<ns>.zod.ts` per namespace                                                                          |
-| `per-namespace+barrel` (**default**) | `<ns>.zod.ts` per namespace **plus** `index.zod.ts` that re-exports every schema **plus** `runtime.zod.ts` with the shared helper functions extracted from per-file inlines |
-| `single-file`                | One `model.zod.ts` with all schemas inlined and dependencies topologically ordered                   |
-
-The barrel + runtime extraction matters because today every per-namespace file inlines the same `runeCheckOneOf`, `runeCount`, `runeAttrExists` helpers. In a multi-namespace bundle that's 3 × N duplicated lines. The barrel layout pulls them into one `runtime.zod.ts` and has each namespace file `import { runeCheckOneOf } from './runtime.zod.js'`. The single-file layout collapses the whole thing into one module.
-
-### 4.2 TypeScript (`options.typescript.layout`)
+### 4.1 Zod — `options.zod.layout`
 
 | Layout                       | Outputs                                                                                              |
 |------------------------------|------------------------------------------------------------------------------------------------------|
-| `per-namespace` (today)      | `<ns>.ts` per namespace                                                                              |
-| `per-namespace+barrel` (**default**) | `<ns>.ts` per namespace **plus** `index.ts` that re-exports every interface, type alias, and func   |
+| `per-namespace`              | `<ns>.zod.ts` per namespace (today's behavior, with `suppressBoilerplate: false` so runtime helpers stay inlined) |
+| `barrel`                     | `<ns>.zod.ts` per namespace (with `suppressBoilerplate: true`) **+** `index.zod.ts` (re-exports) **+** `runtime.zod.ts` (shared helpers as a sidecar) |
+| `single-file`                | One `model.zod.ts` with all schemas, runtime helpers, and exports inlined; dependencies topologically ordered |
+
+The runtime extraction matters because today every per-namespace file inlines the same `runeCheckOneOf`, `runeCount`, `runeAttrExists` helpers. In a multi-namespace bundle that's 3×N duplicated lines. The `barrel` layout extracts them once into `runtime.zod.ts` via `LanguageProfile.makeSharedArtifacts`; the `single-file` layout concatenates everything via `LanguageProfile.concatenate`.
+
+### 4.2 TypeScript — `options.typescript.layout`
+
+| Layout                       | Outputs                                                                                              |
+|------------------------------|------------------------------------------------------------------------------------------------------|
+| `per-namespace`              | `<ns>.ts` per namespace (today's behavior)                                                           |
+| `barrel`                     | `<ns>.ts` per namespace **+** `index.ts` re-exporting every interface, type alias, and func          |
 | `single-file`                | One `model.ts` with all interfaces inlined                                                            |
 
-Same rationale as Zod. Func emission is already separated from interface emission (see `packages/codegen/src/emit/ts-emitter.ts`); the barrel pattern works naturally.
+Func emission already separated from interface emission (`packages/codegen/src/emit/ts-emitter.ts`); the barrel pattern works naturally. No runtime sidecar needed — TS interfaces erase, no shared helpers.
 
-### 4.3 JSON Schema (`options.json-schema.layout`)
+### 4.3 JSON Schema — `options.json-schema.layout`
 
 | Layout                       | Outputs                                                                                              |
 |------------------------------|------------------------------------------------------------------------------------------------------|
-| `per-namespace` (today)      | `<ns>.schema.json` per namespace, cross-namespace refs use `$ref` to sibling files                   |
-| `single-file` (**default**)  | One `model.schema.json` with every type in `$defs` keyed by `<namespace>.<Type>`, cross-references via internal `$ref: "#/$defs/<ns>.<Type>"` |
+| `per-namespace`              | `<ns>.schema.json` per namespace; cross-namespace refs use `$ref` to sibling files                   |
+| `single-file`                | One `model.schema.json` with every type in `$defs` keyed by `<namespace>.<Type>`; cross-refs via internal `$ref: "#/$defs/<ns>.<Type>"` |
 
-JSON Schema's `$defs` is the idiomatic bundling mechanism — that's why the default flips here vs. Zod/TS. Per-namespace stays available for users whose ingest pipelines expect file-per-schema.
+JSON Schema has **no `'barrel'` value** — its bundle *is* `$defs`, which is the `'single-file'` shape. The profile's `makeBarrel` returns `undefined`; the dispatch (§3.2) routes `'barrel'` requests to `'single-file'` behavior implicitly, or the option type narrows it out entirely.
 
-### 4.4 SQL (Phase 2, `options.sql.layout`)
+### 4.4 SQL (Phase 2) — `options.sql.layout`
 
 | Layout                       | Outputs                                                                                              |
 |------------------------------|------------------------------------------------------------------------------------------------------|
 | `per-namespace`              | `<ns>.sql` per namespace                                                                             |
-| `single-file` (**default**)  | One `model.sql` with all `CREATE TABLE` / `CREATE TYPE` statements ordered to satisfy FK constraints |
+| `single-file`                | One `model.sql` with all `CREATE TABLE` / `CREATE TYPE` statements ordered to satisfy FK constraints |
 
-SQL's cross-namespace foreign keys make per-namespace files brittle (you'd need to manually order them when running). Default to a single bundled DDL.
+Same shape as JSON Schema (no `'barrel'`). Cross-namespace FKs make per-namespace runs brittle anyway; `single-file` is the natural artifact.
 
-### 4.5 Markdown (Phase 2, `options.markdown.layout`)
+### 4.5 Markdown (Phase 2) — `options.markdown.layout`
 
 | Layout                       | Outputs                                                                                              |
 |------------------------------|------------------------------------------------------------------------------------------------------|
 | `per-namespace`              | `<ns>.md` per namespace                                                                              |
-| `per-namespace+index` (**default**) | `<ns>.md` per namespace **plus** `index.md` table of contents linking each                       |
+| `barrel`                     | `<ns>.md` per namespace **+** `index.md` table of contents linking each                              |
+
+No `'single-file'` value for Markdown — concatenating multi-namespace docs into one giant Markdown file isn't a use case anyone has asked for, and the per-page navigation pattern is the point of Markdown docs. The Phase 2 Markdown spec can revisit if needed.
+
+### 4.6 Excel (Phase 1) — no `layout` option
+
+Excel ships only as `WholeModelEmitter` (hand-rolled). The `LanguageProfile` for Excel still ships, because the profile's `makeSharedArtifacts` can produce sidecars (e.g., a `manifest.json` describing the workbook structure, a `README.md` with usage notes) that ride alongside the workbook in the response zip. Profile's `makeBarrel` and `concatenate` return `undefined` / no-op for Excel since they're meaningless.
+
+### 4.7 GraphQL (Phase 3) — no `layout` option
+
+GraphQL SDL ships only as `WholeModelEmitter`. Single `schema.graphql` file plus any Profile-defined sidecars.
 
 ---
 
@@ -272,34 +367,35 @@ No new Playwright spec needed for v1 since UX is unchanged. Phase 1 (Excel) will
 
 | Phase | Scope                                                                                                                                                       |
 |-------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 0.5.1 | Contract additions: per-target options interfaces in `types.ts`, `NamespaceEmitter.finalize?` hook, `runGenerate` dispatch, discriminator update. Tests.    |
-| 0.5.2 | Zod: extract runtime helpers to a shared module, implement `finalize` for `per-namespace+barrel` (default) and `single-file`. Tests.                        |
-| 0.5.3 | TypeScript: barrel finalize, single-file layout. Tests.                                                                                                     |
-| 0.5.4 | JSON Schema: single-file `$defs` layout (default), per-namespace fallback. Tests.                                                                           |
-| 0.5.5 | Studio Pages Function: surface `options.<target>.layout` end-to-end, extend unit tests, update spec §7.6 of spec 018 to point at this file for option shapes. |
+| 0.5.1 | Contract foundation: per-target option interfaces in `types.ts`; `NamespaceEmitter` gains `suppressBoilerplate`; new `LanguageProfile<T>` interface; new `GenericModelEmitter<T>` class; new two-registry dispatch in `runGenerate`. Discriminator cleanup (§3.3). Tests for the wrapper + dispatch in isolation. |
+| 0.5.2 | Zod: extract runtime helpers to a sidecar via the Zod Profile (`makeSharedArtifacts`); have `ZodNamespaceEmitter` respect `suppressBoilerplate`; ship `zodProfile` with `makeBarrel` + `concatenate`. Fixture coverage for `per-namespace`, `barrel`, `single-file`. |
+| 0.5.3 | TypeScript: `tsProfile` with `makeBarrel` (re-exports) + `concatenate`; respect `suppressBoilerplate` (no-op for TS since there are no shared helpers, but the option must be accepted). Fixture coverage. |
+| 0.5.4 | JSON Schema: `jsonSchemaProfile` with `concatenate` producing the `$defs` document; `makeBarrel` returns `undefined`. Fixture coverage for `per-namespace` and `single-file`. |
+| 0.5.5 | Studio Pages Function: thread `options.<target>.layout` end-to-end (already wired in PR #165 via the post-review fix, just exercise it); pick the per-target default for `/api/codegen` separately from the library default (§9 open question). Extend unit tests for the option contract. |
 
-Phases 0.5.2 / 0.5.3 / 0.5.4 are independent and can ship as separate PRs against the 019 feature branch, or all together — depending on review-cycle preference.
+Phases 0.5.2 / 0.5.3 / 0.5.4 are independent and can ship as separate PRs against the `019-codegen-whole-model-variants` feature branch, or all together — depending on review cadence.
 
-Phase 2's SQL/Markdown work in spec 018 plugs into the same `finalize` hook; that scope is unchanged by this spec.
+**Phase 2** of spec 018 (SQL, Markdown) plugs straight into this architecture: each target ships its own NamespaceEmitter + Profile and inherits whole-model behavior via `GenericModelEmitter` for free.
+
+**Phase 1** (Excel) and **Phase 3** (GraphQL) ship hand-rolled `WholeModelEmitter` classes registered in `WHOLE_MODEL_EMITTERS`. Their Profiles still exist (for sidecars), but `GenericModelEmitter` doesn't wrap them — the dispatch picks the hand-rolled emitter directly.
 
 ---
 
 ## 9. Migration & risks
 
-- **Existing per-namespace callers see no behavior change.** Default for Zod / TS flips from "per-namespace only" → "per-namespace + barrel" for `/api/codegen` Download, but the CLI's default-omitted-options path still calls per-namespace if `layout` is unset. Concretely: `runGenerate(docs, { target: 'zod' })` returns just per-namespace outputs unless `options.zod.layout` is set.
-  - **Decision point**: should the CLI / library default to barrel mode too, or keep per-namespace as the library default? Lean toward **library default = per-namespace, Pages Function default = barrel** so the studio's Download is opinionated while library consumers don't get surprise extra files. This needs explicit confirmation.
-- **`finalize` discriminator regression risk**: Codegen tests in `packages/codegen/test/emit/whole-model-emitter.test.ts` need updating; `isWholeModelEmitter` switches from prototype-shape sniffing to a static marker.
-- **Runtime helper extraction is a byte-identity break for Zod** (SC-007 is about determinism, not specifically byte-identity — but verify fixture tests are still meaningful after refactor). Mitigation: bump fixture snapshots in the same PR that extracts helpers; CI catches drift.
-- **JSON Schema `$defs` key collisions**: model namespaces could in principle share short type names. The key `<ns>.<Type>` should always be unique since namespace names are globally unique in Rune. Add a test that asserts uniqueness of `$defs` keys.
+- **Existing per-namespace callers see no behavior change** as long as the library default for `layout` stays `'per-namespace'`. The CLI's `pnpm rune-codegen --target zod` keeps producing the same files. (See open question 1 below for the default-policy decision.)
+- **Runtime helper extraction is a byte-identity break for Zod's barrel layout** (per-namespace files no longer include the inlined helpers when `suppressBoilerplate: true`). SC-007 (determinism) is preserved — output is still byte-stable for any fixed `(target, layout, model)` triple, just different from today's per-namespace bytes. Mitigation: fixture snapshots gain new entries per layout; the existing per-namespace snapshots are unchanged.
+- **JSON Schema `$defs` key collisions** are impossible *if* namespace names are globally unique (which they are in Rune — namespace declarations are top-level and unique-keyed). Add a test that asserts uniqueness of `$defs` keys anyway, as defense in depth.
+- **The two-registry dispatch (§3.2) removes the `isWholeModelEmitter` runtime sniff** as a load-bearing call. The export stays for third-party callers but is no longer used internally. Marked for deprecation in a later major.
 
 ---
 
 ## 10. Open questions
 
-1. **Library default — per-namespace or barrel?** (See §9 above.) My lean: keep library at per-namespace (least-surprise for existing CLI users), make `/api/codegen` opinionated. Decision needed before implementation.
-2. **Should `single-file` Zod / TS layouts produce a single `.ts` file even for 30-namespace models?** Practically the output would be enormous (CDM has ~80 namespaces). The layout option is documented but `single-file` for large models is "use at your own risk." No size enforcement.
-3. **Markdown `index.md` shape** — flat list of namespaces, or nested table per type-kind? Defer to Phase 2 spec when Markdown emitter ships.
-4. **GraphQL SDL needs whole-model already (it's `WholeModelEmitter` from day one).** Should we add a `per-namespace` option for GraphQL too, for users who want one `.graphql` file per namespace? Probably not — GraphQL schemas are typically one-file-per-service. Defer until requested.
+1. **Library default for Zod / TypeScript `layout`** — `'per-namespace'` (today's behavior; least-surprise for CLI users) or `'barrel'` (opinionated; matches the studio's Download default)? My lean: keep library default at `'per-namespace'`, make `/api/codegen` send `layout: 'barrel'` explicitly. Then `runGenerate(docs, { target: 'zod' })` from the CLI is unchanged, and the studio's bundled download is an opt-in by the Pages Function. **Decision needed.**
+2. **Large-model `single-file` Zod / TS guardrails** — CDM has ~80 namespaces; a `single-file` Zod artifact for that model is ~1MB and slow to type-check. Options: document as "use at your own risk" (simplest), emit a warning diagnostic above a threshold, or emit a fatal diagnostic. **Decision needed.**
+3. **Markdown `index.md` shape** — flat namespace list vs nested by type-kind. Defer to the Phase 2 Markdown spec; for now reserve `options.markdown.layout: 'barrel'` as the default with the rendering details TBD.
+4. **GraphQL `per-namespace` option** — should GraphQL SDL get a per-namespace variant? GraphQL schemas are typically one-file-per-service; per-namespace splits don't match how SDLs are consumed. Skip unless requested.
 
 ---
 
