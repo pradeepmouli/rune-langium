@@ -592,8 +592,13 @@ describe('buildStructureGraph — cross-namespace references', () => {
     expect(result.nodes.size).toBe(2);
     const a = result.nodes.get('c::A') as StructureDataNode;
     const b = result.nodes.get('c::B') as StructureDataNode;
+    // A → B is kept (B is not an ancestor of A in the recursion stack).
     expect(a.expansions.get('b')).toBe('c::B');
-    expect(b.expansions.get('a')).toBe('c::A');
+    // B → A is dropped: A IS an ancestor of B in the recursion path, so the
+    // containment edge would form a parent-cycle in Phase 3's React Flow
+    // layout. The chip row remains; only the parent/child edge is suppressed.
+    // See the `cycle-aware expansion` block below for full coverage.
+    expect(b.expansions.size).toBe(0);
   });
 
   it('returns an empty graph (no crash) when the focused root is a Choice', () => {
@@ -781,5 +786,173 @@ describe('buildStructureGraph — cross-namespace references', () => {
     // No 'a' Party — cross-namespace fallback to b::Party
     expect(party.targetNodeId).toBe('b::Party');
     expect(party.targetNamespaceUri).toBe('b');
+  });
+});
+
+describe('buildStructureGraph — cycle-aware expansion (ancestor edges dropped)', () => {
+  // Phase 3 layout interprets `StructureNode.expansions` as React Flow
+  // containment (child node `parentId` = ancestor id). A literal A → A or
+  // A → B → A in the expansions chain would form a parent-cycle the layout
+  // cannot resolve, so the adapter MUST drop containment edges back to any
+  // ancestor in the current recursion path while preserving the row chip
+  // itself. Sibling cross-references (target completed in a prior branch,
+  // not currently on the recursion stack) are preserved — they render as
+  // out-of-tree handles in Phase 3.
+
+  it('drops direct self-reference: Tree.parent: Tree records no expansion edge', () => {
+    const fixtureSelf = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::Tree',
+          $type: 'Data' as const,
+          name: 'Tree',
+          namespace: 'ns',
+          attributes: [
+            {
+              name: 'parent',
+              typeCall: { type: { $refText: 'Tree' } },
+              card: { inf: 0, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+    const expansionMap = new Map<string, boolean>([
+      [expansionKey({ namespaceUri: 'ns', typeId: 'Tree', attrName: 'parent' }), true]
+    ]);
+
+    const result = buildStructureGraph(fixtureSelf, {
+      focusedTypeId: 'ns::Tree',
+      expansionMap
+    });
+
+    // Only one Tree node — no self-clone or recursion explosion.
+    expect(result.nodes.size).toBe(1);
+    const tree = result.nodes.get('ns::Tree') as StructureDataNode;
+    // Containment edge suppressed (parent is the ancestor of itself).
+    expect(tree.expansions.size).toBe(0);
+    // Row data is intact — the chip still references Tree by id; only the
+    // parent/child layout edge is missing.
+    const row = tree.rows.find((r) => r.attrName === 'parent')!;
+    expect(row.typeKind).toBe('Data');
+    expect(row.targetNodeId).toBe('ns::Tree');
+  });
+
+  it('drops indirect cycle A → B → A: keeps A.next, suppresses B.next', () => {
+    const fixtureIndirect = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::A',
+          $type: 'Data' as const,
+          name: 'A',
+          namespace: 'ns',
+          attributes: [
+            {
+              name: 'next',
+              typeCall: { type: { $refText: 'B' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'ns::B',
+          $type: 'Data' as const,
+          name: 'B',
+          namespace: 'ns',
+          attributes: [
+            {
+              name: 'next',
+              typeCall: { type: { $refText: 'A' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+    const expansionMap = new Map<string, boolean>([
+      [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'next' }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'next' }), true]
+    ]);
+
+    const result = buildStructureGraph(fixtureIndirect, {
+      focusedTypeId: 'ns::A',
+      expansionMap
+    });
+
+    expect(result.nodes.size).toBe(2);
+    const a = result.nodes.get('ns::A') as StructureDataNode;
+    const b = result.nodes.get('ns::B') as StructureDataNode;
+
+    // A → B kept: B is not an ancestor when we record this edge.
+    expect(a.expansions.get('next')).toBe('ns::B');
+    // B → A dropped: A IS an ancestor (we recursed A then B).
+    expect(b.expansions.size).toBe(0);
+
+    // Row data intact on both sides.
+    const aRow = a.rows.find((r) => r.attrName === 'next')!;
+    expect(aRow.typeKind).toBe('Data');
+    expect(aRow.targetNodeId).toBe('ns::B');
+    const bRow = b.rows.find((r) => r.attrName === 'next')!;
+    expect(bRow.typeKind).toBe('Data');
+    expect(bRow.targetNodeId).toBe('ns::A');
+  });
+
+  it('preserves sibling cross-references: Trade.party AND Trade.counterparty both point to Party', () => {
+    // Critical contract test. The naive fix of "if target already in `out`,
+    // drop the edge" would clobber the second expansion (counterparty) here.
+    // Party is in `out` after the first recursion completes, but Party is
+    // NOT an ancestor of Trade — it's a completed sibling, so the edge MUST
+    // be preserved so Phase 3 can render the second reference as an
+    // out-of-tree handle / shared child.
+    const fixtureSibling = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::Party',
+          $type: 'Data' as const,
+          name: 'Party',
+          namespace: 'ns',
+          attributes: [
+            { name: 'id', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'ns',
+          attributes: [
+            {
+              name: 'party',
+              typeCall: { type: { $refText: 'Party' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            },
+            {
+              name: 'counterparty',
+              typeCall: { type: { $refText: 'Party' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+    const expansionMap = new Map<string, boolean>([
+      [expansionKey({ namespaceUri: 'ns', typeId: 'Trade', attrName: 'party' }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'Trade', attrName: 'counterparty' }), true]
+    ]);
+
+    const result = buildStructureGraph(fixtureSibling, {
+      focusedTypeId: 'ns::Trade',
+      expansionMap
+    });
+
+    // Trade + Party only — no clone of Party for the second reference.
+    expect(result.nodes.size).toBe(2);
+    const trade = result.nodes.get('ns::Trade') as StructureDataNode;
+    // Both edges to the completed-sibling Party are preserved.
+    expect(trade.expansions.get('party')).toBe('ns::Party');
+    expect(trade.expansions.get('counterparty')).toBe('ns::Party');
   });
 });

@@ -177,14 +177,20 @@ function walkAndExpand(
   node: AdapterNode,
   doc: AdapterDocument,
   opts: BuildOptions,
-  out: Map<string, StructureNode>
+  out: Map<string, StructureNode>,
+  // Ancestors of `node` in the current recursion stack. Edges to anything in
+  // this set would form a containment cycle in the Phase 3 React Flow layout
+  // (which treats `expansions` as parentId), so they are dropped at record
+  // time. Completed-sibling references (target already in `out` but NOT in
+  // `path`) are preserved — those render as cross-tree handles, not parents.
+  path: ReadonlySet<string>
 ): void {
   const expansions = new Map<string, string>();
   const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
 
-  // Reserve a placeholder so cyclic references (A → B → A) terminate when we
-  // recurse — children that revisit this node will hit the `out.has(...)`
-  // guard below and short-circuit on the placeholder id.
+  // Reserve a placeholder so cyclic references terminate when we recurse —
+  // children that revisit this node will hit the `out.has(...)` guard below
+  // and re-use the placeholder rather than re-walking.
   const placeholder: StructureDataNode = {
     id: node.id,
     kind: 'data',
@@ -197,6 +203,12 @@ function walkAndExpand(
   };
   out.set(node.id, placeholder);
 
+  // Fresh per-call set keeps the ancestor path scoped to this recursion
+  // branch; siblings in unrelated branches don't share it. Letting `nextPath`
+  // go out of scope on return acts as the implicit "leave" cleanup.
+  const nextPath = new Set(path);
+  nextPath.add(node.id);
+
   for (const row of rows) {
     if (shouldExpand(row, node.namespace, node.name, opts.expansionMap) && row.targetNodeId) {
       const target = doc.nodes.find((n) => n.id === row.targetNodeId);
@@ -205,13 +217,21 @@ function walkAndExpand(
       // disagree with shouldExpand's. If an Enum (or any future non-expandable
       // kind) ever slips through, we skip without recording a dangling edge.
       if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
+      // Ancestor cycle guard: dropping both the expansion edge AND the
+      // recursion. The row still appears in `rows` as a chip referencing the
+      // ancestor by id; only the parent/child containment link is suppressed.
+      // Without this, Phase 3 layout would receive A → B → A as a parentId
+      // cycle and fail to resolve a containment tree.
+      if (nextPath.has(target.id)) continue;
       expansions.set(row.attrName, target.id);
       if (out.has(target.id)) {
-        // Already materialized (or in-flight from a cyclic walk). Re-use.
+        // Already materialized (completed sibling). Edge is kept above; we
+        // just skip re-walking. This is the non-ancestor reuse case and is
+        // deliberately distinct from the cycle guard.
         continue;
       }
       if (target.$type === 'Data') {
-        walkAndExpand(target, doc, opts, out);
+        walkAndExpand(target, doc, opts, out, nextPath);
       } else {
         out.set(target.id, buildChoiceNode(target, doc));
       }
@@ -242,12 +262,12 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
           childNodeId: root.id
         };
         nodes.set(baseId, baseContainer);
-        walkAndExpand(root, doc, opts, nodes);
+        walkAndExpand(root, doc, opts, nodes, new Set<string>());
         return { rootNodeId: baseId, nodes };
       }
     }
 
-    walkAndExpand(root, doc, opts, nodes);
+    walkAndExpand(root, doc, opts, nodes, new Set<string>());
   }
   // Choice as root handled in later tasks.
 
