@@ -25,7 +25,7 @@ export interface TypeRefPayload {
  * can read `types` and match against an accept list.
  */
 export function typeRefMimeForKind(kind: TypeRefPayload['kind']): string {
-  return `${TYPE_REF_PAYLOAD_MIME}+${kind}`;
+  return `${TYPE_REF_PAYLOAD_MIME}+${kind.toLowerCase()}`;
 }
 
 /** Type guard for parsed drag payloads. */

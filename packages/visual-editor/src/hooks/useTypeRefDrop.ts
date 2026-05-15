@@ -86,7 +86,7 @@ export function useTypeRefDrop(opts: UseTypeRefDropOptions): UseTypeRefDropResul
   function hasAcceptedMime(types: DataTransfer['types'] | ReadonlyArray<string> | undefined): boolean {
     if (!types) return false;
     for (let i = 0; i < types.length; i++) {
-      if (acceptableMimes.has(types[i])) return true;
+      if (acceptableMimes.has(types[i].toLowerCase())) return true;
     }
     return false;
   }

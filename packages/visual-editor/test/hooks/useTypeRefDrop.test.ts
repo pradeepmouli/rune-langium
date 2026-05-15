@@ -303,4 +303,32 @@ describe('useTypeRefDrop', () => {
     expect(result.current.isOver).toBe(true);
     expect(overEvt.preventDefault).toHaveBeenCalled();
   });
+
+  // --- Browser normalization regression (Copilot round-7 fix) ---
+
+  it('accepts browser-normalized lowercase MIME when accept list uses PascalCase kind', () => {
+    // Browsers normalize DataTransfer.types to lowercase. A source that registers
+    // "application/x-rune-type-ref+Data" will be seen as
+    // "application/x-rune-type-ref+data" at the target.
+    // The fix: typeRefMimeForKind always lowercases, and hasAcceptedMime also
+    // lowercases the incoming types before checking the Set.
+    const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop: vi.fn() }));
+
+    // Simulate what the browser delivers: already-lowercased kind suffix.
+    const browserNormalizedTypes = [
+      TYPE_REF_PAYLOAD_MIME,
+      'application/x-rune-type-ref+data' // lowercase, as browser would produce
+    ];
+    const enterEvt = makeDragEvent({ type: 'dragenter', types: browserNormalizedTypes });
+    const overEvt = makeDragEvent({ type: 'dragover', types: browserNormalizedTypes });
+    act(() => {
+      result.current.dragOverHandlers.onDragEnter(enterEvt);
+    });
+    expect(result.current.isOver).toBe(true);
+
+    act(() => {
+      result.current.dragOverHandlers.onDragOver(overEvt);
+    });
+    expect(overEvt.preventDefault).toHaveBeenCalled();
+  });
 });
