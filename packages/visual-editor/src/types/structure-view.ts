@@ -85,6 +85,14 @@ export interface StructureBaseContainer {
   readonly baseTypeNamespaceUri: string;
   readonly baseRows: ReadonlyArray<StructureRow>;
   readonly childNodeId: string;
+  /**
+   * Containment edges from this base level's inherited rows into expanded
+   * target nodes (Data/Choice that the user clicked to expand). Mirrors
+   * StructureDataNode.expansions; spec §3.2 says containment is uniform
+   * across inheritance and type-reference, so a row's owner — whether base
+   * level or derived level — must be able to carry its own expansion edges.
+   */
+  readonly expansions: ReadonlyMap<string, string>;
 }
 
 export type StructureNode = StructureDataNode | StructureChoiceNode | StructureBaseContainer;
