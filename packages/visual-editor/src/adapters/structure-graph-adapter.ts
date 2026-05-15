@@ -183,7 +183,12 @@ function walkAndExpand(
   // (which treats `expansions` as parentId), so they are dropped at record
   // time. Completed-sibling references (target already in `out` but NOT in
   // `path`) are preserved — those render as cross-tree handles, not parents.
-  path: ReadonlySet<string>
+  path: ReadonlySet<string>,
+  // Cache mapping a Data target's own id to the outermost-container id that
+  // wraps it (or the target's own id if there is no inheritance chain). Used
+  // by `materializeDataWithInheritance` so repeat expansions of the same
+  // target reuse the cached outermost id without re-walking.
+  outerMostId: Map<string, string>
 ): void {
   const expansions = new Map<string, string>();
   const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
@@ -223,20 +228,109 @@ function walkAndExpand(
       // Without this, Phase 3 layout would receive A → B → A as a parentId
       // cycle and fail to resolve a containment tree.
       if (nextPath.has(target.id)) continue;
-      expansions.set(row.attrName, target.id);
-      if (out.has(target.id)) {
-        // Already materialized (completed sibling). Edge is kept above; we
-        // just skip re-walking. This is the non-ancestor reuse case and is
-        // deliberately distinct from the cycle guard.
-        continue;
-      }
       if (target.$type === 'Data') {
-        walkAndExpand(target, doc, opts, out, nextPath);
+        // Spec §3.2: containment is the single mechanism for both inheritance
+        // and type-reference and they compose uniformly. The expansion edge
+        // must point at the OUTERMOST base container (if any) so the Data
+        // target renders wrapped in its full inheritance chain — matching the
+        // focused-root behavior in `buildStructureGraph`.
+        const expandedId = materializeDataWithInheritance(target, doc, opts, out, nextPath, outerMostId);
+        expansions.set(row.attrName, expandedId);
       } else {
+        expansions.set(row.attrName, target.id);
+        if (out.has(target.id)) continue;
         out.set(target.id, buildChoiceNode(target, doc));
       }
     }
   }
+}
+
+/**
+ * Materialize a Data node into `out` with its full inheritance chain.
+ * Returns the id that a containment edge should point at — the outermost
+ * base container if the node has `extends`, or the node's own id if not.
+ *
+ * Shared between `buildStructureGraph` (focused root) and `walkAndExpand`
+ * (each expanded Data target). Containment is the single mechanism for both
+ * inheritance and type-reference per spec §3.2; the two callers therefore
+ * need identical wrapping behavior. Without this helper, expansion targets
+ * would bypass the inheritance chain and render bare (no yellow base
+ * containers, no inherited rows), violating §3.2's uniform composition.
+ *
+ * The chain is walked once per target — repeat expansions of the same Data
+ * target reuse the cached outermost id from `outerMostId` and skip
+ * re-materialization. Inheritance cycles (A extends B extends A) are broken
+ * by a local `visited` set, distinct from the type-reference recursion
+ * ancestor `path` (those guard different cycle classes).
+ */
+function materializeDataWithInheritance(
+  focused: AdapterNode,
+  doc: AdapterDocument,
+  opts: BuildOptions,
+  out: Map<string, StructureNode>,
+  path: ReadonlySet<string>,
+  outerMostId: Map<string, string>
+): string {
+  // Repeat-expansion fast path: same target reached via multiple references
+  // (e.g. Portfolio.trade1 + Portfolio.trade2 both point at Trade). The
+  // chain has already been built; reuse the cached outermost id.
+  const cached = outerMostId.get(focused.id);
+  if (cached !== undefined) return cached;
+
+  // Materialize the focused Data node first. Its own type-reference
+  // expansions still need to walk through `walkAndExpand`. This must happen
+  // before the inheritance chain is built so the innermost base container's
+  // `childNodeId` can reference the now-present Data node.
+  walkAndExpand(focused, doc, opts, out, path, outerMostId);
+
+  if (!focused.extends) {
+    outerMostId.set(focused.id, focused.id);
+    return focused.id;
+  }
+
+  // Collect ancestors from nearest base outward, with cycle protection.
+  // A type cannot extend itself in well-formed input, but defensive code
+  // must not infinite-loop on malformed chains. The `visited` set is local
+  // to this call (not threaded through) because a Data type's inheritance
+  // chain is intrinsic — it doesn't depend on the expansion context.
+  const visited = new Set<string>([focused.id]);
+  const ancestors: AdapterNode[] = [];
+  let cursor: AdapterNode | undefined = findNodeByName(focused.extends, doc, focused.namespace);
+  while (cursor && !visited.has(cursor.id)) {
+    visited.add(cursor.id);
+    ancestors.push(cursor);
+    cursor = cursor.extends ? findNodeByName(cursor.extends, doc, cursor.namespace) : undefined;
+  }
+
+  if (ancestors.length === 0) {
+    outerMostId.set(focused.id, focused.id);
+    return focused.id;
+  }
+
+  // Build containers inside-out so each parent container references the
+  // already-built child container id. The first ancestor (nearest base)
+  // wraps the focused Data node; subsequent ancestors wrap the previous
+  // container. The last ancestor's container id is the outermost.
+  let childId = focused.id;
+  let outermost = focused.id;
+  for (const baseNode of ancestors) {
+    const baseId = `${focused.id}::__base::${baseNode.id}`;
+    const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
+    const baseContainer: StructureBaseContainer = {
+      id: baseId,
+      kind: 'base',
+      baseTypeName: baseNode.name,
+      baseTypeNamespaceUri: baseNode.namespace,
+      baseRows,
+      childNodeId: childId
+    };
+    out.set(baseId, baseContainer);
+    childId = baseId;
+    outermost = baseId;
+  }
+
+  outerMostId.set(focused.id, outermost);
+  return outermost;
 }
 
 export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): StructureGraphInput {
@@ -247,54 +341,13 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
   }
 
   if (root.$type === 'Data') {
-    // Walk the full inheritance chain (spec §3.2: "Multi-level inheritance
-    // nests yellow inside yellow recursively"). We materialize the focused
-    // Data node first so its expansion walk is unaffected, then thread base
-    // containers outside-in: the innermost container's childNodeId points at
-    // the focused Data node, each subsequent container's childNodeId points
-    // at the previously-built (inner) container, and the outermost container
-    // becomes `rootNodeId`. This produces yellow-inside-yellow nesting where
-    // the topmost ancestor (e.g. TradeRoot) is on the outside.
-    walkAndExpand(root, doc, opts, nodes, new Set<string>());
-
-    if (root.extends) {
-      // Collect ancestors from nearest base outward, with cycle protection.
-      // A class cannot extend itself in well-formed input, but defensive code
-      // must not infinite-loop on malformed chains.
-      const visited = new Set<string>([root.id]);
-      const ancestors: AdapterNode[] = [];
-      let cursor: AdapterNode | undefined = findNodeByName(root.extends, doc, root.namespace);
-      while (cursor && !visited.has(cursor.id)) {
-        visited.add(cursor.id);
-        ancestors.push(cursor);
-        cursor = cursor.extends ? findNodeByName(cursor.extends, doc, cursor.namespace) : undefined;
-      }
-
-      if (ancestors.length > 0) {
-        // Build containers inside-out so each parent container references the
-        // already-built child container id. The first ancestor (nearest base)
-        // wraps the focused Data node; subsequent ancestors wrap the previous
-        // container. The last ancestor's container id is the outermost root.
-        let childId = root.id;
-        let outermostId = root.id;
-        for (const baseNode of ancestors) {
-          const baseId = `${root.id}::__base::${baseNode.id}`;
-          const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
-          const baseContainer: StructureBaseContainer = {
-            id: baseId,
-            kind: 'base',
-            baseTypeName: baseNode.name,
-            baseTypeNamespaceUri: baseNode.namespace,
-            baseRows,
-            childNodeId: childId
-          };
-          nodes.set(baseId, baseContainer);
-          childId = baseId;
-          outermostId = baseId;
-        }
-        return { rootNodeId: outermostId, nodes };
-      }
-    }
+    // Spec §3.2: Multi-level inheritance nests yellow inside yellow
+    // recursively. Both the focused root AND expansion targets must wrap
+    // in their full inheritance chain — the shared
+    // `materializeDataWithInheritance` helper enforces this symmetry.
+    const outerMostId = new Map<string, string>();
+    const rootId = materializeDataWithInheritance(root, doc, opts, nodes, new Set<string>(), outerMostId);
+    return { rootNodeId: rootId, nodes };
   }
   // Choice as root handled in later tasks.
 

@@ -862,6 +862,253 @@ describe('buildStructureGraph — cross-namespace references', () => {
   });
 });
 
+describe('buildStructureGraph — expansion target with inheritance', () => {
+  // Spec §3.2: containment is the single mechanism for both inheritance and
+  // type-reference, and they must compose uniformly. An expanded Data target
+  // therefore needs the same yellow base-container wrapping that the focused
+  // root gets — the `materializeDataWithInheritance` helper is shared
+  // between both call sites. Without it, expanded Trade would render bare
+  // even though `Trade extends TradeBase`.
+
+  it('wraps a single-level expanded target in its base container', () => {
+    const fixture = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::TradeBase',
+          $type: 'Data' as const,
+          name: 'TradeBase',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'tradeID', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          extends: 'TradeBase',
+          attributes: [
+            {
+              name: 'tradeDate',
+              typeCall: { type: { $refText: 'date' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::Portfolio',
+          $type: 'Data' as const,
+          name: 'Portfolio',
+          namespace: 'cdm.trade',
+          attributes: [
+            {
+              name: 'trade',
+              typeCall: { type: { $refText: 'Trade' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.trade::Portfolio',
+      expansionMap: new Map([
+        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Portfolio', attrName: 'trade' }), true]
+      ])
+    });
+
+    // Portfolio + Trade data node + TradeBase container = 3 nodes total.
+    expect(result.nodes.size).toBe(3);
+    expect(result.nodes.has('cdm.trade::Portfolio')).toBe(true);
+    expect(result.nodes.has('cdm.trade::Trade')).toBe(true);
+
+    const baseId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    expect(base.kind).toBe('base');
+    expect(base.baseTypeName).toBe('TradeBase');
+    expect(base.baseRows.map((r) => r.attrName)).toEqual(['tradeID']);
+    expect(base.baseRows.every((r) => r.isInherited)).toBe(true);
+    expect(base.childNodeId).toBe('cdm.trade::Trade');
+
+    // The Trade data node holds ONLY its own additions, not inherited rows.
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    expect(trade.rows.map((r) => r.attrName)).toEqual(['tradeDate']);
+
+    // The expansion edge points at the OUTERMOST base container — not the
+    // raw Trade id. This is the contract that prior fixes missed.
+    const portfolio = result.nodes.get('cdm.trade::Portfolio') as StructureDataNode;
+    expect(portfolio.expansions.get('trade')).toBe(baseId);
+  });
+
+  it('wraps a multi-level expanded target (Trade extends TradeBase extends TradeRoot)', () => {
+    const fixture = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::TradeRoot',
+          $type: 'Data' as const,
+          name: 'TradeRoot',
+          namespace: 'cdm.trade',
+          attributes: [
+            {
+              name: 'rootField',
+              typeCall: { type: { $refText: 'string' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::TradeBase',
+          $type: 'Data' as const,
+          name: 'TradeBase',
+          namespace: 'cdm.trade',
+          extends: 'TradeRoot',
+          attributes: [
+            {
+              name: 'baseField',
+              typeCall: { type: { $refText: 'string' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          extends: 'TradeBase',
+          attributes: [
+            {
+              name: 'tradeField',
+              typeCall: { type: { $refText: 'string' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::Portfolio',
+          $type: 'Data' as const,
+          name: 'Portfolio',
+          namespace: 'cdm.trade',
+          attributes: [
+            {
+              name: 'trade',
+              typeCall: { type: { $refText: 'Trade' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.trade::Portfolio',
+      expansionMap: new Map([
+        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Portfolio', attrName: 'trade' }), true]
+      ])
+    });
+
+    // Portfolio + Trade data + TradeBase container + TradeRoot container = 4.
+    expect(result.nodes.size).toBe(4);
+    const outerId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
+    const innerId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+
+    expect(result.nodes.has(outerId)).toBe(true);
+    expect(result.nodes.has(innerId)).toBe(true);
+    expect(result.nodes.has('cdm.trade::Trade')).toBe(true);
+
+    const outer = result.nodes.get(outerId) as StructureBaseContainer;
+    expect(outer.baseTypeName).toBe('TradeRoot');
+    expect(outer.baseRows.map((r) => r.attrName)).toEqual(['rootField']);
+    expect(outer.childNodeId).toBe(innerId);
+
+    const inner = result.nodes.get(innerId) as StructureBaseContainer;
+    expect(inner.baseTypeName).toBe('TradeBase');
+    expect(inner.baseRows.map((r) => r.attrName)).toEqual(['baseField']);
+    expect(inner.childNodeId).toBe('cdm.trade::Trade');
+
+    // Expansion edge points at the outermost (TradeRoot's) container.
+    const portfolio = result.nodes.get('cdm.trade::Portfolio') as StructureDataNode;
+    expect(portfolio.expansions.get('trade')).toBe(outerId);
+  });
+
+  it('reuses cached outermost id when two attributes expand the same inheriting Data', () => {
+    // Verifies the outerMostId cache: Portfolio.trade1 + Portfolio.trade2
+    // both expand to Trade (which extends TradeBase). The chain must be
+    // materialized exactly once, and BOTH expansion edges must point at
+    // the same outermost id.
+    const fixture = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::TradeBase',
+          $type: 'Data' as const,
+          name: 'TradeBase',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'tradeID', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          extends: 'TradeBase',
+          attributes: [
+            {
+              name: 'tradeDate',
+              typeCall: { type: { $refText: 'date' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::Portfolio',
+          $type: 'Data' as const,
+          name: 'Portfolio',
+          namespace: 'cdm.trade',
+          attributes: [
+            {
+              name: 'trade1',
+              typeCall: { type: { $refText: 'Trade' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            },
+            {
+              name: 'trade2',
+              typeCall: { type: { $refText: 'Trade' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.trade::Portfolio',
+      expansionMap: new Map([
+        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Portfolio', attrName: 'trade1' }), true],
+        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Portfolio', attrName: 'trade2' }), true]
+      ])
+    });
+
+    // Portfolio + Trade + TradeBase container — Trade and its base
+    // container are each materialized exactly once.
+    expect(result.nodes.size).toBe(3);
+    const baseId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    expect(result.nodes.has(baseId)).toBe(true);
+    expect(result.nodes.has('cdm.trade::Trade')).toBe(true);
+
+    const portfolio = result.nodes.get('cdm.trade::Portfolio') as StructureDataNode;
+    // Both edges resolve to the SAME outermost id.
+    expect(portfolio.expansions.get('trade1')).toBe(baseId);
+    expect(portfolio.expansions.get('trade2')).toBe(baseId);
+  });
+});
+
 describe('buildStructureGraph — cycle-aware expansion (ancestor edges dropped)', () => {
   // Phase 3 layout interprets `StructureNode.expansions` as React Flow
   // containment (child node `parentId` = ancestor id). A literal A → A or
