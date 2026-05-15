@@ -54,6 +54,11 @@ export const useStructureViewStore = create<StructureViewState>((set, get) => {
       if (!id) return;
       try {
         const persisted = await loadStructureViewState(id);
+        // Guard against stale hydration: if the active workspace changed
+        // while loadStructureViewState was in flight (e.g., user switched
+        // workspaces twice quickly), drop this result so we don't overwrite
+        // the newer workspace's empty map with the older workspace's data.
+        if (get().workspaceId !== id) return;
         set({ expansionMap: new Map(Object.entries(persisted)) });
       } catch {
         // Persistence unavailable; keep the empty map we just set.
@@ -67,7 +72,14 @@ export const useStructureViewStore = create<StructureViewState>((set, get) => {
     toggleExpansion(key) {
       const map = new Map(get().expansionMap);
       const k = expansionKey(key);
-      map.set(k, !map.get(k));
+      // Delete on collapse so the persisted map doesn't accumulate dead
+      // `false` entries over a session — isExpanded treats absence as
+      // collapsed, so the two states are equivalent.
+      if (map.get(k) === true) {
+        map.delete(k);
+      } else {
+        map.set(k, true);
+      }
       set({ expansionMap: map });
       persist(map);
     },

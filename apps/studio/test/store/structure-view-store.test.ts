@@ -25,6 +25,15 @@ describe('useStructureViewStore expansionMap', () => {
     expect(useStructureViewStore.getState().isExpanded(KEY)).toBe(false);
   });
 
+  it('toggling expanded → collapsed deletes the key instead of writing false', () => {
+    useStructureViewStore.getState().toggleExpansion(KEY);
+    useStructureViewStore.getState().toggleExpansion(KEY);
+
+    // Dead `false` entries would grow the persisted record unbounded over
+    // a session; absence is semantically equivalent and stays empty.
+    expect(useStructureViewStore.getState().expansionMap.size).toBe(0);
+  });
+
   it('collapseAll clears expansions in the focused namespace and leaves others alone', () => {
     const other: StructureExpansionKey = { namespaceUri: 'cdm.product', typeId: 'X', attrName: 'y' };
     useStructureViewStore.getState().toggleExpansion(KEY);
@@ -87,6 +96,36 @@ describe('useStructureViewStore workspace persistence', () => {
     await useStructureViewStore.getState().setWorkspaceId('ws-1');
 
     expect(useStructureViewStore.getState().isExpanded(KEY)).toBe(true);
+  });
+
+  it('drops a stale hydration result when the workspace switched mid-load', async () => {
+    const { saveWorkspace, saveStructureViewState } = await import('../../src/workspace/persistence.js');
+    const baseWs = {
+      kind: 'browser-only' as const,
+      createdAt: '2026-05-14T00:00:00Z',
+      lastOpenedAt: '2026-05-14T00:00:00Z',
+      layout: { version: 1, writtenBy: 'test', dockview: null },
+      tabs: [],
+      activeTabPath: null,
+      curatedModels: [],
+      schemaVersion: 2
+    };
+    await saveWorkspace({ ...baseWs, id: 'ws-a', name: 'ws-a' });
+    await saveWorkspace({ ...baseWs, id: 'ws-b', name: 'ws-b' });
+    await saveStructureViewState('ws-a', { 'a-only::Trade::economics': true });
+    await saveStructureViewState('ws-b', { 'b-only::Trade::economics': true });
+
+    // Fire both setWorkspaceId calls concurrently. The first synchronously
+    // sets workspaceId='ws-a'; the second synchronously sets it to 'ws-b'
+    // and starts its own load. Whichever IDB read resolves last must not
+    // clobber the active workspace's map.
+    const pa = useStructureViewStore.getState().setWorkspaceId('ws-a');
+    const pb = useStructureViewStore.getState().setWorkspaceId('ws-b');
+    await Promise.all([pa, pb]);
+
+    expect(useStructureViewStore.getState().workspaceId).toBe('ws-b');
+    expect(useStructureViewStore.getState().expansionMap.get('a-only::Trade::economics')).toBeUndefined();
+    expect(useStructureViewStore.getState().expansionMap.get('b-only::Trade::economics')).toBe(true);
   });
 
   it('persists toggles back to the workspace record', async () => {
