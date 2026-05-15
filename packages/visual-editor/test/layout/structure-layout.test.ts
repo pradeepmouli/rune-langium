@@ -107,3 +107,67 @@ describe('layoutStructureGraph — base container with derived inside', () => {
     expect(derived.extent).toBe('parent');
   });
 });
+
+describe('layoutStructureGraph — expansion as child', () => {
+  it('places an expanded target as a child of the source Data node', () => {
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'economics',
+                typeName: 'Economics',
+                typeKind: 'Data',
+                targetNodeId: 'Economics',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '0..*',
+                isOptional: true,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['economics', 'Economics']])
+          }
+        ],
+        [
+          'Economics',
+          {
+            id: 'Economics',
+            kind: 'data',
+            name: 'Economics',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'notional',
+                typeName: 'Money',
+                typeKind: 'Unresolved',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    expect(nodes).toHaveLength(2);
+    const economics = nodes.find((n) => n.id === 'Economics')!;
+    expect(economics.parentId).toBe('Trade');
+    expect(economics.extent).toBe('parent');
+    // Economics' x should be in the right column.
+    expect((economics.position as { x: number; y: number }).x).toBeGreaterThanOrEqual(260);
+  });
+});
