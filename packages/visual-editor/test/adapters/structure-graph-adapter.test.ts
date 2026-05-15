@@ -1323,3 +1323,319 @@ describe('buildStructureGraph — cycle-aware expansion (ancestor edges dropped)
     expect(trade.expansions.get('counterparty')).toBe('ns::Party');
   });
 });
+
+describe('buildStructureGraph — base container row expansion (inherited rows carry expansions)', () => {
+  // Spec §3.2: containment is the uniform mechanism for both inheritance
+  // and type-reference. A complex-typed inherited row owned by a base level
+  // (e.g. TradeBase.party: Party, viewed via Trade) must be expandable in
+  // exactly the same way as a row on the derived type — but the expansion
+  // edge lives on the base container (the row's declaration owner) and the
+  // expansion key uses the BASE's namespace+name so the same state applies
+  // whether the user views TradeBase directly or any descendant.
+
+  it('inherited Data ref expanded materializes target as base-owned containment edge', () => {
+    // Spec §3.2: an inherited complex-typed row (e.g. TradeBase.party: Party
+    // viewed via Trade) must be expandable. The expansion edge lives on the
+    // base container (the row's declaration owner), NOT the derived Data node,
+    // and the expansion key uses the BASE's namespace+name so the same state
+    // applies whether the user views TradeBase directly or any descendant.
+    const fixture = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::Party',
+          $type: 'Data' as const,
+          name: 'Party',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'id', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::TradeBase',
+          $type: 'Data' as const,
+          name: 'TradeBase',
+          namespace: 'cdm.trade',
+          attributes: [
+            {
+              name: 'party',
+              typeCall: { type: { $refText: 'Party' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          extends: 'TradeBase',
+          attributes: [
+            {
+              name: 'tradeDate',
+              typeCall: { type: { $refText: 'date' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map([
+        // Key uses the BASE's ns/name — TradeBase, not Trade.
+        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'TradeBase', attrName: 'party' }), true]
+      ])
+    });
+
+    // 3 nodes: TradeBase container, Trade data, Party data.
+    expect(result.nodes.size).toBe(3);
+    const baseId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    expect(base.kind).toBe('base');
+    // The expansion edge lives on the BASE container.
+    expect(base.expansions.get('party')).toBe('cdm.trade::Party');
+
+    // The derived Data node has no expansion for `party` — it doesn't own
+    // that attribute.
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    expect(trade.expansions.size).toBe(0);
+
+    // Party itself is materialized with its own rows.
+    expect(result.nodes.has('cdm.trade::Party')).toBe(true);
+    const party = result.nodes.get('cdm.trade::Party') as StructureDataNode;
+    expect(party.kind).toBe('data');
+    expect(party.rows.map((r) => r.attrName)).toEqual(['id']);
+  });
+
+  it('inherited Choice ref expanded materializes the choice node', () => {
+    const fixture = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::Payout',
+          $type: 'Choice' as const,
+          name: 'Payout',
+          namespace: 'ns',
+          attributes: [
+            { name: 'cash', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::TradeBase',
+          $type: 'Data' as const,
+          name: 'TradeBase',
+          namespace: 'ns',
+          attributes: [
+            {
+              name: 'payout',
+              typeCall: { type: { $refText: 'Payout' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'ns::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'ns',
+          extends: 'TradeBase',
+          attributes: [
+            {
+              name: 'tradeDate',
+              typeCall: { type: { $refText: 'date' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'ns::Trade',
+      expansionMap: new Map([[expansionKey({ namespaceUri: 'ns', typeId: 'TradeBase', attrName: 'payout' }), true]])
+    });
+
+    const baseId = `ns::Trade::__base::ns::TradeBase`;
+    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    expect(base.expansions.get('payout')).toBe('ns::Payout');
+    // Choices have no inheritance wrapping — the edge points at the Choice
+    // node id directly, no synthetic container.
+    const payout = result.nodes.get('ns::Payout');
+    expect(payout?.kind).toBe('choice');
+  });
+
+  it('multi-level: outer base level owns its own attribute expansions', () => {
+    // Trade extends TradeBase extends TradeRoot. TradeRoot.party: Party is
+    // expanded. The OUTER base container (TradeRoot's) carries the
+    // expansion edge — not the inner one. Pins ownership: each base level
+    // is responsible for its own attribute expansions, not its descendants'.
+    const fixture = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::Party',
+          $type: 'Data' as const,
+          name: 'Party',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'id', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::TradeRoot',
+          $type: 'Data' as const,
+          name: 'TradeRoot',
+          namespace: 'cdm.trade',
+          attributes: [
+            {
+              name: 'party',
+              typeCall: { type: { $refText: 'Party' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::TradeBase',
+          $type: 'Data' as const,
+          name: 'TradeBase',
+          namespace: 'cdm.trade',
+          extends: 'TradeRoot',
+          attributes: [
+            {
+              name: 'baseField',
+              typeCall: { type: { $refText: 'string' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          extends: 'TradeBase',
+          attributes: [
+            {
+              name: 'tradeField',
+              typeCall: { type: { $refText: 'string' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map([
+        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'TradeRoot', attrName: 'party' }), true]
+      ])
+    });
+
+    const outerId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
+    const innerId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const outer = result.nodes.get(outerId) as StructureBaseContainer;
+    const inner = result.nodes.get(innerId) as StructureBaseContainer;
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+
+    // The OUTER (TradeRoot) container owns the `party` expansion.
+    expect(outer.expansions.get('party')).toBe('cdm.trade::Party');
+    // Inner (TradeBase) container has no expansions — its only row is a
+    // BasicType, plus it doesn't own TradeRoot's `party`.
+    expect(inner.expansions.size).toBe(0);
+    // Derived Trade node has no expansions — same reason.
+    expect(trade.expansions.size).toBe(0);
+    expect(result.nodes.has('cdm.trade::Party')).toBe(true);
+  });
+
+  it('inherited Data target that itself inherits chains correctly (composes with target-inheritance)', () => {
+    // Structural symmetry: TradeBase.party: Party AND Party extends PartyBase.
+    // Expanding `party` from TradeBase's level must produce an expansion edge
+    // pointing at the OUTERMOST container of Party's chain (PartyBase's
+    // container), not at the bare Party id. This composes inherited-row
+    // expansion with expansion-target-inheritance.
+    const fixture = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::PartyBase',
+          $type: 'Data' as const,
+          name: 'PartyBase',
+          namespace: 'ns',
+          attributes: [
+            { name: 'partyId', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::Party',
+          $type: 'Data' as const,
+          name: 'Party',
+          namespace: 'ns',
+          extends: 'PartyBase',
+          attributes: [
+            { name: 'name', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::TradeBase',
+          $type: 'Data' as const,
+          name: 'TradeBase',
+          namespace: 'ns',
+          attributes: [
+            {
+              name: 'party',
+              typeCall: { type: { $refText: 'Party' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'ns::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'ns',
+          extends: 'TradeBase',
+          attributes: [
+            {
+              name: 'tradeDate',
+              typeCall: { type: { $refText: 'date' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'ns::Trade',
+      expansionMap: new Map([[expansionKey({ namespaceUri: 'ns', typeId: 'TradeBase', attrName: 'party' }), true]])
+    });
+
+    const tradeBaseId = `ns::Trade::__base::ns::TradeBase`;
+    const tradeBase = result.nodes.get(tradeBaseId) as StructureBaseContainer;
+
+    // Outermost container of Party's chain — PartyBase's wrap.
+    const partyOuterId = `ns::Party::__base::ns::PartyBase`;
+    // The base container's expansion points at the OUTERMOST id, mirroring
+    // the contract enforced for derived-node expansions in the
+    // `expansion target with inheritance` describe block above.
+    expect(tradeBase.expansions.get('party')).toBe(partyOuterId);
+
+    // Full chain materialized: TradeBase container, Trade data, PartyBase
+    // container, Party data = 4 nodes.
+    expect(result.nodes.size).toBe(4);
+    expect(result.nodes.has(partyOuterId)).toBe(true);
+    expect(result.nodes.has('ns::Party')).toBe(true);
+    expect(result.nodes.has(tradeBaseId)).toBe(true);
+    expect(result.nodes.has('ns::Trade')).toBe(true);
+
+    const partyOuter = result.nodes.get(partyOuterId) as StructureBaseContainer;
+    expect(partyOuter.baseTypeName).toBe('PartyBase');
+    expect(partyOuter.childNodeId).toBe('ns::Party');
+    const party = result.nodes.get('ns::Party') as StructureDataNode;
+    // Only Party's own additions on the derived node.
+    expect(party.rows.map((r) => r.attrName)).toEqual(['name']);
+  });
+});

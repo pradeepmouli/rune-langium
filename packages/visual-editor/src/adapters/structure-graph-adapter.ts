@@ -316,13 +316,47 @@ function materializeDataWithInheritance(
   for (const baseNode of ancestors) {
     const baseId = `${focused.id}::__base::${baseNode.id}`;
     const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
+
+    // Spec §3.2: containment is the uniform mechanism for both inheritance
+    // and type-reference. A complex-typed inherited row (e.g.
+    // `TradeBase.party: Party`) must be expandable in exactly the same way
+    // as a row on the derived type — the expansion edge is owned by the
+    // base level (this container), not the focused derived Data node, so
+    // the expansion key uses the base node's namespace+name (the attribute's
+    // declaration owner). This keeps expansion state stable whether the
+    // user views TradeBase directly or any descendant.
+    const baseExpansions = new Map<string, string>();
+    // Add this base node to the recursion path while walking its rows so a
+    // self-referential inherited row (`BaseType.foo: BaseType`) does not
+    // form a containment cycle through expansion.
+    const baseRowPath = new Set(path);
+    baseRowPath.add(baseNode.id);
+    for (const row of baseRows) {
+      if (!shouldExpand(row, baseNode.namespace, baseNode.name, opts.expansionMap)) continue;
+      if (!row.targetNodeId) continue;
+      const target = doc.nodes.find((n) => n.id === row.targetNodeId);
+      if (!target) continue;
+      if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
+      if (baseRowPath.has(target.id)) continue;
+      if (target.$type === 'Data') {
+        const expandedId = materializeDataWithInheritance(target, doc, opts, out, baseRowPath, outerMostId);
+        baseExpansions.set(row.attrName, expandedId);
+      } else {
+        baseExpansions.set(row.attrName, target.id);
+        if (!out.has(target.id)) {
+          out.set(target.id, buildChoiceNode(target, doc));
+        }
+      }
+    }
+
     const baseContainer: StructureBaseContainer = {
       id: baseId,
       kind: 'base',
       baseTypeName: baseNode.name,
       baseTypeNamespaceUri: baseNode.namespace,
       baseRows,
-      childNodeId: childId
+      childNodeId: childId,
+      expansions: baseExpansions
     };
     out.set(baseId, baseContainer);
     childId = baseId;
