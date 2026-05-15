@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { InheritanceCell } from '../../../src/components/editors/structure/InheritanceCell.js';
+import { TYPE_REF_PAYLOAD_MIME, type TypeRefPayload } from '../../../src/types/structure-view.js';
+
+const setInheritance = vi.fn();
+vi.mock('../../../src/store/editor-store.js', () => ({
+  useEditorStore: (selector: (s: { setInheritance: typeof setInheritance }) => unknown) => selector({ setInheritance })
+}));
+
+describe('InheritanceCell', () => {
+  beforeEach(() => setInheritance.mockReset());
+
+  it('renders extends label and name', () => {
+    render(<InheritanceCell childId="Trade" extendsName="TradeBase" extendsNodeId="TradeBase" />);
+    expect(screen.getByText(/extends/i)).toBeInTheDocument();
+    expect(screen.getByText('TradeBase')).toBeInTheDocument();
+  });
+
+  it('dispatches setInheritance on drop of Data payload', () => {
+    const payload: TypeRefPayload = {
+      rune: 'type-ref',
+      namespaceUri: 'ns',
+      typeId: 'NewBase',
+      kind: 'Data'
+    };
+    render(<InheritanceCell childId="Trade" extendsName="TradeBase" extendsNodeId="TradeBase" />);
+
+    const el = screen.getByTestId('inheritance-cell');
+    const dt = {
+      types: [TYPE_REF_PAYLOAD_MIME],
+      getData: vi.fn((m: string) => (m === TYPE_REF_PAYLOAD_MIME ? JSON.stringify(payload) : '')),
+      dropEffect: 'none'
+    };
+    fireEvent.dragOver(el, { dataTransfer: dt });
+    fireEvent.drop(el, { dataTransfer: dt });
+
+    expect(setInheritance).toHaveBeenCalledWith('Trade', 'NewBase');
+  });
+});
