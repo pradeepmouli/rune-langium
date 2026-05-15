@@ -180,7 +180,22 @@ export async function _resetForTests(): Promise<void> {
 export async function saveWorkspace(ws: WorkspaceRecord): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(['workspaces', 'recents'], 'readwrite');
-  await tx.objectStore('workspaces').put(ws);
+  const wsStore = tx.objectStore('workspaces');
+  // If the caller didn't include `structureView`, merge in whatever's
+  // currently persisted. Callers commonly hold a stale workspace
+  // snapshot they read before a structure-view toggle landed, and then
+  // call saveWorkspace to update unrelated metadata (name,
+  // lastOpenedAt, layout, tabs). Without this merge, that save would
+  // silently delete the expansion map. Callers who explicitly set
+  // `structureView` (including to a fresh map) take precedence.
+  let toWrite = ws;
+  if (ws.structureView === undefined) {
+    const existing = await wsStore.get(ws.id);
+    if (existing?.structureView) {
+      toWrite = { ...ws, structureView: existing.structureView };
+    }
+  }
+  await wsStore.put(toWrite);
   await tx.objectStore('recents').put({
     id: ws.id,
     name: ws.name,

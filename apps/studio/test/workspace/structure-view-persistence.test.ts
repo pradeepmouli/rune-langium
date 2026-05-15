@@ -57,6 +57,50 @@ describe('structure-view persistence', () => {
     expect(ws?.layout.version).toBe(1);
   });
 
+  it('preserves the structureView slot when a later saveWorkspace omits it (stale-snapshot guard)', async () => {
+    const db = await import('../../src/workspace/persistence.js');
+    // Use a unique id; fake-indexeddb storage outlives `_resetForTests`,
+    // so previous tests' ws-1 data would leak in and confuse the
+    // pre-toggle snapshot.
+    const wsId = 'ws-stale-guard';
+    await saveWorkspace({ ...FRESH_WS, id: wsId, name: wsId });
+
+    // Read a snapshot BEFORE any structure-view edit lands. This mirrors
+    // what other code paths do: workspace-manager opens the workspace and
+    // holds the record before user toggles arrive.
+    const stale = await db.loadWorkspace(wsId);
+
+    // Toggle persistence writes structureView to the workspace record.
+    await saveStructureViewState(wsId, { 'cdm.trade::Trade::economics': true });
+
+    // Later, the stale-snapshot holder updates unrelated metadata and
+    // calls saveWorkspace. Their input doesn't include structureView (it
+    // wasn't on the record when they read it), so without the merge the
+    // expansion map would be silently deleted.
+    await saveWorkspace({ ...stale!, name: 'renamed', lastOpenedAt: '2026-05-14T12:00:00Z' });
+
+    const final = await loadStructureViewState(wsId);
+    expect(final).toEqual({ 'cdm.trade::Trade::economics': true });
+
+    const finalWs = await db.loadWorkspace(wsId);
+    expect(finalWs?.name).toBe('renamed');
+    expect(finalWs?.lastOpenedAt).toBe('2026-05-14T12:00:00Z');
+  });
+
+  it('respects an explicit structureView from the caller (merge does not override)', async () => {
+    const db = await import('../../src/workspace/persistence.js');
+    const wsId = 'ws-explicit-sv';
+    await saveWorkspace({ ...FRESH_WS, id: wsId, name: wsId });
+    await saveStructureViewState(wsId, { a: true });
+
+    // Caller deliberately provides a fresh structureView.
+    const current = await db.loadWorkspace(wsId);
+    await saveWorkspace({ ...current!, structureView: { expansionMap: { b: true } } });
+
+    const final = await loadStructureViewState(wsId);
+    expect(final).toEqual({ b: true });
+  });
+
   it('uses an atomic transaction so a concurrent saveWorkspace cannot be reverted', async () => {
     const db = await import('../../src/workspace/persistence.js');
     await saveWorkspace(FRESH_WS);

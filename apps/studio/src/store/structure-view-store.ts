@@ -59,7 +59,14 @@ export const useStructureViewStore = create<StructureViewState>((set, get) => {
   // UI responsiveness and are recorded as ops to replay onto the loaded
   // map. `persist` is gated to avoid writing the partial map back over the
   // soon-to-be-loaded saved state.
-  let hydration: { id: string; ops: DeferredOp[] } | undefined;
+  //
+  // `gen` is a per-request token, bumped on every setWorkspaceId call. A
+  // late-arriving completion only consumes `hydration.ops` if its captured
+  // gen matches — without this, an A→B→A rapid switch would let the
+  // first A's late load grab the third A's ops queue, leaving the third
+  // A's completion to overwrite the user's clicks with stale saved data.
+  let hydrationGen = 0;
+  let hydration: { id: string; gen: number; ops: DeferredOp[] } | undefined;
 
   const persist = (map: Map<string, boolean>): void => {
     const id = get().workspaceId;
@@ -94,19 +101,18 @@ export const useStructureViewStore = create<StructureViewState>((set, get) => {
     dragSource: undefined,
 
     async setWorkspaceId(id) {
+      const gen = ++hydrationGen;
       set({ workspaceId: id, expansionMap: new Map() });
-      hydration = id ? { id, ops: [] } : undefined;
+      hydration = id ? { id, gen, ops: [] } : undefined;
       if (!id) return;
       try {
         const persisted = await loadStructureViewState(id);
-        // Guard against stale hydration: if the active workspace changed
-        // while loadStructureViewState was in flight (e.g., user switched
-        // workspaces twice quickly), drop this result entirely so we don't
-        // overwrite the newer workspace's state.
-        if (get().workspaceId !== id) {
-          if (hydration?.id === id) hydration = undefined;
-          return;
-        }
+        // Only the completion holding the current generation token may
+        // consume the hydration queue. Late-arriving loads from earlier
+        // setWorkspaceId calls (including ones for the *same* id, e.g.,
+        // an A→B→A switch sequence) are dropped here, leaving the
+        // newest call's queue intact for its own completion to handle.
+        if (hydration?.gen !== gen) return;
         const local = hydration;
         hydration = undefined;
         // Merge: start with loaded state, then replay any user actions
@@ -114,14 +120,14 @@ export const useStructureViewStore = create<StructureViewState>((set, get) => {
         // semantics so the user's visible intent wins for keys they
         // touched while loaded values fill in everything else.
         const merged = new Map<string, boolean>(Object.entries(persisted));
-        if (local) for (const op of local.ops) op(merged);
+        for (const op of local.ops) op(merged);
         set({ expansionMap: merged });
         // If the user touched anything during the gap, the loaded state is
         // no longer canonical — persist the merged state so it survives.
-        if (local && local.ops.length > 0) persist(merged);
+        if (local.ops.length > 0) persist(merged);
       } catch {
         // Persistence unavailable; keep whatever in-memory state we have.
-        if (hydration?.id === id) hydration = undefined;
+        if (hydration?.gen === gen) hydration = undefined;
       }
     },
 

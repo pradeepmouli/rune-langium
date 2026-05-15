@@ -128,6 +128,44 @@ describe('useStructureViewStore workspace persistence', () => {
     expect(useStructureViewStore.getState().expansionMap.get('b-only::Trade::economics')).toBe(true);
   });
 
+  it('per-request token keeps an older completion from consuming a newer hydration queue', async () => {
+    const { saveWorkspace, saveStructureViewState } = await import('../../src/workspace/persistence.js');
+    const baseWs = {
+      kind: 'browser-only' as const,
+      createdAt: '2026-05-14T00:00:00Z',
+      lastOpenedAt: '2026-05-14T00:00:00Z',
+      layout: { version: 1, writtenBy: 'test', dockview: null },
+      tabs: [],
+      activeTabPath: null,
+      curatedModels: [],
+      schemaVersion: 2
+    };
+    await saveWorkspace({ ...baseWs, id: 'gen-a', name: 'gen-a' });
+    await saveWorkspace({ ...baseWs, id: 'gen-b', name: 'gen-b' });
+
+    // Rapid A → B → A: three setWorkspaceId calls before any load resolves.
+    // Without the generation token, the first A's late-arriving completion
+    // would grab the *third* A's hydration queue (since both share id='A',
+    // workspaceId still equals 'A' by the time it resolves), consume it,
+    // and leave the third A's completion to overwrite the user's clicks
+    // with stale saved data. With the token, only the third A's
+    // completion can consume its own queue.
+    const p1 = useStructureViewStore.getState().setWorkspaceId('gen-a');
+    const p2 = useStructureViewStore.getState().setWorkspaceId('gen-b');
+    const p3 = useStructureViewStore.getState().setWorkspaceId('gen-a');
+
+    // User toggle lands during the third A's hydration window — pushed
+    // onto that call's ops queue.
+    useStructureViewStore.getState().toggleExpansion({ namespaceUri: 'user', typeId: 'X', attrName: 'k' });
+
+    await Promise.all([p1, p2, p3]);
+
+    const s = useStructureViewStore.getState();
+    expect(s.workspaceId).toBe('gen-a');
+    // The user's click must survive the rapid switch.
+    expect(s.isExpanded({ namespaceUri: 'user', typeId: 'X', attrName: 'k' })).toBe(true);
+  });
+
   it('preserves user edits made during pending hydration (merge replay)', async () => {
     const { saveWorkspace, saveStructureViewState, loadStructureViewState } =
       await import('../../src/workspace/persistence.js');
