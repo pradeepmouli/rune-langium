@@ -294,3 +294,91 @@ describe('layoutStructureGraph — sibling vertical alignment', () => {
     expect(second).toBeGreaterThanOrEqual(first + firstHeight);
   });
 });
+
+describe('layoutStructureGraph — cross-tree handle deduplication', () => {
+  it('emits one Node record for a target referenced by two parents', () => {
+    // Phase 2's adapter cache-replay can produce duplicate expansion edges
+    // pointing to the same target id from multiple parents. React Flow
+    // forbids a node from having two parents, so the layout dedupes by
+    // first-encounter-wins — the second placement attempt is silently
+    // dropped. This test exercises that dedup path.
+    //
+    // Fixture: a single `Root` Data node with two rows (`a` and `b`),
+    // both expanded to the same `Target`. Only the first reference (by
+    // Map iteration order, which preserves insertion order) survives.
+    const input: StructureGraphInput = {
+      rootNodeId: 'Root',
+      nodes: new Map([
+        [
+          'Root',
+          {
+            id: 'Root',
+            kind: 'data',
+            name: 'Root',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'a',
+                typeName: 'Target',
+                typeKind: 'Data',
+                targetNodeId: 'Target',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              },
+              {
+                attrName: 'b',
+                typeName: 'Target',
+                typeKind: 'Data',
+                targetNodeId: 'Target',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([
+              ['a', 'Target'],
+              ['b', 'Target']
+            ])
+          }
+        ],
+        [
+          'Target',
+          {
+            id: 'Target',
+            kind: 'data',
+            name: 'Target',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'value',
+                typeName: 'string',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+
+    // Exactly one record for Target — the duplicate from `b → Target`
+    // is silently dropped by the `placed: Set<string>` dedup in
+    // `layoutStructureGraph`.
+    const targets = nodes.filter((n) => n.id === 'Target');
+    expect(targets).toHaveLength(1);
+    expect(targets[0].parentId).toBe('Root');
+    expect(nodes).toHaveLength(2); // Root + Target only
+  });
+});
