@@ -254,3 +254,101 @@ describe('buildStructureGraph — Choice / Enum / Unresolved', () => {
     expect(row.targetNodeId).toBeUndefined();
   });
 });
+
+const fixtureCrossNs = {
+  namespaces: [{ uri: 'cdm.trade' }, { uri: 'cdm.product' }],
+  nodes: [
+    {
+      id: 'cdm.product::Party',
+      $type: 'Data' as const,
+      name: 'Party',
+      namespace: 'cdm.product',
+      attributes: [{ name: 'id', typeCall: { type: { $refText: 'string' } }, card: { min: 1, max: 1 } }]
+    },
+    {
+      id: 'cdm.trade::Trade',
+      $type: 'Data' as const,
+      name: 'Trade',
+      namespace: 'cdm.trade',
+      attributes: [{ name: 'party', typeCall: { type: { $refText: 'Party' } }, card: { min: 1, max: 1 } }]
+    }
+  ]
+};
+
+describe('buildStructureGraph — cross-namespace references', () => {
+  it('resolves a reference to a type in a different namespace and surfaces targetNamespaceUri', () => {
+    const result = buildStructureGraph(fixtureCrossNs, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map()
+    });
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const row = trade.rows.find((r) => r.attrName === 'party')!;
+    expect(row.typeKind).toBe('Data');
+    expect(row.targetNodeId).toBe('cdm.product::Party');
+    expect(row.targetNamespaceUri).toBe('cdm.product');
+  });
+
+  it('disambiguates same-name types in different namespaces by qualified id', () => {
+    const fixtureCollision = {
+      namespaces: [{ uri: 'a' }, { uri: 'b' }],
+      // Order matters: put the other-namespace Money FIRST so a naive
+      // first-match resolver would return b::Money. The same-namespace
+      // tiebreak should still prefer a::Money for the caller in 'a'.
+      nodes: [
+        { id: 'b::Money', $type: 'Data' as const, name: 'Money', namespace: 'b', attributes: [] },
+        { id: 'a::Money', $type: 'Data' as const, name: 'Money', namespace: 'a', attributes: [] },
+        {
+          id: 'a::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'a',
+          attributes: [{ name: 'amt', typeCall: { type: { $refText: 'Money' } }, card: { min: 1, max: 1 } }]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixtureCollision, {
+      focusedTypeId: 'a::Trade',
+      expansionMap: new Map()
+    });
+    const row = (result.nodes.get('a::Trade') as StructureDataNode).rows[0];
+    // Prefer the same-namespace match
+    expect(row.targetNodeId).toBe('a::Money');
+  });
+
+  it('mixed: same-namespace and cross-namespace refs resolve correctly from the same caller', () => {
+    const fixtureMixed = {
+      namespaces: [{ uri: 'a' }, { uri: 'b' }],
+      nodes: [
+        { id: 'a::Money', $type: 'Data' as const, name: 'Money', namespace: 'a', attributes: [] },
+        { id: 'b::Money', $type: 'Data' as const, name: 'Money', namespace: 'b', attributes: [] },
+        // Only one Party — lives in 'b'
+        { id: 'b::Party', $type: 'Data' as const, name: 'Party', namespace: 'b', attributes: [] },
+        {
+          id: 'a::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'a',
+          attributes: [
+            { name: 'amt', typeCall: { type: { $refText: 'Money' } }, card: { min: 1, max: 1 } },
+            { name: 'party', typeCall: { type: { $refText: 'Party' } }, card: { min: 1, max: 1 } }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixtureMixed, {
+      focusedTypeId: 'a::Trade',
+      expansionMap: new Map()
+    });
+    const trade = result.nodes.get('a::Trade') as StructureDataNode;
+    const amt = trade.rows.find((r) => r.attrName === 'amt')!;
+    const party = trade.rows.find((r) => r.attrName === 'party')!;
+    // Same-namespace tiebreak picks a::Money
+    expect(amt.targetNodeId).toBe('a::Money');
+    expect(amt.targetNamespaceUri).toBe('a');
+    // No 'a' Party — cross-namespace fallback to b::Party
+    expect(party.targetNodeId).toBe('b::Party');
+    expect(party.targetNamespaceUri).toBe('b');
+  });
+});

@@ -60,26 +60,35 @@ function formatCardinality(card: AdapterAttribute['card']): string {
   return `${card.min}..${max}`;
 }
 
-function classifyType(typeName: string, doc: AdapterDocument): StructureRow['typeKind'] {
+function classifyType(typeName: string, doc: AdapterDocument, callerNamespace?: string): StructureRow['typeKind'] {
   if (BASIC_TYPES.has(typeName)) return 'BasicType';
+  const match = findNodeByName(typeName, doc, callerNamespace);
+  if (!match) return 'Unresolved';
+  if (match.$type === 'Data') return 'Data';
+  if (match.$type === 'Choice') return 'Choice';
+  return 'Enum';
+}
+
+function findNodeByName(typeName: string, doc: AdapterDocument, callerNamespace?: string): AdapterNode | undefined {
+  let firstMatch: AdapterNode | undefined;
   for (const n of doc.nodes) {
-    if (n.name === typeName) {
-      if (n.$type === 'Data') return 'Data';
-      if (n.$type === 'Choice') return 'Choice';
-      if (n.$type === 'Enum') return 'Enum';
-    }
+    if (n.name !== typeName) continue;
+    if (callerNamespace && n.namespace === callerNamespace) return n;
+    if (!firstMatch) firstMatch = n;
   }
-  return 'Unresolved';
+  return firstMatch;
 }
 
-function findNodeByName(typeName: string, doc: AdapterDocument): AdapterNode | undefined {
-  return doc.nodes.find((n) => n.name === typeName);
-}
-
-function buildRow(attr: AdapterAttribute, doc: AdapterDocument, isInherited = false): StructureRow {
+function buildRow(
+  attr: AdapterAttribute,
+  doc: AdapterDocument,
+  callerNamespace: string,
+  isInherited = false
+): StructureRow {
   const typeName = typeRefText(attr);
-  const typeKind = classifyType(typeName, doc);
-  const target = typeKind !== 'BasicType' && typeKind !== 'Unresolved' ? findNodeByName(typeName, doc) : undefined;
+  const typeKind = classifyType(typeName, doc, callerNamespace);
+  const target =
+    typeKind !== 'BasicType' && typeKind !== 'Unresolved' ? findNodeByName(typeName, doc, callerNamespace) : undefined;
   const cardinality = formatCardinality(attr.card);
   return {
     attrName: attr.name,
@@ -111,7 +120,7 @@ function shouldExpand(
 }
 
 function buildChoiceNode(node: AdapterNode, doc: AdapterDocument): StructureChoiceNode {
-  const options = (node.attributes ?? []).map((a) => buildRow(a, doc, false));
+  const options = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
   return {
     id: node.id,
     kind: 'choice',
@@ -128,7 +137,7 @@ function walkAndExpand(
   out: Map<string, StructureNode>
 ): StructureDataNode {
   const expansions = new Map<string, string>();
-  const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, false));
+  const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
 
   // Reserve a placeholder so cyclic references (A → B → A) terminate when we
   // recurse — children that revisit this node will hit the `out.has(...)`
@@ -139,7 +148,7 @@ function walkAndExpand(
     name: node.name,
     namespaceUri: node.namespace,
     extendsName: node.extends,
-    extendsNodeId: node.extends ? findNodeByName(node.extends, doc)?.id : undefined,
+    extendsNodeId: node.extends ? findNodeByName(node.extends, doc, node.namespace)?.id : undefined,
     rows,
     expansions
   };
@@ -174,10 +183,10 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
 
   if (root.$type === 'Data') {
     if (root.extends) {
-      const baseNode = findNodeByName(root.extends, doc);
+      const baseNode = findNodeByName(root.extends, doc, root.namespace);
       if (baseNode) {
         const baseId = `${root.id}::__base`;
-        const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, true));
+        const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
         const baseContainer: StructureBaseContainer = {
           id: baseId,
           kind: 'base',
