@@ -15,10 +15,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { OPERATOR_CATALOG } from './operator-catalog.js';
 import type { OperatorDefinition } from './operator-catalog.js';
 import type { ExpressionNode } from '../../../schemas/expression-node-schema.js';
-import type {
-  FilteredOperatorCategory,
-  AnnotatedOperator
-} from '../../../hooks/useContextFilter.js';
+import type { FilteredOperatorCategory, AnnotatedOperator } from '../../../hooks/useContextFilter.js';
 
 export interface OperatorPaletteProps {
   open: boolean;
@@ -43,7 +40,8 @@ export function OperatorPalette({
   useEffect(() => {
     if (open) {
       setSearch('');
-      setTimeout(() => inputRef.current?.focus(), 0);
+      const id = setTimeout(() => inputRef.current?.focus(), 0);
+      return () => clearTimeout(id);
     }
   }, [open]);
 
@@ -85,6 +83,7 @@ export function OperatorPalette({
       className="absolute z-50 w-64 rounded-md border border-border bg-popover p-1 shadow-lg"
       data-testid="operator-palette"
       role="listbox"
+      aria-multiselectable="false"
     >
       <input
         ref={inputRef}
@@ -123,6 +122,7 @@ export function OperatorPalette({
                   }`}
                   onClick={() => handleSelect(op)}
                   role="option"
+                  aria-selected="false"
                   data-testid={`palette-option-${op.label}`}
                   data-recommended={op.recommended}
                   aria-label={`${op.label}${op.recommended ? '' : ' (not recommended for this context)'}`}

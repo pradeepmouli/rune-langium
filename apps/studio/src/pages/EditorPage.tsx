@@ -250,6 +250,7 @@ export function EditorPage({
   const pendingDisplayFileRef = useRef<Map<string, (view: import('@codemirror/view').EditorView | null) => void>>(
     new Map()
   );
+  const displayFileTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   const storeNodes = useEditorStore((s) => s.nodes);
   const storeEdges = useEditorStore((s) => s.edges);
@@ -467,7 +468,10 @@ export function EditorPage({
     if (!selectedNodeId) {
       return;
     }
+    // Increments a nonce to signal the inspector to re-focus.
+    // No external resource is acquired here, so no cleanup is required.
     setInspectorFocusNonce((current) => current + 1);
+    // react-doctor/effect-needs-cleanup: intentional — pure state update, no subscription.
   }, [selectedNodeId]);
 
   // Navigate the source editor when a graph node is selected.
@@ -513,6 +517,9 @@ export function EditorPage({
         });
       }, 150);
     }
+    return () => {
+      if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);
 
@@ -884,7 +891,8 @@ export function EditorPage({
         const existing = pendingDisplayFileRef.current.get(file.path);
         if (existing) existing(null);
         pendingDisplayFileRef.current.set(file.path, resolve);
-        setTimeout(() => {
+        const timerId = setTimeout(() => {
+          displayFileTimersRef.current.delete(timerId);
           if (pendingDisplayFileRef.current.has(file.path)) {
             pendingDisplayFileRef.current.delete(file.path);
             // eslint-disable-next-line no-console
@@ -892,9 +900,17 @@ export function EditorPage({
             resolve(null);
           }
         }, 2000);
+        displayFileTimersRef.current.add(timerId);
       });
     });
-    return unsub;
+    return () => {
+      unsub();
+      for (const id of displayFileTimersRef.current) clearTimeout(id);
+      displayFileTimersRef.current.clear();
+      // Resolve any pending displayFile promises so LSP client doesn't hang.
+      for (const resolve of pendingDisplayFileRef.current.values()) resolve(null);
+      pendingDisplayFileRef.current.clear();
+    };
   }, [lspClient, files, openFileInSource]);
 
   const handleEditorViewCreated = useCallback((filePath: string, view: import('@codemirror/view').EditorView) => {
