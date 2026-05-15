@@ -517,10 +517,10 @@ export function EditorPage({
         });
       }, 150);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => {
       if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);
 
   const functionScope: FunctionScope = useMemo(() => {
@@ -907,6 +907,9 @@ export function EditorPage({
       unsub();
       for (const id of displayFileTimersRef.current) clearTimeout(id);
       displayFileTimersRef.current.clear();
+      // Resolve any pending displayFile promises so LSP client doesn't hang.
+      for (const resolve of pendingDisplayFileRef.current.values()) resolve(null);
+      pendingDisplayFileRef.current.clear();
     };
   }, [lspClient, files, openFileInSource]);
 

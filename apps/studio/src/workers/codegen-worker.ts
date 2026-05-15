@@ -389,13 +389,19 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     // Security: execution runs in a dedicated web worker (no DOM/network/FS).
     const jsCode = RUNTIME_HELPER_JS_SOURCE + '\n\n' + stripTypeAnnotations(code);
 
-    // Shadow globals that could exfiltrate data from the worker sandbox.
-    // new Function() is intentional here: this worker has no DOM/network/FS
-    // access (no fetch, WebSocket, XMLHttpRequest, importScripts), and all
-    // four are explicitly shadowed as undefined parameters below.
-    // The code executed is user-authored Rosetta function bodies, stripped of
-    // TypeScript annotations by stripTypeAnnotations() before execution.
-    // Trust boundary: isolated web worker — no broader JS context is exposed.
+    // The `new Function(...)` constructor evaluates user-provided code in a
+    // dedicated module-level scope, but it is NOT a sandbox:
+    // - Identifier shadowing (`fetch`, `WebSocket`, `XMLHttpRequest`, `importScripts`
+    //   passed as params) prevents direct calls to those names from the evaluated
+    //   code, but `globalThis.fetch` etc. remain reachable.
+    // - Other Worker globals (`postMessage`, `self`, `addEventListener`) are not
+    //   shadowed.
+    // - This worker runs in a dedicated Web Worker context, so the blast radius is
+    //   limited to that worker, but the user code can still exfil via globalThis.
+    // - For stronger isolation, rely on the Cloudflare Workers / browser CSP to
+    //   block network egress at the runtime level.
+    // react-doctor false positive: this is `new Function`, not `eval`, but the rule
+    // flags both. Disable comment preserved.
     // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
     // react-doctor-disable-next-line react-doctor/no-eval
     const wrapper = new Function(
