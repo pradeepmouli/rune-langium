@@ -1860,3 +1860,126 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
     expect(party.rows.map((r) => r.attrName)).toEqual(['name']);
   });
 });
+
+describe('buildStructureGraph — inherited-row self-reference to descendant (cache seeding)', () => {
+  // Adversarial scenario from the seventh Codex review finding on PR #173,
+  // the second in the "caching strategy" sub-category (first was cache-
+  // replay; this is cache-seeding). When an inherited base-container row
+  // points back at the focused (descendant) type, the cycle-protection
+  // `baseRowPath` set previously didn't include `focused.id`, AND the
+  // `outerMostId` cache wasn't seeded before walking the inheritance chain,
+  // so re-entering `materializeDataWithInheritance(focused, ...)` from a
+  // base-row walk recursed indefinitely and blew the stack.
+  //
+  // The fix pre-seeds `outerMostId` with a sentinel (focused.id) so re-entry
+  // short-circuits via the existing cache hit, AND extends `baseRowPath` to
+  // include `focused.id` so the SuppressedEdge mechanism correctly drops
+  // the containment edge (Phase 3 cannot lay out a parent-cycle).
+
+  it('handles Base.child: Derived where Derived extends Base without stack overflow', () => {
+    // The exact Codex scenario.
+    const fixture = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::Base',
+          $type: 'Data' as const,
+          name: 'Base',
+          namespace: 'ns',
+          attributes: [
+            // Inherited row pointing back at the descendant Derived.
+            { name: 'child', typeCall: { type: { $refText: 'Derived' } }, card: { inf: 0, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::Derived',
+          $type: 'Data' as const,
+          name: 'Derived',
+          namespace: 'ns',
+          extends: 'Base',
+          attributes: []
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'ns::Derived',
+      // Expansion key uses the BASE owner (where `child` is declared).
+      expansionMap: new Map([[expansionKey({ namespaceUri: 'ns', typeId: 'Base', attrName: 'child' }), true]])
+    });
+
+    // Build completed (no stack overflow) and produced exactly two nodes:
+    // the Derived data node and the synthetic Base container that wraps it.
+    expect(result.nodes.size).toBe(2);
+    const baseId = `ns::Derived::__base::ns::Base`;
+    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    expect(base.kind).toBe('base');
+    expect(base.childNodeId).toBe('ns::Derived');
+    // Containment edge MUST be suppressed — the only path to Derived from
+    // here is the recursion we're already in, which would form a parent-
+    // cycle Phase 3 cannot lay out.
+    expect(base.expansions.size).toBe(0);
+    // Row metadata is intact — the chip still references Derived by id;
+    // only the parent/child layout edge is dropped.
+    const childRow = base.baseRows.find((r) => r.attrName === 'child')!;
+    expect(childRow.typeKind).toBe('Data');
+    expect(childRow.targetNodeId).toBe('ns::Derived');
+  });
+
+  it('handles deeper grandparent: C.aRef: A where A extends B extends C', () => {
+    // Inherited row on the outermost base loops back at the focused leaf.
+    // Same self-reference shape, deeper inheritance chain.
+    const fixture = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::C',
+          $type: 'Data' as const,
+          name: 'C',
+          namespace: 'ns',
+          attributes: [
+            { name: 'aRef', typeCall: { type: { $refText: 'A' } }, card: { inf: 0, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::B',
+          $type: 'Data' as const,
+          name: 'B',
+          namespace: 'ns',
+          extends: 'C',
+          attributes: []
+        },
+        {
+          id: 'ns::A',
+          $type: 'Data' as const,
+          name: 'A',
+          namespace: 'ns',
+          extends: 'B',
+          attributes: []
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'ns::A',
+      expansionMap: new Map([[expansionKey({ namespaceUri: 'ns', typeId: 'C', attrName: 'aRef' }), true]])
+    });
+
+    // No stack overflow. Three nodes: A data + B container + C container.
+    expect(result.nodes.size).toBe(3);
+    const bId = `ns::A::__base::ns::B`;
+    const cId = `ns::A::__base::ns::C`;
+    const cContainer = result.nodes.get(cId) as StructureBaseContainer;
+    expect(cContainer.kind).toBe('base');
+    // C's inherited row → A is suppressed (A is the focused descendant on
+    // the current recursion path).
+    expect(cContainer.expansions.size).toBe(0);
+    const aRefRow = cContainer.baseRows.find((r) => r.attrName === 'aRef')!;
+    expect(aRefRow.typeKind).toBe('Data');
+    expect(aRefRow.targetNodeId).toBe('ns::A');
+    // B container exists and chains correctly: outermost is C, inner is B
+    // (B's childNodeId = A; C's childNodeId = B).
+    expect(result.nodes.has(bId)).toBe(true);
+    const bContainer = result.nodes.get(bId) as StructureBaseContainer;
+    expect(bContainer.childNodeId).toBe('ns::A');
+    expect(cContainer.childNodeId).toBe(bId);
+  });
+});

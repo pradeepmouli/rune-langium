@@ -337,6 +337,22 @@ function materializeDataWithInheritance(
   const cached = outerMostId.get(focused.id);
   if (cached !== undefined) return cached;
 
+  // Pre-seed the cache with a sentinel BEFORE walking the inheritance chain
+  // or recursing into the target's rows. If an inherited base-container row
+  // (e.g. `Base.child: Derived` where `Derived extends Base`) loops back at
+  // the focused type, the re-entry would otherwise recurse forever because
+  // the real cache entry is only written after the chain walk completes.
+  // The tentative value is `focused.id` — the value that would be returned
+  // if the chain turned out to be empty — and is overwritten with the real
+  // outermost id at end-of-materialize. On re-entry, the helper sees the
+  // sentinel and returns it as a cache hit, which is the correct cycle-
+  // collapsing behavior (Phase 3 cannot resolve a parent-cycle anyway, and
+  // the cache-replay logic will promote any non-cyclic alternate path
+  // discovered later). This is the Codex P2 cache-seeding defect: the
+  // ancestor `path` set alone is insufficient because base-container row
+  // walks build `baseRowPath` from `path + base ids`, omitting `focused.id`.
+  outerMostId.set(focused.id, focused.id);
+
   // Materialize the focused Data node first. Its own type-reference
   // expansions still need to walk through `walkAndExpand`. This must happen
   // before the inheritance chain is built so the innermost base container's
@@ -391,7 +407,19 @@ function materializeDataWithInheritance(
     // form a containment cycle through expansion. Also add the synthetic
     // base-container id itself so an inherited row that loops back to the
     // *container* level (vs. the base node) is correctly suppressed.
+    //
+    // Crucially, include `focused.id` too: when an inherited row points back
+    // at the focused (descendant) type (`Base.child: Derived` where Derived
+    // extends Base), the SuppressedEdge mechanism must treat Derived as on
+    // the recursion path. Without this, the cycle-suppression check would
+    // miss the loop and the cache sentinel set above would only prevent
+    // runaway recursion — the edge would still be (wrongly) promoted as a
+    // containment edge, producing a parent-cycle Phase 3 can't lay out.
+    // Belt-and-braces with the cache sentinel: the sentinel stops runaway
+    // recursion; this keeps suppression semantics consistent with how
+    // ancestors are handled elsewhere.
     const baseRowPath = new Set(path);
+    baseRowPath.add(focused.id);
     baseRowPath.add(baseNode.id);
     baseRowPath.add(baseId);
 
