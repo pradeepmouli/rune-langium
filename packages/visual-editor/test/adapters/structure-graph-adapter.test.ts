@@ -1324,6 +1324,227 @@ describe('buildStructureGraph — cycle-aware expansion (ancestor edges dropped)
   });
 });
 
+describe('buildStructureGraph — context-dependent expansion edges (cache replay)', () => {
+  // The `outerMostId` cache makes wrapper-id resolution context-independent,
+  // but expansion edges themselves are context-dependent — gated by the
+  // recursion ancestor path. A naive cache (one that caches the *materialized
+  // node*) would freeze a context-dependent suppression decision into a
+  // permanent state. The adapter records suppressions in a side table and
+  // replays them on every cache reuse so completed-sibling references that
+  // were ancestors in their *first* materialization context get promoted
+  // when reached later through a non-cyclic path. Spec §3.2 mandates
+  // completed-sibling cross-references be preserved as cross-tree handles.
+  //
+  // This block is the sixth Codex finding on PR #173 tracing to spec §3.2's
+  // containment-uniformity principle, but the first in the "caching strategy"
+  // sub-category (prior findings were all about missing call sites).
+
+  it('promotes B → A edge when B is reached via a non-cyclic path after first being materialized inside a cycle (Codex scenario)', () => {
+    // Adversarial cycle from Codex review: Root.a → A, Root.b → B, A.b → B,
+    // B.a → A. The first traversal (Root.a → A → B) suppresses B.a → A
+    // because A is on the recursion stack. But the SECOND traversal
+    // (Root.b → B) reaches B with A as a completed sibling, not an ancestor.
+    // The edge must be promoted. Without the cache-replay logic, B.expansions
+    // would be {} forever and Phase 3 would lose a real containment edge.
+    const fixture = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::Root',
+          $type: 'Data' as const,
+          name: 'Root',
+          namespace: 'ns',
+          attributes: [
+            { name: 'a', typeCall: { type: { $refText: 'A' } }, card: { inf: 1, sup: 1, unbounded: false } },
+            { name: 'b', typeCall: { type: { $refText: 'B' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::A',
+          $type: 'Data' as const,
+          name: 'A',
+          namespace: 'ns',
+          attributes: [{ name: 'b', typeCall: { type: { $refText: 'B' } }, card: { inf: 1, sup: 1, unbounded: false } }]
+        },
+        {
+          id: 'ns::B',
+          $type: 'Data' as const,
+          name: 'B',
+          namespace: 'ns',
+          attributes: [{ name: 'a', typeCall: { type: { $refText: 'A' } }, card: { inf: 1, sup: 1, unbounded: false } }]
+        }
+      ]
+    };
+    const expansionMap = new Map<string, boolean>([
+      [expansionKey({ namespaceUri: 'ns', typeId: 'Root', attrName: 'a' }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'Root', attrName: 'b' }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'b' }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'a' }), true]
+    ]);
+
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'ns::Root',
+      expansionMap
+    });
+
+    expect(result.nodes.size).toBe(3);
+    const root = result.nodes.get('ns::Root') as StructureDataNode;
+    const a = result.nodes.get('ns::A') as StructureDataNode;
+    const b = result.nodes.get('ns::B') as StructureDataNode;
+
+    expect(root.expansions.get('a')).toBe('ns::A');
+    expect(root.expansions.get('b')).toBe('ns::B');
+    expect(a.expansions.get('b')).toBe('ns::B');
+    // The key assertion — would fail before the cache-replay fix.
+    expect(b.expansions.get('a')).toBe('ns::A');
+  });
+
+  it('still suppresses direct self-reference even with cache replay (regression)', () => {
+    // Pure cycle with no alternate path. Cache-replay must NOT incorrectly
+    // promote this — there's no non-cyclic route to "rescue" it.
+    const fixture = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::Tree',
+          $type: 'Data' as const,
+          name: 'Tree',
+          namespace: 'ns',
+          attributes: [
+            {
+              name: 'parent',
+              typeCall: { type: { $refText: 'Tree' } },
+              card: { inf: 0, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'ns::Tree',
+      expansionMap: new Map([[expansionKey({ namespaceUri: 'ns', typeId: 'Tree', attrName: 'parent' }), true]])
+    });
+
+    expect(result.nodes.size).toBe(1);
+    const tree = result.nodes.get('ns::Tree') as StructureDataNode;
+    expect(tree.expansions.size).toBe(0);
+  });
+
+  it('still suppresses A → B → A when the ONLY path to B passes through A (regression)', () => {
+    // Existing cycle-aware test, restated as a guard for the cache-replay
+    // logic. B is only reachable via A, so B.next → A must stay suppressed.
+    const fixture = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::A',
+          $type: 'Data' as const,
+          name: 'A',
+          namespace: 'ns',
+          attributes: [
+            { name: 'next', typeCall: { type: { $refText: 'B' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::B',
+          $type: 'Data' as const,
+          name: 'B',
+          namespace: 'ns',
+          attributes: [
+            { name: 'next', typeCall: { type: { $refText: 'A' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'ns::A',
+      expansionMap: new Map<string, boolean>([
+        [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'next' }), true],
+        [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'next' }), true]
+      ])
+    });
+
+    expect(result.nodes.size).toBe(2);
+    const a = result.nodes.get('ns::A') as StructureDataNode;
+    const b = result.nodes.get('ns::B') as StructureDataNode;
+    expect(a.expansions.get('next')).toBe('ns::B');
+    expect(b.expansions.size).toBe(0);
+  });
+
+  it('promotes suppressed inherited-row edge via base-container cache replay', () => {
+    // Inherited-row analogue of the Codex scenario. Root extends BaseRoot,
+    // BaseRoot.a: A, BaseRoot.b: B, A.b: B, B.a: A. All expanded. The base
+    // container's `a` expansion gets walked first (path includes A), then
+    // A.b → B causes B materialization (path includes A,B), then B.a → A is
+    // suppressed. When the base container's `b` row is walked, B is in cache
+    // and A is a completed sibling — B.a → A must be promoted.
+    const fixture = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::BaseRoot',
+          $type: 'Data' as const,
+          name: 'BaseRoot',
+          namespace: 'ns',
+          attributes: [
+            { name: 'a', typeCall: { type: { $refText: 'A' } }, card: { inf: 1, sup: 1, unbounded: false } },
+            { name: 'b', typeCall: { type: { $refText: 'B' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::Root',
+          $type: 'Data' as const,
+          name: 'Root',
+          namespace: 'ns',
+          extends: 'BaseRoot',
+          attributes: [
+            { name: 'extra', typeCall: { type: { $refText: 'string' } }, card: { inf: 0, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'ns::A',
+          $type: 'Data' as const,
+          name: 'A',
+          namespace: 'ns',
+          attributes: [{ name: 'b', typeCall: { type: { $refText: 'B' } }, card: { inf: 1, sup: 1, unbounded: false } }]
+        },
+        {
+          id: 'ns::B',
+          $type: 'Data' as const,
+          name: 'B',
+          namespace: 'ns',
+          attributes: [{ name: 'a', typeCall: { type: { $refText: 'A' } }, card: { inf: 1, sup: 1, unbounded: false } }]
+        }
+      ]
+    };
+    const expansionMap = new Map<string, boolean>([
+      [expansionKey({ namespaceUri: 'ns', typeId: 'BaseRoot', attrName: 'a' }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'BaseRoot', attrName: 'b' }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'b' }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'a' }), true]
+    ]);
+
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'ns::Root',
+      expansionMap
+    });
+
+    const baseId = `ns::Root::__base::ns::BaseRoot`;
+    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    const a = result.nodes.get('ns::A') as StructureDataNode;
+    const b = result.nodes.get('ns::B') as StructureDataNode;
+
+    // Base container carries the inherited-row expansions.
+    expect(base.expansions.get('a')).toBe('ns::A');
+    expect(base.expansions.get('b')).toBe('ns::B');
+    // A.b → B kept.
+    expect(a.expansions.get('b')).toBe('ns::B');
+    // The key inherited-row assertion: B.a → A promoted via cache replay
+    // because reaching B through BaseRoot.b places A as a completed sibling.
+    expect(b.expansions.get('a')).toBe('ns::A');
+  });
+});
+
 describe('buildStructureGraph — base container row expansion (inherited rows carry expansions)', () => {
   // Spec §3.2: containment is the uniform mechanism for both inheritance
   // and type-reference. A complex-typed inherited row owned by a base level

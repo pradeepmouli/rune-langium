@@ -61,6 +61,28 @@ export interface BuildOptions {
   readonly expansionMap: ReadonlyMap<string, boolean>;
 }
 
+/**
+ * Side-table entry capturing an expansion edge that was suppressed during
+ * materialization because the target was an ancestor in the current recursion
+ * path. Suppression is a *context-dependent* decision (it depends on which
+ * path we reached the owner through), but the `outerMostId` cache is
+ * context-independent. When a cached owner is reused in a different context
+ * where the suppressed target is no longer an ancestor, the edge must be
+ * promoted — that's what `replaySuppressedEdges` does.
+ *
+ * Spec §3.2: containment is the single uniform mechanism for both inheritance
+ * and type-reference. A cross-tree handle to a completed sibling (target in
+ * `out` but not in the current ancestor path) must be preserved.
+ */
+interface SuppressedEdge {
+  /** Node id of the owner whose `expansions` map should receive this edge. */
+  readonly ownerNodeId: string;
+  readonly attrName: string;
+  readonly targetId: string;
+  /** Whether the target is a Data node (needs inheritance wrapping) or Choice. */
+  readonly targetKind: 'Data' | 'Choice';
+}
+
 // classifyType treats anything in BUILTIN_TYPES as a chip-only "primitive-like" leaf; UI does not drill into them.
 const BUILTIN_SET = new Set<string>(BUILTIN_TYPES);
 
@@ -188,7 +210,12 @@ function walkAndExpand(
   // wraps it (or the target's own id if there is no inheritance chain). Used
   // by `materializeDataWithInheritance` so repeat expansions of the same
   // target reuse the cached outermost id without re-walking.
-  outerMostId: Map<string, string>
+  outerMostId: Map<string, string>,
+  // Side-table of edges suppressed by the ancestor-cycle guard. Replayed on
+  // every cache-reuse so context-dependent suppressions don't become permanent
+  // when a target is later revisited through a non-cyclic path. See the
+  // `SuppressedEdge` doc for the full rationale.
+  suppressedEdges: SuppressedEdge[]
 ): void {
   const expansions = new Map<string, string>();
   const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
@@ -224,22 +251,48 @@ function walkAndExpand(
       if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
       // Ancestor cycle guard: dropping both the expansion edge AND the
       // recursion. The row still appears in `rows` as a chip referencing the
-      // ancestor by id; only the parent/child containment link is suppressed.
-      // Without this, Phase 3 layout would receive A → B → A as a parentId
-      // cycle and fail to resolve a containment tree.
-      if (nextPath.has(target.id)) continue;
+      // ancestor by id; only the parent/child containment link is suppressed
+      // FOR THIS PATH. We record the suppression in the side table so a later
+      // visit through a different (non-cyclic) path can promote the edge —
+      // otherwise the context-dependent suppression would become permanent
+      // even after the cycle disappears (the Codex P2 cache-reuse defect).
+      if (nextPath.has(target.id)) {
+        suppressedEdges.push({
+          ownerNodeId: node.id,
+          attrName: row.attrName,
+          targetId: target.id,
+          targetKind: target.$type
+        });
+        continue;
+      }
       if (target.$type === 'Data') {
         // Spec §3.2: containment is the single mechanism for both inheritance
         // and type-reference and they compose uniformly. The expansion edge
         // must point at the OUTERMOST base container (if any) so the Data
         // target renders wrapped in its full inheritance chain — matching the
         // focused-root behavior in `buildStructureGraph`.
-        const expandedId = materializeDataWithInheritance(target, doc, opts, out, nextPath, outerMostId);
+        const expandedId = materializeDataWithInheritance(
+          target,
+          doc,
+          opts,
+          out,
+          nextPath,
+          outerMostId,
+          suppressedEdges
+        );
         expansions.set(row.attrName, expandedId);
+        // Promote any previously-suppressed edges that are now reachable now
+        // that `target` (and its subtree) is in `out`.
+        replaySuppressedEdges(doc, opts, out, nextPath, outerMostId, suppressedEdges);
       } else {
         expansions.set(row.attrName, target.id);
-        if (out.has(target.id)) continue;
-        out.set(target.id, buildChoiceNode(target, doc));
+        if (!out.has(target.id)) {
+          out.set(target.id, buildChoiceNode(target, doc));
+        }
+        // Choice has no expansions of its own, so no replay needed for the
+        // freshly-materialized target, but other cached subtrees may have
+        // edges that point at this Choice and were previously suppressed.
+        replaySuppressedEdges(doc, opts, out, nextPath, outerMostId, suppressedEdges);
       }
     }
   }
@@ -269,11 +322,18 @@ function materializeDataWithInheritance(
   opts: BuildOptions,
   out: Map<string, StructureNode>,
   path: ReadonlySet<string>,
-  outerMostId: Map<string, string>
+  outerMostId: Map<string, string>,
+  suppressedEdges: SuppressedEdge[]
 ): string {
   // Repeat-expansion fast path: same target reached via multiple references
   // (e.g. Portfolio.trade1 + Portfolio.trade2 both point at Trade). The
   // chain has already been built; reuse the cached outermost id.
+  //
+  // Note: the cache is for the *outermost wrapper id*, which is intrinsic to
+  // the target's inheritance chain and context-independent. Context-dependent
+  // expansion edges suppressed during the first materialization are tracked
+  // separately in `suppressedEdges` and replayed by the caller after this
+  // function returns.
   const cached = outerMostId.get(focused.id);
   if (cached !== undefined) return cached;
 
@@ -281,7 +341,7 @@ function materializeDataWithInheritance(
   // expansions still need to walk through `walkAndExpand`. This must happen
   // before the inheritance chain is built so the innermost base container's
   // `childNodeId` can reference the now-present Data node.
-  walkAndExpand(focused, doc, opts, out, path, outerMostId);
+  walkAndExpand(focused, doc, opts, out, path, outerMostId, suppressedEdges);
 
   if (!focused.extends) {
     outerMostId.set(focused.id, focused.id);
@@ -328,27 +388,16 @@ function materializeDataWithInheritance(
     const baseExpansions = new Map<string, string>();
     // Add this base node to the recursion path while walking its rows so a
     // self-referential inherited row (`BaseType.foo: BaseType`) does not
-    // form a containment cycle through expansion.
+    // form a containment cycle through expansion. Also add the synthetic
+    // base-container id itself so an inherited row that loops back to the
+    // *container* level (vs. the base node) is correctly suppressed.
     const baseRowPath = new Set(path);
     baseRowPath.add(baseNode.id);
-    for (const row of baseRows) {
-      if (!shouldExpand(row, baseNode.namespace, baseNode.name, opts.expansionMap)) continue;
-      if (!row.targetNodeId) continue;
-      const target = doc.nodes.find((n) => n.id === row.targetNodeId);
-      if (!target) continue;
-      if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
-      if (baseRowPath.has(target.id)) continue;
-      if (target.$type === 'Data') {
-        const expandedId = materializeDataWithInheritance(target, doc, opts, out, baseRowPath, outerMostId);
-        baseExpansions.set(row.attrName, expandedId);
-      } else {
-        baseExpansions.set(row.attrName, target.id);
-        if (!out.has(target.id)) {
-          out.set(target.id, buildChoiceNode(target, doc));
-        }
-      }
-    }
+    baseRowPath.add(baseId);
 
+    // Materialize the base container BEFORE walking its rows so that any
+    // suppressed-edge replay during target materialization can observe the
+    // base container in `out` and promote edges targeting it.
     const baseContainer: StructureBaseContainer = {
       id: baseId,
       kind: 'base',
@@ -359,12 +408,122 @@ function materializeDataWithInheritance(
       expansions: baseExpansions
     };
     out.set(baseId, baseContainer);
+
+    for (const row of baseRows) {
+      if (!shouldExpand(row, baseNode.namespace, baseNode.name, opts.expansionMap)) continue;
+      if (!row.targetNodeId) continue;
+      const target = doc.nodes.find((n) => n.id === row.targetNodeId);
+      if (!target) continue;
+      if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
+      // Suppression path mirrors `walkAndExpand`: record the edge in the side
+      // table so a later cache-reuse of this base container can replay and
+      // promote the edge if the cycle no longer holds.
+      if (baseRowPath.has(target.id)) {
+        suppressedEdges.push({
+          ownerNodeId: baseId,
+          attrName: row.attrName,
+          targetId: target.id,
+          targetKind: target.$type
+        });
+        continue;
+      }
+      if (target.$type === 'Data') {
+        const expandedId = materializeDataWithInheritance(
+          target,
+          doc,
+          opts,
+          out,
+          baseRowPath,
+          outerMostId,
+          suppressedEdges
+        );
+        baseExpansions.set(row.attrName, expandedId);
+        replaySuppressedEdges(doc, opts, out, baseRowPath, outerMostId, suppressedEdges);
+      } else {
+        baseExpansions.set(row.attrName, target.id);
+        if (!out.has(target.id)) {
+          out.set(target.id, buildChoiceNode(target, doc));
+        }
+        replaySuppressedEdges(doc, opts, out, baseRowPath, outerMostId, suppressedEdges);
+      }
+    }
     childId = baseId;
     outermost = baseId;
   }
 
   outerMostId.set(focused.id, outermost);
   return outermost;
+}
+
+/**
+ * Re-evaluate suppressed expansion edges against the current recursion path.
+ *
+ * The `outerMostId` cache makes wrapper-id resolution context-independent,
+ * but expansion edges are context-dependent (they depend on whether the
+ * target is an ancestor in the recursion path at the moment of suppression).
+ * When a target is later reached through a path where the formerly-cycling
+ * peer is now a *completed sibling* (in `out`, not in `path`), the
+ * suppressed edge can — and must — be promoted to a real containment edge.
+ *
+ * Iterates to fixed point because promoting one edge may bring a new owner
+ * into a state where its own previously-suppressed children become reachable.
+ *
+ * Spec §3.2: containment is the uniform mechanism for both inheritance and
+ * type-reference; completed-sibling cross-references are first-class.
+ */
+function replaySuppressedEdges(
+  doc: AdapterDocument,
+  opts: BuildOptions,
+  out: Map<string, StructureNode>,
+  path: ReadonlySet<string>,
+  outerMostId: Map<string, string>,
+  suppressedEdges: SuppressedEdge[]
+): void {
+  // Fixed-point: promotion may materialize a target whose own subtree
+  // previously suppressed edges that are now reachable. We bound iteration
+  // by the length of the suppressed list, which strictly decreases on every
+  // successful promotion.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = suppressedEdges.length - 1; i >= 0; i--) {
+      const entry = suppressedEdges[i];
+      // Sanity guard — owner must exist in `out`. If it doesn't, leave the
+      // entry alone so the eventual materialization can attach to it.
+      const owner = out.get(entry.ownerNodeId);
+      if (!owner) continue;
+      // Still cyclic in the current path? Leave it for a future replay.
+      if (path.has(entry.targetId)) continue;
+
+      let expandedId: string;
+      if (entry.targetKind === 'Data') {
+        const targetNode = doc.nodes.find((n) => n.id === entry.targetId);
+        if (!targetNode) continue;
+        // Reuse the same materialization path that the original (suppressed)
+        // call would have taken. If the target is already in `out`, the
+        // `outerMostId` cache produces the outermost id; otherwise the chain
+        // is built fresh and any nested cycles are handled recursively.
+        expandedId = materializeDataWithInheritance(targetNode, doc, opts, out, path, outerMostId, suppressedEdges);
+      } else {
+        expandedId = entry.targetId;
+        if (!out.has(entry.targetId)) {
+          const choiceNode = doc.nodes.find((n) => n.id === entry.targetId);
+          if (!choiceNode) continue;
+          out.set(entry.targetId, buildChoiceNode(choiceNode, doc));
+        }
+      }
+
+      // Mutate the owner's expansions map in place. The `ReadonlyMap` view in
+      // the public type is a TypeScript-only constraint — the underlying Map
+      // is mutable and shared with this builder. Both `StructureDataNode` and
+      // `StructureBaseContainer` carry `expansions`, and both kinds can be
+      // owners (data-row suppression vs. inherited-row suppression).
+      const expansionsMap = (owner as StructureDataNode | StructureBaseContainer).expansions as Map<string, string>;
+      expansionsMap.set(entry.attrName, expandedId);
+      suppressedEdges.splice(i, 1);
+      changed = true;
+    }
+  }
 }
 
 export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): StructureGraphInput {
@@ -380,7 +539,27 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
     // in their full inheritance chain — the shared
     // `materializeDataWithInheritance` helper enforces this symmetry.
     const outerMostId = new Map<string, string>();
-    const rootId = materializeDataWithInheritance(root, doc, opts, nodes, new Set<string>(), outerMostId);
+    // Edges suppressed by the ancestor-cycle guard during recursion are held
+    // here and replayed after the walk so context-dependent suppressions
+    // don't outlive the cycle that caused them. See `SuppressedEdge` and
+    // `replaySuppressedEdges` for the full rationale.
+    const suppressedEdges: SuppressedEdge[] = [];
+    const rootId = materializeDataWithInheritance(
+      root,
+      doc,
+      opts,
+      nodes,
+      new Set<string>(),
+      outerMostId,
+      suppressedEdges
+    );
+    // NOTE: no empty-path final replay. Suppressions are promoted only when
+    // a target is *actually reached* through a non-cyclic path during the
+    // walk (cache-hit replay inside `walkAndExpand` /
+    // `materializeDataWithInheritance`). Promoting them at empty path here
+    // would un-suppress pure cycles (Tree.parent → Tree, A → B → A with no
+    // alternate route) which the spec mandates stay suppressed — those
+    // edges have NO non-cyclic path and must remain dropped.
     return { rootNodeId: rootId, nodes };
   }
   // Choice as root handled in later tasks.
