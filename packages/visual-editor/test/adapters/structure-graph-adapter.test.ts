@@ -316,6 +316,79 @@ describe('buildStructureGraph — cross-namespace references', () => {
     expect(row.targetNodeId).toBe('a::Money');
   });
 
+  it('formats 0..* cardinality without a doubled max marker', () => {
+    const trade = buildStructureGraph(fixtureRef, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map()
+    }).nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const row = trade.rows.find((r) => r.attrName === 'economics')!;
+    expect(row.cardinality).toBe('0..*');
+  });
+
+  it('terminates on cyclic references (A → B → A) without infinite recursion', () => {
+    const fixtureCycle = {
+      namespaces: [{ uri: 'c' }],
+      nodes: [
+        {
+          id: 'c::A',
+          $type: 'Data' as const,
+          name: 'A',
+          namespace: 'c',
+          attributes: [{ name: 'b', typeCall: { type: { $refText: 'B' } }, card: { min: 1, max: 1 } }]
+        },
+        {
+          id: 'c::B',
+          $type: 'Data' as const,
+          name: 'B',
+          namespace: 'c',
+          attributes: [{ name: 'a', typeCall: { type: { $refText: 'A' } }, card: { min: 1, max: 1 } }]
+        }
+      ]
+    };
+
+    const expansionMap = new Map<string, boolean>([
+      [expansionKey({ namespaceUri: 'c', typeId: 'A', attrName: 'b' }), true],
+      [expansionKey({ namespaceUri: 'c', typeId: 'B', attrName: 'a' }), true]
+    ]);
+
+    const result = buildStructureGraph(fixtureCycle, {
+      focusedTypeId: 'c::A',
+      expansionMap
+    });
+
+    // Both nodes materialized exactly once; the cycle did not blow the stack.
+    expect(result.nodes.size).toBe(2);
+    const a = result.nodes.get('c::A') as StructureDataNode;
+    const b = result.nodes.get('c::B') as StructureDataNode;
+    expect(a.expansions.get('b')).toBe('c::B');
+    expect(b.expansions.get('a')).toBe('c::A');
+  });
+
+  it('returns an empty graph (no crash) when the focused root is a Choice', () => {
+    const fixtureChoiceRoot = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::Payout',
+          $type: 'Choice' as const,
+          name: 'Payout',
+          namespace: 'cdm.trade',
+          attributes: [{ name: 'cash', typeCall: { type: { $refText: 'string' } }, card: { min: 1, max: 1 } }]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixtureChoiceRoot, {
+      focusedTypeId: 'cdm.trade::Payout',
+      expansionMap: new Map()
+    });
+
+    // Phase 2 scope: only Data roots are materialized. Choice-as-root falls
+    // through; the graph is empty but the rootNodeId still echoes the focus.
+    expect(result.rootNodeId).toBe('cdm.trade::Payout');
+    expect(result.nodes.size).toBe(0);
+  });
+
   it('mixed: same-namespace and cross-namespace refs resolve correctly from the same caller', () => {
     const fixtureMixed = {
       namespaces: [{ uri: 'a' }, { uri: 'b' }],
