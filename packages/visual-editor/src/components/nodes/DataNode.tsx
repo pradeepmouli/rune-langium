@@ -16,7 +16,7 @@ import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
 
-export const DataNode = memo(function DataNode({ data, selected }: NodeProps) {
+export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
   const members = ((d as any).attributes ?? []) as any[];
   const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();
@@ -35,6 +35,14 @@ export const DataNode = memo(function DataNode({ data, selected }: NodeProps) {
   const variant = (data as any).variant as 'graph' | 'structure' | undefined;
 
   if (variant === 'structure') {
+    // TODO(Phase 7): tighten cellComponents prop types once StructureView assembly is in place
+    const cellComponents = (data as any).cellComponents as
+      | { name?: React.FC<any>; type?: React.FC<any>; card?: React.FC<any> }
+      | undefined;
+    const NameCell = cellComponents?.name;
+    const TypeCell = cellComponents?.type;
+    const CardCell = cellComponents?.card;
+
     return (
       <div className={`rune-node rune-node-data rune-node-data--structure${selected ? ' rune-node-selected' : ''}`}>
         <Handle type="target" position={handles.target} />
@@ -46,9 +54,21 @@ export const DataNode = memo(function DataNode({ data, selected }: NodeProps) {
           <div className="rune-node-rows">
             {members.map((member: any) => (
               <div key={member.name} className="rune-node-row" data-attr={member.name}>
-                <span className="rune-cell-name">{member.name}</span>
-                <span className="rune-cell-type-chip">{getTypeRefText(member.typeCall)}</span>
-                <span className="rune-cell-card">{formatCardinality(member.card)}</span>
+                {NameCell ? (
+                  <NameCell value={member.name} nodeId={id} attrName={member.name} />
+                ) : (
+                  <span className="rune-cell-name">{member.name}</span>
+                )}
+                {TypeCell ? (
+                  <TypeCell typeName={getTypeRefText(member.typeCall)} nodeId={id} attrName={member.name} />
+                ) : (
+                  <span className="rune-cell-type-chip">{getTypeRefText(member.typeCall)}</span>
+                )}
+                {CardCell ? (
+                  <CardCell value={formatCardinality(member.card)} nodeId={id} attrName={member.name} />
+                ) : (
+                  <span className="rune-cell-card">{formatCardinality(member.card)}</span>
+                )}
                 <Handle
                   type="source"
                   position={Position.Right}

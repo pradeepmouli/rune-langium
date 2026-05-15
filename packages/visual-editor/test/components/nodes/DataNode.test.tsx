@@ -31,4 +31,13 @@ describe('DataNode — structure variant', () => {
     expect(screen.getByTestId('row-handle-tradeDate')).toBeInTheDocument();
     expect(screen.getByTestId('row-handle-economics')).toBeInTheDocument();
   });
+
+  it('renders injected cell components when provided in data.cellComponents', () => {
+    const Custom = ({ value }: { value: string }) => <em data-testid="custom-cell">{value}</em>;
+    const data2 = { ...data, cellComponents: { name: (props: any) => <Custom value={props.value} /> } };
+    renderInFlow(<DataNode data={data2 as any} selected={false} id="Trade" type="data" />);
+    const cells = screen.getAllByTestId('custom-cell');
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells[0]).toHaveTextContent('tradeDate');
+  });
 });
