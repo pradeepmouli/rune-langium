@@ -17,6 +17,24 @@ export interface TypeRefPayload {
   readonly kind: 'Data' | 'Choice' | 'Enum' | 'BasicType';
 }
 
+/**
+ * Kind-scoped MIME variant so drop targets can filter by `accept` during
+ * dragover, when the browser security model makes `getData` return empty.
+ *
+ * **Recommended drag-source contract:** register BOTH the canonical
+ * `TYPE_REF_PAYLOAD_MIME` (with the JSON payload) AND `typeRefMimeForKind(kind)`
+ * (with empty value, just a marker). The dual-MIME pattern gives drop targets
+ * accept-policy enforcement during the dragover phase.
+ *
+ * **Single-MIME fallback:** drag sources that register only the canonical MIME
+ * will still trigger drop, but accept-policy filtering moves to drop time —
+ * the hook can't filter by kind during dragover, so hover may briefly show
+ * "accepting" before the drop is rejected if the payload kind isn't in `accept`.
+ */
+export function typeRefMimeForKind(kind: TypeRefPayload['kind']): string {
+  return `${TYPE_REF_PAYLOAD_MIME}+${kind.toLowerCase()}`;
+}
+
 /** Type guard for parsed drag payloads. */
 export function isTypeRefPayload(value: unknown): value is TypeRefPayload {
   if (!value || typeof value !== 'object') return false;
