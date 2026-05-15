@@ -101,15 +101,15 @@ function classifyType(typeName: string, doc: AdapterDocument, callerNamespace?: 
 function findNodeByName(typeName: string, doc: AdapterDocument, callerNamespace?: string): AdapterNode | undefined {
   // Qualified-ref form: "<ns.segments>.<TypeName>". Split on the last dot:
   // everything before is the namespace, everything after is the simple name.
+  // A failed qualified lookup is authoritative — type names can't contain
+  // dots in the DSL, so a $refText with dots is unambiguously a qualified
+  // reference. Falling back to unqualified matching here would let a
+  // typoed namespace silently resolve to a same-named type elsewhere.
   const lastDot = typeName.lastIndexOf('.');
   if (lastDot > 0) {
     const qualifiedNs = typeName.slice(0, lastDot);
     const qualifiedName = typeName.slice(lastDot + 1);
-    const qualifiedMatch = doc.nodes.find((n) => n.name === qualifiedName && n.namespace === qualifiedNs);
-    if (qualifiedMatch) return qualifiedMatch;
-    // Fall through to the unqualified path below — defensive cover for a
-    // $refText that looks qualified but is actually a bare name containing a
-    // dot. In practice this branch is dead but it's cheap defense.
+    return doc.nodes.find((n) => n.name === qualifiedName && n.namespace === qualifiedNs);
   }
 
   // Unqualified path: name match, optionally prefer same-namespace caller.

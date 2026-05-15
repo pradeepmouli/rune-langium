@@ -825,6 +825,53 @@ describe('buildStructureGraph — cross-namespace references', () => {
     expect(base.baseRows.map((r) => r.attrName)).toEqual(['tradeID']);
   });
 
+  it('does NOT fall back to unqualified matching when a qualified namespace fails to resolve', () => {
+    // Type names can't contain dots in the DSL, so a $refText with dots is
+    // unambiguously qualified. If the namespace is wrong (typo, broken import,
+    // dangling reference), the lookup must fail authoritatively — falling
+    // through to unqualified matching would silently resolve a same-named
+    // type in some other namespace, masking the error.
+    const fixtureBrokenQualified = {
+      namespaces: [{ uri: 'cdm.product' }, { uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.product::Party',
+          $type: 'Data' as const,
+          name: 'Party',
+          namespace: 'cdm.product',
+          attributes: [
+            { name: 'id', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          attributes: [
+            // Typoed namespace: 'missing.ns.Party' instead of 'cdm.product.Party'.
+            // Naive fallback to unqualified would find 'Party' in cdm.product.
+            {
+              name: 'party',
+              typeCall: { type: { $refText: 'missing.ns.Party' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixtureBrokenQualified, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map()
+    });
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const row = trade.rows.find((r) => r.attrName === 'party')!;
+    expect(row.typeKind).toBe('Unresolved');
+    expect(row.targetNodeId).toBeUndefined();
+    expect(row.targetNamespaceUri).toBeUndefined();
+  });
+
   it('mixed: same-namespace and cross-namespace refs resolve correctly from the same caller', () => {
     const fixtureMixed = {
       namespaces: [{ uri: 'a' }, { uri: 'b' }],
