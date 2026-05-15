@@ -126,14 +126,24 @@ export function useTypeRefDrop(opts: UseTypeRefDropOptions): UseTypeRefDropResul
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
-      e.preventDefault();
+      // Always reset hover state — a drop ends the drag session regardless of
+      // whether the payload is ours. This prevents isOver from persisting after
+      // non-type-ref drops (e.g., plain text or file drops onto a CodeMirror
+      // surface that also uses this hook in Phase 9).
       enterCountRef.current = 0;
       setIsOver(false);
+
       const payload = parsePayload(e);
-      if (!payload) return;
+      if (!payload) return; // not a type-ref drop — let the browser handle it
+
       // Belt-and-braces: also check kind for sources that registered the
       // canonical MIME but not the kind-specific one.
-      if (!accept.includes(payload.kind)) return;
+      if (!accept.includes(payload.kind)) return; // not accepted — let browser handle
+
+      // Only preventDefault once we've confirmed the payload is ours and accepted.
+      // Calling it unconditionally would suppress plain-text/file drops on any
+      // shared surface (e.g., CodeMirror editor in Phase 9).
+      e.preventDefault();
       onDrop(payload);
     },
     [accept, onDrop]

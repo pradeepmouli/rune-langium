@@ -304,6 +304,34 @@ describe('useTypeRefDrop', () => {
     expect(overEvt.preventDefault).toHaveBeenCalled();
   });
 
+  // --- Codex review fix: preventDefault gated on accepted payload (round 8) ---
+
+  it('does NOT call preventDefault on a drop without a type-ref payload', () => {
+    const onDrop = vi.fn();
+    const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop }));
+    // No payload → no type-ref MIME → parsePayload returns undefined → early return
+    const evt = makeDragEvent({ type: 'drop', types: [] });
+    act(() => {
+      result.current.dragOverHandlers.onDrop(evt);
+    });
+    expect(evt.preventDefault).not.toHaveBeenCalled();
+    expect(onDrop).not.toHaveBeenCalled();
+    // Hover state must still be reset
+    expect(result.current.isOver).toBe(false);
+  });
+
+  it('does NOT call preventDefault on a drop with a non-accepted kind', () => {
+    const onDrop = vi.fn();
+    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', kind: 'Enum' };
+    const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop }));
+    const evt = makeDragEvent({ type: 'drop', payload });
+    act(() => {
+      result.current.dragOverHandlers.onDrop(evt);
+    });
+    expect(evt.preventDefault).not.toHaveBeenCalled();
+    expect(onDrop).not.toHaveBeenCalled();
+  });
+
   // --- Browser normalization regression (Copilot round-7 fix) ---
 
   it('accepts browser-normalized lowercase MIME when accept list uses PascalCase kind', () => {
