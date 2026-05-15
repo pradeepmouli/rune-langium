@@ -87,18 +87,47 @@ describe('structure-view persistence', () => {
     expect(finalWs?.lastOpenedAt).toBe('2026-05-14T12:00:00Z');
   });
 
-  it('respects an explicit structureView from the caller (merge does not override)', async () => {
+  it('saveWorkspace ignores caller-supplied structureView (only saveStructureViewState may write it)', async () => {
     const db = await import('../../src/workspace/persistence.js');
-    const wsId = 'ws-explicit-sv';
+    const wsId = 'ws-caller-ignored';
     await saveWorkspace({ ...FRESH_WS, id: wsId, name: wsId });
     await saveStructureViewState(wsId, { a: true });
 
-    // Caller deliberately provides a fresh structureView.
+    // Even when the caller passes an explicit structureView, saveWorkspace
+    // ignores it in favor of whatever is currently persisted. structureView
+    // is owned by saveStructureViewState; saveWorkspace handles metadata.
     const current = await db.loadWorkspace(wsId);
     await saveWorkspace({ ...current!, structureView: { expansionMap: { b: true } } });
 
     const final = await loadStructureViewState(wsId);
-    expect(final).toEqual({ b: true });
+    expect(final).toEqual({ a: true });
+  });
+
+  it('saveWorkspace preserves the latest persisted structureView when the caller carries a stale one', async () => {
+    const db = await import('../../src/workspace/persistence.js');
+    const wsId = 'ws-preserve-newer';
+    await saveWorkspace({ ...FRESH_WS, id: wsId, name: wsId });
+    await saveStructureViewState(wsId, { a: true });
+
+    // Caller snapshots the workspace; their record now carries structureView = {a:true}.
+    const stale = await db.loadWorkspace(wsId);
+
+    // Concurrent: structure-view store toggles, advancing persisted state to {a:true, b:true}.
+    await saveStructureViewState(wsId, { a: true, b: true });
+
+    // Caller updates a metadata field and calls saveWorkspace with the
+    // stale record. Even though their input contains a non-undefined
+    // structureView ({a:true}), the previous fix's "only merge on
+    // undefined" guard would have written that stale value back and
+    // silently dropped `b`. The new unconditional preserve keeps the
+    // newer {a:true, b:true}.
+    await saveWorkspace({ ...stale!, name: 'renamed' });
+
+    const final = await loadStructureViewState(wsId);
+    expect(final).toEqual({ a: true, b: true });
+
+    const finalWs = await db.loadWorkspace(wsId);
+    expect(finalWs?.name).toBe('renamed');
   });
 
   it('uses an atomic transaction so a concurrent saveWorkspace cannot be reverted', async () => {

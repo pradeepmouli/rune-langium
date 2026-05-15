@@ -181,20 +181,20 @@ export async function saveWorkspace(ws: WorkspaceRecord): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(['workspaces', 'recents'], 'readwrite');
   const wsStore = tx.objectStore('workspaces');
-  // If the caller didn't include `structureView`, merge in whatever's
-  // currently persisted. Callers commonly hold a stale workspace
-  // snapshot they read before a structure-view toggle landed, and then
-  // call saveWorkspace to update unrelated metadata (name,
-  // lastOpenedAt, layout, tabs). Without this merge, that save would
-  // silently delete the expansion map. Callers who explicitly set
-  // `structureView` (including to a fresh map) take precedence.
-  let toWrite = ws;
-  if (ws.structureView === undefined) {
-    const existing = await wsStore.get(ws.id);
-    if (existing?.structureView) {
-      toWrite = { ...ws, structureView: existing.structureView };
-    }
-  }
+  // `structureView` is owned by `saveStructureViewState`; `saveWorkspace`
+  // is for workspace metadata only. Callers reach this function via a
+  // `load → mutate field → save` cycle that inevitably carries forward
+  // the `structureView` they read, which may be stale relative to a
+  // concurrent toggle. Unconditionally read the persisted value inside
+  // this tx and write that back, ignoring the caller's input for this
+  // field. (A conditional merge — "only when input is undefined" — left
+  // the stale-snapshot case wide open because stale snapshots almost
+  // always *do* carry a non-undefined, outdated structureView.)
+  const existing = await wsStore.get(ws.id);
+  const { structureView: _ignoredCaller, ...rest } = ws;
+  const toWrite: WorkspaceRecord = existing?.structureView
+    ? ({ ...rest, structureView: existing.structureView } as WorkspaceRecord)
+    : (rest as WorkspaceRecord);
   await wsStore.put(toWrite);
   await tx.objectStore('recents').put({
     id: ws.id,
