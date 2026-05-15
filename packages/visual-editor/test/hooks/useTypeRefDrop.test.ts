@@ -412,6 +412,32 @@ describe('useTypeRefDrop', () => {
     expect(result.current.isOver).toBe(false);
   });
 
+  // --- Copilot round-8: empty accept = disabled target ---
+
+  it('rejects all drags when accept is an empty array (disabled target semantics)', () => {
+    const onDrop = vi.fn();
+    const { result } = renderHook(() => useTypeRefDrop({ accept: [], onDrop }));
+
+    // Build a dragenter/dragover with the canonical type-ref MIME — previously
+    // the canonical-MIME fallback loop would match and set isOver/call preventDefault.
+    const evt = {
+      type: 'dragover',
+      dataTransfer: {
+        types: [TYPE_REF_PAYLOAD_MIME],
+        getData: vi.fn(() => ''),
+        dropEffect: 'none' as DataTransfer['dropEffect']
+      },
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn()
+    } as unknown as React.DragEvent;
+
+    act(() => {
+      result.current.dragOverHandlers.onDragEnter(evt);
+    });
+    expect(result.current.isOver).toBe(false);
+    expect(evt.preventDefault).not.toHaveBeenCalled();
+  });
+
   // --- Browser normalization regression (Copilot round-7 fix) ---
 
   it('accepts browser-normalized lowercase MIME when accept list uses PascalCase kind', () => {

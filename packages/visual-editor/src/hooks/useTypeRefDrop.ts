@@ -96,7 +96,12 @@ export function useTypeRefDrop(opts: UseTypeRefDropOptions): UseTypeRefDropResul
   /**
    * Returns true when the dataTransfer should be treated as an accepted drag.
    *
-   * Two-phase check:
+   * Three-phase check:
+   * 0. If `accept` is empty, return false immediately — the target accepts nothing.
+   *    This is the "disabled target" semantic: `accept: []` means reject all drags,
+   *    including the canonical-MIME fallback path. Without this guard the canonical
+   *    fallback loop would match any `application/x-rune-type-ref` drag even when
+   *    the consumer has explicitly opted out (e.g. TypePickerCell when disabled).
    * 1. If the source registered ANY kind-specific MIME (`TYPE_REF_PAYLOAD_MIME+<kind>`),
    *    use strict policy: accept only if at least one of those kinds is in `acceptableMimes`.
    *    This enforces accept-policy during the dragover phase for dual-MIME sources.
@@ -105,7 +110,12 @@ export function useTypeRefDrop(opts: UseTypeRefDropOptions): UseTypeRefDropResul
    *    drop time via `parsePayload` + `accept`. Hover may briefly show "accepting" for
    *    drags whose payload kind will ultimately be rejected — migration-safety trade-off.
    */
-  function hasAcceptedMime(types: DataTransfer['types'] | ReadonlyArray<string> | undefined): boolean {
+  function hasAcceptedMime(
+    types: DataTransfer['types'] | ReadonlyArray<string> | undefined,
+    currentAccept: ReadonlyArray<TypeRefPayload['kind']>
+  ): boolean {
+    // Phase 0: empty accept means "reject everything" (disabled-target semantics).
+    if (currentAccept.length === 0) return false;
     if (!types) return false;
     // Phase 1: scan for any kind-specific MIME (prefix `TYPE_REF_PAYLOAD_MIME+`).
     // If the source registered at least one kind-specific MIME, use strict policy:
@@ -130,17 +140,17 @@ export function useTypeRefDrop(opts: UseTypeRefDropOptions): UseTypeRefDropResul
 
   const onDragEnter = useCallback(
     (e: React.DragEvent) => {
-      if (!hasAcceptedMime(e.dataTransfer?.types)) return;
+      if (!hasAcceptedMime(e.dataTransfer?.types, accept)) return;
       enterCountRef.current++;
       setIsOver(true);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [acceptableMimes]
+    [accept, acceptableMimes]
   );
 
   const onDragOver = useCallback(
     (e: React.DragEvent) => {
-      if (!hasAcceptedMime(e.dataTransfer?.types)) return;
+      if (!hasAcceptedMime(e.dataTransfer?.types, accept)) return;
       e.preventDefault();
       // Some test stubs / locked-down browsers may make dropEffect read-only.
       try {
@@ -150,7 +160,7 @@ export function useTypeRefDrop(opts: UseTypeRefDropOptions): UseTypeRefDropResul
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [acceptableMimes]
+    [accept, acceptableMimes]
   );
 
   const onDragLeave = useCallback((_e: React.DragEvent) => {

@@ -39,12 +39,19 @@ export function NameCell({ value, nodeId, attrName, disabled }: NameCellProps): 
     setEditing(false);
   }, [value]);
 
+  // Stable callback ref: fires once on mount, never on re-render.
+  // An inline `ref={(node) => { if (node) node.focus(); }}` creates a new
+  // function each render, causing React to call old-ref(null) + new-ref(node)
+  // on every keystroke — re-focusing the input mid-edit.
+  const focusOnMount = useCallback((node: HTMLInputElement | null) => {
+    if (node) node.focus();
+  }, []);
+
   if (editing) {
     return (
       <input
-        ref={(node) => {
-          if (node) node.focus();
-        }}
+        ref={focusOnMount}
+        aria-label={`Edit ${attrName}`}
         className="rune-cell-editor"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -72,7 +79,10 @@ export function NameCell({ value, nodeId, attrName, disabled }: NameCellProps): 
       role={disabled ? undefined : 'button'}
       tabIndex={disabled ? undefined : 0}
       onKeyDown={(e) => {
-        if (!disabled && (e.key === 'Enter' || e.key === ' ')) setEditing(true);
+        if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault(); // Prevent Space from scrolling the page.
+          setEditing(true);
+        }
       }}
     >
       {value}
