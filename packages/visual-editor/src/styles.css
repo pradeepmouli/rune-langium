@@ -828,6 +828,13 @@ button[data-navigable]:focus-visible {
    * width here so the node shell remains the single source of truth. */
 }
 
+/* Reset the 8px/12px padding .rune-node-body applies — structure-layout.ts
+ * positions the children column at exactly COL_WIDTH + COL_GAP from the
+ * parent origin, so any inherited padding offsets that math. */
+.rune-node-data--structure .rune-node-body--two-col {
+  padding: 0;
+}
+
 .rune-node-rows {
   display: flex;
   flex-direction: column;
@@ -866,7 +873,10 @@ button[data-navigable]:focus-visible {
 .rune-graph-group--base {
   /* Yellow dashed container per spec §3.1.
    * --color-base-type / --color-base-type-bg are new tokens; hard
-   * fallbacks ensure the style works without a theme layer. */
+   * fallbacks ensure the style works without a theme layer.
+   * box-sizing: border-box so the 16px padding + 2px border draw INSIDE
+   * the layout-computed width/height instead of expanding beyond it. */
+  box-sizing: border-box;
   padding: 16px;  /* BASE_PADDING */
   border: 2px dashed var(--color-base-type, #d4a017);
   background: var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
