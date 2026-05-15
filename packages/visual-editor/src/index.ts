@@ -35,11 +35,7 @@ export { CardinalityEditor } from './components/editors/CardinalityEditor.js';
 export type { CardinalityEditorProps } from './components/editors/CardinalityEditor.js';
 
 // New editor form sub-components
-export {
-  TypeSelector,
-  getKindBadgeClasses,
-  getKindLabel
-} from './components/editors/TypeSelector.js';
+export { TypeSelector, getKindBadgeClasses, getKindLabel } from './components/editors/TypeSelector.js';
 export type {
   TypeSelectorProps,
   TypeSelectorTriggerProps,
@@ -123,11 +119,7 @@ export {
 } from './adapters/model-helpers.js';
 
 // Layout
-export {
-  computeLayout,
-  computeLayoutIncremental,
-  clearLayoutCache
-} from './layout/dagre-layout.js';
+export { computeLayout, computeLayoutIncremental, clearLayoutCache } from './layout/dagre-layout.js';
 export { computeLayoutAsync, cancelAsyncLayout } from './layout/layout-worker.js';
 export { computeGroupedLayout, findInheritanceGroups } from './layout/grouped-layout.js';
 export type { GroupInfo } from './layout/grouped-layout.js';
@@ -137,12 +129,7 @@ export { buildNamespaceTree, filterNamespaceTree } from './utils/namespace-tree.
 
 // Store (for advanced consumers)
 export { createEditorStore, useEditorStore } from './store/editor-store.js';
-export type {
-  EditorStore,
-  EditorState,
-  EditorActions,
-  DeferredExportEntry
-} from './store/editor-store.js';
+export type { EditorStore, EditorState, EditorActions, DeferredExportEntry } from './store/editor-store.js';
 
 // History / undo-redo
 export { useTemporalStore, useCanUndo, useCanRedo, useUndo, useRedo } from './store/history.js';
@@ -156,10 +143,7 @@ export type { FunctionScope, FunctionScopeEntry } from './store/expression-store
 // Hooks
 export { useAutoSave } from './hooks/useAutoSave.js';
 export { useExpressionAutocomplete } from './hooks/useExpressionAutocomplete.js';
-export type {
-  CompletionItem,
-  UseExpressionAutocompleteResult
-} from './hooks/useExpressionAutocomplete.js';
+export type { CompletionItem, UseExpressionAutocompleteResult } from './hooks/useExpressionAutocomplete.js';
 
 // Validation utilities
 export {
@@ -173,3 +157,6 @@ export {
   validateGraph
 } from './validation/edit-validator.js';
 export type { ExpressionValidationResult } from './validation/edit-validator.js';
+
+// Structure View shared types (spec 020)
+export * from './types/structure-view.js';

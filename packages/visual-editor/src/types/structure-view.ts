@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
+/**
+ * Shared types for the Structure View feature.
+ * See docs/superpowers/specs/2026-05-12-structure-view-design.md.
+ */
+
+/** MIME type used for drag-drop payloads. */
+export const TYPE_REF_PAYLOAD_MIME = 'application/x-rune-type-ref';
+
+/** Drag payload emitted by NamespaceExplorer items and consumed by drop targets. */
+export interface TypeRefPayload {
+  readonly rune: 'type-ref';
+  readonly namespaceUri: string;
+  readonly typeId: string;
+  readonly kind: 'Data' | 'Choice' | 'Enum' | 'BasicType';
+}
+
+/** Type guard for parsed drag payloads. */
+export function isTypeRefPayload(value: unknown): value is TypeRefPayload {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    v.rune === 'type-ref' &&
+    typeof v.namespaceUri === 'string' &&
+    typeof v.typeId === 'string' &&
+    (v.kind === 'Data' || v.kind === 'Choice' || v.kind === 'Enum' || v.kind === 'BasicType')
+  );
+}
+
+/** Key used in the expansion map; encodes namespace + type + attribute. */
+export interface StructureExpansionKey {
+  readonly namespaceUri: string;
+  readonly typeId: string;
+  readonly attrName: string;
+}
+
+/** Serialise an expansion key for use as a Map / Record key. */
+export function expansionKey(k: StructureExpansionKey): string {
+  return `${k.namespaceUri}::${k.typeId}::${k.attrName}`;
+}
+
+/** Single row inside a Data node, as the Structure View sees it. */
+export interface StructureRow {
+  readonly attrName: string;
+  readonly typeName: string;
+  readonly typeKind: 'Data' | 'Choice' | 'Enum' | 'BasicType' | 'Unresolved';
+  readonly targetNodeId?: string;
+  readonly targetNamespaceUri?: string;
+  readonly cardinality: string;
+  readonly isOptional: boolean;
+  readonly isInherited: boolean;
+  /** Range in the source document (for diagnostic binding + cursor sync). */
+  readonly astRange?: { start: number; end: number };
+}
+
+/** A Data node in the Structure View graph. */
+export interface StructureDataNode {
+  readonly id: string;
+  readonly kind: 'data';
+  readonly name: string;
+  readonly namespaceUri: string;
+  readonly extendsName?: string;
+  readonly extendsNodeId?: string;
+  readonly rows: ReadonlyArray<StructureRow>;
+  /** Direct expansions (attrName → child node id). */
+  readonly expansions: ReadonlyMap<string, string>;
+}
+
+/** A Choice node in the Structure View graph. */
+export interface StructureChoiceNode {
+  readonly id: string;
+  readonly kind: 'choice';
+  readonly name: string;
+  readonly namespaceUri: string;
+  readonly options: ReadonlyArray<StructureRow>;
+}
+
+/** A base-type GroupContainer wrap. */
+export interface StructureBaseContainer {
+  readonly id: string;
+  readonly kind: 'base';
+  readonly baseTypeName: string;
+  readonly baseTypeNamespaceUri: string;
+  readonly baseRows: ReadonlyArray<StructureRow>;
+  readonly childNodeId: string;
+}
+
+export type StructureNode = StructureDataNode | StructureChoiceNode | StructureBaseContainer;
+
+/** Full graph input produced by the adapter. */
+export interface StructureGraphInput {
+  readonly rootNodeId: string;
+  readonly nodes: ReadonlyMap<string, StructureNode>;
+}

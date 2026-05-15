@@ -69,6 +69,12 @@ interface BaseWorkspaceFields {
   activeTabPath: string | null;
   curatedModels: CuratedModelBinding[];
   schemaVersion: number;
+  /**
+   * Per-workspace Structure View state. Optional so pre-`DB_VERSION=2`
+   * records remain valid without a data migration — readers default to
+   * an empty expansion map.
+   */
+  structureView?: { expansionMap: Record<string, boolean> };
 }
 
 /**
@@ -95,12 +101,7 @@ export interface FolderHandleRecord {
   lastPermission: 'granted' | 'prompt' | 'denied';
 }
 
-export type SettingKey =
-  | 'theme'
-  | 'telemetry-enabled'
-  | 'reduced-motion'
-  | 'editor.tab-size'
-  | 'design-system-version';
+export type SettingKey = 'theme' | 'telemetry-enabled' | 'reduced-motion' | 'editor.tab-size' | 'design-system-version';
 
 interface RuneStudioDB extends DBSchema {
   workspaces: { key: string; value: WorkspaceRecord };
@@ -114,7 +115,13 @@ interface RuneStudioDB extends DBSchema {
 }
 
 const DB_NAME = 'rune-studio';
-const DB_VERSION = 1;
+/**
+ * Bumped from 1 → 2 when the optional `structureView` slot was added to
+ * `WorkspaceRecord` (spec 020). The field is optional, so the upgrade is
+ * a no-op for the object-store schema; the bump exists only to invalidate
+ * older idb caches that asserted on the schema version.
+ */
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<RuneStudioDB>> | undefined;
 let closeInFlight: Promise<void> | undefined;
@@ -173,7 +180,22 @@ export async function _resetForTests(): Promise<void> {
 export async function saveWorkspace(ws: WorkspaceRecord): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(['workspaces', 'recents'], 'readwrite');
-  await tx.objectStore('workspaces').put(ws);
+  const wsStore = tx.objectStore('workspaces');
+  // `structureView` is owned by `saveStructureViewState`; `saveWorkspace`
+  // is for workspace metadata only. Callers reach this function via a
+  // `load → mutate field → save` cycle that inevitably carries forward
+  // the `structureView` they read, which may be stale relative to a
+  // concurrent toggle. Unconditionally read the persisted value inside
+  // this tx and write that back, ignoring the caller's input for this
+  // field. (A conditional merge — "only when input is undefined" — left
+  // the stale-snapshot case wide open because stale snapshots almost
+  // always *do* carry a non-undefined, outdated structureView.)
+  const existing = await wsStore.get(ws.id);
+  const { structureView: _ignoredCaller, ...rest } = ws;
+  const toWrite: WorkspaceRecord = existing?.structureView
+    ? ({ ...rest, structureView: existing.structureView } as WorkspaceRecord)
+    : (rest as WorkspaceRecord);
+  await wsStore.put(toWrite);
   await tx.objectStore('recents').put({
     id: ws.id,
     name: ws.name,
@@ -200,6 +222,49 @@ export async function listRecents(): Promise<RecentWorkspaceRecord[]> {
   const db = await getDb();
   const all = await db.getAllFromIndex('recents', 'by-lastOpenedAt');
   return all.reverse(); // index is ascending; we want most-recent first
+}
+
+// ---------- structure-view ----------
+
+/**
+ * Load the Structure View expansion map for a workspace. Returns `{}` for
+ * workspaces that don't exist or were saved before the `structureView`
+ * slot was introduced, so the store can hydrate unconditionally.
+ */
+export async function loadStructureViewState(workspaceId: string): Promise<Record<string, boolean>> {
+  const ws = await loadWorkspace(workspaceId);
+  return ws?.structureView?.expansionMap ?? {};
+}
+
+/**
+ * Write the Structure View expansion map for a workspace. Silently drops
+ * the write if the workspace has been deleted out from under us — keeps
+ * callers from having to special-case race conditions during teardown.
+ *
+ * Performs the get + put inside a single `readwrite` transaction on
+ * `'workspaces'` so a concurrent `saveWorkspace` call (e.g., the
+ * workspace-manager updating `lastOpenedAt`, layout, or tabs) can't
+ * commit between our read and our write — without this, our put would
+ * write back a stale snapshot and silently revert those other fields.
+ *
+ * Deliberately doesn't touch `'recents'`: a structure-view toggle isn't
+ * a workspace-open event, so `lastOpenedAt` and the recents index stay
+ * put.
+ */
+export async function saveStructureViewState(
+  workspaceId: string,
+  expansionMap: Record<string, boolean>
+): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('workspaces', 'readwrite');
+  const store = tx.objectStore('workspaces');
+  const ws = await store.get(workspaceId);
+  if (!ws) {
+    await tx.done.catch(() => undefined);
+    return;
+  }
+  await store.put({ ...ws, structureView: { expansionMap } });
+  await tx.done;
 }
 
 // ---------- settings ----------
