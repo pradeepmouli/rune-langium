@@ -39,9 +39,20 @@ import {
 export interface UseTypeRefDropOptions {
   /**
    * Kinds this drop target will accept. Drops whose `payload.kind` is not in
-   * this list are silently ignored (no `onDrop` call). During dragover,
-   * `isOver` is only set when the drag source registered at least one
-   * kind-specific MIME that matches this list.
+   * this list are silently ignored (no `onDrop` call).
+   *
+   * `isOver` semantics during dragover depend on what the drag source
+   * registered on `dataTransfer`:
+   * - **Kind-specific MIME** (e.g. `application/x-rune-type-ref+data`): `isOver`
+   *   is set only when at least one registered kind matches this list — strict
+   *   accept gating during hover.
+   * - **Canonical MIME only** (`application/x-rune-type-ref`, no kind suffix):
+   *   `isOver` is set as a backward-compatibility fallback; kind filtering
+   *   moves to drop time via the parsed payload + `accept` check. Hover may
+   *   briefly show "accepting" before the drop is rejected.
+   *
+   * Drag sources following the recommended dual-MIME contract get the strict
+   * behavior; single-MIME sources still work but lose dragover-time filtering.
    */
   readonly accept: ReadonlyArray<TypeRefPayload['kind']>;
   /** Called with the parsed payload when an accepted drop completes. */
