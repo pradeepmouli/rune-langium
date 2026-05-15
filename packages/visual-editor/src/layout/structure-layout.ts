@@ -42,6 +42,36 @@ interface SizedNode {
   rowOffsets: Map<string, number>;
 }
 
+/**
+ * Simulate `placeDataChildren` / `placeBaseChildren`'s placement walk to compute
+ * the bottom of the right-hand column. The placement pass advances `yCursor` to
+ * `max(rowTop, yCursor)` so a late-row expansion can land below the simple-sum
+ * height; sizing must mirror that math, otherwise children render outside the
+ * parent's extent (see review must-fix #6 / #7).
+ */
+function simulateColumnHeight(
+  expansions: ReadonlyMap<string, string>,
+  rowOffsets: ReadonlyMap<string, number>,
+  input: StructureGraphInput,
+  sizes: Map<string, SizedNode>,
+  sizing: Set<string>
+): number {
+  let yCursor = HEADER_HEIGHT;
+  for (const [attrName, childId] of expansions) {
+    const child = input.nodes.get(childId);
+    if (!child) continue;
+    const childSize = sizeOf(child, sizes, input, sizing);
+    if (!childSize) continue;
+    const rowCenter = rowOffsets.get(attrName);
+    const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
+    const childY = Math.max(rowTop, yCursor);
+    yCursor = childY + childSize.height + ROW_GAP;
+  }
+  // No trailing gap once the last child has been placed; clamp to HEADER_HEIGHT
+  // so an empty expansions map still reserves a header strip.
+  return Math.max(HEADER_HEIGHT, yCursor - ROW_GAP);
+}
+
 function sizeData(
   node: StructureDataNode,
   sizes: Map<string, SizedNode>,
@@ -56,18 +86,21 @@ function sizeData(
     rowOffsets.set(rows[i].attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
 
-  let childrenHeight = 0;
   let childrenWidth = 0;
   for (const [, childId] of node.expansions) {
     const child = input.nodes.get(childId);
     if (!child) continue;
     const childSize = sizeOf(child, sizes, input, sizing);
     if (!childSize) continue;
-    childrenHeight += childSize.height + ROW_GAP;
     childrenWidth = Math.max(childrenWidth, childSize.width);
   }
-  // Trim trailing gap so the children column matches the actual content height.
-  childrenHeight = Math.max(0, childrenHeight - ROW_GAP);
+
+  // Height of the right-hand expansions column matches what the placement pass
+  // will actually produce (row-aligned + non-overlapping), not the naive sum.
+  const childrenHeight =
+    node.expansions.size > 0
+      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT
+      : 0;
 
   const width = childrenWidth > 0 ? COL_WIDTH + COL_GAP + childrenWidth : COL_WIDTH;
   const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
@@ -111,17 +144,21 @@ function sizeBase(
     rowOffsets.set(node.baseRows[i].attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
 
-  let expansionsHeight = 0;
   let expansionsWidth = 0;
   for (const [, expChildId] of node.expansions) {
     const expChild = input.nodes.get(expChildId);
     if (!expChild) continue;
     const expSize = sizeOf(expChild, sizes, input, sizing);
     if (!expSize) continue;
-    expansionsHeight += expSize.height + ROW_GAP;
     expansionsWidth = Math.max(expansionsWidth, expSize.width);
   }
-  expansionsHeight = Math.max(0, expansionsHeight - ROW_GAP);
+
+  // Mirror the placement pass: late-row expansions can extend below the simple
+  // sum of child heights because each child is placed at max(rowTop, yCursor).
+  const expansionsHeight =
+    node.expansions.size > 0
+      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT
+      : 0;
 
   // The base container wraps:
   //  - the base rows (top section)
@@ -222,15 +259,17 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     if (!sz) return;
 
     placed.add(id);
-    // TODO(Phase 6): the `variant: 'structure'` discriminator is consumed by
-    // downstream renderers. The base-container case emits type
-    // `'groupContainer'` — the renderer for that variant lands in Phase 6
-    // (`GroupContainerNode — base-type scope`). Until then, any consumer
-    // keyed on `variant === 'structure'` must handle a `groupContainer`
-    // payload too.
+    // Base containers emit a Structure-specific node type `'structureBase'`
+    // so they do not collide with the existing `'groupContainer'` renderer
+    // (which expects `GroupContainerData = { label, nodeCount, scope, ... }`
+    // — incompatible with the `StructureBaseContainer` payload we attach).
+    // The matching renderer for `'structureBase'` is registered in Phase 6
+    // (`GroupContainerNode — base-type scope`); until then this node type
+    // falls through to the default React Flow renderer, which is sufficient
+    // for the Phase 3 layout-only milestone.
     nodes.push({
       id,
-      type: n.kind === 'base' ? 'groupContainer' : n.kind,
+      type: n.kind === 'base' ? 'structureBase' : n.kind,
       position,
       data: { ...n, variant: 'structure' },
       parentId,
@@ -266,21 +305,25 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     // yCursor tracks the running bottom of the children column. Each child is
     // placed at max(rowOffsetY, yCursor) so it aligns with its source row when
     // possible, but never overlaps the previous sibling.
+    //
+    // Dedup behavior: we deliberately do NOT skip already-placed children
+    // here. `placeNode` is itself a no-op for duplicates (first-encounter
+    // wins), but the layout iteration still runs and yCursor still advances
+    // — the deduped child's slot stays reserved so subsequent siblings keep
+    // their row alignment instead of collapsing upward into the empty space.
     let yCursor = HEADER_HEIGHT;
     for (const [attrName, childId] of n.expansions) {
       const childSize = sizes.get(childId);
       if (!childSize) continue;
-      if (placed.has(childId)) continue; // skip already-placed targets early
 
       const rowCenter = sz.rowOffsets.get(attrName);
-      const rowTop = rowCenter !== undefined ? rowCenter - HEADER_HEIGHT / 2 : yCursor;
+      const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
       const childY = Math.max(rowTop, yCursor);
 
       placeNode(childId, id, { x: COL_WIDTH + COL_GAP, y: childY });
 
-      // Advance yCursor past this child (whether or not it was actually placed
-      // — placeNode is a no-op for duplicates, but yCursor still reflects the
-      // intended slot so subsequent siblings don't try to overlap it).
+      // Advance yCursor past this child whether or not placeNode placed it —
+      // duplicates take their visual slot to preserve sibling row alignment.
       yCursor = childY + childSize.height + ROW_GAP;
     }
   }
@@ -297,17 +340,27 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     //    Spec §3.2: containment is uniform across inheritance and type-ref —
     //    a base-level row is just as eligible to carry an expansion edge as a
     //    derived-level row.
+    //
+    //    The right-column x must clear the LEFT column, whose width is the
+    //    derived child's own width (which can exceed COL_WIDTH if the derived
+    //    data has its own expansions). `sizeBase` uses the same expression
+    //    when computing innerWidth, so geometry stays consistent.
+    const leftColumnWidth = sizes.get(n.childNodeId)?.width ?? COL_WIDTH;
+    const rightColumnX = BASE_PADDING + Math.max(COL_WIDTH, leftColumnWidth) + COL_GAP;
+
+    // Dedup behavior: see `placeDataChildren` — we do NOT skip already-placed
+    // children. yCursor advances unconditionally so deduped duplicates keep
+    // their visual slot reserved.
     let yCursor = HEADER_HEIGHT;
     for (const [attrName, childId] of n.expansions) {
       const childSize = sizes.get(childId);
       if (!childSize) continue;
-      if (placed.has(childId)) continue;
 
       const rowCenter = sz.rowOffsets.get(attrName);
-      const rowTop = rowCenter !== undefined ? rowCenter - HEADER_HEIGHT / 2 : yCursor;
+      const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
       const childY = Math.max(rowTop, yCursor);
 
-      placeNode(childId, id, { x: COL_WIDTH + COL_GAP, y: childY });
+      placeNode(childId, id, { x: rightColumnX, y: childY });
       yCursor = childY + childSize.height + ROW_GAP;
     }
   }

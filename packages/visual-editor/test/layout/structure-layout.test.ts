@@ -46,7 +46,7 @@ describe('layoutStructureGraph — single Data node', () => {
 });
 
 describe('layoutStructureGraph — base container with derived inside', () => {
-  it('produces a base groupContainer with the derived data as its child', () => {
+  it('produces a base structureBase with the derived data as its child', () => {
     const input: StructureGraphInput = {
       rootNodeId: 'Trade::__base',
       nodes: new Map([
@@ -102,7 +102,7 @@ describe('layoutStructureGraph — base container with derived inside', () => {
     expect(nodes).toHaveLength(2);
     const base = nodes.find((n) => n.id === 'Trade::__base')!;
     const derived = nodes.find((n) => n.id === 'Trade')!;
-    expect(base.type).toBe('groupContainer');
+    expect(base.type).toBe('structureBase');
     expect(derived.parentId).toBe('Trade::__base');
     expect(derived.extent).toBe('parent');
   });
@@ -165,10 +165,18 @@ describe('layoutStructureGraph — expansion as child', () => {
     const { nodes } = layoutStructureGraph(input);
     expect(nodes).toHaveLength(2);
     const economics = nodes.find((n) => n.id === 'Economics')!;
+    const trade = nodes.find((n) => n.id === 'Trade')!;
     expect(economics.parentId).toBe('Trade');
     expect(economics.extent).toBe('parent');
-    // Economics' x should be in the right column.
-    expect((economics.position as { x: number; y: number }).x).toBeGreaterThanOrEqual(260);
+    // Relative-placement check: Economics sits in the right-hand column of
+    // its parent, i.e. its right edge aligns with (or exceeds) the parent's
+    // right edge — equivalently, its left edge is at parent.width - child.width.
+    // Asserting the property, not the COL_WIDTH constant, keeps the test
+    // independent of layout tuning.
+    const tradeWidth = trade.width ?? 0;
+    const economicsWidth = economics.width ?? 0;
+    const economicsX = (economics.position as { x: number; y: number }).x;
+    expect(economicsX).toBeGreaterThanOrEqual(tradeWidth - economicsWidth);
   });
 });
 
@@ -633,13 +641,112 @@ describe('layoutStructureGraph — base container with expanded inherited row', 
 
     const { nodes } = layoutStructureGraph(input);
     const base = nodes.find((n) => n.id === 'Trade::__base')!;
+    const trade = nodes.find((n) => n.id === 'Trade')!;
     const party = nodes.find((n) => n.id === 'Party')!;
     expect(base).toBeDefined();
     expect(party).toBeDefined();
     expect(party.parentId).toBe('Trade::__base');
     expect(party.extent).toBe('parent');
-    // Party is placed in the right-hand column of the base container, so its
-    // x must be at or past the first column boundary (COL_WIDTH = 260).
-    expect((party.position as { x: number; y: number }).x).toBeGreaterThanOrEqual(260);
+    // Relative-placement check: Party sits in the right-hand column of the
+    // base container — its left edge clears the derived child's right edge.
+    // Asserting the geometric property (not COL_WIDTH) keeps the test
+    // independent of layout tuning.
+    const partyX = (party.position as { x: number; y: number }).x;
+    const tradeX = (trade.position as { x: number; y: number }).x;
+    const tradeWidth = trade.width ?? 0;
+    const partyWidth = party.width ?? 0;
+    const baseWidth = base.width ?? 0;
+    // Right column starts past the derived child's right edge.
+    expect(partyX).toBeGreaterThanOrEqual(tradeX + tradeWidth);
+    // And the expansion stays within the base container.
+    expect(partyX + partyWidth).toBeLessThanOrEqual(baseWidth);
+  });
+});
+
+describe('layoutStructureGraph — late-row expansion sizing', () => {
+  it('parent height accommodates a tall expansion on the last row', () => {
+    // Regression for the sizing-vs-placement asymmetry (review must-fix #6/#7):
+    // when only a late row is expanded, the placement pass advances
+    // `yCursor = max(rowTop, yCursor)`, pushing the placed child below the
+    // simple sum of expansion heights. The sizing pass must mirror that walk,
+    // otherwise the parent's height clips the child.
+    //
+    // Fixture: a parent with three rows; only the last row (`tall`) is
+    // expanded, and its target has many rows so it is tall.
+    const input: StructureGraphInput = {
+      rootNodeId: 'Parent',
+      nodes: new Map([
+        [
+          'Parent',
+          {
+            id: 'Parent',
+            kind: 'data',
+            name: 'Parent',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'first',
+                typeName: 'string',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              },
+              {
+                attrName: 'second',
+                typeName: 'string',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              },
+              {
+                attrName: 'tall',
+                typeName: 'Tall',
+                typeKind: 'Data',
+                targetNodeId: 'Tall',
+                targetNamespaceUri: 'ns',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['tall', 'Tall']])
+          }
+        ],
+        [
+          'Tall',
+          {
+            id: 'Tall',
+            kind: 'data',
+            name: 'Tall',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: Array.from({ length: 8 }, (_, i) => ({
+              attrName: `r${i}`,
+              typeName: 'string' as const,
+              typeKind: 'BasicType' as const,
+              cardinality: '1..1' as const,
+              isOptional: false,
+              isInherited: false
+            })),
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    const parent = nodes.find((n) => n.id === 'Parent')!;
+    const tall = nodes.find((n) => n.id === 'Tall')!;
+    const tallY = (tall.position as { x: number; y: number }).y;
+    const tallHeight = tall.height ?? 0;
+    const parentHeight = parent.height ?? 0;
+    // Parent must enclose the child's bottom edge — would fail before the
+    // sizing pass was taught to simulate placement's max(rowTop, yCursor).
+    expect(parentHeight).toBeGreaterThanOrEqual(tallY + tallHeight);
   });
 });
