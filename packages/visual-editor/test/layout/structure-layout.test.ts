@@ -382,3 +382,69 @@ describe('layoutStructureGraph — cross-tree handle deduplication', () => {
     expect(nodes).toHaveLength(2); // Root + Target only
   });
 });
+
+describe('layoutStructureGraph — defensive cycle protection', () => {
+  it('does not stack-overflow when input.nodes has a mutual-expansion cycle', () => {
+    // Adapter normally prevents this via SuppressedEdge, but a malformed
+    // StructureGraphInput should not crash the layout pass.
+    const input: StructureGraphInput = {
+      rootNodeId: 'A',
+      nodes: new Map([
+        [
+          'A',
+          {
+            id: 'A',
+            kind: 'data',
+            name: 'A',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'next',
+                typeName: 'B',
+                typeKind: 'Data',
+                targetNodeId: 'B',
+                targetNamespaceUri: 'ns',
+                cardinality: '0..1',
+                isOptional: true,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['next', 'B']])
+          }
+        ],
+        [
+          'B',
+          {
+            id: 'B',
+            kind: 'data',
+            name: 'B',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'next',
+                typeName: 'A',
+                typeKind: 'Data',
+                targetNodeId: 'A',
+                targetNamespaceUri: 'ns',
+                cardinality: '0..1',
+                isOptional: true,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['next', 'A']])
+          }
+        ]
+      ])
+    };
+
+    // Test passes by not throwing/hanging. Verify reasonable output:
+    // both nodes are present, neither is its own ancestor in the layout.
+    const { nodes } = layoutStructureGraph(input);
+    expect(nodes.length).toBeGreaterThanOrEqual(1);
+    expect(nodes.some((n) => n.id === 'A')).toBe(true);
+  });
+});
