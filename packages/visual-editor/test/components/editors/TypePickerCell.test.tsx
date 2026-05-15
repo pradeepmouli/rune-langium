@@ -27,7 +27,8 @@ describe('TypePickerCell', () => {
     const payload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'cdm.trade',
-      typeId: 'NewType',
+      typeId: 'cdm.trade::NewType',
+      typeName: 'NewType',
       kind: 'Data'
     };
     render(<TypePickerCell typeName="Economics" typeKind="Data" nodeId="Trade" attrName="economics" />);
@@ -41,6 +42,16 @@ describe('TypePickerCell', () => {
     fireEvent.dragOver(row, { dataTransfer: dt });
     fireEvent.drop(row, { dataTransfer: dt });
 
+    // updateAttributeType receives the bare typeName, not the namespaced typeId
     expect(updateAttributeType).toHaveBeenCalledWith('Trade', 'economics', 'NewType');
+  });
+
+  it('does not activate isOver when disabled', () => {
+    render(<TypePickerCell typeName="Economics" typeKind="Data" nodeId="Trade" attrName="economics" disabled />);
+    const row = screen.getByTestId('type-picker-cell');
+    fireEvent.dragOver(row, {
+      dataTransfer: { types: [TYPE_REF_PAYLOAD_MIME], getData: vi.fn(), dropEffect: 'none' }
+    });
+    expect(row.className).not.toMatch(/--over/);
   });
 });

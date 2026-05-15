@@ -69,6 +69,7 @@ describe('useTypeRefDrop', () => {
       rune: 'type-ref',
       namespaceUri: 'ns',
       typeId: 'T',
+      typeName: 'T',
       kind: 'Data'
     };
     const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop: vi.fn() }));
@@ -85,6 +86,7 @@ describe('useTypeRefDrop', () => {
       rune: 'type-ref',
       namespaceUri: 'ns',
       typeId: 'T',
+      typeName: 'T',
       kind: 'Data'
     };
     const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop: vi.fn() }));
@@ -104,6 +106,7 @@ describe('useTypeRefDrop', () => {
       rune: 'type-ref',
       namespaceUri: 'ns',
       typeId: 'T',
+      typeName: 'T',
       kind: 'Choice'
     };
     const onDrop = vi.fn();
@@ -121,6 +124,7 @@ describe('useTypeRefDrop', () => {
       rune: 'type-ref',
       namespaceUri: 'ns',
       typeId: 'T',
+      typeName: 'T',
       kind: 'Enum'
     };
     const onDrop = vi.fn();
@@ -165,6 +169,7 @@ describe('useTypeRefDrop', () => {
       rune: 'type-ref',
       namespaceUri: 'ns',
       typeId: 'T',
+      typeName: 'T',
       kind: 'Data'
     };
     const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop: vi.fn() }));
@@ -185,6 +190,7 @@ describe('useTypeRefDrop', () => {
       rune: 'type-ref',
       namespaceUri: 'ns',
       typeId: 'T',
+      typeName: 'T',
       kind: 'Data'
     };
     const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop: vi.fn() }));
@@ -214,6 +220,7 @@ describe('useTypeRefDrop', () => {
       rune: 'type-ref',
       namespaceUri: 'ns',
       typeId: 'T',
+      typeName: 'T',
       kind: 'Data'
     };
     const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop: vi.fn() }));
@@ -237,6 +244,7 @@ describe('useTypeRefDrop', () => {
       rune: 'type-ref',
       namespaceUri: 'ns',
       typeId: 'T',
+      typeName: 'T',
       kind: 'Data'
     };
     const onDrop1 = vi.fn();
@@ -322,7 +330,7 @@ describe('useTypeRefDrop', () => {
 
   it('does NOT call preventDefault on a drop with a non-accepted kind', () => {
     const onDrop = vi.fn();
-    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', kind: 'Enum' };
+    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', typeName: 'T', kind: 'Enum' };
     const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop }));
     const evt = makeDragEvent({ type: 'drop', payload });
     act(() => {
@@ -336,7 +344,7 @@ describe('useTypeRefDrop', () => {
 
   it('accepts canonical-MIME-only drags during dragover/dragenter (single-MIME fallback)', () => {
     const onDrop = vi.fn();
-    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', kind: 'Data' };
+    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', typeName: 'T', kind: 'Data' };
     const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop }));
 
     // Source registered ONLY the canonical MIME (no kind-specific marker).
@@ -364,7 +372,7 @@ describe('useTypeRefDrop', () => {
 
   it('single-MIME source with accepted kind: drop calls onDrop', () => {
     const onDrop = vi.fn();
-    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', kind: 'Data' };
+    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', typeName: 'T', kind: 'Data' };
     const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop }));
 
     // Drop event — getData returns payload JSON (as browser does on drop).
@@ -380,7 +388,7 @@ describe('useTypeRefDrop', () => {
     // Canonical-MIME-only source whose payload.kind is not in accept —
     // drop-time filter via parsePayload + accept rejects it.
     const onDrop = vi.fn();
-    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', kind: 'Enum' };
+    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', typeName: 'T', kind: 'Enum' };
     const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop }));
 
     // Dragenter with canonical MIME only — isOver becomes true (migration trade-off).

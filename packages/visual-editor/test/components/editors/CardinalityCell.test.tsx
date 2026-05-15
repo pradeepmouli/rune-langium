@@ -33,4 +33,14 @@ describe('CardinalityCell', () => {
     fireEvent.click(items[items.length - 1]);
     expect(updateCardinality).not.toHaveBeenCalled();
   });
+
+  it('closes menu on outside mousedown', () => {
+    render(<CardinalityCell value="0..1" nodeId="Trade" attrName="tradeDate" />);
+    fireEvent.click(screen.getByText('0..1'));
+    // Menu is open — at least one preset should be visible
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    // Fire mousedown on document body (outside the component)
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
 });

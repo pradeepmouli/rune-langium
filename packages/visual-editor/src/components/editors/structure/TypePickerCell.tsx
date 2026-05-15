@@ -33,24 +33,25 @@ export function TypePickerCell({
 
   const handleDrop = useCallback(
     (payload: TypeRefPayload) => {
-      if (disabled) return;
-      updateAttributeType(nodeId, attrName, payload.typeId);
+      updateAttributeType(nodeId, attrName, payload.typeName);
     },
-    [disabled, nodeId, attrName, updateAttributeType]
+    [nodeId, attrName, updateAttributeType]
   );
 
   const { dragOverHandlers, isOver } = useTypeRefDrop({
-    accept: ['Data', 'Choice', 'Enum', 'BasicType'],
+    accept: disabled ? [] : ['Data', 'Choice', 'Enum', 'BasicType'],
     onDrop: handleDrop
   });
 
   return (
     <span
       data-testid="type-picker-cell"
-      className={`rune-cell-type-wrap${isOver ? ' rune-cell-type-wrap--over' : ''}`}
+      className={`rune-cell-type-wrap${isOver && !disabled ? ' rune-cell-type-wrap--over' : ''}`}
       {...dragOverHandlers}
     >
-      <span className={`rune-cell-type-chip ${KIND_CLASS[typeKind]}`}>{typeName}</span>
+      <button type="button" disabled={disabled} className={`rune-cell-type-chip ${KIND_CLASS[typeKind]}`}>
+        {typeName}
+      </button>
     </span>
   );
 }

@@ -9,11 +9,26 @@
 /** MIME type used for drag-drop payloads. */
 export const TYPE_REF_PAYLOAD_MIME = 'application/x-rune-type-ref';
 
-/** Drag payload emitted by NamespaceExplorer items and consumed by drop targets. */
+/**
+ * Drag payload emitted by NamespaceExplorer items and consumed by drop targets.
+ *
+ * **Field semantics:**
+ * - `typeId`   — canonical node id in `ns::Name` format (e.g. `cdm.trade::Trade`).
+ *               Used by `setInheritance` and other operations that reference nodes
+ *               by their fully-qualified id.
+ * - `typeName` — bare display/AST name (e.g. `Trade`) used in `$refText` writes,
+ *               e.g. `updateAttributeType`. This is what the grammar stores as the
+ *               unqualified cross-reference text.
+ *
+ * Drag sources MUST set both fields.
+ */
 export interface TypeRefPayload {
   readonly rune: 'type-ref';
   readonly namespaceUri: string;
+  /** Canonical node id in `ns::Name` format. Used by setInheritance. */
   readonly typeId: string;
+  /** Bare AST/display name used in $refText writes. Used by updateAttributeType. */
+  readonly typeName: string;
   readonly kind: 'Data' | 'Choice' | 'Enum' | 'BasicType';
 }
 
@@ -43,6 +58,7 @@ export function isTypeRefPayload(value: unknown): value is TypeRefPayload {
     v.rune === 'type-ref' &&
     typeof v.namespaceUri === 'string' &&
     typeof v.typeId === 'string' &&
+    typeof v.typeName === 'string' &&
     (v.kind === 'Data' || v.kind === 'Choice' || v.kind === 'Enum' || v.kind === 'BasicType')
   );
 }

@@ -162,3 +162,13 @@ export type { ExpressionValidationResult } from './validation/edit-validator.js'
 
 // Structure View shared types (spec 020)
 export * from './types/structure-view.js';
+
+// Structure cells (Phase 5)
+export { NameCell } from './components/editors/structure/NameCell.js';
+export type { NameCellProps } from './components/editors/structure/NameCell.js';
+export { CardinalityCell } from './components/editors/structure/CardinalityCell.js';
+export type { CardinalityCellProps } from './components/editors/structure/CardinalityCell.js';
+export { TypePickerCell } from './components/editors/structure/TypePickerCell.js';
+export type { TypePickerCellProps } from './components/editors/structure/TypePickerCell.js';
+export { InheritanceCell } from './components/editors/structure/InheritanceCell.js';
+export type { InheritanceCellProps } from './components/editors/structure/InheritanceCell.js';

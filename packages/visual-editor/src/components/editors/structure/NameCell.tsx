@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useEditorStore, type EditorStore } from '../../../store/editor-store.js';
 
 export interface NameCellProps {
@@ -17,23 +17,19 @@ export function NameCell({ value, nodeId, attrName, disabled }: NameCellProps): 
   // draft is initialised from value; synced via useEffect when value changes
   // externally while NOT editing (avoids clobbering an in-progress edit).
   const [draft, setDraft] = useState(value);
-  const ref = useRef<HTMLInputElement>(null);
 
   // Sync external value changes into draft only when not actively editing.
   useEffect(() => {
     if (!editing) setDraft(value);
   }, [value, editing]);
 
-  useEffect(() => {
-    if (editing) ref.current?.focus();
-  }, [editing]);
-
   const commit = useCallback(() => {
     setEditing(false);
-    if (draft && draft !== value) {
-      renameAttribute(nodeId, attrName, draft);
+    const next = draft.trim();
+    if (next && next !== value) {
+      renameAttribute(nodeId, attrName, next);
     } else {
-      // no-op: restore draft in case it was blanked
+      // no-op: restore draft in case it was blanked or only whitespace
       setDraft(value);
     }
   }, [draft, value, nodeId, attrName, renameAttribute]);
@@ -46,7 +42,9 @@ export function NameCell({ value, nodeId, attrName, disabled }: NameCellProps): 
   if (editing) {
     return (
       <input
-        ref={ref}
+        ref={(node) => {
+          if (node) node.focus();
+        }}
         className="rune-cell-editor"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}

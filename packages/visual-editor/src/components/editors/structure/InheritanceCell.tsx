@@ -13,23 +13,31 @@ export interface InheritanceCellProps {
   disabled?: boolean;
 }
 
-export function InheritanceCell({ childId, extendsName, disabled }: InheritanceCellProps): React.ReactElement {
+export function InheritanceCell({
+  childId,
+  extendsName,
+  extendsNodeId,
+  disabled
+}: InheritanceCellProps): React.ReactElement {
   const setInheritance = useEditorStore((s: EditorStore) => s.setInheritance);
 
   const handleDrop = useCallback(
     (payload: TypeRefPayload) => {
-      if (disabled) return;
       setInheritance(childId, payload.typeId);
     },
-    [childId, disabled, setInheritance]
+    [childId, setInheritance]
   );
 
-  const { dragOverHandlers, isOver } = useTypeRefDrop({ accept: ['Data'], onDrop: handleDrop });
+  const { dragOverHandlers, isOver } = useTypeRefDrop({
+    accept: disabled ? [] : ['Data'],
+    onDrop: handleDrop
+  });
 
   return (
     <span
       data-testid="inheritance-cell"
-      className={`rune-cell-extends${isOver ? ' rune-cell-extends--over' : ''}`}
+      data-extends-id={extendsNodeId}
+      className={`rune-cell-extends${isOver && !disabled ? ' rune-cell-extends--over' : ''}`}
       {...dragOverHandlers}
     >
       <span className="rune-cell-extends-label">extends</span>
