@@ -889,8 +889,9 @@ button[data-navigable]:focus-visible {
 .rune-graph-group__base-rows {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 16px; /* BASE_PADDING */
+  /* No `gap` between rows — layout math (structure-layout.ts) packs rows at
+   * exactly ROW_HEIGHT without inter-row spacing. */
+  margin-bottom: 8px; /* ROW_GAP — gap before the nested child data node */
 }
 
 .rune-graph-group__base-row {
