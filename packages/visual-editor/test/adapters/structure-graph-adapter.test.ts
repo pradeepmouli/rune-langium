@@ -159,3 +159,98 @@ describe('buildStructureGraph — type-reference expansion', () => {
     expect(trade.expansions.get('economics')).toBe('cdm.trade::Economics');
   });
 });
+
+const fixtureChoice = {
+  namespaces: [{ uri: 'cdm.trade' }],
+  nodes: [
+    {
+      id: 'cdm.trade::Payout',
+      $type: 'Choice' as const,
+      name: 'Payout',
+      namespace: 'cdm.trade',
+      attributes: [{ name: 'cashPayout', typeCall: { type: { $refText: 'Cash' } }, card: { min: 1, max: 1 } }]
+    },
+    {
+      id: 'cdm.trade::Trade',
+      $type: 'Data' as const,
+      name: 'Trade',
+      namespace: 'cdm.trade',
+      attributes: [{ name: 'payout', typeCall: { type: { $refText: 'Payout' } }, card: { min: 1, max: 1 } }]
+    }
+  ]
+};
+
+const fixtureEnumAndUnresolved = {
+  namespaces: [{ uri: 'cdm.trade' }],
+  nodes: [
+    {
+      id: 'cdm.trade::DayCount',
+      $type: 'Enum' as const,
+      name: 'DayCount',
+      namespace: 'cdm.trade',
+      values: [{ name: 'ACT_360' }, { name: 'ACT_365' }]
+    },
+    {
+      id: 'cdm.trade::Trade',
+      $type: 'Data' as const,
+      name: 'Trade',
+      namespace: 'cdm.trade',
+      attributes: [
+        {
+          name: 'dayCount',
+          typeCall: { type: { $refText: 'DayCount' } },
+          card: { min: 1, max: 1 }
+        },
+        {
+          name: 'mystery',
+          typeCall: { type: { $refText: 'MissingType' } },
+          card: { min: 0, max: 1 }
+        }
+      ]
+    }
+  ]
+};
+
+describe('buildStructureGraph — Choice / Enum / Unresolved', () => {
+  it('classifies a Choice-typed attr and expands to a choice node', () => {
+    const key: StructureExpansionKey = {
+      namespaceUri: 'cdm.trade',
+      typeId: 'Trade',
+      attrName: 'payout'
+    };
+    const result = buildStructureGraph(fixtureChoice, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map([[expansionKey(key), true]])
+    });
+    const choice = result.nodes.get('cdm.trade::Payout');
+    expect(choice?.kind).toBe('choice');
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    expect(trade.rows.find((r) => r.attrName === 'payout')?.typeKind).toBe('Choice');
+  });
+
+  it('classifies an Enum-typed attr and does NOT expand it (chip-only)', () => {
+    const key: StructureExpansionKey = {
+      namespaceUri: 'cdm.trade',
+      typeId: 'Trade',
+      attrName: 'dayCount'
+    };
+    const result = buildStructureGraph(fixtureEnumAndUnresolved, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map([[expansionKey(key), true]])
+    });
+    expect(result.nodes.has('cdm.trade::DayCount')).toBe(false);
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    expect(trade.rows.find((r) => r.attrName === 'dayCount')?.typeKind).toBe('Enum');
+  });
+
+  it('marks unresolved references with kind=Unresolved', () => {
+    const result = buildStructureGraph(fixtureEnumAndUnresolved, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map()
+    });
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const row = trade.rows.find((r) => r.attrName === 'mystery')!;
+    expect(row.typeKind).toBe('Unresolved');
+    expect(row.targetNodeId).toBeUndefined();
+  });
+});
