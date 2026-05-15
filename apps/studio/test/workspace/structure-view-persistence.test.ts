@@ -56,4 +56,34 @@ describe('structure-view persistence', () => {
     expect(ws?.tabs).toEqual([]);
     expect(ws?.layout.version).toBe(1);
   });
+
+  it('uses an atomic transaction so a concurrent saveWorkspace cannot be reverted', async () => {
+    const db = await import('../../src/workspace/persistence.js');
+    await saveWorkspace(FRESH_WS);
+
+    // Read a starting snapshot so the simulated concurrent saveWorkspace has
+    // a full record to mutate (mirrors how workspace-manager re-saves on
+    // open: load → mutate fields → save).
+    const initial = await db.loadWorkspace('ws-1');
+
+    // Fire both writes without awaiting in between. With the old two-tx
+    // load+save pattern, saveStructureViewState's stale-snapshot put could
+    // commit *after* saveWorkspace's put and silently revert `name` /
+    // `lastOpenedAt` to their pre-update values. With the single-tx fix,
+    // the get inside saveStructureViewState's tx sees whichever commit
+    // landed first, so neither write reverts the other's fields.
+    const pSv = saveStructureViewState('ws-1', { k: true });
+    const pWs = saveWorkspace({
+      ...initial!,
+      name: 'renamed',
+      lastOpenedAt: '2026-05-14T12:00:00Z'
+    });
+    await Promise.all([pSv, pWs]);
+
+    const final = await db.loadWorkspace('ws-1');
+    // The metadata update must survive: this is the field saveStructureViewState
+    // used to clobber when it wrote back its stale snapshot.
+    expect(final?.name).toBe('renamed');
+    expect(final?.lastOpenedAt).toBe('2026-05-14T12:00:00Z');
+  });
 });

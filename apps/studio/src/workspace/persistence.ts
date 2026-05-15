@@ -225,14 +225,31 @@ export async function loadStructureViewState(workspaceId: string): Promise<Recor
  * Write the Structure View expansion map for a workspace. Silently drops
  * the write if the workspace has been deleted out from under us — keeps
  * callers from having to special-case race conditions during teardown.
+ *
+ * Performs the get + put inside a single `readwrite` transaction on
+ * `'workspaces'` so a concurrent `saveWorkspace` call (e.g., the
+ * workspace-manager updating `lastOpenedAt`, layout, or tabs) can't
+ * commit between our read and our write — without this, our put would
+ * write back a stale snapshot and silently revert those other fields.
+ *
+ * Deliberately doesn't touch `'recents'`: a structure-view toggle isn't
+ * a workspace-open event, so `lastOpenedAt` and the recents index stay
+ * put.
  */
 export async function saveStructureViewState(
   workspaceId: string,
   expansionMap: Record<string, boolean>
 ): Promise<void> {
-  const ws = await loadWorkspace(workspaceId);
-  if (!ws) return;
-  await saveWorkspace({ ...ws, structureView: { expansionMap } });
+  const db = await getDb();
+  const tx = db.transaction('workspaces', 'readwrite');
+  const store = tx.objectStore('workspaces');
+  const ws = await store.get(workspaceId);
+  if (!ws) {
+    await tx.done.catch(() => undefined);
+    return;
+  }
+  await store.put({ ...ws, structureView: { expansionMap } });
+  await tx.done;
 }
 
 // ---------- settings ----------
