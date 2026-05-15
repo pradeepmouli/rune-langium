@@ -6,9 +6,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { InheritanceCell } from '../../../src/components/editors/structure/InheritanceCell.js';
 import { TYPE_REF_PAYLOAD_MIME, type TypeRefPayload } from '../../../src/types/structure-view.js';
 
-const setInheritance = vi.fn();
+const { setInheritance } = vi.hoisted(() => ({ setInheritance: vi.fn() }));
 vi.mock('../../../src/store/editor-store.js', () => ({
-  useEditorStore: (selector: (s: { setInheritance: typeof setInheritance }) => unknown) => selector({ setInheritance })
+  useEditorStore: (selector: any) => selector({ setInheritance })
 }));
 
 describe('InheritanceCell', () => {

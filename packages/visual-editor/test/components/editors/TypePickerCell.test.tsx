@@ -6,10 +6,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { TypePickerCell } from '../../../src/components/editors/structure/TypePickerCell.js';
 import { TYPE_REF_PAYLOAD_MIME, type TypeRefPayload } from '../../../src/types/structure-view.js';
 
-const updateAttributeType = vi.fn();
+const { updateAttributeType } = vi.hoisted(() => ({ updateAttributeType: vi.fn() }));
 vi.mock('../../../src/store/editor-store.js', () => ({
-  useEditorStore: (selector: (s: { updateAttributeType: typeof updateAttributeType }) => unknown) =>
-    selector({ updateAttributeType })
+  useEditorStore: (selector: any) => selector({ updateAttributeType })
 }));
 
 describe('TypePickerCell', () => {

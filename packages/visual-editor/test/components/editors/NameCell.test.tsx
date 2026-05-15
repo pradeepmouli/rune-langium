@@ -5,11 +5,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NameCell } from '../../../src/components/editors/structure/NameCell.js';
 
-const renameAttribute = vi.fn();
+const { renameAttribute } = vi.hoisted(() => ({ renameAttribute: vi.fn() }));
 
 vi.mock('../../../src/store/editor-store.js', () => ({
-  useEditorStore: (selector: (s: { renameAttribute: typeof renameAttribute }) => unknown) =>
-    selector({ renameAttribute })
+  useEditorStore: (selector: any) => selector({ renameAttribute })
 }));
 
 describe('NameCell', () => {

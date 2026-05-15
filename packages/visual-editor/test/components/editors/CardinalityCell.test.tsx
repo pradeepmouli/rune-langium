@@ -5,10 +5,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CardinalityCell } from '../../../src/components/editors/structure/CardinalityCell.js';
 
-const updateCardinality = vi.fn();
+const { updateCardinality } = vi.hoisted(() => ({ updateCardinality: vi.fn() }));
 vi.mock('../../../src/store/editor-store.js', () => ({
-  useEditorStore: (selector: (s: { updateCardinality: typeof updateCardinality }) => unknown) =>
-    selector({ updateCardinality })
+  useEditorStore: (selector: any) => selector({ updateCardinality })
 }));
 
 describe('CardinalityCell', () => {
