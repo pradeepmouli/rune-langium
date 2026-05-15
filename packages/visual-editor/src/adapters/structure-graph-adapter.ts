@@ -15,6 +15,7 @@ import {
   type StructureGraphInput,
   type StructureNode,
   type StructureDataNode,
+  type StructureBaseContainer,
   type StructureRow
 } from '../types/structure-view.js';
 
@@ -117,9 +118,28 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
   }
 
   if (root.$type === 'Data') {
+    if (root.extends) {
+      const baseNode = findNodeByName(root.extends, doc);
+      if (baseNode) {
+        const baseId = `${root.id}::__base`;
+        const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, true));
+        const baseContainer: StructureBaseContainer = {
+          id: baseId,
+          kind: 'base',
+          baseTypeName: baseNode.name,
+          baseTypeNamespaceUri: baseNode.namespace,
+          baseRows,
+          childNodeId: root.id
+        };
+        nodes.set(baseId, baseContainer);
+        nodes.set(root.id, buildDataNode(root, doc, new Map()));
+        return { rootNodeId: baseId, nodes };
+      }
+    }
+
     nodes.set(root.id, buildDataNode(root, doc, new Map()));
   }
-  // Choice as root and inheritance handled in later tasks.
+  // Choice as root handled in later tasks.
 
   return { rootNodeId: root.id, nodes };
 }
