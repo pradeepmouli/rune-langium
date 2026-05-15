@@ -3,7 +3,12 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildStructureGraph } from '../../src/adapters/structure-graph-adapter.js';
-import type { StructureBaseContainer, StructureDataNode } from '../../src/types/structure-view.js';
+import {
+  type StructureBaseContainer,
+  type StructureDataNode,
+  type StructureExpansionKey,
+  expansionKey
+} from '../../src/types/structure-view.js';
 
 // Minimal in-memory document representation; real adapter accepts the
 // visual-editor's GraphSnapshot or LangiumDocument (see implementation).
@@ -97,5 +102,60 @@ describe('buildStructureGraph — inheritance', () => {
     const derived = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
     expect(derived?.kind).toBe('data');
     expect(derived.rows.map((r) => r.attrName)).toEqual(['tradeDate']); // ONLY new additions
+  });
+});
+
+const fixtureRef = {
+  namespaces: [{ uri: 'cdm.trade' }],
+  nodes: [
+    {
+      id: 'cdm.trade::Economics',
+      $type: 'Data' as const,
+      name: 'Economics',
+      namespace: 'cdm.trade',
+      attributes: [{ name: 'notional', typeCall: { type: { $refText: 'Money' } }, card: { min: 1, max: 1 } }]
+    },
+    {
+      id: 'cdm.trade::Trade',
+      $type: 'Data' as const,
+      name: 'Trade',
+      namespace: 'cdm.trade',
+      attributes: [
+        {
+          name: 'economics',
+          typeCall: { type: { $refText: 'Economics' } },
+          card: { min: 0, max: '*' as const }
+        }
+      ]
+    }
+  ]
+};
+
+describe('buildStructureGraph — type-reference expansion', () => {
+  it('does NOT expand when the attribute is collapsed', () => {
+    const result = buildStructureGraph(fixtureRef, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map()
+    });
+    expect(result.nodes.size).toBe(1);
+    expect(result.nodes.has('cdm.trade::Economics')).toBe(false);
+  });
+
+  it('expands target type when the attribute is expanded', () => {
+    const key: StructureExpansionKey = {
+      namespaceUri: 'cdm.trade',
+      typeId: 'Trade',
+      attrName: 'economics'
+    };
+    const expansionMap = new Map([[expansionKey(key), true]]);
+
+    const result = buildStructureGraph(fixtureRef, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap
+    });
+
+    expect(result.nodes.has('cdm.trade::Economics')).toBe(true);
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    expect(trade.expansions.get('economics')).toBe('cdm.trade::Economics');
   });
 });

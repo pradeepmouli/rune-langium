@@ -15,8 +15,10 @@ import {
   type StructureGraphInput,
   type StructureNode,
   type StructureDataNode,
+  type StructureChoiceNode,
   type StructureBaseContainer,
-  type StructureRow
+  type StructureRow,
+  expansionKey
 } from '../types/structure-view.js';
 
 export interface AdapterDocument {
@@ -92,13 +94,46 @@ function buildRow(attr: AdapterAttribute, doc: AdapterDocument, isInherited = fa
   };
 }
 
-function buildDataNode(
+function shouldExpand(
+  row: StructureRow,
+  ownerNamespace: string,
+  ownerTypeName: string,
+  expansionMap: ReadonlyMap<string, boolean>
+): boolean {
+  if (row.typeKind !== 'Data' && row.typeKind !== 'Choice') return false;
+  if (!row.targetNodeId) return false;
+  const k = expansionKey({
+    namespaceUri: ownerNamespace,
+    typeId: ownerTypeName,
+    attrName: row.attrName
+  });
+  return expansionMap.get(k) === true;
+}
+
+function buildChoiceNode(node: AdapterNode, doc: AdapterDocument): StructureChoiceNode {
+  const options = (node.attributes ?? []).map((a) => buildRow(a, doc, false));
+  return {
+    id: node.id,
+    kind: 'choice',
+    name: node.name,
+    namespaceUri: node.namespace,
+    options
+  };
+}
+
+function walkAndExpand(
   node: AdapterNode,
   doc: AdapterDocument,
-  expansions: ReadonlyMap<string, string>
+  opts: BuildOptions,
+  out: Map<string, StructureNode>
 ): StructureDataNode {
+  const expansions = new Map<string, string>();
   const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, false));
-  return {
+
+  // Reserve a placeholder so cyclic references (A → B → A) terminate when we
+  // recurse — children that revisit this node will hit the `out.has(...)`
+  // guard below and short-circuit on the placeholder id.
+  const placeholder: StructureDataNode = {
     id: node.id,
     kind: 'data',
     name: node.name,
@@ -108,6 +143,26 @@ function buildDataNode(
     rows,
     expansions
   };
+  out.set(node.id, placeholder);
+
+  for (const row of rows) {
+    if (shouldExpand(row, node.namespace, node.name, opts.expansionMap) && row.targetNodeId) {
+      const target = doc.nodes.find((n) => n.id === row.targetNodeId);
+      if (!target) continue;
+      expansions.set(row.attrName, target.id);
+      if (out.has(target.id)) {
+        // Already materialized (or in-flight from a cyclic walk). Re-use.
+        continue;
+      }
+      if (target.$type === 'Data') {
+        walkAndExpand(target, doc, opts, out);
+      } else if (target.$type === 'Choice') {
+        out.set(target.id, buildChoiceNode(target, doc));
+      }
+    }
+  }
+
+  return placeholder;
 }
 
 export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): StructureGraphInput {
@@ -132,12 +187,12 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
           childNodeId: root.id
         };
         nodes.set(baseId, baseContainer);
-        nodes.set(root.id, buildDataNode(root, doc, new Map()));
+        walkAndExpand(root, doc, opts, nodes);
         return { rootNodeId: baseId, nodes };
       }
     }
 
-    nodes.set(root.id, buildDataNode(root, doc, new Map()));
+    walkAndExpand(root, doc, opts, nodes);
   }
   // Choice as root handled in later tasks.
 
