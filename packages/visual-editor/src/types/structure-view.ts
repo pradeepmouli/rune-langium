@@ -17,6 +17,17 @@ export interface TypeRefPayload {
   readonly kind: 'Data' | 'Choice' | 'Enum' | 'BasicType';
 }
 
+/**
+ * Kind-scoped MIME variant so drop targets can filter by `accept` during
+ * dragover, when the browser security model makes `getData` return empty.
+ * Drag sources should call `setData(TYPE_REF_PAYLOAD_MIME, json)` AND
+ * `setData(typeRefMimeForKind(kind), '')` so the target's dragover handler
+ * can read `types` and match against an accept list.
+ */
+export function typeRefMimeForKind(kind: TypeRefPayload['kind']): string {
+  return `${TYPE_REF_PAYLOAD_MIME}+${kind}`;
+}
+
 /** Type guard for parsed drag payloads. */
 export function isTypeRefPayload(value: unknown): value is TypeRefPayload {
   if (!value || typeof value !== 'object') return false;
