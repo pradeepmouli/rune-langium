@@ -20,7 +20,9 @@ jobs:
 
       - name: Use Node.js 22.x
         # Pinned to Node 22 to match Cloudflare Workers/Pages `nodejs_compat`
-        # production target (all wrangler.toml compatibility_dates select Node 22).
+        # production target — every wrangler.toml in the repo enables
+        # `nodejs_compat`, which selects Node 22 LTS API surface regardless of
+        # the specific compatibility_date used.
         uses: actions/setup-node@v6
         with:
           node-version: '22.x'
