@@ -171,3 +171,126 @@ describe('layoutStructureGraph — expansion as child', () => {
     expect((economics.position as { x: number; y: number }).x).toBeGreaterThanOrEqual(260);
   });
 });
+
+describe('layoutStructureGraph — sibling vertical alignment', () => {
+  it('stacks multiple expansions on the same parent without overlap', () => {
+    // Two expansions on a single Data node. After the yCursor fix
+    // (amendment to Task 3.1), the second child's y must be at least
+    // `child1.y + child1.height`, i.e. they do not overlap vertically.
+    // Distinct typeName / attrName values keep row ordering deterministic.
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'party',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              },
+              {
+                attrName: 'counterparty',
+                typeName: 'Counterparty',
+                typeKind: 'Data',
+                targetNodeId: 'Counterparty',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([
+              ['party', 'Party'],
+              ['counterparty', 'Counterparty']
+            ])
+          }
+        ],
+        [
+          'Party',
+          {
+            id: 'Party',
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'partyId',
+                typeName: 'string',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              },
+              {
+                attrName: 'partyName',
+                typeName: 'string',
+                typeKind: 'BasicType',
+                cardinality: '0..1',
+                isOptional: true,
+                isInherited: false
+              }
+            ],
+            expansions: new Map()
+          }
+        ],
+        [
+          'Counterparty',
+          {
+            id: 'Counterparty',
+            kind: 'data',
+            name: 'Counterparty',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'counterpartyId',
+                typeName: 'string',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    expect(nodes).toHaveLength(3);
+
+    const party = nodes.find((n) => n.id === 'Party')!;
+    const counterparty = nodes.find((n) => n.id === 'Counterparty')!;
+    expect(party.parentId).toBe('Trade');
+    expect(counterparty.parentId).toBe('Trade');
+
+    const partyY = (party.position as { x: number; y: number }).y;
+    const counterpartyY = (counterparty.position as { x: number; y: number }).y;
+    const partyHeight = party.height ?? 0;
+
+    // Determine sibling order by y so the assertion is robust to insertion
+    // order, then assert non-overlap.
+    const [first, second, firstHeight] =
+      partyY <= counterpartyY
+        ? [partyY, counterpartyY, partyHeight]
+        : [counterpartyY, partyY, counterparty.height ?? 0];
+    expect(second).toBeGreaterThanOrEqual(first + firstHeight);
+  });
+});
