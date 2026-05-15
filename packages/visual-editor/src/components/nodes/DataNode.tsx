@@ -59,8 +59,10 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // Finding 1: consume StructureRow shape from data.rows (not data.attributes).
     // StructureRow.typeName, .attrName, .cardinality are already pre-formatted strings
     // from the adapter — no getTypeRefText / formatCardinality needed here.
-    // TODO(Phase 10): structure variant geometry constants (ROW_HEIGHT/COL_WIDTH from layout)
-    // must match these classes' rendered sizes in styles.css to avoid layout drift.
+    // TODO(Phase 10) visual tightening: gradient/shadow/font polish.
+    // Core geometry handled by .rune-node-data--structure, .rune-node-body--two-col,
+    // .rune-node-rows, .rune-node-row, .rune-row-handle, .rune-node-children-slot
+    // in styles.css — layout constants (ROW_HEIGHT=28, COL_WIDTH=260, etc.) are matched there.
     const rows = data.rows as ReadonlyArray<StructureRow>;
     const { cellComponents } = data;
     const NameCell = cellComponents?.name;

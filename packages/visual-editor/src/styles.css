@@ -797,3 +797,93 @@ button[data-navigable]:focus-visible {
 .rune-node-dimmed {
   opacity: 0.3;
 }
+
+/* ── Structure View — Phase 6 geometry ───────────────────────────
+ *
+ * These rules make layout math in structure-layout.ts match the
+ * rendered DOM.  Constants must stay in sync with the values in
+ * packages/visual-editor/src/layout/structure-layout.ts:
+ *   ROW_HEIGHT = 28   HEADER_HEIGHT = 28   COL_WIDTH = 260
+ *   COL_GAP    = 32   ROW_GAP       = 8    BASE_PADDING = 16
+ *
+ * Phase 10 owns gradient / shadow / font polish — this block is
+ * geometry-only.  New CSS variables introduced here carry hard
+ * fallback values so they work without any theme layer.
+ * ──────────────────────────────────────────────────────────────── */
+
+/* DataNode — structure variant ---------------------------------- */
+
+.rune-node-data--structure {
+  /* Inherits .rune-node-data card baseline; structure layout
+   * stacks the header, then a two-column body below it. */
+  display: flex;
+  flex-direction: column;
+}
+
+.rune-node-body--two-col {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  /* Outer width is set by React Flow's `width` node prop; no fixed
+   * width here so the node shell remains the single source of truth. */
+}
+
+.rune-node-rows {
+  display: flex;
+  flex-direction: column;
+  width: 260px;   /* COL_WIDTH */
+  flex-shrink: 0;
+}
+
+.rune-node-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 28px;   /* ROW_HEIGHT */
+  gap: 8px;       /* ROW_GAP */
+  padding: 0 8px;
+  position: relative; /* anchor per-row Handle */
+}
+
+.rune-row-handle {
+  position: absolute;
+  right: -4px;    /* half outside the right edge for connection visual */
+  width: 8px;
+  height: 8px;
+}
+
+.rune-node-children-slot {
+  /* React Flow positions child nodes absolutely via parentNode; this
+   * slot only declares the column gap.  Width is implicit from the
+   * layout's child placements. */
+  margin-left: 32px; /* COL_GAP */
+  flex: 1 1 auto;
+  min-height: 28px;  /* ROW_HEIGHT — prevents collapse when child list is empty */
+}
+
+/* GroupContainerNode — base-type scope -------------------------- */
+
+.rune-graph-group--base {
+  /* Yellow dashed container per spec §3.1.
+   * --color-base-type / --color-base-type-bg are new tokens; hard
+   * fallbacks ensure the style works without a theme layer. */
+  padding: 16px;  /* BASE_PADDING */
+  border: 2px dashed var(--color-base-type, #d4a017);
+  background: var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
+  border-radius: 8px;
+}
+
+.rune-graph-group__base-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px; /* BASE_PADDING */
+}
+
+.rune-graph-group__base-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 28px;  /* ROW_HEIGHT */
+  gap: 8px;      /* ROW_GAP */
+}

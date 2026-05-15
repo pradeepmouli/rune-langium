@@ -34,8 +34,10 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
   }
 
   // scope === 'base-type'
-  // TODO(Phase 10): structure variant geometry constants (ROW_HEIGHT/COL_WIDTH from layout)
-  // must match these classes' rendered sizes in styles.css to avoid layout drift.
+  // TODO(Phase 10) visual tightening: gradient/shadow/font polish.
+  // Core geometry handled by .rune-graph-group--base, .rune-graph-group__base-rows,
+  // .rune-graph-group__base-row in styles.css — layout constants (ROW_HEIGHT=28,
+  // BASE_PADDING=16, etc.) are matched there.
   return (
     <div className="rune-graph-group rune-graph-group--base">
       <div className="rune-graph-group__header">
