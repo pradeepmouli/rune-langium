@@ -54,9 +54,12 @@ function simulateColumnHeight(
   rowOffsets: ReadonlyMap<string, number>,
   input: StructureGraphInput,
   sizes: Map<string, SizedNode>,
-  sizing: Set<string>
+  sizing: Set<string>,
+  /** Initial yCursor — HEADER_HEIGHT for data nodes, BASE_PADDING+HEADER_HEIGHT
+   *  for base containers (whose placement pass starts there to match CSS padding). */
+  initialYCursor: number = HEADER_HEIGHT
 ): number {
-  let yCursor = HEADER_HEIGHT;
+  let yCursor = initialYCursor;
   for (const [attrName, childId] of expansions) {
     const child = input.nodes.get(childId);
     if (!child) continue;
@@ -139,9 +142,14 @@ function sizeBase(
   // Base containers can carry their own `expansions` (spec §3.2: containment
   // is uniform across inheritance and type-reference). Each expansion is
   // placed in the right-hand column aligned with the corresponding base row.
+  //
+  // Row centers must include BASE_PADDING (top) so expansion children placed
+  // at rowOffsets.get(attrName) align with the visually-rendered rows — the
+  // CSS applies `padding: 16px` (BASE_PADDING) inside .rune-graph-group--base,
+  // pushing every rendered row down by that amount relative to the node origin.
   const rowOffsets = new Map<string, number>();
   for (let i = 0; i < node.baseRows.length; i++) {
-    rowOffsets.set(node.baseRows[i].attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+    rowOffsets.set(node.baseRows[i].attrName, BASE_PADDING + HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
 
   let expansionsWidth = 0;
@@ -155,17 +163,24 @@ function sizeBase(
 
   // Mirror the placement pass: late-row expansions can extend below the simple
   // sum of child heights because each child is placed at max(rowTop, yCursor).
-  const expansionsHeight =
+  // The simulation starts at BASE_PADDING + HEADER_HEIGHT to match the updated
+  // placeBaseChildren yCursor (which was bumped to account for CSS top padding).
+  // simulateColumnHeight returns the absolute y-bottom from the node origin, so
+  // rightColumnHeight is that value directly — no further adjustment needed.
+  const rightColumnHeight =
     node.expansions.size > 0
-      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT
-      : 0;
+      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, BASE_PADDING + HEADER_HEIGHT)
+      : BASE_PADDING + HEADER_HEIGHT;
 
   // The base container wraps:
-  //  - the base rows (top section)
-  //  - the derived child below the base rows
+  //  - the base rows (top section, inside top padding)
+  //  - the derived child below the base rows (+ ROW_GAP separator)
   //  - expansions positioned in a right-hand column next to the base rows
+  // leftColumnHeight is the content height from the node origin (before adding
+  // BASE_PADDING bottom). The +BASE_PADDING accounts for the gap between the
+  // last base row and the derived child, mirroring placeBaseChildren's
+  // y: HEADER_HEIGHT + baseRows.length*ROW_HEIGHT + BASE_PADDING for the child.
   const leftColumnHeight = baseRowsHeight + childSize.height + BASE_PADDING;
-  const rightColumnHeight = HEADER_HEIGHT + expansionsHeight;
   const innerHeight = Math.max(leftColumnHeight, rightColumnHeight);
   const innerWidth =
     expansionsWidth > 0
@@ -351,7 +366,12 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     // Dedup behavior: see `placeDataChildren` — we do NOT skip already-placed
     // children. yCursor advances unconditionally so deduped duplicates keep
     // their visual slot reserved.
-    let yCursor = HEADER_HEIGHT;
+    //
+    // yCursor starts at BASE_PADDING + HEADER_HEIGHT: the first base row is
+    // rendered at that y-offset (CSS padding pushes everything down), so the
+    // placement cursor must begin there. rowOffsets already include BASE_PADDING
+    // (set in sizeBase), so max(rowTop, yCursor) is consistent across both passes.
+    let yCursor = BASE_PADDING + HEADER_HEIGHT;
     for (const [attrName, childId] of n.expansions) {
       const childSize = sizes.get(childId);
       if (!childSize) continue;

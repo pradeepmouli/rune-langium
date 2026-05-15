@@ -877,6 +877,9 @@ button[data-navigable]:focus-visible {
    * box-sizing: border-box so the 16px padding + 2px border draw INSIDE
    * the layout-computed width/height instead of expanding beyond it. */
   box-sizing: border-box;
+  /* padding matches BASE_PADDING in structure-layout.ts; see sizeBase and
+   * placeBaseChildren for the y-coord coupling — row offsets and child
+   * positions all add BASE_PADDING so layout coords align with rendered rows. */
   padding: 16px;  /* BASE_PADDING */
   border: 2px dashed var(--color-base-type, #d4a017);
   background: var(--color-base-type-bg, rgba(212, 160, 23, 0.06));

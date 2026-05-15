@@ -663,6 +663,107 @@ describe('layoutStructureGraph — base container with expanded inherited row', 
   });
 });
 
+describe('layoutStructureGraph — base container child y includes BASE_PADDING (geometry alignment)', () => {
+  it('positions derived child and row offsets with BASE_PADDING offset from node origin', () => {
+    // Regression for CSS-vs-layout drift: .rune-graph-group--base has
+    // `padding: 16px` (BASE_PADDING), so every rendered row is 16px lower than
+    // the node origin. Layout y-coords must include BASE_PADDING so that
+    // expansion children placed at rowOffsets.get(attrName) visually align
+    // with their base row, and the derived child clears the base rows + gap.
+    //
+    // Constants (must stay in sync with structure-layout.ts):
+    const BASE_PADDING = 16;
+    const HEADER_HEIGHT = 28;
+    const ROW_HEIGHT = 28;
+    const ROW_GAP = 8;
+
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade::__base',
+      nodes: new Map([
+        [
+          'Trade::__base',
+          {
+            id: 'Trade::__base',
+            kind: 'base',
+            baseTypeName: 'TradeBase',
+            baseTypeNamespaceUri: 'cdm.trade',
+            baseRows: [
+              {
+                attrName: 'party',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: true
+              }
+            ],
+            childNodeId: 'Trade',
+            expansions: new Map([['party', 'Party']])
+          }
+        ],
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: 'TradeBase',
+            extendsNodeId: 'TradeBase',
+            rows: [],
+            expansions: new Map()
+          }
+        ],
+        [
+          'Party',
+          {
+            id: 'Party',
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'partyId',
+                typeName: 'string',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    const trade = nodes.find((n) => n.id === 'Trade')!;
+    const party = nodes.find((n) => n.id === 'Party')!;
+
+    // Derived child must be placed below base rows + BASE_PADDING gap.
+    // Expected: BASE_PADDING (top CSS padding) is NOT part of this formula —
+    // placeBaseChildren places the child at:
+    //   y = HEADER_HEIGHT + 1 * ROW_HEIGHT + BASE_PADDING
+    const expectedTradeY = HEADER_HEIGHT + 1 * ROW_HEIGHT + BASE_PADDING;
+    expect((trade.position as { x: number; y: number }).y).toBe(expectedTradeY);
+
+    // Right-column expansion for the base row must start at the row's
+    // vertical center minus half ROW_HEIGHT, accounting for BASE_PADDING top.
+    // Row 0 center = BASE_PADDING + HEADER_HEIGHT + 0 * ROW_HEIGHT + ROW_HEIGHT/2
+    const row0Center = BASE_PADDING + HEADER_HEIGHT + 0 * ROW_HEIGHT + ROW_HEIGHT / 2;
+    const expectedPartyY = row0Center - ROW_HEIGHT / 2; // = rowTop for row 0
+    expect((party.position as { x: number; y: number }).y).toBe(expectedPartyY);
+
+    // BASE_PADDING must equal 16 — documents the CSS coupling in the test.
+    expect(BASE_PADDING).toBe(16);
+  });
+});
+
 describe('layoutStructureGraph — late-row expansion sizing', () => {
   it('parent height accommodates a tall expansion on the last row', () => {
     // Regression for the sizing-vs-placement asymmetry (review must-fix #6/#7):
