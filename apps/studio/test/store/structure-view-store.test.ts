@@ -128,6 +128,40 @@ describe('useStructureViewStore workspace persistence', () => {
     expect(useStructureViewStore.getState().expansionMap.get('b-only::Trade::economics')).toBe(true);
   });
 
+  it('serializes persistence writes so the final saved state matches the final in-memory state', async () => {
+    const { saveWorkspace, loadStructureViewState } = await import('../../src/workspace/persistence.js');
+    await saveWorkspace({
+      id: 'ws-c',
+      name: 'ws-c',
+      kind: 'browser-only',
+      createdAt: '2026-05-14T00:00:00Z',
+      lastOpenedAt: '2026-05-14T00:00:00Z',
+      layout: { version: 1, writtenBy: 'test', dockview: null },
+      tabs: [],
+      activeTabPath: null,
+      curatedModels: [],
+      schemaVersion: 2
+    });
+
+    await useStructureViewStore.getState().setWorkspaceId('ws-c');
+
+    const K1: StructureExpansionKey = { namespaceUri: 'ns', typeId: 'T', attrName: 'a' };
+    const K2: StructureExpansionKey = { namespaceUri: 'ns', typeId: 'T', attrName: 'b' };
+    // Rapid toggle sequence: expand a, expand b, collapse a.
+    // Final in-memory state: only b is expanded.
+    useStructureViewStore.getState().toggleExpansion(K1);
+    useStructureViewStore.getState().toggleExpansion(K2);
+    useStructureViewStore.getState().toggleExpansion(K1);
+
+    // Drain the persistence chain. Each toggle enqueues a save behind the
+    // previous one, so awaiting the chain is the public signal that all
+    // pending writes have landed.
+    await new Promise((r) => setTimeout(r, 50));
+
+    const saved = await loadStructureViewState('ws-c');
+    expect(saved).toEqual({ 'ns::T::b': true });
+  });
+
   it('persists toggles back to the workspace record', async () => {
     const { saveWorkspace, loadStructureViewState } = await import('../../src/workspace/persistence.js');
     await saveWorkspace({

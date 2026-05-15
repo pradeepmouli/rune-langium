@@ -33,15 +33,26 @@ interface StructureViewState {
 }
 
 export const useStructureViewStore = create<StructureViewState>((set, get) => {
+  // Serialize persistence writes. `saveStructureViewState` does an IDB
+  // read-modify-write under the hood, so concurrent fire-and-forget calls
+  // can interleave and persist an older snapshot last — visibly: toggling
+  // a row off then on rapidly can save `{key: true}` *after* the off
+  // toggle's `{}`, so on next load the row reappears expanded. Chaining
+  // writes guarantees they apply in the order toggles fired; each call
+  // captures its own map snapshot at enqueue time.
+  let writeChain: Promise<void> = Promise.resolve();
+
   const persist = (map: Map<string, boolean>): void => {
     const id = get().workspaceId;
     if (!id) return;
     const obj: Record<string, boolean> = {};
     for (const [k, v] of map) obj[k] = v;
-    void saveStructureViewState(id, obj).catch(() => {
-      // IDB unavailable (private mode, tests with no fake-indexeddb,
-      // or workspace race-deleted) — silently skip; next toggle retries.
-    });
+    writeChain = writeChain.then(() =>
+      saveStructureViewState(id, obj).catch(() => {
+        // IDB unavailable (private mode, tests with no fake-indexeddb,
+        // or workspace race-deleted) — silently skip; next toggle retries.
+      })
+    );
   };
 
   return {
