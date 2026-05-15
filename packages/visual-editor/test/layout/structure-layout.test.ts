@@ -441,10 +441,205 @@ describe('layoutStructureGraph — defensive cycle protection', () => {
       ])
     };
 
-    // Test passes by not throwing/hanging. Verify reasonable output:
-    // both nodes are present, neither is its own ancestor in the layout.
+    // Test passes by not throwing/hanging. After the cycle-placeholder
+    // symmetry fix (sizing-pass placeholder is cached in `sizes`), the
+    // placement pass produces both nodes: A as the root, and B as A's
+    // expansion child via the cached placeholder. The recursive back-edge
+    // from B → A is dropped by the `placed: Set<string>` dedup (A is
+    // already placed), so the cycle does not unroll further.
     const { nodes } = layoutStructureGraph(input);
-    expect(nodes.length).toBeGreaterThanOrEqual(1);
+    expect(nodes).toHaveLength(2);
     expect(nodes.some((n) => n.id === 'A')).toBe(true);
+    expect(nodes.some((n) => n.id === 'B')).toBe(true);
+    const a = nodes.find((n) => n.id === 'A')!;
+    const b = nodes.find((n) => n.id === 'B')!;
+    expect(a.parentId).toBeUndefined();
+    expect(b.parentId).toBe('A');
+  });
+});
+
+describe('layoutStructureGraph — Choice node', () => {
+  it('places a Choice as the root with no parent', () => {
+    const input: StructureGraphInput = {
+      rootNodeId: 'PriceChoice',
+      nodes: new Map([
+        [
+          'PriceChoice',
+          {
+            id: 'PriceChoice',
+            kind: 'choice',
+            name: 'PriceChoice',
+            namespaceUri: 'cdm.trade',
+            options: [
+              {
+                attrName: 'fixedPrice',
+                typeName: 'Money',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              },
+              {
+                attrName: 'indexedPrice',
+                typeName: 'IndexedRate',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ]
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].type).toBe('choice');
+    expect(nodes[0].parentId).toBeUndefined();
+  });
+
+  it('places a Choice as an expansion child of a Data root', () => {
+    // Pins the Phase 1 invariant that Choice is a valid expansion target,
+    // not just a root. The placement pass must emit it under `parentId`
+    // when reached via a Data parent's `expansions` map.
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'price',
+                typeName: 'PriceChoice',
+                typeKind: 'Choice',
+                targetNodeId: 'PriceChoice',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['price', 'PriceChoice']])
+          }
+        ],
+        [
+          'PriceChoice',
+          {
+            id: 'PriceChoice',
+            kind: 'choice',
+            name: 'PriceChoice',
+            namespaceUri: 'cdm.trade',
+            options: [
+              {
+                attrName: 'fixedPrice',
+                typeName: 'Money',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ]
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    expect(nodes).toHaveLength(2);
+    const choice = nodes.find((n) => n.id === 'PriceChoice')!;
+    expect(choice.type).toBe('choice');
+    expect(choice.parentId).toBe('Trade');
+    expect(choice.extent).toBe('parent');
+  });
+});
+
+describe('layoutStructureGraph — base container with expanded inherited row', () => {
+  it('places a base container expansion target as a right-column child', () => {
+    // Phase 2 invariant: base containers carry their own `expansions` for
+    // inherited complex rows (spec §3.2 — containment is uniform across
+    // inheritance and type-reference). A row owned by the base level must
+    // be just as eligible to carry an expansion edge as a derived-level row.
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade::__base',
+      nodes: new Map([
+        [
+          'Trade::__base',
+          {
+            id: 'Trade::__base',
+            kind: 'base',
+            baseTypeName: 'TradeBase',
+            baseTypeNamespaceUri: 'cdm.trade',
+            baseRows: [
+              {
+                attrName: 'party',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: true
+              }
+            ],
+            childNodeId: 'Trade',
+            expansions: new Map([['party', 'Party']])
+          }
+        ],
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: 'TradeBase',
+            extendsNodeId: 'TradeBase',
+            rows: [],
+            expansions: new Map()
+          }
+        ],
+        [
+          'Party',
+          {
+            id: 'Party',
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'partyId',
+                typeName: 'string',
+                typeKind: 'BasicType',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    const base = nodes.find((n) => n.id === 'Trade::__base')!;
+    const party = nodes.find((n) => n.id === 'Party')!;
+    expect(base).toBeDefined();
+    expect(party).toBeDefined();
+    expect(party.parentId).toBe('Trade::__base');
+    expect(party.extent).toBe('parent');
+    // Party is placed in the right-hand column of the base container, so its
+    // x must be at or past the first column boundary (COL_WIDTH = 260).
+    expect((party.position as { x: number; y: number }).x).toBeGreaterThanOrEqual(260);
   });
 });

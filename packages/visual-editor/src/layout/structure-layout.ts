@@ -153,11 +153,19 @@ function sizeOf(
   const cached = sizes.get(node.id);
   if (cached) return cached;
   // Cycle protection: if we re-enter the same node while still sizing it,
-  // return a placeholder. Phase 2's adapter can emit cyclic expansion maps
-  // (self-references / mutual references) when the user expands across
-  // recursive structures.
+  // return a stable placeholder AND cache it so the placement pass can emit
+  // the node consistently with the sized body. Phase 2's adapter can emit
+  // cyclic expansion maps (self-references / mutual references) when the
+  // user expands across recursive structures.
+  //
+  // Caching is load-bearing: the parent's `childrenHeight`/`expansionsHeight`
+  // math already includes this placeholder's height, so the placement pass
+  // must find the same SizedNode under `sizes.get(node.id)` — otherwise we
+  // reserve space for a child that never gets placed.
   if (sizing.has(node.id)) {
-    return { width: COL_WIDTH, height: HEADER_HEIGHT, rowOffsets: new Map() };
+    const placeholder: SizedNode = { width: COL_WIDTH, height: HEADER_HEIGHT, rowOffsets: new Map() };
+    sizes.set(node.id, placeholder);
+    return placeholder;
   }
   sizing.add(node.id);
   try {
@@ -214,6 +222,12 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     if (!sz) return;
 
     placed.add(id);
+    // TODO(Phase 6): the `variant: 'structure'` discriminator is consumed by
+    // downstream renderers. The base-container case emits type
+    // `'groupContainer'` — the renderer for that variant lands in Phase 6
+    // (`GroupContainerNode — base-type scope`). Until then, any consumer
+    // keyed on `variant === 'structure'` must handle a `groupContainer`
+    // payload too.
     nodes.push({
       id,
       type: n.kind === 'base' ? 'groupContainer' : n.kind,
@@ -225,10 +239,26 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       height: sz.height
     } as Node);
 
-    if (n.kind === 'data') {
-      placeDataChildren(n, id, sz);
-    } else if (n.kind === 'base') {
-      placeBaseChildren(n, id, sz);
+    // Invariant: StructureChoiceNode is terminal in Phase 1's type (it has
+    // `options` rows but no `expansions` field), so the recursion only fans
+    // out for 'data' and 'base'. A switch on `n.kind` keeps this exhaustive —
+    // if a future phase adds children to Choice, the missing case here will
+    // fail the exhaustiveness check below rather than silently dropping them.
+    switch (n.kind) {
+      case 'data':
+        placeDataChildren(n, id, sz);
+        break;
+      case 'base':
+        placeBaseChildren(n, id, sz);
+        break;
+      case 'choice':
+        // StructureChoiceNode is terminal — no expansions per type; nothing
+        // to recurse. Explicit no-op locks the invariant at the call site.
+        break;
+      default: {
+        const _exhaustive: never = n;
+        void _exhaustive;
+      }
     }
   }
 
