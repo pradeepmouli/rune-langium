@@ -10,10 +10,6 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [22.x, 24.x]
-
     steps:
       - uses: actions/checkout@v6
 
@@ -22,10 +18,14 @@ jobs:
         with:
           version: 10.32.0
 
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Use Node.js 22.x
+        # Pinned to Node 22 to match Cloudflare Workers/Pages `nodejs_compat`
+        # production target — every wrangler.toml in the repo enables
+        # `nodejs_compat`, which selects Node 22 LTS API surface regardless of
+        # the specific compatibility_date used.
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '22.x'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -75,11 +75,9 @@ jobs:
 
       - name: Test Coverage
         run: pnpm run test:coverage
-        if: matrix.node-version == '22.x'
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6
-        if: matrix.node-version == '22.x'
         with:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
@@ -90,7 +88,6 @@ jobs:
 
       - name: Check Studio Bundle Size (019 Phase 2)
         run: pnpm --filter @rune-langium/studio run bundle-size
-        if: matrix.node-version == '22.x'
         # Soft-disabled 2026-05-14: ExcelJS + JSZip (PRs #167-#169) pushed
         # the bundle over the configured limit; the check still runs and
         # reports the size in CI logs, but the job no longer fails on it.
