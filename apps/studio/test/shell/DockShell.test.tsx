@@ -310,15 +310,27 @@ describe('DockShell — dockview integration (T065)', () => {
   });
 
   it('updates override panel content when parent state changes', async () => {
+    // FileTree is defined at this scope (not inside Harness) to avoid creating
+    // a new component identity on every Harness render (react-doctor/no-nested-component-definition).
+    // It closes over a ref so Harness can push label updates without remounting.
+    const labelRef = { current: 'initial file tree' };
+    function FileTreeUpdates() {
+      return <div>{labelRef.current}</div>;
+    }
+
     function Harness() {
       const [label, setLabel] = useState('initial file tree');
-      const FileTree = () => <div>{label}</div>;
+      labelRef.current = label;
       return (
         <>
           <button type="button" onClick={() => setLabel('updated file tree')}>
             update panel
           </button>
-          <DockShell studioVersion="0.1.0" workspaceId="ws-1" panelComponents={{ 'workspace.fileTree': FileTree }} />
+          <DockShell
+            studioVersion="0.1.0"
+            workspaceId="ws-1"
+            panelComponents={{ 'workspace.fileTree': FileTreeUpdates }}
+          />
         </>
       );
     }
@@ -332,21 +344,30 @@ describe('DockShell — dockview integration (T065)', () => {
   it('does not remount override panel content when parent state changes', async () => {
     const mountSpy = vi.fn();
 
+    // Defined outside Harness to avoid new component identity per render
+    // (react-doctor/no-nested-component-definition).
+    const remountLabelRef = { current: 'initial file tree' };
+    function FileTreeNoRemount() {
+      useState(() => {
+        mountSpy();
+        return 0;
+      });
+      return <div>{remountLabelRef.current}</div>;
+    }
+
     function Harness() {
       const [label, setLabel] = useState('initial file tree');
-      const FileTree = () => {
-        useState(() => {
-          mountSpy();
-          return 0;
-        });
-        return <div>{label}</div>;
-      };
+      remountLabelRef.current = label;
       return (
         <>
           <button type="button" onClick={() => setLabel('updated file tree')}>
             update panel
           </button>
-          <DockShell studioVersion="0.1.0" workspaceId="ws-1" panelComponents={{ 'workspace.fileTree': FileTree }} />
+          <DockShell
+            studioVersion="0.1.0"
+            workspaceId="ws-1"
+            panelComponents={{ 'workspace.fileTree': FileTreeNoRemount }}
+          />
         </>
       );
     }

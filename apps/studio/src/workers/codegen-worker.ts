@@ -389,8 +389,15 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     // Security: execution runs in a dedicated web worker (no DOM/network/FS).
     const jsCode = RUNTIME_HELPER_JS_SOURCE + '\n\n' + stripTypeAnnotations(code);
 
-    // Shadow globals that could exfiltrate data from the worker sandbox
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    // Shadow globals that could exfiltrate data from the worker sandbox.
+    // new Function() is intentional here: this worker has no DOM/network/FS
+    // access (no fetch, WebSocket, XMLHttpRequest, importScripts), and all
+    // four are explicitly shadowed as undefined parameters below.
+    // The code executed is user-authored Rosetta function bodies, stripped of
+    // TypeScript annotations by stripTypeAnnotations() before execution.
+    // Trust boundary: isolated web worker — no broader JS context is exposed.
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+    // react-doctor-disable-next-line react-doctor/no-eval
     const wrapper = new Function(
       'input',
       'fetch',
