@@ -20,6 +20,7 @@ import {
   type StructureRow,
   expansionKey
 } from '../types/structure-view.js';
+import { BUILTIN_TYPES } from '../types.js';
 
 export interface AdapterDocument {
   readonly namespaces: ReadonlyArray<{ uri: string }>;
@@ -60,22 +61,8 @@ export interface BuildOptions {
   readonly expansionMap: ReadonlyMap<string, boolean>;
 }
 
-/**
- * Types rendered as inline chips (no drill-down node) in the structure view.
- *
- * This set intentionally conflates two grammar productions from
- * `rune-dsl.langium`:
- *   - `basicType`  → `boolean`, `number`, `string`, `pattern`
- *   - `recordType` → `date`, `dateTime`, `time`, `zonedDateTime`
- *
- * They are distinct AST kinds but both render the same way in this view, so a
- * single `'BasicType'` classification keeps the UI predicate simple. If a
- * future view needs to distinguish them, split this set and extend
- * `StructureRow.typeKind`.
- */
-const BASIC_TYPES: ReadonlySet<string> = Object.freeze(
-  new Set(['boolean', 'number', 'string', 'pattern', 'date', 'time', 'dateTime', 'zonedDateTime'])
-);
+// classifyType treats anything in BUILTIN_TYPES as a chip-only "primitive-like" leaf; UI does not drill into them.
+const BUILTIN_SET = new Set<string>(BUILTIN_TYPES);
 
 function typeRefText(attr: AdapterAttribute): string {
   if (typeof attr.typeCall === 'string') return attr.typeCall;
@@ -96,7 +83,7 @@ function formatCardinality(card: AdapterCardinality): string {
 }
 
 function classifyType(typeName: string, doc: AdapterDocument, callerNamespace?: string): StructureRow['typeKind'] {
-  if (BASIC_TYPES.has(typeName)) return 'BasicType';
+  if (BUILTIN_SET.has(typeName)) return 'BasicType';
   const match = findNodeByName(typeName, doc, callerNamespace);
   if (!match) return 'Unresolved';
   if (match.$type === 'Data') return 'Data';
@@ -105,7 +92,27 @@ function classifyType(typeName: string, doc: AdapterDocument, callerNamespace?: 
 }
 
 // callerNamespace is always provided by current callers (classifyType / buildRow / inheritance / root lookup); the undefined-namespace branch is defensive fallback.
+//
+// Rune DSL grammar (rune-dsl.langium) declares `TypeCall.type` and `extends`
+// superType references as `[T:QualifiedName]`, so $refText can be either a
+// bare name ("Party") or a fully-qualified name ("cdm.product.Party"). We
+// handle both forms here so the qualified-name source-drop path (Phase 9)
+// resolves correctly.
 function findNodeByName(typeName: string, doc: AdapterDocument, callerNamespace?: string): AdapterNode | undefined {
+  // Qualified-ref form: "<ns.segments>.<TypeName>". Split on the last dot:
+  // everything before is the namespace, everything after is the simple name.
+  const lastDot = typeName.lastIndexOf('.');
+  if (lastDot > 0) {
+    const qualifiedNs = typeName.slice(0, lastDot);
+    const qualifiedName = typeName.slice(lastDot + 1);
+    const qualifiedMatch = doc.nodes.find((n) => n.name === qualifiedName && n.namespace === qualifiedNs);
+    if (qualifiedMatch) return qualifiedMatch;
+    // Fall through to the unqualified path below — defensive cover for a
+    // $refText that looks qualified but is actually a bare name containing a
+    // dot. In practice this branch is dead but it's cheap defense.
+  }
+
+  // Unqualified path: name match, optionally prefer same-namespace caller.
   let firstMatch: AdapterNode | undefined;
   for (const n of doc.nodes) {
     if (n.name !== typeName) continue;

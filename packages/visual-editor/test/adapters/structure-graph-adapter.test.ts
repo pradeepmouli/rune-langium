@@ -336,9 +336,12 @@ describe('buildStructureGraph — Choice / Enum / Unresolved', () => {
 });
 
 describe('buildStructureGraph — BasicType classification', () => {
-  // `pattern` is a grammar `basicType` (see rune-dsl.langium). Easy to miss
-  // when reading the BASIC_TYPES set in isolation, so pinned here.
-  it('classifies a basicType pattern as BasicType', () => {
+  // `pattern` is a grammar `basicType` but it is NOT in the canonical
+  // `BUILTIN_TYPES` list (packages/visual-editor/src/types.ts). The adapter
+  // uses BUILTIN_TYPES as the single source of truth for chip-only types, so
+  // `pattern` falls through to the node-lookup path and resolves as
+  // Unresolved when no matching node exists.
+  it('classifies a non-builtin "pattern" reference as Unresolved (not in BUILTIN_TYPES)', () => {
     const fixture = {
       namespaces: [{ uri: 'cdm.misc' }],
       nodes: [
@@ -359,14 +362,41 @@ describe('buildStructureGraph — BasicType classification', () => {
     });
     const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
     expect(row.typeName).toBe('pattern');
+    expect(row.typeKind).toBe('Unresolved');
+  });
+
+  // `int` IS in `BUILTIN_TYPES` — pinning this because an earlier review-fix
+  // pass incorrectly dropped `int` from the local set. Aligning with the
+  // canonical UI list ensures the adapter stays consistent with the type
+  // selectors and other consumers.
+  it('classifies int as BasicType (member of canonical BUILTIN_TYPES)', () => {
+    const fixture = {
+      namespaces: [{ uri: 'cdm.misc' }],
+      nodes: [
+        {
+          id: 'cdm.misc::Thing',
+          $type: 'Data' as const,
+          name: 'Thing',
+          namespace: 'cdm.misc',
+          attributes: [
+            { name: 'count', typeCall: { type: { $refText: 'int' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.misc::Thing',
+      expansionMap: new Map()
+    });
+    const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
+    expect(row.typeName).toBe('int');
     expect(row.typeKind).toBe('BasicType');
   });
 
-  // `date` is a grammar `recordType`, not a `basicType`. The adapter conflates
-  // both under `'BasicType'` because the UI renders them the same way (inline
-  // chip, no drill-down). This test documents the conflation so a future
-  // reader doesn't file it as a bug.
-  it('classifies a recordType date as BasicType (UI conflates basicType + recordType)', () => {
+  // `date` is in BUILTIN_TYPES (grammar `recordType`). The adapter does not
+  // distinguish basicType vs. recordType because the UI renders both the same
+  // way (inline chip, no drill-down).
+  it('classifies a recordType date as BasicType', () => {
     const fixture = {
       namespaces: [{ uri: 'cdm.misc' }],
       nodes: [
@@ -591,6 +621,130 @@ describe('buildStructureGraph — cross-namespace references', () => {
     // through; the graph is empty but the rootNodeId still echoes the focus.
     expect(result.rootNodeId).toBe('cdm.trade::Payout');
     expect(result.nodes.size).toBe(0);
+  });
+
+  it('resolves a fully-qualified reference like "cdm.product.Party"', () => {
+    // Phase 9 source-drop path inserts qualified names for cross-namespace
+    // refs (TypeCall.type and extends both use QualifiedName per
+    // rune-dsl.langium). findNodeByName must split on the last dot and
+    // match {name, namespace} together.
+    const fixtureQualified = {
+      namespaces: [{ uri: 'cdm.trade' }, { uri: 'cdm.product' }],
+      nodes: [
+        {
+          id: 'cdm.product::Party',
+          $type: 'Data' as const,
+          name: 'Party',
+          namespace: 'cdm.product',
+          attributes: [
+            { name: 'id', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          attributes: [
+            {
+              name: 'party',
+              typeCall: { type: { $refText: 'cdm.product.Party' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixtureQualified, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map()
+    });
+    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const row = trade.rows.find((r) => r.attrName === 'party')!;
+    expect(row.typeKind).toBe('Data');
+    expect(row.targetNodeId).toBe('cdm.product::Party');
+    expect(row.targetNamespaceUri).toBe('cdm.product');
+  });
+
+  it('prefers exact qualified match over same-name unqualified collision', () => {
+    // Two `Money` nodes in different namespaces. The caller is in `cdm.other`
+    // — without qualification, same-namespace tiebreak would fail and the
+    // first-listed (cdm.product::Money) would win. With the qualified ref
+    // "cdm.trade.Money", we must resolve to cdm.trade::Money regardless of
+    // caller namespace.
+    const fixtureQualifiedCollision = {
+      namespaces: [{ uri: 'cdm.product' }, { uri: 'cdm.trade' }, { uri: 'cdm.other' }],
+      nodes: [
+        { id: 'cdm.product::Money', $type: 'Data' as const, name: 'Money', namespace: 'cdm.product', attributes: [] },
+        { id: 'cdm.trade::Money', $type: 'Data' as const, name: 'Money', namespace: 'cdm.trade', attributes: [] },
+        {
+          id: 'cdm.other::Holding',
+          $type: 'Data' as const,
+          name: 'Holding',
+          namespace: 'cdm.other',
+          attributes: [
+            {
+              name: 'amt',
+              typeCall: { type: { $refText: 'cdm.trade.Money' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixtureQualifiedCollision, {
+      focusedTypeId: 'cdm.other::Holding',
+      expansionMap: new Map()
+    });
+    const row = (result.nodes.get('cdm.other::Holding') as StructureDataNode).rows[0]!;
+    expect(row.typeKind).toBe('Data');
+    expect(row.targetNodeId).toBe('cdm.trade::Money');
+    expect(row.targetNamespaceUri).toBe('cdm.trade');
+  });
+
+  it('resolves a qualified `extends` reference (extends uses QualifiedName too)', () => {
+    // rune-dsl.langium line 60: `extends superType=[Data:QualifiedName]`.
+    // Same fix in findNodeByName must cover the inheritance path.
+    const fixtureQualifiedExtends = {
+      namespaces: [{ uri: 'cdm.base' }, { uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.base::TradeBase',
+          $type: 'Data' as const,
+          name: 'TradeBase',
+          namespace: 'cdm.base',
+          attributes: [
+            { name: 'tradeID', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          extends: 'cdm.base.TradeBase',
+          attributes: [
+            {
+              name: 'tradeDate',
+              typeCall: { type: { $refText: 'date' } },
+              card: { inf: 0, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixtureQualifiedExtends, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map()
+    });
+    const base = result.nodes.get(result.rootNodeId) as StructureBaseContainer;
+    expect(base.kind).toBe('base');
+    expect(base.baseTypeName).toBe('TradeBase');
+    expect(base.baseTypeNamespaceUri).toBe('cdm.base');
+    expect(base.baseRows.map((r) => r.attrName)).toEqual(['tradeID']);
   });
 
   it('mixed: same-namespace and cross-namespace refs resolve correctly from the same caller', () => {
