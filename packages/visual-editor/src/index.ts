@@ -144,6 +144,8 @@ export type { FunctionScope, FunctionScopeEntry } from './store/expression-store
 export { useAutoSave } from './hooks/useAutoSave.js';
 export { useExpressionAutocomplete } from './hooks/useExpressionAutocomplete.js';
 export type { CompletionItem, UseExpressionAutocompleteResult } from './hooks/useExpressionAutocomplete.js';
+export { useTypeRefDrop } from './hooks/useTypeRefDrop.js';
+export type { UseTypeRefDropOptions, UseTypeRefDropResult } from './hooks/useTypeRefDrop.js';
 
 // Validation utilities
 export {
