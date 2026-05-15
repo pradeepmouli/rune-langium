@@ -44,3 +44,66 @@ describe('layoutStructureGraph — single Data node', () => {
     expect(edges).toHaveLength(0);
   });
 });
+
+describe('layoutStructureGraph — base container with derived inside', () => {
+  it('produces a base groupContainer with the derived data as its child', () => {
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade::__base',
+      nodes: new Map([
+        [
+          'Trade::__base',
+          {
+            id: 'Trade::__base',
+            kind: 'base',
+            baseTypeName: 'TradeBase',
+            baseTypeNamespaceUri: 'cdm.trade',
+            baseRows: [
+              {
+                attrName: 'tradeID',
+                typeName: 'string',
+                typeKind: 'BasicType',
+                cardinality: '0..1',
+                isOptional: true,
+                isInherited: true
+              }
+            ],
+            childNodeId: 'Trade',
+            // Phase 2 addition: base containers carry their own expansions
+            // for inherited complex rows (spec §3.2 uniformity). Empty here.
+            expansions: new Map()
+          }
+        ],
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: 'TradeBase',
+            extendsNodeId: 'TradeBase',
+            rows: [
+              {
+                attrName: 'tradeDate',
+                typeName: 'date',
+                typeKind: 'BasicType',
+                cardinality: '0..1',
+                isOptional: true,
+                isInherited: false
+              }
+            ],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    expect(nodes).toHaveLength(2);
+    const base = nodes.find((n) => n.id === 'Trade::__base')!;
+    const derived = nodes.find((n) => n.id === 'Trade')!;
+    expect(base.type).toBe('groupContainer');
+    expect(derived.parentId).toBe('Trade::__base');
+    expect(derived.extent).toBe('parent');
+  });
+});
