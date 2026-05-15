@@ -106,13 +106,13 @@ describe('buildStructureGraph — inheritance', () => {
     expect(derived.rows.map((r) => r.attrName)).toEqual(['tradeDate']); // ONLY new additions
   });
 
-  it('flattens single-level only: Trade extends TradeBase extends TradeRoot drops TradeRoot attrs', () => {
-    // Multi-level inheritance contract pin (silent-failure #2):
-    // Phase 2 deliberately flattens just one level. If Trade extends TradeBase
-    // and TradeBase extends TradeRoot, only TradeBase's attributes show in the
-    // base container. TradeRoot's attributes are silently dropped until a
-    // future phase walks the full chain. A breaking change here should
-    // intentionally update this test.
+  it('walks the full chain: Trade extends TradeBase extends TradeRoot nests yellow inside yellow', () => {
+    // Spec §3.2: "Multi-level inheritance nests yellow inside yellow recursively."
+    // The outermost base container (TradeRoot's) is rootNodeId; TradeBase's
+    // container nests inside it; the focused Data node is innermost. Each
+    // base container's baseRows hold only that level's own attributes
+    // (marked isInherited), and the focused Data node holds only its own
+    // additions — no row duplication across levels.
     const fixtureDeep = {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
@@ -165,17 +165,90 @@ describe('buildStructureGraph — inheritance', () => {
       expansionMap: new Map()
     });
 
-    const base = result.nodes.get(result.rootNodeId) as StructureBaseContainer;
-    expect(base.kind).toBe('base');
-    expect(base.baseTypeName).toBe('TradeBase');
-    // Only direct base's fields surface — rootField is NOT here.
-    expect(base.baseRows.map((r) => r.attrName)).toEqual(['baseField']);
-    expect(base.baseRows.some((r) => r.attrName === 'rootField')).toBe(false);
+    // Three nodes: 2 base containers + 1 data node.
+    expect(result.nodes.size).toBe(3);
+
+    const outerId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
+    const innerId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+
+    // rootNodeId is the outermost (TradeRoot's container).
+    expect(result.rootNodeId).toBe(outerId);
+
+    const outer = result.nodes.get(outerId) as StructureBaseContainer;
+    expect(outer.kind).toBe('base');
+    expect(outer.baseTypeName).toBe('TradeRoot');
+    expect(outer.baseRows.map((r) => r.attrName)).toEqual(['rootField']);
+    expect(outer.baseRows.every((r) => r.isInherited)).toBe(true);
+    expect(outer.childNodeId).toBe(innerId);
+
+    const inner = result.nodes.get(innerId) as StructureBaseContainer;
+    expect(inner.kind).toBe('base');
+    expect(inner.baseTypeName).toBe('TradeBase');
+    expect(inner.baseRows.map((r) => r.attrName)).toEqual(['baseField']);
+    expect(inner.baseRows.every((r) => r.isInherited)).toBe(true);
+    expect(inner.childNodeId).toBe('cdm.trade::Trade');
 
     const derived = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    expect(derived.kind).toBe('data');
+    // Only Trade's own additions; ancestor attrs are NOT duplicated here.
     expect(derived.rows.map((r) => r.attrName)).toEqual(['tradeField']);
-    // rootField is NOT smuggled into the derived rows either.
     expect(derived.rows.some((r) => r.attrName === 'rootField')).toBe(false);
+    expect(derived.rows.some((r) => r.attrName === 'baseField')).toBe(false);
+  });
+
+  it('terminates on cyclic extends (A extends B extends A) without infinite recursion', () => {
+    // Defensive: well-formed CDM cannot express this, but the chain walker
+    // must not loop. A visited-set guard breaks the walk when an ancestor id
+    // repeats; the resulting graph shape is "sensible" — finite, with the
+    // valid ancestor(s) wrapping the focused Data node — but the exact shape
+    // is incidental. The contract is "terminates and doesn't crash."
+    const fixtureCyclicExtends = {
+      namespaces: [{ uri: 'cdm.cycle' }],
+      nodes: [
+        {
+          id: 'cdm.cycle::A',
+          $type: 'Data' as const,
+          name: 'A',
+          namespace: 'cdm.cycle',
+          extends: 'B',
+          attributes: [
+            { name: 'a', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.cycle::B',
+          $type: 'Data' as const,
+          name: 'B',
+          namespace: 'cdm.cycle',
+          extends: 'A',
+          attributes: [
+            { name: 'b', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        }
+      ]
+    };
+
+    // The call must return — vitest will mark this test failing on timeout
+    // if the walker loops.
+    const result = buildStructureGraph(fixtureCyclicExtends, {
+      focusedTypeId: 'cdm.cycle::A',
+      expansionMap: new Map()
+    });
+
+    // Graph is finite. Focused A is present.
+    expect(result.nodes.has('cdm.cycle::A')).toBe(true);
+    const a = result.nodes.get('cdm.cycle::A') as StructureDataNode;
+    expect(a.kind).toBe('data');
+    // The walker stops before re-entering A: B is allowed once (the direct
+    // base), then B.extends → A is rejected by the visited guard. So we
+    // expect exactly one base container wrapping A.
+    expect(result.nodes.size).toBe(2);
+    const baseId = `cdm.cycle::A::__base::cdm.cycle::B`;
+    expect(result.rootNodeId).toBe(baseId);
+    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    expect(base.kind).toBe('base');
+    expect(base.baseTypeName).toBe('B');
+    expect(base.childNodeId).toBe('cdm.cycle::A');
   });
 });
 

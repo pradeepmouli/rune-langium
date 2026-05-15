@@ -247,27 +247,54 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
   }
 
   if (root.$type === 'Data') {
+    // Walk the full inheritance chain (spec §3.2: "Multi-level inheritance
+    // nests yellow inside yellow recursively"). We materialize the focused
+    // Data node first so its expansion walk is unaffected, then thread base
+    // containers outside-in: the innermost container's childNodeId points at
+    // the focused Data node, each subsequent container's childNodeId points
+    // at the previously-built (inner) container, and the outermost container
+    // becomes `rootNodeId`. This produces yellow-inside-yellow nesting where
+    // the topmost ancestor (e.g. TradeRoot) is on the outside.
+    walkAndExpand(root, doc, opts, nodes, new Set<string>());
+
     if (root.extends) {
-      const baseNode = findNodeByName(root.extends, doc, root.namespace);
-      if (baseNode) {
-        // Phase 2 only flattens one inheritance level; deeper chains land in a follow-up phase.
-        const baseId = `${root.id}::__base`;
-        const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
-        const baseContainer: StructureBaseContainer = {
-          id: baseId,
-          kind: 'base',
-          baseTypeName: baseNode.name,
-          baseTypeNamespaceUri: baseNode.namespace,
-          baseRows,
-          childNodeId: root.id
-        };
-        nodes.set(baseId, baseContainer);
-        walkAndExpand(root, doc, opts, nodes, new Set<string>());
-        return { rootNodeId: baseId, nodes };
+      // Collect ancestors from nearest base outward, with cycle protection.
+      // A class cannot extend itself in well-formed input, but defensive code
+      // must not infinite-loop on malformed chains.
+      const visited = new Set<string>([root.id]);
+      const ancestors: AdapterNode[] = [];
+      let cursor: AdapterNode | undefined = findNodeByName(root.extends, doc, root.namespace);
+      while (cursor && !visited.has(cursor.id)) {
+        visited.add(cursor.id);
+        ancestors.push(cursor);
+        cursor = cursor.extends ? findNodeByName(cursor.extends, doc, cursor.namespace) : undefined;
+      }
+
+      if (ancestors.length > 0) {
+        // Build containers inside-out so each parent container references the
+        // already-built child container id. The first ancestor (nearest base)
+        // wraps the focused Data node; subsequent ancestors wrap the previous
+        // container. The last ancestor's container id is the outermost root.
+        let childId = root.id;
+        let outermostId = root.id;
+        for (const baseNode of ancestors) {
+          const baseId = `${root.id}::__base::${baseNode.id}`;
+          const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
+          const baseContainer: StructureBaseContainer = {
+            id: baseId,
+            kind: 'base',
+            baseTypeName: baseNode.name,
+            baseTypeNamespaceUri: baseNode.namespace,
+            baseRows,
+            childNodeId: childId
+          };
+          nodes.set(baseId, baseContainer);
+          childId = baseId;
+          outermostId = baseId;
+        }
+        return { rootNodeId: outermostId, nodes };
       }
     }
-
-    walkAndExpand(root, doc, opts, nodes, new Set<string>());
   }
   // Choice as root handled in later tasks.
 
