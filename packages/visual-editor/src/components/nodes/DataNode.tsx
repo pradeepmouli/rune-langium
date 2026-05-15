@@ -12,9 +12,32 @@ import { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode } from '../../types.js';
+import type { StructureDataNode, StructureRow } from '../../types/structure-view.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
+
+// ---------------------------------------------------------------------------
+// Structure-variant types (Finding 4)
+// ---------------------------------------------------------------------------
+
+interface StructureNodeData extends StructureDataNode {
+  readonly variant: 'structure';
+  readonly cellComponents?: {
+    name?: React.ComponentType<{ value: string; nodeId: string; attrName: string }>;
+    type?: React.ComponentType<{
+      typeName: string;
+      typeKind: StructureRow['typeKind'];
+      nodeId: string;
+      attrName: string;
+    }>;
+    card?: React.ComponentType<{ value: string; nodeId: string; attrName: string }>;
+  };
+}
+
+function isStructureData(d: unknown): d is StructureNodeData {
+  return typeof d === 'object' && d !== null && (d as { variant?: unknown }).variant === 'structure';
+}
 
 export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
@@ -32,13 +55,14 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     [onNavigateToType]
   );
 
-  const variant = (data as any).variant as 'graph' | 'structure' | undefined;
-
-  if (variant === 'structure') {
-    // TODO(Phase 7): tighten cellComponents prop types once StructureView assembly is in place
-    const cellComponents = (data as any).cellComponents as
-      | { name?: React.FC<any>; type?: React.FC<any>; card?: React.FC<any> }
-      | undefined;
+  if (isStructureData(data)) {
+    // Finding 1: consume StructureRow shape from data.rows (not data.attributes).
+    // StructureRow.typeName, .attrName, .cardinality are already pre-formatted strings
+    // from the adapter — no getTypeRefText / formatCardinality needed here.
+    // TODO(Phase 10): structure variant geometry constants (ROW_HEIGHT/COL_WIDTH from layout)
+    // must match these classes' rendered sizes in styles.css to avoid layout drift.
+    const rows = data.rows as ReadonlyArray<StructureRow>;
+    const { cellComponents } = data;
     const NameCell = cellComponents?.name;
     const TypeCell = cellComponents?.type;
     const CardCell = cellComponents?.card;
@@ -48,33 +72,34 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
         <Handle type="target" position={handles.target} />
         <div className="rune-node-header">
           <NodeKindBadge kind="data" />
-          <span>{d.name}</span>
+          <span>{data.name}</span>
         </div>
         <div className="rune-node-body rune-node-body--two-col">
           <div className="rune-node-rows">
-            {members.map((member: any) => (
-              <div key={member.name} className="rune-node-row" data-attr={member.name}>
+            {rows.map((row: StructureRow) => (
+              <div key={row.attrName} className="rune-node-row" data-attr={row.attrName}>
                 {NameCell ? (
-                  <NameCell value={member.name} nodeId={id} attrName={member.name} />
+                  <NameCell value={row.attrName} nodeId={id} attrName={row.attrName} />
                 ) : (
-                  <span className="rune-cell-name">{member.name}</span>
+                  <span className="rune-cell-name">{row.attrName}</span>
                 )}
                 {TypeCell ? (
-                  <TypeCell typeName={getTypeRefText(member.typeCall)} nodeId={id} attrName={member.name} />
+                  <TypeCell typeName={row.typeName} typeKind={row.typeKind} nodeId={id} attrName={row.attrName} />
                 ) : (
-                  <span className="rune-cell-type-chip">{getTypeRefText(member.typeCall)}</span>
+                  // Finding 3: row.typeName is string (not undefined) per StructureRow; render '?' if empty.
+                  <span className="rune-cell-type-chip">{row.typeName || '?'}</span>
                 )}
                 {CardCell ? (
-                  <CardCell value={formatCardinality(member.card)} nodeId={id} attrName={member.name} />
+                  <CardCell value={row.cardinality} nodeId={id} attrName={row.attrName} />
                 ) : (
-                  <span className="rune-cell-card">{formatCardinality(member.card)}</span>
+                  <span className="rune-cell-card">{row.cardinality}</span>
                 )}
                 <Handle
                   type="source"
                   position={Position.Right}
-                  id={member.name}
+                  id={row.attrName}
                   className="rune-row-handle"
-                  data-testid={`row-handle-${member.name}`}
+                  data-testid={`row-handle-${row.attrName}`}
                 />
               </div>
             ))}
