@@ -1611,6 +1611,17 @@ git commit -m "feat(visual-editor): adapter prefers same-namespace match for nam
 
 **Outcome:** `structure-layout.ts` converts the adapter's `StructureGraphInput` into React Flow nodes with `parentNode` chains and per-row child positions.
 
+> **Amendment (post-Phase-2 review cycles):** The Task 3.1 implementation snippet below was written before Phase 2's review iterations and has known gaps. When implementing, the executing agent MUST:
+>
+> 1. **Include `expansions: new Map()` on every `StructureBaseContainer` fixture** in tests — Phase 2 added this field to the type (PR #173 commit `db129fa7`); fixtures without it will fail type-check.
+> 2. **Fix the `yCursor` bug** in the data-node child placement loop — `yCursor` is initialized but never advanced. Multiple expansions stacking at the same Y is wrong; advance `yCursor` by `placedChildSize.height + ROW_GAP` after each placement.
+> 3. **Process base-container `expansions`** in `placeNode` for `kind: 'base'`. Currently the snippet only recurses into `childNodeId`; it must also place each `[attrName, childId]` from the base container's `expansions` map as a child (parented to the base container, positioned per the base row alignment).
+> 4. **Handle cross-tree handles**: a target node id may appear in `input.nodes` but never as a containment child (Phase 2's cache-replay can produce expansion edges to a target that already has a containment parent elsewhere). Layout should NOT attempt to give such a target two parents — track placed-node ids in a `placed: Set<string>` and skip duplicate placements.
+> 5. **Add Tasks 3.4 (sibling vertical alignment) and 3.5 (cross-tree handle deduplication)** as additional test-only tasks (no impl changes if the above are baked into Task 3.1):
+>    - Task 3.4: multiple expansions on the same parent → assert children are vertically stacked without overlap (`y` of child N+1 > `y` of child N + child N's height).
+>    - Task 3.5: target appears in `input.nodes` and is referenced from two parents' `expansions` maps → assert layout produces exactly one Node record for that target with one parent (the first encountered wins, second is silently dropped — document this in a comment).
+> 6. **Empty `edges` array is acceptable** for Phase 3 — containment is rendered via `parentId`, no explicit Edge records needed for the basic surface. If a future phase introduces non-containment edges (cross-tree handles rendered as a separate edge type), revisit.
+
 ## Task 3.1: Layout — base case (single Data node)
 
 **Files:**
@@ -1876,6 +1887,9 @@ describe('layoutStructureGraph — base container with derived inside', () => {
               { attrName: 'tradeID', typeName: 'string', typeKind: 'BasicType', cardinality: '0..1', isOptional: true, isInherited: true },
             ],
             childNodeId: 'Trade',
+            // Phase 2 addition: base containers carry their own expansions
+            // for inherited complex rows (spec §3.2 uniformity). Empty here.
+            expansions: new Map(),
           },
         ],
         [
