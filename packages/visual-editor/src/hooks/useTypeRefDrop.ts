@@ -82,11 +82,37 @@ export function useTypeRefDrop(opts: UseTypeRefDropOptions): UseTypeRefDropResul
   // O(1) lookups without recomputing per event.
   const acceptableMimes = useMemo(() => new Set(accept.map(typeRefMimeForKind)), [accept]);
 
-  /** Returns true when the dataTransfer carries at least one accepted kind MIME. */
+  /**
+   * Returns true when the dataTransfer should be treated as an accepted drag.
+   *
+   * Two-phase check:
+   * 1. If the source registered ANY kind-specific MIME (`TYPE_REF_PAYLOAD_MIME+<kind>`),
+   *    use strict policy: accept only if at least one of those kinds is in `acceptableMimes`.
+   *    This enforces accept-policy during the dragover phase for dual-MIME sources.
+   * 2. If NO kind-specific MIME is present but the canonical `TYPE_REF_PAYLOAD_MIME` is,
+   *    allow the drag through (single-MIME fallback). Accept-policy enforcement moves to
+   *    drop time via `parsePayload` + `accept`. Hover may briefly show "accepting" for
+   *    drags whose payload kind will ultimately be rejected — migration-safety trade-off.
+   */
   function hasAcceptedMime(types: DataTransfer['types'] | ReadonlyArray<string> | undefined): boolean {
     if (!types) return false;
+    // Phase 1: scan for any kind-specific MIME (prefix `TYPE_REF_PAYLOAD_MIME+`).
+    // If the source registered at least one kind-specific MIME, use strict policy:
+    // accept only if one of them is in acceptableMimes (enforces accept during hover).
+    const kindMimePrefix = `${TYPE_REF_PAYLOAD_MIME}+`;
+    let hasAnyKindSpecific = false;
     for (let i = 0; i < types.length; i++) {
-      if (acceptableMimes.has(types[i].toLowerCase())) return true;
+      const t = types[i].toLowerCase();
+      if (t.startsWith(kindMimePrefix)) {
+        hasAnyKindSpecific = true;
+        if (acceptableMimes.has(t)) return true;
+      }
+    }
+    if (hasAnyKindSpecific) return false; // kind-specific present but none matched
+    // Phase 2: canonical MIME alone — source didn't register any kind-specific MIME.
+    // Drop handler still validates via parsePayload + accept before firing onDrop.
+    for (let i = 0; i < types.length; i++) {
+      if (types[i].toLowerCase() === TYPE_REF_PAYLOAD_MIME) return true;
     }
     return false;
   }

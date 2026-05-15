@@ -332,6 +332,78 @@ describe('useTypeRefDrop', () => {
     expect(onDrop).not.toHaveBeenCalled();
   });
 
+  // --- Codex round-8 regression: canonical-MIME-only (single-MIME fallback) ---
+
+  it('accepts canonical-MIME-only drags during dragover/dragenter (single-MIME fallback)', () => {
+    const onDrop = vi.fn();
+    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', kind: 'Data' };
+    const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop }));
+
+    // Source registered ONLY the canonical MIME (no kind-specific marker).
+    const enterEvt = makeDragEvent({
+      type: 'dragenter',
+      types: [TYPE_REF_PAYLOAD_MIME],
+      payload
+    });
+    const overEvt = makeDragEvent({
+      type: 'dragover',
+      types: [TYPE_REF_PAYLOAD_MIME],
+      payload
+    });
+
+    act(() => {
+      result.current.dragOverHandlers.onDragEnter(enterEvt);
+    });
+    expect(result.current.isOver).toBe(true);
+
+    act(() => {
+      result.current.dragOverHandlers.onDragOver(overEvt);
+    });
+    expect(overEvt.preventDefault).toHaveBeenCalled();
+  });
+
+  it('single-MIME source with accepted kind: drop calls onDrop', () => {
+    const onDrop = vi.fn();
+    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', kind: 'Data' };
+    const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop }));
+
+    // Drop event — getData returns payload JSON (as browser does on drop).
+    const dropEvt = makeDragEvent({ type: 'drop', payload });
+    act(() => {
+      result.current.dragOverHandlers.onDrop(dropEvt);
+    });
+    expect(onDrop).toHaveBeenCalledWith(payload);
+    expect(onDrop).toHaveBeenCalledTimes(1);
+  });
+
+  it('single-MIME source with non-accepted kind: drop does NOT call onDrop', () => {
+    // Canonical-MIME-only source whose payload.kind is not in accept —
+    // drop-time filter via parsePayload + accept rejects it.
+    const onDrop = vi.fn();
+    const payload: TypeRefPayload = { rune: 'type-ref', namespaceUri: 'ns', typeId: 'T', kind: 'Enum' };
+    const { result } = renderHook(() => useTypeRefDrop({ accept: ['Data'], onDrop }));
+
+    // Dragenter with canonical MIME only — isOver becomes true (migration trade-off).
+    const enterEvt = makeDragEvent({
+      type: 'dragenter',
+      types: [TYPE_REF_PAYLOAD_MIME],
+      payload
+    });
+    act(() => {
+      result.current.dragOverHandlers.onDragEnter(enterEvt);
+    });
+    expect(result.current.isOver).toBe(true); // "soft" accept during hover — expected trade-off
+
+    // Drop — parsePayload sees kind: 'Enum' which is not in ['Data']; onDrop must NOT fire.
+    const dropEvt = makeDragEvent({ type: 'drop', payload });
+    act(() => {
+      result.current.dragOverHandlers.onDrop(dropEvt);
+    });
+    expect(onDrop).not.toHaveBeenCalled();
+    // Hover state is reset regardless.
+    expect(result.current.isOver).toBe(false);
+  });
+
   // --- Browser normalization regression (Copilot round-7 fix) ---
 
   it('accepts browser-normalized lowercase MIME when accept list uses PascalCase kind', () => {
