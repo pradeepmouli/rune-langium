@@ -36,10 +36,22 @@ export interface AdapterNode {
   readonly values?: ReadonlyArray<{ name: string }>;
 }
 
+/**
+ * Canonical cardinality shape mirroring `model-helpers.ts`'s `CardinalityShape`.
+ * Re-declared here (not imported) because that type is not exported, but kept
+ * structurally identical so the adapter can be wired to the real Langium AST
+ * in Phase 3 without a second migration.
+ */
+export interface AdapterCardinality {
+  readonly inf: number;
+  readonly sup?: number;
+  readonly unbounded: boolean;
+}
+
 export interface AdapterAttribute {
   readonly name: string;
   readonly typeCall: { readonly type?: { readonly $refText?: string } } | string;
-  readonly card: { readonly min: number; readonly max: number | '*' };
+  readonly card: AdapterCardinality;
   readonly astRange?: { start: number; end: number };
 }
 
@@ -48,16 +60,39 @@ export interface BuildOptions {
   readonly expansionMap: ReadonlyMap<string, boolean>;
 }
 
-const BASIC_TYPES = new Set(['string', 'int', 'number', 'boolean', 'date', 'time', 'dateTime', 'zonedDateTime']);
+/**
+ * Types rendered as inline chips (no drill-down node) in the structure view.
+ *
+ * This set intentionally conflates two grammar productions from
+ * `rune-dsl.langium`:
+ *   - `basicType`  → `boolean`, `number`, `string`, `pattern`
+ *   - `recordType` → `date`, `dateTime`, `time`, `zonedDateTime`
+ *
+ * They are distinct AST kinds but both render the same way in this view, so a
+ * single `'BasicType'` classification keeps the UI predicate simple. If a
+ * future view needs to distinguish them, split this set and extend
+ * `StructureRow.typeKind`.
+ */
+const BASIC_TYPES: ReadonlySet<string> = Object.freeze(
+  new Set(['boolean', 'number', 'string', 'pattern', 'date', 'time', 'dateTime', 'zonedDateTime'])
+);
 
 function typeRefText(attr: AdapterAttribute): string {
   if (typeof attr.typeCall === 'string') return attr.typeCall;
   return attr.typeCall.type?.$refText ?? '';
 }
 
-function formatCardinality(card: AdapterAttribute['card']): string {
-  const max = card.max === '*' ? '*' : String(card.max);
-  return `${card.min}..${max}`;
+/**
+ * Pill-label form of cardinality: `"0..1"`, `"0..*"`, `"1..*"`.
+ *
+ * Deliberately parens-less; the canonical `formatCardinality` in
+ * `model-helpers.ts` returns parens form (`"(0..1)"`) for AstNodeModel
+ * display. The structure-view spec calls for the bare form on
+ * `StructureRow.cardinality`.
+ */
+function formatCardinality(card: AdapterCardinality): string {
+  const sup = card.unbounded ? '*' : String(card.sup ?? card.inf);
+  return `${card.inf}..${sup}`;
 }
 
 function classifyType(typeName: string, doc: AdapterDocument, callerNamespace?: string): StructureRow['typeKind'] {
@@ -69,6 +104,7 @@ function classifyType(typeName: string, doc: AdapterDocument, callerNamespace?: 
   return 'Enum';
 }
 
+// callerNamespace is always provided by current callers (classifyType / buildRow / inheritance / root lookup); the undefined-namespace branch is defensive fallback.
 function findNodeByName(typeName: string, doc: AdapterDocument, callerNamespace?: string): AdapterNode | undefined {
   let firstMatch: AdapterNode | undefined;
   for (const n of doc.nodes) {
@@ -97,7 +133,7 @@ function buildRow(
     targetNodeId: target?.id,
     targetNamespaceUri: target?.namespace,
     cardinality,
-    isOptional: attr.card.min === 0,
+    isOptional: attr.card.inf === 0,
     isInherited,
     astRange: attr.astRange
   };
@@ -135,7 +171,7 @@ function walkAndExpand(
   doc: AdapterDocument,
   opts: BuildOptions,
   out: Map<string, StructureNode>
-): StructureDataNode {
+): void {
   const expansions = new Map<string, string>();
   const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
 
@@ -158,6 +194,10 @@ function walkAndExpand(
     if (shouldExpand(row, node.namespace, node.name, opts.expansionMap) && row.targetNodeId) {
       const target = doc.nodes.find((n) => n.id === row.targetNodeId);
       if (!target) continue;
+      // Defense-in-depth: re-check the target kind here so this guard cannot
+      // disagree with shouldExpand's. If an Enum (or any future non-expandable
+      // kind) ever slips through, we skip without recording a dangling edge.
+      if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
       expansions.set(row.attrName, target.id);
       if (out.has(target.id)) {
         // Already materialized (or in-flight from a cyclic walk). Re-use.
@@ -165,13 +205,11 @@ function walkAndExpand(
       }
       if (target.$type === 'Data') {
         walkAndExpand(target, doc, opts, out);
-      } else if (target.$type === 'Choice') {
+      } else {
         out.set(target.id, buildChoiceNode(target, doc));
       }
     }
   }
-
-  return placeholder;
 }
 
 export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): StructureGraphInput {
@@ -185,6 +223,7 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
     if (root.extends) {
       const baseNode = findNodeByName(root.extends, doc, root.namespace);
       if (baseNode) {
+        // Phase 2 only flattens one inheritance level; deeper chains land in a follow-up phase.
         const baseId = `${root.id}::__base`;
         const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
         const baseContainer: StructureBaseContainer = {

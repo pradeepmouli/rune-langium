@@ -22,8 +22,8 @@ const fixtureSimple = {
       namespace: 'cdm.trade',
       extends: undefined,
       attributes: [
-        { name: 'tradeDate', typeCall: { type: { $refText: 'date' } }, card: { min: 0, max: 1 } },
-        { name: 'tradeID', typeCall: { type: { $refText: 'string' } }, card: { min: 0, max: 1 } }
+        { name: 'tradeDate', typeCall: { type: { $refText: 'date' } }, card: { inf: 0, sup: 1, unbounded: false } },
+        { name: 'tradeID', typeCall: { type: { $refText: 'string' } }, card: { inf: 0, sup: 1, unbounded: false } }
       ]
     }
   ]
@@ -38,14 +38,14 @@ describe('buildStructureGraph — standalone Data type', () => {
 
     expect(result.rootNodeId).toBe('cdm.trade::Trade');
     expect(result.nodes.size).toBe(1);
-    const root = result.nodes.get('cdm.trade::Trade');
-    expect(root?.kind).toBe('data');
-    expect((root as any).rows).toHaveLength(2);
-    expect((root as any).rows[0].attrName).toBe('tradeDate');
-    expect((root as any).rows[0].typeName).toBe('date');
-    expect((root as any).rows[0].typeKind).toBe('BasicType');
-    expect((root as any).rows[0].isOptional).toBe(true);
-    expect((root as any).rows[0].cardinality).toBe('0..1');
+    const root = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    expect(root.kind).toBe('data');
+    expect(root.rows).toHaveLength(2);
+    expect(root.rows[0]!.attrName).toBe('tradeDate');
+    expect(root.rows[0]!.typeName).toBe('date');
+    expect(root.rows[0]!.typeKind).toBe('BasicType');
+    expect(root.rows[0]!.isOptional).toBe(true);
+    expect(root.rows[0]!.cardinality).toBe('0..1');
   });
 
   it('returns empty graph when focusedTypeId is unknown', () => {
@@ -67,8 +67,8 @@ const fixtureExtends = {
       name: 'TradeBase',
       namespace: 'cdm.trade',
       attributes: [
-        { name: 'tradeID', typeCall: { type: { $refText: 'string' } }, card: { min: 0, max: 1 } },
-        { name: 'parties', typeCall: { type: { $refText: 'Party' } }, card: { min: 2, max: 2 } }
+        { name: 'tradeID', typeCall: { type: { $refText: 'string' } }, card: { inf: 0, sup: 1, unbounded: false } },
+        { name: 'parties', typeCall: { type: { $refText: 'Party' } }, card: { inf: 2, sup: 2, unbounded: false } }
       ]
     },
     {
@@ -77,7 +77,9 @@ const fixtureExtends = {
       name: 'Trade',
       namespace: 'cdm.trade',
       extends: 'TradeBase',
-      attributes: [{ name: 'tradeDate', typeCall: { type: { $refText: 'date' } }, card: { min: 0, max: 1 } }]
+      attributes: [
+        { name: 'tradeDate', typeCall: { type: { $refText: 'date' } }, card: { inf: 0, sup: 1, unbounded: false } }
+      ]
     }
   ]
 };
@@ -103,6 +105,78 @@ describe('buildStructureGraph — inheritance', () => {
     expect(derived?.kind).toBe('data');
     expect(derived.rows.map((r) => r.attrName)).toEqual(['tradeDate']); // ONLY new additions
   });
+
+  it('flattens single-level only: Trade extends TradeBase extends TradeRoot drops TradeRoot attrs', () => {
+    // Multi-level inheritance contract pin (silent-failure #2):
+    // Phase 2 deliberately flattens just one level. If Trade extends TradeBase
+    // and TradeBase extends TradeRoot, only TradeBase's attributes show in the
+    // base container. TradeRoot's attributes are silently dropped until a
+    // future phase walks the full chain. A breaking change here should
+    // intentionally update this test.
+    const fixtureDeep = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::TradeRoot',
+          $type: 'Data' as const,
+          name: 'TradeRoot',
+          namespace: 'cdm.trade',
+          attributes: [
+            {
+              name: 'rootField',
+              typeCall: { type: { $refText: 'string' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::TradeBase',
+          $type: 'Data' as const,
+          name: 'TradeBase',
+          namespace: 'cdm.trade',
+          extends: 'TradeRoot',
+          attributes: [
+            {
+              name: 'baseField',
+              typeCall: { type: { $refText: 'string' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        },
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          extends: 'TradeBase',
+          attributes: [
+            {
+              name: 'tradeField',
+              typeCall: { type: { $refText: 'string' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = buildStructureGraph(fixtureDeep, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map()
+    });
+
+    const base = result.nodes.get(result.rootNodeId) as StructureBaseContainer;
+    expect(base.kind).toBe('base');
+    expect(base.baseTypeName).toBe('TradeBase');
+    // Only direct base's fields surface — rootField is NOT here.
+    expect(base.baseRows.map((r) => r.attrName)).toEqual(['baseField']);
+    expect(base.baseRows.some((r) => r.attrName === 'rootField')).toBe(false);
+
+    const derived = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    expect(derived.rows.map((r) => r.attrName)).toEqual(['tradeField']);
+    // rootField is NOT smuggled into the derived rows either.
+    expect(derived.rows.some((r) => r.attrName === 'rootField')).toBe(false);
+  });
 });
 
 const fixtureRef = {
@@ -113,7 +187,9 @@ const fixtureRef = {
       $type: 'Data' as const,
       name: 'Economics',
       namespace: 'cdm.trade',
-      attributes: [{ name: 'notional', typeCall: { type: { $refText: 'Money' } }, card: { min: 1, max: 1 } }]
+      attributes: [
+        { name: 'notional', typeCall: { type: { $refText: 'Money' } }, card: { inf: 1, sup: 1, unbounded: false } }
+      ]
     },
     {
       id: 'cdm.trade::Trade',
@@ -124,7 +200,7 @@ const fixtureRef = {
         {
           name: 'economics',
           typeCall: { type: { $refText: 'Economics' } },
-          card: { min: 0, max: '*' as const }
+          card: { inf: 0, unbounded: true }
         }
       ]
     }
@@ -168,14 +244,18 @@ const fixtureChoice = {
       $type: 'Choice' as const,
       name: 'Payout',
       namespace: 'cdm.trade',
-      attributes: [{ name: 'cashPayout', typeCall: { type: { $refText: 'Cash' } }, card: { min: 1, max: 1 } }]
+      attributes: [
+        { name: 'cashPayout', typeCall: { type: { $refText: 'Cash' } }, card: { inf: 1, sup: 1, unbounded: false } }
+      ]
     },
     {
       id: 'cdm.trade::Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
-      attributes: [{ name: 'payout', typeCall: { type: { $refText: 'Payout' } }, card: { min: 1, max: 1 } }]
+      attributes: [
+        { name: 'payout', typeCall: { type: { $refText: 'Payout' } }, card: { inf: 1, sup: 1, unbounded: false } }
+      ]
     }
   ]
 };
@@ -199,12 +279,12 @@ const fixtureEnumAndUnresolved = {
         {
           name: 'dayCount',
           typeCall: { type: { $refText: 'DayCount' } },
-          card: { min: 1, max: 1 }
+          card: { inf: 1, sup: 1, unbounded: false }
         },
         {
           name: 'mystery',
           typeCall: { type: { $refText: 'MissingType' } },
-          card: { min: 0, max: 1 }
+          card: { inf: 0, sup: 1, unbounded: false }
         }
       ]
     }
@@ -255,6 +335,131 @@ describe('buildStructureGraph — Choice / Enum / Unresolved', () => {
   });
 });
 
+describe('buildStructureGraph — BasicType classification', () => {
+  // `pattern` is a grammar `basicType` (see rune-dsl.langium). Easy to miss
+  // when reading the BASIC_TYPES set in isolation, so pinned here.
+  it('classifies a basicType pattern as BasicType', () => {
+    const fixture = {
+      namespaces: [{ uri: 'cdm.misc' }],
+      nodes: [
+        {
+          id: 'cdm.misc::Thing',
+          $type: 'Data' as const,
+          name: 'Thing',
+          namespace: 'cdm.misc',
+          attributes: [
+            { name: 'regex', typeCall: { type: { $refText: 'pattern' } }, card: { inf: 0, sup: 1, unbounded: false } }
+          ]
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.misc::Thing',
+      expansionMap: new Map()
+    });
+    const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
+    expect(row.typeName).toBe('pattern');
+    expect(row.typeKind).toBe('BasicType');
+  });
+
+  // `date` is a grammar `recordType`, not a `basicType`. The adapter conflates
+  // both under `'BasicType'` because the UI renders them the same way (inline
+  // chip, no drill-down). This test documents the conflation so a future
+  // reader doesn't file it as a bug.
+  it('classifies a recordType date as BasicType (UI conflates basicType + recordType)', () => {
+    const fixture = {
+      namespaces: [{ uri: 'cdm.misc' }],
+      nodes: [
+        {
+          id: 'cdm.misc::Thing',
+          $type: 'Data' as const,
+          name: 'Thing',
+          namespace: 'cdm.misc',
+          attributes: [
+            { name: 'when', typeCall: { type: { $refText: 'date' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.misc::Thing',
+      expansionMap: new Map()
+    });
+    const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
+    expect(row.typeName).toBe('date');
+    expect(row.typeKind).toBe('BasicType');
+  });
+});
+
+describe('buildStructureGraph — malformed typeCall', () => {
+  // Silent-failure #5: `typeRefText` defaults to '' when the AST shape is off.
+  // Pinning current behavior — '' is not in BASIC_TYPES and matches no node,
+  // so the row classifies as Unresolved with an empty type name. Renderers
+  // need to handle the empty-string chip without crashing.
+  it('handles typeCall.type === undefined as Unresolved with empty typeName', () => {
+    const fixture = {
+      namespaces: [{ uri: 'x' }],
+      nodes: [
+        {
+          id: 'x::Thing',
+          $type: 'Data' as const,
+          name: 'Thing',
+          namespace: 'x',
+          attributes: [{ name: 'broken', typeCall: { type: undefined }, card: { inf: 0, sup: 1, unbounded: false } }]
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'x::Thing',
+      expansionMap: new Map()
+    });
+    const row = (result.nodes.get('x::Thing') as StructureDataNode).rows[0]!;
+    expect(row.typeName).toBe('');
+    expect(row.typeKind).toBe('Unresolved');
+    expect(row.targetNodeId).toBeUndefined();
+  });
+
+  it('handles typeCall.type.$refText === undefined as Unresolved with empty typeName', () => {
+    const fixture = {
+      namespaces: [{ uri: 'x' }],
+      nodes: [
+        {
+          id: 'x::Thing',
+          $type: 'Data' as const,
+          name: 'Thing',
+          namespace: 'x',
+          attributes: [
+            {
+              name: 'broken',
+              typeCall: { type: { $refText: undefined } },
+              card: { inf: 0, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'x::Thing',
+      expansionMap: new Map()
+    });
+    const row = (result.nodes.get('x::Thing') as StructureDataNode).rows[0]!;
+    expect(row.typeName).toBe('');
+    expect(row.typeKind).toBe('Unresolved');
+    expect(row.targetNodeId).toBeUndefined();
+  });
+});
+
+describe('buildStructureGraph — cardinality formatting', () => {
+  it('formats 0..* cardinality without a doubled max marker', () => {
+    const trade = buildStructureGraph(fixtureRef, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map()
+    }).nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const row = trade.rows.find((r) => r.attrName === 'economics')!;
+    expect(row.cardinality).toBe('0..*');
+  });
+});
+
 const fixtureCrossNs = {
   namespaces: [{ uri: 'cdm.trade' }, { uri: 'cdm.product' }],
   nodes: [
@@ -263,14 +468,18 @@ const fixtureCrossNs = {
       $type: 'Data' as const,
       name: 'Party',
       namespace: 'cdm.product',
-      attributes: [{ name: 'id', typeCall: { type: { $refText: 'string' } }, card: { min: 1, max: 1 } }]
+      attributes: [
+        { name: 'id', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+      ]
     },
     {
       id: 'cdm.trade::Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
-      attributes: [{ name: 'party', typeCall: { type: { $refText: 'Party' } }, card: { min: 1, max: 1 } }]
+      attributes: [
+        { name: 'party', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } }
+      ]
     }
   ]
 };
@@ -302,7 +511,9 @@ describe('buildStructureGraph — cross-namespace references', () => {
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'a',
-          attributes: [{ name: 'amt', typeCall: { type: { $refText: 'Money' } }, card: { min: 1, max: 1 } }]
+          attributes: [
+            { name: 'amt', typeCall: { type: { $refText: 'Money' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
         }
       ]
     };
@@ -311,18 +522,9 @@ describe('buildStructureGraph — cross-namespace references', () => {
       focusedTypeId: 'a::Trade',
       expansionMap: new Map()
     });
-    const row = (result.nodes.get('a::Trade') as StructureDataNode).rows[0];
+    const row = (result.nodes.get('a::Trade') as StructureDataNode).rows[0]!;
     // Prefer the same-namespace match
     expect(row.targetNodeId).toBe('a::Money');
-  });
-
-  it('formats 0..* cardinality without a doubled max marker', () => {
-    const trade = buildStructureGraph(fixtureRef, {
-      focusedTypeId: 'cdm.trade::Trade',
-      expansionMap: new Map()
-    }).nodes.get('cdm.trade::Trade') as StructureDataNode;
-    const row = trade.rows.find((r) => r.attrName === 'economics')!;
-    expect(row.cardinality).toBe('0..*');
   });
 
   it('terminates on cyclic references (A → B → A) without infinite recursion', () => {
@@ -334,14 +536,14 @@ describe('buildStructureGraph — cross-namespace references', () => {
           $type: 'Data' as const,
           name: 'A',
           namespace: 'c',
-          attributes: [{ name: 'b', typeCall: { type: { $refText: 'B' } }, card: { min: 1, max: 1 } }]
+          attributes: [{ name: 'b', typeCall: { type: { $refText: 'B' } }, card: { inf: 1, sup: 1, unbounded: false } }]
         },
         {
           id: 'c::B',
           $type: 'Data' as const,
           name: 'B',
           namespace: 'c',
-          attributes: [{ name: 'a', typeCall: { type: { $refText: 'A' } }, card: { min: 1, max: 1 } }]
+          attributes: [{ name: 'a', typeCall: { type: { $refText: 'A' } }, card: { inf: 1, sup: 1, unbounded: false } }]
         }
       ]
     };
@@ -373,7 +575,9 @@ describe('buildStructureGraph — cross-namespace references', () => {
           $type: 'Choice' as const,
           name: 'Payout',
           namespace: 'cdm.trade',
-          attributes: [{ name: 'cash', typeCall: { type: { $refText: 'string' } }, card: { min: 1, max: 1 } }]
+          attributes: [
+            { name: 'cash', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
         }
       ]
     };
@@ -403,8 +607,8 @@ describe('buildStructureGraph — cross-namespace references', () => {
           name: 'Trade',
           namespace: 'a',
           attributes: [
-            { name: 'amt', typeCall: { type: { $refText: 'Money' } }, card: { min: 1, max: 1 } },
-            { name: 'party', typeCall: { type: { $refText: 'Party' } }, card: { min: 1, max: 1 } }
+            { name: 'amt', typeCall: { type: { $refText: 'Money' } }, card: { inf: 1, sup: 1, unbounded: false } },
+            { name: 'party', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } }
           ]
         }
       ]
