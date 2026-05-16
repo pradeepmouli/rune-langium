@@ -29,7 +29,9 @@
     "build": "tsgo -b && cp src/styles.css dist/styles.css",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "dev": "tsgo -b --watch",
-    "lint": "oxlint .",
+    "lint": "pnpm run lint:js && pnpm run lint:css",
+    "lint:js": "oxlint .",
+    "lint:css": "stylelint 'src/**/*.css'",
     "generate:schemas": "langium-zod generate --config ../core/langium-config.json --out src/generated/zod-schemas.ts --strip-internals --projection form-surfaces.json --cross-ref-validation --conformance --ast-types ../core/src/generated/ast.ts --conformance-out src/generated/zod-schemas.conformance.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -65,6 +67,8 @@
     "langium-zod": "^0.5.4",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "stylelint": "^17.11.1",
+    "stylelint-config-standard": "^40.0.0",
     "typescript": "^6.0.3"
   },
   "engines": {

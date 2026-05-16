@@ -27,13 +27,27 @@ import type {
   StructureNode
 } from '../types/structure-view.js';
 
-const ROW_HEIGHT = 28;
-const HEADER_HEIGHT = 28;
-const COL_WIDTH = 260;
-const COL_GAP = 32;
-const ROW_GAP = 8;
-/** Padding inside a base GroupContainer's yellow border. */
-const BASE_PADDING = 16;
+/**
+ * Single source of truth for Structure View layout constants.
+ *
+ * **If you change a value here, mirror it in the CSS custom properties
+ * declared in `src/styles.css` (the `:root` block near the top of the
+ * Structure View section).  The unit test
+ * `test/layout/structure-css-ssot.test.ts` enforces parity and will
+ * fail CI if the two drift apart.**
+ */
+export const STRUCTURE_LAYOUT_CONSTANTS = {
+  ROW_HEIGHT: 28,
+  HEADER_HEIGHT: 28,
+  COL_WIDTH: 260,
+  COL_GAP: 32,
+  ROW_GAP: 8,
+  /** Padding inside a base GroupContainer's yellow border. */
+  BASE_PADDING: 16
+} as const;
+
+// Internal aliases — keep call sites inside this module readable.
+const { ROW_HEIGHT, HEADER_HEIGHT, COL_WIDTH, COL_GAP, ROW_GAP, BASE_PADDING } = STRUCTURE_LAYOUT_CONSTANTS;
 
 interface SizedNode {
   width: number;

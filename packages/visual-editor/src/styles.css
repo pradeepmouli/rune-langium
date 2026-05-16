@@ -93,7 +93,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px 0;
+  /* box-sizing + height keep the rendered header flush with
+   * HEADER_HEIGHT in structure-layout.ts so row offsets align. */
+  box-sizing: border-box;
+  height: var(--rune-header-height);
+  padding: 0 14px;
 }
 
 .rune-graph-group__title {
@@ -798,13 +802,37 @@ button[data-navigable]:focus-visible {
   opacity: 0.3;
 }
 
+/* ── Structure View — layout SSoT (CSS custom properties) ────────
+ *
+ * These custom properties are the CSS half of the single source of
+ * truth.  The TypeScript half lives in STRUCTURE_LAYOUT_CONSTANTS in
+ * `src/layout/structure-layout.ts`.
+ *
+ * The unit test `test/layout/structure-css-ssot.test.ts` enforces
+ * parity — if you change a value here, change it there too (and
+ * vice-versa), otherwise CI will fail.
+ * ──────────────────────────────────────────────────────────────── */
+:root {
+  --rune-row-height: 28px;
+  --rune-header-height: 28px;
+  --rune-col-width: 260px;
+  --rune-col-gap: 32px;
+  --rune-row-gap: 8px;
+  --rune-base-padding: 16px;
+}
+
 /* ── Structure View — Phase 6 geometry ───────────────────────────
  *
- * These rules make layout math in structure-layout.ts match the
- * rendered DOM.  Constants must stay in sync with the values in
- * packages/visual-editor/src/layout/structure-layout.ts:
- *   ROW_HEIGHT = 28   HEADER_HEIGHT = 28   COL_WIDTH = 260
- *   COL_GAP    = 32   ROW_GAP       = 8    BASE_PADDING = 16
+ * All layout-coupled properties on `.rune-node-*` / `.rune-graph-group-*`
+ * / `.rune-cell-*` classes must use `var(--rune-*)` custom properties
+ * declared above. The unit test in `test/layout/structure-css-ssot.test.ts`
+ * enforces this — literal `px` values for layout-coupled properties on
+ * geometry classes will fail CI.
+ *
+ * If you genuinely need a literal value (e.g., a 1px border, an 8px
+ * gap that isn't layout-bearing), the test allows zeros, auto/none,
+ * and any value not containing `Npx`. For everything else, add or
+ * reference a CSS custom prop.
  *
  * Phase 10 owns gradient / shadow / font polish — this block is
  * geometry-only.  New CSS variables introduced here carry hard
@@ -818,6 +846,15 @@ button[data-navigable]:focus-visible {
    * stacks the header, then a two-column body below it. */
   display: flex;
   flex-direction: column;
+}
+
+/* Wire HEADER_HEIGHT SSoT: the structure-variant header must render at
+ * exactly HEADER_HEIGHT px so row offsets computed in structure-layout.ts
+ * align with the rendered rows.  box-sizing: border-box absorbs the
+ * horizontal padding without expanding the box beyond the SSoT value. */
+.rune-node-data--structure .rune-node-header {
+  box-sizing: border-box;
+  height: var(--rune-header-height);
 }
 
 .rune-node-body--two-col {
@@ -838,7 +875,7 @@ button[data-navigable]:focus-visible {
 .rune-node-rows {
   display: flex;
   flex-direction: column;
-  width: 260px;   /* COL_WIDTH */
+  width: var(--rune-col-width);
   flex-shrink: 0;
 }
 
@@ -846,8 +883,8 @@ button[data-navigable]:focus-visible {
   display: flex;
   flex-direction: row;
   align-items: center;
-  height: 28px;   /* ROW_HEIGHT */
-  gap: 8px;       /* ROW_GAP */
+  height: var(--rune-row-height);
+  gap: var(--rune-row-gap);
   padding: 0 8px;
   position: relative; /* anchor per-row Handle */
 }
@@ -863,9 +900,9 @@ button[data-navigable]:focus-visible {
   /* React Flow positions child nodes absolutely via parentNode; this
    * slot only declares the column gap.  Width is implicit from the
    * layout's child placements. */
-  margin-left: 32px; /* COL_GAP */
+  margin-left: var(--rune-col-gap);
   flex: 1 1 auto;
-  min-height: 28px;  /* ROW_HEIGHT — prevents collapse when child list is empty */
+  min-height: var(--rune-row-height); /* prevents collapse when child list is empty */
 }
 
 /* GroupContainerNode — base-type scope -------------------------- */
@@ -874,13 +911,13 @@ button[data-navigable]:focus-visible {
   /* Yellow dashed container per spec §3.1.
    * --color-base-type / --color-base-type-bg are new tokens; hard
    * fallbacks ensure the style works without a theme layer.
-   * box-sizing: border-box so the 16px padding + 2px border draw INSIDE
-   * the layout-computed width/height instead of expanding beyond it. */
+   * box-sizing: border-box so padding + 2px border draw INSIDE the
+   * layout-computed width/height instead of expanding beyond it. */
   box-sizing: border-box;
   /* padding matches BASE_PADDING in structure-layout.ts; see sizeBase and
    * placeBaseChildren for the y-coord coupling — row offsets and child
    * positions all add BASE_PADDING so layout coords align with rendered rows. */
-  padding: 16px;  /* BASE_PADDING */
+  padding: var(--rune-base-padding);
   border: 2px dashed var(--color-base-type, #d4a017);
   background: var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
   border-radius: 8px;
@@ -891,13 +928,13 @@ button[data-navigable]:focus-visible {
   flex-direction: column;
   /* No `gap` between rows — layout math (structure-layout.ts) packs rows at
    * exactly ROW_HEIGHT without inter-row spacing. */
-  margin-bottom: 8px; /* ROW_GAP — gap before the nested child data node */
+  margin-bottom: var(--rune-row-gap); /* gap before the nested child data node */
 }
 
 .rune-graph-group__base-row {
   display: flex;
   flex-direction: row;
   align-items: center;
-  height: 28px;  /* ROW_HEIGHT */
-  gap: 8px;      /* ROW_GAP */
+  height: var(--rune-row-height);
+  gap: var(--rune-row-gap);
 }
