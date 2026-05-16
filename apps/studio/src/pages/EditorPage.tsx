@@ -81,7 +81,6 @@ import {
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
 import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
-import { useStructureViewStore } from '../store/structure-view-store.js';
 import '../test-api.js';
 import { getRuneStudioTestApi } from '../test-api.js';
 
