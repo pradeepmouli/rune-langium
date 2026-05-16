@@ -82,6 +82,7 @@ const {
     latestProps: undefined as
       | {
           onSelectNode?: (nodeId: string) => void;
+          [key: string]: unknown;
         }
       | undefined
   };
@@ -171,7 +172,7 @@ vi.mock('@rune-langium/visual-editor', () => ({
       return React.createElement('div');
     }
   ),
-  NamespaceExplorerPanel: (props: { onSelectNode?: (nodeId: string) => void }) => {
+  NamespaceExplorerPanel: (props: { onSelectNode?: (nodeId: string) => void; [key: string]: unknown }) => {
     namespaceExplorerMockState.latestProps = props;
     return React.createElement('div');
   },

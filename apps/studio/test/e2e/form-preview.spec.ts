@@ -104,9 +104,9 @@ async function installPreviewWorkerMock(page: Page): Promise<void> {
     };
 
     window.fetch = async (...args) => {
-      (
-        window as unknown as { __previewTestState: { networkEvents: string[] } }
-      ).__previewTestState.networkEvents.push(`fetch:${String(args[0])}`);
+      (window as unknown as { __previewTestState: { networkEvents: string[] } }).__previewTestState.networkEvents.push(
+        `fetch:${String(args[0])}`
+      );
       return realFetch(...args);
     };
 
@@ -120,9 +120,9 @@ async function installPreviewWorkerMock(page: Page): Promise<void> {
     }
 
     XMLHttpRequest.prototype.open = function (...args) {
-      (
-        window as unknown as { __previewTestState: { networkEvents: string[] } }
-      ).__previewTestState.networkEvents.push(`xhr:${String(args[1])}`);
+      (window as unknown as { __previewTestState: { networkEvents: string[] } }).__previewTestState.networkEvents.push(
+        `xhr:${String(args[1])}`
+      );
       return realXhrOpen.apply(this, args as Parameters<typeof realXhrOpen>);
     };
     XMLHttpRequest.prototype.send = function (...args) {
@@ -133,9 +133,7 @@ async function installPreviewWorkerMock(page: Page): Promise<void> {
       configurable: true,
       value: {
         writeText: async (value: string) => {
-          (
-            window as unknown as { __previewTestState: { clipboard: string } }
-          ).__previewTestState.clipboard = value;
+          (window as unknown as { __previewTestState: { clipboard: string } }).__previewTestState.clipboard = value;
         }
       }
     });
@@ -338,25 +336,19 @@ async function installPreviewWorkerMock(page: Page): Promise<void> {
 
 async function resetPreviewNetworkState(page: Page) {
   await page.evaluate(() => {
-    (
-      window as unknown as { __previewTestState: { resetNetwork(): void } }
-    ).__previewTestState.resetNetwork();
+    (window as unknown as { __previewTestState: { resetNetwork(): void } }).__previewTestState.resetNetwork();
   });
 }
 
 async function readPreviewClipboard(page: Page) {
   return page.evaluate(
-    () =>
-      (window as unknown as { __previewTestState: { clipboard: string } }).__previewTestState
-        .clipboard
+    () => (window as unknown as { __previewTestState: { clipboard: string } }).__previewTestState.clipboard
   );
 }
 
 async function readPreviewNetworkEvents(page: Page) {
   return page.evaluate(
-    () =>
-      (window as unknown as { __previewTestState: { networkEvents: string[] } }).__previewTestState
-        .networkEvents
+    () => (window as unknown as { __previewTestState: { networkEvents: string[] } }).__previewTestState.networkEvents
   );
 }
 
@@ -394,7 +386,8 @@ async function replaceActiveSource(page: Page, content: string) {
 async function selectTypeFromNavigate(page: Page, nodeId: string): Promise<void> {
   const typeRow = page.getByTestId(`ns-type-${nodeId}`);
   await typeRow.waitFor({ state: 'visible', timeout: 10_000 });
-  await typeRow.locator('span.truncate').click();
+  // Phase 8: single-click marks drag source; double-click navigates.
+  await typeRow.locator('span.truncate').dblclick();
 }
 
 test.describe('Form Preview', () => {
@@ -404,9 +397,7 @@ test.describe('Form Preview', () => {
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('renders the selected type in Preview → Form with nested mapped fields', async ({
-    page
-  }) => {
+  test('renders the selected type in Preview → Form with nested mapped fields', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alpha.rosetta', content: PREVIEW_MODEL }]);
 
     const previewPanel = page.getByTestId('panel-formPreview');
@@ -424,9 +415,7 @@ test.describe('Form Preview', () => {
     await expect(previewPanel.getByLabel('legalName')).toBeVisible();
   });
 
-  test('uses fully-qualified target identity when duplicate display names exist', async ({
-    page
-  }) => {
+  test('uses fully-qualified target identity when duplicate display names exist', async ({ page }) => {
     await loadFiles(page, [
       { name: 'preview-alpha.rosetta', content: DUPLICATE_ALPHA_MODEL },
       { name: 'preview-beta.rosetta', content: DUPLICATE_BETA_MODEL }
@@ -445,9 +434,7 @@ test.describe('Form Preview', () => {
     await expect(previewPanel).not.toContainText('preview.alpha.Trade [Data]');
   });
 
-  test('validates required fields and bounded arrays, then clears errors after valid input', async ({
-    page
-  }) => {
+  test('validates required fields and bounded arrays, then clears errors after valid input', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alpha.rosetta', content: PREVIEW_MODEL }]);
     await selectTypeFromNavigate(page, 'preview.alpha::Trade');
 
@@ -471,9 +458,7 @@ test.describe('Form Preview', () => {
     await expect(previewPanel.getByText(/invalid sample/i)).not.toBeVisible();
   });
 
-  test('supports keyboard-only reset and sample-data copy without extra network requests', async ({
-    page
-  }) => {
+  test('supports keyboard-only reset and sample-data copy without extra network requests', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alpha.rosetta', content: PREVIEW_MODEL }]);
     await selectTypeFromNavigate(page, 'preview.alpha::Trade');
     await resetPreviewNetworkState(page);
@@ -485,9 +470,7 @@ test.describe('Form Preview', () => {
     await previewPanel.getByLabel('aliases item 1').fill('Desk alias');
 
     await expect(previewPanel.getByText(/valid sample/i)).toBeVisible();
-    await expect(previewPanel.getByTestId('sample-data-output')).toContainText(
-      '"tradeId": "TRD-200"'
-    );
+    await expect(previewPanel.getByTestId('sample-data-output')).toContainText('"tradeId": "TRD-200"');
 
     await previewPanel.getByRole('button', { name: /copy sample data/i }).focus();
     await page.keyboard.press('Enter');
@@ -524,15 +507,11 @@ test.describe('Form Preview', () => {
     await expect(previewPanel.getByRole('heading', { name: 'Trade' })).toBeVisible();
 
     await replaceActiveSource(page, PREVIEW_MODEL_DELETED);
-    await expect(
-      previewPanel.getByText(/select a type from the graph, file tree, or source editor/i)
-    ).toBeVisible();
+    await expect(previewPanel.getByText(/select a type from the graph, file tree, or source editor/i)).toBeVisible();
     await expect(previewPanel.getByRole('heading', { name: 'Trade' })).not.toBeVisible();
   });
 
-  test('follows the selected preview target when the type is renamed during reload', async ({
-    page
-  }) => {
+  test('follows the selected preview target when the type is renamed during reload', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alpha.rosetta', content: PREVIEW_MODEL }]);
     await selectTypeFromNavigate(page, 'preview.alpha::Trade');
 

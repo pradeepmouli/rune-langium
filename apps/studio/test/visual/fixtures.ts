@@ -99,7 +99,8 @@ export async function selectNode(page: Page, kind: FormKind): Promise<void> {
   // the row container's `data-testid="ns-type-<nodeId>"` is stable.
   const typeRow = page.locator('[data-testid^="ns-type-"]').filter({ hasText: nodeName });
   await typeRow.first().waitFor({ state: 'visible', timeout: 10000 });
-  await typeRow.first().click();
+  // Phase 8: single-click marks drag source; double-click navigates.
+  await typeRow.first().dblclick();
   await page.locator('[data-testid="panel-inspector"]').waitFor({ timeout: 5000 });
   await page.waitForTimeout(500);
 }

@@ -81,6 +81,7 @@ import {
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
 import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
+import { useStructureViewStore } from '../store/structure-view-store.js';
 import '../test-api.js';
 import { getRuneStudioTestApi } from '../test-api.js';
 
@@ -350,6 +351,11 @@ export function EditorPage({
   const previewSelectedTarget = usePreviewStore((s) => s.selectedTarget);
   const setPreviewTargets = usePreviewStore((s) => s.setAvailableTargets);
   const selectPreviewTarget = usePreviewStore((s) => s.selectTarget);
+
+  // Structure View: drag-source state for the NamespaceExplorerPanel palette.
+  const dragSource = useStructureViewStore((s) => s.dragSource);
+  const setDragSource = useStructureViewStore((s) => s.setDragSource);
+  const clearDragSource = useStructureViewStore((s) => s.clearDragSource);
   const receivePreviewResult = usePreviewStore((s) => s.receivePreviewResult);
   const receivePreviewStale = usePreviewStore((s) => s.receivePreviewStale);
   const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
@@ -1138,6 +1144,9 @@ export function EditorPage({
           onExpandAll={storeExpandAllNamespaces}
           onCollapseAll={storeCollapseAllNamespaces}
           onSelectNode={handleExplorerSelectNode}
+          dragSourceId={dragSource?.typeId}
+          onSetDragSource={setDragSource}
+          onClearDragSource={clearDragSource}
         />
       </ScrollArea>
     ),
@@ -1149,7 +1158,10 @@ export function EditorPage({
       storeToggleNamespace,
       storeExpandAllNamespaces,
       storeCollapseAllNamespaces,
-      handleExplorerSelectNode
+      handleExplorerSelectNode,
+      dragSource,
+      setDragSource,
+      clearDragSource
     ]
   );
 

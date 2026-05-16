@@ -51,7 +51,8 @@ async function loadModel(page: Page) {
 }
 
 async function selectType(page: Page, nodeId: string) {
-  await page.getByTestId(`ns-type-${nodeId}`).click();
+  // Phase 8: single-click marks drag source; double-click navigates.
+  await page.getByTestId(`ns-type-${nodeId}`).dblclick();
   await page.waitForTimeout(1000);
 }
 

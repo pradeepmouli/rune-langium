@@ -248,7 +248,8 @@ async function loadFiles(page: Page, files: Array<{ name: string; content: strin
 async function selectTypeFromNavigate(page: Page, nodeId: string): Promise<void> {
   const typeRow = page.getByTestId(`ns-type-${nodeId}`);
   await typeRow.waitFor({ state: 'visible', timeout: 10_000 });
-  await typeRow.locator('span.truncate').click();
+  // Phase 8: single-click marks drag source; double-click navigates.
+  await typeRow.locator('span.truncate').dblclick();
 }
 
 // ---------------------------------------------------------------------------
@@ -262,9 +263,7 @@ test.describe('Form Preview — Extended Types', () => {
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('T083: type alias model renders Order type in the preview panel without errors', async ({
-    page
-  }) => {
+  test('T083: type alias model renders Order type in the preview panel without errors', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alias.rosetta', content: TYPE_ALIAS_MODEL }]);
 
     const previewPanel = page.getByTestId('panel-formPreview');
@@ -284,9 +283,7 @@ test.describe('Form Preview — Extended Types', () => {
     await expect(previewPanel.getByLabel('description')).toBeVisible();
   });
 
-  test('T083: choice model renders Transfer choice panel with option radio controls', async ({
-    page
-  }) => {
+  test('T083: choice model renders Transfer choice panel with option radio controls', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-choice.rosetta', content: CHOICE_MODEL }]);
 
     const previewPanel = page.getByTestId('panel-formPreview');
@@ -306,9 +303,7 @@ test.describe('Form Preview — Extended Types', () => {
     await expect(previewPanel.getByText('SecurityTransfer', { exact: true })).toBeVisible();
   });
 
-  test('T084: function model shows input fields and a Run button in the preview panel', async ({
-    page
-  }) => {
+  test('T084: function model shows input fields and a Run button in the preview panel', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-func.rosetta', content: FUNCTION_MODEL }]);
 
     const previewPanel = page.getByTestId('panel-formPreview');
