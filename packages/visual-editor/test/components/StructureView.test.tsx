@@ -20,24 +20,24 @@ import { expansionKey } from '../../src/types/structure-view.js';
 
 describe('StructureView — empty state', () => {
   it('renders empty-state when focusedTypeId is undefined', () => {
-    render(<StructureView focusedTypeId={undefined} document={undefined} />);
+    render(<StructureView focusedTypeId={undefined} adapterDoc={undefined} />);
     expect(screen.getByTestId('structure-empty-state')).toBeInTheDocument();
     expect(screen.getByTestId('structure-empty-state')).toHaveTextContent(
       'Select a type from the Namespace Explorer to view its structure.'
     );
   });
 
-  it('renders empty-state when document is undefined even with a focusedTypeId', () => {
-    render(<StructureView focusedTypeId="cdm.trade::Trade" document={undefined} />);
+  it('renders empty-state when adapterDoc is undefined even with a focusedTypeId', () => {
+    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={undefined} />);
     expect(screen.getByTestId('structure-empty-state')).toBeInTheDocument();
   });
 
-  it('renders empty-state when focusedTypeId is undefined even with a document', () => {
+  it('renders empty-state when focusedTypeId is undefined even with an adapterDoc', () => {
     const doc: AdapterDocument = {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: []
     };
-    render(<StructureView focusedTypeId={undefined} document={doc} />);
+    render(<StructureView focusedTypeId={undefined} adapterDoc={doc} />);
     expect(screen.getByTestId('structure-empty-state')).toBeInTheDocument();
   });
 });
@@ -109,7 +109,7 @@ vi.mock('@xyflow/react', async (importOriginal) => {
 
 describe('StructureView — adapter + layout integration', () => {
   it('renders Trade node; Economics node absent when not expanded', () => {
-    render(<StructureView focusedTypeId="cdm.trade::Trade" document={tradeDoc} expansionMap={new Map()} />);
+    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={tradeDoc} expansionMap={new Map()} />);
 
     // Flow container should be present (not empty state)
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
@@ -132,7 +132,7 @@ describe('StructureView — adapter + layout integration', () => {
     });
     const expansionMap = new Map([[key, true]]);
 
-    render(<StructureView focusedTypeId="cdm.trade::Trade" document={tradeDoc} expansionMap={expansionMap} />);
+    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={tradeDoc} expansionMap={expansionMap} />);
 
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     // Economics node should now be present in the layout output

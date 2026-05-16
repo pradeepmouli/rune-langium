@@ -7,24 +7,27 @@
  *   - `layoutStructureGraph` (Phase 3 layout)
  *   - React Flow for rendering the resulting nodes
  *
- * Renders an empty-state message when `focusedTypeId` or `document` is absent.
+ * Renders an empty-state message when `focusedTypeId` or `adapterDoc` is absent.
  * Phase 8 will inject editable cell components via `cellComponents`; this phase
- * renders the read-only structure with React Flow's default node renderers.
+ * renders the read-only structure with React Flow's custom node renderers registered
+ * in `nodes/index.ts` (DataNode, ChoiceNode, GroupContainerNode, StructureBase).
  *
  * @module
  */
 
 import React, { useMemo } from 'react';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
+import type { Node, Edge } from '@xyflow/react';
 import type { AdapterDocument } from '../adapters/structure-graph-adapter.js';
 import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
 import { layoutStructureGraph } from '../layout/structure-layout.js';
+import { nodeTypes } from './nodes/index.js';
 
 export interface StructureViewProps {
   /** Canonical node id of the type to focus (e.g. `'cdm.trade::Trade'`). */
   readonly focusedTypeId: string | undefined;
   /** In-memory document representation produced by the studio's store adapter. */
-  readonly document: AdapterDocument | undefined;
+  readonly adapterDoc: AdapterDocument | undefined;
   /** Expansion state; when undefined the view renders all nodes collapsed. */
   readonly expansionMap?: ReadonlyMap<string, boolean>;
 }
@@ -33,7 +36,7 @@ const EMPTY_EXPANSION_MAP: ReadonlyMap<string, boolean> = new Map();
 
 interface StructureFlowInnerProps {
   readonly focusedTypeId: string;
-  readonly document: AdapterDocument;
+  readonly adapterDoc: AdapterDocument;
   readonly expansionMap: ReadonlyMap<string, boolean>;
 }
 
@@ -41,20 +44,24 @@ interface StructureFlowInnerProps {
  * Inner ReactFlow renderer — kept separate so the ReactFlowProvider wraps the
  * whole subtree without the empty-state check logic needing to know about it.
  */
-function StructureFlowInner({ focusedTypeId, document, expansionMap }: StructureFlowInnerProps): React.ReactElement {
+function StructureFlowInner({ focusedTypeId, adapterDoc, expansionMap }: StructureFlowInnerProps): React.ReactElement {
   const { nodes, edges } = useMemo(() => {
-    const input = buildStructureGraph(document, {
+    const input = buildStructureGraph(adapterDoc, {
       focusedTypeId,
       expansionMap
     });
-    return layoutStructureGraph(input);
-  }, [focusedTypeId, document, expansionMap]);
+    // layoutStructureGraph returns LayoutResult: { nodes: ReadonlyArray<Node>, edges: ReadonlyArray<Edge> }
+    // where Node/Edge are from @xyflow/react. Spreading to mutable arrays satisfies ReactFlow's prop type.
+    const result = layoutStructureGraph(input);
+    return { nodes: result.nodes as Node[], edges: result.edges as Edge[] };
+  }, [focusedTypeId, adapterDoc, expansionMap]);
 
   return (
     <div data-testid="structure-view-flow" style={{ width: '100%', height: '100%', minHeight: 320 }}>
       <ReactFlow
-        nodes={nodes as import('@xyflow/react').Node[]}
-        edges={edges as import('@xyflow/react').Edge[]}
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
         fitView
         nodesDraggable={false}
         nodesConnectable={false}
@@ -69,11 +76,11 @@ function StructureFlowInner({ focusedTypeId, document, expansionMap }: Structure
  * StructureView component.
  *
  * Shows a read-only expanded structure graph for the focused type.  When
- * `focusedTypeId` or `document` is missing an empty-state placeholder is
+ * `focusedTypeId` or `adapterDoc` is missing an empty-state placeholder is
  * rendered instead.
  */
-export function StructureView({ focusedTypeId, document, expansionMap }: StructureViewProps): React.ReactElement {
-  if (!focusedTypeId || !document) {
+export function StructureView({ focusedTypeId, adapterDoc, expansionMap }: StructureViewProps): React.ReactElement {
+  if (!focusedTypeId || !adapterDoc) {
     return (
       <div data-testid="structure-empty-state">Select a type from the Namespace Explorer to view its structure.</div>
     );
@@ -83,7 +90,7 @@ export function StructureView({ focusedTypeId, document, expansionMap }: Structu
     <ReactFlowProvider>
       <StructureFlowInner
         focusedTypeId={focusedTypeId}
-        document={document}
+        adapterDoc={adapterDoc}
         expansionMap={expansionMap ?? EMPTY_EXPANSION_MAP}
       />
     </ReactFlowProvider>

@@ -68,18 +68,23 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         extends: d.superType?.$refText,
         // `attributes` on AstNodeModel<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
-        attributes: (d.attributes ?? []) as AdapterNode['attributes']
+        attributes: (d.attributes ?? []) satisfies AdapterNode['attributes']
       });
     } else if (d.$type === 'Choice') {
-      // Choice nodes use `options` in the AST, but AdapterNode.attributes maps
-      // to whichever sub-array holds the selectable arms. For the structure-view
-      // adapter a Choice's `options` acts like attributes (each option is a row).
+      // Choice arms are stored on d.attributes (same shape as Data attributes — single-array projection).
+      // (d.options is undefined on the AST; choice-utils, editor-store, rosetta-serializer, and codegen
+      // all push/read arms via .attributes — see choice-utils.ts:10,23 and editor-store.ts:1221.)
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Choice',
         name: d.name,
         namespace: d.namespace,
-        attributes: (d.options ?? []) as AdapterNode['attributes']
+        // ChoiceOption's AstNodeModel shape doesn't structurally overlap AdapterAttribute
+        // at the TypeScript level (AstNodeModel<ChoiceOption> lacks the name/card literal
+        // shape that AdapterAttribute requires), but the runtime fields consumed by
+        // buildStructureGraph (name, typeCall, card) are present on every ChoiceOption.
+        // Double-cast through unknown is intentional — runtime invariant is verified.
+        attributes: (d.attributes ?? []) as unknown as AdapterNode['attributes']
       });
     } else if (d.$type === 'RosettaEnumeration') {
       adapterNodes.push({
@@ -110,12 +115,11 @@ export function VisualPreviewPanel({ children }: VisualPreviewPanelProps): React
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const storeNodes = useEditorStore((s) => s.nodes);
 
-  // Structure view store — expansion state + drag source (drag-source reserved for Phase 8)
+  // Structure view store — expansion state (drag-source consumption is a Phase 8 concern,
+  // see the Phase 8 TODO block at the top of this file)
   const expansionMap = useStructureViewStore((s) => s.expansionMap);
-  // dragSource imported for Phase 8 readiness — not yet used in this panel
-  // const dragSource = useStructureViewStore((s) => s.dragSource);
 
-  // Derive AdapterDocument from the editor store nodes (pure projection)
+  // expansionMap is intentionally excluded — adapterDocument only changes when AST nodes change; expansion-only changes re-run the cheaper inner memo in StructureFlowInner.
   const adapterDocument = useMemo(
     () => (storeNodes.length > 0 ? graphNodesToAdapterDocument(storeNodes) : undefined),
     [storeNodes]
@@ -131,18 +135,22 @@ export function VisualPreviewPanel({ children }: VisualPreviewPanelProps): React
     >
       <Tabs defaultValue="graph" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
         <TabsList aria-label="View mode">
-          <TabsTrigger value="graph">Graph</TabsTrigger>
-          <TabsTrigger value="structure">Structure</TabsTrigger>
+          <TabsTrigger value="graph" data-testid="tab-graph">
+            Graph
+          </TabsTrigger>
+          <TabsTrigger value="structure" data-testid="tab-structure">
+            Structure
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="graph" style={{ flex: 1, overflow: 'hidden' }}>
+        <TabsContent forceMount value="graph" className="flex-1 overflow-hidden data-[state=inactive]:hidden">
           {children ?? <p>The graph-focused modeling view mounts here.</p>}
         </TabsContent>
 
-        <TabsContent value="structure" style={{ flex: 1, overflow: 'hidden' }}>
+        <TabsContent forceMount value="structure" className="flex-1 overflow-hidden data-[state=inactive]:hidden">
           <StructureView
             focusedTypeId={selectedNodeId ?? undefined}
-            document={adapterDocument}
+            adapterDoc={adapterDocument}
             expansionMap={expansionMap}
           />
         </TabsContent>
