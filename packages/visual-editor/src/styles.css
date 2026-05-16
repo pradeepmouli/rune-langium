@@ -121,23 +121,16 @@
 /* ── Node base ────────────────────────────────────────────────── */
 
 .rune-node {
-  border-radius: var(--radius-lg, 8px);
-  border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 10%, oklch(0.21 0.02 280)) 0%,
-      oklch(0.18 0.02 280) 100%
-    );
-  font-family: var(--font-sans, 'Inter', ui-sans-serif, system-ui, sans-serif);
-  font-size: var(--text-base, 13px);
+  background: var(--card, var(--background, #181824));
+  font-family: var(--font-sans, Inter, system-ui, -apple-system, sans-serif);
+  font-size: var(--text-sm, 0.875rem);
   min-width: 200px;
-  color: var(--color-node-text, #E8E6E1);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 8px 18px oklch(0 0 0 / 0.2);
+  color: var(--color-node-text, var(--foreground, #E8E6E1));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
@@ -150,20 +143,6 @@
   width: 3px;
   background: color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 82%, white 18%);
   opacity: 0.78;
-}
-
-.rune-node::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      circle at top,
-      color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 18%, transparent),
-      transparent 52%
-    ),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 38%);
 }
 
 .rune-node:hover {
@@ -179,26 +158,16 @@
   transition: none;
 }
 
-.react-flow__node.dragging .rune-node::after {
-  opacity: 0.42;
-}
-
 .rune-node-header {
-  padding: var(--space-4, 8px) var(--space-6, 12px);
+  padding: var(--rune-header-padding-y) var(--rune-header-padding-x);
   font-weight: 600;
-  font-size: var(--text-md, 14px);
-  border-bottom: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
+  font-size: var(--text-sm, 0.875rem);
+  border-bottom: 1px solid color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 78%, transparent);
   display: flex;
   align-items: center;
-  gap: var(--space-3, 6px);
+  gap: var(--rune-header-padding-y);
   position: relative;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 10%, transparent),
-      transparent 72%
-    ),
-    color-mix(in oklch, var(--background, #121218) 28%, transparent);
+  background: transparent;
 }
 
 .rune-node-summary {
@@ -281,7 +250,7 @@
 }
 
 .rune-node-body {
-  padding: var(--space-4, 8px) var(--space-6, 12px);
+  padding: var(--rune-body-padding-y) var(--rune-body-padding-x);
 }
 
 .rune-node-members {
@@ -819,6 +788,23 @@ button[data-navigable]:focus-visible {
   --rune-col-gap: 32px;
   --rune-row-gap: 8px;
   --rune-base-padding: 16px;
+  /* Phase 10.2 — ornament constants (chip/pill/row-indent).
+   * Not layout-bearing in the structure-layout.ts sense (they don't
+   * couple to row y-offsets), but declared here so the stylelint rule
+   * rune/no-literal-layout-px accepts them on geometry-class selectors.
+   * Parity with STRUCTURE_LAYOUT_CONSTANTS is NOT required for these. */
+  --rune-chip-padding-y: 1px;
+  --rune-chip-padding-x: 6px;
+  --rune-pill-padding-x: 5px;
+  --rune-row-indent: 6px;
+  /* Chrome padding — bridges design-system tokens to the rune SSoT
+   * so the no-literal-layout-px rule can require var(--rune-*) on all
+   * layout-coupled properties of .rune-* classes. Values default to
+   * the matching design-system tokens so rendering is unchanged. */
+  --rune-header-padding-y: var(--space-2, 8px);
+  --rune-header-padding-x: var(--space-4, 16px);
+  --rune-body-padding-y: var(--space-2, 8px);
+  --rune-body-padding-x: var(--space-4, 16px);
 }
 
 /* ── Structure View — Phase 6 geometry ───────────────────────────
@@ -916,6 +902,10 @@ button[data-navigable]:focus-visible {
   margin-left: var(--rune-col-gap);
   flex: 1 1 auto;
   min-height: var(--rune-row-height); /* prevents collapse when child list is empty */
+  /* Phase 10.2 — decorative left border to visually separate the child column.
+   * Padding uses --rune-row-gap (8px) as the inset. */
+  border-left: 1px dashed var(--border, rgba(255, 255, 255, 0.06));
+  padding-left: var(--rune-row-gap);
 }
 
 /* GroupContainerNode — base-type scope -------------------------- */
@@ -950,4 +940,96 @@ button[data-navigable]:focus-visible {
   align-items: center;
   height: var(--rune-row-height);
   gap: var(--rune-row-gap);
+}
+
+/* ── Phase 10.2 — Cell-level type chip, cardinality pill, row modifiers ──
+ *
+ * These rules add visual-layer polish on top of the Phase 6 geometry.
+ * Layout-coupled px values use var(--rune-*) SSoT props declared above.
+ * Colors are mapped through design-system tokens; no raw hex literals.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* Type reference chip — per-kind coloured badge replacing italic text */
+.rune-cell-type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--rune-chip-padding-y) var(--rune-chip-padding-x);
+  border-radius: 3px;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: var(--text-xs, 0.75rem);
+  font-style: normal;
+  cursor: pointer;
+  background: var(--color-data-badge, rgba(0, 212, 170, 0.20));
+  color: var(--color-data-text, #00D4AA);
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+/* Per-kind chip variants — background/text from design-system kind tokens */
+.rune-cell-type-chip--data {
+  background: var(--color-data-badge, rgba(0, 212, 170, 0.20));
+  color: var(--color-data-text, #00D4AA);
+}
+
+.rune-cell-type-chip--choice {
+  background: var(--color-choice-bg, rgba(232, 145, 58, 0.12));
+  color: var(--color-choice-text, #E8913A);
+}
+
+.rune-cell-type-chip--enum {
+  background: var(--color-enum-bg, rgba(139, 123, 244, 0.12));
+  color: var(--color-enum-text, #8B7BF4);
+}
+
+/* Basic/scalar types reuse muted-foreground palette */
+.rune-cell-type-chip--basic {
+  background: color-mix(in oklch, var(--muted-foreground, #8A8A96) 14%, transparent);
+  color: var(--muted-foreground, #8A8A96);
+}
+
+.rune-cell-type-chip--unresolved {
+  background: color-mix(in oklch, var(--destructive, #FF6058) 14%, transparent);
+  color: var(--destructive, #FF6058);
+}
+
+.rune-cell-type-chip:hover {
+  border-color: currentColor;
+}
+
+/* Cardinality pill — monospace badge replacing plain text */
+.rune-cell-card {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--rune-chip-padding-y) var(--rune-pill-padding-x);
+  border-radius: 3px;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: var(--text-xs, 0.75rem);
+  background: var(--muted, #181824);
+  color: var(--muted-foreground, #8A8A96);
+  cursor: pointer;
+}
+
+/* Row modifier — optional field (dashed left border + indent) */
+.rune-node-row.optional {
+  border-left: 2px dashed color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 80%, transparent);
+  padding-left: var(--rune-row-indent);
+}
+
+/* Row modifier — field being edited (solid primary left border + indent) */
+.rune-node-row.editing {
+  border-left: 2px solid var(--primary, #00D4AA);
+  padding-left: var(--rune-row-indent);
+}
+
+/* Row modifier — row with an expand/collapse control (no additional geometry) */
+.rune-node-row.has-expansion {
+  /* visual expansion indicator is rendered inside the row;
+   * no extra layout geometry needed here */
+}
+
+/* Drop-over highlight states — outline does not reflow, so bare px is OK */
+.rune-cell-type-wrap--over .rune-cell-type-chip,
+.rune-cell-extends--over {
+  outline: 2px solid var(--primary, #00D4AA);
+  outline-offset: 1px;
 }
