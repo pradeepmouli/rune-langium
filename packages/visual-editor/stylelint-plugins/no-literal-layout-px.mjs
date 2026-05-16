@@ -52,12 +52,12 @@ function isViolation(value) {
   // Allow zero values, auto/none/inherit/initial
   if (/^0(px)?$/.test(value)) return false;
   if (/^(auto|none|inherit|initial|revert|unset)$/.test(value)) return false;
-  // Allow shorthand values where every numeric component is zero or a
-  // non-layout-coupled axis-only literal (e.g., "0 8px" — vertical 0 means
-  // no layout coupling; horizontal 8px is a render inset, not a row-height)
-  // We approximate: if the value has any token containing a digit followed
-  // by px AND it's not preceded by var(...), flag.
-  if (!/\d+px/.test(value)) return false;
+  // Allow px values that appear only inside var() fallback position —
+  // e.g. `var(--space-2, 8px)` is a valid standalone fallback, not a bare
+  // literal.  Strip all var(…) calls (including nested) before checking for
+  // bare px so that only truly naked literals trigger the violation.
+  const withoutVarFallbacks = value.replace(/\bvar\([^)]*\)/g, 'VAR');
+  if (!/\d+px/.test(withoutVarFallbacks)) return false;
   // Special-case: shorthand starting with "0 " (vertical zero) followed by
   // horizontal-only px is allowed — horizontal padding/margin doesn't couple
   // to layout y-coords. This matches the existing `.rune-node-row { padding: 0 8px }` pattern.
