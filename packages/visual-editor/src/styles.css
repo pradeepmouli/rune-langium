@@ -788,6 +788,15 @@ button[data-navigable]:focus-visible {
   --rune-col-gap: 32px;
   --rune-row-gap: 8px;
   --rune-base-padding: 16px;
+  /* Phase 10.2 — ornament constants (chip/pill/row-indent).
+   * Not layout-bearing in the structure-layout.ts sense (they don't
+   * couple to row y-offsets), but declared here so the stylelint rule
+   * rune/no-literal-layout-px accepts them on geometry-class selectors.
+   * Parity with STRUCTURE_LAYOUT_CONSTANTS is NOT required for these. */
+  --rune-chip-padding-y: 1px;
+  --rune-chip-padding-x: 6px;
+  --rune-pill-padding-x: 5px;
+  --rune-row-indent: 6px;
 }
 
 /* ── Structure View — Phase 6 geometry ───────────────────────────
@@ -885,6 +894,10 @@ button[data-navigable]:focus-visible {
   margin-left: var(--rune-col-gap);
   flex: 1 1 auto;
   min-height: var(--rune-row-height); /* prevents collapse when child list is empty */
+  /* Phase 10.2 — decorative left border to visually separate the child column.
+   * Padding uses --rune-row-gap (8px) as the inset. */
+  border-left: 1px dashed var(--border);
+  padding-left: var(--rune-row-gap);
 }
 
 /* GroupContainerNode — base-type scope -------------------------- */
@@ -919,4 +932,96 @@ button[data-navigable]:focus-visible {
   align-items: center;
   height: var(--rune-row-height);
   gap: var(--rune-row-gap);
+}
+
+/* ── Phase 10.2 — Cell-level type chip, cardinality pill, row modifiers ──
+ *
+ * These rules add visual-layer polish on top of the Phase 6 geometry.
+ * Layout-coupled px values use var(--rune-*) SSoT props declared above.
+ * Colors are mapped through design-system tokens; no raw hex literals.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* Type reference chip — per-kind coloured badge replacing italic text */
+.rune-cell-type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--rune-chip-padding-y) var(--rune-chip-padding-x);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-style: normal;
+  cursor: pointer;
+  background: var(--color-data-badge);
+  color: var(--color-data-text);
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+/* Per-kind chip variants — background/text from design-system kind tokens */
+.rune-cell-type-chip--data {
+  background: var(--color-data-badge);
+  color: var(--color-data-text);
+}
+
+.rune-cell-type-chip--choice {
+  background: var(--color-choice-bg);
+  color: var(--color-choice-text);
+}
+
+.rune-cell-type-chip--enum {
+  background: var(--color-enum-bg);
+  color: var(--color-enum-text);
+}
+
+/* Basic/scalar types reuse muted-foreground palette */
+.rune-cell-type-chip--basic {
+  background: color-mix(in oklch, var(--muted-foreground) 14%, transparent);
+  color: var(--muted-foreground);
+}
+
+.rune-cell-type-chip--unresolved {
+  background: color-mix(in oklch, var(--destructive) 14%, transparent);
+  color: var(--destructive);
+}
+
+.rune-cell-type-chip:hover {
+  border-color: currentColor;
+}
+
+/* Cardinality pill — monospace badge replacing plain text */
+.rune-cell-card {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--rune-chip-padding-y) var(--rune-pill-padding-x);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+/* Row modifier — optional field (dashed left border + indent) */
+.rune-node-row.optional {
+  border-left: 2px dashed color-mix(in oklch, var(--border) 80%, transparent);
+  padding-left: var(--rune-row-indent);
+}
+
+/* Row modifier — field being edited (solid primary left border + indent) */
+.rune-node-row.editing {
+  border-left: 2px solid var(--primary);
+  padding-left: var(--rune-row-indent);
+}
+
+/* Row modifier — row with an expand/collapse control (no additional geometry) */
+.rune-node-row.has-expansion {
+  /* visual expansion indicator is rendered inside the row;
+   * no extra layout geometry needed here */
+}
+
+/* Drop-over highlight states — outline does not reflow, so bare px is OK */
+.rune-cell-type-wrap--over .rune-cell-type-chip,
+.rune-cell-extends--over {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
