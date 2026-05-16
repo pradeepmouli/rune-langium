@@ -34,12 +34,7 @@ export function StatusBar({
   onToggleTelemetry
 }: Props): React.ReactElement {
   return (
-    <footer
-      role="contentinfo"
-      aria-label="Studio status bar"
-      data-testid="status-bar"
-      className="studio-statusbar"
-    >
+    <footer aria-label="Studio status bar" data-testid="status-bar" className="studio-statusbar">
       <div className="studio-statusbar__left">
         <span data-testid="status-workspace">⟢ {workspaceName}</span>
         <span className="studio-statusbar__sep" />

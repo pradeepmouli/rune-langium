@@ -11,7 +11,6 @@ export interface InspectorPanelProps {
 export function InspectorPanel({ children }: InspectorPanelProps): React.ReactElement {
   return (
     <section
-      role="region"
       aria-label="Inspector"
       data-testid="panel-inspector"
       data-component="workspace.inspector"

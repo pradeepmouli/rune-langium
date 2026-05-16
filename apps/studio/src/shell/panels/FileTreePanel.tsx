@@ -8,14 +8,11 @@ export interface FileTreePanelProps {
   onOpen?: (path: string) => void;
 }
 
-export function FileTreePanel({ files = [], onOpen }: FileTreePanelProps): React.ReactElement {
+const EMPTY_FILES: ReadonlyArray<{ path: string }> = [];
+
+export function FileTreePanel({ files = EMPTY_FILES, onOpen }: FileTreePanelProps): React.ReactElement {
   return (
-    <section
-      role="region"
-      aria-label="File tree"
-      data-testid="panel-fileTree"
-      data-component="workspace.fileTree"
-    >
+    <section aria-label="File tree" data-testid="panel-fileTree" data-component="workspace.fileTree">
       <h2>Files</h2>
       <ul role="tree">
         {files.map((f) => (

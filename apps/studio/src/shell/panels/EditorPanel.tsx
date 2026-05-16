@@ -15,6 +15,8 @@ export interface EditorPanelProps {
   onClose?: (path: string) => void;
 }
 
+const EMPTY_TABS: ReadonlyArray<EditorTab> = [];
+
 // File paths can contain `/`, `.`, and other characters that aren't valid in
 // HTML ids (and risk colliding with paths from other panels). Hash to a stable
 // alphanumeric id so `aria-controls` / `aria-labelledby` actually resolve.
@@ -31,7 +33,7 @@ function tabPanelId(path: string): string {
 }
 
 export function EditorPanel({
-  tabs = [],
+  tabs = EMPTY_TABS,
   activePath = null,
   onSelect,
   onClose
@@ -39,12 +41,7 @@ export function EditorPanel({
   const activeTabId = activePath ? tabId(activePath) : undefined;
   const activeTabPanelId = activePath ? tabPanelId(activePath) : undefined;
   return (
-    <section
-      role="region"
-      aria-label="Editor"
-      data-testid="panel-editor"
-      data-component="workspace.editor"
-    >
+    <section aria-label="Editor" data-testid="panel-editor" data-component="workspace.editor">
       <div role="tablist" aria-orientation="horizontal">
         {tabs.map((t) => {
           const id = tabId(t.path);
@@ -66,11 +63,7 @@ export function EditorPanel({
                 )}
                 {t.path}
               </button>
-              <button
-                type="button"
-                aria-label={`Close ${t.path}`}
-                onClick={() => onClose?.(t.path)}
-              >
+              <button type="button" aria-label={`Close ${t.path}`} onClick={() => onClose?.(t.path)}>
                 ×
               </button>
             </div>

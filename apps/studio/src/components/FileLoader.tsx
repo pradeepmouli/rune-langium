@@ -22,6 +22,8 @@ import { cn } from '@rune-langium/design-system/utils';
 import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
 import { config } from '../config.js';
 
+const EMPTY_FILES: ReadonlyArray<WorkspaceFile> = [];
+
 export interface FileLoaderProps {
   onFilesLoaded: (files: WorkspaceFile[]) => void;
   /**
@@ -62,7 +64,7 @@ function defaultGithubAuthBase(): string {
 
 export function FileLoader({
   onFilesLoaded,
-  existingFiles = [],
+  existingFiles = EMPTY_FILES,
   githubAuthBase,
   createGitBackedWorkspace,
   onGitHubWorkspaceCreated
@@ -148,9 +150,7 @@ export function FileLoader({
        *      a discoverable but visually subordinate row — no
        *      `border-t` divider, just `mt-8`. */}
       <div className="text-center max-w-[560px]">
-        <h2 className="text-3xl font-semibold tracking-tight text-foreground mb-3">
-          Load Rune DSL Models
-        </h2>
+        <h2 className="text-3xl font-semibold tracking-tight text-foreground mb-3">Load Rune DSL Models</h2>
         <p className="text-md text-text-secondary mb-8">
           Start a new file, or drag and drop existing .rosetta files here
         </p>
@@ -206,9 +206,7 @@ export function FileLoader({
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Open from GitHub</DialogTitle>
-                <DialogDescription>
-                  Sign in with GitHub and clone a repository into a new workspace.
-                </DialogDescription>
+                <DialogDescription>Sign in with GitHub and clone a repository into a new workspace.</DialogDescription>
               </DialogHeader>
               <GitHubWorkspaceFlow
                 authBase={authBase}

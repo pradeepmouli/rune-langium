@@ -10,13 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { Button } from '@rune-langium/design-system/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@rune-langium/design-system/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
@@ -29,11 +23,7 @@ import {
 } from '@rune-langium/design-system/ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import { KNOWN_GENERATORS } from '@rune-langium/codegen-legacy';
-import type {
-  CodeGenerationResult,
-  GeneratedFile,
-  GenerationError
-} from '@rune-langium/codegen-legacy';
+import type { CodeGenerationResult, GeneratedFile, GenerationError } from '@rune-langium/codegen-legacy';
 import { getCodegenService } from '../services/codegen-service.js';
 import { downloadFile } from '../services/export.js';
 
@@ -73,13 +63,7 @@ type DialogState =
   | { phase: 'done'; result: CodeGenerationResult }
   | { phase: 'error'; details: ErrorDetails };
 
-export function ExportDialog({
-  getUserFiles,
-  getReferenceFiles,
-  open,
-  onClose,
-  validateModel
-}: ExportDialogProps) {
+export function ExportDialog({ getUserFiles, getReferenceFiles, open, onClose, validateModel }: ExportDialogProps) {
   const [language, setLanguage] = useState('java');
   const [state, setState] = useState<DialogState>({ phase: 'idle' });
   const [selectedFile, setSelectedFile] = useState<GeneratedFile | null>(null);
@@ -99,9 +83,7 @@ export function ExportDialog({
   const isHosted = service.isHostedService();
   const turnstileSiteKey = (
     typeof import.meta !== 'undefined'
-      ? (import.meta as unknown as Record<string, Record<string, string>>).env?.[
-          'VITE_TURNSTILE_SITE_KEY'
-        ]
+      ? (import.meta as unknown as Record<string, Record<string, string>>).env?.['VITE_TURNSTILE_SITE_KEY']
       : undefined
   ) as string | undefined;
   const showTurnstile = isHosted && Boolean(turnstileSiteKey);
@@ -219,8 +201,7 @@ export function ExportDialog({
     }
     // 429 rate_limited → show retry window + local-dev hint.
     if (status === 429 && body?.error === 'rate_limited') {
-      const mins =
-        typeof body.retry_after_s === 'number' ? Math.ceil(body.retry_after_s / 60) : null;
+      const mins = typeof body.retry_after_s === 'number' ? Math.ceil(body.retry_after_s / 60) : null;
       return (
         <>
           <p className="font-medium mb-1">Rate limit reached</p>
@@ -232,8 +213,8 @@ export function ExportDialog({
           </p>
           {mins !== null && <p className="mt-1">Try again in {mins} minutes.</p>}
           <p className="mt-1">
-            Need more? Run Studio locally with <code className="font-mono">pnpm codegen:start</code>{' '}
-            for unlimited generation.
+            Need more? Run Studio locally with <code className="font-mono">pnpm codegen:start</code> for unlimited
+            generation.
           </p>
         </>
       );
@@ -276,12 +257,8 @@ export function ExportDialog({
               <AlertDescription>
                 {isHosted ? (
                   <>
-                    The code generation service is temporarily unavailable. Please try again in a
-                    minute, or{' '}
-                    <a
-                      href="https://github.com/pradeepmouli/rune-langium#export-code"
-                      className="underline"
-                    >
+                    The code generation service is temporarily unavailable. Please try again in a minute, or{' '}
+                    <a href="https://github.com/pradeepmouli/rune-langium#export-code" className="underline">
                       run Studio locally
                     </a>{' '}
                     for unlimited generation.
@@ -303,8 +280,8 @@ export function ExportDialog({
               <AlertTitle>Validation warnings</AlertTitle>
               <AlertDescription>
                 <ul className="list-disc pl-4">
-                  {validationWarnings.map((w, i) => (
-                    <li key={i}>{w}</li>
+                  {validationWarnings.map((w) => (
+                    <li key={w}>{w}</li>
                   ))}
                 </ul>
               </AlertDescription>
@@ -313,10 +290,7 @@ export function ExportDialog({
 
           {/* CF Turnstile challenge — hosted deploys only; first generation per session */}
           {turnstileNeeded && turnstileSiteKey && (
-            <div
-              className="flex items-center justify-center py-2"
-              data-testid="turnstile-widget-container"
-            >
+            <div className="flex items-center justify-center py-2" data-testid="turnstile-widget-container">
               <Turnstile
                 siteKey={turnstileSiteKey}
                 onSuccess={(token) => setTurnstileToken(token)}
@@ -330,11 +304,7 @@ export function ExportDialog({
           {/* Language selector + generate button */}
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium">Target language:</label>
-            <Select
-              value={language}
-              onValueChange={setLanguage}
-              disabled={state.phase === 'generating'}
-            >
+            <Select value={language} onValueChange={setLanguage} disabled={state.phase === 'generating'}>
               <SelectTrigger size="sm" className="w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -355,9 +325,7 @@ export function ExportDialog({
               <Button
                 size="sm"
                 onClick={handleGenerate}
-                disabled={
-                  serviceAvailable === false || (turnstileNeeded && turnstileToken === null)
-                }
+                disabled={serviceAvailable === false || (turnstileNeeded && turnstileToken === null)}
               >
                 Generate
               </Button>
@@ -389,12 +357,10 @@ export function ExportDialog({
             <>
               {state.result.errors.length > 0 && (
                 <div className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded text-sm">
-                  <p className="font-medium text-destructive mb-1">
-                    {state.result.errors.length} error(s):
-                  </p>
+                  <p className="font-medium text-destructive mb-1">{state.result.errors.length} error(s):</p>
                   <ul className="list-disc pl-4 text-destructive">
                     {state.result.errors.map((err: GenerationError, i: number) => (
-                      <li key={i}>
+                      <li key={`${err.sourceFile ?? ''}-${err.message}-${i}`}>
                         {err.sourceFile && <span className="font-mono">{err.sourceFile}: </span>}
                         {err.message}
                       </li>
@@ -423,9 +389,7 @@ export function ExportDialog({
                             <button
                               key={file.path}
                               className={`w-full text-left px-2 py-1 text-xs font-mono rounded truncate ${
-                                selectedFile?.path === file.path
-                                  ? 'bg-accent text-accent-foreground'
-                                  : 'hover:bg-muted'
+                                selectedFile?.path === file.path ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
                               }`}
                               onClick={() => setSelectedFile(file)}
                               title={file.path}
@@ -443,14 +407,8 @@ export function ExportDialog({
                     {selectedFile && (
                       <>
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-mono text-muted-foreground truncate">
-                            {selectedFile.path}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDownloadFile(selectedFile)}
-                          >
+                          <span className="text-xs font-mono text-muted-foreground truncate">{selectedFile.path}</span>
+                          <Button variant="ghost" size="sm" onClick={() => handleDownloadFile(selectedFile)}>
                             Download
                           </Button>
                         </div>

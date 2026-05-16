@@ -1207,7 +1207,6 @@ export function EditorPage({
   const renderGraphPane = useCallback(
     () => (
       <section
-        role="region"
         aria-label="Graph"
         data-testid="panel-visualPreview"
         data-component="workspace.visualPreview"

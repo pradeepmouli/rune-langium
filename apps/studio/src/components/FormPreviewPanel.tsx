@@ -203,7 +203,6 @@ export function FormPreviewPanel({
     const isWaiting = status.state === 'waiting' && status.targetId;
     return (
       <section
-        role="region"
         aria-label="Form preview"
         data-testid="panel-formPreview"
         className="flex h-full flex-col overflow-auto p-3"
@@ -522,7 +521,7 @@ function PreviewFieldControl({
         {arrayError ? <FieldError message={arrayError} /> : null}
         {child
           ? items.map((_, index) => (
-              <div key={`${field.path}-${index}`} className="space-y-1 p-2">
+              <div key={`${field.path}-item-${index}`} className="space-y-1 p-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] text-muted-foreground">
                     {child.label} {index + 1}
