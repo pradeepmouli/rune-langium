@@ -47,3 +47,22 @@ describe('Structure layout SSoT — CSS custom props match TS constants', () => 
     });
   }
 });
+
+// ── Part B: every --rune-* custom property is referenced at least once ───────
+
+describe('Structure layout SSoT — every --rune-* var is referenced (not just declared)', () => {
+  it('every --rune-* custom property declared at :root is used via var() in the same stylesheet', () => {
+    // Collect all custom-property names declared anywhere in the stylesheet.
+    const declRe = /(--rune-[a-z-]+)\s*:/g;
+    const declared = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = declRe.exec(css)) !== null) declared.add(m[1]);
+
+    const unused: string[] = [];
+    for (const v of declared) {
+      const refRe = new RegExp(`var\\(${v}\\b`);
+      if (!refRe.test(css)) unused.push(v);
+    }
+    expect(unused, `These --rune-* vars are declared but never referenced via var(): ${unused.join(', ')}`).toEqual([]);
+  });
+});

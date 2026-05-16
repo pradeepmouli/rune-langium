@@ -26,7 +26,16 @@ const meta = {
 // checker (test/layout/structure-css-ssot.test.ts Part A) so both tools
 // agree on scope.
 const GEOMETRY_CLASS_PATTERN =
-  /\.rune-(node-rows|node-row|node-children-slot|graph-group--base|graph-group__base-rows?|graph-group__base-row|cell)/;
+  /\.rune-(node-header|node-rows|node-row|node-children-slot|graph-group__header|graph-group--base|graph-group__base-rows?|graph-group__base-row|cell)/;
+
+// Header classes (.rune-node-header, .rune-graph-group__header) are in scope
+// only for box-dimension properties — their gap/padding are visual insets, not
+// y-coordinate coupling.  All other geometry classes use the full property set.
+const HEADER_CLASS_PATTERN = /\.rune-(node-header|graph-group__header)\b/;
+const HEADER_GEOMETRY_PROPS = new Set([
+  'height', 'min-height', 'max-height',
+]);
+
 const GEOMETRY_PROPS = new Set([
   'width', 'height',
   'min-width', 'min-height', 'max-width', 'max-height',
@@ -65,8 +74,14 @@ const rule = (primary) => (root, result) => {
 
   root.walkRules((ruleNode) => {
     if (!GEOMETRY_CLASS_PATTERN.test(ruleNode.selector)) return;
+    // Header classes are layout-coupled only for box-dimension props (height/
+    // min-height).  Their gap and padding are visual insets, not y-coord
+    // coupling, so we use a narrower property set for those selectors.
+    const props = HEADER_CLASS_PATTERN.test(ruleNode.selector)
+      ? HEADER_GEOMETRY_PROPS
+      : GEOMETRY_PROPS;
     ruleNode.walkDecls((decl) => {
-      if (!GEOMETRY_PROPS.has(decl.prop.toLowerCase())) return;
+      if (!props.has(decl.prop.toLowerCase())) return;
       if (!isViolation(decl.value)) return;
       stylelint.utils.report({
         message: messages.literalPx(ruleNode.selector, decl.prop, decl.value),

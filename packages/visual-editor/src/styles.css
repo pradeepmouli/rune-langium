@@ -93,7 +93,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px 0;
+  /* box-sizing + height keep the rendered header flush with
+   * HEADER_HEIGHT in structure-layout.ts so row offsets align. */
+  box-sizing: border-box;
+  height: var(--rune-header-height);
+  padding: 0 14px;
 }
 
 .rune-graph-group__title {
@@ -842,6 +846,15 @@ button[data-navigable]:focus-visible {
    * stacks the header, then a two-column body below it. */
   display: flex;
   flex-direction: column;
+}
+
+/* Wire HEADER_HEIGHT SSoT: the structure-variant header must render at
+ * exactly HEADER_HEIGHT px so row offsets computed in structure-layout.ts
+ * align with the rendered rows.  box-sizing: border-box absorbs the
+ * horizontal padding without expanding the box beyond the SSoT value. */
+.rune-node-data--structure .rune-node-header {
+  box-sizing: border-box;
+  height: var(--rune-header-height);
 }
 
 .rune-node-body--two-col {
