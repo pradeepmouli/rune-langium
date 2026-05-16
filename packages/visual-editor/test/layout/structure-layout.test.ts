@@ -100,8 +100,12 @@ describe('layoutStructureGraph — base container with derived inside', () => {
 
     const { nodes } = layoutStructureGraph(input);
     expect(nodes).toHaveLength(2);
+    // Phase 13 / Finding 2: layout uses per-edge instance ids for children
+    // (`parentId::attrName::canonicalId`). Root retains its canonical id; we
+    // look children up by `data.id` (the canonical id is preserved on the
+    // payload).
     const base = nodes.find((n) => n.id === 'Trade::__base')!;
-    const derived = nodes.find((n) => n.id === 'Trade')!;
+    const derived = nodes.find((n) => (n.data as { id?: string }).id === 'Trade')!;
     expect(base.type).toBe('structureBase');
     expect(derived.parentId).toBe('Trade::__base');
     expect(derived.extent).toBe('parent');
@@ -164,7 +168,9 @@ describe('layoutStructureGraph — expansion as child', () => {
 
     const { nodes } = layoutStructureGraph(input);
     expect(nodes).toHaveLength(2);
-    const economics = nodes.find((n) => n.id === 'Economics')!;
+    // Look up by data.id (canonical); Finding 2 uses per-edge instance ids
+    // for child React Flow ids while keeping `data` aligned to canonical.
+    const economics = nodes.find((n) => (n.data as { id?: string }).id === 'Economics')!;
     const trade = nodes.find((n) => n.id === 'Trade')!;
     expect(economics.parentId).toBe('Trade');
     expect(economics.extent).toBe('parent');
@@ -284,8 +290,8 @@ describe('layoutStructureGraph — sibling vertical alignment', () => {
     const { nodes } = layoutStructureGraph(input);
     expect(nodes).toHaveLength(3);
 
-    const party = nodes.find((n) => n.id === 'Party')!;
-    const counterparty = nodes.find((n) => n.id === 'Counterparty')!;
+    const party = nodes.find((n) => (n.data as { id?: string }).id === 'Party')!;
+    const counterparty = nodes.find((n) => (n.data as { id?: string }).id === 'Counterparty')!;
     expect(party.parentId).toBe('Trade');
     expect(counterparty.parentId).toBe('Trade');
 
@@ -303,45 +309,50 @@ describe('layoutStructureGraph — sibling vertical alignment', () => {
   });
 });
 
-describe('layoutStructureGraph — cross-tree handle deduplication', () => {
-  it('emits one Node record for a target referenced by two parents', () => {
-    // Phase 2's adapter cache-replay can produce duplicate expansion edges
-    // pointing to the same target id from multiple parents. React Flow
-    // forbids a node from having two parents, so the layout dedupes by
-    // first-encounter-wins — the second placement attempt is silently
-    // dropped. This test exercises that dedup path.
+describe('layoutStructureGraph — per-edge instances for repeated type refs (Finding 2)', () => {
+  it('materialises one Node record per expansion edge when two rows reference the same target', () => {
+    // Phase 13 / Finding 2 (spec 020): real schemas (CDM, FpML) routinely
+    // reference the same type from multiple rows — e.g. `buyer: Party` AND
+    // `seller: Party`. The previous dedup-by-canonical-id silently dropped
+    // the second placement, leaving a blank gap in the column.
     //
-    // Fixture: a single `Root` Data node with two rows (`a` and `b`),
-    // both expanded to the same `Target`. Only the first reference (by
-    // Map iteration order, which preserves insertion order) survives.
+    // The fix gives each placement a unique instance id of the form
+    // `parentInstanceId::attrName::canonicalTargetId`. Both rows visibly
+    // drill into their own copy of the target; the shared `data` payload
+    // means cell editors and downstream consumers still see one canonical
+    // type.
+    //
+    // Fixture: a `Trade` Data node with `buyer: Party` AND `seller: Party`,
+    // both expanded. Layout must emit TWO Party placements, with distinct
+    // React Flow ids but matching `data.id`.
     const input: StructureGraphInput = {
-      rootNodeId: 'Root',
+      rootNodeId: 'Trade',
       nodes: new Map([
         [
-          'Root',
+          'Trade',
           {
-            id: 'Root',
+            id: 'Trade',
             kind: 'data',
-            name: 'Root',
+            name: 'Trade',
             namespaceUri: 'cdm.trade',
             extendsName: undefined,
             extendsNodeId: undefined,
             rows: [
               {
-                attrName: 'a',
-                typeName: 'Target',
+                attrName: 'buyer',
+                typeName: 'Party',
                 typeKind: 'Data',
-                targetNodeId: 'Target',
+                targetNodeId: 'Party',
                 targetNamespaceUri: 'cdm.trade',
                 cardinality: '1..1',
                 isOptional: false,
                 isInherited: false
               },
               {
-                attrName: 'b',
-                typeName: 'Target',
+                attrName: 'seller',
+                typeName: 'Party',
                 typeKind: 'Data',
-                targetNodeId: 'Target',
+                targetNodeId: 'Party',
                 targetNamespaceUri: 'cdm.trade',
                 cardinality: '1..1',
                 isOptional: false,
@@ -349,17 +360,17 @@ describe('layoutStructureGraph — cross-tree handle deduplication', () => {
               }
             ],
             expansions: new Map([
-              ['a', 'Target'],
-              ['b', 'Target']
+              ['buyer', 'Party'],
+              ['seller', 'Party']
             ])
           }
         ],
         [
-          'Target',
+          'Party',
           {
-            id: 'Target',
+            id: 'Party',
             kind: 'data',
-            name: 'Target',
+            name: 'Party',
             namespaceUri: 'cdm.trade',
             extendsName: undefined,
             extendsNodeId: undefined,
@@ -381,13 +392,64 @@ describe('layoutStructureGraph — cross-tree handle deduplication', () => {
 
     const { nodes } = layoutStructureGraph(input);
 
-    // Exactly one record for Target — the duplicate from `b → Target`
-    // is silently dropped by the `placed: Set<string>` dedup in
-    // `layoutStructureGraph`.
-    const targets = nodes.filter((n) => n.id === 'Target');
-    expect(targets).toHaveLength(1);
-    expect(targets[0].parentId).toBe('Root');
-    expect(nodes).toHaveLength(2); // Root + Target only
+    // Both per-row placements present — find by data.id (canonical) since the
+    // React Flow `id` field carries the per-edge instance id.
+    const partyPlacements = nodes.filter((n) => (n.data as { id?: string }).id === 'Party');
+    expect(partyPlacements).toHaveLength(2);
+
+    // React Flow ids must be unique; both must include the attrName so the
+    // edge identity is recoverable from the id.
+    const ids = partyPlacements.map((n) => n.id);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toEqual(expect.arrayContaining(['Trade::buyer::Party', 'Trade::seller::Party']));
+
+    // Both contained under the same parent React Flow node.
+    expect(partyPlacements[0].parentId).toBe('Trade');
+    expect(partyPlacements[1].parentId).toBe('Trade');
+
+    // Total: Root + two Party placements.
+    expect(nodes).toHaveLength(3);
+  });
+
+  it('does not double-place a target that is also on the recursion ancestor path (cycle guard)', () => {
+    // A self-referencing Data type. The row-level expansion is recorded but
+    // the recursion stops at the cycle; we must NOT emit a Self node twice
+    // under itself.
+    const input: StructureGraphInput = {
+      rootNodeId: 'Node',
+      nodes: new Map([
+        [
+          'Node',
+          {
+            id: 'Node',
+            kind: 'data',
+            name: 'Node',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'parent',
+                typeName: 'Node',
+                typeKind: 'Data',
+                targetNodeId: 'Node',
+                targetNamespaceUri: 'ns',
+                cardinality: '0..1',
+                isOptional: true,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['parent', 'Node']])
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    // Only the root — the self-reference is on the ancestor path so the
+    // expansion is suppressed and the recursion terminates.
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].id).toBe('Node');
   });
 });
 
@@ -449,18 +511,18 @@ describe('layoutStructureGraph — defensive cycle protection', () => {
       ])
     };
 
-    // Test passes by not throwing/hanging. After the cycle-placeholder
-    // symmetry fix (sizing-pass placeholder is cached in `sizes`), the
-    // placement pass produces both nodes: A as the root, and B as A's
-    // expansion child via the cached placeholder. The recursive back-edge
-    // from B → A is dropped by the `placed: Set<string>` dedup (A is
-    // already placed), so the cycle does not unroll further.
+    // Test passes by not throwing/hanging. With per-edge instance ids
+    // (Finding 2), the placement walks: root A is placed (canonical id),
+    // then A's `next → B` expansion adds B with instance id `A::next::B`.
+    // When recursing into B, its `next → A` expansion would form a cycle
+    // (A is on the ancestor path), so the placement is suppressed by the
+    // cycle guard. Two nodes total — A as root, B as A's expansion child.
     const { nodes } = layoutStructureGraph(input);
     expect(nodes).toHaveLength(2);
-    expect(nodes.some((n) => n.id === 'A')).toBe(true);
-    expect(nodes.some((n) => n.id === 'B')).toBe(true);
-    const a = nodes.find((n) => n.id === 'A')!;
-    const b = nodes.find((n) => n.id === 'B')!;
+    const a = nodes.find((n) => (n.data as { id?: string }).id === 'A')!;
+    const b = nodes.find((n) => (n.data as { id?: string }).id === 'B')!;
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
     expect(a.parentId).toBeUndefined();
     expect(b.parentId).toBe('A');
   });
@@ -541,7 +603,8 @@ describe('layoutStructureGraph — Choice node', () => {
 
     const { nodes } = layoutStructureGraph(input);
     expect(nodes).toHaveLength(2);
-    const choice = nodes.find((n) => n.id === 'PriceChoice')!;
+    const choice = nodes.find((n) => (n.data as { id?: string }).id === 'PriceChoice')!;
+    expect(choice).toBeDefined();
     expect(choice.type).toBe('choice');
     expect(choice.parentId).toBe('Trade');
     expect(choice.extent).toBe('parent');
@@ -620,8 +683,8 @@ describe('layoutStructureGraph — base container with expanded inherited row', 
 
     const { nodes } = layoutStructureGraph(input);
     const base = nodes.find((n) => n.id === 'Trade::__base')!;
-    const trade = nodes.find((n) => n.id === 'Trade')!;
-    const party = nodes.find((n) => n.id === 'Party')!;
+    const trade = nodes.find((n) => (n.data as { id?: string }).id === 'Trade')!;
+    const party = nodes.find((n) => (n.data as { id?: string }).id === 'Party')!;
     expect(base).toBeDefined();
     expect(party).toBeDefined();
     expect(party.parentId).toBe('Trade::__base');
@@ -721,8 +784,8 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     };
 
     const { nodes } = layoutStructureGraph(input);
-    const trade = nodes.find((n) => n.id === 'Trade')!;
-    const party = nodes.find((n) => n.id === 'Party')!;
+    const trade = nodes.find((n) => (n.data as { id?: string }).id === 'Trade')!;
+    const party = nodes.find((n) => (n.data as { id?: string }).id === 'Party')!;
 
     // Derived child must be placed below base rows + BASE_PADDING gap.
     // Expected: BASE_PADDING (top CSS padding) is NOT part of this formula —
@@ -820,8 +883,8 @@ describe('layoutStructureGraph — late-row expansion sizing', () => {
     };
 
     const { nodes } = layoutStructureGraph(input);
-    const parent = nodes.find((n) => n.id === 'Parent')!;
-    const tall = nodes.find((n) => n.id === 'Tall')!;
+    const parent = nodes.find((n) => (n.data as { id?: string }).id === 'Parent')!;
+    const tall = nodes.find((n) => (n.data as { id?: string }).id === 'Tall')!;
     const tallY = (tall.position as { x: number; y: number }).y;
     const tallHeight = tall.height ?? 0;
     const parentHeight = parent.height ?? 0;

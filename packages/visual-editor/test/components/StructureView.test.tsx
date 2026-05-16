@@ -97,10 +97,15 @@ vi.mock('@xyflow/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@xyflow/react')>();
   return {
     ...actual,
-    ReactFlow: ({ nodes }: { nodes: Array<{ id: string }> }) => (
+    // Phase 13 / Finding 2: layout uses per-edge instance ids for child React
+    // Flow node ids. The canonical id is preserved in `data.id` (see the
+    // layout's per-node data payload). The mock surfaces both so tests can
+    // assert against the stable canonical id rather than the path-dependent
+    // instance id.
+    ReactFlow: ({ nodes }: { nodes: Array<{ id: string; data: { id?: string } }> }) => (
       <div data-testid="mock-react-flow">
         {nodes.map((n) => (
-          <div key={n.id} data-testid={`rf-node-${n.id}`} data-node-id={n.id} />
+          <div key={n.id} data-testid={`rf-node-${n.id}`} data-node-id={n.id} data-canonical-id={n.data?.id ?? n.id} />
         ))}
       </div>
     ),
@@ -189,13 +194,13 @@ describe('StructureView — adapter + layout integration', () => {
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
 
-    // The Trade root node should be present
+    // Root retains its canonical id, so the rf-node testid is stable.
     const tradeNode = screen.queryByTestId('rf-node-cdm.trade::Trade');
     expect(tradeNode).toBeInTheDocument();
 
-    // Economics should NOT appear since expansion map is empty
-    const economicsNode = screen.queryByTestId('rf-node-cdm.trade::Economics');
-    expect(economicsNode).toBeNull();
+    // Economics should NOT appear (no expansion) — assert via canonical id.
+    const economicsByCanonical = document.querySelector('[data-canonical-id="cdm.trade::Economics"]');
+    expect(economicsByCanonical).toBeNull();
   });
 
   it('renders Economics node when expansion map marks it as expanded', () => {
@@ -209,8 +214,9 @@ describe('StructureView — adapter + layout integration', () => {
     render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={tradeDoc} expansionMap={expansionMap} />);
 
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
-    // Economics node should now be present in the layout output
-    const economicsNode = screen.queryByTestId('rf-node-cdm.trade::Economics');
-    expect(economicsNode).toBeInTheDocument();
+    // Phase 13 / Finding 2: assert by canonical id since the React Flow `id`
+    // is a per-edge instance id (`cdm.trade::Trade::economics::cdm.trade::Economics`).
+    const economicsByCanonical = document.querySelector('[data-canonical-id="cdm.trade::Economics"]');
+    expect(economicsByCanonical).not.toBeNull();
   });
 });
