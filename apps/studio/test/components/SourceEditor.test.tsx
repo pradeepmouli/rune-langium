@@ -312,6 +312,22 @@ describe('SourceEditor', () => {
       // EditorState.readOnly.of should have been called with true
       expect(EditorState.readOnly.of).toHaveBeenCalledWith(true);
     });
+
+    it('does NOT register drop handlers for read-only files', async () => {
+      const { EditorView } = vi.mocked(await import('@codemirror/view'));
+      render(<SourceEditor files={[readOnlyFile]} activeFile={readOnlyFile.path} />);
+      // domEventHandlers must not have been called with drag/drop handlers when the
+      // active file is read-only — otherwise programmatic view.dispatch() inside the
+      // drop handler would silently mutate a system buffer that onContentChange never sees.
+      expect(EditorView.domEventHandlers).not.toHaveBeenCalled();
+    });
+
+    it('registers drop handlers for writable files', async () => {
+      const { EditorView } = vi.mocked(await import('@codemirror/view'));
+      render(<SourceEditor files={[editableFile]} activeFile={editableFile.path} />);
+      // For a writable file the drop extension must be installed.
+      expect(EditorView.domEventHandlers).toHaveBeenCalledOnce();
+    });
   });
 });
 
@@ -354,14 +370,20 @@ const VALID_PAYLOAD = {
   kind: 'Data'
 };
 
-function makeView(posAtCoordsResult: number | null = 42): { view: DropTargetView; dispatch: ReturnType<typeof vi.fn> } {
+function makeView(posAtCoordsResult: number | null = 42): {
+  view: DropTargetView;
+  dispatch: ReturnType<typeof vi.fn>;
+  focus: ReturnType<typeof vi.fn>;
+} {
   const dispatch = vi.fn();
+  const focus = vi.fn();
   const view: DropTargetView = {
     posAtCoords: vi.fn().mockReturnValue(posAtCoordsResult),
     state: { selection: { main: { head: 7 } } },
-    dispatch
+    dispatch,
+    focus
   };
-  return { view, dispatch };
+  return { view, dispatch, focus };
 }
 
 describe('handleTypeRefDragOver', () => {
@@ -396,7 +418,7 @@ describe('handleTypeRefDragOver', () => {
 
 describe('handleTypeRefDrop', () => {
   it('inserts qualified name at drop position and returns true', () => {
-    const { view, dispatch } = makeView(42);
+    const { view, dispatch, focus } = makeView(42);
     const event = makeDragEvent({
       getData: (mime) => (mime === TYPE_REF_PAYLOAD_MIME ? JSON.stringify(VALID_PAYLOAD) : '')
     });
@@ -407,6 +429,8 @@ describe('handleTypeRefDrop', () => {
       changes: { from: 42, to: 42, insert: 'cdm.trade.Trade' },
       selection: { anchor: 42 + 'cdm.trade.Trade'.length }
     });
+    // Focus must be restored after dispatch so the user can type immediately.
+    expect(focus).toHaveBeenCalledOnce();
   });
 
   it('falls back to selection.main.head when posAtCoords returns null', () => {

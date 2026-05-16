@@ -126,6 +126,8 @@ export interface DropTargetView {
   posAtCoords(coords: { x: number; y: number }): number | null;
   state: { selection: { main: { head: number } } };
   dispatch(tr: { changes: { from: number; to: number; insert: string }; selection: { anchor: number } }): void;
+  /** Restore keyboard focus to the editor so the user can type immediately after a drop. */
+  focus(): void;
 }
 
 /**
@@ -156,6 +158,8 @@ export function handleTypeRefDrop(event: DragEvent, view: DropTargetView): boole
     // Place caret after the inserted text so the user can keep typing.
     selection: { anchor: pos + qualified.length }
   });
+  // Restore focus so the user can type immediately without clicking first.
+  view.focus();
   return true;
 }
 
@@ -436,12 +440,18 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
       // Phase 9: accept type-ref drops from NamespaceExplorer onto the editor surface.
       // Delegates to pure helpers (handleTypeRefDragOver / handleTypeRefDrop) so the
       // logic is unit-testable without constructing a full EditorView.
-      exts.push(
-        EditorView.domEventHandlers({
-          dragover: handleTypeRefDragOver,
-          drop: handleTypeRefDrop
-        })
-      );
+      // Guard: read-only editors must never receive drop mutations — CodeMirror's
+      // EditorState.readOnly.of(true) blocks user input but NOT programmatic
+      // view.dispatch(), so without this gate a drop would silently mutate a
+      // system/built-in buffer that onContentChange never sees.
+      if (!isReadOnly) {
+        exts.push(
+          EditorView.domEventHandlers({
+            dragover: handleTypeRefDragOver,
+            drop: handleTypeRefDrop
+          })
+        );
+      }
 
       return exts;
     },
