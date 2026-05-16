@@ -159,13 +159,13 @@
 }
 
 .rune-node-header {
-  padding: var(--space-2, 8px) var(--space-4, 16px);
+  padding: var(--rune-header-padding-y) var(--rune-header-padding-x);
   font-weight: 600;
   font-size: var(--text-sm, 0.875rem);
   border-bottom: 1px solid color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 78%, transparent);
   display: flex;
   align-items: center;
-  gap: var(--space-2, 8px);
+  gap: var(--rune-header-padding-y);
   position: relative;
   background: transparent;
 }
@@ -250,7 +250,7 @@
 }
 
 .rune-node-body {
-  padding: var(--space-2, 8px) var(--space-4, 16px);
+  padding: var(--rune-body-padding-y) var(--rune-body-padding-x);
 }
 
 .rune-node-members {
@@ -797,6 +797,14 @@ button[data-navigable]:focus-visible {
   --rune-chip-padding-x: 6px;
   --rune-pill-padding-x: 5px;
   --rune-row-indent: 6px;
+  /* Chrome padding — bridges design-system tokens to the rune SSoT
+   * so the no-literal-layout-px rule can require var(--rune-*) on all
+   * layout-coupled properties of .rune-* classes. Values default to
+   * the matching design-system tokens so rendering is unchanged. */
+  --rune-header-padding-y: var(--space-2, 8px);
+  --rune-header-padding-x: var(--space-4, 16px);
+  --rune-body-padding-y: var(--space-2, 8px);
+  --rune-body-padding-x: var(--space-4, 16px);
 }
 
 /* ── Structure View — Phase 6 geometry ───────────────────────────

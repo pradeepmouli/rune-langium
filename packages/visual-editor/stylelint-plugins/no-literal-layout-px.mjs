@@ -47,17 +47,21 @@ const GEOMETRY_PROPS = new Set([
 
 /** Returns true if `value` is a layout-coupled literal-px expression. */
 function isViolation(value) {
-  // Allow var(--rune-*) anywhere in the value
-  if (/\bvar\(--rune-/.test(value)) return false;
   // Allow zero values, auto/none/inherit/initial
   if (/^0(px)?$/.test(value)) return false;
   if (/^(auto|none|inherit|initial|revert|unset)$/.test(value)) return false;
-  // Allow px values that appear only inside var() fallback position —
-  // e.g. `var(--space-2, 8px)` is a valid standalone fallback, not a bare
-  // literal.  Strip all var(…) calls (including nested) before checking for
-  // bare px so that only truly naked literals trigger the violation.
-  const withoutVarFallbacks = value.replace(/\bvar\([^)]*\)/g, 'VAR');
-  if (!/\d+px/.test(withoutVarFallbacks)) return false;
+  // Only exempt var(--rune-*, ...) calls — design-system token vars (e.g.
+  // var(--space-2, 8px)) must NOT be used for layout-coupled properties on
+  // .rune-* selectors because they bypass the STRUCTURE_LAYOUT_CONSTANTS
+  // coupling. New geometry values must be promoted to --rune-* SSoT first.
+  //
+  // Regex breakdown:
+  //   \bvar\(         — start of var() call
+  //   --rune-[^,)]*  — must begin with --rune- and continue until comma or )
+  //   (?:,[^)]*)?    — optional fallback (anything after comma until close)
+  //   \)             — close paren
+  const withoutRuneVars = value.replace(/\bvar\(--rune-[^,)]*(?:,[^)]*)?\)/g, 'VAR');
+  if (!/\d+px/.test(withoutRuneVars)) return false;
   // Special-case: shorthand starting with "0 " (vertical zero) followed by
   // horizontal-only px is allowed — horizontal padding/margin doesn't couple
   // to layout y-coords. This matches the existing `.rune-node-row { padding: 0 8px }` pattern.
