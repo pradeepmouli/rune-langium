@@ -453,16 +453,34 @@ function TypeItemRow({
     onSelectNode();
   }, [payload, isDragSource, onClearDragSource, onSelectNode]);
 
-  // Keyboard activation: Enter/Space trigger drag-source immediately (no
-  // dblclick race possible on keyboard). Navigation via keyboard is future scope.
+  // Keyboard activation (spec 020 Phase 13, Finding 4).
+  //
+  // Contract:
+  //   Enter / Space           → navigate (calls onSelectNode — the primary
+  //                             verb for keyboard and AT users; matches the
+  //                             dominant file-tree convention "Enter = open")
+  //   Cmd+Enter / Ctrl+Enter  → mark this row as the active drag source
+  //                             (the keyboard equivalent of mouse single-click,
+  //                             previously the ONLY action bound here)
+  //
+  // Rationale: Phase 8's a11y fix bound Enter/Space to set-drag-source, but
+  // never bound the navigation verb — keyboard/AT users had no way to
+  // perform the primary Structure View flow (focus a Data type → populate
+  // Structure pane). Drag-source mark is fundamentally a mouse-only
+  // affordance (drag-and-drop has no native keyboard equivalent), so it
+  // moves to the modifier slot; navigation gets the primary keystroke.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        if (payload) onSetDragSource?.(payload);
+        if ((e.metaKey || e.ctrlKey) && payload) {
+          onSetDragSource?.(payload);
+          return;
+        }
+        onSelectNode();
       }
     },
-    [payload, onSetDragSource]
+    [payload, onSetDragSource, onSelectNode]
   );
 
   return (

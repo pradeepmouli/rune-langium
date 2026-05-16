@@ -307,33 +307,65 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   // -------------------------------------------------------------------------
-  // a11y — keyboard activation (Finding 3: react-doctor)
+  // a11y — keyboard activation
+  // Phase 8 (Finding 3: react-doctor) added Enter/Space → drag-source mark.
+  // Phase 13 (Finding 4: adversarial review) flipped the contract:
+  //   Enter / Space          → navigate (calls onSelectNode — the primary
+  //                            keyboard verb, matching file-tree conventions)
+  //   Cmd+Enter / Ctrl+Enter → mark this row as the active drag source
+  //                            (modifier slot for the mouse-equivalent action)
   // -------------------------------------------------------------------------
 
-  it('Enter key calls onSetDragSource with correct payload (no timer delay)', () => {
+  it('Enter key calls onSelectNode (navigate — the primary keyboard verb)', () => {
     const onSetDragSource = vi.fn();
     const { props } = renderPanel({ onSetDragSource });
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
     fireEvent.keyDown(typeRow, { key: 'Enter' });
-    // Keyboard activation is immediate — no 250ms deferral.
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    // Drag-source mark should NOT be triggered by bare Enter (now on the
+    // modifier slot).
+    expect(onSetDragSource).not.toHaveBeenCalled();
+  });
+
+  it('Space key calls onSelectNode (navigate)', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    fireEvent.keyDown(typeRow, { key: ' ' });
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(onSetDragSource).not.toHaveBeenCalled();
+  });
+
+  it('Cmd+Enter marks this row as the active drag source with correct payload', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    fireEvent.keyDown(typeRow, { key: 'Enter', metaKey: true });
     expect(onSetDragSource).toHaveBeenCalledOnce();
     const payload = onSetDragSource.mock.calls[0]![0];
     expect(isTypeRefPayload(payload)).toBe(true);
     expect(payload.typeId).toBe('com.model::Trade');
     expect(payload.kind).toBe('Data');
-    // Navigation should NOT be triggered
+    // Navigation should NOT be triggered when modifier is held.
     expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
-  it('Space key calls onSetDragSource with correct payload (no timer delay)', () => {
+  it('Ctrl+Enter marks this row as the active drag source (Windows/Linux equivalent)', () => {
     const onSetDragSource = vi.fn();
     const { props } = renderPanel({ onSetDragSource });
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
-    fireEvent.keyDown(typeRow, { key: ' ' });
+    fireEvent.keyDown(typeRow, { key: 'Enter', ctrlKey: true });
     expect(onSetDragSource).toHaveBeenCalledOnce();
-    const payload = onSetDragSource.mock.calls[0]![0];
-    expect(payload.typeId).toBe('com.model::Trade');
     expect(props.onSelectNode).not.toHaveBeenCalled();
+  });
+
+  it('non-activation keys (e.g. ArrowDown) do not fire any callback', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    fireEvent.keyDown(typeRow, { key: 'ArrowDown' });
+    expect(props.onSelectNode).not.toHaveBeenCalled();
+    expect(onSetDragSource).not.toHaveBeenCalled();
   });
 
   it('type rows have role=button and tabIndex=0 for keyboard accessibility', () => {
