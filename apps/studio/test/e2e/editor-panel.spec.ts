@@ -51,8 +51,8 @@ async function loadModel(page: Page) {
 }
 
 async function selectType(page: Page, nodeId: string) {
-  // Phase 8: single-click marks drag source; double-click navigates.
-  await page.getByTestId(`ns-type-${nodeId}`).dblclick();
+  // Phase 13 amend: navigate via the dedicated arrow button (single-click on the button).
+  await page.getByTestId(`ns-type-nav-${nodeId}`).click();
   await page.waitForTimeout(1000);
 }
 

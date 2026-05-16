@@ -94,13 +94,13 @@ export async function selectNode(page: Page, kind: FormKind): Promise<void> {
   await chevron.click().catch(() => {
     /* already expanded — ignore */
   });
-  // Pick the type row by data-testid prefix + text. The class-based
-  // `.ns-type__name` selector is stale (Tailwind migration removed it);
-  // the row container's `data-testid="ns-type-<nodeId>"` is stable.
-  const typeRow = page.locator('[data-testid^="ns-type-"]').filter({ hasText: nodeName });
-  await typeRow.first().waitFor({ state: 'visible', timeout: 10000 });
-  // Phase 8: single-click marks drag source; double-click navigates.
-  await typeRow.first().dblclick();
+  // Phase 13 amend: navigate via the dedicated arrow button (single-click on the button).
+  // The forms baseline fixture always uses the "demo.forms" namespace, so the nodeId
+  // is predictable as "demo.forms::<nodeName>".
+  const nodeId = `demo.forms::${nodeName}`;
+  const navBtn = page.getByTestId(`ns-type-nav-${nodeId}`);
+  await navBtn.waitFor({ state: 'visible', timeout: 10000 });
+  await navBtn.click();
   await page.locator('[data-testid="panel-inspector"]').waitFor({ timeout: 5000 });
   await page.waitForTimeout(500);
 }

@@ -264,17 +264,18 @@ test.describe('Namespace Explorer', () => {
     await expect(enumEntry).toBeVisible();
   });
 
-  test('double-clicking type name in tree should focus it on graph', async ({ page }) => {
+  test('clicking the nav button on a type row should focus it on graph', async ({ page }) => {
     await loadFiles(page, [{ name: 'demo.rosetta', content: SMALL_MODEL }]);
 
     // Expand tree
     const chevron = page.locator('.ns-row__chevron').first();
     await chevron.click();
 
-    // Double-click on "Employee" type row to navigate (Phase 8 contract: single-click
-    // marks the row as active drag source; double-click triggers graph navigation).
-    const typeRow = page.locator('[data-testid^="ns-type-"]', { hasText: 'Employee' });
-    await typeRow.dblclick();
+    // Phase 13 amend: navigate via the dedicated arrow button (single-click on the button).
+    // The nav button testid is ns-type-nav-{nodeId}; Employee lives in demo.small namespace.
+    const navBtn = page.getByTestId('ns-type-nav-demo.small::Employee');
+    await navBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await navBtn.click();
 
     // The graph should zoom/pan to focus on the node
     // We can verify the viewport changed by checking the ReactFlow transform
