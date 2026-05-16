@@ -28,6 +28,9 @@ import {
   EditorFormPanel,
   ExpressionBuilder,
   StructureView,
+  NameCell,
+  CardinalityCell,
+  TypePickerCell,
   BUILTIN_TYPES,
   AST_TYPE_TO_NODE_TYPE,
   useEditorStore
@@ -1389,11 +1392,29 @@ export function EditorPage({
     [storeNodes]
   );
 
+  // Memoize cell components to preserve prop identity across renders — avoids
+  // unnecessary ReactFlow reconciliation when unrelated EditorPage state changes.
+  // InheritanceCell is not included here because GroupContainerNode (the base-type
+  // wrap) does not expose a cell-injection API; that wiring is a future addition.
+  const structureCellComponents = useMemo(
+    () => ({
+      name: NameCell,
+      type: TypePickerCell,
+      card: CardinalityCell
+    }),
+    []
+  );
+
   const renderStructurePane = useCallback(
     () => (
-      <StructureView focusedTypeId={structureFocusedTypeId} adapterDoc={adapterDocument} expansionMap={expansionMap} />
+      <StructureView
+        focusedTypeId={structureFocusedTypeId}
+        adapterDoc={adapterDocument}
+        expansionMap={expansionMap}
+        cellComponents={structureCellComponents}
+      />
     ),
-    [structureFocusedTypeId, adapterDocument, expansionMap]
+    [structureFocusedTypeId, adapterDocument, expansionMap, structureCellComponents]
   );
 
   const VisualPreviewPanelMounted = useCallback(

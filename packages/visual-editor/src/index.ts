@@ -163,9 +163,9 @@ export type { ExpressionValidationResult } from './validation/edit-validator.js'
 // Structure View shared types (spec 020)
 export * from './types/structure-view.js';
 
-// Structure View component (Phase 7)
+// Structure View component (Phase 7/8)
 export { StructureView } from './components/StructureView.js';
-export type { StructureViewProps } from './components/StructureView.js';
+export type { StructureViewProps, StructureCellComponents } from './components/StructureView.js';
 
 // Structure View adapter (Phase 2)
 export { buildStructureGraph } from './adapters/structure-graph-adapter.js';
