@@ -163,6 +163,24 @@ export type { ExpressionValidationResult } from './validation/edit-validator.js'
 // Structure View shared types (spec 020)
 export * from './types/structure-view.js';
 
+// Structure View component (Phase 7)
+export { StructureView } from './components/StructureView.js';
+export type { StructureViewProps } from './components/StructureView.js';
+
+// Structure View adapter (Phase 2)
+export { buildStructureGraph } from './adapters/structure-graph-adapter.js';
+export type {
+  AdapterDocument,
+  AdapterNode,
+  AdapterAttribute,
+  AdapterCardinality,
+  BuildOptions
+} from './adapters/structure-graph-adapter.js';
+
+// Structure View layout (Phase 3)
+export { layoutStructureGraph, STRUCTURE_LAYOUT_CONSTANTS } from './layout/structure-layout.js';
+export type { LayoutResult } from './layout/structure-layout.js';
+
 // Structure cells (Phase 5)
 export { NameCell } from './components/editors/structure/NameCell.js';
 export type { NameCellProps } from './components/editors/structure/NameCell.js';
