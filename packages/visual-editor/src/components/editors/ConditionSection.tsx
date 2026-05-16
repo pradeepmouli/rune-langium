@@ -409,7 +409,7 @@ export function ConditionSection({
       <FieldGroup className="gap-1.5">
         {conditions.map((condition, i) => (
           <ConditionRow
-            key={condition.name ? `condition-${condition.name}` : `condition-${i}`}
+            key={`condition-${condition.name ?? ''}:${i}`}
             condition={condition}
             index={i}
             total={conditions.length}

@@ -291,9 +291,9 @@ function FunctionForm({
             </FieldLegend>
 
             <FieldGroup className="gap-0.5">
-              {inputParams.map((member: { name: string; typeName?: string }) => (
+              {inputParams.map((member: { name: string; typeName?: string }, i: number) => (
                 <FunctionInputRow
-                  key={`${nodeId}-param-${member.name}`}
+                  key={`${nodeId}-param-${member.name}:${i}`}
                   member={member}
                   nodeId={nodeId}
                   availableTypes={availableTypes}

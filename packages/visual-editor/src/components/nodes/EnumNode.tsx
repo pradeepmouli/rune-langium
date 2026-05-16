@@ -42,7 +42,7 @@ export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
         {(d as any).errors?.length > 0 && (
           <div className="rune-node-errors">
             {((d as any).errors as any[]).map((err: any, i: number) => (
-              <div key={err.message ?? i}>{err.message}</div>
+              <div key={`${err.ruleId ?? 'err'}:${err.message}:${i}`}>{err.message}</div>
             ))}
           </div>
         )}
