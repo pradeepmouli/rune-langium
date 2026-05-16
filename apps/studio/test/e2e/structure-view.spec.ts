@@ -119,3 +119,30 @@ test.describe('Structure View', () => {
     // Ctrl-Z, and assert the source reverts to its pre-edit state.
   });
 });
+
+// ---------------------------------------------------------------------------
+// Visual snapshots
+// ---------------------------------------------------------------------------
+
+test.describe('Structure View — visual snapshots', () => {
+  test('snapshot — collapsed Trade type', async ({ page }) => {
+    // Phase 11.2 scaffold: screenshot of the Structure pane showing the Trade
+    // type in its collapsed (default) state.
+    //
+    // Disabled until a deterministic fixture is wired. When enabled, the
+    // 0.02 maxDiffPixelRatio gives enough tolerance for sub-pixel rendering
+    // variance across CI runners without masking real visual regressions.
+    // Font-rendering and color-theme variance across CI environments is the
+    // primary concern — consider restricting to a single platform in the
+    // Playwright config when this is unskipped.
+    test.skip(true, 'requires deterministic fixture');
+    // When the fixture is available:
+    // await loadInlineFiles(page, [{ name: 'trade.rosetta', content: TRADE_FIXTURE }]);
+    // await page.getByRole('button', { name: /^structure$/i }).click();
+    // const chevron = page.locator('.ns-row__chevron').first();
+    // await chevron.click();
+    // await page.locator('.ns-type__name', { hasText: 'Trade' }).dblclick();
+    // await expect(page.getByTestId('structure-view-flow')).toBeVisible();
+    // await expect(page).toHaveScreenshot('structure-collapsed.png', { maxDiffPixelRatio: 0.02 });
+  });
+});
