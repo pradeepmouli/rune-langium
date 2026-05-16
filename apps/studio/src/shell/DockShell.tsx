@@ -31,7 +31,8 @@ import { EditorPanel } from './panels/EditorPanel.js';
 import { InspectorPanel } from './panels/InspectorPanel.js';
 import { ProblemsPanel } from './panels/ProblemsPanel.js';
 import { OutputPanel } from './panels/OutputPanel.js';
-import { VisualPreviewPanel } from './panels/VisualPreviewPanel.js';
+// VisualPreviewPanel removed in Phase 7.5 — structure view is now a peer
+// segment in CenterStackPanel wired from EditorPage.
 import { FormPreviewPanel } from './panels/FormPreviewPanel.js';
 import { CodePreviewPanel as CodePreviewPanelShell } from './panels/CodePreviewPanel.js';
 import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_COMPONENT_NAMES } from './layout-factory.js';
@@ -55,6 +56,7 @@ const _PRESET_OPTIONS: Array<{ id: LayoutPreset; label: string }> = [
 
 const _CENTER_PANE_OPTIONS: Array<{ id: CenterPane; label: string; panel: string }> = [
   { id: 'graph', label: 'Graph', panel: 'workspace.visualPreview' },
+  { id: 'structure', label: 'Structure', panel: 'workspace.visualPreview' },
   { id: 'source', label: 'Source', panel: 'workspace.editor' },
   { id: 'inspector', label: 'Inspector', panel: 'workspace.inspector' }
 ];
@@ -102,7 +104,7 @@ const DEFAULT_PANEL_REGISTRY: PanelRegistry = {
   'workspace.inspector': () => InspectorPanel({}),
   'workspace.problems': () => ProblemsPanel({}),
   'workspace.output': () => OutputPanel({}),
-  'workspace.visualPreview': () => VisualPreviewPanel({}),
+  'workspace.visualPreview': () => null,
   'workspace.formPreview': () => FormPreviewPanel(),
   'workspace.codePreview': () => CodePreviewPanelShell({})
 };

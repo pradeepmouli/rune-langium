@@ -3,19 +3,21 @@
 
 import { Fragment, useCallback, useRef, useState } from 'react';
 import type React from 'react';
-import { Network, FileCode2, Info, MoreHorizontal } from 'lucide-react';
+import { Network, FileCode2, Info, MoreHorizontal, Layers } from 'lucide-react';
 import { GraphFilterMenu } from '../../components/GraphFilterMenu.js';
 import { useCenterPanes, type CenterPane } from '../center-panes-context.js';
 import { useUtilityTrayControls } from '../utility-tray-context.js';
 
-const PANE_ORDER: CenterPane[] = ['graph', 'source', 'inspector'];
+const PANE_ORDER: CenterPane[] = ['graph', 'structure', 'source', 'inspector'];
 const PANE_LABELS: Record<CenterPane, string> = {
   graph: 'Graph',
+  structure: 'Structure',
   source: 'Source',
   inspector: 'Inspector'
 };
 const PANE_ICONS: Record<CenterPane, React.FC<React.SVGProps<SVGSVGElement>>> = {
   graph: Network,
+  structure: Layers,
   source: FileCode2,
   inspector: Info
 };
@@ -25,12 +27,14 @@ interface CenterStackPanelProps {
   renderGraph: () => React.ReactElement | null;
   renderSource: () => React.ReactElement | null;
   renderInspector: () => React.ReactElement | null;
+  renderStructure: () => React.ReactElement | null;
 }
 
 export function CenterStackPanel({
   renderGraph,
   renderSource,
-  renderInspector
+  renderInspector,
+  renderStructure
 }: CenterStackPanelProps): React.ReactElement {
   const { activePanes, toggle } = useCenterPanes();
   const { utilitiesCollapsed, toggleUtilities } = useUtilityTrayControls();
@@ -89,6 +93,8 @@ export function CenterStackPanel({
     switch (pane) {
       case 'graph':
         return renderGraph();
+      case 'structure':
+        return renderStructure();
       case 'source':
         return renderSource();
       case 'inspector':
