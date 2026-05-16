@@ -22,7 +22,7 @@ describe('TypePickerCell', () => {
     expect(chip.className).toMatch(/--data/);
   });
 
-  it('dispatches updateAttributeType on drop of an accepted payload', () => {
+  it('dispatches updateAttributeType on drop of an accepted payload, forwarding typeId for store-side validation/qualification', () => {
     const payload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'cdm.trade',
@@ -41,8 +41,10 @@ describe('TypePickerCell', () => {
     fireEvent.dragOver(row, { dataTransfer: dt });
     fireEvent.drop(row, { dataTransfer: dt });
 
-    // updateAttributeType receives the bare typeName, not the namespaced typeId
-    expect(updateAttributeType).toHaveBeenCalledWith('Trade', 'economics', 'NewType');
+    // Phase 13 / Finding 3: cell forwards the bare typeName AND the canonical
+    // typeId so the store can validate existence and qualify against
+    // cross-namespace ambiguity.
+    expect(updateAttributeType).toHaveBeenCalledWith('Trade', 'economics', 'NewType', 'cdm.trade::NewType');
   });
 
   it('does not activate isOver when disabled', () => {

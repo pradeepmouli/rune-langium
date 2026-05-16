@@ -644,3 +644,136 @@ describe('EditorStore — updateAttributeType', () => {
     expect(matching.every((a) => a.typeCall.type.$refText === 'Economics')).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// updateAttributeType — Phase 13 / Finding 3 (cross-namespace qualification +
+// stale-payload validation)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — updateAttributeType (Finding 3: cross-namespace qualification)', () => {
+  it('writes a QUALIFIED $refText when another node shares the bare name across namespaces', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'p', 'string', '0..1');
+    // Two `Party` types in distinct namespaces — the drop target is the
+    // OTHER (ns.b) Party, but the bare name "Party" would resolve to
+    // whichever node comes first by name in the AST.
+    store.getState().createType('data', 'Party', 'ns.a');
+    const bPartyId = store.getState().createType('data', 'Party', 'ns.b');
+
+    // Drop ns.b::Party onto Trade.p with the full canonical id (Finding 3 path).
+    store.getState().updateAttributeType(tradeId, 'p', 'Party', bPartyId);
+
+    const node = store.getState().nodes.find((n) => n.id === tradeId)!;
+    const attrs = ((node.data as any).attributes ?? []) as Array<any>;
+    const p = attrs.find((a) => a.name === 'p')!;
+    // Qualified form uses `.` separator (matches grammar QualifiedName +
+    // structure-graph-adapter findNodeByName resolution).
+    expect(p.typeCall.type.$refText).toBe('ns.b.Party');
+
+    // And the resulting edge must point at THE drop target (not the other Party).
+    const edges = store
+      .getState()
+      .edges.filter((e) => e.source === tradeId && e.data?.kind === 'attribute-ref' && e.data.label === 'p');
+    expect(edges.length).toBe(1);
+    expect(edges[0].target).toBe(bPartyId);
+  });
+
+  it('writes the BARE $refText when the type is unambiguous (single namespace)', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'p', 'string', '0..1');
+    const partyId = store.getState().createType('data', 'Party', 'cdm.trade');
+
+    store.getState().updateAttributeType(tradeId, 'p', 'Party', partyId);
+
+    const node = store.getState().nodes.find((n) => n.id === tradeId)!;
+    const attrs = ((node.data as any).attributes ?? []) as Array<any>;
+    const p = attrs.find((a) => a.name === 'p')!;
+    // No collision → write the bare name (avoid over-qualification noise).
+    expect(p.typeCall.type.$refText).toBe('Party');
+  });
+
+  it('is a no-op (no mutation) when targetTypeId is stale / not in the store', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'p', 'OldType', '0..1');
+    // No "Ghost" node exists in the store — the drag payload is stale (the
+    // target was deleted between drag start and drop). The action must abort
+    // without touching the AST.
+    const before = store.getState();
+    store.getState().updateAttributeType(tradeId, 'p', 'Ghost', 'ns.x::Ghost');
+
+    const node = store.getState().nodes.find((n) => n.id === tradeId)!;
+    const attrs = ((node.data as any).attributes ?? []) as Array<any>;
+    const p = attrs.find((a) => a.name === 'p')!;
+    expect(p.typeCall.type.$refText).toBe('OldType'); // unchanged
+    // No new edges either.
+    expect(store.getState().edges.length).toBe(before.edges.length);
+  });
+
+  it('preserves legacy bare-name behavior when targetTypeId is omitted (back-compat)', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'p', 'string', '0..1');
+    // Even with two Party types in different namespaces, the legacy
+    // 3-arg call writes the bare name (callers that haven't migrated yet
+    // must not get a surprise qualification).
+    store.getState().createType('data', 'Party', 'ns.a');
+    store.getState().createType('data', 'Party', 'ns.b');
+
+    store.getState().updateAttributeType(tradeId, 'p', 'Party');
+
+    const node = store.getState().nodes.find((n) => n.id === tradeId)!;
+    const attrs = ((node.data as any).attributes ?? []) as Array<any>;
+    const p = attrs.find((a) => a.name === 'p')!;
+    expect(p.typeCall.type.$refText).toBe('Party');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setInheritance — Phase 13 / Finding 3 (cross-namespace qualification + stale)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — setInheritance (Finding 3: cross-namespace qualification)', () => {
+  it('writes a QUALIFIED superType $refText when the parent name collides across namespaces', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().createType('data', 'BaseType', 'ns.a');
+    const bBaseId = store.getState().createType('data', 'BaseType', 'ns.b');
+
+    store.getState().setInheritance(childId, bBaseId);
+
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    const superType = (node.data as any).superType;
+    expect(superType?.$refText).toBe('ns.b.BaseType');
+  });
+
+  it('writes the BARE superType $refText when the parent name is unambiguous', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const baseId = store.getState().createType('data', 'TradeBase', 'cdm.trade');
+
+    store.getState().setInheritance(childId, baseId);
+
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    const superType = (node.data as any).superType;
+    expect(superType?.$refText).toBe('TradeBase');
+  });
+
+  it('is a no-op when parentId is stale / not in the store', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const baseId = store.getState().createType('data', 'TradeBase', 'cdm.trade');
+    store.getState().setInheritance(childId, baseId);
+    const beforeRefText = ((store.getState().nodes.find((n) => n.id === childId)!.data as any).superType as any)
+      ?.$refText;
+
+    store.getState().setInheritance(childId, 'ns.x::DeletedBase');
+
+    // Inheritance unchanged — stale payload was rejected.
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    const superType = (node.data as any).superType;
+    expect(superType?.$refText).toBe(beforeRefText);
+  });
+});

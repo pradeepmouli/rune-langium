@@ -58,6 +58,42 @@ import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from 
 import type { TrackedState } from './history.js';
 
 // ---------------------------------------------------------------------------
+// Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the canonical `$refText` for a type drop, qualifying with the
+ * namespace iff any OTHER node in the current store has the same bare name
+ * (would resolve ambiguously). Otherwise returns the bare name verbatim.
+ *
+ * `targetTypeId` must be the canonical id (`namespace::Name`) of the actual
+ * drop target — caller is expected to have validated existence already.
+ *
+ * The qualified form matches the grammar's `QualifiedName` token shape used
+ * by the source-drop path (see structure-graph-adapter.ts findNodeByName
+ * comment): `<namespace>.<TypeName>`. Resolution in both the adapter and the
+ * Langium grammar treats a `$refText` with dots as authoritatively qualified.
+ */
+export function disambiguateTypeRef(
+  targetTypeId: string,
+  targetTypeName: string,
+  targetNamespace: string,
+  allNodes: ReadonlyArray<TypeGraphNode>
+): string {
+  // Look for ANY other node (different id) sharing the same bare name.
+  // We don't need to enumerate them — the existence of a single sibling
+  // collision is enough to require qualification.
+  for (const n of allNodes) {
+    if (n.id === targetTypeId) continue;
+    const nName = (n.data as { name?: string }).name;
+    if (nName === targetTypeName) {
+      return `${targetNamespace}.${targetTypeName}`;
+    }
+  }
+  return targetTypeName;
+}
+
+// ---------------------------------------------------------------------------
 // State shape
 // ---------------------------------------------------------------------------
 
@@ -168,7 +204,17 @@ export interface EditorActions {
   addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string): void;
   removeAttribute(nodeId: string, attrName: string): void;
   renameAttribute(nodeId: string, oldName: string, newName: string): void;
-  updateAttributeType(nodeId: string, attrName: string, newTypeName: string): void;
+  /**
+   * Update the type ref on an attribute.
+   *
+   * @param targetTypeId Optional canonical node id of the resolved target
+   *   (`namespace::Name`). When supplied, the store validates the id against
+   *   current nodes and writes a fully-qualified `$refText` if any other
+   *   node shares the bare name across namespaces (spec 020 Phase 13,
+   *   Finding 3). When omitted, falls back to legacy behavior (write the
+   *   bare name verbatim, no validation).
+   */
+  updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId?: string): void;
   updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string): void;
   reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
   updateCardinality(nodeId: string, attrName: string, cardinality: string): void;
@@ -888,7 +934,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           }));
         },
 
-        updateAttributeType(nodeId: string, attrName: string, newTypeName: string) {
+        updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId?: string) {
           const current = get();
           const node = current.nodes.find((n) => n.id === nodeId);
           if (!node) return;
@@ -898,6 +944,24 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const firstMatch = attrs0.find((a) => a.name === attrName);
           if (!firstMatch) return;
           const preservedCardinality = formatCardinality(firstMatch.card);
+
+          // Phase 13 / Finding 3: when caller supplies the canonical targetTypeId
+          // (drop-time path), validate that it exists in the current store and
+          // pick a $refText that disambiguates against same-named types in
+          // other namespaces. Reject (no-op) stale or unknown targetTypeIds —
+          // a drag payload pointing at a node that was deleted between drag
+          // and drop must NOT corrupt the AST silently.
+          let refText = newTypeName;
+          let resolvedTargetId: string | undefined;
+          if (targetTypeId !== undefined) {
+            const target = current.nodes.find((n) => n.id === targetTypeId);
+            if (!target) return; // stale payload — abort
+            const targetData = target.data as AnyGraphNode;
+            const targetNamespace = (targetData as { namespace?: string }).namespace;
+            if (!targetNamespace) return; // malformed target
+            refText = disambiguateTypeRef(targetTypeId, newTypeName, targetNamespace, current.nodes);
+            resolvedTargetId = targetTypeId;
+          }
 
           set((state) => {
             const updatedNodes = state.nodes.map((n) => {
@@ -911,7 +975,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                       ...a,
                       typeCall: {
                         ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
-                        type: { $refText: newTypeName }
+                        type: { $refText: refText }
                       }
                     }
                   : a
@@ -922,7 +986,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             const filteredEdges = state.edges.filter(
               (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName)
             );
-            const newTargetId = state.nodes.find((n) => (n.data as AnyGraphNode).name === newTypeName)?.id;
+            // Prefer the caller-supplied id (Finding 3 path: drop-time) when
+            // available so the edge target matches the exact node the user
+            // dropped. Fall back to legacy name-based lookup for callers that
+            // still use the bare-name signature.
+            const newTargetId =
+              resolvedTargetId ?? state.nodes.find((n) => (n.data as AnyGraphNode).name === newTypeName)?.id;
             if (!newTargetId || newTargetId === nodeId) {
               return { nodes: updatedNodes, edges: filteredEdges };
             }
@@ -994,13 +1063,32 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           set((state) => {
             const filteredEdges = state.edges.filter((e) => !(e.source === childId && e.data?.kind === 'extends'));
 
+            // Phase 13 / Finding 3: validate `parentId` exists; reject stale
+            // payloads (drag target deleted between drag and drop). When
+            // resolving the superType $refText, qualify against the
+            // namespace if any same-named sibling exists across namespaces
+            // — otherwise multi-namespace workspaces silently link to the
+            // first-by-name Party (or whichever node) regardless of intent.
             const parentNode = parentId ? state.nodes.find((n) => n.id === parentId) : null;
+            if (parentId && !parentNode) {
+              // Stale parentId — abort the mutation, preserve existing
+              // inheritance untouched. We still filtered the old edges out
+              // above; restore them by returning unchanged state.
+              return state;
+            }
             const parentName = (parentNode?.data as AnyGraphNode)?.name as string | undefined;
+            const parentNamespace = (parentNode?.data as { namespace?: string } | undefined)?.namespace;
+            const superRefText =
+              parentName && parentNamespace && parentNode
+                ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, state.nodes)
+                : parentName;
 
             const updatedNodes = state.nodes.map((n) => {
               if (n.id !== childId) return n;
               const d = n.data as AnyGraphNode;
-              const superRef = parentName ? ({ ref: { name: parentName }, $refText: parentName } as any) : undefined;
+              const superRef = superRefText
+                ? ({ ref: { name: parentName }, $refText: superRefText } as any)
+                : undefined;
               if (d.$type === 'Data') {
                 return { ...n, data: { ...d, superType: superRef } } as TypeGraphNode;
               }
