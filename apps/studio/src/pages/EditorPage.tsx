@@ -27,6 +27,7 @@ import {
   NamespaceExplorerPanel,
   EditorFormPanel,
   ExpressionBuilder,
+  StructureView,
   BUILTIN_TYPES,
   AST_TYPE_TO_NODE_TYPE,
   useEditorStore
@@ -38,8 +39,12 @@ import type {
   EditorFormActions,
   ExpressionEditorSlotProps,
   FunctionScope,
-  LayoutDirection
+  LayoutDirection,
+  AdapterChoiceOption,
+  AdapterDocument,
+  AdapterNode
 } from '@rune-langium/visual-editor';
+import { useStructureViewStore } from '../store/structure-view-store.js';
 import type { RosettaModel } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
@@ -94,6 +99,68 @@ type DeferredExportEntry = {
  * reference stable so `useEffect`'s shallow-equality dep check works.
  */
 const EMPTY_DEFERRED_EXPORTS: ReadonlyArray<DeferredExportEntry> = Object.freeze([]);
+
+// ---------------------------------------------------------------------------
+// Adapter: TypeGraphNode[] → AdapterDocument
+// ---------------------------------------------------------------------------
+
+/**
+ * Project the editor store's node array into the AdapterDocument shape.
+ *
+ * Only `Data`, `Choice`, and `Enum` nodes are included. `superType.$refText`
+ * maps to `extends`; Data `attributes` carry through to `AdapterAttribute`
+ * directly since their fields match. Choice arms are mapped to the new
+ * `choiceOptions` field on `AdapterNode`, preserving the real `ChoiceOption`
+ * AST shape (only `typeCall`, no synthesized `name` or `card`).
+ *
+ * This is a **pure projection** — no side-effects, safe to call inside useMemo.
+ */
+function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGraphNode }[]): AdapterDocument {
+  const adapterNodes: AdapterNode[] = [];
+  const namespacesSet = new Set<string>();
+
+  for (const rfNode of nodes) {
+    const d = rfNode.data;
+    if (!d || typeof d.namespace !== 'string') continue;
+    namespacesSet.add(d.namespace);
+
+    if (d.$type === 'Data') {
+      adapterNodes.push({
+        id: rfNode.id,
+        $type: 'Data',
+        name: d.name,
+        namespace: d.namespace,
+        extends: d.superType?.$refText,
+        // `attributes` on AstNodeModel<Data> has the same structural shape as
+        // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
+        attributes: (d.attributes ?? []) satisfies AdapterNode['attributes']
+      });
+    } else if (d.$type === 'Choice') {
+      // ChoiceOption AST shape: { $type, typeCall, … } — NO `name`, NO `card`.
+      // Pass through to the new `choiceOptions` field on AdapterNode unchanged.
+      // The adapter's buildChoiceArm consumes the real shape via typeCall only.
+      adapterNodes.push({
+        id: rfNode.id,
+        $type: 'Choice',
+        name: d.name,
+        namespace: d.namespace,
+        choiceOptions: (d.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>
+      });
+    } else if (d.$type === 'RosettaEnumeration') {
+      adapterNodes.push({
+        id: rfNode.id,
+        $type: 'Enum',
+        name: d.name,
+        namespace: d.namespace,
+        values: (d.enumValues ?? []) as Array<{ name: string }>
+      });
+    }
+    // Other kinds (Function, RecordType, TypeAlias, etc.) are not relevant to Structure View
+  }
+
+  const namespaces = Array.from(namespacesSet).map((uri) => ({ uri }));
+  return { namespaces, nodes: adapterNodes };
+}
 
 export interface EditorPageProps {
   models: RosettaModel[];
@@ -264,6 +331,18 @@ export function EditorPage({
   const storeExpandAllNamespaces = useEditorStore((s) => s.expandAllNamespaces);
   const storeCollapseAllNamespaces = useEditorStore((s) => s.collapseAllNamespaces);
   const storeLayoutEngine = useEditorStore((s) => s.layoutOptions.engine ?? 'elk');
+
+  // Structure View store — expansion state for the structure pane
+  const expansionMap = useStructureViewStore((s) => s.expansionMap);
+
+  // Derive $type of the currently-selected node to gate which ids get forwarded
+  // to StructureView as focusedTypeId. Using a separate selector avoids breaking
+  // zustand's referential-equality optimisation that would fire on every nodes mutation.
+  const selectedNodeType = useEditorStore((s) => {
+    if (!s.selectedNodeId) return null;
+    const node = s.nodes.find((n) => n.id === s.selectedNodeId);
+    return (node?.data as { $type?: string } | undefined)?.$type ?? null;
+  });
   const storeSetLayoutEngine = useEditorStore((s) => s.setLayoutEngine);
   const layoutEngineRef = useRef(storeLayoutEngine);
   layoutEngineRef.current = storeLayoutEngine;
@@ -1286,15 +1365,37 @@ export function EditorPage({
     ]
   );
 
+  // Structure pane — focusedTypeId gated by node $type (Data / Choice / Enum only)
+  const structureFocusedTypeId = useMemo(() => {
+    if (!selectedNodeId) return undefined;
+    if (selectedNodeType === 'Data' || selectedNodeType === 'Choice' || selectedNodeType === 'RosettaEnumeration')
+      return selectedNodeId;
+    // Unsupported kind — pass undefined so StructureView shows its empty-selection state
+    return undefined;
+  }, [selectedNodeId, selectedNodeType]);
+
+  const adapterDocument = useMemo(
+    () => (storeNodes.length > 0 ? graphNodesToAdapterDocument(storeNodes) : undefined),
+    [storeNodes]
+  );
+
+  const renderStructurePane = useCallback(
+    () => (
+      <StructureView focusedTypeId={structureFocusedTypeId} adapterDoc={adapterDocument} expansionMap={expansionMap} />
+    ),
+    [structureFocusedTypeId, adapterDocument, expansionMap]
+  );
+
   const VisualPreviewPanelMounted = useCallback(
     () => (
       <CenterStackPanel
         renderGraph={renderGraphPane}
         renderSource={renderSourcePane}
         renderInspector={renderInspectorPane}
+        renderStructure={renderStructurePane}
       />
     ),
-    [renderGraphPane, renderSourcePane, renderInspectorPane]
+    [renderGraphPane, renderSourcePane, renderInspectorPane, renderStructurePane]
   );
 
   // Memoize the overrides object so DockShell's useMemo([panelComponents])

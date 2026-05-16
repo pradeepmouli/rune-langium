@@ -3,7 +3,7 @@
 
 import { createContext, useContext } from 'react';
 
-export type CenterPane = 'graph' | 'source' | 'inspector';
+export type CenterPane = 'graph' | 'source' | 'inspector' | 'structure';
 
 export interface CenterPanesContextValue {
   activePanes: Set<CenterPane>;
