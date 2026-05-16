@@ -19,16 +19,10 @@ export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
   const members = ((d as any).enumValues ?? []) as any[];
   const { layoutDirection } = useNavigation();
   const handles = getHandlePositions(layoutDirection);
-  const summary =
-    members.length === 0
-      ? 'No values'
-      : `${members.length} value${members.length === 1 ? '' : 's'}`;
+  const summary = members.length === 0 ? 'No values' : `${members.length} value${members.length === 1 ? '' : 's'}`;
 
   return (
-    <div
-      className={`rune-node rune-node-enum${selected ? ' rune-node-selected' : ''}`}
-      data-summary={summary}
-    >
+    <div className={`rune-node rune-node-enum${selected ? ' rune-node-selected' : ''}`} data-summary={summary}>
       <Handle type="target" position={handles.target} />
       <div className="rune-node-header">
         <NodeKindBadge kind="enum" />
@@ -48,7 +42,7 @@ export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
         {(d as any).errors?.length > 0 && (
           <div className="rune-node-errors">
             {((d as any).errors as any[]).map((err: any, i: number) => (
-              <div key={i}>{err.message}</div>
+              <div key={err.message ?? i}>{err.message}</div>
             ))}
           </div>
         )}

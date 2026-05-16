@@ -166,7 +166,6 @@ const EditorFormPanel = memo(function EditorFormPanel({
       <aside
         ref={panelRef}
         data-slot="editor-form-panel"
-        role="complementary"
         aria-label="Editor form"
         className="flex items-center justify-center h-full text-sm text-muted-foreground"
         tabIndex={-1}
@@ -183,7 +182,6 @@ const EditorFormPanel = memo(function EditorFormPanel({
       <aside
         ref={panelRef}
         data-slot="editor-form-panel"
-        role="complementary"
         aria-label={`Details for ${(nodeData as any).name}`}
         className="flex flex-col h-full overflow-hidden"
         tabIndex={-1}
@@ -291,7 +289,6 @@ const EditorFormPanel = memo(function EditorFormPanel({
     <aside
       ref={panelRef}
       data-slot="editor-form-panel"
-      role="complementary"
       aria-label={`Edit ${(nodeData as any).name}`}
       className="flex flex-col h-full overflow-hidden"
       tabIndex={-1}

@@ -82,13 +82,10 @@ export function AnnotationSection({
   const formCtx = useFormContext();
 
   const annotationsFromForm =
-    rawAnnotations === undefined
-      ? (formCtx?.watch?.('annotations') as unknown[] | undefined)
-      : undefined;
+    rawAnnotations === undefined ? (formCtx?.watch?.('annotations') as unknown[] | undefined) : undefined;
   const effectiveRawAnnotations = rawAnnotations ?? annotationsFromForm;
 
-  const effectiveAvailable =
-    availableAnnotations ?? ctx?.availableAnnotations ?? WELL_KNOWN_ANNOTATIONS;
+  const effectiveAvailable = availableAnnotations ?? ctx?.availableAnnotations ?? WELL_KNOWN_ANNOTATIONS;
   const effectiveReadOnly = readOnly ?? ctx?.readOnly ?? false;
 
   const effectiveOnAdd = useCallback(
@@ -133,7 +130,7 @@ export function AnnotationSection({
             variant="ghost"
             size="icon-xs"
             onClick={() => setShowPicker(!showPicker)}
-            className="h-5 w-5 text-muted-foreground hover:text-foreground"
+            className="size-5 text-muted-foreground hover:text-foreground"
             aria-label="Add annotation"
           >
             <Plus className="size-3" />
@@ -145,7 +142,7 @@ export function AnnotationSection({
       <div className="flex flex-wrap gap-1 px-1">
         {annotations.map((ann, i) => (
           <Badge
-            key={`${ann.name}-${i}`}
+            key={`${ann.name}-${ann.attribute ?? ''}-${i}`}
             variant="annotation"
             className="gap-1 text-[10px] h-5 pl-1.5 pr-1"
           >

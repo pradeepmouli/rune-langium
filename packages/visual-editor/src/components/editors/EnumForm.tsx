@@ -54,6 +54,8 @@ import type {
   NavigateToNodeCallback
 } from '../../types.js';
 
+const EMPTY_NODES: TypeGraphNode[] = [];
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -84,7 +86,7 @@ function EnumForm({
   data,
   availableTypes,
   actions,
-  allNodes = [],
+  allNodes = EMPTY_NODES,
   onNavigateToNode,
   allNodeIds
 }: EnumFormProps) {

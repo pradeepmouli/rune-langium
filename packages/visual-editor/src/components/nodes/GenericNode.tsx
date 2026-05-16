@@ -13,12 +13,7 @@ import { memo, useCallback } from 'react';
 import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode, TypeKind } from '../../types.js';
-import {
-  AST_TYPE_TO_NODE_TYPE,
-  getTypeRefText,
-  formatCardinality,
-  getRefText
-} from '../../adapters/model-helpers.js';
+import { AST_TYPE_TO_NODE_TYPE, getTypeRefText, formatCardinality, getRefText } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
 
@@ -39,9 +34,7 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
   const handles = getHandlePositions(layoutDirection);
   // For functions, show inputs as members; otherwise show attributes/features
   const members = (
-    kind === 'func'
-      ? ((d as any).inputs ?? [])
-      : ((d as any).attributes ?? (d as any).features ?? [])
+    kind === 'func' ? ((d as any).inputs ?? []) : ((d as any).attributes ?? (d as any).features ?? [])
   ) as any[];
 
   const handleTypeClick = useCallback(
@@ -65,10 +58,7 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
   const summary = summaryParts.join(' • ') || 'No members';
 
   return (
-    <div
-      className={`rune-node ${kindCss}${selected ? ' rune-node-selected' : ''}`}
-      data-summary={summary}
-    >
+    <div className={`rune-node ${kindCss}${selected ? ' rune-node-selected' : ''}`} data-summary={summary}>
       <Handle type="target" position={handles.target} />
       <div className="rune-node-header">
         <NodeKindBadge kind={kind} />
@@ -146,7 +136,7 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
         {(d as any).errors?.length > 0 && (
           <div className="rune-node-errors">
             {((d as any).errors as any[]).map((err: any, i: number) => (
-              <div key={i}>{err.message}</div>
+              <div key={err.message ?? i}>{err.message}</div>
             ))}
           </div>
         )}

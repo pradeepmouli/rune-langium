@@ -124,7 +124,7 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
         {(d as any).errors?.length > 0 && (
           <div className="rune-node-errors">
             {((d as any).errors as any[]).map((err: any, i: number) => (
-              <div key={i}>{err.message}</div>
+              <div key={err.message ?? i}>{err.message}</div>
             ))}
           </div>
         )}

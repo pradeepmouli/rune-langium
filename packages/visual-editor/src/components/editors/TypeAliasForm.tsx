@@ -50,6 +50,8 @@ import type {
 } from '../../types.js';
 import type { ReactNode } from 'react';
 
+const EMPTY_TYPES: TypeOption[] = [];
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -79,7 +81,7 @@ function TypeAliasForm({
   nodeId,
   data,
   actions,
-  availableTypes = [],
+  availableTypes = EMPTY_TYPES,
   onNavigateToNode,
   allNodeIds
 }: TypeAliasFormProps) {

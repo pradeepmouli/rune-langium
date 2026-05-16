@@ -49,7 +49,7 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
       role="listbox"
       aria-multiselectable="false"
     >
-      {allEntries.length === 0 && <div className="px-2 py-2 text-xs text-muted-foreground">No variables in scope</div>}
+      {allEntries.length === 0 && <div className="p-2 text-xs text-muted-foreground">No variables in scope</div>}
       {allEntries.map((entry) => (
         <button
           key={`${entry.origin}-${entry.name}`}
