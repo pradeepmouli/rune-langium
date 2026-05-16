@@ -78,11 +78,34 @@ function StructureFlowInner({ focusedTypeId, adapterDoc, expansionMap }: Structu
  * Shows a read-only expanded structure graph for the focused type.  When
  * `focusedTypeId` or `adapterDoc` is missing an empty-state placeholder is
  * rendered instead.
+ *
+ * An unsupported-root state is shown when `focusedTypeId` resolves to a
+ * non-Data node (Choice, Enum, Function) or no longer exists in `adapterDoc`.
+ * This prevents a blank canvas when `buildStructureGraph` returns an empty
+ * node map for anything other than a Data root (Finding 2, PR #182 Codex review).
  */
 export function StructureView({ focusedTypeId, adapterDoc, expansionMap }: StructureViewProps): React.ReactElement {
   if (!focusedTypeId || !adapterDoc) {
     return (
       <div data-testid="structure-empty-state">Select a type from the Namespace Explorer to view its structure.</div>
+    );
+  }
+
+  // Detect unsupported root upfront — cheaper than building+laying out an empty
+  // graph and gives a precise, user-friendly message instead of a blank canvas.
+  const rootNode = adapterDoc.nodes.find((n) => n.id === focusedTypeId);
+  if (!rootNode) {
+    return (
+      <div data-testid="structure-unsupported-root-state">
+        The selected type is no longer available. Select a Data type from the Namespace Explorer.
+      </div>
+    );
+  }
+  if (rootNode.$type !== 'Data') {
+    return (
+      <div data-testid="structure-unsupported-root-state">
+        Structure View shows the shape of Data types. Select a Data type from the Namespace Explorer.
+      </div>
     );
   }
 

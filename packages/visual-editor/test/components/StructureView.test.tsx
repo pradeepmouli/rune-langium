@@ -6,6 +6,7 @@
  *
  * Task 7.1 — empty-state renders when focusedTypeId is undefined.
  * Task 7.2 — adapter + layout integration: expansion map controls visibility.
+ * PR #182 Finding 2 — unsupported-root state for non-Data and stale selections.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -105,6 +106,79 @@ vi.mock('@xyflow/react', async (importOriginal) => {
     ),
     ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
   };
+});
+
+// -----------------------------------------------------------------------
+// PR #182 Finding 2 — unsupported-root state
+//
+// When focusedTypeId points at a non-Data node (Choice/Enum) or a node that
+// no longer exists in adapterDoc, StructureView must render a clear message
+// with data-testid="structure-unsupported-root-state" and NOT mount ReactFlow.
+// -----------------------------------------------------------------------
+
+describe('StructureView — unsupported root state (Finding 2)', () => {
+  it('renders unsupported-root when focusedTypeId resolves to a Choice in adapterDoc', () => {
+    const docWithChoice: AdapterDocument = {
+      namespaces: [{ uri: 'cdm.settlement' }],
+      nodes: [
+        {
+          id: 'cdm.settlement::SettlementTerms',
+          $type: 'Choice' as const,
+          name: 'SettlementTerms',
+          namespace: 'cdm.settlement',
+          attributes: []
+        }
+      ]
+    };
+    render(<StructureView focusedTypeId="cdm.settlement::SettlementTerms" adapterDoc={docWithChoice} />);
+    expect(screen.getByTestId('structure-unsupported-root-state')).toBeInTheDocument();
+    // ReactFlow must NOT be mounted.
+    expect(screen.queryByTestId('mock-react-flow')).toBeNull();
+    // The existing empty-state should NOT appear.
+    expect(screen.queryByTestId('structure-empty-state')).toBeNull();
+  });
+
+  it('renders unsupported-root when focusedTypeId resolves to an Enum in adapterDoc', () => {
+    const docWithEnum: AdapterDocument = {
+      namespaces: [{ uri: 'cdm.base' }],
+      nodes: [
+        {
+          id: 'cdm.base::DayCountFraction',
+          $type: 'Enum' as const,
+          name: 'DayCountFraction',
+          namespace: 'cdm.base',
+          values: [{ name: 'ACT_360' }]
+        }
+      ]
+    };
+    render(<StructureView focusedTypeId="cdm.base::DayCountFraction" adapterDoc={docWithEnum} />);
+    expect(screen.getByTestId('structure-unsupported-root-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('mock-react-flow')).toBeNull();
+  });
+
+  it('renders unsupported-root when focusedTypeId does not exist in adapterDoc (stale selection)', () => {
+    const docWithoutStaleNode: AdapterDocument = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          attributes: []
+        }
+      ]
+    };
+    render(<StructureView focusedTypeId="cdm.trade::DeletedType" adapterDoc={docWithoutStaleNode} />);
+    expect(screen.getByTestId('structure-unsupported-root-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('mock-react-flow')).toBeNull();
+  });
+
+  it('does NOT render unsupported-root for a valid Data selection', () => {
+    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={tradeDoc} />);
+    expect(screen.queryByTestId('structure-unsupported-root-state')).toBeNull();
+    expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
+  });
 });
 
 describe('StructureView — adapter + layout integration', () => {

@@ -5,25 +5,79 @@
  * ChoiceNode — Custom ReactFlow node for Rune DSL `Choice` types.
  *
  * Displays choice name and its options (each referencing a type).
+ *
+ * Two rendering variants:
+ *   - `variant === 'structure'`: structure-view context, reads `data.options`
+ *     (ReadonlyArray<StructureRow>) emitted by layoutStructureGraph. Mirrors
+ *     how DataNode handles its structure variant (Phase 6 Finding 4).
+ *   - default (graph view): reads `data.attributes`, renders navigable handles.
  */
 
 import { memo, useCallback } from 'react';
-import { Handle } from '@xyflow/react';
+import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode } from '../../types.js';
+import type { StructureChoiceNode, StructureRow } from '../../types/structure-view.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
 
-export const ChoiceNode = memo(function ChoiceNode({ data, selected }: NodeProps) {
+// ---------------------------------------------------------------------------
+// Structure-variant helpers
+// ---------------------------------------------------------------------------
+
+interface StructureChoiceNodeData extends StructureChoiceNode {
+  readonly variant: 'structure';
+}
+
+function isStructureChoice(d: unknown): d is StructureChoiceNodeData {
+  return typeof d === 'object' && d !== null && (d as { variant?: unknown }).variant === 'structure';
+}
+
+export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
-  const members = ((d as any).attributes ?? []) as any[];
   const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();
   const handles = getHandlePositions(layoutDirection);
-  const summary =
-    members.length === 0
-      ? 'No options'
-      : `${members.length} option${members.length === 1 ? '' : 's'}`;
+
+  // -------------------------------------------------------------------------
+  // Structure variant — reads data.options (StructureRow[]) from the adapter.
+  // TODO(Phase 10) visual tightening: gradient/shadow/font polish.
+  // -------------------------------------------------------------------------
+  if (isStructureChoice(data)) {
+    const options = data.options as ReadonlyArray<StructureRow>;
+    return (
+      <div className={`rune-node rune-node-choice rune-node-choice--structure${selected ? ' rune-node-selected' : ''}`}>
+        <Handle type="target" position={handles.target} />
+        <div className="rune-node-header">
+          <NodeKindBadge kind="choice" />
+          <span>{data.name}</span>
+        </div>
+        <div className="rune-node-rows">
+          {options.map((row: StructureRow) => (
+            <div key={row.attrName} className="rune-node-row" data-attr={row.attrName}>
+              <span className="rune-cell-name">{row.attrName}</span>
+              <span className="rune-cell-type-chip">{row.typeName || '?'}</span>
+              <span className="rune-cell-card">{row.cardinality}</span>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={row.attrName}
+                className="rune-row-handle"
+                data-testid={`choice-row-handle-${row.attrName}`}
+              />
+            </div>
+          ))}
+        </div>
+        <Handle type="source" position={handles.source} />
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Default graph variant — reads data.attributes (existing behavior).
+  // -------------------------------------------------------------------------
+  const members = ((d as any).attributes ?? []) as any[];
+  const summary = members.length === 0 ? 'No options' : `${members.length} option${members.length === 1 ? '' : 's'}`;
 
   const handleTypeClick = useCallback(
     (e: React.MouseEvent, nodeId: string) => {
@@ -34,10 +88,7 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected }: NodeProps
   );
 
   return (
-    <div
-      className={`rune-node rune-node-choice${selected ? ' rune-node-selected' : ''}`}
-      data-summary={summary}
-    >
+    <div className={`rune-node rune-node-choice${selected ? ' rune-node-selected' : ''}`} data-summary={summary}>
       <Handle type="target" position={handles.target} />
       <div className="rune-node-header">
         <NodeKindBadge kind="choice" />
