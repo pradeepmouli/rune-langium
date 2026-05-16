@@ -15,10 +15,12 @@
  * `TypeGraphNode` (= React Flow `Node<AnyGraphNode>`). We project them into the
  * `AdapterDocument` shape required by `buildStructureGraph`. Only `Data`,
  * `Choice`, and `Enum` nodes are included; unknown kinds are dropped silently.
- * This helper is intentionally local to this file; it should NOT be added to
- * the editor-store because it encodes a display-specific projection that is
- * only needed by the Structure View. If a future use case (e.g., LSP hover)
- * needs the same projection, extract it to a shared `adapter-document.ts` then.
+ * Choice arms are mapped to `AdapterChoiceOption` (real ChoiceOption shape —
+ * `typeCall` only, no synthesized `name`/`card`). This helper is intentionally
+ * local to this file; it should NOT be added to the editor-store because it
+ * encodes a display-specific projection that is only needed by the Structure
+ * View. If a future use case (e.g., LSP hover) needs the same projection,
+ * extract it to a shared `adapter-document.ts` then.
  *
  * **`useStructureViewStore` wiring** — `expansionMap` and `dragSource` are
  * consumed here. `setWorkspaceId` is wired in the workspace-init path
@@ -32,7 +34,7 @@ import type React from 'react';
 import { useMemo } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { StructureView, useEditorStore } from '@rune-langium/visual-editor';
-import type { AdapterDocument, AdapterNode } from '@rune-langium/visual-editor';
+import type { AdapterChoiceOption, AdapterDocument, AdapterNode } from '@rune-langium/visual-editor';
 import type { AnyGraphNode } from '@rune-langium/visual-editor';
 import { useStructureViewStore } from '../../store/structure-view-store.js';
 
@@ -44,9 +46,10 @@ import { useStructureViewStore } from '../../store/structure-view-store.js';
  * Project the editor store's node array into the AdapterDocument shape.
  *
  * Only `Data`, `Choice`, and `Enum` nodes are included. `superType.$refText`
- * maps to `extends`; `attributes` and `options` carry through directly since
- * their fields (`name`, `typeCall`, `card`) are structurally identical to
- * `AdapterAttribute`.
+ * maps to `extends`; Data `attributes` carry through to `AdapterAttribute`
+ * directly since their fields match. Choice arms are mapped to the new
+ * `choiceOptions` field on `AdapterNode`, preserving the real `ChoiceOption`
+ * AST shape (only `typeCall`, no synthesized `name` or `card`).
  *
  * This is a **pure projection** — no side-effects, safe to call inside useMemo.
  */
@@ -71,20 +74,15 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         attributes: (d.attributes ?? []) satisfies AdapterNode['attributes']
       });
     } else if (d.$type === 'Choice') {
-      // Choice arms are stored on d.attributes (same shape as Data attributes — single-array projection).
-      // (d.options is undefined on the AST; choice-utils, editor-store, rosetta-serializer, and codegen
-      // all push/read arms via .attributes — see choice-utils.ts:10,23 and editor-store.ts:1221.)
+      // ChoiceOption AST shape: { $type, typeCall, … } — NO `name`, NO `card`.
+      // Pass through to the new `choiceOptions` field on AdapterNode unchanged.
+      // The adapter's buildChoiceArm consumes the real shape via typeCall only.
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Choice',
         name: d.name,
         namespace: d.namespace,
-        // ChoiceOption's AstNodeModel shape doesn't structurally overlap AdapterAttribute
-        // at the TypeScript level (AstNodeModel<ChoiceOption> lacks the name/card literal
-        // shape that AdapterAttribute requires), but the runtime fields consumed by
-        // buildStructureGraph (name, typeCall, card) are present on every ChoiceOption.
-        // Double-cast through unknown is intentional — runtime invariant is verified.
-        attributes: (d.attributes ?? []) as unknown as AdapterNode['attributes']
+        choiceOptions: (d.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>
       });
     } else if (d.$type === 'RosettaEnumeration') {
       adapterNodes.push({
@@ -114,6 +112,30 @@ export function VisualPreviewPanel({ children }: VisualPreviewPanelProps): React
   // Editor store selectors — reactive, stable references from zustand
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const storeNodes = useEditorStore((s) => s.nodes);
+
+  // Derive the $type of the currently-selected node so we can gate which ids
+  // get forwarded to StructureView as focusedTypeId. Using two separate selectors
+  // (selectedNodeId above, then a find below) avoids breaking zustand's
+  // referential-equality optimisation that would fire on every nodes mutation.
+  //
+  // Only Data / Choice / Enum nodes are projected into adapterDocument.  When
+  // the user selects a Function, RecordType, TypeAlias, BasicType or Annotation
+  // node we pass `undefined` so StructureView shows its empty-selection state
+  // rather than the "stale selection" message (which is misleading — the node
+  // exists, it's just an unsupported kind for structure display).
+  const selectedNodeType = useEditorStore((s) => {
+    if (!s.selectedNodeId) return null;
+    const node = s.nodes.find((n) => n.id === s.selectedNodeId);
+    return (node?.data as { $type?: string } | undefined)?.$type ?? null;
+  });
+
+  const focusedTypeId = useMemo(() => {
+    if (!selectedNodeId) return undefined;
+    if (selectedNodeType === 'Data' || selectedNodeType === 'Choice' || selectedNodeType === 'RosettaEnumeration')
+      return selectedNodeId;
+    // Unsupported kind — do not forward to StructureView; let the empty state render.
+    return undefined;
+  }, [selectedNodeId, selectedNodeType]);
 
   // Structure view store — expansion state (drag-source consumption is a Phase 8 concern,
   // see the Phase 8 TODO block at the top of this file)
@@ -148,11 +170,7 @@ export function VisualPreviewPanel({ children }: VisualPreviewPanelProps): React
         </TabsContent>
 
         <TabsContent forceMount value="structure" className="flex-1 overflow-hidden data-[state=inactive]:hidden">
-          <StructureView
-            focusedTypeId={selectedNodeId ?? undefined}
-            adapterDoc={adapterDocument}
-            expansionMap={expansionMap}
-          />
+          <StructureView focusedTypeId={focusedTypeId} adapterDoc={adapterDocument} expansionMap={expansionMap} />
         </TabsContent>
       </Tabs>
     </section>

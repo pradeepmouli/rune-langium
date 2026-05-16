@@ -126,7 +126,7 @@ describe('StructureView — unsupported root state (Finding 2)', () => {
           $type: 'Choice' as const,
           name: 'SettlementTerms',
           namespace: 'cdm.settlement',
-          attributes: []
+          choiceOptions: []
         }
       ]
     };

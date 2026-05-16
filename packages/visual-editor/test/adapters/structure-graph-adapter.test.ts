@@ -317,9 +317,8 @@ const fixtureChoice = {
       $type: 'Choice' as const,
       name: 'Payout',
       namespace: 'cdm.trade',
-      attributes: [
-        { name: 'cashPayout', typeCall: { type: { $refText: 'Cash' } }, card: { inf: 1, sup: 1, unbounded: false } }
-      ]
+      // Real ChoiceOption shape: only typeCall, no name/card.
+      choiceOptions: [{ typeCall: { type: { $refText: 'Cash' } } }]
     },
     {
       id: 'cdm.trade::Trade',
@@ -405,6 +404,181 @@ describe('buildStructureGraph — Choice / Enum / Unresolved', () => {
     const row = trade.rows.find((r) => r.attrName === 'mystery')!;
     expect(row.typeKind).toBe('Unresolved');
     expect(row.targetNodeId).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR #182 round-2 Finding 1: real ChoiceOption shape (no name/card)
+// ---------------------------------------------------------------------------
+
+import type { StructureChoiceNode } from '../../src/types/structure-view.js';
+
+describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', () => {
+  // The critical regression: ChoiceOption AST has only `typeCall`, not `name`
+  // or `card`. The previous fix synthesized fake name/card so buildRow could
+  // consume it; this test pins the architectural fix: the adapter must consume
+  // AdapterChoiceOption directly via choiceOptions, never via attributes.
+
+  it('does not throw when ChoiceOption arms have no name or card', () => {
+    // The real ChoiceOption shape from the AST.
+    const fixture = {
+      namespaces: [{ uri: 'cdm.payment' }],
+      nodes: [
+        {
+          id: 'cdm.payment::CashSettlement',
+          $type: 'Data' as const,
+          name: 'CashSettlement',
+          namespace: 'cdm.payment',
+          attributes: []
+        },
+        {
+          id: 'cdm.payment::BankTransfer',
+          $type: 'Data' as const,
+          name: 'BankTransfer',
+          namespace: 'cdm.payment',
+          attributes: []
+        },
+        {
+          id: 'cdm.payment::SettlementMethod',
+          $type: 'Choice' as const,
+          name: 'SettlementMethod',
+          namespace: 'cdm.payment',
+          // Real ChoiceOption shape: only typeCall — NO name, NO card.
+          choiceOptions: [
+            { typeCall: { type: { $refText: 'CashSettlement' } } },
+            { typeCall: { type: { $refText: 'BankTransfer' } } }
+          ]
+        },
+        {
+          id: 'cdm.payment::Payment',
+          $type: 'Data' as const,
+          name: 'Payment',
+          namespace: 'cdm.payment',
+          attributes: [
+            {
+              name: 'method',
+              typeCall: { type: { $refText: 'SettlementMethod' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    // Must not throw — previously crashed when buildRow dereferenced attr.card.inf
+    // on undefined because ChoiceOption had no card field.
+    const expansionKey_ = expansionKey({ namespaceUri: 'cdm.payment', typeId: 'Payment', attrName: 'method' });
+    expect(() =>
+      buildStructureGraph(fixture, {
+        focusedTypeId: 'cdm.payment::Payment',
+        expansionMap: new Map([[expansionKey_, true]])
+      })
+    ).not.toThrow();
+  });
+
+  it('builds StructureChoiceArm entries with typeName from typeCall.$refText', () => {
+    const fixture = {
+      namespaces: [{ uri: 'cdm.payment' }],
+      nodes: [
+        {
+          id: 'cdm.payment::CashSettlement',
+          $type: 'Data' as const,
+          name: 'CashSettlement',
+          namespace: 'cdm.payment',
+          attributes: []
+        },
+        {
+          id: 'cdm.payment::BankTransfer',
+          $type: 'Data' as const,
+          name: 'BankTransfer',
+          namespace: 'cdm.payment',
+          attributes: []
+        },
+        {
+          id: 'cdm.payment::SettlementMethod',
+          $type: 'Choice' as const,
+          name: 'SettlementMethod',
+          namespace: 'cdm.payment',
+          choiceOptions: [
+            { typeCall: { type: { $refText: 'CashSettlement' } } },
+            { typeCall: { type: { $refText: 'BankTransfer' } } }
+          ]
+        },
+        {
+          id: 'cdm.payment::Payment',
+          $type: 'Data' as const,
+          name: 'Payment',
+          namespace: 'cdm.payment',
+          attributes: [
+            {
+              name: 'method',
+              typeCall: { type: { $refText: 'SettlementMethod' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const expansionKey_ = expansionKey({ namespaceUri: 'cdm.payment', typeId: 'Payment', attrName: 'method' });
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.payment::Payment',
+      expansionMap: new Map([[expansionKey_, true]])
+    });
+
+    const choiceNode = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    expect(choiceNode).toBeDefined();
+    expect(choiceNode.kind).toBe('choice');
+    expect(choiceNode.options).toHaveLength(2);
+
+    // StructureChoiceArm: typeName from $refText, typeKind resolved by lookup.
+    expect(choiceNode.options[0]!.typeName).toBe('CashSettlement');
+    expect(choiceNode.options[0]!.typeKind).toBe('Data');
+    expect(choiceNode.options[0]!.targetNodeId).toBe('cdm.payment::CashSettlement');
+
+    expect(choiceNode.options[1]!.typeName).toBe('BankTransfer');
+    expect(choiceNode.options[1]!.typeKind).toBe('Data');
+    expect(choiceNode.options[1]!.targetNodeId).toBe('cdm.payment::BankTransfer');
+  });
+
+  it('marks an unresolvable arm as Unresolved (no targetNodeId)', () => {
+    const fixture = {
+      namespaces: [{ uri: 'cdm.payment' }],
+      nodes: [
+        {
+          id: 'cdm.payment::SettlementMethod',
+          $type: 'Choice' as const,
+          name: 'SettlementMethod',
+          namespace: 'cdm.payment',
+          // Arm references a type that isn't in the document.
+          choiceOptions: [{ typeCall: { type: { $refText: 'UnknownType' } } }]
+        },
+        {
+          id: 'cdm.payment::Payment',
+          $type: 'Data' as const,
+          name: 'Payment',
+          namespace: 'cdm.payment',
+          attributes: [
+            {
+              name: 'method',
+              typeCall: { type: { $refText: 'SettlementMethod' } },
+              card: { inf: 1, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+
+    const expansionKey_ = expansionKey({ namespaceUri: 'cdm.payment', typeId: 'Payment', attrName: 'method' });
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.payment::Payment',
+      expansionMap: new Map([[expansionKey_, true]])
+    });
+
+    const choiceNode = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    expect(choiceNode.options[0]!.typeName).toBe('UnknownType');
+    expect(choiceNode.options[0]!.typeKind).toBe('Unresolved');
+    expect(choiceNode.options[0]!.targetNodeId).toBeUndefined();
   });
 });
 
@@ -683,9 +857,8 @@ describe('buildStructureGraph — cross-namespace references', () => {
           $type: 'Choice' as const,
           name: 'Payout',
           namespace: 'cdm.trade',
-          attributes: [
-            { name: 'cash', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
-          ]
+          // Real ChoiceOption shape: only typeCall, no name/card.
+          choiceOptions: [{ typeCall: { type: { $refText: 'string' } } }]
         }
       ]
     };
@@ -1639,9 +1812,8 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
           $type: 'Choice' as const,
           name: 'Payout',
           namespace: 'ns',
-          attributes: [
-            { name: 'cash', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
-          ]
+          // Real ChoiceOption shape: only typeCall, no name/card.
+          choiceOptions: [{ typeCall: { type: { $refText: 'string' } } }]
         },
         {
           id: 'ns::TradeBase',

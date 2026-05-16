@@ -173,6 +173,7 @@ export type {
   AdapterDocument,
   AdapterNode,
   AdapterAttribute,
+  AdapterChoiceOption,
   AdapterCardinality,
   BuildOptions
 } from './adapters/structure-graph-adapter.js';

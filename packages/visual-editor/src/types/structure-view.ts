@@ -102,13 +102,27 @@ export interface StructureDataNode {
   readonly expansions: ReadonlyMap<string, string>;
 }
 
+/**
+ * A Choice arm — represents one option in a Choice. Unlike Data attributes,
+ * Choice arms have no `name` of their own (their identity IS their type) and
+ * no cardinality (they are alternatives, not multi-valued).
+ */
+export interface StructureChoiceArm {
+  /** The arm's type name as written in source (e.g., "CashPayment"). */
+  readonly typeName: string;
+  /** Classification of the referenced type, mirroring StructureRow.typeKind. */
+  readonly typeKind: 'Data' | 'Choice' | 'Enum' | 'Builtin' | 'Unresolved';
+  /** Canonical id of the referenced node, when resolvable. */
+  readonly targetNodeId?: string;
+}
+
 /** A Choice node in the Structure View graph. */
 export interface StructureChoiceNode {
   readonly id: string;
   readonly kind: 'choice';
   readonly name: string;
   readonly namespaceUri: string;
-  readonly options: ReadonlyArray<StructureRow>;
+  readonly options: ReadonlyArray<StructureChoiceArm>;
 }
 
 /** A base-type GroupContainer wrap. */

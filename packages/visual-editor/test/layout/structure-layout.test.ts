@@ -478,23 +478,10 @@ describe('layoutStructureGraph — Choice node', () => {
             kind: 'choice',
             name: 'PriceChoice',
             namespaceUri: 'cdm.trade',
+            // StructureChoiceArm: typeName + typeKind only — no attrName, no cardinality.
             options: [
-              {
-                attrName: 'fixedPrice',
-                typeName: 'Money',
-                typeKind: 'BasicType',
-                cardinality: '1..1',
-                isOptional: false,
-                isInherited: false
-              },
-              {
-                attrName: 'indexedPrice',
-                typeName: 'IndexedRate',
-                typeKind: 'BasicType',
-                cardinality: '1..1',
-                isOptional: false,
-                isInherited: false
-              }
+              { typeName: 'Money', typeKind: 'Builtin' as const },
+              { typeName: 'IndexedRate', typeKind: 'Unresolved' as const }
             ]
           }
         ]
@@ -545,16 +532,8 @@ describe('layoutStructureGraph — Choice node', () => {
             kind: 'choice',
             name: 'PriceChoice',
             namespaceUri: 'cdm.trade',
-            options: [
-              {
-                attrName: 'fixedPrice',
-                typeName: 'Money',
-                typeKind: 'BasicType',
-                cardinality: '1..1',
-                isOptional: false,
-                isInherited: false
-              }
-            ]
+            // StructureChoiceArm: typeName + typeKind only — no attrName, no cardinality.
+            options: [{ typeName: 'Money', typeKind: 'Builtin' as const }]
           }
         ]
       ])

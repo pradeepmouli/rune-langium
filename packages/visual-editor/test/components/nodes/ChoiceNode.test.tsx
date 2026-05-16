@@ -1,44 +1,51 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Regression tests for ChoiceNode (PR #182 Codex review, Finding 1).
+ * Regression tests for ChoiceNode (PR #182 Codex review, Finding 1 & Finding 3).
  *
- * Finding: in structure-view context, layoutStructureGraph emits React Flow
- * nodes with `type: 'choice'` and `data: { ...n, variant: 'structure' }`, but
- * ChoiceNode was reading `data.attributes` while StructureChoiceNode carries
- * its arms on `data.options`. The pre-fix code rendered an empty box.
+ * Finding 1: in structure-view context, layoutStructureGraph emits React Flow
+ * nodes with `type: 'choice'` and `data: { ...n, variant: 'structure' }`.
+ * ChoiceNode previously read `data.options` as StructureRow[], but the new
+ * architectural fix introduces StructureChoiceArm (typeName + typeKind only —
+ * no attrName, no cardinality). Arms have no name distinct from their type.
+ *
+ * Finding 3: the structure-variant wrapper must carry `rune-node-choice--structure`
+ * so the CSS height override (`.rune-node-choice--structure .rune-node-header`)
+ * resolves at all. Verified with class-name assertions since jsdom can't compute
+ * layout.
  *
  * Tests here verify:
- *   1. Structure-variant ChoiceNode renders each option's attrName.
- *   2. Graph-variant ChoiceNode (pre-existing behavior) still renders correctly.
+ *   1. Structure-variant ChoiceNode renders each arm's typeName.
+ *   2. Each arm gets a type chip (rune-cell-type-chip).
+ *   3. Arms do NOT render cardinality cells (no rune-cell-card — arms are
+ *      alternatives, not attributes).
+ *   4. The correct CSS class names are present for the layout SSoT.
+ *   5. Graph-variant ChoiceNode (pre-existing behavior) is unaffected.
  */
 
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { ChoiceNode } from '../../../src/components/nodes/ChoiceNode.js';
-import type { StructureRow } from '../../../src/types/structure-view.js';
+import type { StructureChoiceArm } from '../../../src/types/structure-view.js';
 
 // ---------------------------------------------------------------------------
 // Structure-variant fixture — mirrors shape emitted by layoutStructureGraph
+// StructureChoiceArm: typeName + typeKind + optional targetNodeId. No attrName,
+// no cardinality — choice arms are alternatives ("is this type"), not attributes.
 // ---------------------------------------------------------------------------
 
-const options: StructureRow[] = [
+const options: StructureChoiceArm[] = [
   {
-    attrName: 'CashSettlement',
     typeName: 'CashSettlement',
     typeKind: 'Data',
-    cardinality: '0..1',
-    isOptional: true,
-    isInherited: false
+    targetNodeId: 'cdm.settlement::CashSettlement'
   },
   {
-    attrName: 'PhysicalSettlement',
     typeName: 'PhysicalSettlement',
     typeKind: 'Data',
-    cardinality: '0..1',
-    isOptional: true,
-    isInherited: false
+    targetNodeId: 'cdm.settlement::PhysicalSettlement'
   }
 ];
 
@@ -56,41 +63,37 @@ function renderInFlow(jsx: React.ReactNode) {
 }
 
 describe('ChoiceNode — structure variant (Finding 1)', () => {
-  it('renders each option attrName (pre-fix this would render an empty box)', () => {
+  it('renders each arm typeName (pre-fix this would render an empty box)', () => {
     renderInFlow(
       <ChoiceNode data={structureData as any} selected={false} id="cdm.settlement::SettlementTerms" type="choice" />
     );
-    // attrName appears in both .rune-cell-name and .rune-cell-type-chip in this
-    // fixture (attrName === typeName), so getAllByText is correct here.
     expect(screen.getAllByText('CashSettlement').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('PhysicalSettlement').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders each option typeName as a type chip', () => {
+  it('renders each arm typeName as a type chip', () => {
     renderInFlow(
       <ChoiceNode data={structureData as any} selected={false} id="cdm.settlement::SettlementTerms" type="choice" />
     );
-    // typeName for both options is the same as attrName in this fixture —
-    // confirm at least one type-chip element is rendered per row.
     const chips = document.querySelectorAll('.rune-cell-type-chip');
     expect(chips.length).toBe(options.length);
   });
 
-  it('renders each option cardinality', () => {
+  it('does NOT render cardinality cells — arms are alternatives, not attributes', () => {
     renderInFlow(
       <ChoiceNode data={structureData as any} selected={false} id="cdm.settlement::SettlementTerms" type="choice" />
     );
+    // rune-cell-card is only present on Data attribute rows, not on Choice arms.
     const cards = document.querySelectorAll('.rune-cell-card');
-    expect(cards.length).toBe(options.length);
-    expect(cards[0]).toHaveTextContent('0..1');
+    expect(cards.length).toBe(0);
   });
 
-  it('renders a row handle per option', () => {
+  it('renders a row handle per arm (keyed by typeName)', () => {
     renderInFlow(
       <ChoiceNode data={structureData as any} selected={false} id="cdm.settlement::SettlementTerms" type="choice" />
     );
-    expect(screen.getByTestId('choice-row-handle-CashSettlement')).toBeInTheDocument();
-    expect(screen.getByTestId('choice-row-handle-PhysicalSettlement')).toBeInTheDocument();
+    expect(screen.getByTestId('choice-arm-handle-CashSettlement')).toBeInTheDocument();
+    expect(screen.getByTestId('choice-arm-handle-PhysicalSettlement')).toBeInTheDocument();
   });
 
   it('does NOT fall through to graph-variant rendering (no data-summary attribute)', () => {
@@ -99,6 +102,50 @@ describe('ChoiceNode — structure variant (Finding 1)', () => {
     );
     // Graph variant adds data-summary to the wrapper; structure variant does not.
     expect(container.querySelector('[data-summary]')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Finding 3 regression: structure-variant wrapper carries the class name that
+// the CSS SSoT rule targets.
+//
+// The CSS fix adds `.rune-node-choice--structure .rune-node-header { height:
+// var(--rune-header-height); … }` to constrain the header to HEADER_HEIGHT.
+// jsdom cannot compute layout, so we can't assert a rendered pixel height.
+// Instead, we assert:
+//   1. The outer wrapper has class `rune-node-choice--structure` so the CSS
+//      selector resolves at all.
+//   2. The header element is present and carries class `rune-node-header`
+//      (the child selector target).
+// If the class names were changed in ChoiceNode.tsx without updating the CSS,
+// these tests would catch the drift before it reached CI's visual regression.
+// ---------------------------------------------------------------------------
+
+describe('ChoiceNode — Finding 3: structure-variant CSS class names (layout SSoT)', () => {
+  it('outer wrapper has rune-node-choice--structure class', () => {
+    const { container } = renderInFlow(
+      <ChoiceNode data={structureData as any} selected={false} id="cdm.settlement::SettlementTerms" type="choice" />
+    );
+    // Use querySelector — the ReactFlowProvider adds extra wrapper divs so
+    // navigating via firstElementChild is not reliable.
+    const wrapper = container.querySelector('.rune-node-choice--structure');
+    expect(wrapper).not.toBeNull();
+  });
+
+  it('header element has rune-node-header class (CSS selector target for height override)', () => {
+    const { container } = renderInFlow(
+      <ChoiceNode data={structureData as any} selected={false} id="cdm.settlement::SettlementTerms" type="choice" />
+    );
+    const header = container.querySelector('.rune-node-choice--structure .rune-node-header');
+    expect(header).not.toBeNull();
+  });
+
+  it('graph-variant wrapper does NOT have the --structure modifier (no false positive)', () => {
+    const { container } = renderInFlow(
+      <ChoiceNode data={graphData as any} selected={false} id="cdm.settlement::SettlementTerms" type="choice" />
+    );
+    const structureVariant = container.querySelector('.rune-node-choice--structure');
+    expect(structureVariant).toBeNull();
   });
 });
 

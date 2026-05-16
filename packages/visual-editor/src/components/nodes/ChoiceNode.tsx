@@ -17,7 +17,7 @@ import { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode } from '../../types.js';
-import type { StructureChoiceNode, StructureRow } from '../../types/structure-view.js';
+import type { StructureChoiceNode, StructureChoiceArm } from '../../types/structure-view.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
@@ -40,11 +40,13 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
   const handles = getHandlePositions(layoutDirection);
 
   // -------------------------------------------------------------------------
-  // Structure variant — reads data.options (StructureRow[]) from the adapter.
+  // Structure variant — reads data.options (StructureChoiceArm[]) from the
+  // adapter. Arms have only a typeName and typeKind — no attrName or
+  // cardinality (a choice arm IS a type, not an attribute).
   // TODO(Phase 10) visual tightening: gradient/shadow/font polish.
   // -------------------------------------------------------------------------
   if (isStructureChoice(data)) {
-    const options = data.options as ReadonlyArray<StructureRow>;
+    const options = data.options as ReadonlyArray<StructureChoiceArm>;
     return (
       <div className={`rune-node rune-node-choice rune-node-choice--structure${selected ? ' rune-node-selected' : ''}`}>
         <Handle type="target" position={handles.target} />
@@ -53,17 +55,15 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
           <span>{data.name}</span>
         </div>
         <div className="rune-node-rows">
-          {options.map((row: StructureRow) => (
-            <div key={row.attrName} className="rune-node-row" data-attr={row.attrName}>
-              <span className="rune-cell-name">{row.attrName}</span>
-              <span className="rune-cell-type-chip">{row.typeName || '?'}</span>
-              <span className="rune-cell-card">{row.cardinality}</span>
+          {options.map((arm: StructureChoiceArm) => (
+            <div key={arm.typeName} className="rune-node-row" data-attr={arm.typeName}>
+              <span className="rune-cell-type-chip">{arm.typeName || '?'}</span>
               <Handle
                 type="source"
                 position={Position.Right}
-                id={row.attrName}
+                id={arm.typeName}
                 className="rune-row-handle"
-                data-testid={`choice-row-handle-${row.attrName}`}
+                data-testid={`choice-arm-handle-${arm.typeName}`}
               />
             </div>
           ))}

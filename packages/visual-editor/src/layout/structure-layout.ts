@@ -127,9 +127,11 @@ function sizeData(
 }
 
 function sizeChoice(node: StructureChoiceNode, sizes: Map<string, SizedNode>): SizedNode {
+  // StructureChoiceArm uses typeName as the row key (arms have no attrName —
+  // their identity IS the referenced type).
   const rowOffsets = new Map<string, number>();
   for (let i = 0; i < node.options.length; i++) {
-    rowOffsets.set(node.options[i].attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+    rowOffsets.set(node.options[i].typeName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
   const sized: SizedNode = {
     width: COL_WIDTH,

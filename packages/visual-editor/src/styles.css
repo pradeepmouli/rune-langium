@@ -857,6 +857,19 @@ button[data-navigable]:focus-visible {
   height: var(--rune-header-height);
 }
 
+/* Mirror the data-structure rule for the choice-structure variant.
+ * sizeChoice in structure-layout.ts reserves exactly HEADER_HEIGHT (28px)
+ * for the choice header via `height: HEADER_HEIGHT + n * ROW_HEIGHT`.
+ * Without this override the default .rune-node-header padding renders the
+ * header taller than 28px, pushing siblings below an expanded Choice out
+ * of alignment with their layout-computed y positions. */
+.rune-node-choice--structure .rune-node-header {
+  box-sizing: border-box;
+  height: var(--rune-header-height);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .rune-node-body--two-col {
   display: flex;
   flex-direction: row;
