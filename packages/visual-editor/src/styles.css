@@ -121,23 +121,16 @@
 /* ── Node base ────────────────────────────────────────────────── */
 
 .rune-node {
-  border-radius: var(--radius-lg, 8px);
-  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 10%, oklch(0.21 0.02 280)) 0%,
-      oklch(0.18 0.02 280) 100%
-    );
-  font-family: var(--font-sans, 'Inter', ui-sans-serif, system-ui, sans-serif);
-  font-size: var(--text-base, 13px);
+  background: var(--card, var(--background));
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
   min-width: 200px;
-  color: var(--color-node-text, #E8E6E1);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 8px 18px oklch(0 0 0 / 0.2);
+  color: var(--color-node-text, var(--foreground));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
@@ -150,20 +143,6 @@
   width: 3px;
   background: color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 82%, white 18%);
   opacity: 0.78;
-}
-
-.rune-node::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      circle at top,
-      color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 18%, transparent),
-      transparent 52%
-    ),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 38%);
 }
 
 .rune-node:hover {
@@ -179,26 +158,16 @@
   transition: none;
 }
 
-.react-flow__node.dragging .rune-node::after {
-  opacity: 0.42;
-}
-
 .rune-node-header {
-  padding: var(--space-4, 8px) var(--space-6, 12px);
+  padding: var(--space-2) var(--space-4);
   font-weight: 600;
-  font-size: var(--text-md, 14px);
+  font-size: var(--text-sm);
   border-bottom: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
   display: flex;
   align-items: center;
-  gap: var(--space-3, 6px);
+  gap: var(--space-2);
   position: relative;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 10%, transparent),
-      transparent 72%
-    ),
-    color-mix(in oklch, var(--background, #121218) 28%, transparent);
+  background: transparent;
 }
 
 .rune-node-summary {
@@ -281,7 +250,7 @@
 }
 
 .rune-node-body {
-  padding: var(--space-4, 8px) var(--space-6, 12px);
+  padding: var(--space-2) var(--space-4);
 }
 
 .rune-node-members {
