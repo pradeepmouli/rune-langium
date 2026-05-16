@@ -57,11 +57,31 @@ interface SizedNode {
 }
 
 /**
+ * Compose a path-aware cache key for the sizing pass.
+ *
+ * Phase 13 / Codex P2 Finding 2: with per-edge instance placement, a type
+ * can be sized in different ancestor contexts — cyclic-path vs sibling-direct.
+ * Keying on canonical id alone caused the placeholder-truncated size from a
+ * cyclic context to be reused for a later non-cyclic sibling placement,
+ * making that sibling's children overflow parent extent.
+ *
+ * The key is `canonicalId:ancestor1:ancestor2:...` where the ancestor list is
+ * the ordered recursion stack at the time of sizing. Memory cost scales with
+ * unique (id, path) pairs; typical schemas have few unique contexts.
+ */
+function makeSizeCacheKey(nodeId: string, ancestorPath: readonly string[]): string {
+  return ancestorPath.length === 0 ? nodeId : `${nodeId}:${ancestorPath.join(':')}`;
+}
+
+/**
  * Simulate `placeDataChildren` / `placeBaseChildren`'s placement walk to compute
  * the bottom of the right-hand column. The placement pass advances `yCursor` to
  * `max(rowTop, yCursor)` so a late-row expansion can land below the simple-sum
  * height; sizing must mirror that math, otherwise children render outside the
  * parent's extent (see review must-fix #6 / #7).
+ *
+ * `childAncestorPath` is the path that will be passed to each child's `sizeOf`
+ * call — it must equal `[...ownerAncestorPath, ownerNodeId]`.
  */
 function simulateColumnHeight(
   expansions: ReadonlyMap<string, string>,
@@ -69,6 +89,7 @@ function simulateColumnHeight(
   input: StructureGraphInput,
   sizes: Map<string, SizedNode>,
   sizing: Set<string>,
+  childAncestorPath: readonly string[],
   /** Initial yCursor — HEADER_HEIGHT for data nodes, BASE_PADDING+HEADER_HEIGHT
    *  for base containers (whose placement pass starts there to match CSS padding). */
   initialYCursor: number = HEADER_HEIGHT
@@ -77,7 +98,7 @@ function simulateColumnHeight(
   for (const [attrName, childId] of expansions) {
     const child = input.nodes.get(childId);
     if (!child) continue;
-    const childSize = sizeOf(child, sizes, input, sizing);
+    const childSize = sizeOf(child, sizes, input, sizing, childAncestorPath);
     if (!childSize) continue;
     const rowCenter = rowOffsets.get(attrName);
     const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
@@ -89,11 +110,17 @@ function simulateColumnHeight(
   return Math.max(HEADER_HEIGHT, yCursor - ROW_GAP);
 }
 
+/**
+ * Compute the SizedNode for a Data node, recursing into expansion children
+ * with `childAncestorPath = [...ownerAncestorPath, node.id]` so each child's
+ * size is cached under its own path-aware key.
+ */
 function sizeData(
   node: StructureDataNode,
   sizes: Map<string, SizedNode>,
   input: StructureGraphInput,
-  sizing: Set<string>
+  sizing: Set<string>,
+  childAncestorPath: readonly string[]
 ): SizedNode {
   const rows = node.rows;
   const rowsHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT;
@@ -107,7 +134,7 @@ function sizeData(
   for (const [, childId] of node.expansions) {
     const child = input.nodes.get(childId);
     if (!child) continue;
-    const childSize = sizeOf(child, sizes, input, sizing);
+    const childSize = sizeOf(child, sizes, input, sizing, childAncestorPath);
     if (!childSize) continue;
     childrenWidth = Math.max(childrenWidth, childSize.width);
   }
@@ -116,41 +143,46 @@ function sizeData(
   // will actually produce (row-aligned + non-overlapping), not the naive sum.
   const childrenHeight =
     node.expansions.size > 0
-      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT
+      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, childAncestorPath) - HEADER_HEIGHT
       : 0;
 
   const width = childrenWidth > 0 ? COL_WIDTH + COL_GAP + childrenWidth : COL_WIDTH;
   const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
-  const sized: SizedNode = { width, height, rowOffsets };
-  sizes.set(node.id, sized);
-  return sized;
+  return { width, height, rowOffsets };
 }
 
-function sizeChoice(node: StructureChoiceNode, sizes: Map<string, SizedNode>): SizedNode {
+function sizeChoice(node: StructureChoiceNode): SizedNode {
   // StructureChoiceArm uses typeName as the row key (arms have no attrName —
   // their identity IS the referenced type).
   const rowOffsets = new Map<string, number>();
   for (let i = 0; i < node.options.length; i++) {
     rowOffsets.set(node.options[i].typeName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
-  const sized: SizedNode = {
+  return {
     width: COL_WIDTH,
     height: HEADER_HEIGHT + node.options.length * ROW_HEIGHT,
     rowOffsets
   };
-  sizes.set(node.id, sized);
-  return sized;
 }
 
+/**
+ * Compute the SizedNode for a Base container, recursing into expansion children
+ * with `childAncestorPath = [...ownerAncestorPath, node.id]`.
+ */
 function sizeBase(
   node: StructureBaseContainer,
   sizes: Map<string, SizedNode>,
   input: StructureGraphInput,
-  sizing: Set<string>
+  sizing: Set<string>,
+  childAncestorPath: readonly string[]
 ): SizedNode {
   const child = input.nodes.get(node.childNodeId);
   const childSize = child
-    ? (sizeOf(child, sizes, input, sizing) ?? { width: COL_WIDTH, height: HEADER_HEIGHT, rowOffsets: new Map() })
+    ? (sizeOf(child, sizes, input, sizing, childAncestorPath) ?? {
+        width: COL_WIDTH,
+        height: HEADER_HEIGHT,
+        rowOffsets: new Map()
+      })
     : { width: COL_WIDTH, height: HEADER_HEIGHT, rowOffsets: new Map() };
 
   const baseRowsHeight = HEADER_HEIGHT + node.baseRows.length * ROW_HEIGHT;
@@ -172,7 +204,7 @@ function sizeBase(
   for (const [, expChildId] of node.expansions) {
     const expChild = input.nodes.get(expChildId);
     if (!expChild) continue;
-    const expSize = sizeOf(expChild, sizes, input, sizing);
+    const expSize = sizeOf(expChild, sizes, input, sizing, childAncestorPath);
     if (!expSize) continue;
     expansionsWidth = Math.max(expansionsWidth, expSize.width);
   }
@@ -185,7 +217,15 @@ function sizeBase(
   // rightColumnHeight is that value directly — no further adjustment needed.
   const rightColumnHeight =
     node.expansions.size > 0
-      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, BASE_PADDING + HEADER_HEIGHT)
+      ? simulateColumnHeight(
+          node.expansions,
+          rowOffsets,
+          input,
+          sizes,
+          sizing,
+          childAncestorPath,
+          BASE_PADDING + HEADER_HEIGHT
+        )
       : BASE_PADDING + HEADER_HEIGHT;
 
   // The base container wraps:
@@ -203,43 +243,69 @@ function sizeBase(
       ? Math.max(COL_WIDTH, childSize.width) + COL_GAP + expansionsWidth
       : Math.max(COL_WIDTH, childSize.width);
 
-  const sized: SizedNode = {
+  return {
     width: innerWidth + BASE_PADDING * 2,
     height: innerHeight + BASE_PADDING * 2,
     rowOffsets
   };
-  sizes.set(node.id, sized);
-  return sized;
 }
 
+/**
+ * Compute (and path-aware-cache) the size of `node` in the given ancestor context.
+ *
+ * **Cache key:** `makeSizeCacheKey(node.id, ancestorPath)` where `ancestorPath`
+ * is the ordered list of canonical ids of all ANCESTORS of this node (excluding
+ * `node.id` itself). This makes the cache unique per placement context — a type
+ * sized in a cyclic path gets a different cache entry from the same type sized
+ * on a non-cyclic direct path (Codex P2 Finding 2 fix).
+ *
+ * **Cycle protection:** `sizing: Set<string>` tracks which canonical ids are
+ * currently open on the stack. Re-entrant sizing of the same id writes a
+ * placeholder size (also path-keyed) and returns early — the placeholder is
+ * keyed to the cyclic path, so a subsequent non-cyclic call at a different
+ * path gets its own key and recomputes the full size correctly.
+ *
+ * **Children:** `sizeData` / `sizeBase` / `simulateColumnHeight` receive
+ * `childAncestorPath = [...ancestorPath, node.id]` and pass it to their own
+ * `sizeOf` calls, so every descendant is keyed relative to its full ancestor
+ * chain.
+ */
 function sizeOf(
   node: StructureNode,
   sizes: Map<string, SizedNode>,
   input: StructureGraphInput,
-  sizing: Set<string>
+  sizing: Set<string>,
+  /** Canonical ids of ALL ancestors of this node (not including node.id itself). */
+  ancestorPath: readonly string[] = []
 ): SizedNode | undefined {
-  const cached = sizes.get(node.id);
+  const cacheKey = makeSizeCacheKey(node.id, ancestorPath);
+  const cached = sizes.get(cacheKey);
   if (cached) return cached;
-  // Cycle protection: if we re-enter the same node while still sizing it,
-  // return a stable placeholder AND cache it so the placement pass can emit
-  // the node consistently with the sized body. Phase 2's adapter can emit
-  // cyclic expansion maps (self-references / mutual references) when the
-  // user expands across recursive structures.
+  // Cycle protection: if we re-enter the same node while still sizing it (it is
+  // already in the `sizing` set), return a stable placeholder keyed to this
+  // path. Phase 2's adapter can emit cyclic expansion maps (self-references /
+  // mutual references) when the user expands across recursive structures.
   //
-  // Caching is load-bearing: the parent's `childrenHeight`/`expansionsHeight`
-  // math already includes this placeholder's height, so the placement pass
-  // must find the same SizedNode under `sizes.get(node.id)` — otherwise we
-  // reserve space for a child that never gets placed.
+  // The placeholder is path-keyed so a later non-cyclic sizeOf call for the
+  // same canonical id but a DIFFERENT ancestor path computes a fresh full size
+  // rather than hitting this placeholder.
   if (sizing.has(node.id)) {
     const placeholder: SizedNode = { width: COL_WIDTH, height: HEADER_HEIGHT, rowOffsets: new Map() };
-    sizes.set(node.id, placeholder);
+    sizes.set(cacheKey, placeholder);
     return placeholder;
   }
   sizing.add(node.id);
+  // Build the path that children of this node will receive: their ancestors
+  // include all of this node's ancestors PLUS this node itself.
+  const childAncestorPath: readonly string[] = [...ancestorPath, node.id];
   try {
-    if (node.kind === 'data') return sizeData(node, sizes, input, sizing);
-    if (node.kind === 'choice') return sizeChoice(node, sizes);
-    return sizeBase(node, sizes, input, sizing);
+    let sized: SizedNode;
+    if (node.kind === 'data') sized = sizeData(node, sizes, input, sizing, childAncestorPath);
+    else if (node.kind === 'choice') sized = sizeChoice(node);
+    else sized = sizeBase(node, sizes, input, sizing, childAncestorPath);
+    // Write under this node's own key (ancestorPath, NOT childAncestorPath).
+    sizes.set(cacheKey, sized);
+    return sized;
   } finally {
     sizing.delete(node.id);
   }
@@ -316,17 +382,29 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
    * @param parentInstanceId  React Flow parent id (undefined at the root).
    * @param position          Position relative to parent (or canvas for root).
    * @param ancestors         Canonical ids of recursion ancestors; used for cycle guard.
+   * @param ancestorPath      Ordered list of canonical ids on the current path; mirrors
+   *                          the ancestorPath used by the sizing pass so size lookups
+   *                          retrieve the path-aware cache entry for this placement context.
    */
   function placeNode(
     instanceId: string,
     canonicalId: string,
     parentInstanceId: string | undefined,
     position: { x: number; y: number },
-    ancestors: ReadonlySet<string>
+    ancestors: ReadonlySet<string>,
+    ancestorPath: readonly string[]
   ): void {
     const n = input.nodes.get(canonicalId);
     if (!n) return;
-    const sz = sizes.get(canonicalId);
+    // Path-aware size lookup: use the same key the sizing pass wrote.
+    // The sizing pass wrote the entry under `makeSizeCacheKey(node.id, childPath)`
+    // where `childPath = [...parentAncestorPath, node.id]`. At placement time the
+    // current node's canonical id is already in `ancestorPath` (added before
+    // placeNode was called for children), so lookup must use the path WITHOUT
+    // the current node appended — i.e., the parent's ancestorPath at the time
+    // sizeOf was called for this node. That parent path IS `ancestorPath` here
+    // because we extend it with the current node before recursing into children.
+    const sz = sizes.get(makeSizeCacheKey(canonicalId, ancestorPath));
     if (!sz) return;
 
     // Base containers emit a Structure-specific node type `'structureBase'`
@@ -346,6 +424,10 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
 
     const nextAncestors = new Set(ancestors);
     nextAncestors.add(canonicalId);
+    // Extend the path with the current node before recursing so children see
+    // their parent in the path — mirroring `childPath = [...ancestorPath, node.id]`
+    // in the sizing pass.
+    const childAncestorPath = [...ancestorPath, canonicalId];
 
     // Invariant: StructureChoiceNode is terminal in Phase 1's type (it has
     // `options` rows but no `expansions` field), so the recursion only fans
@@ -354,10 +436,10 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     // fail the exhaustiveness check below rather than silently dropping them.
     switch (n.kind) {
       case 'data':
-        placeDataChildren(n, instanceId, sz, nextAncestors);
+        placeDataChildren(n, instanceId, sz, nextAncestors, childAncestorPath);
         break;
       case 'base':
-        placeBaseChildren(n, instanceId, sz, nextAncestors);
+        placeBaseChildren(n, instanceId, sz, nextAncestors, childAncestorPath);
         break;
       case 'choice':
         // StructureChoiceNode is terminal — no expansions per type; nothing
@@ -374,14 +456,19 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     n: StructureDataNode,
     parentInstanceId: string,
     sz: SizedNode,
-    ancestors: ReadonlySet<string>
+    ancestors: ReadonlySet<string>,
+    ancestorPath: readonly string[]
   ): void {
     // yCursor tracks the running bottom of the children column. Each child is
     // placed at max(rowOffsetY, yCursor) so it aligns with its source row when
     // possible, but never overlaps the previous sibling.
     let yCursor = HEADER_HEIGHT;
     for (const [attrName, childCanonicalId] of n.expansions) {
-      const childSize = sizes.get(childCanonicalId);
+      // Path-aware size lookup: the sizing pass stored this entry under
+      // `makeSizeCacheKey(childCanonicalId, [...ancestorPath, childCanonicalId])`.
+      // `ancestorPath` here already contains the current parent (added in
+      // placeNode before recursing), so the child's key is `childCanonicalId:ancestorPath`.
+      const childSize = sizes.get(makeSizeCacheKey(childCanonicalId, ancestorPath));
       if (!childSize) continue;
 
       const rowCenter = sz.rowOffsets.get(attrName);
@@ -398,7 +485,8 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
           childCanonicalId,
           parentInstanceId,
           { x: COL_WIDTH + COL_GAP, y: childY },
-          ancestors
+          ancestors,
+          ancestorPath
         );
       }
 
@@ -410,7 +498,8 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     n: StructureBaseContainer,
     parentInstanceId: string,
     sz: SizedNode,
-    ancestors: ReadonlySet<string>
+    ancestors: ReadonlySet<string>,
+    ancestorPath: readonly string[]
   ): void {
     // 1. The derived child sits inside the yellow border below the base rows.
     //    The derived child is structurally singular per StructureBaseContainer
@@ -427,18 +516,20 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
           x: BASE_PADDING,
           y: HEADER_HEIGHT + n.baseRows.length * ROW_HEIGHT + BASE_PADDING
         },
-        ancestors
+        ancestors,
+        ancestorPath
       );
     }
 
     // 2. The base container's own expansions (inherited complex rows the user
     //    expanded) sit in the right-hand column aligned with their base rows.
-    const leftColumnWidth = sizes.get(n.childNodeId)?.width ?? COL_WIDTH;
+    const derivedChildSize = sizes.get(makeSizeCacheKey(n.childNodeId, ancestorPath));
+    const leftColumnWidth = derivedChildSize?.width ?? COL_WIDTH;
     const rightColumnX = BASE_PADDING + Math.max(COL_WIDTH, leftColumnWidth) + COL_GAP;
 
     let yCursor = BASE_PADDING + HEADER_HEIGHT;
     for (const [attrName, childCanonicalId] of n.expansions) {
-      const childSize = sizes.get(childCanonicalId);
+      const childSize = sizes.get(makeSizeCacheKey(childCanonicalId, ancestorPath));
       if (!childSize) continue;
 
       const rowCenter = sz.rowOffsets.get(attrName);
@@ -447,7 +538,14 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
 
       if (!ancestors.has(childCanonicalId)) {
         const childInstanceId = makeInstanceId(parentInstanceId, attrName, childCanonicalId);
-        placeNode(childInstanceId, childCanonicalId, parentInstanceId, { x: rightColumnX, y: childY }, ancestors);
+        placeNode(
+          childInstanceId,
+          childCanonicalId,
+          parentInstanceId,
+          { x: rightColumnX, y: childY },
+          ancestors,
+          ancestorPath
+        );
       }
 
       yCursor = childY + childSize.height + ROW_GAP;
@@ -457,6 +555,10 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
   // Root uses its canonical id as its instance id; nested placements extend
   // from there. This preserves the contract that the root React Flow node id
   // === canonical id, which callers and existing tests rely on.
-  placeNode(input.rootNodeId, input.rootNodeId, undefined, { x: 0, y: 0 }, new Set());
+  // ancestorPath starts empty at the root — the root's size was stored under
+  // `makeSizeCacheKey(rootNodeId, [rootNodeId])` by the sizing pass, so
+  // the placeNode call must pass `[]` here (the pre-push path; placeNode
+  // extends it with canonicalId before looking up the size).
+  placeNode(input.rootNodeId, input.rootNodeId, undefined, { x: 0, y: 0 }, new Set(), []);
   return { nodes, edges };
 }

@@ -893,3 +893,151 @@ describe('layoutStructureGraph — late-row expansion sizing', () => {
     expect(parentHeight).toBeGreaterThanOrEqual(tallY + tallHeight);
   });
 });
+
+describe('layoutStructureGraph — path-aware sizing cache for cyclic+direct refs (Codex P2 Finding 2)', () => {
+  it('directly-placed B has larger size than cyclically-placed B inside A', () => {
+    // Regression: Codex P2 review caught that with per-edge instance placement
+    // (Phase 13 / commit f27f8aec), the sizing cache was keyed only on canonical
+    // id. A type sized in a cyclic context (placeholder-truncated) had its small
+    // size cached and reused for a later non-cyclic sibling placement, causing
+    // children to overflow parent extent.
+    //
+    // Fix: cache key = `canonicalId:ancestor1:ancestor2:...` so each unique
+    // ancestor context gets its own cached size.
+    //
+    // Fixture: Root.a:A (expanded), A.b:B (expanded), B.a:A (back-edge — cycle)
+    //          Root.b:B (also expanded — non-cyclic sibling path)
+    //
+    // With the fix:
+    //   - B placed inside A (path Root→A→B) has truncated size (A is placeholder)
+    //   - B placed directly under Root (path Root→B) has full size (A can be computed)
+    // Both sizes are now stored independently under different path-aware keys.
+    //
+    // This test FAILS on pre-fix code because both B placements share the same
+    // cache entry (the first cyclic-path entry wins) and emit the same truncated size.
+    const input: StructureGraphInput = {
+      rootNodeId: 'Root',
+      nodes: new Map([
+        [
+          'Root',
+          {
+            id: 'Root',
+            kind: 'data',
+            name: 'Root',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'a',
+                typeName: 'A',
+                typeKind: 'Data',
+                targetNodeId: 'A',
+                targetNamespaceUri: 'ns',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              },
+              {
+                attrName: 'b',
+                typeName: 'B',
+                typeKind: 'Data',
+                targetNodeId: 'B',
+                targetNamespaceUri: 'ns',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([
+              ['a', 'A'],
+              ['b', 'B']
+            ])
+          }
+        ],
+        [
+          'A',
+          {
+            id: 'A',
+            kind: 'data',
+            name: 'A',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'b',
+                typeName: 'B',
+                typeKind: 'Data',
+                targetNodeId: 'B',
+                targetNamespaceUri: 'ns',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['b', 'B']])
+          }
+        ],
+        [
+          'B',
+          {
+            id: 'B',
+            kind: 'data',
+            name: 'B',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'a',
+                typeName: 'A',
+                typeKind: 'Data',
+                targetNodeId: 'A',
+                targetNamespaceUri: 'ns',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            // B → A back-edge closes the mutual cycle (Root→A→B→A)
+            expansions: new Map([['a', 'A']])
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+
+    // All placements are present:
+    // Root (canonical, 1 root) + A placed under Root ('Root::a::A') +
+    // B placed inside A ('Root::a::A::b::B') + B placed directly under Root ('Root::b::B').
+    // A→B's back-edge to A is on the cycle path, so THAT A placement is suppressed.
+    expect(nodes.length).toBeGreaterThanOrEqual(4);
+
+    // Two B placements: one cyclic (inside A), one direct (under Root).
+    const bPlacements = nodes.filter((n) => (n.data as { id?: string }).id === 'B');
+    expect(bPlacements).toHaveLength(2);
+
+    // Identify placements by their React Flow instance id.
+    const bInsideA = bPlacements.find((n) => n.id === 'Root::a::A::b::B');
+    const bDirect = bPlacements.find((n) => n.id === 'Root::b::B');
+    expect(bInsideA).toBeDefined();
+    expect(bDirect).toBeDefined();
+
+    // Key assertion: the directly-placed B (non-cyclic path Root→B) has
+    // larger dimensions than the cyclically-placed B (path Root→A→B, where
+    // A inside B is a placeholder). Both dimensions must differ — a shared
+    // cache would make them equal.
+    const bInsideAHeight = bInsideA!.height ?? 0;
+    const bDirectHeight = bDirect!.height ?? 0;
+    const bInsideAWidth = bInsideA!.width ?? 0;
+    const bDirectWidth = bDirect!.width ?? 0;
+
+    // The directly-placed B contains a properly-sized A child (which itself
+    // carries a placeholder B), so its dimensions must be strictly larger
+    // than the cyclically-placed B (which only has a placeholder A).
+    expect(bDirectHeight).toBeGreaterThan(bInsideAHeight);
+    expect(bDirectWidth).toBeGreaterThan(bInsideAWidth);
+  });
+});
