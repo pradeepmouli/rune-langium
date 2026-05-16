@@ -11,7 +11,7 @@
  * and shadcn/ui primitives with lucide-react icons.
  */
 
-import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react';
+import { useState, useMemo, useCallback, useRef, memo } from 'react';
 import type { JSX, DragEvent, MouseEvent, KeyboardEvent } from 'react';
 import { ChevronRight, ChevronDown, Eye, EyeOff, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
@@ -57,8 +57,16 @@ export interface NamespaceExplorerPanelProps {
   /**
    * Called when the user single-clicks a type row to mark it as the active
    * drag source. Single-click NO LONGER navigates — use double-click for that.
+   * The action is immediate (no timer delay).
    */
   onSetDragSource?: (payload: TypeRefPayload) => void;
+  /**
+   * Called on double-click to revert the drag-source state set by the
+   * preceding click, only when this row is currently the active drag source.
+   * Keeps the net effect of a double-click (drag source mutation cancels out,
+   * navigation persists) without relying on a fixed-duration timer cutoff.
+   */
+  onClearDragSource?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +148,8 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   className,
   hiddenRefCounts,
   dragSourceId,
-  onSetDragSource
+  onSetDragSource,
+  onClearDragSource
 }: NamespaceExplorerPanelProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => new Set(nodes.map((n) => n.data.namespace)));
@@ -287,6 +296,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         onSelectNode={() => onSelectNode?.(row.nodeId)}
                         isDragSource={dragSourceId === row.nodeId}
                         onSetDragSource={onSetDragSource}
+                        onClearDragSource={onClearDragSource}
                       />
                     )}
                   </div>
@@ -371,8 +381,14 @@ interface TypeItemRowProps {
   onSelectNode: () => void;
   /** True when this row is the currently active drag source. */
   isDragSource: boolean;
-  /** Called on single-click to mark this type as the active drag source. */
+  /** Called on single-click to mark this type as the active drag source (immediate). */
   onSetDragSource?: (payload: TypeRefPayload) => void;
+  /**
+   * Called on double-click to revert the drag-source mutation, but only when
+   * this row is currently the active drag source. Guards against clobbering
+   * a deliberate single-click on a different row.
+   */
+  onClearDragSource?: () => void;
 }
 
 function TypeItemRow({
@@ -382,7 +398,8 @@ function TypeItemRow({
   refCount,
   onSelectNode,
   isDragSource,
-  onSetDragSource
+  onSetDragSource,
+  onClearDragSource
 }: TypeItemRowProps): JSX.Element {
   const isVisible = isGraphVisible && !row.hidden;
 
@@ -414,44 +431,27 @@ function TypeItemRow({
     e.dataTransfer.effectAllowed = 'link';
   };
 
-  // Delayed-single-click pattern: a real double-click fires click(detail=1)
-  // then click(detail=2) then dblclick. By deferring the single-click action
-  // 250ms (the de-facto browser dblclick threshold) the dblclick handler can
-  // cancel the pending timer, preventing drag-source state mutation as a side
-  // effect of navigation.
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Clean up any pending timer on unmount.
-  useEffect(() => {
-    return () => {
-      if (clickTimerRef.current !== null) {
-        clearTimeout(clickTimerRef.current);
-        clickTimerRef.current = null;
-      }
-    };
-  }, []);
-
+  // Single-click: set drag source immediately — no timer. The OS/browser
+  // double-click interval is user-configurable (up to ~800ms on macOS
+  // Accessibility settings), so a fixed 250ms cutoff is not reliable.
   const handleClick = useCallback(
     (_e: MouseEvent<HTMLDivElement>) => {
       if (!payload) return;
-      if (clickTimerRef.current !== null) clearTimeout(clickTimerRef.current);
-      // Defer so a follow-up dblclick can cancel this before it fires.
-      clickTimerRef.current = setTimeout(() => {
-        clickTimerRef.current = null;
-        onSetDragSource?.(payload);
-      }, 250);
+      onSetDragSource?.(payload);
     },
     [payload, onSetDragSource]
   );
 
+  // Double-click: revert the drag-source mutation (set by the preceding click)
+  // and navigate. We only clear when THIS row is currently the active drag
+  // source so we don't clobber a deliberate single-click on a different row
+  // that happened to be the existing source before the dblclick sequence.
   const handleDoubleClick = useCallback(() => {
-    // Phase 8: single-click marks drag source; double-click navigates.
-    if (clickTimerRef.current !== null) {
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
+    if (payload && isDragSource) {
+      onClearDragSource?.();
     }
     onSelectNode();
-  }, [onSelectNode]);
+  }, [payload, isDragSource, onClearDragSource, onSelectNode]);
 
   // Keyboard activation: Enter/Space trigger drag-source immediately (no
   // dblclick race possible on keyboard). Navigation via keyboard is future scope.

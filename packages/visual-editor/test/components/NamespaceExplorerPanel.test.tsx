@@ -9,7 +9,7 @@
  * behaviour (Phase 8: single-click marks drag source, double-click navigates).
  */
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
 import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
@@ -129,46 +129,55 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onCollapseAll).toHaveBeenCalledOnce();
   });
 
-  it('single-click marks drag source (onSetDragSource called) but does NOT navigate', () => {
-    vi.useFakeTimers();
-    try {
-      const onSetDragSource = vi.fn();
-      const { props } = renderPanel({ onSetDragSource });
-      const typeRow = screen.getByTestId('ns-type-com.model::Trade');
-      // Fire click; the action is deferred 250ms (delayed-single-click pattern).
-      fireEvent.click(typeRow);
-      // Before the timer fires, onSetDragSource should not have been called yet.
-      expect(onSetDragSource).not.toHaveBeenCalled();
-      // Advance past the dblclick threshold so the pending timer fires.
-      vi.advanceTimersByTime(300);
-      expect(onSetDragSource).toHaveBeenCalledOnce();
-      const payload = onSetDragSource.mock.calls[0]![0];
-      expect(isTypeRefPayload(payload)).toBe(true);
-      expect(payload.typeId).toBe('com.model::Trade');
-      expect(payload.typeName).toBe('Trade');
-      expect(payload.namespaceUri).toBe('com.model');
-      expect(payload.kind).toBe('Data');
-      // onSelectNode should NOT have been called on a single click
-      expect(props.onSelectNode).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
+  it('single-click calls onSetDragSource immediately and does NOT navigate', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+
+    // Click is immediate — no timer needed.
+    fireEvent.click(typeRow);
+
+    expect(onSetDragSource).toHaveBeenCalledOnce();
+    const payload = onSetDragSource.mock.calls[0]![0];
+    expect(isTypeRefPayload(payload)).toBe(true);
+    expect(payload.typeId).toBe('com.model::Trade');
+    expect(payload.typeName).toBe('Trade');
+    expect(payload.namespaceUri).toBe('com.model');
+    expect(payload.kind).toBe('Data');
+    // onSelectNode should NOT have been called on a single click
+    expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
-  it('double-click navigates (onSelectNode called)', () => {
-    vi.useFakeTimers();
-    try {
-      const onSetDragSource = vi.fn();
-      const { props } = renderPanel({ onSetDragSource });
-      const typeRow = screen.getByTestId('ns-type-com.model::Trade');
-      fireEvent.doubleClick(typeRow);
-      // Advance past the dblclick threshold; the pending single-click timer (if any)
-      // should have been cancelled, so onSetDragSource must NOT be called.
-      vi.advanceTimersByTime(500);
-      expect(props.onSelectNode).toHaveBeenCalledWith('com.model::Trade');
-    } finally {
-      vi.useRealTimers();
-    }
+  it('double-click calls onSelectNode and clears drag source when this row is the active source', () => {
+    const onClearDragSource = vi.fn();
+    const onSelectNode = vi.fn();
+    // Render with dragSourceId matching the row so isDragSource=true.
+    // fireEvent.doubleClick dispatches only a dblclick event (not preceding clicks);
+    // we fire an explicit click first to mirror the real browser sequence, then
+    // the dblclick to trigger handleDoubleClick. isDragSource=true (via dragSourceId
+    // prop) so the handler must call onClearDragSource before navigating.
+    render(
+      <NamespaceExplorerPanel
+        nodes={defaultNodes}
+        expandedNamespaces={new Set(defaultNodes.map((n) => n.data.namespace))}
+        hiddenNodeIds={new Set()}
+        onToggleNamespace={vi.fn()}
+        onExpandAll={vi.fn()}
+        onCollapseAll={vi.fn()}
+        onSelectNode={(id) => onSelectNode(id)}
+        onClearDragSource={onClearDragSource}
+        dragSourceId="cdm.trade::Trade"
+      />
+    );
+    const row = screen.getByTestId('ns-type-cdm.trade::Trade');
+    // Simulate click sequence: click (sets drag source) then dblclick (clears + navigates).
+    fireEvent.click(row);
+    fireEvent.doubleClick(row);
+
+    // onClearDragSource must be called (row IS the active drag source)
+    expect(onClearDragSource).toHaveBeenCalled();
+    // Navigation must happen
+    expect(onSelectNode).toHaveBeenCalledTimes(1);
   });
 
   it('filters types when search query entered', () => {
@@ -250,32 +259,33 @@ describe('NamespaceExplorerPanel', () => {
     expect(dataTransfer.effectAllowed).toBe('link');
   });
 
-  it('double-click does NOT trigger drag-source side effect', () => {
-    vi.useFakeTimers();
-    try {
-      const onSetDragSource = vi.fn();
-      const onSelectNode = vi.fn();
-      render(
-        <NamespaceExplorerPanel
-          nodes={defaultNodes}
-          expandedNamespaces={new Set(defaultNodes.map((n) => n.data.namespace))}
-          hiddenNodeIds={new Set()}
-          onToggleNamespace={vi.fn()}
-          onExpandAll={vi.fn()}
-          onCollapseAll={vi.fn()}
-          onSelectNode={(id) => onSelectNode(id)}
-          onSetDragSource={onSetDragSource}
-        />
-      );
-      const row = screen.getByTestId('ns-type-cdm.trade::Trade');
-      fireEvent.doubleClick(row);
-      // Advance past the dblclick threshold so any pending single-click timer would have fired.
-      vi.advanceTimersByTime(500);
-      expect(onSetDragSource).not.toHaveBeenCalled();
-      expect(onSelectNode).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
+  it('double-click on row B does NOT clear drag source when row A is the current source', () => {
+    // Row A (com.model::Trade) is the current drag source. The user double-clicks row B
+    // (cdm.trade::Trade). isDragSource=false for row B, so onClearDragSource must NOT
+    // be called — the existing deliberate single-click on row A must survive.
+    const onClearDragSource = vi.fn();
+    const onSelectNode = vi.fn();
+    render(
+      <NamespaceExplorerPanel
+        nodes={defaultNodes}
+        expandedNamespaces={new Set(defaultNodes.map((n) => n.data.namespace))}
+        hiddenNodeIds={new Set()}
+        onToggleNamespace={vi.fn()}
+        onExpandAll={vi.fn()}
+        onCollapseAll={vi.fn()}
+        onSelectNode={(id) => onSelectNode(id)}
+        onClearDragSource={onClearDragSource}
+        // Row A is the drag source; row B (cdm.trade::Trade) is NOT.
+        dragSourceId="com.model::Trade"
+      />
+    );
+    const rowB = screen.getByTestId('ns-type-cdm.trade::Trade');
+    fireEvent.doubleClick(rowB);
+
+    // onClearDragSource must NOT be called (row B is not the drag source)
+    expect(onClearDragSource).not.toHaveBeenCalled();
+    // Navigation must still happen
+    expect(onSelectNode).toHaveBeenCalledTimes(1);
   });
 
   it('renders → arrow when dragSourceId matches the row nodeId', () => {

@@ -276,6 +276,7 @@ export function EditorPage({
   // Structure View: drag-source state for the NamespaceExplorerPanel palette.
   const dragSource = useStructureViewStore((s) => s.dragSource);
   const setDragSource = useStructureViewStore((s) => s.setDragSource);
+  const clearDragSource = useStructureViewStore((s) => s.clearDragSource);
   const receivePreviewResult = usePreviewStore((s) => s.receivePreviewResult);
   const receivePreviewStale = usePreviewStore((s) => s.receivePreviewStale);
   const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
@@ -1066,6 +1067,7 @@ export function EditorPage({
           onSelectNode={handleExplorerSelectNode}
           dragSourceId={dragSource?.typeId}
           onSetDragSource={setDragSource}
+          onClearDragSource={clearDragSource}
         />
       </ScrollArea>
     ),
@@ -1079,7 +1081,8 @@ export function EditorPage({
       storeCollapseAllNamespaces,
       handleExplorerSelectNode,
       dragSource,
-      setDragSource
+      setDragSource,
+      clearDragSource
     ]
   );
 
