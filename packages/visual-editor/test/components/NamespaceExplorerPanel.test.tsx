@@ -9,7 +9,7 @@
  * behaviour (Phase 8: single-click marks drag source, double-click navigates).
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
 import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
@@ -62,7 +62,8 @@ const defaultNodes = [
   makeNode('com.model', 'Trade'),
   makeNode('com.model', 'Event'),
   makeNode('com.lib', 'Date'),
-  makeNode('cdm.product', 'Asset', 'Choice')
+  makeNode('cdm.product', 'Asset', 'Choice'),
+  makeNode('cdm.trade', 'Trade')
 ];
 
 function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExplorerPanel>> = {}) {
@@ -97,14 +98,15 @@ describe('NamespaceExplorerPanel', () => {
 
   it('shows total type count in header badge', () => {
     renderPanel();
-    // 4 visible / 4 total
-    expect(screen.getByText('4/4')).toBeTruthy();
+    // 5 visible / 5 total (defaultNodes has 5 entries including cdm.trade::Trade)
+    expect(screen.getByText('5/5')).toBeTruthy();
   });
 
   it('shows types within expanded namespaces', () => {
     renderPanel();
     // All namespaces start expanded (treeExpanded is initialized from nodes)
-    expect(screen.getByText('Trade')).toBeTruthy();
+    // Use getAllByText since 'Trade' appears in both com.model and cdm.trade
+    expect(screen.getAllByText('Trade').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Event')).toBeTruthy();
     expect(screen.getByText('Date')).toBeTruthy();
     expect(screen.getByText('Asset')).toBeTruthy();
@@ -128,27 +130,45 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   it('single-click marks drag source (onSetDragSource called) but does NOT navigate', () => {
-    const onSetDragSource = vi.fn();
-    const { props } = renderPanel({ onSetDragSource });
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
-    // fireEvent.click uses detail:1 by default
-    fireEvent.click(typeRow, { detail: 1 });
-    expect(onSetDragSource).toHaveBeenCalledOnce();
-    const payload = onSetDragSource.mock.calls[0]![0];
-    expect(isTypeRefPayload(payload)).toBe(true);
-    expect(payload.typeId).toBe('com.model::Trade');
-    expect(payload.typeName).toBe('Trade');
-    expect(payload.namespaceUri).toBe('com.model');
-    expect(payload.kind).toBe('Data');
-    // onSelectNode should NOT have been called on a single click
-    expect(props.onSelectNode).not.toHaveBeenCalled();
+    vi.useFakeTimers();
+    try {
+      const onSetDragSource = vi.fn();
+      const { props } = renderPanel({ onSetDragSource });
+      const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+      // Fire click; the action is deferred 250ms (delayed-single-click pattern).
+      fireEvent.click(typeRow);
+      // Before the timer fires, onSetDragSource should not have been called yet.
+      expect(onSetDragSource).not.toHaveBeenCalled();
+      // Advance past the dblclick threshold so the pending timer fires.
+      vi.advanceTimersByTime(300);
+      expect(onSetDragSource).toHaveBeenCalledOnce();
+      const payload = onSetDragSource.mock.calls[0]![0];
+      expect(isTypeRefPayload(payload)).toBe(true);
+      expect(payload.typeId).toBe('com.model::Trade');
+      expect(payload.typeName).toBe('Trade');
+      expect(payload.namespaceUri).toBe('com.model');
+      expect(payload.kind).toBe('Data');
+      // onSelectNode should NOT have been called on a single click
+      expect(props.onSelectNode).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('double-click navigates (onSelectNode called)', () => {
-    const { props } = renderPanel();
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
-    fireEvent.doubleClick(typeRow);
-    expect(props.onSelectNode).toHaveBeenCalledWith('com.model::Trade');
+    vi.useFakeTimers();
+    try {
+      const onSetDragSource = vi.fn();
+      const { props } = renderPanel({ onSetDragSource });
+      const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+      fireEvent.doubleClick(typeRow);
+      // Advance past the dblclick threshold; the pending single-click timer (if any)
+      // should have been cancelled, so onSetDragSource must NOT be called.
+      vi.advanceTimersByTime(500);
+      expect(props.onSelectNode).toHaveBeenCalledWith('com.model::Trade');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('filters types when search query entered', () => {
@@ -157,9 +177,9 @@ describe('NamespaceExplorerPanel', () => {
     expect(searchInput).toHaveAttribute('placeholder', 'Filter types or namespaces...');
     fireEvent.change(searchInput, { target: { value: 'Trade' } });
 
-    // Trade should be visible
-    expect(screen.getByText('Trade')).toBeTruthy();
-    // Asset should not be visible (different namespace, name doesn't match)
+    // Both Trade rows (com.model::Trade and cdm.trade::Trade) should be visible
+    expect(screen.getAllByText('Trade').length).toBeGreaterThanOrEqual(1);
+    // Asset should not be visible (name doesn't match 'Trade')
     expect(screen.queryByText('Asset')).toBeNull();
   });
 
@@ -180,16 +200,16 @@ describe('NamespaceExplorerPanel', () => {
     // Only com.model is expanded, others hidden
     const expanded = new Set(['com.model']);
     renderPanel({ expandedNamespaces: expanded });
-    // 2 visible (Trade, Event in com.model) / 4 total
-    expect(screen.getByText('2/4')).toBeTruthy();
+    // 2 visible (Trade, Event in com.model) / 5 total (defaultNodes now has 5)
+    expect(screen.getByText('2/5')).toBeTruthy();
   });
 
   it('shows reduced visible count when individual nodes hidden', () => {
     const allNamespaces = new Set(defaultNodes.map((n) => n.data.namespace));
     const hidden = new Set(['com.model::Trade']);
     renderPanel({ expandedNamespaces: allNamespaces, hiddenNodeIds: hidden });
-    // 3 visible / 4 total (Trade is hidden)
-    expect(screen.getByText('3/4')).toBeTruthy();
+    // 4 visible / 5 total (com.model::Trade is hidden; cdm.trade::Trade is still visible)
+    expect(screen.getByText('4/5')).toBeTruthy();
   });
 
   // -------------------------------------------------------------------------
@@ -225,6 +245,37 @@ describe('NamespaceExplorerPanel', () => {
     const kindMime = typeRefMimeForKind('Data');
     const markerCall = setData.mock.calls.find((c: string[]) => c[0] === kindMime);
     expect(markerCall).toBeTruthy();
+
+    // effectAllowed must be 'link' per the dual-MIME contract
+    expect(dataTransfer.effectAllowed).toBe('link');
+  });
+
+  it('double-click does NOT trigger drag-source side effect', () => {
+    vi.useFakeTimers();
+    try {
+      const onSetDragSource = vi.fn();
+      const onSelectNode = vi.fn();
+      render(
+        <NamespaceExplorerPanel
+          nodes={defaultNodes}
+          expandedNamespaces={new Set(defaultNodes.map((n) => n.data.namespace))}
+          hiddenNodeIds={new Set()}
+          onToggleNamespace={vi.fn()}
+          onExpandAll={vi.fn()}
+          onCollapseAll={vi.fn()}
+          onSelectNode={(id) => onSelectNode(id)}
+          onSetDragSource={onSetDragSource}
+        />
+      );
+      const row = screen.getByTestId('ns-type-cdm.trade::Trade');
+      fireEvent.doubleClick(row);
+      // Advance past the dblclick threshold so any pending single-click timer would have fired.
+      vi.advanceTimersByTime(500);
+      expect(onSetDragSource).not.toHaveBeenCalled();
+      expect(onSelectNode).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders → arrow when dragSourceId matches the row nodeId', () => {
@@ -243,5 +294,84 @@ describe('NamespaceExplorerPanel', () => {
   it('does NOT render → arrow when dragSourceId is absent', () => {
     renderPanel();
     expect(screen.queryByLabelText('active drag source')).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // a11y — keyboard activation (Finding 3: react-doctor)
+  // -------------------------------------------------------------------------
+
+  it('Enter key calls onSetDragSource with correct payload (no timer delay)', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    fireEvent.keyDown(typeRow, { key: 'Enter' });
+    // Keyboard activation is immediate — no 250ms deferral.
+    expect(onSetDragSource).toHaveBeenCalledOnce();
+    const payload = onSetDragSource.mock.calls[0]![0];
+    expect(isTypeRefPayload(payload)).toBe(true);
+    expect(payload.typeId).toBe('com.model::Trade');
+    expect(payload.kind).toBe('Data');
+    // Navigation should NOT be triggered
+    expect(props.onSelectNode).not.toHaveBeenCalled();
+  });
+
+  it('Space key calls onSetDragSource with correct payload (no timer delay)', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    fireEvent.keyDown(typeRow, { key: ' ' });
+    expect(onSetDragSource).toHaveBeenCalledOnce();
+    const payload = onSetDragSource.mock.calls[0]![0];
+    expect(payload.typeId).toBe('com.model::Trade');
+    expect(props.onSelectNode).not.toHaveBeenCalled();
+  });
+
+  it('type rows have role=button and tabIndex=0 for keyboard accessibility', () => {
+    renderPanel();
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    expect(typeRow.getAttribute('role')).toBe('button');
+    expect(typeRow.getAttribute('tabindex')).toBe('0');
+  });
+
+  // -------------------------------------------------------------------------
+  // Non-draggable kinds (Finding 4: Copilot)
+  // -------------------------------------------------------------------------
+
+  it('Function-kind row is not draggable', () => {
+    const funcNode = makeNode('cdm.func', 'MyFunc', 'RosettaFunction');
+    render(
+      <NamespaceExplorerPanel
+        nodes={[funcNode]}
+        expandedNamespaces={new Set(['cdm.func'])}
+        hiddenNodeIds={new Set()}
+        onToggleNamespace={vi.fn()}
+        onExpandAll={vi.fn()}
+        onCollapseAll={vi.fn()}
+        onSelectNode={vi.fn()}
+      />
+    );
+    const funcRow = screen.getByTestId('ns-type-cdm.func::MyFunc');
+    expect((funcRow as HTMLElement).draggable).toBe(false);
+  });
+
+  it('dragstart on non-draggable Function row does not call setData', () => {
+    const funcNode = makeNode('cdm.func', 'MyFunc', 'RosettaFunction');
+    render(
+      <NamespaceExplorerPanel
+        nodes={[funcNode]}
+        expandedNamespaces={new Set(['cdm.func'])}
+        hiddenNodeIds={new Set()}
+        onToggleNamespace={vi.fn()}
+        onExpandAll={vi.fn()}
+        onCollapseAll={vi.fn()}
+        onSelectNode={vi.fn()}
+      />
+    );
+    const funcRow = screen.getByTestId('ns-type-cdm.func::MyFunc');
+    const setData = vi.fn();
+    const dataTransfer = { setData, effectAllowed: '' as DataTransfer['effectAllowed'] };
+    fireEvent.dragStart(funcRow, { dataTransfer });
+    // Non-supported kind: dragstart should be suppressed, setData never called.
+    expect(setData).not.toHaveBeenCalled();
   });
 });

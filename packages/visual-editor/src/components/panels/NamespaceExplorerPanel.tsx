@@ -11,8 +11,8 @@
  * and shadcn/ui primitives with lucide-react icons.
  */
 
-import { useState, useMemo, useCallback, useRef, memo } from 'react';
-import type { JSX, DragEvent, MouseEvent } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, memo } from 'react';
+import type { JSX, DragEvent, MouseEvent, KeyboardEvent } from 'react';
 import { ChevronRight, ChevronDown, Eye, EyeOff, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -414,15 +414,61 @@ function TypeItemRow({
     e.dataTransfer.effectAllowed = 'link';
   };
 
-  const handleClick = (e: MouseEvent<HTMLDivElement>) => {
-    // Single-click marks the drag source; double-click navigates (onDoubleClick).
-    if (e.detail === 1 && payload) {
-      onSetDragSource?.(payload);
+  // Delayed-single-click pattern: a real double-click fires click(detail=1)
+  // then click(detail=2) then dblclick. By deferring the single-click action
+  // 250ms (the de-facto browser dblclick threshold) the dblclick handler can
+  // cancel the pending timer, preventing drag-source state mutation as a side
+  // effect of navigation.
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up any pending timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current !== null) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleClick = useCallback(
+    (_e: MouseEvent<HTMLDivElement>) => {
+      if (!payload) return;
+      if (clickTimerRef.current !== null) clearTimeout(clickTimerRef.current);
+      // Defer so a follow-up dblclick can cancel this before it fires.
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        onSetDragSource?.(payload);
+      }, 250);
+    },
+    [payload, onSetDragSource]
+  );
+
+  const handleDoubleClick = useCallback(() => {
+    // Phase 8: single-click marks drag source; double-click navigates.
+    if (clickTimerRef.current !== null) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
     }
-  };
+    onSelectNode();
+  }, [onSelectNode]);
+
+  // Keyboard activation: Enter/Space trigger drag-source immediately (no
+  // dblclick race possible on keyboard). Navigation via keyboard is future scope.
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (payload) onSetDragSource?.(payload);
+      }
+    },
+    [payload, onSetDragSource]
+  );
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={`relative ml-4 flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
         isSelected ? 'studio-type-row--selected' : isVisible ? 'text-foreground' : 'text-muted-foreground opacity-60'
       }`}
@@ -430,7 +476,8 @@ function TypeItemRow({
       draggable={payload !== undefined}
       onDragStart={handleDragStart}
       onClick={handleClick}
-      onDoubleClick={onSelectNode}
+      onDoubleClick={handleDoubleClick}
+      onKeyDown={handleKeyDown}
     >
       {isSelected && <span className="studio-type-pip" />}
 
