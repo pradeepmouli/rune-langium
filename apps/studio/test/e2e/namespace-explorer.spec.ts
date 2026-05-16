@@ -61,10 +61,7 @@ enum BetaEnum:
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function loadFiles(
-  page: import('@playwright/test').Page,
-  files: { name: string; content: string }[]
-) {
+async function loadFiles(page: import('@playwright/test').Page, files: { name: string; content: string }[]) {
   const fileInput = page.locator('input[type="file"][accept=".rosetta"]');
   await fileInput.setInputFiles(
     files.map((f) => ({
@@ -255,27 +252,29 @@ test.describe('Namespace Explorer', () => {
     const chevron = page.locator('.ns-row__chevron').first();
     await chevron.click();
 
-    // Type entries should appear
-    const typeEntry = page.locator('.ns-type__name', { hasText: 'Person' });
+    // Type entries should appear — each row has data-testid="ns-type-{nodeId}";
+    // locate by the testid attribute prefix and the visible type name text inside.
+    const typeEntry = page.locator('[data-testid^="ns-type-"]', { hasText: 'Person' });
     await expect(typeEntry).toBeVisible();
 
-    const employeeEntry = page.locator('.ns-type__name', { hasText: 'Employee' });
+    const employeeEntry = page.locator('[data-testid^="ns-type-"]', { hasText: 'Employee' });
     await expect(employeeEntry).toBeVisible();
 
-    const enumEntry = page.locator('.ns-type__name', { hasText: 'RoleEnum' });
+    const enumEntry = page.locator('[data-testid^="ns-type-"]', { hasText: 'RoleEnum' });
     await expect(enumEntry).toBeVisible();
   });
 
-  test('clicking type name in tree should focus it on graph', async ({ page }) => {
+  test('double-clicking type name in tree should focus it on graph', async ({ page }) => {
     await loadFiles(page, [{ name: 'demo.rosetta', content: SMALL_MODEL }]);
 
     // Expand tree
     const chevron = page.locator('.ns-row__chevron').first();
     await chevron.click();
 
-    // Click on "Employee" type name
-    const typeName = page.locator('.ns-type__name', { hasText: 'Employee' });
-    await typeName.click();
+    // Double-click on "Employee" type row to navigate (Phase 8 contract: single-click
+    // marks the row as active drag source; double-click triggers graph navigation).
+    const typeRow = page.locator('[data-testid^="ns-type-"]', { hasText: 'Employee' });
+    await typeRow.dblclick();
 
     // The graph should zoom/pan to focus on the node
     // We can verify the viewport changed by checking the ReactFlow transform

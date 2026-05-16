@@ -14,6 +14,7 @@ const {
   runeTypeGraphMockState,
   resizeObserverMockState,
   namespaceExplorerMockState,
+  structureViewMockState,
   showToastSpy
 } = vi.hoisted(() => {
   const editorStoreState = {
@@ -87,6 +88,36 @@ const {
       | undefined
   };
 
+  // Sentinel functions used as identity-stable cell component references in the
+  // StructureView mock. Assigned as plain functions so vi.fn() is not needed —
+  // we only care about identity, not call counts.
+  const SENTINEL_NAME_CELL = function SentinelNameCell() {
+    return null;
+  };
+  const SENTINEL_TYPE_CELL = function SentinelTypePickerCell() {
+    return null;
+  };
+  const SENTINEL_CARD_CELL = function SentinelCardinalityCell() {
+    return null;
+  };
+
+  const structureViewMockState = {
+    latestProps: undefined as
+      | {
+          focusedTypeId?: string;
+          adapterDoc?: unknown;
+          cellComponents?: {
+            name?: unknown;
+            type?: unknown;
+            card?: unknown;
+          };
+        }
+      | undefined,
+    SENTINEL_NAME_CELL,
+    SENTINEL_TYPE_CELL,
+    SENTINEL_CARD_CELL
+  };
+
   const showToastSpy = vi.fn();
 
   return {
@@ -97,6 +128,7 @@ const {
     runeTypeGraphMockState,
     resizeObserverMockState,
     namespaceExplorerMockState,
+    structureViewMockState,
     showToastSpy
   };
 });
@@ -176,8 +208,21 @@ vi.mock('@rune-langium/visual-editor', () => ({
     namespaceExplorerMockState.latestProps = props;
     return React.createElement('div');
   },
+  StructureView: (props: {
+    focusedTypeId?: string;
+    adapterDoc?: unknown;
+    cellComponents?: { name?: unknown; type?: unknown; card?: unknown };
+  }) => {
+    structureViewMockState.latestProps = props;
+    return React.createElement('div', { 'data-testid': 'structure-view-mock' });
+  },
   EditorFormPanel: () => React.createElement('div'),
   ExpressionBuilder: () => React.createElement('div'),
+  // Cell components: exported as the sentinel functions so EditorPage's
+  // structureCellComponents memo captures the exact same references.
+  NameCell: structureViewMockState.SENTINEL_NAME_CELL,
+  CardinalityCell: structureViewMockState.SENTINEL_CARD_CELL,
+  TypePickerCell: structureViewMockState.SENTINEL_TYPE_CELL,
   BUILTIN_TYPES: [],
   AST_TYPE_TO_NODE_TYPE: {},
   useEditorStore
@@ -302,6 +347,35 @@ vi.mock('../../src/shell/DockShell.js', () => ({
         : null
     ]);
   }
+}));
+
+vi.mock('../../src/shell/panels/CenterStackPanel.js', () => ({
+  // Simplified stub: renders all four panes unconditionally so that
+  // StructureView is always mounted when VisualPreviewPanelMounted renders.
+  // This surfaces the cellComponents wiring in EditorPage — an earlier
+  // regression had cell editors built but never passed to StructureView
+  // (same class as the Phase 7 integration miss fixed by PR #185).
+  // renderSource is included so SourceEditor (inside renderSourcePane) is
+  // still mounted — other tests rely on SourceEditor being rendered.
+  CenterStackPanel: ({
+    renderStructure,
+    renderGraph,
+    renderSource,
+    renderInspector
+  }: {
+    renderGraph?: () => React.ReactElement | null;
+    renderSource?: () => React.ReactElement | null;
+    renderInspector?: () => React.ReactElement | null;
+    renderStructure?: () => React.ReactElement | null;
+  }) =>
+    React.createElement(
+      'div',
+      { 'data-testid': 'center-stack-mock' },
+      renderGraph?.() ?? null,
+      renderSource?.() ?? null,
+      renderInspector?.() ?? null,
+      renderStructure?.() ?? null
+    )
 }));
 
 vi.mock('../../src/hooks/useLspDiagnosticsBridge.js', () => ({
@@ -1308,5 +1382,81 @@ describe('EditorPage workspace chrome', () => {
         groupByInheritance: false
       });
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression guard: StructureView cell-editor wiring (Phase 5/8 integration)
+// ---------------------------------------------------------------------------
+// PR #190 review caught that NameCell, CardinalityCell, and TypePickerCell were
+// built and unit-tested in isolation but never injected into the StructureView
+// at the EditorPage mount site — same "shipped but unreachable" pattern as the
+// Phase 7 integration miss fixed by PR #185.
+//
+// This suite asserts that EditorPage passes cellComponents containing the three
+// cell constructors so DataNode's structure variant renders editable cells
+// instead of read-only spans. It would have caught the original gap.
+// ---------------------------------------------------------------------------
+describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guard)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('Worker', MockWorker);
+    vi.stubGlobal(
+      'ResizeObserver',
+      class MockResizeObserver {
+        private instance: { callback: ResizeObserverCallback; targets: Element[] };
+        constructor(callback: ResizeObserverCallback) {
+          this.instance = { callback, targets: [] };
+          resizeObserverMockState.instances.push(this.instance);
+        }
+        observe(target: Element) {
+          this.instance.targets.push(target);
+        }
+        disconnect() {}
+        unobserve() {}
+      }
+    );
+    MockWorker.instances = [];
+    setRuneStudioTestApi(() => undefined);
+    usePreviewStore.getState().resetPreviewState();
+    editorStoreState.nodes = [];
+    editorStoreState.edges = [];
+    editorStoreState.selectedNodeId = undefined;
+    vi.clearAllMocks();
+    structureViewMockState.latestProps = undefined;
+    resizeObserverMockState.instances = [];
+  });
+
+  afterEach(() => {
+    setRuneStudioTestApi(() => undefined);
+    vi.unstubAllGlobals();
+    cleanup();
+  });
+
+  it('passes cellComponents with NameCell, TypePickerCell, and CardinalityCell to StructureView', () => {
+    // The CenterStackPanel mock (above) renders the structure pane unconditionally,
+    // so StructureView renders immediately without needing to activate the pane.
+    render(
+      <EditorPage
+        models={[]}
+        files={[
+          {
+            name: 'trade.rosetta',
+            path: 'trade.rosetta',
+            content: 'namespace alpha',
+            dirty: false
+          }
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId('structure-view-mock')).toBeInTheDocument();
+
+    const { cellComponents } = structureViewMockState.latestProps ?? {};
+    expect(cellComponents).toBeDefined();
+    // Assert identity against the sentinel functions exported by the mock —
+    // if EditorPage is importing a different object (or undefined), these fail.
+    expect(cellComponents?.name).toBe(structureViewMockState.SENTINEL_NAME_CELL);
+    expect(cellComponents?.type).toBe(structureViewMockState.SENTINEL_TYPE_CELL);
+    expect(cellComponents?.card).toBe(structureViewMockState.SENTINEL_CARD_CELL);
   });
 });
