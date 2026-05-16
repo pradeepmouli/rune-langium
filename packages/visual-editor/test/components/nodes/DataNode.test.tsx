@@ -213,3 +213,113 @@ describe('DataNode — structure variant — row expansion control (Finding 1)',
     expect(() => fireEvent.click(screen.getByTestId('expand-row-economics'))).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression — Codex P2 Finding 1: cells must receive data.id (canonical),
+// not React Flow's wrapper id (which encodes per-edge instance paths).
+//
+// After Phase 13 / Option A, expanded children have React Flow ids like
+// `Root::buyer::Party` while data.id is still the canonical `Party`. All
+// store actions look up nodes by canonical id; forwarding the wrapper id
+// causes silent no-ops for every edit inside a nested expanded row.
+// ---------------------------------------------------------------------------
+
+describe('DataNode — structure variant — cells forward canonical data.id, not wrapper id', () => {
+  // Fixture: data.id is canonical (`Party`); React Flow wrapper id is an
+  // instance-encoded path (`Root::buyer::Party`) as produced by Option A.
+  // The two must differ so any regression is immediately observable.
+  const canonicalId = 'Party';
+  const instanceId = 'Root::buyer::Party'; // React Flow wrapper id (per-edge instance)
+
+  const instanceRows: StructureRow[] = [
+    {
+      attrName: 'partyId',
+      typeName: 'string',
+      typeKind: 'BasicType',
+      cardinality: '1..1',
+      isOptional: false,
+      isInherited: false
+    },
+    {
+      attrName: 'role',
+      typeName: 'RoleEnum',
+      typeKind: 'Enum',
+      cardinality: '0..1',
+      isOptional: true,
+      isInherited: false
+    }
+  ];
+
+  const instanceData = {
+    $type: 'Data',
+    id: canonicalId, // canonical id preserved on data payload (Option A contract)
+    kind: 'data',
+    name: 'Party',
+    namespaceUri: 'cdm.trade',
+    rows: instanceRows,
+    expansions: new Map(),
+    variant: 'structure'
+  };
+
+  it('NameCell receives data.id, not the React Flow wrapper id', () => {
+    const capturedNodeIds: string[] = [];
+    const NameCellSpy = ({ nodeId, value, attrName: _a }: { nodeId: string; value: string; attrName: string }) => {
+      capturedNodeIds.push(nodeId);
+      return <span data-testid={`name-cell-${value}`}>{value}</span>;
+    };
+    const dataWithCells = { ...instanceData, cellComponents: { name: NameCellSpy } };
+
+    renderInFlow(<DataNode data={dataWithCells as any} selected={false} id={instanceId} type="data" />);
+
+    // Both rows must be rendered; all forwarded nodeIds must be the canonical id.
+    expect(capturedNodeIds.length).toBeGreaterThan(0);
+    for (const nodeId of capturedNodeIds) {
+      expect(nodeId).toBe(canonicalId);
+      expect(nodeId).not.toBe(instanceId);
+    }
+  });
+
+  it('TypeCell receives data.id, not the React Flow wrapper id', () => {
+    const capturedNodeIds: string[] = [];
+    const TypeCellSpy = ({
+      nodeId,
+      typeName: _t,
+      typeKind: _k,
+      attrName: _a
+    }: {
+      nodeId: string;
+      typeName: string;
+      typeKind: StructureRow['typeKind'];
+      attrName: string;
+    }) => {
+      capturedNodeIds.push(nodeId);
+      return <span />;
+    };
+    const dataWithCells = { ...instanceData, cellComponents: { type: TypeCellSpy } };
+
+    renderInFlow(<DataNode data={dataWithCells as any} selected={false} id={instanceId} type="data" />);
+
+    expect(capturedNodeIds.length).toBeGreaterThan(0);
+    for (const nodeId of capturedNodeIds) {
+      expect(nodeId).toBe(canonicalId);
+      expect(nodeId).not.toBe(instanceId);
+    }
+  });
+
+  it('CardCell receives data.id, not the React Flow wrapper id', () => {
+    const capturedNodeIds: string[] = [];
+    const CardCellSpy = ({ nodeId, value: _v, attrName: _a }: { nodeId: string; value: string; attrName: string }) => {
+      capturedNodeIds.push(nodeId);
+      return <span />;
+    };
+    const dataWithCells = { ...instanceData, cellComponents: { card: CardCellSpy } };
+
+    renderInFlow(<DataNode data={dataWithCells as any} selected={false} id={instanceId} type="data" />);
+
+    expect(capturedNodeIds.length).toBeGreaterThan(0);
+    for (const nodeId of capturedNodeIds) {
+      expect(nodeId).toBe(canonicalId);
+      expect(nodeId).not.toBe(instanceId);
+    }
+  });
+});

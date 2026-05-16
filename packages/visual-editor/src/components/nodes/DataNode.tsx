@@ -149,18 +149,23 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
                     <span className="rune-row-expand-spacer" aria-hidden="true" />
                   )}
                   {NameCell ? (
-                    <NameCell value={row.attrName} nodeId={id} attrName={row.attrName} />
+                    <NameCell value={row.attrName} nodeId={data.id} attrName={row.attrName} />
                   ) : (
                     <span className="rune-cell-name">{row.attrName}</span>
                   )}
                   {TypeCell ? (
-                    <TypeCell typeName={row.typeName} typeKind={row.typeKind} nodeId={id} attrName={row.attrName} />
+                    <TypeCell
+                      typeName={row.typeName}
+                      typeKind={row.typeKind}
+                      nodeId={data.id}
+                      attrName={row.attrName}
+                    />
                   ) : (
                     // Finding 3: row.typeName is string (not undefined) per StructureRow; render '?' if empty.
                     <span className="rune-cell-type-chip">{row.typeName || '?'}</span>
                   )}
                   {CardCell ? (
-                    <CardCell value={row.cardinality} nodeId={id} attrName={row.attrName} />
+                    <CardCell value={row.cardinality} nodeId={data.id} attrName={row.attrName} />
                   ) : (
                     <span className="rune-cell-card">{row.cardinality}</span>
                   )}
