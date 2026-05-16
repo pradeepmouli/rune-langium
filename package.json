@@ -51,7 +51,7 @@
     "format:check": "oxfmt --check .",
     "fresh": "pnpm clean:all && pnpm install",
     "generate": "pnpm --filter @rune-langium/core run generate",
-    "lint": "oxlint .",
+    "lint": "oxlint . && pnpm -r --if-present run lint:css",
     "lint:fix": "oxlint --fix .",
     "test": "pnpm -r run test",
     "test:coverage": "vitest run --coverage",
