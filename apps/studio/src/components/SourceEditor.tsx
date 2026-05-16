@@ -31,6 +31,7 @@ import { refactoryDark } from '../lang/refactory-dark-theme.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
 import { cn } from '@rune-langium/design-system/utils';
+import { isTypeRefPayload, TYPE_REF_PAYLOAD_MIME } from '@rune-langium/visual-editor';
 
 // Re-export pathToUri for backward compatibility
 export { pathToUri } from '../utils/uri.js';
@@ -96,6 +97,66 @@ export interface SourceEditorRef {
 function getTabId(path: string): string {
   const encoded = encodeURIComponent(path);
   return `tab-${encoded}`;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 9: type-ref drop helpers (exported for unit testing)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Accepts a dragover event iff it carries our TYPE_REF_PAYLOAD_MIME.
+ * Returns true when accepted, false otherwise.
+ * Exported so it can be unit-tested without constructing an EditorView.
+ */
+export function handleTypeRefDragOver(event: DragEvent): boolean {
+  const types = Array.from(event.dataTransfer?.types ?? []);
+  const hasOurMime = types.some((t) => t.toLowerCase() === TYPE_REF_PAYLOAD_MIME);
+  if (!hasOurMime) return false;
+  event.preventDefault();
+  try {
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'link';
+  } catch {
+    // Some test stubs make dropEffect read-only — non-fatal.
+  }
+  return true;
+}
+
+/** Minimal view interface required by the drop handler (subset of EditorView). */
+export interface DropTargetView {
+  posAtCoords(coords: { x: number; y: number }): number | null;
+  state: { selection: { main: { head: number } } };
+  dispatch(tr: { changes: { from: number; to: number; insert: string }; selection: { anchor: number } }): void;
+}
+
+/**
+ * Handles a drop event for a type-ref payload.
+ * Inserts `${namespaceUri}.${typeName}` at the drop position.
+ * Returns true when the event was accepted and handled, false otherwise.
+ * Exported so it can be unit-tested without constructing a full EditorView.
+ */
+export function handleTypeRefDrop(event: DragEvent, view: DropTargetView): boolean {
+  const raw = event.dataTransfer?.getData(TYPE_REF_PAYLOAD_MIME);
+  if (!raw) return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+  if (!isTypeRefPayload(parsed)) return false;
+
+  // Only preventDefault once we've confirmed the payload is ours — otherwise
+  // plain-text and file drops on the SourceEditor would be suppressed.
+  event.preventDefault();
+
+  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head;
+  const qualified = `${parsed.namespaceUri}.${parsed.typeName}`;
+  view.dispatch({
+    changes: { from: pos, to: pos, insert: qualified },
+    // Place caret after the inserted text so the user can keep typing.
+    selection: { anchor: pos + qualified.length }
+  });
+  return true;
 }
 
 function scrollToPosition(view: EditorView | null, position: { line: number; character: number }): void {
@@ -371,6 +432,16 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
         const lspPlugin = lspClient.getPlugin(pathToUri(filePath));
         if (lspPlugin) exts.push(lspPlugin);
       }
+
+      // Phase 9: accept type-ref drops from NamespaceExplorer onto the editor surface.
+      // Delegates to pure helpers (handleTypeRefDragOver / handleTypeRefDrop) so the
+      // logic is unit-testable without constructing a full EditorView.
+      exts.push(
+        EditorView.domEventHandlers({
+          dragover: handleTypeRefDragOver,
+          drop: handleTypeRefDrop
+        })
+      );
 
       return exts;
     },
