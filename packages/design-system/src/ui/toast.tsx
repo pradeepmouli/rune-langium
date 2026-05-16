@@ -74,7 +74,7 @@ function ToastClose({ className, children, ...props }: React.ComponentProps<type
     <ToastPrimitive.Close
       data-slot="toast-close"
       className={cn(
-        'absolute top-2 right-2 inline-flex size-7 items-center justify-center rounded-md text-current/70 transition-colors hover:bg-black/5 hover:text-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] dark:hover:bg-white/10',
+        'absolute top-2 right-2 inline-flex size-7 items-center justify-center rounded-md text-current/70 transition-colors hover:bg-black/5 hover:text-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ring) dark:hover:bg-white/10',
         className
       )}
       {...props}
