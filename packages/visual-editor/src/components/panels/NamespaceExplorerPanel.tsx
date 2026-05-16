@@ -12,7 +12,7 @@
  */
 
 import { useState, useMemo, useCallback, useRef, memo } from 'react';
-import type { JSX } from 'react';
+import type { JSX, DragEvent, MouseEvent } from 'react';
 import { ChevronRight, ChevronDown, Eye, EyeOff, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -21,6 +21,8 @@ import type { TypeGraphNode, TypeKind } from '../../types.js';
 import { buildNamespaceTree, flattenNamespaceTree } from '../../utils/namespace-tree.js';
 import type { FlatTreeRow } from '../../utils/namespace-tree.js';
 import { useVirtualTree } from '../../hooks/useVirtualTree.js';
+import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../types/structure-view.js';
+import type { TypeRefPayload } from '../../types/structure-view.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -39,7 +41,7 @@ export interface NamespaceExplorerPanelProps {
   onExpandAll: () => void;
   /** Collapse all namespaces. */
   onCollapseAll: () => void;
-  /** Called when a node is clicked to select it in the graph. */
+  /** Called when a node is double-clicked to select it in the graph. */
   onSelectNode?: (nodeId: string) => void;
   /** Currently selected node ID (for highlighting). */
   selectedNodeId?: string | null;
@@ -47,6 +49,16 @@ export interface NamespaceExplorerPanelProps {
   className?: string;
   /** Total edge count for cross-namespace reference detection. */
   hiddenRefCounts?: Map<string, number>;
+  /**
+   * Canonical node id of the currently active drag source (used to render
+   * the → arrow indicator next to the type name).
+   */
+  dragSourceId?: string;
+  /**
+   * Called when the user single-clicks a type row to mark it as the active
+   * drag source. Single-click NO LONGER navigates — use double-click for that.
+   */
+  onSetDragSource?: (payload: TypeRefPayload) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +99,32 @@ const KIND_LABELS: Record<TypeKind, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// typeKind → TypeRefPayload.kind mapping
+//
+// FlatTreeRow.typeKind uses lowercase TypeKind values ('data', 'choice', 'enum',
+// 'basicType', …) while TypeRefPayload.kind requires PascalCase literals.
+// Only the four kinds recognised by the payload spec are mappable; all others
+// (func, record, typeAlias, annotation) return undefined so TypeItemRow can
+// opt out of registering the drag payload for unsupported kinds.
+// ---------------------------------------------------------------------------
+
+function toPayloadKind(typeKind: TypeKind): TypeRefPayload['kind'] | undefined {
+  switch (typeKind) {
+    case 'data':
+      return 'Data';
+    case 'choice':
+      return 'Choice';
+    case 'enum':
+      return 'Enum';
+    case 'basicType':
+      return 'BasicType';
+    default:
+      // func, record, typeAlias, annotation are not valid drag-source payload kinds.
+      return undefined;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -100,7 +138,9 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   onCollapseAll,
   onSelectNode,
   className,
-  hiddenRefCounts
+  hiddenRefCounts,
+  dragSourceId,
+  onSetDragSource
 }: NamespaceExplorerPanelProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => new Set(nodes.map((n) => n.data.namespace)));
@@ -245,6 +285,8 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         isSelected={row.nodeId === selectedNodeId}
                         refCount={hiddenRefCounts?.get(row.nodeId) ?? 0}
                         onSelectNode={() => onSelectNode?.(row.nodeId)}
+                        isDragSource={dragSourceId === row.nodeId}
+                        onSetDragSource={onSetDragSource}
                       />
                     )}
                   </div>
@@ -327,10 +369,57 @@ interface TypeItemRowProps {
   isSelected: boolean;
   refCount: number;
   onSelectNode: () => void;
+  /** True when this row is the currently active drag source. */
+  isDragSource: boolean;
+  /** Called on single-click to mark this type as the active drag source. */
+  onSetDragSource?: (payload: TypeRefPayload) => void;
 }
 
-function TypeItemRow({ row, isGraphVisible, isSelected, refCount, onSelectNode }: TypeItemRowProps): JSX.Element {
+function TypeItemRow({
+  row,
+  isGraphVisible,
+  isSelected,
+  refCount,
+  onSelectNode,
+  isDragSource,
+  onSetDragSource
+}: TypeItemRowProps): JSX.Element {
   const isVisible = isGraphVisible && !row.hidden;
+
+  // Build the payload kind once; undefined means this kind is not a valid drag source.
+  const payloadKind = toPayloadKind(row.typeKind);
+
+  const payload: TypeRefPayload | undefined = payloadKind
+    ? {
+        rune: 'type-ref',
+        // FlatTreeRow uses 'namespace' (the namespace string); TypeRefPayload
+        // calls this field 'namespaceUri'. They represent the same value.
+        namespaceUri: row.namespace,
+        typeId: row.nodeId,
+        typeName: row.name,
+        kind: payloadKind
+      }
+    : undefined;
+
+  const handleDragStart = (e: DragEvent<HTMLDivElement>) => {
+    if (!payload) {
+      e.preventDefault();
+      return;
+    }
+    // Dual-MIME contract per Phase 4: canonical MIME carries the JSON payload;
+    // kind-specific marker MIME is registered with an empty value so that drop
+    // targets can filter by kind during dragover (when getData is unavailable).
+    e.dataTransfer.setData(TYPE_REF_PAYLOAD_MIME, JSON.stringify(payload));
+    e.dataTransfer.setData(typeRefMimeForKind(payload.kind), '');
+    e.dataTransfer.effectAllowed = 'link';
+  };
+
+  const handleClick = (e: MouseEvent<HTMLDivElement>) => {
+    // Single-click marks the drag source; double-click navigates (onDoubleClick).
+    if (e.detail === 1 && payload) {
+      onSetDragSource?.(payload);
+    }
+  };
 
   return (
     <div
@@ -338,7 +427,10 @@ function TypeItemRow({ row, isGraphVisible, isSelected, refCount, onSelectNode }
         isSelected ? 'studio-type-row--selected' : isVisible ? 'text-foreground' : 'text-muted-foreground opacity-60'
       }`}
       data-testid={`ns-type-${row.nodeId}`}
-      onClick={onSelectNode}
+      draggable={payload !== undefined}
+      onDragStart={handleDragStart}
+      onClick={handleClick}
+      onDoubleClick={onSelectNode}
     >
       {isSelected && <span className="studio-type-pip" />}
 
@@ -356,6 +448,12 @@ function TypeItemRow({ row, isGraphVisible, isSelected, refCount, onSelectNode }
       <span className="flex-1 truncate hover:underline" title={`${row.name} [${KIND_LABELS[row.typeKind]}]`}>
         {row.name}
       </span>
+
+      {isDragSource && (
+        <span className="rune-type-item__arrow text-primary text-xs ml-1" aria-label="active drag source">
+          →
+        </span>
+      )}
 
       {refCount > 0 && (
         <Tooltip>

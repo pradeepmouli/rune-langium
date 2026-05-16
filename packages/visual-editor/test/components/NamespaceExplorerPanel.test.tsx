@@ -5,13 +5,15 @@
  * Tests for NamespaceExplorerPanel component.
  *
  * Verifies tree rendering, expand/collapse, search filtering,
- * visibility toggles, and node selection callbacks.
+ * visibility toggles, node selection callbacks, and drag-source palette
+ * behaviour (Phase 8: single-click marks drag source, double-click navigates).
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
 import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
+import { TYPE_REF_PAYLOAD_MIME, isTypeRefPayload, typeRefMimeForKind } from '../../src/types/structure-view.js';
 
 // Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
 vi.mock('@tanstack/react-virtual', () => ({
@@ -125,10 +127,27 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onCollapseAll).toHaveBeenCalledOnce();
   });
 
-  it('calls onSelectNode when type row clicked', () => {
+  it('single-click marks drag source (onSetDragSource called) but does NOT navigate', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    // fireEvent.click uses detail:1 by default
+    fireEvent.click(typeRow, { detail: 1 });
+    expect(onSetDragSource).toHaveBeenCalledOnce();
+    const payload = onSetDragSource.mock.calls[0]![0];
+    expect(isTypeRefPayload(payload)).toBe(true);
+    expect(payload.typeId).toBe('com.model::Trade');
+    expect(payload.typeName).toBe('Trade');
+    expect(payload.namespaceUri).toBe('com.model');
+    expect(payload.kind).toBe('Data');
+    // onSelectNode should NOT have been called on a single click
+    expect(props.onSelectNode).not.toHaveBeenCalled();
+  });
+
+  it('double-click navigates (onSelectNode called)', () => {
     const { props } = renderPanel();
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
-    fireEvent.click(typeRow);
+    fireEvent.doubleClick(typeRow);
     expect(props.onSelectNode).toHaveBeenCalledWith('com.model::Trade');
   });
 
@@ -171,5 +190,58 @@ describe('NamespaceExplorerPanel', () => {
     renderPanel({ expandedNamespaces: allNamespaces, hiddenNodeIds: hidden });
     // 3 visible / 4 total (Trade is hidden)
     expect(screen.getByText('3/4')).toBeTruthy();
+  });
+
+  // -------------------------------------------------------------------------
+  // Phase 8 — drag-source palette behaviour
+  // -------------------------------------------------------------------------
+
+  it('type rows for draggable kinds have the draggable attribute', () => {
+    renderPanel();
+    const tradeRow = screen.getByTestId('ns-type-com.model::Trade');
+    // HTMLElement.draggable is a boolean property
+    expect((tradeRow as HTMLElement).draggable).toBe(true);
+  });
+
+  it('dragstart registers canonical MIME with JSON payload and kind-specific marker MIME', () => {
+    renderPanel();
+    const tradeRow = screen.getByTestId('ns-type-com.model::Trade');
+
+    // Simulate dataTransfer to capture setData calls
+    const setData = vi.fn();
+    const dataTransfer = { setData, effectAllowed: '' as DataTransfer['effectAllowed'] };
+
+    fireEvent.dragStart(tradeRow, { dataTransfer });
+
+    // Canonical MIME must be registered with a JSON payload that passes isTypeRefPayload
+    const canonicalCall = setData.mock.calls.find((c: string[]) => c[0] === TYPE_REF_PAYLOAD_MIME);
+    expect(canonicalCall).toBeTruthy();
+    const parsed = JSON.parse(canonicalCall![1] as string);
+    expect(isTypeRefPayload(parsed)).toBe(true);
+    expect(parsed.typeId).toBe('com.model::Trade');
+    expect(parsed.kind).toBe('Data');
+
+    // Kind-specific marker MIME must also be registered
+    const kindMime = typeRefMimeForKind('Data');
+    const markerCall = setData.mock.calls.find((c: string[]) => c[0] === kindMime);
+    expect(markerCall).toBeTruthy();
+  });
+
+  it('renders → arrow when dragSourceId matches the row nodeId', () => {
+    renderPanel({ dragSourceId: 'com.model::Trade' });
+    const arrow = screen.getByLabelText('active drag source');
+    expect(arrow).toBeTruthy();
+  });
+
+  it('does NOT render → arrow when dragSourceId does not match', () => {
+    renderPanel({ dragSourceId: 'com.lib::Date' });
+    // Trade row should not have the arrow
+    const tradeRow = screen.getByTestId('ns-type-com.model::Trade');
+    expect(tradeRow.querySelector('[aria-label="active drag source"]')).toBeNull();
+  });
+
+  it('does NOT render → arrow when dragSourceId is absent', () => {
+    renderPanel();
+    expect(screen.queryByLabelText('active drag source')).toBeNull();
   });
 });
