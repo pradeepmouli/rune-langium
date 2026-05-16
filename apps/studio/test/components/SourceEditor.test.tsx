@@ -11,8 +11,9 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
-import { SourceEditor } from '../../src/components/SourceEditor.js';
-import type { SourceEditorProps } from '../../src/components/SourceEditor.js';
+import { SourceEditor, handleTypeRefDragOver, handleTypeRefDrop } from '../../src/components/SourceEditor.js';
+import type { SourceEditorProps, DropTargetView } from '../../src/components/SourceEditor.js';
+import { TYPE_REF_PAYLOAD_MIME } from '@rune-langium/visual-editor';
 
 // Mock CodeMirror since it needs a real DOM
 const mockEditorViewDestroy = vi.fn();
@@ -43,6 +44,7 @@ vi.mock('@codemirror/view', () => {
     focus = mockEditorViewFocus;
     destroy = mockEditorViewDestroy;
     static updateListener = { of: vi.fn().mockReturnValue([]) };
+    static domEventHandlers = vi.fn().mockReturnValue([]);
     static theme = vi.fn().mockReturnValue([]);
     static scrollIntoView = vi.fn((anchor: number) => ({ anchor }));
     static lineWrapping = [];
@@ -310,5 +312,174 @@ describe('SourceEditor', () => {
       // EditorState.readOnly.of should have been called with true
       expect(EditorState.readOnly.of).toHaveBeenCalledWith(true);
     });
+
+    it('does NOT register drop handlers for read-only files', async () => {
+      const { EditorView } = vi.mocked(await import('@codemirror/view'));
+      render(<SourceEditor files={[readOnlyFile]} activeFile={readOnlyFile.path} />);
+      // domEventHandlers must not have been called with drag/drop handlers when the
+      // active file is read-only — otherwise programmatic view.dispatch() inside the
+      // drop handler would silently mutate a system buffer that onContentChange never sees.
+      expect(EditorView.domEventHandlers).not.toHaveBeenCalled();
+    });
+
+    it('registers drop handlers for writable files', async () => {
+      const { EditorView } = vi.mocked(await import('@codemirror/view'));
+      render(<SourceEditor files={[editableFile]} activeFile={editableFile.path} />);
+      // For a writable file the drop extension must be installed.
+      expect(EditorView.domEventHandlers).toHaveBeenCalledOnce();
+    });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 9: pure drop-handler unit tests (no EditorView construction needed)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Build a minimal DragEvent-like object for testing. */
+function makeDragEvent(overrides: {
+  types?: string[];
+  getData?: (mime: string) => string;
+  clientX?: number;
+  clientY?: number;
+}): DragEvent {
+  const types = overrides.types ?? [TYPE_REF_PAYLOAD_MIME];
+  const getData = overrides.getData ?? (() => '');
+  const event = {
+    dataTransfer: {
+      types,
+      get dropEffect() {
+        return 'none';
+      },
+      set dropEffect(_v: string) {
+        /* no-op in some stubs */
+      },
+      getData
+    },
+    clientX: overrides.clientX ?? 100,
+    clientY: overrides.clientY ?? 200,
+    preventDefault: vi.fn()
+  } as unknown as DragEvent;
+  return event;
+}
+
+const VALID_PAYLOAD = {
+  rune: 'type-ref',
+  namespaceUri: 'cdm.trade',
+  typeId: 'cdm.trade::Trade',
+  typeName: 'Trade',
+  kind: 'Data'
+};
+
+function makeView(posAtCoordsResult: number | null = 42): {
+  view: DropTargetView;
+  dispatch: ReturnType<typeof vi.fn>;
+  focus: ReturnType<typeof vi.fn>;
+} {
+  const dispatch = vi.fn();
+  const focus = vi.fn();
+  const view: DropTargetView = {
+    posAtCoords: vi.fn().mockReturnValue(posAtCoordsResult),
+    state: { selection: { main: { head: 7 } } },
+    dispatch,
+    focus
+  };
+  return { view, dispatch, focus };
+}
+
+describe('handleTypeRefDragOver', () => {
+  it('accepts dragover when our MIME is present', () => {
+    const event = makeDragEvent({ types: [TYPE_REF_PAYLOAD_MIME] });
+    const result = handleTypeRefDragOver(event);
+    expect(result).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it('accepts MIME comparison case-insensitively (browsers uppercase)', () => {
+    const event = makeDragEvent({ types: [TYPE_REF_PAYLOAD_MIME.toUpperCase()] });
+    const result = handleTypeRefDragOver(event);
+    expect(result).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it('rejects dragover when MIME is absent', () => {
+    const event = makeDragEvent({ types: ['text/plain'] });
+    const result = handleTypeRefDragOver(event);
+    expect(result).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('rejects dragover when dataTransfer is null', () => {
+    const event = { dataTransfer: null, preventDefault: vi.fn() } as unknown as DragEvent;
+    const result = handleTypeRefDragOver(event);
+    expect(result).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleTypeRefDrop', () => {
+  it('inserts qualified name at drop position and returns true', () => {
+    const { view, dispatch, focus } = makeView(42);
+    const event = makeDragEvent({
+      getData: (mime) => (mime === TYPE_REF_PAYLOAD_MIME ? JSON.stringify(VALID_PAYLOAD) : '')
+    });
+    const result = handleTypeRefDrop(event, view);
+    expect(result).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith({
+      changes: { from: 42, to: 42, insert: 'cdm.trade.Trade' },
+      selection: { anchor: 42 + 'cdm.trade.Trade'.length }
+    });
+    // Focus must be restored after dispatch so the user can type immediately.
+    expect(focus).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to selection.main.head when posAtCoords returns null', () => {
+    const { view, dispatch } = makeView(null);
+    const event = makeDragEvent({
+      getData: (mime) => (mime === TYPE_REF_PAYLOAD_MIME ? JSON.stringify(VALID_PAYLOAD) : '')
+    });
+    handleTypeRefDrop(event, view);
+    // head is 7
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ changes: expect.objectContaining({ from: 7, to: 7 }) })
+    );
+  });
+
+  it('rejects when MIME data is empty (wrong drag source)', () => {
+    const { view, dispatch } = makeView(42);
+    const event = makeDragEvent({ getData: () => '' });
+    const result = handleTypeRefDrop(event, view);
+    expect(result).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('rejects when payload JSON is malformed', () => {
+    const { view, dispatch } = makeView(42);
+    const event = makeDragEvent({ getData: () => 'not-json{' });
+    const result = handleTypeRefDrop(event, view);
+    expect(result).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('rejects when payload fails isTypeRefPayload guard (missing field)', () => {
+    const { view, dispatch } = makeView(42);
+    const invalid = { rune: 'type-ref', namespaceUri: 'cdm.trade' }; // missing typeId, typeName, kind
+    const event = makeDragEvent({
+      getData: (mime) => (mime === TYPE_REF_PAYLOAD_MIME ? JSON.stringify(invalid) : '')
+    });
+    const result = handleTypeRefDrop(event, view);
+    expect(result).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('rejects when dataTransfer is null', () => {
+    const { view, dispatch } = makeView(42);
+    const event = { dataTransfer: null, clientX: 0, clientY: 0, preventDefault: vi.fn() } as unknown as DragEvent;
+    const result = handleTypeRefDrop(event, view);
+    expect(result).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
