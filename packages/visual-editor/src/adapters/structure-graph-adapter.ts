@@ -16,6 +16,7 @@ import {
   type StructureNode,
   type StructureDataNode,
   type StructureChoiceNode,
+  type StructureChoiceArm,
   type StructureBaseContainer,
   type StructureRow,
   expansionKey
@@ -33,8 +34,20 @@ export interface AdapterNode {
   readonly name: string;
   readonly namespace: string;
   readonly extends?: string;
+  /** Data nodes carry their attributes here. */
   readonly attributes?: ReadonlyArray<AdapterAttribute>;
+  /** Choice nodes carry their arms here — real ChoiceOption AST shape (typeCall only, no name/card). */
+  readonly choiceOptions?: ReadonlyArray<AdapterChoiceOption>;
   readonly values?: ReadonlyArray<{ name: string }>;
+}
+
+/**
+ * Mirrors the real ChoiceOption AST shape: only `typeCall`, no `name`, no `card`.
+ * Choice arms are alternatives ("pick one of these types"), not attributes.
+ */
+export interface AdapterChoiceOption {
+  /** The type reference in the same union form as AdapterAttribute.typeCall. */
+  readonly typeCall: { readonly type?: { readonly $refText?: string } } | string;
 }
 
 /**
@@ -184,14 +197,41 @@ function shouldExpand(
   return expansionMap.get(k) === true;
 }
 
+function choiceOptRefText(opt: AdapterChoiceOption): string {
+  if (typeof opt.typeCall === 'string') return opt.typeCall;
+  return opt.typeCall.type?.$refText ?? '';
+}
+
+/**
+ * Resolve a single ChoiceOption arm into a StructureChoiceArm.
+ * Reuses `findNodeByName` (the same lookup `buildRow` uses) to classify and
+ * resolve the referenced type — no fabricated name or cardinality.
+ */
+function buildChoiceArm(opt: AdapterChoiceOption, doc: AdapterDocument, ownerNamespace: string): StructureChoiceArm {
+  const refText = choiceOptRefText(opt);
+  if (!refText) {
+    return { typeName: '<unresolved>', typeKind: 'Unresolved' };
+  }
+  if (BUILTIN_SET.has(refText)) {
+    return { typeName: refText, typeKind: 'Builtin' };
+  }
+  const target = findNodeByName(refText, doc, ownerNamespace);
+  if (!target) {
+    return { typeName: refText, typeKind: 'Unresolved' };
+  }
+  const typeKind: StructureChoiceArm['typeKind'] =
+    target.$type === 'Data' ? 'Data' : target.$type === 'Choice' ? 'Choice' : 'Enum';
+  return { typeName: refText, typeKind, targetNodeId: target.id };
+}
+
 function buildChoiceNode(node: AdapterNode, doc: AdapterDocument): StructureChoiceNode {
-  const options = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
+  const arms = (node.choiceOptions ?? []).map((opt) => buildChoiceArm(opt, doc, node.namespace));
   return {
     id: node.id,
     kind: 'choice',
     name: node.name,
     namespaceUri: node.namespace,
-    options
+    options: arms
   };
 }
 
