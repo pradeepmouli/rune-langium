@@ -23,5 +23,8 @@ export const nodeTypes: NodeTypes = {
   typeAlias: GenericNode,
   basicType: GenericNode,
   annotation: GenericNode,
-  groupContainer: GroupContainerNode
+  groupContainer: GroupContainerNode,
+  // Finding 2: layoutStructureGraph emits base containers as type:'structureBase'; both
+  // types map to GroupContainerNode which branches on data.scope internally.
+  structureBase: GroupContainerNode
 };
