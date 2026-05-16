@@ -4,20 +4,17 @@
 import type React from 'react';
 import { useUtilityTrayControls } from '../utility-tray-context.js';
 
+const EMPTY_LINES: ReadonlyArray<string> = [];
+
 export interface OutputPanelProps {
   lines?: ReadonlyArray<string>;
 }
 
-export function OutputPanel({ lines = [] }: OutputPanelProps): React.ReactElement {
+export function OutputPanel({ lines = EMPTY_LINES }: OutputPanelProps): React.ReactElement {
   const { utilitiesCollapsed, setUtilitiesCollapsed } = useUtilityTrayControls();
 
   return (
-    <section
-      role="region"
-      aria-label="Messages"
-      data-testid="panel-output"
-      data-component="workspace.output"
-    >
+    <section aria-label="Messages" data-testid="panel-output" data-component="workspace.output">
       <div className="flex items-center justify-between gap-2">
         <h2>Messages</h2>
         <button

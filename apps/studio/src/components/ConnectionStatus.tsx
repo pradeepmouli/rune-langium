@@ -46,7 +46,7 @@ export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) 
   const showReconnect = onReconnect !== undefined && state.status !== 'connected' && state.status !== 'connecting';
 
   return (
-    <output className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+    <output className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
       <span className={cn('w-2 h-2 rounded-full shrink-0', DOT_COLORS[state.status] ?? DOT_COLORS['disconnected'])} />
       <span>
         {statusLabel}

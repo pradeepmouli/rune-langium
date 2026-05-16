@@ -64,6 +64,8 @@ import type {
 } from '../../types.js';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
+const EMPTY_GROUPS: InheritedGroup[] = [];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -127,7 +129,7 @@ function FunctionForm({
   data,
   availableTypes,
   actions,
-  inheritedGroups = [],
+  inheritedGroups = EMPTY_GROUPS,
   renderExpressionEditor,
   onNavigateToNode,
   allNodeIds
@@ -291,7 +293,7 @@ function FunctionForm({
             <FieldGroup className="gap-0.5">
               {inputParams.map((member: { name: string; typeName?: string }, i: number) => (
                 <FunctionInputRow
-                  key={`${nodeId}-param-${member.name}-${i}`}
+                  key={`${nodeId}-param-${member.name}:${i}`}
                   member={member}
                   nodeId={nodeId}
                   availableTypes={availableTypes}
@@ -403,7 +405,7 @@ function FunctionForm({
                 'result';
               const isAdd = op.add === true;
               return (
-                <div key={`op-${i}`} data-slot="operation-section" className="flex flex-col gap-1">
+                <div key={`op-${assignTarget}-${i}`} data-slot="operation-section" className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground">
                     {isAdd ? 'add' : 'set'} {assignTarget}
                   </span>

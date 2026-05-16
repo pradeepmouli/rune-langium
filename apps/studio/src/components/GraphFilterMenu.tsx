@@ -127,13 +127,13 @@ export function GraphFilterMenu({ compact = false, className, align = 'start' }:
                   type="button"
                 >
                   <span
-                    className="w-2.5 h-2.5 rounded-sm shrink-0"
+                    className="size-2.5 rounded-sm shrink-0"
                     style={{
                       backgroundColor: active ? color : 'transparent',
                       border: `1.5px solid ${active ? color : 'currentColor'}`
                     }}
                   />
-                  <Icon className="w-3.5 h-3.5 shrink-0" style={{ opacity: active ? 1 : 0.4 }} />
+                  <Icon className="size-3.5 shrink-0" style={{ opacity: active ? 1 : 0.4 }} />
                   <span>{label}</span>
                 </button>
               );

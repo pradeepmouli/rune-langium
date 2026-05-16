@@ -48,6 +48,8 @@ import type {
 } from '../../types.js';
 import type { ReactNode } from 'react';
 
+const EMPTY_NODES: TypeGraphNode[] = [];
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -80,7 +82,7 @@ function DataTypeForm({
   data,
   availableTypes,
   actions,
-  allNodes = [],
+  allNodes = EMPTY_NODES,
   renderExpressionEditor,
   onNavigateToNode,
   allNodeIds

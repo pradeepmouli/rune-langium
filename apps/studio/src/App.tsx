@@ -683,14 +683,14 @@ function AppContent() {
             className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md"
             data-testid="boot-spinner"
           >
-            <Spinner className="h-8 w-8 text-primary" />
+            <Spinner className="size-8 text-primary" />
             <p>{bootState === 'restoring' ? 'Restoring workspace…' : 'Loading…'}</p>
           </div>
         )}
 
         {bootState !== 'checking' && bootState !== 'restoring' && loading && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md">
-            <Spinner className="h-8 w-8 text-primary" />
+            <Spinner className="size-8 text-primary" />
             <p>Parsing files…</p>
           </div>
         )}

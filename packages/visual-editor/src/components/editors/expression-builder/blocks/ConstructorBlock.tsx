@@ -34,8 +34,8 @@ export function ConstructorBlock({ node, renderChild }: ConstructorBlockProps) {
       <span className="font-mono text-xs font-semibold text-(--color-expr-reference)">
         {typeName} {'{}'}
       </span>
-      {values.map((kvp, i) => (
-        <span key={i} className="ml-3 inline-flex items-baseline gap-1">
+      {values.map((kvp) => (
+        <span key={kvp.key} className="ml-3 inline-flex items-baseline gap-1">
           <span className="font-mono text-xs opacity-70">{kvp.key}:</span>
           {renderChild(kvp.value)}
         </span>

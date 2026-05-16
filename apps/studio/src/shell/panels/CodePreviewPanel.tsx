@@ -20,12 +20,7 @@ export function CodePreviewPanel({ children }: CodePreviewPanelProps): React.Rea
   const label = TARGET_LABELS[target];
 
   return (
-    <section
-      role="region"
-      aria-label="Code preview"
-      data-testid="panel-codePreview"
-      data-component="workspace.codePreview"
-    >
+    <section aria-label="Code preview" data-testid="panel-codePreview" data-component="workspace.codePreview">
       <h2>Code preview — {label}</h2>
       {children ?? (
         <p>

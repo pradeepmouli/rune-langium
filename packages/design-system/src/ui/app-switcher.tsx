@@ -35,7 +35,6 @@ export function AppSwitcher({ current, urls, className }: AppSwitcherProps): Rea
   const resolved = { ...DEFAULT_URLS, ...urls };
   return (
     <nav
-      role="navigation"
       aria-label="rune-langium surfaces"
       className={cn('flex items-center gap-2', className)}
       data-testid="app-switcher"
@@ -49,9 +48,7 @@ export function AppSwitcher({ current, urls, className }: AppSwitcherProps): Rea
             aria-current={isCurrent ? 'page' : undefined}
             className={cn(
               'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-              isCurrent
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+              isCurrent ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
             )}
           >
             {LABELS[surface]}

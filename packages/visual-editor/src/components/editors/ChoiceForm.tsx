@@ -34,13 +34,7 @@
 
 import { useCallback, useRef } from 'react';
 import { FormProvider, Controller } from 'react-hook-form';
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLegend,
-  FieldSet
-} from '@rune-langium/design-system/ui/field';
+import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { ChoiceOptionRow } from './ChoiceOptionRow.js';
@@ -53,12 +47,7 @@ import { ChoiceSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { identityProjection } from './identity-projection.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
-import type {
-  AnyGraphNode,
-  TypeOption,
-  EditorFormActions,
-  NavigateToNodeCallback
-} from '../../types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions, NavigateToNodeCallback } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -83,14 +72,7 @@ export interface ChoiceFormProps {
 // Component
 // ---------------------------------------------------------------------------
 
-function ChoiceForm({
-  nodeId,
-  data,
-  availableTypes,
-  actions,
-  onNavigateToNode,
-  allNodeIds
-}: ChoiceFormProps) {
+function ChoiceForm({ nodeId, data, availableTypes, actions, onNavigateToNode, allNodeIds }: ChoiceFormProps) {
   const d = data as any;
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
@@ -189,10 +171,7 @@ function ChoiceForm({
 
   const usedTypeNames = new Set(members.map((m: { typeName: string }) => m.typeName));
   const addableTypes = availableTypes.filter(
-    (opt) =>
-      (opt.kind === 'data' || opt.kind === 'choice') &&
-      opt.label !== d.name &&
-      !usedTypeNames.has(opt.label)
+    (opt) => (opt.kind === 'data' || opt.kind === 'choice') && opt.label !== d.name && !usedTypeNames.has(opt.label)
   );
 
   // ---- Render --------------------------------------------------------------
@@ -240,9 +219,9 @@ function ChoiceForm({
             </FieldLegend>
 
             <FieldGroup className="gap-0.5">
-              {members.map((member: { name: string; typeName: string }, i: number) => (
+              {members.map((member: { name: string; typeName: string }) => (
                 <ChoiceOptionRow
-                  key={`${member.typeName}-${i}`}
+                  key={member.typeName ?? member.name}
                   typeName={member.typeName ?? member.name}
                   nodeId={nodeId}
                   availableTypes={availableTypes}
@@ -261,12 +240,7 @@ function ChoiceForm({
 
             {/* Add Option via TypeSelector */}
             <div data-slot="add-option" className="mt-1">
-              <TypeSelector
-                value=""
-                options={addableTypes}
-                onSelect={handleAddOption}
-                placeholder="Add option..."
-              />
+              <TypeSelector value="" options={addableTypes} onSelect={handleAddOption} placeholder="Add option..." />
             </div>
           </FieldSet>
 

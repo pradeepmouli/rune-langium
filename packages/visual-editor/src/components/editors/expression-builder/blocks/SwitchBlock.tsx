@@ -42,7 +42,7 @@ export function SwitchBlock({ node, renderChild }: SwitchBlockProps) {
         const guard = c.guard;
         const label = guard?.referenceGuard ?? guard?.literalGuard ?? 'default';
         return (
-          <span key={i} className="ml-3 inline-flex items-baseline gap-1">
+          <span key={`${String(label)}-${i}`} className="ml-3 inline-flex items-baseline gap-1">
             <span className="font-mono text-xs opacity-70">{String(label)}:</span>
             {renderChild(c.expression)}
           </span>

@@ -16,18 +16,9 @@ interface Props {
   onSettingsClick: () => void;
 }
 
-export function ActivityBar({
-  onWorkspaceClick,
-  onModelsClick,
-  onSettingsClick
-}: Props): React.ReactElement {
+export function ActivityBar({ onWorkspaceClick, onModelsClick, onSettingsClick }: Props): React.ReactElement {
   return (
-    <nav
-      role="navigation"
-      aria-label="Studio activity bar"
-      data-testid="activity-bar"
-      className="studio-rail"
-    >
+    <nav aria-label="Studio activity bar" data-testid="activity-bar" className="studio-rail">
       <div className="studio-rail__group">
         <button
           type="button"
@@ -45,12 +36,7 @@ export function ActivityBar({
         <button type="button" disabled className="studio-rail__btn" aria-label="Search">
           <Search className="size-4" />
         </button>
-        <button
-          type="button"
-          className="studio-rail__btn"
-          aria-label="Curated models"
-          onClick={onModelsClick}
-        >
+        <button type="button" className="studio-rail__btn" aria-label="Curated models" onClick={onModelsClick}>
           <Database className="size-4" />
         </button>
       </div>
@@ -59,12 +45,7 @@ export function ActivityBar({
         <button type="button" disabled className="studio-rail__btn" aria-label="Notifications">
           <Bell className="size-4" />
         </button>
-        <button
-          type="button"
-          className="studio-rail__btn"
-          aria-label="Settings"
-          onClick={onSettingsClick}
-        >
+        <button type="button" className="studio-rail__btn" aria-label="Settings" onClick={onSettingsClick}>
           <Settings className="size-4" />
         </button>
       </div>

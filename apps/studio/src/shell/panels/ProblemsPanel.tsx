@@ -12,21 +12,18 @@ export interface ProblemRow {
   message: string;
 }
 
+const EMPTY_PROBLEMS: ReadonlyArray<ProblemRow> = [];
+
 export interface ProblemsPanelProps {
   problems?: ReadonlyArray<ProblemRow>;
   onJump?: (row: ProblemRow) => void;
 }
 
-export function ProblemsPanel({ problems = [], onJump }: ProblemsPanelProps): React.ReactElement {
+export function ProblemsPanel({ problems = EMPTY_PROBLEMS, onJump }: ProblemsPanelProps): React.ReactElement {
   const { utilitiesCollapsed, setUtilitiesCollapsed } = useUtilityTrayControls();
 
   return (
-    <section
-      role="region"
-      aria-label="Problems"
-      data-testid="panel-problems"
-      data-component="workspace.problems"
-    >
+    <section aria-label="Problems" data-testid="panel-problems" data-component="workspace.problems">
       <div className="flex items-center justify-between gap-2">
         <h2>Problems</h2>
         <button
@@ -41,11 +38,10 @@ export function ProblemsPanel({ problems = [], onJump }: ProblemsPanelProps): Re
         <p>No problems detected in the workspace.</p>
       ) : (
         <ul>
-          {problems.map((p, i) => (
-            <li key={`${p.path}:${p.line}:${i}`}>
+          {problems.map((p) => (
+            <li key={`${p.path}:${p.line}:${p.column}:${p.message}`}>
               <button type="button" onClick={() => onJump?.(p)}>
-                <span data-severity={p.severity}>{p.severity}</span> {p.path}:{p.line}:{p.column} —{' '}
-                {p.message}
+                <span data-severity={p.severity}>{p.severity}</span> {p.path}:{p.line}:{p.column} — {p.message}
               </button>
             </li>
           ))}

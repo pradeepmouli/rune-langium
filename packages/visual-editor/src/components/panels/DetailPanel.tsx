@@ -154,7 +154,7 @@ export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds, refOnly }:
               <span className="text-xs font-medium text-destructive">Errors ({errors.length})</span>
               {errors.map((err, i) => (
                 <div
-                  key={i}
+                  key={`${err.ruleId ?? 'err'}:${err.message}:${i}`}
                   className="flex items-start gap-1.5 rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive"
                 >
                   <AlertCircle className="size-3.5 shrink-0 mt-0.5" />

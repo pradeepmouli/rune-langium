@@ -82,7 +82,7 @@ function LoadedModelBadge({ model }: { model: { source: ModelSource; files: { pa
       <Button
         variant="ghost"
         size="sm"
-        className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+        className="size-5 p-0 text-muted-foreground hover:text-destructive"
         onClick={() => unload(model.source.id)}
         aria-label={`Unload ${model.source.name}`}
       >

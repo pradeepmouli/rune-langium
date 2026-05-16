@@ -115,11 +115,7 @@ function ConditionRow({
   const [isExpanded, setIsExpanded] = useState(true);
 
   return (
-    <div
-      data-slot="condition-row"
-      className="border border-border rounded-md bg-card"
-      role="listitem"
-    >
+    <div data-slot="condition-row" className="border border-border rounded-md bg-card" role="listitem">
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2 py-1.5 bg-muted/30 rounded-t-md">
         <button
@@ -135,16 +131,14 @@ function ConditionRow({
           {condition.isPostCondition ? 'post-condition' : 'condition'}
         </span>
 
-        {condition.name && (
-          <span className="text-xs font-semibold text-foreground">{condition.name}</span>
-        )}
+        {condition.name && <span className="text-xs font-semibold text-foreground">{condition.name}</span>}
 
         {!readOnly && (
           <div className="ml-auto flex items-center gap-0.5">
             <Button
               variant="ghost"
               size="icon-xs"
-              className="h-5 w-5"
+              className="size-5"
               disabled={index === 0}
               onClick={() => onReorder?.(index, index - 1)}
               aria-label="Move condition up"
@@ -154,7 +148,7 @@ function ConditionRow({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="h-5 w-5"
+              className="size-5"
               disabled={index === total - 1}
               onClick={() => onReorder?.(index, index + 1)}
               aria-label="Move condition down"
@@ -164,7 +158,7 @@ function ConditionRow({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="h-5 w-5 text-destructive hover:text-destructive/80"
+              className="size-5 text-destructive hover:text-destructive/80"
               onClick={() => onRemove?.(index)}
               aria-label={`Remove condition ${condition.name ?? index}`}
             >
@@ -176,7 +170,7 @@ function ConditionRow({
 
       {/* Body */}
       {isExpanded && (
-        <div className="px-2 py-2 space-y-2">
+        <div className="p-2 space-y-2">
           {/* Name */}
           {readOnly ? (
             condition.name && (
@@ -197,9 +191,7 @@ function ConditionRow({
 
           {/* Definition */}
           {readOnly ? (
-            condition.definition && (
-              <p className="text-xs text-muted-foreground italic">{condition.definition}</p>
-            )
+            condition.definition && <p className="text-xs text-muted-foreground italic">{condition.definition}</p>
           ) : (
             <Input
               value={condition.definition ?? ''}
@@ -245,12 +237,7 @@ function ConditionRow({
 // ---------------------------------------------------------------------------
 
 interface AddConditionFormProps {
-  onAdd: (condition: {
-    name?: string;
-    definition?: string;
-    expressionText: string;
-    isPostCondition?: boolean;
-  }) => void;
+  onAdd: (condition: { name?: string; definition?: string; expressionText: string; isPostCondition?: boolean }) => void;
   onCancel: () => void;
   showPostConditionToggle: boolean;
 }
@@ -283,12 +270,7 @@ function AddConditionForm({ onAdd, onCancel, showPostConditionToggle }: AddCondi
         />
         {showPostConditionToggle && (
           <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isPost}
-              onChange={(e) => setIsPost(e.target.checked)}
-              className="rounded"
-            />
+            <input type="checkbox" checked={isPost} onChange={(e) => setIsPost(e.target.checked)} className="rounded" />
             post-condition
           </label>
         )}
@@ -348,24 +330,15 @@ export function ConditionSection({
   const formCtx = useFormContext();
 
   const conditionsFromForm =
-    rawConditions === undefined
-      ? (formCtx?.watch?.('conditions') as unknown[] | undefined)
-      : undefined;
+    rawConditions === undefined ? (formCtx?.watch?.('conditions') as unknown[] | undefined) : undefined;
   const postConditionsFromForm =
-    rawPostConditions === undefined
-      ? (formCtx?.watch?.('postConditions') as unknown[] | undefined)
-      : undefined;
+    rawPostConditions === undefined ? (formCtx?.watch?.('postConditions') as unknown[] | undefined) : undefined;
   const effectiveRawConditions = rawConditions ?? conditionsFromForm;
   const effectiveRawPostConditions = rawPostConditions ?? postConditionsFromForm;
   const effectiveReadOnly = readOnly ?? ctx?.readOnly ?? false;
 
   const effectiveOnAdd = useCallback(
-    (condition: {
-      name?: string;
-      definition?: string;
-      expressionText: string;
-      isPostCondition?: boolean;
-    }) => {
+    (condition: { name?: string; definition?: string; expressionText: string; isPostCondition?: boolean }) => {
       if (onAdd) return onAdd(condition);
       if (ctx) ctx.actions.addCondition(ctx.nodeId, condition);
     },
@@ -405,12 +378,7 @@ export function ConditionSection({
   );
 
   const handleAdd = useCallback(
-    (condition: {
-      name?: string;
-      definition?: string;
-      expressionText: string;
-      isPostCondition?: boolean;
-    }) => {
+    (condition: { name?: string; definition?: string; expressionText: string; isPostCondition?: boolean }) => {
       effectiveOnAdd(condition);
       setShowAddForm(false);
     },
@@ -421,10 +389,7 @@ export function ConditionSection({
 
   return (
     <FieldSet data-slot="condition-section" className="gap-1">
-      <FieldLegend
-        variant="label"
-        className="mb-0 text-muted-foreground flex items-center justify-between"
-      >
+      <FieldLegend variant="label" className="mb-0 text-muted-foreground flex items-center justify-between">
         <span>
           {label} ({conditions.length})
         </span>
@@ -433,7 +398,7 @@ export function ConditionSection({
             variant="ghost"
             size="icon-xs"
             onClick={() => setShowAddForm(!showAddForm)}
-            className="h-5 w-5 text-muted-foreground hover:text-foreground"
+            className="size-5 text-muted-foreground hover:text-foreground"
             aria-label="Add condition"
           >
             <Plus className="size-3" />
@@ -444,7 +409,7 @@ export function ConditionSection({
       <FieldGroup className="gap-1.5">
         {conditions.map((condition, i) => (
           <ConditionRow
-            key={`condition-${condition.name ?? ''}-${i}`}
+            key={`condition-${condition.name ?? ''}:${i}`}
             condition={condition}
             index={i}
             total={conditions.length}
@@ -457,9 +422,7 @@ export function ConditionSection({
         ))}
 
         {conditions.length === 0 && !showAddForm && (
-          <p className="text-xs text-muted-foreground italic py-2 text-center">
-            No conditions defined.
-          </p>
+          <p className="text-xs text-muted-foreground italic py-2 text-center">No conditions defined.</p>
         )}
 
         {showAddForm && (
