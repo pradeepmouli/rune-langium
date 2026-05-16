@@ -1530,7 +1530,7 @@ export function EditorPage({
           <span className="studio-topbar__divider" />
           <Avatar asChild className="size-7 cursor-pointer">
             <button type="button" aria-label="Account">
-              <AvatarFallback className="bg-gradient-to-br from-[var(--color-enum)] to-[var(--color-data)] text-primary-foreground text-[11px] font-bold">
+              <AvatarFallback className="bg-linear-to-br from-enum to-data text-primary-foreground text-[11px] font-bold">
                 PM
               </AvatarFallback>
             </button>
