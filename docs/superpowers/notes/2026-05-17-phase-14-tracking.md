@@ -53,15 +53,34 @@ This doc captures 8 findings from the two reviews run on PR #191. They were inte
 
 ### C — Data identity churns on every edit (P1)
 
-**Files:** `packages/visual-editor/src/components/StructureView.tsx:110-120`, `apps/studio/src/pages/EditorPage.tsx:1393-1396`
+**Files:** `packages/visual-editor/src/components/StructureView.tsx:110-120`, `apps/studio/src/components/StructureView.tsx` (memo deps), `packages/visual-editor/src/adapters/structure-graph-adapter.ts` (node-object creation), `packages/visual-editor/src/layout/structure-layout.ts:414-423` (data payload spread), `apps/studio/src/pages/EditorPage.tsx:1393-1396` (adapterDoc memo)
 
 **Problem:** The useMemo in `StructureFlowInner` rebuilds the React Flow node `data` payload on every layout pass (which fires on every edit, since `storeNodes` invalidates on any mutation). React Flow shallow-compares `node.data` for rerender decisions, so every keystroke in a single NameCell rerenders every visible DataNode/GroupContainerNode.
 
-**Fix:** Hoist `cellComponents`/`expansionMap`/`onToggleExpansion` to a `StructureCellContext` provider inside `StructureFlowInner`. DataNode/GroupContainerNode read via `useContext`. Layout's `result.nodes` is returned untouched. Each node's `data` identity stays stable across edits that don't touch its row set.
+**Codex correction (PR #193 review):** The context-only fix is necessary but **not sufficient**. Three sources of identity churn ALL need to be addressed:
+1. The `StructureView` injection (`data: { ...n.data, cellComponents, ... }`) — fixed by context refactor
+2. `layoutStructureGraph()` wraps every layout-returned node with fresh `data: { ...n, variant: 'structure' }` — still churns identity even if injection is removed
+3. `buildStructureGraph()` creates fresh `StructureDataNode`/row objects on each `adapterDoc` pass — feeds (2) with new inputs even when underlying content is unchanged
 
-**Alternative:** WeakMap keyed off the canonical StructureNode identity, returning the same augmented data object across rerenders.
+Without addressing all three, the "≤1 DataNode rerender on single-cell edit" test will fail because React Flow still sees new `node.data` identities for every visible node.
+
+**Full fix (3 parts):**
+1. **Context refactor (C.1)**: hoist `cellComponents`/`expansionMap`/`onToggleExpansion` to a `StructureCellContext` provider inside `StructureFlowInner`. DataNode/GroupContainerNode read via `useContext`. (Originally proposed.)
+2. **Stable layout output (C.2)**: cache the layout's per-node data payload by canonical StructureNode identity (e.g., `WeakMap<StructureNode, ReactFlowNodeData>`). When layout walks an unchanged adapter node, return the cached data object. New cache entry only when the canonical node identity changes.
+3. **Stable adapter output (C.3)**: cache buildStructureGraph's output similarly — if the underlying editor-store nodes for a focused type haven't changed (deep-equal on the source fields), return the previous `StructureGraphInput` with reference-stable nodes.
+
+OR — a simpler total approach — selectively re-use the previous `result` object's nodes when their canonical content hasn't changed (identity-preserving map over `prev.nodes`):
+```ts
+const stableNodes = result.nodes.map((n) => {
+  const prev = prevResultRef.current?.nodes.find((p) => p.id === n.id);
+  return prev && shallowEqual(prev.data, n.data) ? prev : n;
+});
+```
+This is cheaper to implement than C.2 + C.3 but does a per-edit O(n²) scan; acceptable for typical schemas.
 
 **Impact:** Medium perceived perf on large schemas (CDM `Trade` expanded 3 deep ≈ dozens of nodes re-render on every keystroke). Correctness unaffected.
+
+**Acceptance test refinement:** "Edit a single cell; assert that React DevTools Profiler shows ≤1 DataNode rerender" — must pass after ALL three fix parts, not just C.1.
 
 ---
 
