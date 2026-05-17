@@ -181,6 +181,32 @@ export interface StructureChoiceNode {
   readonly name: string;
   readonly namespaceUri: string;
   readonly options: ReadonlyArray<StructureChoiceArm>;
+  /**
+   * Per-arm expansions (Phase 14e/B). Keyed by the arm's `typeName` (since
+   * arms have no `attrName` — their identity IS the referenced type), value
+   * is the child INSTANCE id in `StructureGraphInput.nodes`. Only arms whose
+   * `typeKind` is `Data` or `Choice` are eligible to be expanded; terminal
+   * arms (Enum / Builtin / Unresolved) never appear here.
+   *
+   * Empty (default) for arms that have not been expanded by the user.
+   */
+  readonly expansions: ReadonlyMap<string, string>;
+}
+
+/**
+ * A read-only Enum node in the Structure View graph (Phase 14e/A). Materialized
+ * when the user focuses an Enum from the namespace explorer; lists the enum's
+ * values as plain rows. Enums are terminal — no per-value expansion, no
+ * cellComponents wiring, no chevrons.
+ */
+export interface StructureEnumNode {
+  readonly id: string;
+  readonly instanceId?: string;
+  readonly kind: 'enum';
+  readonly name: string;
+  readonly namespaceUri: string;
+  /** Enum value names in source order. */
+  readonly values: ReadonlyArray<string>;
 }
 
 /** A base-type GroupContainer wrap. */
@@ -208,7 +234,7 @@ export interface StructureBaseContainer {
   readonly expansions: ReadonlyMap<string, string>;
 }
 
-export type StructureNode = StructureDataNode | StructureChoiceNode | StructureBaseContainer;
+export type StructureNode = StructureDataNode | StructureChoiceNode | StructureBaseContainer | StructureEnumNode;
 
 /** Full graph input produced by the adapter. */
 export interface StructureGraphInput {
@@ -217,6 +243,9 @@ export interface StructureGraphInput {
    * the instance id equals the canonical id of the outermost wrapper, so
    * existing callers that pass canonical ids through this field continue to
    * work for non-nested roots.
+   *
+   * Phase 14e/A: roots may be `data`, `choice`, or `enum` kinds — the adapter
+   * materializes whichever the focused type resolves to.
    */
   readonly rootNodeId: string;
   /**

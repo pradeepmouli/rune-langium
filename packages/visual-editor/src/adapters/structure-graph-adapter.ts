@@ -18,6 +18,7 @@ import {
   type StructureChoiceNode,
   type StructureChoiceArm,
   type StructureBaseContainer,
+  type StructureEnumNode,
   type StructureRow,
   expansionKey
 } from '../types/structure-view.js';
@@ -242,7 +243,19 @@ function buildChoiceArm(opt: AdapterChoiceOption, doc: AdapterDocument, ownerNam
   return { typeName: refText, typeKind, targetNodeId: target.id };
 }
 
-function buildChoiceNode(node: AdapterNode, doc: AdapterDocument, instanceId: string): StructureChoiceNode {
+/**
+ * Build a StructureChoiceNode for `node` at the given instance id, with an
+ * optional `expansions` map of pre-resolved arm expansions (Phase 14e/B). The
+ * caller is responsible for materializing the arm targets into `out` before
+ * passing their instance ids in via `expansions` — `buildChoiceNode` itself
+ * does not recurse.
+ */
+function buildChoiceNode(
+  node: AdapterNode,
+  doc: AdapterDocument,
+  instanceId: string,
+  expansions: ReadonlyMap<string, string> = new Map()
+): StructureChoiceNode {
   const arms = (node.choiceOptions ?? []).map((opt) => buildChoiceArm(opt, doc, node.namespace));
   return {
     id: node.id,
@@ -250,7 +263,23 @@ function buildChoiceNode(node: AdapterNode, doc: AdapterDocument, instanceId: st
     kind: 'choice',
     name: node.name,
     namespaceUri: node.namespace,
-    options: arms
+    options: arms,
+    expansions
+  };
+}
+
+/**
+ * Build a StructureEnumNode for `node` at the given instance id (Phase 14e/A).
+ * Enum nodes are terminal — no expansion map, no recursion.
+ */
+function buildEnumNode(node: AdapterNode, instanceId: string): StructureEnumNode {
+  return {
+    id: node.id,
+    instanceId,
+    kind: 'enum',
+    name: node.name,
+    namespaceUri: node.namespace,
+    values: (node.values ?? []).map((v) => v.name)
   };
 }
 
@@ -395,7 +424,20 @@ function walkAndExpand(
       } else {
         const childInstanceId = adapterChildInstanceId(currentInstanceId, row.attrName, target.id);
         if (!out.has(childInstanceId)) {
-          out.set(childInstanceId, buildChoiceNode(target, doc, childInstanceId));
+          // Phase 14e/B — Choice arms are now expandable too. Recurse into the
+          // arm-expansion walk with the same per-instance path conventions so
+          // a Choice reached via a Data expansion can have its own arms drilled.
+          const armExpansions = expandChoiceArms(
+            target,
+            doc,
+            opts,
+            out,
+            nextPath,
+            outerMostCanonicalCache,
+            childInstanceId,
+            childInstancePath
+          );
+          out.set(childInstanceId, buildChoiceNode(target, doc, childInstanceId, armExpansions));
         }
         expansions.set(row.attrName, childInstanceId);
       }
@@ -576,7 +618,18 @@ function materializeDataWithInheritance(
       } else {
         const targetInstanceId = adapterChildInstanceId(baseRfId, row.attrName, target.id);
         if (!out.has(targetInstanceId)) {
-          out.set(targetInstanceId, buildChoiceNode(target, doc, targetInstanceId));
+          // Phase 14e/B — inherited Choice rows also get arm-level expansion.
+          const armExpansions = expandChoiceArms(
+            target,
+            doc,
+            opts,
+            out,
+            baseRowPath,
+            outerMostCanonicalCache,
+            targetInstanceId,
+            childExpansionInstancePath
+          );
+          out.set(targetInstanceId, buildChoiceNode(target, doc, targetInstanceId, armExpansions));
         }
         baseExpansions.set(row.attrName, targetInstanceId);
       }
@@ -588,6 +641,98 @@ function materializeDataWithInheritance(
 
   outerMostCanonicalCache.set(focused.id, outermostCanonical);
   return outermostRfId;
+}
+
+/**
+ * Phase 14e/B — Choice arm expansion. Walk a Choice node's arms and, for any
+ * arm targeting a Data or Choice type whose per-instance expansion key is
+ * marked `true`, materialize the target into `out` and return an `expansions`
+ * map keyed by the arm's `typeName`.
+ *
+ * **Arm expansion key convention.** Arms have no `attrName` in the DSL — their
+ * identity IS the referenced type. The expansion key uses the arm's `typeName`
+ * as the `attrName` slot, mirroring how `StructureChoiceArm.typeName` already
+ * keys the layout's `rowOffsets` for Choice nodes. So toggling an arm fires
+ * `{ namespaceUri: <choiceNs>, typeId: <choiceName>, attrName: <armTypeName>,
+ *   instancePath: <self-inclusive path> }` — same shape as Data row chevrons.
+ *
+ * **Per-instance semantics.** The renderer builds the key with
+ * `[...instancePath, choiceInstanceId]` (self-inclusive), and `shouldExpandArm`
+ * checks against the same self-inclusive path so the round-trip is symmetric
+ * with `shouldExpand`.
+ *
+ * Terminal arms (Enum / Builtin / Unresolved) are never expandable — they
+ * have no child to materialize. Cycles (an arm pointing back into a Choice
+ * already on the recursion path) are dropped silently; the arm chip remains.
+ */
+function expandChoiceArms(
+  node: AdapterNode,
+  doc: AdapterDocument,
+  opts: BuildOptions,
+  out: Map<string, StructureNode>,
+  path: ReadonlySet<string>,
+  outerMostCanonicalCache: Map<string, string>,
+  currentInstanceId: string,
+  instancePath: ReadonlyArray<string>
+): Map<string, string> {
+  const expansions = new Map<string, string>();
+  const childInstancePath: ReadonlyArray<string> = [...instancePath, currentInstanceId];
+
+  for (const opt of node.choiceOptions ?? []) {
+    const arm = buildChoiceArm(opt, doc, node.namespace);
+    if (arm.typeKind !== 'Data' && arm.typeKind !== 'Choice') continue;
+    if (!arm.targetNodeId) continue;
+    const key = expansionKey({
+      namespaceUri: node.namespace,
+      typeId: node.name,
+      attrName: arm.typeName,
+      instancePath: childInstancePath
+    });
+    if (opts.expansionMap.get(key) !== true) continue;
+
+    const target = doc.nodes.find((n) => n.id === arm.targetNodeId);
+    if (!target) continue;
+    if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
+    if (path.has(target.id)) continue; // cycle — drop edge, keep chip
+
+    if (target.$type === 'Data') {
+      const targetOutermostCanonical = computeOutermostCanonicalId(target, doc, outerMostCanonicalCache);
+      const childInstanceId = adapterChildInstanceId(currentInstanceId, arm.typeName, targetOutermostCanonical);
+      const nextPath = new Set(path);
+      nextPath.add(node.id);
+      const expandedId = materializeDataWithInheritance(
+        target,
+        doc,
+        opts,
+        out,
+        nextPath,
+        outerMostCanonicalCache,
+        childInstanceId,
+        childInstancePath
+      );
+      expansions.set(arm.typeName, expandedId);
+    } else {
+      // target.$type === 'Choice'
+      const childInstanceId = adapterChildInstanceId(currentInstanceId, arm.typeName, target.id);
+      if (!out.has(childInstanceId)) {
+        const nextPath = new Set(path);
+        nextPath.add(node.id);
+        const nestedArmExpansions = expandChoiceArms(
+          target,
+          doc,
+          opts,
+          out,
+          nextPath,
+          outerMostCanonicalCache,
+          childInstanceId,
+          childInstancePath
+        );
+        out.set(childInstanceId, buildChoiceNode(target, doc, childInstanceId, nestedArmExpansions));
+      }
+      expansions.set(arm.typeName, childInstanceId);
+    }
+  }
+  return expansions;
 }
 
 export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): StructureGraphInput {
@@ -618,8 +763,36 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
     );
     return { rootNodeId: rootInstanceId, nodes };
   }
-  // Choice as root handled in later tasks; preserve the Phase 2 contract of
-  // an empty `nodes` map with `rootNodeId` echoing the focused id.
+
+  if (root.$type === 'Choice') {
+    // Phase 14e/A — wire Choice root rendering. Root instance id === canonical id
+    // (matches the layout's root rfId convention so `data.instancePath = []`).
+    // Arm expansions are then resolved against the per-instance expansion map.
+    const rootInstanceId = root.id;
+    const outerMostCanonicalCache = new Map<string, string>();
+    const armExpansions = expandChoiceArms(
+      root,
+      doc,
+      opts,
+      nodes,
+      new Set<string>([root.id]),
+      outerMostCanonicalCache,
+      rootInstanceId,
+      []
+    );
+    nodes.set(rootInstanceId, buildChoiceNode(root, doc, rootInstanceId, armExpansions));
+    return { rootNodeId: rootInstanceId, nodes };
+  }
+
+  if (root.$type === 'Enum') {
+    // Phase 14e/A — focused Enum root materializes as a single read-only node
+    // listing its values. Enums are terminal: no expansion, no chevrons.
+    const rootInstanceId = root.id;
+    nodes.set(rootInstanceId, buildEnumNode(root, rootInstanceId));
+    return { rootNodeId: rootInstanceId, nodes };
+  }
+
+  // Defensive fallback — unknown $type echoes the focused id with empty nodes.
   return { rootNodeId: root.id, nodes };
 }
 
