@@ -895,6 +895,40 @@ button[data-navigable]:focus-visible {
   height: 8px;
 }
 
+/* Per-row expand/collapse control (spec 020 Phase 13, Finding 1).
+ * Rendered on rows whose typeKind is 'Data' or 'Choice'. Non-expandable rows
+ * render a same-width spacer instead so the name column stays aligned across
+ * rows regardless of expandability. */
+.rune-row-expand,
+.rune-row-expand-spacer {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.rune-row-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--muted-foreground, #8A8A96);
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.rune-row-expand:hover {
+  color: var(--foreground, #FFFFFF);
+  background: color-mix(in oklch, var(--accent, #2A2A36), transparent 60%);
+}
+
+.rune-row-expand:focus-visible {
+  outline: 2px solid var(--primary, #00D4AA);
+  outline-offset: 1px;
+}
+
 .rune-node-children-slot {
   /* React Flow positions child nodes absolutely via parentNode; this
    * slot only declares the column gap.  Width is implicit from the

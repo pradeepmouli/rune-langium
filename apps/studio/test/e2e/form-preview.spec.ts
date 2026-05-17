@@ -384,10 +384,10 @@ async function replaceActiveSource(page: Page, content: string) {
 }
 
 async function selectTypeFromNavigate(page: Page, nodeId: string): Promise<void> {
-  const typeRow = page.getByTestId(`ns-type-${nodeId}`);
-  await typeRow.waitFor({ state: 'visible', timeout: 10_000 });
-  // Phase 8: single-click marks drag source; double-click navigates.
-  await typeRow.locator('span.truncate').dblclick();
+  const navBtn = page.getByTestId(`ns-type-nav-${nodeId}`);
+  await navBtn.waitFor({ state: 'visible', timeout: 10_000 });
+  // Phase 13 amend: navigate via the dedicated arrow button (single-click on the button).
+  await navBtn.click();
 }
 
 test.describe('Form Preview', () => {

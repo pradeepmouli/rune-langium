@@ -6,7 +6,10 @@
  *
  * Verifies tree rendering, expand/collapse, search filtering,
  * visibility toggles, node selection callbacks, and drag-source palette
- * behaviour (Phase 8: single-click marks drag source, double-click navigates).
+ * behaviour.
+ *
+ * Phase 13 amend: row body is single-purpose (drag-source mark only);
+ * navigation moved to a dedicated chevron-right nav button per finding 4.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -129,12 +132,16 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onCollapseAll).toHaveBeenCalledOnce();
   });
 
-  it('single-click calls onSetDragSource immediately and does NOT navigate', () => {
+  // -------------------------------------------------------------------------
+  // Phase 13 amend: row body is single-purpose (drag-source mark only)
+  // Navigation moved to the dedicated nav button (chevron-right).
+  // -------------------------------------------------------------------------
+
+  it('single-click on row body calls onSetDragSource and does NOT navigate', () => {
     const onSetDragSource = vi.fn();
     const { props } = renderPanel({ onSetDragSource });
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
 
-    // Click is immediate — no timer needed.
     fireEvent.click(typeRow);
 
     expect(onSetDragSource).toHaveBeenCalledOnce();
@@ -144,40 +151,72 @@ describe('NamespaceExplorerPanel', () => {
     expect(payload.typeName).toBe('Trade');
     expect(payload.namespaceUri).toBe('com.model');
     expect(payload.kind).toBe('Data');
-    // onSelectNode should NOT have been called on a single click
+    // onSelectNode must NOT be called when clicking the row body
     expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
-  it('double-click calls onSelectNode and clears drag source when this row is the active source', () => {
-    const onClearDragSource = vi.fn();
-    const onSelectNode = vi.fn();
-    // Render with dragSourceId matching the row so isDragSource=true.
-    // fireEvent.doubleClick dispatches only a dblclick event (not preceding clicks);
-    // we fire an explicit click first to mirror the real browser sequence, then
-    // the dblclick to trigger handleDoubleClick. isDragSource=true (via dragSourceId
-    // prop) so the handler must call onClearDragSource before navigating.
-    render(
-      <NamespaceExplorerPanel
-        nodes={defaultNodes}
-        expandedNamespaces={new Set(defaultNodes.map((n) => n.data.namespace))}
-        hiddenNodeIds={new Set()}
-        onToggleNamespace={vi.fn()}
-        onExpandAll={vi.fn()}
-        onCollapseAll={vi.fn()}
-        onSelectNode={(id) => onSelectNode(id)}
-        onClearDragSource={onClearDragSource}
-        dragSourceId="cdm.trade::Trade"
-      />
-    );
-    const row = screen.getByTestId('ns-type-cdm.trade::Trade');
-    // Simulate click sequence: click (sets drag source) then dblclick (clears + navigates).
-    fireEvent.click(row);
-    fireEvent.doubleClick(row);
+  it('click on nav button calls onSelectNode and does NOT mark drag source', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
 
-    // onClearDragSource must be called (row IS the active drag source)
-    expect(onClearDragSource).toHaveBeenCalled();
-    // Navigation must happen
-    expect(onSelectNode).toHaveBeenCalledTimes(1);
+    fireEvent.click(navBtn);
+
+    // Navigation must be triggered
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    // Drag-source mark must NOT be triggered (stopPropagation prevents row body click)
+    expect(onSetDragSource).not.toHaveBeenCalled();
+  });
+
+  it('keyboard activate nav button (Enter) calls onSelectNode', async () => {
+    const { props } = renderPanel();
+    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+
+    // Tab to focus the nav button and press Enter
+    navBtn.focus();
+    fireEvent.keyDown(navBtn, { key: 'Enter' });
+    // Native <button> dispatches click on Enter — simulate that
+    fireEvent.click(navBtn);
+
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+  });
+
+  it('Enter on nav button does NOT bubble to row keydown (no spurious drag-source mark)', () => {
+    // Codex P2 regression: previously the nav button's keydown bubbled to the
+    // row's onKeyDown handler, marking the type as drag source AS WELL AS
+    // navigating. One keystroke triggered both actions. handleNavKeyDown's
+    // stopPropagation prevents that.
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+
+    navBtn.focus();
+    fireEvent.keyDown(navBtn, { key: 'Enter' });
+    fireEvent.click(navBtn); // native button click on Enter
+
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(onSetDragSource).not.toHaveBeenCalled();
+  });
+
+  it('Space on nav button does NOT bubble to row keydown', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+
+    navBtn.focus();
+    fireEvent.keyDown(navBtn, { key: ' ' });
+    fireEvent.click(navBtn);
+
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(onSetDragSource).not.toHaveBeenCalled();
+  });
+
+  it('nav button is present for all type rows', () => {
+    renderPanel();
+    // Each type row in defaultNodes should have a corresponding nav button
+    for (const node of defaultNodes) {
+      expect(screen.getByTestId(`ns-type-nav-${node.id}`)).toBeTruthy();
+    }
   });
 
   it('filters types when search query entered', () => {
@@ -259,35 +298,6 @@ describe('NamespaceExplorerPanel', () => {
     expect(dataTransfer.effectAllowed).toBe('link');
   });
 
-  it('double-click on row B does NOT clear drag source when row A is the current source', () => {
-    // Row A (com.model::Trade) is the current drag source. The user double-clicks row B
-    // (cdm.trade::Trade). isDragSource=false for row B, so onClearDragSource must NOT
-    // be called — the existing deliberate single-click on row A must survive.
-    const onClearDragSource = vi.fn();
-    const onSelectNode = vi.fn();
-    render(
-      <NamespaceExplorerPanel
-        nodes={defaultNodes}
-        expandedNamespaces={new Set(defaultNodes.map((n) => n.data.namespace))}
-        hiddenNodeIds={new Set()}
-        onToggleNamespace={vi.fn()}
-        onExpandAll={vi.fn()}
-        onCollapseAll={vi.fn()}
-        onSelectNode={(id) => onSelectNode(id)}
-        onClearDragSource={onClearDragSource}
-        // Row A is the drag source; row B (cdm.trade::Trade) is NOT.
-        dragSourceId="com.model::Trade"
-      />
-    );
-    const rowB = screen.getByTestId('ns-type-cdm.trade::Trade');
-    fireEvent.doubleClick(rowB);
-
-    // onClearDragSource must NOT be called (row B is not the drag source)
-    expect(onClearDragSource).not.toHaveBeenCalled();
-    // Navigation must still happen
-    expect(onSelectNode).toHaveBeenCalledTimes(1);
-  });
-
   it('renders → arrow when dragSourceId matches the row nodeId', () => {
     renderPanel({ dragSourceId: 'com.model::Trade' });
     const arrow = screen.getByLabelText('active drag source');
@@ -307,33 +317,50 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   // -------------------------------------------------------------------------
-  // a11y — keyboard activation (Finding 3: react-doctor)
+  // a11y — keyboard activation (Phase 13 amend)
+  //
+  // Row body Enter/Space → mark drag source (single-purpose, matches click)
+  // Nav button Enter     → navigate (via native button activation)
   // -------------------------------------------------------------------------
 
-  it('Enter key calls onSetDragSource with correct payload (no timer delay)', () => {
+  it('Enter key on row body marks drag source (does NOT navigate)', () => {
     const onSetDragSource = vi.fn();
     const { props } = renderPanel({ onSetDragSource });
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
     fireEvent.keyDown(typeRow, { key: 'Enter' });
-    // Keyboard activation is immediate — no 250ms deferral.
     expect(onSetDragSource).toHaveBeenCalledOnce();
-    const payload = onSetDragSource.mock.calls[0]![0];
-    expect(isTypeRefPayload(payload)).toBe(true);
-    expect(payload.typeId).toBe('com.model::Trade');
-    expect(payload.kind).toBe('Data');
-    // Navigation should NOT be triggered
+    // Row body Enter must NOT navigate — that's the nav button's job
     expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
-  it('Space key calls onSetDragSource with correct payload (no timer delay)', () => {
+  it('Space key on row body marks drag source (does NOT navigate)', () => {
     const onSetDragSource = vi.fn();
     const { props } = renderPanel({ onSetDragSource });
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
     fireEvent.keyDown(typeRow, { key: ' ' });
     expect(onSetDragSource).toHaveBeenCalledOnce();
-    const payload = onSetDragSource.mock.calls[0]![0];
-    expect(payload.typeId).toBe('com.model::Trade');
     expect(props.onSelectNode).not.toHaveBeenCalled();
+  });
+
+  it('nav button has independent tabIndex=0 (keyboard-focusable separately from row)', () => {
+    renderPanel();
+    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+    expect(navBtn.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('nav button has descriptive aria-label', () => {
+    renderPanel();
+    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+    expect(navBtn.getAttribute('aria-label')).toBe('Navigate to Trade');
+  });
+
+  it('non-activation keys on row body (e.g. ArrowDown) do not fire any callback', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    fireEvent.keyDown(typeRow, { key: 'ArrowDown' });
+    expect(props.onSelectNode).not.toHaveBeenCalled();
+    expect(onSetDragSource).not.toHaveBeenCalled();
   });
 
   it('type rows have role=button and tabIndex=0 for keyboard accessibility', () => {

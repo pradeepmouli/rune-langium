@@ -337,6 +337,9 @@ export function EditorPage({
 
   // Structure View store — expansion state for the structure pane
   const expansionMap = useStructureViewStore((s) => s.expansionMap);
+  // Row-level expansion toggle (Phase 13 / Finding 1). Wired into StructureView
+  // so the per-row chevron rendered by DataNode can flip its store entry.
+  const toggleExpansion = useStructureViewStore((s) => s.toggleExpansion);
 
   // Derive $type of the currently-selected node to gate which ids get forwarded
   // to StructureView as focusedTypeId. Using a separate selector avoids breaking
@@ -1412,9 +1415,10 @@ export function EditorPage({
         adapterDoc={adapterDocument}
         expansionMap={expansionMap}
         cellComponents={structureCellComponents}
+        onToggleExpansion={toggleExpansion}
       />
     ),
-    [structureFocusedTypeId, adapterDocument, expansionMap, structureCellComponents]
+    [structureFocusedTypeId, adapterDocument, expansionMap, structureCellComponents, toggleExpansion]
   );
 
   const VisualPreviewPanelMounted = useCallback(

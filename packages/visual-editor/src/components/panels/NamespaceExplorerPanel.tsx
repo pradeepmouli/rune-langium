@@ -41,7 +41,7 @@ export interface NamespaceExplorerPanelProps {
   onExpandAll: () => void;
   /** Collapse all namespaces. */
   onCollapseAll: () => void;
-  /** Called when a node is double-clicked to select it in the graph. */
+  /** Called when the navigation button on a type row is clicked to select it in the graph. */
   onSelectNode?: (nodeId: string) => void;
   /** Currently selected node ID (for highlighting). */
   selectedNodeId?: string | null;
@@ -55,16 +55,15 @@ export interface NamespaceExplorerPanelProps {
    */
   dragSourceId?: string;
   /**
-   * Called when the user single-clicks a type row to mark it as the active
-   * drag source. Single-click NO LONGER navigates — use double-click for that.
-   * The action is immediate (no timer delay).
+   * Called when the user single-clicks the row body (or presses Enter/Space on it)
+   * to mark this type as the active drag source. The row body is single-purpose:
+   * drag-source mark only. Navigation is handled exclusively by the nav button.
    */
   onSetDragSource?: (payload: TypeRefPayload) => void;
   /**
-   * Called on double-click to revert the drag-source state set by the
-   * preceding click, only when this row is currently the active drag source.
-   * Keeps the net effect of a double-click (drag source mutation cancels out,
-   * navigation persists) without relying on a fixed-duration timer cutoff.
+   * @reserved Previously used for double-click undo-on-navigate; no longer
+   * consumed internally after Phase 13 redesign (row body is single-purpose).
+   * Retained on the interface for back-compat with EditorPage pass-through.
    */
   onClearDragSource?: () => void;
 }
@@ -296,7 +295,8 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         onSelectNode={() => onSelectNode?.(row.nodeId)}
                         isDragSource={dragSourceId === row.nodeId}
                         onSetDragSource={onSetDragSource}
-                        onClearDragSource={onClearDragSource}
+                        // onClearDragSource is intentionally NOT forwarded — the TypeItemRow
+                        // no longer uses it. The panel-level prop is kept for back-compat only.
                       />
                     )}
                   </div>
@@ -381,14 +381,13 @@ interface TypeItemRowProps {
   onSelectNode: () => void;
   /** True when this row is the currently active drag source. */
   isDragSource: boolean;
-  /** Called on single-click to mark this type as the active drag source (immediate). */
-  onSetDragSource?: (payload: TypeRefPayload) => void;
   /**
-   * Called on double-click to revert the drag-source mutation, but only when
-   * this row is currently the active drag source. Guards against clobbering
-   * a deliberate single-click on a different row.
+   * Called on single-click on the row body (or Enter/Space on the row) to
+   * mark this type as the active drag source. The row body is single-purpose.
    */
-  onClearDragSource?: () => void;
+  onSetDragSource?: (payload: TypeRefPayload) => void;
+  // onClearDragSource is intentionally omitted — the TypeItemRow no longer
+  // needs it. The panel-level prop is kept for interface back-compat only.
 }
 
 function TypeItemRow({
@@ -398,8 +397,7 @@ function TypeItemRow({
   refCount,
   onSelectNode,
   isDragSource,
-  onSetDragSource,
-  onClearDragSource
+  onSetDragSource
 }: TypeItemRowProps): JSX.Element {
   const isVisible = isGraphVisible && !row.hidden;
 
@@ -431,9 +429,8 @@ function TypeItemRow({
     e.dataTransfer.effectAllowed = 'link';
   };
 
-  // Single-click: set drag source immediately — no timer. The OS/browser
-  // double-click interval is user-configurable (up to ~800ms on macOS
-  // Accessibility settings), so a fixed 250ms cutoff is not reliable.
+  // Row body click: single-purpose — mark as drag source only.
+  // No double-click, no navigation from the row body.
   const handleClick = useCallback(
     (_e: MouseEvent<HTMLDivElement>) => {
       if (!payload) return;
@@ -442,44 +439,65 @@ function TypeItemRow({
     [payload, onSetDragSource]
   );
 
-  // Double-click: revert the drag-source mutation (set by the preceding click)
-  // and navigate. We only clear when THIS row is currently the active drag
-  // source so we don't clobber a deliberate single-click on a different row
-  // that happened to be the existing source before the dblclick sequence.
-  const handleDoubleClick = useCallback(() => {
-    if (payload && isDragSource) {
-      onClearDragSource?.();
-    }
-    onSelectNode();
-  }, [payload, isDragSource, onClearDragSource, onSelectNode]);
-
-  // Keyboard activation: Enter/Space trigger drag-source immediately (no
-  // dblclick race possible on keyboard). Navigation via keyboard is future scope.
+  // Row body keyboard: Enter/Space marks drag source (matches the click action).
+  // Navigation is bound to the dedicated nav button below, not the row body.
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        if (payload) onSetDragSource?.(payload);
+        if (payload) {
+          onSetDragSource?.(payload);
+        }
       }
     },
     [payload, onSetDragSource]
   );
 
+  // Nav button handler: navigate without triggering drag-source on the row body.
+  const handleNavClick = useCallback(
+    (e: MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation(); // prevent the row body's drag-source-set from also firing
+      onSelectNode();
+    },
+    [onSelectNode]
+  );
+
+  // Keyboard activation parity with handleNavClick: when the nav button has focus
+  // and the user presses Enter/Space, the browser fires keydown FIRST (which bubbles
+  // to the row's onKeyDown and marks drag source), THEN a synthetic click (handled
+  // by handleNavClick → navigates). Without stopPropagation here, one keystroke
+  // triggered BOTH actions. The button's default click activation still fires —
+  // we only stop the keydown from bubbling.
+  const handleNavKeyDown = useCallback((e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.stopPropagation();
+    }
+  }, []);
+
   return (
     <div
       role="button"
       tabIndex={0}
-      className={`relative ml-4 flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
+      className={`group relative ml-4 flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
         isSelected ? 'studio-type-row--selected' : isVisible ? 'text-foreground' : 'text-muted-foreground opacity-60'
       }`}
       data-testid={`ns-type-${row.nodeId}`}
       draggable={payload !== undefined}
       onDragStart={handleDragStart}
       onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
     >
       {isSelected && <span className="studio-type-pip" />}
+
+      {/* Phase 13 amend: → state indicator moved to left of glyph so it does
+          not visually compete with the right-aligned navigation button.
+          It remains as a low-cost affordance for sighted users to spot which
+          row is the active drag source at a glance. */}
+      {isDragSource && (
+        <span className="rune-type-item__arrow text-primary text-xs" aria-label="active drag source">
+          →
+        </span>
+      )}
 
       <span
         className="studio-type-glyph"
@@ -496,12 +514,6 @@ function TypeItemRow({
         {row.name}
       </span>
 
-      {isDragSource && (
-        <span className="rune-type-item__arrow text-primary text-xs ml-1" aria-label="active drag source">
-          →
-        </span>
-      )}
-
       {refCount > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -513,6 +525,22 @@ function TypeItemRow({
           <TooltipContent>{refCount} hidden reference(s)</TooltipContent>
         </Tooltip>
       )}
+
+      {/* Navigation button — separate focusable surface for "open in graph".
+          Visible only on row hover/focus to keep the explorer visually quiet.
+          stopPropagation prevents the row body's drag-source click from firing
+          alongside navigation. Independently keyboard-focusable (Tab stop). */}
+      <button
+        type="button"
+        onClick={handleNavClick}
+        onKeyDown={handleNavKeyDown}
+        aria-label={`Navigate to ${row.name}`}
+        data-testid={`ns-type-nav-${row.nodeId}`}
+        className="ml-auto shrink-0 opacity-0 group-hover:opacity-60 focus:opacity-60 hover:!opacity-100 focus-visible:ring-1 focus-visible:ring-ring rounded transition-opacity"
+        tabIndex={0}
+      >
+        <ChevronRight className="size-3" />
+      </button>
     </div>
   );
 }

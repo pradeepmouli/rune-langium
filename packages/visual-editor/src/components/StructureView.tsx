@@ -24,7 +24,7 @@ import type { AdapterDocument } from '../adapters/structure-graph-adapter.js';
 import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
 import { layoutStructureGraph } from '../layout/structure-layout.js';
 import { nodeTypes } from './nodes/index.js';
-import type { StructureRow } from '../types/structure-view.js';
+import type { StructureExpansionKey, StructureRow } from '../types/structure-view.js';
 
 /** Shape injected into DataNode's structure-variant `data.cellComponents`. */
 export interface StructureCellComponents {
@@ -52,6 +52,14 @@ export interface StructureViewProps {
    * prop-identity churn on every render.
    */
   readonly cellComponents?: StructureCellComponents;
+  /**
+   * Row-level expand/collapse handler (spec 020 Phase 13, Finding 1). When
+   * provided, each Data/Choice-typed row in the rendered DataNode shows an
+   * expansion chevron that calls this with the row's StructureExpansionKey.
+   * Wire this to `useStructureViewStore.toggleExpansion` in the studio so
+   * the click flips the relevant entry in `expansionMap`.
+   */
+  readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
 }
 
 const EMPTY_EXPANSION_MAP: ReadonlyMap<string, boolean> = new Map();
@@ -61,6 +69,7 @@ interface StructureFlowInnerProps {
   readonly adapterDoc: AdapterDocument;
   readonly expansionMap: ReadonlyMap<string, boolean>;
   readonly cellComponents?: StructureCellComponents;
+  readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
 }
 
 /**
@@ -71,7 +80,8 @@ function StructureFlowInner({
   focusedTypeId,
   adapterDoc,
   expansionMap,
-  cellComponents
+  cellComponents,
+  onToggleExpansion
 }: StructureFlowInnerProps): React.ReactElement {
   const { nodes, edges } = useMemo(() => {
     const input = buildStructureGraph(adapterDoc, {
@@ -81,20 +91,33 @@ function StructureFlowInner({
     // layoutStructureGraph returns LayoutResult: { nodes: ReadonlyArray<Node>, edges: ReadonlyArray<Edge> }
     // where Node/Edge are from @xyflow/react. Spreading to mutable arrays satisfies ReactFlow's prop type.
     const result = layoutStructureGraph(input);
-    if (!cellComponents) {
-      return { nodes: result.nodes as Node[], edges: result.edges as Edge[] };
-    }
-    // Inject cellComponents into the data payload of 'data'-typed nodes so that
-    // DataNode's structure variant renders editable cells instead of plain spans.
+    // Inject cellComponents AND row-expansion plumbing into the data payload of
+    // 'data'-typed nodes so that DataNode's structure variant renders editable
+    // cells and the per-row expand/collapse chevron (Finding 1).
+    //
     // 'choice' nodes (ChoiceNode structure variant) use StructureChoiceArm arms
     // which carry only typeName/typeKind — no attrName or cardinality — so they
-    // don't participate in the name/type/card cellComponents contract.
-    // 'groupContainer' nodes (GroupContainerNode) also have no cell-injection API.
-    const injectedNodes = result.nodes.map((n) =>
-      n.type === 'data' ? { ...n, data: { ...n.data, cellComponents } } : n
-    );
+    // don't participate in the name/type/card cellComponents contract. Choice
+    // arms also have no per-arm expansion (StructureChoiceNode has no
+    // `expansions` map), so onToggleExpansion is not piped through.
+    //
+    // 'structureBase' nodes (GroupContainerNode base-type branch) also receive
+    // expansionMap + onToggleExpansion so inherited Data/Choice rows can be
+    // expanded/collapsed (Codex P2, PR #191). cellComponents is NOT injected —
+    // base rows are read-only inherited rows; editable cells on base rows would
+    // be a separate scope decision (spec §5 does not include inline-editing of
+    // inherited attributes in Phase 13).
+    const needsInjection = cellComponents !== undefined || onToggleExpansion !== undefined;
+    if (!needsInjection) {
+      return { nodes: result.nodes as Node[], edges: result.edges as Edge[] };
+    }
+    const injectedNodes = result.nodes.map((n) => {
+      if (n.type === 'data') return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
+      if (n.type === 'structureBase') return { ...n, data: { ...n.data, expansionMap, onToggleExpansion } };
+      return n;
+    });
     return { nodes: injectedNodes as Node[], edges: result.edges as Edge[] };
-  }, [focusedTypeId, adapterDoc, expansionMap, cellComponents]);
+  }, [focusedTypeId, adapterDoc, expansionMap, cellComponents, onToggleExpansion]);
 
   return (
     <div data-testid="structure-view-flow" style={{ width: '100%', height: '100%', minHeight: 320 }}>
@@ -129,7 +152,8 @@ export function StructureView({
   focusedTypeId,
   adapterDoc,
   expansionMap,
-  cellComponents
+  cellComponents,
+  onToggleExpansion
 }: StructureViewProps): React.ReactElement {
   if (!focusedTypeId || !adapterDoc) {
     return (
@@ -162,6 +186,7 @@ export function StructureView({
         adapterDoc={adapterDoc}
         expansionMap={expansionMap ?? EMPTY_EXPANSION_MAP}
         cellComponents={cellComponents}
+        onToggleExpansion={onToggleExpansion}
       />
     </ReactFlowProvider>
   );

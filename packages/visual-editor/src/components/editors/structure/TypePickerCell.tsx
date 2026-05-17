@@ -33,7 +33,12 @@ export function TypePickerCell({
 
   const handleDrop = useCallback(
     (payload: TypeRefPayload) => {
-      updateAttributeType(nodeId, attrName, payload.typeName);
+      // Phase 13 / Finding 3: pass payload.typeId so the store can validate
+      // existence AND qualify the $refText against same-named types in
+      // other namespaces. Without typeId the store falls back to the legacy
+      // bare-name write which corrupts cross-namespace references in
+      // multi-namespace workspaces (CDM, FpML).
+      updateAttributeType(nodeId, attrName, payload.typeName, payload.typeId);
     },
     [nodeId, attrName, updateAttributeType]
   );
