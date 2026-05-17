@@ -29,11 +29,15 @@ This doc captures 8 findings from the two reviews run on PR #191. They were inte
 - Pick from the 3 doable-now items: C + E + F + G + H
 
 **Phase 14b — Easy wins** (1 PR, ~half-day):
-- E (imperative fitView on focus change only)
 - F (gate Handles by variant)
 - G (style.width/height)
 - H (onlyRenderVisibleElements)
-- Plus: regression test that mounts a 20-node expansion and asserts no fitView re-fire on chevron click
+- E is **NOT** included — see detail section. The Opus reviewer's claim that `fitView` re-fires is contradicted by RF12 docs and needs a runtime reproduction first. Do the verification step BEFORE scheduling any 14b-style code work on it.
+
+**Phase 14b-pre — E verification** (10 min, no code change):
+- Run the studio locally, mount Structure View, expand a Data row, edit a NameCell, observe whether the viewport jumps
+- If viewport DOES jump → E is real; add the imperative-fitView refactor + regression test to Phase 14b (or split into 14b' as a separate PR)
+- If viewport stays put → drop E from the tracking entirely; the Opus reviewer was applying RF11 mental model to RF12
 
 **Phase 14c — Data identity refactor** (1 PR, ~half-day):
 - C (hoist cellComponents/expansionMap/onToggleExpansion to React context, hook reads in DataNode/GroupContainerNode)
