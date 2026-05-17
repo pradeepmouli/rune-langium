@@ -8,16 +8,28 @@
  *
  * Two rendering variants:
  *   - `variant === 'structure'`: structure-view context, reads `data.options`
- *     (ReadonlyArray<StructureRow>) emitted by layoutStructureGraph. Mirrors
- *     how DataNode handles its structure variant (Phase 6 Finding 4).
+ *     (ReadonlyArray<StructureChoiceArm>) emitted by layoutStructureGraph.
+ *     Phase 14e/B brings ChoiceNode to parity with DataNode for arms: each
+ *     arm row renders a TypePickerCell (drag-drop target) and, for arms
+ *     whose target is Data or Choice, an expansion chevron that toggles
+ *     per-instance expansion via `data.onToggleExpansion`. Terminal arms
+ *     (Enum / Builtin / Unresolved) render a spacer for alignment but no
+ *     chevron — there is no subtree to drill into.
  *   - default (graph view): reads `data.attributes`, renders navigable handles.
  */
 
 import { memo, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import type { AnyGraphNode } from '../../types.js';
-import type { StructureChoiceNode, StructureChoiceArm } from '../../types/structure-view.js';
+import type {
+  StructureChoiceNode,
+  StructureChoiceArm,
+  StructureExpansionKey,
+  StructureRow
+} from '../../types/structure-view.js';
+import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
@@ -28,10 +40,46 @@ import { NodeKindBadge } from './NodeKindBadge.js';
 
 interface StructureChoiceNodeData extends StructureChoiceNode {
   readonly variant: 'structure';
+  readonly cellComponents?: {
+    name?: React.ComponentType<{ value: string; nodeId: string; attrName: string }>;
+    type?: React.ComponentType<{
+      typeName: string;
+      typeKind: StructureRow['typeKind'];
+      nodeId: string;
+      attrName: string;
+    }>;
+    card?: React.ComponentType<{ value: string; nodeId: string; attrName: string }>;
+  };
+  /** Per-key expansion state (Phase 14e/B); same shape as DataNode. */
+  readonly expansionMap?: ReadonlyMap<string, boolean>;
+  /** Toggle callback (Phase 14e/B); same shape as DataNode. */
+  readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
+  /** Ancestor rfId chain (Phase 14d); same shape as DataNode. */
+  readonly instancePath?: ReadonlyArray<string>;
 }
 
 function isStructureChoice(d: unknown): d is StructureChoiceNodeData {
   return typeof d === 'object' && d !== null && (d as { variant?: unknown }).variant === 'structure';
+}
+
+/**
+ * An arm is expandable only when its referenced target is itself a structured
+ * node (Data or Choice). Terminal kinds — Enum, Builtin, Unresolved — never
+ * get a chevron. Mirrors DataNode's `isRowExpandable` predicate.
+ */
+function isArmExpandable(typeKind: StructureChoiceArm['typeKind']): boolean {
+  return typeKind === 'Data' || typeKind === 'Choice';
+}
+
+/**
+ * StructureChoiceArm.typeKind narrows to a subset of StructureRow.typeKind
+ * (no 'Builtin' vs 'BasicType' overlap — arms classify Builtin where rows
+ * classify BasicType). Map the arm kind to the row kind that TypePickerCell
+ * expects so the same cell component can be reused on arms without a
+ * dedicated arm-specific TypePickerCell variant.
+ */
+function armKindToRowKind(armKind: StructureChoiceArm['typeKind']): StructureRow['typeKind'] {
+  return armKind === 'Builtin' ? 'BasicType' : armKind;
 }
 
 export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeProps) {
@@ -43,10 +91,19 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
   // Structure variant — reads data.options (StructureChoiceArm[]) from the
   // adapter. Arms have only a typeName and typeKind — no attrName or
   // cardinality (a choice arm IS a type, not an attribute).
-  // TODO(Phase 10) visual tightening: gradient/shadow/font polish.
+  //
+  // Phase 14e/B: arms gain TypePickerCell (when injected via cellComponents)
+  // and per-arm expansion chevrons (when the target is Data or Choice).
   // -------------------------------------------------------------------------
   if (isStructureChoice(data)) {
     const options = data.options as ReadonlyArray<StructureChoiceArm>;
+    const { cellComponents, expansionMap, onToggleExpansion, instancePath } = data;
+    const TypeCell = cellComponents?.type;
+    const ownerNamespaceUri = data.namespaceUri;
+    const ownerTypeName = data.name;
+    // Same self-inclusive instancePath convention as DataNode: ancestors + self.
+    const ownerInstancePath: ReadonlyArray<string> = [...(instancePath ?? []), id];
+
     return (
       <div className={`rune-node rune-node-choice rune-node-choice--structure${selected ? ' rune-node-selected' : ''}`}>
         <Handle type="target" position={handles.target} />
@@ -55,18 +112,75 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
           <span>{data.name}</span>
         </div>
         <div className="rune-node-rows">
-          {options.map((arm: StructureChoiceArm) => (
-            <div key={arm.typeName} className="rune-node-row" data-attr={arm.typeName}>
-              <span className="rune-cell-type-chip">{arm.typeName || '?'}</span>
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={arm.typeName}
-                className="rune-row-handle"
-                data-testid={`choice-arm-handle-${arm.typeName}`}
-              />
-            </div>
-          ))}
+          {options.map((arm: StructureChoiceArm) => {
+            const expandable = isArmExpandable(arm.typeKind);
+            // Arm expansion key convention (Phase 14e/B): arm.typeName fills
+            // the attrName slot since arms have no DSL-level attribute name.
+            // Matches the adapter's `expandChoiceArms` key construction so
+            // chevron writes round-trip through `shouldExpandArm`-equivalent
+            // checks symmetrically.
+            const rowKey: StructureExpansionKey | undefined = expandable
+              ? {
+                  namespaceUri: ownerNamespaceUri,
+                  typeId: ownerTypeName,
+                  attrName: arm.typeName,
+                  instancePath: ownerInstancePath
+                }
+              : undefined;
+            const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;
+            const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (rowKey) onToggleExpansion?.(rowKey);
+            };
+            return (
+              <div
+                key={arm.typeName}
+                className={`rune-node-row${expandable ? ' has-expansion' : ''}`}
+                data-attr={arm.typeName}
+              >
+                {expandable ? (
+                  <button
+                    type="button"
+                    className="rune-row-expand nodrag nopan"
+                    onClick={handleToggle}
+                    aria-expanded={isExpanded}
+                    aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${arm.typeName}`}
+                    data-testid={`choice-arm-expand-${arm.typeName}`}
+                  >
+                    {isExpanded ? (
+                      <ChevronDown size={12} aria-hidden="true" />
+                    ) : (
+                      <ChevronRight size={12} aria-hidden="true" />
+                    )}
+                  </button>
+                ) : (
+                  <span className="rune-row-expand-spacer" aria-hidden="true" />
+                )}
+                {TypeCell ? (
+                  // Cells receive the canonical node id (data.id), not the
+                  // React Flow wrapper id — matches DataNode's contract so
+                  // updateAttributeType (or the analogous arm-retype action)
+                  // looks up by canonical id consistently.
+                  <TypeCell
+                    typeName={arm.typeName}
+                    typeKind={armKindToRowKind(arm.typeKind)}
+                    nodeId={data.id}
+                    attrName={arm.typeName}
+                  />
+                ) : (
+                  <span className="rune-cell-type-chip">{arm.typeName || '?'}</span>
+                )}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={arm.typeName}
+                  className="rune-row-handle"
+                  data-testid={`choice-arm-handle-${arm.typeName}`}
+                />
+              </div>
+            );
+          })}
         </div>
         <Handle type="source" position={handles.source} />
       </div>
