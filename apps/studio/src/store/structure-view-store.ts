@@ -143,10 +143,11 @@ export const useStructureViewStore = create<StructureViewState>((set, get) => {
       // regardless of what the saved value turns out to be.
       const targetExpanded = get().expansionMap.get(k) !== true;
       const op: DeferredOp = (map) => {
-        // Delete on collapse so the persisted map doesn't accumulate dead
-        // `false` entries; isExpanded treats absence as collapsed.
-        if (targetExpanded) map.set(k, true);
-        else map.delete(k);
+        if (targetExpanded) {
+          map.set(k, true);
+        } else {
+          map.delete(k);
+        }
       };
       applyOp(op);
     },

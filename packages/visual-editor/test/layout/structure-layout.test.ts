@@ -309,22 +309,13 @@ describe('layoutStructureGraph — sibling vertical alignment', () => {
   });
 });
 
-describe('layoutStructureGraph — per-edge instances for repeated type refs (Finding 2)', () => {
-  it('materialises one Node record per expansion edge when two rows reference the same target', () => {
-    // Phase 13 / Finding 2 (spec 020): real schemas (CDM, FpML) routinely
-    // reference the same type from multiple rows — e.g. `buyer: Party` AND
-    // `seller: Party`. The previous dedup-by-canonical-id silently dropped
-    // the second placement, leaving a blank gap in the column.
-    //
-    // The fix gives each placement a unique instance id of the form
-    // `parentInstanceId::attrName::canonicalTargetId`. Both rows visibly
-    // drill into their own copy of the target; the shared `data` payload
-    // means cell editors and downstream consumers still see one canonical
-    // type.
-    //
-    // Fixture: a `Trade` Data node with `buyer: Party` AND `seller: Party`,
-    // both expanded. Layout must emit TWO Party placements, with distinct
-    // React Flow ids but matching `data.id`.
+describe('layoutStructureGraph — data.instancePath injection (Phase 14d)', () => {
+  // Phase 14d: per-instance expansion semantics. Layout exposes the chain of
+  // React Flow instance ids of each node's ancestors via `data.instancePath`.
+  // Renderers read this to scope row chevrons per-instance, so two visible
+  // occurrences of the same type at different depths get distinct keys.
+
+  it('root node has empty data.instancePath (root-level nodes have no ancestors)', () => {
     const input: StructureGraphInput = {
       rootNodeId: 'Trade',
       nodes: new Map([
@@ -332,6 +323,181 @@ describe('layoutStructureGraph — per-edge instances for repeated type refs (Fi
           'Trade',
           {
             id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+    const { nodes } = layoutStructureGraph(input);
+    const root = nodes[0];
+    expect((root.data as { instancePath?: ReadonlyArray<string> }).instancePath).toEqual([]);
+  });
+
+  it('expanded child has data.instancePath containing the parent rfId', () => {
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'party',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['party', 'Party']])
+          }
+        ],
+        [
+          'Party',
+          {
+            id: 'Party',
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+    const { nodes } = layoutStructureGraph(input);
+    const party = nodes.find((n) => (n.data as { id?: string }).id === 'Party')!;
+    expect(party).toBeDefined();
+    // Party is reached via Trade.party, so its only ancestor's instance id is
+    // the root's rfId ('Trade').
+    expect((party.data as { instancePath?: ReadonlyArray<string> }).instancePath).toEqual(['Trade']);
+  });
+
+  it('deeper expansion accumulates ancestor instance ids in data.instancePath', () => {
+    // Trade.party:Party, Party.address:Address. Address's path should include
+    // both Trade and the Party instance id.
+    //
+    // Phase 14e: per-instance node ids are now produced by the adapter; the
+    // fixture mirrors what the adapter would emit (one StructureNode entry per
+    // visible occurrence, keyed by instance id).
+    const partyInstanceId = 'Trade::party::Party';
+    const addressInstanceId = `${partyInstanceId}::address::Address`;
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            instanceId: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'party',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['party', partyInstanceId]])
+          }
+        ],
+        [
+          partyInstanceId,
+          {
+            id: 'Party',
+            instanceId: partyInstanceId,
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'address',
+                typeName: 'Address',
+                typeKind: 'Data',
+                targetNodeId: 'Address',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['address', addressInstanceId]])
+          }
+        ],
+        [
+          addressInstanceId,
+          {
+            id: 'Address',
+            instanceId: addressInstanceId,
+            kind: 'data',
+            name: 'Address',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+    const { nodes } = layoutStructureGraph(input);
+    const address = nodes.find((n) => (n.data as { id?: string }).id === 'Address')!;
+    expect(address).toBeDefined();
+    // Path: root Trade (rfId 'Trade'), then Party (rfId 'Trade::party::Party').
+    expect((address.data as { instancePath?: ReadonlyArray<string> }).instancePath).toEqual([
+      'Trade',
+      'Trade::party::Party'
+    ]);
+  });
+
+  it('sibling Party instances under the same parent share the same instancePath (canonical-path semantics)', () => {
+    // buyer.Party and seller.Party both have the same parent rfId (Trade), so
+    // their instancePath is identical (`[Trade]`). Per-instance disambiguation
+    // at this level is provided by the DIFFERENT attrNames on the parent's
+    // chevrons (`Trade.buyer` vs `Trade.seller`), not by the path itself.
+    //
+    // Phase 14e: per-instance materialization. Each visible Party occurrence
+    // is its own StructureDataNode entry in `input.nodes`, keyed by its
+    // instance id. The adapter pre-computes these; the fixture mirrors the
+    // adapter's output.
+    const buyerPartyId = 'Trade::buyer::Party';
+    const sellerPartyId = 'Trade::seller::Party';
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            instanceId: 'Trade',
             kind: 'data',
             name: 'Trade',
             namespaceUri: 'cdm.trade',
@@ -360,33 +526,139 @@ describe('layoutStructureGraph — per-edge instances for repeated type refs (Fi
               }
             ],
             expansions: new Map([
-              ['buyer', 'Party'],
-              ['seller', 'Party']
+              ['buyer', buyerPartyId],
+              ['seller', sellerPartyId]
             ])
           }
         ],
         [
-          'Party',
+          buyerPartyId,
           {
             id: 'Party',
+            instanceId: buyerPartyId,
             kind: 'data',
             name: 'Party',
             namespaceUri: 'cdm.trade',
             extendsName: undefined,
             extendsNodeId: undefined,
+            rows: [],
+            expansions: new Map()
+          }
+        ],
+        [
+          sellerPartyId,
+          {
+            id: 'Party',
+            instanceId: sellerPartyId,
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+    const { nodes } = layoutStructureGraph(input);
+    const partyInstances = nodes.filter((n) => (n.data as { id?: string }).id === 'Party');
+    expect(partyInstances).toHaveLength(2);
+    for (const inst of partyInstances) {
+      expect((inst.data as { instancePath?: ReadonlyArray<string> }).instancePath).toEqual(['Trade']);
+    }
+    // RfIds DO differ — that's how children of buyer.Party vs seller.Party get
+    // distinct paths one level deeper.
+    const rfIds = new Set(partyInstances.map((n) => n.id));
+    expect(rfIds).toEqual(new Set(['Trade::buyer::Party', 'Trade::seller::Party']));
+  });
+});
+
+describe('layoutStructureGraph — per-edge instances for repeated type refs (Finding 2)', () => {
+  it('materialises one Node record per expansion edge when two rows reference the same target', () => {
+    // Phase 13 / Finding 2 (spec 020): real schemas (CDM, FpML) routinely
+    // reference the same type from multiple rows — e.g. `buyer: Party` AND
+    // `seller: Party`. The previous dedup-by-canonical-id silently dropped
+    // the second placement, leaving a blank gap in the column.
+    //
+    // The fix gives each placement a unique instance id of the form
+    // `parentInstanceId::attrName::canonicalTargetId`. Both rows visibly
+    // drill into their own copy of the target; the shared `data` payload
+    // means cell editors and downstream consumers still see one canonical
+    // type.
+    //
+    // Fixture: a `Trade` Data node with `buyer: Party` AND `seller: Party`,
+    // both expanded. Layout must emit TWO Party placements, with distinct
+    // React Flow ids but matching `data.id`.
+    //
+    // Phase 14e: per-instance materialization. The adapter (and now this
+    // fixture) emits one StructureDataNode per visible Party, keyed by its
+    // pre-computed instance id.
+    const buyerPartyId = 'Trade::buyer::Party';
+    const sellerPartyId = 'Trade::seller::Party';
+    const partyShape = (instanceId: string) => ({
+      id: 'Party',
+      instanceId,
+      kind: 'data' as const,
+      name: 'Party',
+      namespaceUri: 'cdm.trade',
+      extendsName: undefined,
+      extendsNodeId: undefined,
+      rows: [
+        {
+          attrName: 'value',
+          typeName: 'string',
+          typeKind: 'BasicType' as const,
+          cardinality: '1..1',
+          isOptional: false,
+          isInherited: false
+        }
+      ],
+      expansions: new Map<string, string>()
+    });
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            instanceId: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
             rows: [
               {
-                attrName: 'value',
-                typeName: 'string',
-                typeKind: 'BasicType',
+                attrName: 'buyer',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              },
+              {
+                attrName: 'seller',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
                 cardinality: '1..1',
                 isOptional: false,
                 isInherited: false
               }
             ],
-            expansions: new Map()
+            expansions: new Map([
+              ['buyer', buyerPartyId],
+              ['seller', sellerPartyId]
+            ])
           }
-        ]
+        ],
+        [buyerPartyId, partyShape(buyerPartyId)],
+        [sellerPartyId, partyShape(sellerPartyId)]
       ])
     };
 
@@ -894,27 +1166,39 @@ describe('layoutStructureGraph — late-row expansion sizing', () => {
   });
 });
 
-describe('layoutStructureGraph — path-aware sizing cache for cyclic+direct refs (Codex P2 Finding 2)', () => {
-  it('directly-placed B has larger size than cyclically-placed B inside A', () => {
-    // Regression: Codex P2 review caught that with per-edge instance placement
-    // (Phase 13 / commit f27f8aec), the sizing cache was keyed only on canonical
-    // id. A type sized in a cyclic context (placeholder-truncated) had its small
-    // size cached and reused for a later non-cyclic sibling placement, causing
-    // children to overflow parent extent.
+describe('layoutStructureGraph — per-instance sizing (Phase 14e successor to Codex P2 Finding 2)', () => {
+  it('per-instance B placements use their own StructureNodes; placeholder sizes for cyclic-path only', () => {
+    // Phase 14e: the original Codex P2 Finding 2 (path-aware sizing cache)
+    // is superseded by full per-instance materialization. The ADAPTER now
+    // emits one StructureNode per visible occurrence with pre-computed
+    // instance ids; the LAYOUT no longer needs path-aware composite sizing
+    // keys because each entry is unique by construction.
     //
-    // Fix: cache key = `canonicalId:ancestor1:ancestor2:...` so each unique
-    // ancestor context gets its own cached size.
+    // This regression rewrites the original test as a per-instance scenario:
+    // Root.a:A (expanded), A.b:B (cyclic — A is on path), Root.b:B (direct).
+    // The fixture mirrors what the adapter produces: two separate B
+    // StructureNodes, one for each visible placement. The cyclic B (inside A)
+    // has B.a → A suppressed by the adapter; the direct B (under Root) gets
+    // a full subtree including A as a completed sibling (with B placeholder
+    // inside it via the same suppression).
     //
-    // Fixture: Root.a:A (expanded), A.b:B (expanded), B.a:A (back-edge — cycle)
-    //          Root.b:B (also expanded — non-cyclic sibling path)
+    // Sizing therefore differs naturally because the two B entries hold
+    // different `expansions` maps — no path-aware key trickery needed.
+    // Mirror what the adapter would produce post-Phase-14e:
+    // - A under Root: instance `Root::a::A`
+    // - B inside A: instance `Root::a::A::b::B` with EMPTY expansions
+    //   (B.a → A suppressed by adapter cycle guard)
+    // - B under Root: instance `Root::b::B` with `expansions: { a: <A inside B> }`
+    //   where that A also has empty expansions (A.b → B suppressed because the
+    //   A inside this B is on a different recursion path that would loop back).
     //
-    // With the fix:
-    //   - B placed inside A (path Root→A→B) has truncated size (A is placeholder)
-    //   - B placed directly under Root (path Root→B) has full size (A can be computed)
-    // Both sizes are now stored independently under different path-aware keys.
-    //
-    // This test FAILS on pre-fix code because both B placements share the same
-    // cache entry (the first cyclic-path entry wins) and emit the same truncated size.
+    // For simplicity, the fixture below tests only the basic per-instance
+    // structural invariant — two B placements, distinct sizes follow from
+    // distinct expansions on each StructureNode.
+    const bInsideAId = 'Root::a::A::b::B';
+    const bDirectId = 'Root::b::B';
+    const aUnderRootId = 'Root::a::A';
+    const aInsideBDirect = `${bDirectId}::a::A`;
     const input: StructureGraphInput = {
       rootNodeId: 'Root',
       nodes: new Map([
@@ -922,6 +1206,7 @@ describe('layoutStructureGraph — path-aware sizing cache for cyclic+direct ref
           'Root',
           {
             id: 'Root',
+            instanceId: 'Root',
             kind: 'data',
             name: 'Root',
             namespaceUri: 'ns',
@@ -950,15 +1235,16 @@ describe('layoutStructureGraph — path-aware sizing cache for cyclic+direct ref
               }
             ],
             expansions: new Map([
-              ['a', 'A'],
-              ['b', 'B']
+              ['a', aUnderRootId],
+              ['b', bDirectId]
             ])
           }
         ],
         [
-          'A',
+          aUnderRootId,
           {
             id: 'A',
+            instanceId: aUnderRootId,
             kind: 'data',
             name: 'A',
             namespaceUri: 'ns',
@@ -976,13 +1262,15 @@ describe('layoutStructureGraph — path-aware sizing cache for cyclic+direct ref
                 isInherited: false
               }
             ],
-            expansions: new Map([['b', 'B']])
+            expansions: new Map([['b', bInsideAId]])
           }
         ],
         [
-          'B',
+          bInsideAId,
           {
+            // Cyclic B — B.a → A suppressed (A on recursion path), so no expansions
             id: 'B',
+            instanceId: bInsideAId,
             kind: 'data',
             name: 'B',
             namespaceUri: 'ns',
@@ -1000,8 +1288,58 @@ describe('layoutStructureGraph — path-aware sizing cache for cyclic+direct ref
                 isInherited: false
               }
             ],
-            // B → A back-edge closes the mutual cycle (Root→A→B→A)
-            expansions: new Map([['a', 'A']])
+            expansions: new Map() // suppressed
+          }
+        ],
+        [
+          bDirectId,
+          {
+            // Direct B — B.a → A allowed (A is a completed sibling), gets a fresh A
+            id: 'B',
+            instanceId: bDirectId,
+            kind: 'data',
+            name: 'B',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'a',
+                typeName: 'A',
+                typeKind: 'Data',
+                targetNodeId: 'A',
+                targetNamespaceUri: 'ns',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['a', aInsideBDirect]])
+          }
+        ],
+        [
+          aInsideBDirect,
+          {
+            id: 'A',
+            instanceId: aInsideBDirect,
+            kind: 'data',
+            name: 'A',
+            namespaceUri: 'ns',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'b',
+                typeName: 'B',
+                typeKind: 'Data',
+                targetNodeId: 'B',
+                targetNamespaceUri: 'ns',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map() // A.b → B suppressed (the parent B is on path)
           }
         ]
       ])
@@ -1009,34 +1347,23 @@ describe('layoutStructureGraph — path-aware sizing cache for cyclic+direct ref
 
     const { nodes } = layoutStructureGraph(input);
 
-    // All placements are present:
-    // Root (canonical, 1 root) + A placed under Root ('Root::a::A') +
-    // B placed inside A ('Root::a::A::b::B') + B placed directly under Root ('Root::b::B').
-    // A→B's back-edge to A is on the cycle path, so THAT A placement is suppressed.
-    expect(nodes.length).toBeGreaterThanOrEqual(4);
-
-    // Two B placements: one cyclic (inside A), one direct (under Root).
+    // Per-instance: two B placements visible.
     const bPlacements = nodes.filter((n) => (n.data as { id?: string }).id === 'B');
     expect(bPlacements).toHaveLength(2);
 
-    // Identify placements by their React Flow instance id.
-    const bInsideA = bPlacements.find((n) => n.id === 'Root::a::A::b::B');
-    const bDirect = bPlacements.find((n) => n.id === 'Root::b::B');
+    const bInsideA = bPlacements.find((n) => n.id === bInsideAId);
+    const bDirect = bPlacements.find((n) => n.id === bDirectId);
     expect(bInsideA).toBeDefined();
     expect(bDirect).toBeDefined();
 
-    // Key assertion: the directly-placed B (non-cyclic path Root→B) has
-    // larger dimensions than the cyclically-placed B (path Root→A→B, where
-    // A inside B is a placeholder). Both dimensions must differ — a shared
-    // cache would make them equal.
+    // The directly-placed B carries an expansion to its own A instance (which
+    // itself has no expansions), so its sized envelope is larger than the
+    // cyclic B (which has no expansions at all).
     const bInsideAHeight = bInsideA!.height ?? 0;
     const bDirectHeight = bDirect!.height ?? 0;
     const bInsideAWidth = bInsideA!.width ?? 0;
     const bDirectWidth = bDirect!.width ?? 0;
 
-    // The directly-placed B contains a properly-sized A child (which itself
-    // carries a placeholder B), so its dimensions must be strictly larger
-    // than the cyclically-placed B (which only has a placeholder A).
     expect(bDirectHeight).toBeGreaterThan(bInsideAHeight);
     expect(bDirectWidth).toBeGreaterThan(bInsideAWidth);
   });

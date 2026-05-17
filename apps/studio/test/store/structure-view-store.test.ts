@@ -25,13 +25,13 @@ describe('useStructureViewStore expansionMap', () => {
     expect(useStructureViewStore.getState().isExpanded(KEY)).toBe(false);
   });
 
-  it('toggling expanded → collapsed deletes the key instead of writing false', () => {
+  it('toggling expanded → collapsed deletes the key (map stays compact)', () => {
     useStructureViewStore.getState().toggleExpansion(KEY);
     useStructureViewStore.getState().toggleExpansion(KEY);
 
-    // Dead `false` entries would grow the persisted record unbounded over
-    // a session; absence is semantically equivalent and stays empty.
+    // Delete-on-collapse: the map has no entry for a collapsed row.
     expect(useStructureViewStore.getState().expansionMap.size).toBe(0);
+    expect(useStructureViewStore.getState().isExpanded(KEY)).toBe(false);
   });
 
   it('collapseAll clears expansions in the focused namespace and leaves others alone', () => {
@@ -264,6 +264,8 @@ describe('useStructureViewStore workspace persistence', () => {
     // pending writes have landed.
     await new Promise((r) => setTimeout(r, 50));
 
+    // Delete-on-collapse: the persisted state records only expanded rows.
+    // K1 was collapsed (deleted), K2 is expanded.
     const saved = await loadStructureViewState('ws-c');
     expect(saved).toEqual({ 'ns::T::b': true });
   });

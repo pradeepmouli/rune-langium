@@ -31,6 +31,14 @@ export interface GroupContainerBaseTypeData extends Record<string, unknown> {
    * round-trips correctly through the persistence layer.
    */
   onToggleExpansion?: (key: StructureExpansionKey) => void;
+  /**
+   * React Flow instance ids of this base container's ancestors (NOT including
+   * the container itself). Injected by `layoutStructureGraph` (Phase 14d).
+   * Used to scope each row's expansion key per-instance so chevrons on
+   * inherited rows of two visible occurrences of the same base type stay
+   * independent. Treated as empty array when absent.
+   */
+  instancePath?: ReadonlyArray<string>;
 }
 
 export type GroupContainerData = GroupContainerInheritanceData | GroupContainerBaseTypeData;
@@ -45,7 +53,7 @@ function isRowExpandable(typeKind: StructureRow['typeKind']): boolean {
   return typeKind === 'Data' || typeKind === 'Choice';
 }
 
-export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>): React.ReactElement {
+export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeType>): React.ReactElement {
   if (data.scope === 'inheritance') {
     return (
       <div className="rune-graph-group">
@@ -71,7 +79,14 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
   // DataNode.tsx:113. Any other format would produce a key that the adapter never
   // looks for, leaving the chevron's "expanded" state visually correct but never
   // actually rendering the child.
-  const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion } = data;
+  const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion, instancePath } = data;
+
+  // Phase 14d (fix): include self's React Flow id in the rowKey instancePath so
+  // two visible occurrences of the same base container at the same depth produce
+  // distinct keys. `data.instancePath` carries the ancestors (NOT including self);
+  // appending `id` makes it self-inclusive and aligns with the adapter's updated
+  // shouldExpand check (which also uses the self-inclusive path).
+  const ownerInstancePath: ReadonlyArray<string> = [...(instancePath ?? []), id];
 
   return (
     <div className="rune-graph-group rune-graph-group--base">
@@ -83,7 +98,12 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
         {baseRows.map((row) => {
           const expandable = isRowExpandable(row.typeKind);
           const rowKey: StructureExpansionKey | undefined = expandable
-            ? { namespaceUri: baseTypeNamespaceUri, typeId: baseTypeName, attrName: row.attrName }
+            ? {
+                namespaceUri: baseTypeNamespaceUri,
+                typeId: baseTypeName,
+                attrName: row.attrName,
+                instancePath: ownerInstancePath
+              }
             : undefined;
           const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;
           const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {

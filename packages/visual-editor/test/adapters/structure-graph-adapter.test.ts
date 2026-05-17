@@ -2,9 +2,14 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import { buildStructureGraph } from '../../src/adapters/structure-graph-adapter.js';
+import {
+  buildStructureGraph,
+  findByCanonicalId,
+  findAllByCanonicalId
+} from '../../src/adapters/structure-graph-adapter.js';
 import {
   type StructureBaseContainer,
+  type StructureChoiceNode,
   type StructureDataNode,
   type StructureExpansionKey,
   expansionKey
@@ -99,10 +104,12 @@ describe('buildStructureGraph — inheritance', () => {
     expect(base.baseRows.map((r) => r.attrName)).toEqual(['tradeID', 'parties']);
     expect(base.baseRows.every((r) => r.isInherited)).toBe(true);
 
-    // Derived Data is referenced by id
-    expect(base.childNodeId).toBe('cdm.trade::Trade');
-    const derived = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    // Phase 14e: per-instance materialization. `childNodeId` now carries the
+    // child's INSTANCE id (a derivation of the parent). The derived Data node
+    // is found via its canonical id with the helper.
+    const derived = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
     expect(derived?.kind).toBe('data');
+    expect(base.childNodeId).toBe(derived.instanceId);
     expect(derived.rows.map((r) => r.attrName)).toEqual(['tradeDate']); // ONLY new additions
   });
 
@@ -168,29 +175,30 @@ describe('buildStructureGraph — inheritance', () => {
     // Three nodes: 2 base containers + 1 data node.
     expect(result.nodes.size).toBe(3);
 
-    const outerId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
-    const innerId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const outerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
+    const innerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
 
-    // rootNodeId is the outermost (TradeRoot's container).
-    expect(result.rootNodeId).toBe(outerId);
+    // Phase 14e: rootNodeId is the outermost wrapper's INSTANCE id; for a
+    // root placement the instance id equals the canonical id (no parent prefix).
+    expect(result.rootNodeId).toBe(outerCanonicalId);
 
-    const outer = result.nodes.get(outerId) as StructureBaseContainer;
+    const outer = findByCanonicalId(result.nodes, outerCanonicalId) as StructureBaseContainer;
     expect(outer.kind).toBe('base');
     expect(outer.baseTypeName).toBe('TradeRoot');
     expect(outer.baseRows.map((r) => r.attrName)).toEqual(['rootField']);
     expect(outer.baseRows.every((r) => r.isInherited)).toBe(true);
-    expect(outer.childNodeId).toBe(innerId);
 
-    const inner = result.nodes.get(innerId) as StructureBaseContainer;
+    const inner = findByCanonicalId(result.nodes, innerCanonicalId) as StructureBaseContainer;
     expect(inner.kind).toBe('base');
     expect(inner.baseTypeName).toBe('TradeBase');
     expect(inner.baseRows.map((r) => r.attrName)).toEqual(['baseField']);
     expect(inner.baseRows.every((r) => r.isInherited)).toBe(true);
-    expect(inner.childNodeId).toBe('cdm.trade::Trade');
+    // Child links are per-instance ids; verify by lineage rather than literal.
+    expect(outer.childNodeId).toBe(inner.instanceId);
 
-    const derived = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const derived = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
     expect(derived.kind).toBe('data');
-    // Only Trade's own additions; ancestor attrs are NOT duplicated here.
+    expect(inner.childNodeId).toBe(derived.instanceId);
     expect(derived.rows.map((r) => r.attrName)).toEqual(['tradeField']);
     expect(derived.rows.some((r) => r.attrName === 'rootField')).toBe(false);
     expect(derived.rows.some((r) => r.attrName === 'baseField')).toBe(false);
@@ -236,19 +244,19 @@ describe('buildStructureGraph — inheritance', () => {
     });
 
     // Graph is finite. Focused A is present.
-    expect(result.nodes.has('cdm.cycle::A')).toBe(true);
-    const a = result.nodes.get('cdm.cycle::A') as StructureDataNode;
+    const a = findByCanonicalId(result.nodes, 'cdm.cycle::A') as StructureDataNode;
+    expect(a).toBeDefined();
     expect(a.kind).toBe('data');
     // The walker stops before re-entering A: B is allowed once (the direct
     // base), then B.extends → A is rejected by the visited guard. So we
     // expect exactly one base container wrapping A.
     expect(result.nodes.size).toBe(2);
-    const baseId = `cdm.cycle::A::__base::cdm.cycle::B`;
-    expect(result.rootNodeId).toBe(baseId);
-    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    const baseCanonicalId = `cdm.cycle::A::__base::cdm.cycle::B`;
+    expect(result.rootNodeId).toBe(baseCanonicalId);
+    const base = findByCanonicalId(result.nodes, baseCanonicalId) as StructureBaseContainer;
     expect(base.kind).toBe('base');
     expect(base.baseTypeName).toBe('B');
-    expect(base.childNodeId).toBe('cdm.cycle::A');
+    expect(base.childNodeId).toBe(a.instanceId);
   });
 });
 
@@ -291,10 +299,13 @@ describe('buildStructureGraph — type-reference expansion', () => {
   });
 
   it('expands target type when the attribute is expanded', () => {
+    // Per-instance key: Trade has no inheritance, so rootInstanceId = 'cdm.trade::Trade'.
+    // Root-row instancePath = [rootInstanceId].
     const key: StructureExpansionKey = {
       namespaceUri: 'cdm.trade',
       typeId: 'Trade',
-      attrName: 'economics'
+      attrName: 'economics',
+      instancePath: ['cdm.trade::Trade']
     };
     const expansionMap = new Map([[expansionKey(key), true]]);
 
@@ -303,9 +314,12 @@ describe('buildStructureGraph — type-reference expansion', () => {
       expansionMap
     });
 
-    expect(result.nodes.has('cdm.trade::Economics')).toBe(true);
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
-    expect(trade.expansions.get('economics')).toBe('cdm.trade::Economics');
+    // Phase 14e: lookup the expansion target by canonical id; the actual key
+    // in `nodes` is the per-instance id assigned by the adapter.
+    const economics = findByCanonicalId(result.nodes, 'cdm.trade::Economics') as StructureDataNode;
+    expect(economics).toBeDefined();
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    expect(trade.expansions.get('economics')).toBe(economics.instanceId);
   });
 });
 
@@ -368,15 +382,16 @@ describe('buildStructureGraph — Choice / Enum / Unresolved', () => {
     const key: StructureExpansionKey = {
       namespaceUri: 'cdm.trade',
       typeId: 'Trade',
-      attrName: 'payout'
+      attrName: 'payout',
+      instancePath: ['cdm.trade::Trade']
     };
     const result = buildStructureGraph(fixtureChoice, {
       focusedTypeId: 'cdm.trade::Trade',
       expansionMap: new Map([[expansionKey(key), true]])
     });
-    const choice = result.nodes.get('cdm.trade::Payout');
+    const choice = findByCanonicalId(result.nodes, 'cdm.trade::Payout');
     expect(choice?.kind).toBe('choice');
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
     expect(trade.rows.find((r) => r.attrName === 'payout')?.typeKind).toBe('Choice');
   });
 
@@ -410,8 +425,6 @@ describe('buildStructureGraph — Choice / Enum / Unresolved', () => {
 // ---------------------------------------------------------------------------
 // PR #182 round-2 Finding 1: real ChoiceOption shape (no name/card)
 // ---------------------------------------------------------------------------
-
-import type { StructureChoiceNode } from '../../src/types/structure-view.js';
 
 describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', () => {
   // The critical regression: ChoiceOption AST has only `typeCall`, not `name`
@@ -467,7 +480,12 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
 
     // Must not throw — previously crashed when buildRow dereferenced attr.card.inf
     // on undefined because ChoiceOption had no card field.
-    const expansionKey_ = expansionKey({ namespaceUri: 'cdm.payment', typeId: 'Payment', attrName: 'method' });
+    const expansionKey_ = expansionKey({
+      namespaceUri: 'cdm.payment',
+      typeId: 'Payment',
+      attrName: 'method',
+      instancePath: ['cdm.payment::Payment']
+    });
     expect(() =>
       buildStructureGraph(fixture, {
         focusedTypeId: 'cdm.payment::Payment',
@@ -520,13 +538,18 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
       ]
     };
 
-    const expansionKey_ = expansionKey({ namespaceUri: 'cdm.payment', typeId: 'Payment', attrName: 'method' });
+    const expansionKey_ = expansionKey({
+      namespaceUri: 'cdm.payment',
+      typeId: 'Payment',
+      attrName: 'method',
+      instancePath: ['cdm.payment::Payment']
+    });
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'cdm.payment::Payment',
       expansionMap: new Map([[expansionKey_, true]])
     });
 
-    const choiceNode = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    const choiceNode = findByCanonicalId(result.nodes, 'cdm.payment::SettlementMethod') as StructureChoiceNode;
     expect(choiceNode).toBeDefined();
     expect(choiceNode.kind).toBe('choice');
     expect(choiceNode.options).toHaveLength(2);
@@ -569,13 +592,18 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
       ]
     };
 
-    const expansionKey_ = expansionKey({ namespaceUri: 'cdm.payment', typeId: 'Payment', attrName: 'method' });
+    const expansionKey_ = expansionKey({
+      namespaceUri: 'cdm.payment',
+      typeId: 'Payment',
+      attrName: 'method',
+      instancePath: ['cdm.payment::Payment']
+    });
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'cdm.payment::Payment',
       expansionMap: new Map([[expansionKey_, true]])
     });
 
-    const choiceNode = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    const choiceNode = findByCanonicalId(result.nodes, 'cdm.payment::SettlementMethod') as StructureChoiceNode;
     expect(choiceNode.options[0]!.typeName).toBe('UnknownType');
     expect(choiceNode.options[0]!.typeKind).toBe('Unresolved');
     expect(choiceNode.options[0]!.targetNodeId).toBeUndefined();
@@ -825,9 +853,12 @@ describe('buildStructureGraph — cross-namespace references', () => {
       ]
     };
 
+    // Per-instance keys: A has no inheritance, rootInstanceId = 'c::A'.
+    const aInstanceId = 'c::A';
+    const bInstanceId = `${aInstanceId}::b::c::B`;
     const expansionMap = new Map<string, boolean>([
-      [expansionKey({ namespaceUri: 'c', typeId: 'A', attrName: 'b' }), true],
-      [expansionKey({ namespaceUri: 'c', typeId: 'B', attrName: 'a' }), true]
+      [expansionKey({ namespaceUri: 'c', typeId: 'A', attrName: 'b', instancePath: [aInstanceId] }), true],
+      [expansionKey({ namespaceUri: 'c', typeId: 'B', attrName: 'a', instancePath: [aInstanceId, bInstanceId] }), true]
     ]);
 
     const result = buildStructureGraph(fixtureCycle, {
@@ -835,16 +866,16 @@ describe('buildStructureGraph — cross-namespace references', () => {
       expansionMap
     });
 
-    // Both nodes materialized exactly once; the cycle did not blow the stack.
+    // Both canonical types materialize exactly once each (one A as root, one
+    // B as A's expansion target); the cycle did not blow the stack.
     expect(result.nodes.size).toBe(2);
-    const a = result.nodes.get('c::A') as StructureDataNode;
-    const b = result.nodes.get('c::B') as StructureDataNode;
+    const a = findByCanonicalId(result.nodes, 'c::A') as StructureDataNode;
+    const b = findByCanonicalId(result.nodes, 'c::B') as StructureDataNode;
     // A → B is kept (B is not an ancestor of A in the recursion stack).
-    expect(a.expansions.get('b')).toBe('c::B');
+    expect(a.expansions.get('b')).toBe(b.instanceId);
     // B → A is dropped: A IS an ancestor of B in the recursion path, so the
     // containment edge would form a parent-cycle in Phase 3's React Flow
     // layout. The chip row remains; only the parent/child edge is suppressed.
-    // See the `cycle-aware expansion` block below for full coverage.
     expect(b.expansions.size).toBe(0);
   });
 
@@ -1136,31 +1167,37 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'cdm.trade::Portfolio',
       expansionMap: new Map([
-        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Portfolio', attrName: 'trade' }), true]
+        [
+          expansionKey({
+            namespaceUri: 'cdm.trade',
+            typeId: 'Portfolio',
+            attrName: 'trade',
+            instancePath: ['cdm.trade::Portfolio']
+          }),
+          true
+        ]
       ])
     });
 
     // Portfolio + Trade data node + TradeBase container = 3 nodes total.
     expect(result.nodes.size).toBe(3);
-    expect(result.nodes.has('cdm.trade::Portfolio')).toBe(true);
-    expect(result.nodes.has('cdm.trade::Trade')).toBe(true);
+    expect(findByCanonicalId(result.nodes, 'cdm.trade::Portfolio')).toBeDefined();
+    expect(findByCanonicalId(result.nodes, 'cdm.trade::Trade')).toBeDefined();
 
-    const baseId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
-    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    const baseCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const base = findByCanonicalId(result.nodes, baseCanonicalId) as StructureBaseContainer;
     expect(base.kind).toBe('base');
     expect(base.baseTypeName).toBe('TradeBase');
     expect(base.baseRows.map((r) => r.attrName)).toEqual(['tradeID']);
     expect(base.baseRows.every((r) => r.isInherited)).toBe(true);
-    expect(base.childNodeId).toBe('cdm.trade::Trade');
 
-    // The Trade data node holds ONLY its own additions, not inherited rows.
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
     expect(trade.rows.map((r) => r.attrName)).toEqual(['tradeDate']);
+    expect(base.childNodeId).toBe(trade.instanceId);
 
-    // The expansion edge points at the OUTERMOST base container — not the
-    // raw Trade id. This is the contract that prior fixes missed.
-    const portfolio = result.nodes.get('cdm.trade::Portfolio') as StructureDataNode;
-    expect(portfolio.expansions.get('trade')).toBe(baseId);
+    // The expansion edge points at the OUTERMOST wrapper's INSTANCE id.
+    const portfolio = findByCanonicalId(result.nodes, 'cdm.trade::Portfolio') as StructureDataNode;
+    expect(portfolio.expansions.get('trade')).toBe(base.instanceId);
   });
 
   it('wraps a multi-level expanded target (Trade extends TradeBase extends TradeRoot)', () => {
@@ -1227,39 +1264,51 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'cdm.trade::Portfolio',
       expansionMap: new Map([
-        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Portfolio', attrName: 'trade' }), true]
+        [
+          expansionKey({
+            namespaceUri: 'cdm.trade',
+            typeId: 'Portfolio',
+            attrName: 'trade',
+            instancePath: ['cdm.trade::Portfolio']
+          }),
+          true
+        ]
       ])
     });
 
     // Portfolio + Trade data + TradeBase container + TradeRoot container = 4.
     expect(result.nodes.size).toBe(4);
-    const outerId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
-    const innerId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const outerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
+    const innerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
 
-    expect(result.nodes.has(outerId)).toBe(true);
-    expect(result.nodes.has(innerId)).toBe(true);
-    expect(result.nodes.has('cdm.trade::Trade')).toBe(true);
+    const outer = findByCanonicalId(result.nodes, outerCanonicalId) as StructureBaseContainer;
+    const inner = findByCanonicalId(result.nodes, innerCanonicalId) as StructureBaseContainer;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    expect(outer).toBeDefined();
+    expect(inner).toBeDefined();
+    expect(trade).toBeDefined();
 
-    const outer = result.nodes.get(outerId) as StructureBaseContainer;
     expect(outer.baseTypeName).toBe('TradeRoot');
     expect(outer.baseRows.map((r) => r.attrName)).toEqual(['rootField']);
-    expect(outer.childNodeId).toBe(innerId);
+    expect(outer.childNodeId).toBe(inner.instanceId);
 
-    const inner = result.nodes.get(innerId) as StructureBaseContainer;
     expect(inner.baseTypeName).toBe('TradeBase');
     expect(inner.baseRows.map((r) => r.attrName)).toEqual(['baseField']);
-    expect(inner.childNodeId).toBe('cdm.trade::Trade');
+    expect(inner.childNodeId).toBe(trade.instanceId);
 
-    // Expansion edge points at the outermost (TradeRoot's) container.
-    const portfolio = result.nodes.get('cdm.trade::Portfolio') as StructureDataNode;
-    expect(portfolio.expansions.get('trade')).toBe(outerId);
+    // Expansion edge points at the outermost (TradeRoot's) container instance id.
+    const portfolio = findByCanonicalId(result.nodes, 'cdm.trade::Portfolio') as StructureDataNode;
+    expect(portfolio.expansions.get('trade')).toBe(outer.instanceId);
   });
 
-  it('reuses cached outermost id when two attributes expand the same inheriting Data', () => {
-    // Verifies the outerMostId cache: Portfolio.trade1 + Portfolio.trade2
-    // both expand to Trade (which extends TradeBase). The chain must be
-    // materialized exactly once, and BOTH expansion edges must point at
-    // the same outermost id.
+  it('Phase 14e: two attributes expanding the same inheriting Data produce TWO per-instance subtrees', () => {
+    // Pre-Phase-14e: Portfolio.trade1 + Portfolio.trade2 both expand to Trade
+    // (which extends TradeBase) and the canonical-dedup cache shared ONE Trade
+    // StructureNode across both edges. Per Phase 14e (full per-instance
+    // materialization), each visible occurrence is its own subtree — so the
+    // graph now contains TWO TradeBase containers and TWO Trade data nodes
+    // for the two expansion targets, with their own (potentially divergent)
+    // expansion state.
     const fixture = {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
@@ -1310,22 +1359,44 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'cdm.trade::Portfolio',
       expansionMap: new Map([
-        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Portfolio', attrName: 'trade1' }), true],
-        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Portfolio', attrName: 'trade2' }), true]
+        [
+          expansionKey({
+            namespaceUri: 'cdm.trade',
+            typeId: 'Portfolio',
+            attrName: 'trade1',
+            instancePath: ['cdm.trade::Portfolio']
+          }),
+          true
+        ],
+        [
+          expansionKey({
+            namespaceUri: 'cdm.trade',
+            typeId: 'Portfolio',
+            attrName: 'trade2',
+            instancePath: ['cdm.trade::Portfolio']
+          }),
+          true
+        ]
       ])
     });
 
-    // Portfolio + Trade + TradeBase container — Trade and its base
-    // container are each materialized exactly once.
-    expect(result.nodes.size).toBe(3);
-    const baseId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
-    expect(result.nodes.has(baseId)).toBe(true);
-    expect(result.nodes.has('cdm.trade::Trade')).toBe(true);
+    // Portfolio + 2 Trade data nodes + 2 TradeBase containers = 5 nodes total.
+    expect(result.nodes.size).toBe(5);
+    const baseInstances = findAllByCanonicalId(result.nodes, `cdm.trade::Trade::__base::cdm.trade::TradeBase`);
+    expect(baseInstances).toHaveLength(2);
+    const tradeInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Trade');
+    expect(tradeInstances).toHaveLength(2);
 
-    const portfolio = result.nodes.get('cdm.trade::Portfolio') as StructureDataNode;
-    // Both edges resolve to the SAME outermost id.
-    expect(portfolio.expansions.get('trade1')).toBe(baseId);
-    expect(portfolio.expansions.get('trade2')).toBe(baseId);
+    const portfolio = findByCanonicalId(result.nodes, 'cdm.trade::Portfolio') as StructureDataNode;
+    // Each edge resolves to a DIFFERENT outermost-wrapper instance id (one
+    // per visible occurrence).
+    const trade1Id = portfolio.expansions.get('trade1');
+    const trade2Id = portfolio.expansions.get('trade2');
+    expect(trade1Id).toBeDefined();
+    expect(trade2Id).toBeDefined();
+    expect(trade1Id).not.toBe(trade2Id);
+    // Both ids resolve to (different) base-container instances.
+    expect(baseInstances.map((b) => b.instanceId)).toEqual(expect.arrayContaining([trade1Id, trade2Id]));
   });
 });
 
@@ -1411,9 +1482,15 @@ describe('buildStructureGraph — cycle-aware expansion (ancestor edges dropped)
         }
       ]
     };
+    // Per-instance keys: A has no inheritance, rootInstanceId = 'ns::A'.
+    const aInstanceId = 'ns::A';
+    const bInstanceId = `${aInstanceId}::next::ns::B`;
     const expansionMap = new Map<string, boolean>([
-      [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'next' }), true],
-      [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'next' }), true]
+      [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'next', instancePath: [aInstanceId] }), true],
+      [
+        expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'next', instancePath: [aInstanceId, bInstanceId] }),
+        true
+      ]
     ]);
 
     const result = buildStructureGraph(fixtureIndirect, {
@@ -1422,11 +1499,11 @@ describe('buildStructureGraph — cycle-aware expansion (ancestor edges dropped)
     });
 
     expect(result.nodes.size).toBe(2);
-    const a = result.nodes.get('ns::A') as StructureDataNode;
-    const b = result.nodes.get('ns::B') as StructureDataNode;
+    const a = findByCanonicalId(result.nodes, 'ns::A') as StructureDataNode;
+    const b = findByCanonicalId(result.nodes, 'ns::B') as StructureDataNode;
 
     // A → B kept: B is not an ancestor when we record this edge.
-    expect(a.expansions.get('next')).toBe('ns::B');
+    expect(a.expansions.get('next')).toBe(b.instanceId);
     // B → A dropped: A IS an ancestor (we recursed A then B).
     expect(b.expansions.size).toBe(0);
 
@@ -1439,13 +1516,12 @@ describe('buildStructureGraph — cycle-aware expansion (ancestor edges dropped)
     expect(bRow.targetNodeId).toBe('ns::A');
   });
 
-  it('preserves sibling cross-references: Trade.party AND Trade.counterparty both point to Party', () => {
-    // Critical contract test. The naive fix of "if target already in `out`,
-    // drop the edge" would clobber the second expansion (counterparty) here.
-    // Party is in `out` after the first recursion completes, but Party is
-    // NOT an ancestor of Trade — it's a completed sibling, so the edge MUST
-    // be preserved so Phase 3 can render the second reference as an
-    // out-of-tree handle / shared child.
+  it('Phase 14e: Trade.party AND Trade.counterparty produce TWO per-instance Party subtrees', () => {
+    // Pre-Phase-14e (canonical dedup): one shared Party StructureNode with
+    // both expansion edges pointing at it.
+    // Phase 14e (per-instance): each visible Party is its own StructureNode
+    // with its own (potentially divergent) expansion state. Both edges still
+    // resolve — they just resolve to DIFFERENT instance ids.
     const fixtureSibling = {
       namespaces: [{ uri: 'ns' }],
       nodes: [
@@ -1478,9 +1554,19 @@ describe('buildStructureGraph — cycle-aware expansion (ancestor edges dropped)
         }
       ]
     };
+    // Per-instance keys: Trade has no inheritance, rootInstanceId = 'ns::Trade'.
+    const tradeInstanceId = 'ns::Trade';
     const expansionMap = new Map<string, boolean>([
-      [expansionKey({ namespaceUri: 'ns', typeId: 'Trade', attrName: 'party' }), true],
-      [expansionKey({ namespaceUri: 'ns', typeId: 'Trade', attrName: 'counterparty' }), true]
+      [expansionKey({ namespaceUri: 'ns', typeId: 'Trade', attrName: 'party', instancePath: [tradeInstanceId] }), true],
+      [
+        expansionKey({
+          namespaceUri: 'ns',
+          typeId: 'Trade',
+          attrName: 'counterparty',
+          instancePath: [tradeInstanceId]
+        }),
+        true
+      ]
     ]);
 
     const result = buildStructureGraph(fixtureSibling, {
@@ -1488,29 +1574,31 @@ describe('buildStructureGraph — cycle-aware expansion (ancestor edges dropped)
       expansionMap
     });
 
-    // Trade + Party only — no clone of Party for the second reference.
-    expect(result.nodes.size).toBe(2);
-    const trade = result.nodes.get('ns::Trade') as StructureDataNode;
-    // Both edges to the completed-sibling Party are preserved.
-    expect(trade.expansions.get('party')).toBe('ns::Party');
-    expect(trade.expansions.get('counterparty')).toBe('ns::Party');
+    // Trade + 2 Party instances = 3 nodes total (per-instance).
+    expect(result.nodes.size).toBe(3);
+    const parties = findAllByCanonicalId(result.nodes, 'ns::Party');
+    expect(parties).toHaveLength(2);
+    const trade = findByCanonicalId(result.nodes, 'ns::Trade') as StructureDataNode;
+    const partyId = trade.expansions.get('party');
+    const counterpartyId = trade.expansions.get('counterparty');
+    expect(partyId).toBeDefined();
+    expect(counterpartyId).toBeDefined();
+    expect(partyId).not.toBe(counterpartyId);
+    expect(parties.map((p) => p.instanceId)).toEqual(expect.arrayContaining([partyId, counterpartyId]));
   });
 });
 
-describe('buildStructureGraph — context-dependent expansion edges (cache replay)', () => {
-  // The `outerMostId` cache makes wrapper-id resolution context-independent,
-  // but expansion edges themselves are context-dependent — gated by the
-  // recursion ancestor path. A naive cache (one that caches the *materialized
-  // node*) would freeze a context-dependent suppression decision into a
-  // permanent state. The adapter records suppressions in a side table and
-  // replays them on every cache reuse so completed-sibling references that
-  // were ancestors in their *first* materialization context get promoted
-  // when reached later through a non-cyclic path. Spec §3.2 mandates
-  // completed-sibling cross-references be preserved as cross-tree handles.
+describe('buildStructureGraph — context-dependent expansion edges (per-instance Phase 14e)', () => {
+  // Pre-Phase-14e: this block exercised the SuppressedEdge cache-replay
+  // mechanism that promoted a suppressed edge when a target was later reached
+  // through a non-cyclic sibling path. Phase 14e (full per-instance
+  // materialization) makes the mechanism unnecessary: each visible occurrence
+  // walks independently with its own canonical-id `path` cycle guard, so the
+  // expected outcome (the originally-suppressed edge IS present on the
+  // alternate-path instance) emerges naturally without a side table.
   //
-  // This block is the sixth Codex finding on PR #173 tracing to spec §3.2's
-  // containment-uniformity principle, but the first in the "caching strategy"
-  // sub-category (prior findings were all about missing call sites).
+  // The tests are preserved for outcome-coverage; the implementation details
+  // they verified (suppressedEdges side table, replay loop) no longer exist.
 
   it('promotes B → A edge when B is reached via a non-cyclic path after first being materialized inside a cycle (Codex scenario)', () => {
     // Adversarial cycle from Codex review: Root.a → A, Root.b → B, A.b → B,
@@ -1548,11 +1636,25 @@ describe('buildStructureGraph — context-dependent expansion edges (cache repla
         }
       ]
     };
+    // Per-instance keys: Root has no inheritance, rootInstanceId = 'ns::Root'.
+    const rootId = 'ns::Root';
+    const aUnderRootId = `${rootId}::a::ns::A`;
+    const bUnderAId = `${aUnderRootId}::b::ns::B`;
+    const bUnderRootId = `${rootId}::b::ns::B`;
     const expansionMap = new Map<string, boolean>([
-      [expansionKey({ namespaceUri: 'ns', typeId: 'Root', attrName: 'a' }), true],
-      [expansionKey({ namespaceUri: 'ns', typeId: 'Root', attrName: 'b' }), true],
-      [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'b' }), true],
-      [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'a' }), true]
+      [expansionKey({ namespaceUri: 'ns', typeId: 'Root', attrName: 'a', instancePath: [rootId] }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'Root', attrName: 'b', instancePath: [rootId] }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'b', instancePath: [rootId, aUnderRootId] }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'a', instancePath: [rootId, bUnderRootId] }), true],
+      [
+        expansionKey({
+          namespaceUri: 'ns',
+          typeId: 'B',
+          attrName: 'a',
+          instancePath: [rootId, aUnderRootId, bUnderAId]
+        }),
+        true
+      ]
     ]);
 
     const result = buildStructureGraph(fixture, {
@@ -1560,16 +1662,32 @@ describe('buildStructureGraph — context-dependent expansion edges (cache repla
       expansionMap
     });
 
-    expect(result.nodes.size).toBe(3);
-    const root = result.nodes.get('ns::Root') as StructureDataNode;
-    const a = result.nodes.get('ns::A') as StructureDataNode;
-    const b = result.nodes.get('ns::B') as StructureDataNode;
+    // Phase 14e: per-instance materialization creates one StructureNode per
+    // visible occurrence. Root.a → A (one A), A.b → B (one B inside A),
+    // Root.b → B (a second B), and that second B's expansion to A (another A
+    // since A is not on the recursion path of Root.b → B).
+    //
+    // Visible nodes: Root + A-under-Root.a + B-inside-A + B-under-Root.b +
+    // A-inside-Root.b-B = 5.
+    expect(result.nodes.size).toBe(5);
+    const root = findByCanonicalId(result.nodes, 'ns::Root') as StructureDataNode;
+    const aInstances = findAllByCanonicalId(result.nodes, 'ns::A');
+    const bInstances = findAllByCanonicalId(result.nodes, 'ns::B');
+    expect(aInstances).toHaveLength(2);
+    expect(bInstances).toHaveLength(2);
 
-    expect(root.expansions.get('a')).toBe('ns::A');
-    expect(root.expansions.get('b')).toBe('ns::B');
-    expect(a.expansions.get('b')).toBe('ns::B');
-    // The key assertion — would fail before the cache-replay fix.
-    expect(b.expansions.get('a')).toBe('ns::A');
+    // Root has both expansion edges, each resolving to a per-instance subtree.
+    expect(root.expansions.get('a')).toBeDefined();
+    expect(root.expansions.get('b')).toBeDefined();
+    expect(root.expansions.get('a')).not.toBe(root.expansions.get('b'));
+
+    // The B reached via Root.b carries its OWN expansion to A (its own
+    // per-instance A) — the formerly-suppressed B.a → A edge is naturally
+    // present here because the per-instance walk reaches it on a non-cyclic
+    // path (path = {Root, B}, A not on path).
+    const bUnderRoot = bInstances.find((b) => b.instanceId === root.expansions.get('b')) as StructureDataNode;
+    expect(bUnderRoot).toBeDefined();
+    expect((bUnderRoot.expansions as Map<string, string>).get('a')).toBeDefined();
   });
 
   it('still suppresses direct self-reference even with cache replay (regression)', () => {
@@ -1629,22 +1747,24 @@ describe('buildStructureGraph — context-dependent expansion edges (cache repla
         }
       ]
     };
+    const aId = 'ns::A';
+    const bId = `${aId}::next::ns::B`;
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'ns::A',
       expansionMap: new Map<string, boolean>([
-        [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'next' }), true],
-        [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'next' }), true]
+        [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'next', instancePath: [aId] }), true],
+        [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'next', instancePath: [aId, bId] }), true]
       ])
     });
 
     expect(result.nodes.size).toBe(2);
-    const a = result.nodes.get('ns::A') as StructureDataNode;
-    const b = result.nodes.get('ns::B') as StructureDataNode;
-    expect(a.expansions.get('next')).toBe('ns::B');
+    const a = findByCanonicalId(result.nodes, 'ns::A') as StructureDataNode;
+    const b = findByCanonicalId(result.nodes, 'ns::B') as StructureDataNode;
+    expect(a.expansions.get('next')).toBe(b.instanceId);
     expect(b.expansions.size).toBe(0);
   });
 
-  it('promotes suppressed inherited-row edge via base-container cache replay', () => {
+  it('Phase 14e: BaseRoot.b path produces per-instance B with its own A subtree (was: cache-replay promotion)', () => {
     // Inherited-row analogue of the Codex scenario. Root extends BaseRoot,
     // BaseRoot.a: A, BaseRoot.b: B, A.b: B, B.a: A. All expanded. The base
     // container's `a` expansion gets walked first (path includes A), then
@@ -1690,11 +1810,27 @@ describe('buildStructureGraph — context-dependent expansion edges (cache repla
         }
       ]
     };
+    // Root extends BaseRoot, so outermostCanonicalId = 'ns::Root::__base::ns::BaseRoot'.
+    // Base container rfId = outermostInstanceId = 'ns::Root::__base::ns::BaseRoot'.
+    // childExpansionInstancePath for base rows = [baseRfId].
+    const baseRfId = 'ns::Root::__base::ns::BaseRoot';
+    const aUnderBaseId = `${baseRfId}::a::ns::A`;
+    const bUnderAId = `${aUnderBaseId}::b::ns::B`;
+    const bUnderBaseId = `${baseRfId}::b::ns::B`;
     const expansionMap = new Map<string, boolean>([
-      [expansionKey({ namespaceUri: 'ns', typeId: 'BaseRoot', attrName: 'a' }), true],
-      [expansionKey({ namespaceUri: 'ns', typeId: 'BaseRoot', attrName: 'b' }), true],
-      [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'b' }), true],
-      [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'a' }), true]
+      [expansionKey({ namespaceUri: 'ns', typeId: 'BaseRoot', attrName: 'a', instancePath: [baseRfId] }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'BaseRoot', attrName: 'b', instancePath: [baseRfId] }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'b', instancePath: [baseRfId, aUnderBaseId] }), true],
+      [expansionKey({ namespaceUri: 'ns', typeId: 'B', attrName: 'a', instancePath: [baseRfId, bUnderBaseId] }), true],
+      [
+        expansionKey({
+          namespaceUri: 'ns',
+          typeId: 'B',
+          attrName: 'a',
+          instancePath: [baseRfId, aUnderBaseId, bUnderAId]
+        }),
+        true
+      ]
     ]);
 
     const result = buildStructureGraph(fixture, {
@@ -1702,19 +1838,29 @@ describe('buildStructureGraph — context-dependent expansion edges (cache repla
       expansionMap
     });
 
-    const baseId = `ns::Root::__base::ns::BaseRoot`;
-    const base = result.nodes.get(baseId) as StructureBaseContainer;
-    const a = result.nodes.get('ns::A') as StructureDataNode;
-    const b = result.nodes.get('ns::B') as StructureDataNode;
+    const baseCanonicalId = `ns::Root::__base::ns::BaseRoot`;
+    const base = findByCanonicalId(result.nodes, baseCanonicalId) as StructureBaseContainer;
+    const aInstances = findAllByCanonicalId(result.nodes, 'ns::A');
+    const bInstances = findAllByCanonicalId(result.nodes, 'ns::B');
 
-    // Base container carries the inherited-row expansions.
-    expect(base.expansions.get('a')).toBe('ns::A');
-    expect(base.expansions.get('b')).toBe('ns::B');
-    // A.b → B kept.
-    expect(a.expansions.get('b')).toBe('ns::B');
-    // The key inherited-row assertion: B.a → A promoted via cache replay
-    // because reaching B through BaseRoot.b places A as a completed sibling.
-    expect(b.expansions.get('a')).toBe('ns::A');
+    // Per-instance: two A subtrees (BaseRoot.a + Root.b->B.a) and two B
+    // subtrees (BaseRoot.b + BaseRoot.a->A.b).
+    expect(aInstances.length).toBeGreaterThanOrEqual(2);
+    expect(bInstances.length).toBeGreaterThanOrEqual(2);
+
+    // Base container carries both inherited-row expansions; each points at a
+    // distinct per-instance subtree.
+    const baseAId = base.expansions.get('a');
+    const baseBId = base.expansions.get('b');
+    expect(baseAId).toBeDefined();
+    expect(baseBId).toBeDefined();
+    expect(baseAId).not.toBe(baseBId);
+
+    // The B reached via BaseRoot.b carries its own expansion to A (a fresh A
+    // sibling), reflecting the per-instance walk's natural fall-through.
+    const bUnderBaseB = bInstances.find((b) => b.instanceId === baseBId) as StructureDataNode;
+    expect(bUnderBaseB).toBeDefined();
+    expect((bUnderBaseB.expansions as Map<string, string>).get('a')).toBeDefined();
   });
 });
 
@@ -1775,32 +1921,37 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
       ]
     };
 
+    // Trade extends TradeBase: outermostCanonicalId = 'cdm.trade::Trade::__base::cdm.trade::TradeBase'.
+    // Base container rfId = outermostInstanceId. childExpansionInstancePath = [baseRfId].
+    const baseRfId = 'cdm.trade::Trade::__base::cdm.trade::TradeBase';
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'cdm.trade::Trade',
       expansionMap: new Map([
         // Key uses the BASE's ns/name — TradeBase, not Trade.
-        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'TradeBase', attrName: 'party' }), true]
+        [
+          expansionKey({ namespaceUri: 'cdm.trade', typeId: 'TradeBase', attrName: 'party', instancePath: [baseRfId] }),
+          true
+        ]
       ])
     });
 
     // 3 nodes: TradeBase container, Trade data, Party data.
     expect(result.nodes.size).toBe(3);
-    const baseId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
-    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    const baseCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const base = findByCanonicalId(result.nodes, baseCanonicalId) as StructureBaseContainer;
     expect(base.kind).toBe('base');
-    // The expansion edge lives on the BASE container.
-    expect(base.expansions.get('party')).toBe('cdm.trade::Party');
-
     // The derived Data node has no expansion for `party` — it doesn't own
     // that attribute.
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
     expect(trade.expansions.size).toBe(0);
 
     // Party itself is materialized with its own rows.
-    expect(result.nodes.has('cdm.trade::Party')).toBe(true);
-    const party = result.nodes.get('cdm.trade::Party') as StructureDataNode;
+    const party = findByCanonicalId(result.nodes, 'cdm.trade::Party') as StructureDataNode;
+    expect(party).toBeDefined();
     expect(party.kind).toBe('data');
     expect(party.rows.map((r) => r.attrName)).toEqual(['id']);
+    // The expansion edge on the BASE container points at Party's instance id.
+    expect(base.expansions.get('party')).toBe(party.instanceId);
   });
 
   it('inherited Choice ref expanded materializes the choice node', () => {
@@ -1845,18 +1996,22 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
       ]
     };
 
+    // ns::Trade extends ns::TradeBase: outermostCanonicalId = 'ns::Trade::__base::ns::TradeBase'.
+    const baseRfId_ = 'ns::Trade::__base::ns::TradeBase';
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'ns::Trade',
-      expansionMap: new Map([[expansionKey({ namespaceUri: 'ns', typeId: 'TradeBase', attrName: 'payout' }), true]])
+      expansionMap: new Map([
+        [expansionKey({ namespaceUri: 'ns', typeId: 'TradeBase', attrName: 'payout', instancePath: [baseRfId_] }), true]
+      ])
     });
 
-    const baseId = `ns::Trade::__base::ns::TradeBase`;
-    const base = result.nodes.get(baseId) as StructureBaseContainer;
-    expect(base.expansions.get('payout')).toBe('ns::Payout');
+    const baseCanonicalId = `ns::Trade::__base::ns::TradeBase`;
+    const base = findByCanonicalId(result.nodes, baseCanonicalId) as StructureBaseContainer;
     // Choices have no inheritance wrapping — the edge points at the Choice
-    // node id directly, no synthetic container.
-    const payout = result.nodes.get('ns::Payout');
+    // instance id, no synthetic container.
+    const payout = findByCanonicalId(result.nodes, 'ns::Payout');
     expect(payout?.kind).toBe('choice');
+    expect(base.expansions.get('payout')).toBe(payout!.instanceId);
   });
 
   it('multi-level: outer base level owns its own attribute expansions', () => {
@@ -1920,27 +2075,36 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
       ]
     };
 
+    // Trade extends TradeBase extends TradeRoot: outermost = 'cdm.trade::Trade::__base::cdm.trade::TradeRoot'.
+    const outerBaseRfId = 'cdm.trade::Trade::__base::cdm.trade::TradeRoot';
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'cdm.trade::Trade',
       expansionMap: new Map([
-        [expansionKey({ namespaceUri: 'cdm.trade', typeId: 'TradeRoot', attrName: 'party' }), true]
+        [
+          expansionKey({
+            namespaceUri: 'cdm.trade',
+            typeId: 'TradeRoot',
+            attrName: 'party',
+            instancePath: [outerBaseRfId]
+          }),
+          true
+        ]
       ])
     });
 
-    const outerId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
-    const innerId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
-    const outer = result.nodes.get(outerId) as StructureBaseContainer;
-    const inner = result.nodes.get(innerId) as StructureBaseContainer;
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const outerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
+    const innerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const outer = findByCanonicalId(result.nodes, outerCanonicalId) as StructureBaseContainer;
+    const inner = findByCanonicalId(result.nodes, innerCanonicalId) as StructureBaseContainer;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    const party = findByCanonicalId(result.nodes, 'cdm.trade::Party') as StructureDataNode;
 
-    // The OUTER (TradeRoot) container owns the `party` expansion.
-    expect(outer.expansions.get('party')).toBe('cdm.trade::Party');
-    // Inner (TradeBase) container has no expansions — its only row is a
-    // BasicType, plus it doesn't own TradeRoot's `party`.
+    // The OUTER (TradeRoot) container owns the `party` expansion. Edge value
+    // is Party's per-instance id.
+    expect(party).toBeDefined();
+    expect(outer.expansions.get('party')).toBe(party.instanceId);
     expect(inner.expansions.size).toBe(0);
-    // Derived Trade node has no expansions — same reason.
     expect(trade.expansions.size).toBe(0);
-    expect(result.nodes.has('cdm.trade::Party')).toBe(true);
   });
 
   it('inherited Data target that itself inherits chains correctly (composes with target-inheritance)', () => {
@@ -2001,34 +2165,39 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
       ]
     };
 
+    // ns::Trade extends ns::TradeBase: outermostCanonicalId = 'ns::Trade::__base::ns::TradeBase'.
+    const tradeBaseRfId = 'ns::Trade::__base::ns::TradeBase';
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'ns::Trade',
-      expansionMap: new Map([[expansionKey({ namespaceUri: 'ns', typeId: 'TradeBase', attrName: 'party' }), true]])
+      expansionMap: new Map([
+        [
+          expansionKey({ namespaceUri: 'ns', typeId: 'TradeBase', attrName: 'party', instancePath: [tradeBaseRfId] }),
+          true
+        ]
+      ])
     });
 
-    const tradeBaseId = `ns::Trade::__base::ns::TradeBase`;
-    const tradeBase = result.nodes.get(tradeBaseId) as StructureBaseContainer;
+    const tradeBaseCanonicalId = `ns::Trade::__base::ns::TradeBase`;
+    const tradeBase = findByCanonicalId(result.nodes, tradeBaseCanonicalId) as StructureBaseContainer;
 
     // Outermost container of Party's chain — PartyBase's wrap.
-    const partyOuterId = `ns::Party::__base::ns::PartyBase`;
-    // The base container's expansion points at the OUTERMOST id, mirroring
-    // the contract enforced for derived-node expansions in the
-    // `expansion target with inheritance` describe block above.
-    expect(tradeBase.expansions.get('party')).toBe(partyOuterId);
+    const partyOuterCanonicalId = `ns::Party::__base::ns::PartyBase`;
+    const partyOuter = findByCanonicalId(result.nodes, partyOuterCanonicalId) as StructureBaseContainer;
+    const party = findByCanonicalId(result.nodes, 'ns::Party') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'ns::Trade') as StructureDataNode;
+    expect(tradeBase).toBeDefined();
+    expect(partyOuter).toBeDefined();
+    expect(party).toBeDefined();
+    expect(trade).toBeDefined();
 
-    // Full chain materialized: TradeBase container, Trade data, PartyBase
-    // container, Party data = 4 nodes.
+    // The base container's expansion points at PartyBase's instance id
+    // (outermost wrapper of Party's chain).
+    expect(tradeBase.expansions.get('party')).toBe(partyOuter.instanceId);
+
     expect(result.nodes.size).toBe(4);
-    expect(result.nodes.has(partyOuterId)).toBe(true);
-    expect(result.nodes.has('ns::Party')).toBe(true);
-    expect(result.nodes.has(tradeBaseId)).toBe(true);
-    expect(result.nodes.has('ns::Trade')).toBe(true);
 
-    const partyOuter = result.nodes.get(partyOuterId) as StructureBaseContainer;
     expect(partyOuter.baseTypeName).toBe('PartyBase');
-    expect(partyOuter.childNodeId).toBe('ns::Party');
-    const party = result.nodes.get('ns::Party') as StructureDataNode;
-    // Only Party's own additions on the derived node.
+    expect(partyOuter.childNodeId).toBe(party.instanceId);
     expect(party.rows.map((r) => r.attrName)).toEqual(['name']);
   });
 });
@@ -2073,19 +2242,24 @@ describe('buildStructureGraph — inherited-row self-reference to descendant (ca
         }
       ]
     };
+    // ns::Derived extends ns::Base: outermostCanonicalId = 'ns::Derived::__base::ns::Base'.
+    const derivedBaseRfId = 'ns::Derived::__base::ns::Base';
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'ns::Derived',
       // Expansion key uses the BASE owner (where `child` is declared).
-      expansionMap: new Map([[expansionKey({ namespaceUri: 'ns', typeId: 'Base', attrName: 'child' }), true]])
+      expansionMap: new Map([
+        [expansionKey({ namespaceUri: 'ns', typeId: 'Base', attrName: 'child', instancePath: [derivedBaseRfId] }), true]
+      ])
     });
 
     // Build completed (no stack overflow) and produced exactly two nodes:
     // the Derived data node and the synthetic Base container that wraps it.
     expect(result.nodes.size).toBe(2);
-    const baseId = `ns::Derived::__base::ns::Base`;
-    const base = result.nodes.get(baseId) as StructureBaseContainer;
+    const baseCanonicalId = `ns::Derived::__base::ns::Base`;
+    const base = findByCanonicalId(result.nodes, baseCanonicalId) as StructureBaseContainer;
+    const derived = findByCanonicalId(result.nodes, 'ns::Derived') as StructureDataNode;
     expect(base.kind).toBe('base');
-    expect(base.childNodeId).toBe('ns::Derived');
+    expect(base.childNodeId).toBe(derived.instanceId);
     // Containment edge MUST be suppressed — the only path to Derived from
     // here is the recursion we're already in, which would form a parent-
     // cycle Phase 3 cannot lay out.
@@ -2130,16 +2304,22 @@ describe('buildStructureGraph — inherited-row self-reference to descendant (ca
         }
       ]
     };
+    // A extends B extends C: outermostCanonicalId = 'ns::A::__base::ns::C'.
+    const cBaseRfId = 'ns::A::__base::ns::C';
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'ns::A',
-      expansionMap: new Map([[expansionKey({ namespaceUri: 'ns', typeId: 'C', attrName: 'aRef' }), true]])
+      expansionMap: new Map([
+        [expansionKey({ namespaceUri: 'ns', typeId: 'C', attrName: 'aRef', instancePath: [cBaseRfId] }), true]
+      ])
     });
 
     // No stack overflow. Three nodes: A data + B container + C container.
     expect(result.nodes.size).toBe(3);
-    const bId = `ns::A::__base::ns::B`;
-    const cId = `ns::A::__base::ns::C`;
-    const cContainer = result.nodes.get(cId) as StructureBaseContainer;
+    const bCanonicalId = `ns::A::__base::ns::B`;
+    const cCanonicalId = `ns::A::__base::ns::C`;
+    const cContainer = findByCanonicalId(result.nodes, cCanonicalId) as StructureBaseContainer;
+    const bContainer = findByCanonicalId(result.nodes, bCanonicalId) as StructureBaseContainer;
+    const a = findByCanonicalId(result.nodes, 'ns::A') as StructureDataNode;
     expect(cContainer.kind).toBe('base');
     // C's inherited row → A is suppressed (A is the focused descendant on
     // the current recursion path).
@@ -2147,11 +2327,468 @@ describe('buildStructureGraph — inherited-row self-reference to descendant (ca
     const aRefRow = cContainer.baseRows.find((r) => r.attrName === 'aRef')!;
     expect(aRefRow.typeKind).toBe('Data');
     expect(aRefRow.targetNodeId).toBe('ns::A');
-    // B container exists and chains correctly: outermost is C, inner is B
-    // (B's childNodeId = A; C's childNodeId = B).
-    expect(result.nodes.has(bId)).toBe(true);
-    const bContainer = result.nodes.get(bId) as StructureBaseContainer;
-    expect(bContainer.childNodeId).toBe('ns::A');
-    expect(cContainer.childNodeId).toBe(bId);
+    // B container chains correctly: outermost is C, inner is B (B's childNodeId
+    // = A's instance id; C's childNodeId = B's instance id).
+    expect(bContainer).toBeDefined();
+    expect(bContainer.childNodeId).toBe(a.instanceId);
+    expect(cContainer.childNodeId).toBe(bContainer.instanceId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 14d — per-instance expansion semantics
+// ---------------------------------------------------------------------------
+
+describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
+  // Per-instance expansion semantics, matching XmlSpy / Altova UModel / Liquid
+  // Studio / Oxygen XML conventions. Each visible occurrence of a type can be
+  // expanded independently. The expansion key carries an `instancePath` of
+  // ancestor React Flow instance ids, so chevrons in different visible
+  // occurrences of the same type produce different keys.
+
+  it('expanding the buyer row on Trade does not expand the seller row even though both target Party', () => {
+    // Top-level independence: buyer and seller are different attrNames on Trade,
+    // so their chevrons have distinct keys (`{Trade, buyer, []}` vs
+    // `{Trade, seller, []}`). Expanding only buyer leaves seller collapsed.
+    const fixture = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'buyer', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } },
+            { name: 'seller', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Party',
+          $type: 'Data' as const,
+          name: 'Party',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'partyId', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        }
+      ]
+    };
+    // Only the buyer row is expanded. Per-instance key: Trade has no inheritance,
+    // rootInstanceId = 'cdm.trade::Trade'. Root-row instancePath = [rootInstanceId].
+    const buyerKey: StructureExpansionKey = {
+      namespaceUri: 'cdm.trade',
+      typeId: 'Trade',
+      attrName: 'buyer',
+      instancePath: ['cdm.trade::Trade']
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map([[expansionKey(buyerKey), true]])
+    });
+
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    // Buyer expansion edge present (resolves to a per-instance Party id);
+    // seller is collapsed.
+    expect(trade.expansions.get('buyer')).toBeDefined();
+    expect(trade.expansions.has('seller')).toBe(false);
+    // Phase 14e: the buyer's Party is its own per-instance subtree.
+    const partyInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Party');
+    expect(partyInstances).toHaveLength(1);
+    expect(trade.expansions.get('buyer')).toBe(partyInstances[0].instanceId);
+  });
+
+  it('per-instance keys expand rows at both root and nested levels', () => {
+    // Verifies that the per-instance key format correctly fires both the root
+    // row expansion (Trade.party) and the nested row expansion (Party.address).
+    //
+    // Per-instance key for Trade.party: Trade's rows are checked with
+    //   childInstancePath = ['cdm.trade::Trade'] (= [...[], TradeRfId])
+    //
+    // Per-instance key for Party.address: Party's rows are checked with
+    //   childInstancePath = ['cdm.trade::Trade', 'cdm.trade::Trade::party::cdm.trade::Party']
+    // This is the self-inclusive format (ancestors + self rfId).
+    const fixture = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'party', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Party',
+          $type: 'Data' as const,
+          name: 'Party',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'address', typeCall: { type: { $refText: 'Address' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Address',
+          $type: 'Data' as const,
+          name: 'Address',
+          namespace: 'cdm.trade',
+          attributes: []
+        }
+      ]
+    };
+    const tradeRfId = 'cdm.trade::Trade';
+    const partyRfId = `${tradeRfId}::party::cdm.trade::Party`;
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap: new Map([
+        [
+          expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'party', instancePath: [tradeRfId] }),
+          true
+        ],
+        [
+          expansionKey({
+            namespaceUri: 'cdm.trade',
+            typeId: 'Party',
+            attrName: 'address',
+            instancePath: [tradeRfId, partyRfId]
+          }),
+          true
+        ]
+      ])
+    });
+
+    const party = findByCanonicalId(result.nodes, 'cdm.trade::Party') as StructureDataNode;
+    const address = findByCanonicalId(result.nodes, 'cdm.trade::Address') as StructureDataNode;
+    expect(party).toBeDefined();
+    expect(address).toBeDefined();
+    expect(party.expansions.get('address')).toBe(address.instanceId);
+  });
+});
+
+describe('expansionKey — serialization contract (Phase 14d single shape)', () => {
+  // Single deterministic key shape. Empty/undefined instancePath serializes
+  // to `ns::Type::attr` (no suffix); non-empty path appends `::<path.join('>')>`.
+
+  it('serializes empty instancePath and omitted instancePath to the same string (root-level form)', () => {
+    const a = expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'party' });
+    const b = expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'party', instancePath: [] });
+    expect(a).toBe(b);
+    expect(a).toBe('cdm.trade::Trade::party');
+  });
+
+  it('appends instancePath with `>` separator when non-empty', () => {
+    const k = expansionKey({
+      namespaceUri: 'cdm.trade',
+      typeId: 'Party',
+      attrName: 'address',
+      instancePath: ['cdm.trade::Trade']
+    });
+    expect(k).toBe('cdm.trade::Party::address::cdm.trade::Trade');
+  });
+
+  it('uses `>` between path entries to keep them distinguishable from `::` field separators', () => {
+    const k = expansionKey({
+      namespaceUri: 'cdm.trade',
+      typeId: 'Address',
+      attrName: 'street',
+      instancePath: ['cdm.trade::Trade', 'cdm.trade::Trade::party::cdm.trade::Party']
+    });
+    expect(k).toBe('cdm.trade::Address::street::cdm.trade::Trade>cdm.trade::Trade::party::cdm.trade::Party');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 14e — full per-instance materialization (Codex PR #194 review)
+// ---------------------------------------------------------------------------
+
+describe('buildStructureGraph — full per-instance materialization (Phase 14e)', () => {
+  // The Phase 14d chevron-write fix addressed only half the problem: chevrons
+  // wrote per-instance keys, but the adapter's `walkAndExpand` still deduped
+  // StructureNodes by canonical id, so toggling `buyer.Party.address` polluted
+  // a shared Party.expansions map that the layout consulted for the seller's
+  // Party too. Phase 14e completes the picture: each visible instance has its
+  // own StructureNode with its own expansions map.
+
+  const buyerSellerFixture = {
+    namespaces: [{ uri: 'cdm.trade' }],
+    nodes: [
+      {
+        id: 'cdm.trade::Trade',
+        $type: 'Data' as const,
+        name: 'Trade',
+        namespace: 'cdm.trade',
+        attributes: [
+          { name: 'buyer', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } },
+          { name: 'seller', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      },
+      {
+        id: 'cdm.trade::Party',
+        $type: 'Data' as const,
+        name: 'Party',
+        namespace: 'cdm.trade',
+        attributes: [
+          { name: 'address', typeCall: { type: { $refText: 'Address' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      },
+      {
+        id: 'cdm.trade::Address',
+        $type: 'Data' as const,
+        name: 'Address',
+        namespace: 'cdm.trade',
+        attributes: [
+          { name: 'street', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      }
+    ]
+  };
+
+  it('expanding buyer.Party.address does NOT expand seller.Party.address (no shared expansions map)', () => {
+    // Expand: Trade.buyer (root row), Trade.seller (root row),
+    // AND buyer.Party.address ONLY — using the per-instance key with
+    // buyer.Party's instance id in the path.
+    // Trade has no inheritance, rootInstanceId = 'cdm.trade::Trade'.
+    const tradeRfId = 'cdm.trade::Trade';
+    const buyerPartyInstanceId = `${tradeRfId}::buyer::cdm.trade::Party`;
+    const expansionMap = new Map([
+      [
+        expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'buyer', instancePath: [tradeRfId] }),
+        true
+      ],
+      [
+        expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'seller', instancePath: [tradeRfId] }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Party',
+          attrName: 'address',
+          instancePath: [tradeRfId, buyerPartyInstanceId]
+        }),
+        true
+      ]
+    ]);
+    const result = buildStructureGraph(buyerSellerFixture, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap
+    });
+
+    // Both Party instances are present, each with its own expansions map.
+    const partyInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Party') as StructureDataNode[];
+    expect(partyInstances).toHaveLength(2);
+    const buyerParty = partyInstances.find((p) => p.instanceId === buyerPartyInstanceId)!;
+    const sellerParty = partyInstances.find((p) => p.instanceId !== buyerPartyInstanceId)!;
+    expect(buyerParty).toBeDefined();
+    expect(sellerParty).toBeDefined();
+
+    // Buyer's Party HAS the address expansion; seller's does NOT.
+    expect(buyerParty.expansions.has('address')).toBe(true);
+    expect(sellerParty.expansions.has('address')).toBe(false);
+
+    // Exactly one Address materialized (buyer's), not two.
+    const addressInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Address');
+    expect(addressInstances).toHaveLength(1);
+
+    // Total: Trade + 2 Party + 1 Address = 4 nodes.
+    expect(result.nodes.size).toBe(4);
+  });
+
+  it('expanding both buyer.Party.address AND seller.Party.address materializes TWO distinct Address subtrees', () => {
+    const tradeRfId = 'cdm.trade::Trade';
+    const buyerPartyInstanceId = `${tradeRfId}::buyer::cdm.trade::Party`;
+    const sellerPartyInstanceId = `${tradeRfId}::seller::cdm.trade::Party`;
+    const expansionMap = new Map([
+      [
+        expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'buyer', instancePath: [tradeRfId] }),
+        true
+      ],
+      [
+        expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'seller', instancePath: [tradeRfId] }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Party',
+          attrName: 'address',
+          instancePath: [tradeRfId, buyerPartyInstanceId]
+        }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Party',
+          attrName: 'address',
+          instancePath: [tradeRfId, sellerPartyInstanceId]
+        }),
+        true
+      ]
+    ]);
+    const result = buildStructureGraph(buyerSellerFixture, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap
+    });
+
+    // Total: Trade + 2 Party + 2 Address = 5 nodes.
+    expect(result.nodes.size).toBe(5);
+    const addressInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Address');
+    expect(addressInstances).toHaveLength(2);
+    // Each Address sits under its own Party instance.
+    const addrUnderBuyer = addressInstances.find((a) => a.instanceId.startsWith(buyerPartyInstanceId));
+    const addrUnderSeller = addressInstances.find((a) => a.instanceId.startsWith(sellerPartyInstanceId));
+    expect(addrUnderBuyer).toBeDefined();
+    expect(addrUnderSeller).toBeDefined();
+  });
+
+  it('recursive self-reference terminates safely (A.refToSelf:A expanded once)', () => {
+    const fixture = {
+      namespaces: [{ uri: 'ns' }],
+      nodes: [
+        {
+          id: 'ns::A',
+          $type: 'Data' as const,
+          name: 'A',
+          namespace: 'ns',
+          attributes: [
+            { name: 'refToSelf', typeCall: { type: { $refText: 'A' } }, card: { inf: 0, sup: 1, unbounded: false } }
+          ]
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'ns::A',
+      expansionMap: new Map([
+        [expansionKey({ namespaceUri: 'ns', typeId: 'A', attrName: 'refToSelf', instancePath: ['ns::A'] }), true]
+      ])
+    });
+    // Cycle detected at the first re-entry; no infinite loop. Exactly one A
+    // in the graph (the root); the self-referential expansion is suppressed.
+    expect(result.nodes.size).toBe(1);
+    const a = findByCanonicalId(result.nodes, 'ns::A') as StructureDataNode;
+    expect(a.expansions.size).toBe(0);
+  });
+
+  it('memory smoke: 3 Party expansions × 2 Address expansions each → 10 nodes (not deduped)', () => {
+    const fixture = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade::Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'buyer', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } },
+            { name: 'seller', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } },
+            { name: 'broker', typeCall: { type: { $refText: 'Party' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Party',
+          $type: 'Data' as const,
+          name: 'Party',
+          namespace: 'cdm.trade',
+          attributes: [
+            { name: 'home', typeCall: { type: { $refText: 'Address' } }, card: { inf: 1, sup: 1, unbounded: false } },
+            { name: 'work', typeCall: { type: { $refText: 'Address' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        },
+        {
+          id: 'cdm.trade::Address',
+          $type: 'Data' as const,
+          name: 'Address',
+          namespace: 'cdm.trade',
+          attributes: []
+        }
+      ]
+    };
+    // Expand all three Party rows + both Address rows on each Party.
+    // Per-instance keys: Trade has no inheritance, rootInstanceId = 'cdm.trade::Trade'.
+    // Each Party instance has its own id; to expand address on ALL three, we
+    // need per-instance keys for each Party instance's home/work rows.
+    const tradeRfId = 'cdm.trade::Trade';
+    const buyerPartyId = `${tradeRfId}::buyer::cdm.trade::Party`;
+    const sellerPartyId = `${tradeRfId}::seller::cdm.trade::Party`;
+    const brokerPartyId = `${tradeRfId}::broker::cdm.trade::Party`;
+    const expansionMap = new Map([
+      [
+        expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'buyer', instancePath: [tradeRfId] }),
+        true
+      ],
+      [
+        expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'seller', instancePath: [tradeRfId] }),
+        true
+      ],
+      [
+        expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'broker', instancePath: [tradeRfId] }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Party',
+          attrName: 'home',
+          instancePath: [tradeRfId, buyerPartyId]
+        }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Party',
+          attrName: 'home',
+          instancePath: [tradeRfId, sellerPartyId]
+        }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Party',
+          attrName: 'home',
+          instancePath: [tradeRfId, brokerPartyId]
+        }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Party',
+          attrName: 'work',
+          instancePath: [tradeRfId, buyerPartyId]
+        }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Party',
+          attrName: 'work',
+          instancePath: [tradeRfId, sellerPartyId]
+        }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Party',
+          attrName: 'work',
+          instancePath: [tradeRfId, brokerPartyId]
+        }),
+        true
+      ]
+    ]);
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap
+    });
+    // Trade + 3 Party + 6 Address = 10 nodes.
+    expect(result.nodes.size).toBe(10);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.trade::Party')).toHaveLength(3);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.trade::Address')).toHaveLength(6);
   });
 });

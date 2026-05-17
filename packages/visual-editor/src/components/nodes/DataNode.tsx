@@ -47,6 +47,18 @@ interface StructureNodeData extends StructureDataNode {
    * expansion map (typically via useStructureViewStore.toggleExpansion).
    */
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
+  /**
+   * React Flow instance ids of this node's ancestors (NOT including this node
+   * itself). Injected by `layoutStructureGraph` (Phase 14d). Used to scope
+   * each row's expansion key per-instance: two visible occurrences of the
+   * same type have different `instancePath`s because their parent instance
+   * ids differ, so their row chevrons stay independent.
+   *
+   * Optional / may be undefined when this component is rendered outside the
+   * Structure View layout (e.g., direct unit tests that omit it). Treated
+   * as an empty array: `ownerInstancePath = [...(instancePath ?? []), id]`.
+   */
+  readonly instancePath?: ReadonlyArray<string>;
 }
 
 /**
@@ -88,7 +100,7 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // .rune-node-rows, .rune-node-row, .rune-row-handle, .rune-node-children-slot
     // in styles.css — layout constants (ROW_HEIGHT=28, COL_WIDTH=260, etc.) are matched there.
     const rows = data.rows as ReadonlyArray<StructureRow>;
-    const { cellComponents, expansionMap, onToggleExpansion } = data;
+    const { cellComponents, expansionMap, onToggleExpansion, instancePath } = data;
     const NameCell = cellComponents?.name;
     const TypeCell = cellComponents?.type;
     const CardCell = cellComponents?.card;
@@ -97,6 +109,19 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // toggles round-trip through the persistence layer correctly.
     const ownerNamespaceUri = data.namespaceUri;
     const ownerTypeName = data.name;
+    // Per-instance expansion. The rowKey's instancePath must include self's
+    // React Flow id (`id`) so two visible occurrences of the same type at the
+    // same depth produce DISTINCT keys. `data.instancePath` carries the ancestors
+    // (NOT including self); appending `id` makes it self-inclusive.
+    //
+    // Example: buyer.Party and seller.Party both have `data.instancePath = ['Trade']`
+    // because their parent is Trade. Each chevron serializes to a distinct key:
+    //   buyer.Party:  instancePath = ['Trade', 'Trade::buyer::Party']
+    //   seller.Party: instancePath = ['Trade', 'Trade::seller::Party']
+    //
+    // The adapter's shouldExpand checks with the same self-inclusive path, so
+    // expansion round-trips correctly through the store.
+    const ownerInstancePath: ReadonlyArray<string> = [...(instancePath ?? []), id];
 
     return (
       <div className={`rune-node rune-node-data rune-node-data--structure${selected ? ' rune-node-selected' : ''}`}>
@@ -110,7 +135,12 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
             {rows.map((row: StructureRow) => {
               const expandable = isRowExpandable(row.typeKind);
               const rowKey: StructureExpansionKey | undefined = expandable
-                ? { namespaceUri: ownerNamespaceUri, typeId: ownerTypeName, attrName: row.attrName }
+                ? {
+                    namespaceUri: ownerNamespaceUri,
+                    typeId: ownerTypeName,
+                    attrName: row.attrName,
+                    instancePath: ownerInstancePath
+                  }
                 : undefined;
               const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;
               const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {

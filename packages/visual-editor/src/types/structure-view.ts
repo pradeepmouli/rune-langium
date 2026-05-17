@@ -63,16 +63,48 @@ export function isTypeRefPayload(value: unknown): value is TypeRefPayload {
   );
 }
 
-/** Key used in the expansion map; encodes namespace + type + attribute. */
+/**
+ * Key used in the expansion map; encodes namespace + type + attribute, plus
+ * an optional per-instance discriminator.
+ *
+ * **Per-instance semantics (Phase 14d, spec 020).** Each visible occurrence of
+ * a type tracks its own expansion state — matching XmlSpy / Altova UModel /
+ * Liquid Studio / Oxygen XML conventions. The `instancePath` carries the chain
+ * of React Flow instance ids of the ancestors leading TO this row's owner (NOT
+ * including the owner itself). Two placements of the same type at the same
+ * depth produce different `instancePath`s because their parent instance ids
+ * differ (e.g. `Trade::buyer::Party` vs `Trade::seller::Party`), so chevrons
+ * inside them stay independent.
+ *
+ * The separator inside the path uses `>` (not `:`) because `:` is already the
+ * field separator and we need to round-trip the path through a single string.
+ */
 export interface StructureExpansionKey {
   readonly namespaceUri: string;
   readonly typeId: string;
   readonly attrName: string;
+  /**
+   * Chain of React Flow instance ids of ancestors leading to this row's owner,
+   * NOT including the owner. Empty/undefined = root-level instance (no ancestors).
+   */
+  readonly instancePath?: ReadonlyArray<string>;
 }
 
-/** Serialise an expansion key for use as a Map / Record key. */
+/**
+ * Serialise an expansion key for use as a Map / Record key.
+ *
+ * **Format:**
+ * - No `instancePath` (or empty): `${namespaceUri}::${typeId}::${attrName}`
+ * - With `instancePath`: `${namespaceUri}::${typeId}::${attrName}::${path.join('>')}`
+ *
+ * This is the single deterministic per-instance key shape. Root-level rows
+ * (empty `instancePath`) serialize without a suffix; nested rows append the
+ * ancestor chain. `expansionKey` is the sole serializer — use it everywhere.
+ */
 export function expansionKey(k: StructureExpansionKey): string {
-  return `${k.namespaceUri}::${k.typeId}::${k.attrName}`;
+  const base = `${k.namespaceUri}::${k.typeId}::${k.attrName}`;
+  if (!k.instancePath || k.instancePath.length === 0) return base;
+  return `${base}::${k.instancePath.join('>')}`;
 }
 
 /** Single row inside a Data node, as the Structure View sees it. */
@@ -91,14 +123,37 @@ export interface StructureRow {
 
 /** A Data node in the Structure View graph. */
 export interface StructureDataNode {
+  /**
+   * CANONICAL node id (e.g. `cdm.trade::Party`). Cells / editors look up the
+   * shared type description by this id. Multiple visible instances of the same
+   * type share the same `id` — they are distinguished by `instanceId`.
+   */
   readonly id: string;
+  /**
+   * Per-instance discriminator id (Phase 14e). The adapter emits one
+   * StructureDataNode per visible occurrence of a type; each carries its own
+   * `expansions` map so chevrons on different instances don't bleed into each
+   * other (e.g. `buyer.Party` vs `seller.Party`).
+   *
+   * For root placements this equals the canonical `id`. For nested instances
+   * it follows the layout's instance-id format
+   * (`${parentInstanceId}::${attrName}::${canonicalId}`).
+   *
+   * The `nodes` map in `StructureGraphInput` is keyed on `instanceId` when
+   * the adapter populates it. Layout-only test fixtures may omit `instanceId`;
+   * the layout falls back to `id` so existing fixtures continue to work.
+   */
+  readonly instanceId?: string;
   readonly kind: 'data';
   readonly name: string;
   readonly namespaceUri: string;
   readonly extendsName?: string;
   readonly extendsNodeId?: string;
   readonly rows: ReadonlyArray<StructureRow>;
-  /** Direct expansions (attrName → child node id). */
+  /**
+   * Direct expansions (attrName → child INSTANCE id). The child id keys into
+   * `StructureGraphInput.nodes` (which is per-instance keyed).
+   */
   readonly expansions: ReadonlyMap<string, string>;
 }
 
@@ -118,7 +173,10 @@ export interface StructureChoiceArm {
 
 /** A Choice node in the Structure View graph. */
 export interface StructureChoiceNode {
+  /** Canonical node id; see `StructureDataNode.id` for the per-instance contract. */
   readonly id: string;
+  /** Per-instance discriminator (Phase 14e); see `StructureDataNode.instanceId`. */
+  readonly instanceId?: string;
   readonly kind: 'choice';
   readonly name: string;
   readonly namespaceUri: string;
@@ -127,18 +185,25 @@ export interface StructureChoiceNode {
 
 /** A base-type GroupContainer wrap. */
 export interface StructureBaseContainer {
+  /**
+   * Canonical wrapper id (e.g. `cdm.trade::Trade::__base::cdm.trade::TradeBase`).
+   * Multiple instances of the same wrapper (one per visible occurrence of the
+   * outer type) share the canonical id but differ in `instanceId`.
+   */
   readonly id: string;
+  /** Per-instance discriminator (Phase 14e); see `StructureDataNode.instanceId`. */
+  readonly instanceId?: string;
   readonly kind: 'base';
   readonly baseTypeName: string;
   readonly baseTypeNamespaceUri: string;
   readonly baseRows: ReadonlyArray<StructureRow>;
+  /** INSTANCE id of the child Data node inside this base container. */
   readonly childNodeId: string;
   /**
    * Containment edges from this base level's inherited rows into expanded
-   * target nodes (Data/Choice that the user clicked to expand). Mirrors
-   * StructureDataNode.expansions; spec §3.2 says containment is uniform
-   * across inheritance and type-reference, so a row's owner — whether base
-   * level or derived level — must be able to carry its own expansion edges.
+   * target nodes (Data/Choice that the user clicked to expand). Values are
+   * INSTANCE ids (mirroring StructureDataNode.expansions). Spec §3.2 — base
+   * level rows can carry their own expansion edges, scoped per-instance.
    */
   readonly expansions: ReadonlyMap<string, string>;
 }
@@ -147,6 +212,17 @@ export type StructureNode = StructureDataNode | StructureChoiceNode | StructureB
 
 /** Full graph input produced by the adapter. */
 export interface StructureGraphInput {
+  /**
+   * INSTANCE id of the root node. Keys into `nodes`. For the root placement
+   * the instance id equals the canonical id of the outermost wrapper, so
+   * existing callers that pass canonical ids through this field continue to
+   * work for non-nested roots.
+   */
   readonly rootNodeId: string;
+  /**
+   * Per-instance node map. Keys are `StructureNode.instanceId`; each visible
+   * occurrence of a type is its own entry with its own `expansions` map.
+   * Look up a node's shared canonical metadata via `.id`.
+   */
   readonly nodes: ReadonlyMap<string, StructureNode>;
 }
