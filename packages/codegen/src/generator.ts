@@ -147,12 +147,11 @@ function resolveEmitter(
     };
   }
 
-  // No path forward. Copilot review on PR #166: don't silently fall
-  // back to the namespace emitter when a non-'per-namespace' layout
-  // was requested — that ignores the caller's `options.<target>.layout`
-  // and silently produces legacy output. Return undefined so the
-  // top-level runGenerate emits a `not-implemented` diagnostic that
-  // strict-mode callers can turn into a GeneratorError.
+  // No emitter found for the requested target + layout combination.
+  // Return undefined so the top-level runGenerate emits a
+  // `not-implemented` diagnostic that strict-mode callers can turn
+  // into a GeneratorError (PR #166: avoids silently ignoring the
+  // caller's `options.<target>.layout` setting).
   return undefined;
 }
 
