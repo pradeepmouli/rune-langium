@@ -17,7 +17,7 @@ purpose, defaults, and the runtime gate they drive.
 | `VITE_LSP_SESSION_URL` | derived from `VITE_LSP_WS_URL` | Endpoint for `POST /lsp/session`. Same host, http(s) scheme. |
 | `VITE_TELEMETRY_ENDPOINT` | derived from `location.origin` (existing) | Already shipped in 012. Listed here for completeness; FR-021's "make hosts configurable" applies. |
 | `VITE_DEV_MODE` | `true` if `import.meta.env.DEV`, else `false` | FR-014 — gates dev-only copy. The status bar's `ws://localhost:3001` instruction text is shown ONLY when this is true. |
-| `VITE_LEGACY_GIT_PATH` | `false` | FR-019 — when `true`, re-enables the legacy `cors.isomorphic-git.org` clone fallback. Production builds default to `false`; only contributors testing the legacy path locally flip it on. |
+| ~~`VITE_LEGACY_GIT_PATH`~~ | _removed_ | Removed in chore/rip-legacy-yagni: the flag was always `false` in production. The git-clone path it gated (used by "+ Load from custom URL") is now reached at runtime via the source's `repoUrl` field; no env var gates it. FR-019's "opt-in legacy fallback" semantics no longer exist. |
 
 ---
 
@@ -31,8 +31,8 @@ const Config = z.object({
   lspWsUrl: z.string().url().refine(u => u.startsWith('ws://') || u.startsWith('wss://')),
   lspSessionUrl: z.string().url(),
   telemetryEndpoint: z.string().url(),
-  devMode: z.boolean(),
-  legacyGitPathEnabled: z.boolean()
+  devMode: z.boolean()
+  // legacyGitPathEnabled removed — see env table above
 }).strict();
 ```
 
@@ -53,14 +53,14 @@ if (config.devMode) {
   setStatusError('Editor running offline — language services unavailable');
 }
 
-// FR-019: legacy git fallback opt-in
+// FR-019 (post-cleanup): primary curated path or runtime git-clone for custom URL sources
 if (source.archiveUrl) {
   return loadCuratedModel({...}); // primary path
 }
-if (config.legacyGitPathEnabled) {
-  return cloneViaIsomorphicGit({...}); // dev-only fallback
+if (source.repoUrl) {
+  return cloneViaIsomorphicGit({...}); // custom URL flow — runtime check, no env gate
 }
-throw new ModelLoadError('unknown', 'No archive URL and legacy fallback disabled');
+throw new ModelLoadError('unknown', 'Source has no archiveUrl or repoUrl');
 ```
 
 ---
@@ -69,9 +69,9 @@ throw new ModelLoadError('unknown', 'No archive URL and legacy fallback disabled
 
 | Build target | `pnpm build` cmd | Resulting env defaults |
 |---|---|---|
-| Local dev | `pnpm dev` | `devMode=true`, `legacyGitPathEnabled=false`, `lspWsUrl=ws://localhost:3001` |
-| Production (CF Pages) | `pnpm --filter @rune-langium/studio build` (with CF env injection) | `devMode=false`, `legacyGitPathEnabled=false`, `lspWsUrl=wss://www.daikonic.dev/rune-studio/api/lsp` |
-| Storybook / fixtures | `pnpm test` | `devMode=true`, `legacyGitPathEnabled=true` (matches today's test fixtures) |
+| Local dev | `pnpm dev` | `devMode=true`, `lspWsUrl=ws://localhost:3001` |
+| Production (CF Pages) | `pnpm --filter @rune-langium/studio build` (with CF env injection) | `devMode=false`, `lspWsUrl=wss://www.daikonic.dev/rune-studio/api/lsp` |
+| Storybook / fixtures | `pnpm test` | `devMode=true` |
 
 ---
 
