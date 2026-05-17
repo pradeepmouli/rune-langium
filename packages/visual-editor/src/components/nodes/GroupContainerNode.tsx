@@ -65,12 +65,13 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
   // BASE_PADDING=16, etc.) are matched there.
   //
   // Codex P2 / PR #191: each Data/Choice row now shows a chevron expand/collapse
-  // button (matching the DataNode pattern). The expansion key is keyed to the BASE
-  // type's canonical typeId (`${baseTypeNamespaceUri}::${baseTypeName}`) because
-  // the row belongs to the base type, not the derived type.
+  // button (matching the DataNode pattern). The expansion key uses the BARE base
+  // type name as typeId because the adapter's shouldExpand (and DataNode) write
+  // `typeId: ownerTypeName` (bare) — see structure-graph-adapter.ts:194 and
+  // DataNode.tsx:113. Any other format would produce a key that the adapter never
+  // looks for, leaving the chevron's "expanded" state visually correct but never
+  // actually rendering the child.
   const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion } = data;
-  // The canonical typeId for base rows: `ns::Name` form — matches expansionKey contract.
-  const baseTypeId = `${baseTypeNamespaceUri}::${baseTypeName}`;
 
   return (
     <div className="rune-graph-group rune-graph-group--base">
@@ -82,7 +83,7 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
         {baseRows.map((row) => {
           const expandable = isRowExpandable(row.typeKind);
           const rowKey: StructureExpansionKey | undefined = expandable
-            ? { namespaceUri: baseTypeNamespaceUri, typeId: baseTypeId, attrName: row.attrName }
+            ? { namespaceUri: baseTypeNamespaceUri, typeId: baseTypeName, attrName: row.attrName }
             : undefined;
           const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;
           const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {

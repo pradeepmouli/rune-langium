@@ -8,7 +8,6 @@ import type { StructureRow, StructureExpansionKey } from '../../../src/types/str
 
 const NS = 'cdm.base';
 const BASE_TYPE_NAME = 'TradeBase';
-const BASE_TYPE_ID = `${NS}::${BASE_TYPE_NAME}`;
 
 const dataRow: StructureRow = {
   attrName: 'economics',
@@ -60,7 +59,7 @@ describe('GroupContainerNode — base-type scope', () => {
 describe('GroupContainerNode — base-type expansion chevron (Codex P2, PR #191)', () => {
   const dataRowKey: StructureExpansionKey = {
     namespaceUri: NS,
-    typeId: BASE_TYPE_ID,
+    typeId: BASE_TYPE_NAME,
     attrName: dataRow.attrName
   };
 
@@ -146,7 +145,7 @@ describe('GroupContainerNode — base-type expansion chevron (Codex P2, PR #191)
     expect(onToggle).toHaveBeenCalledTimes(1);
     expect(onToggle).toHaveBeenCalledWith({
       namespaceUri: NS,
-      typeId: BASE_TYPE_ID,
+      typeId: BASE_TYPE_NAME,
       attrName: dataRow.attrName
     } satisfies StructureExpansionKey);
   });
