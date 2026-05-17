@@ -20,8 +20,6 @@
  *   - `VITE_ENABLE_GITHUB_AUTH` deployment-level switch for GitHub auth flow
  *   - `VITE_ENABLE_CURATED_MIRROR` deployment-level switch for curated mirror UI
  *   - `VITE_DEV_MODE`           gates dev-only status copy (FR-014)
- *   - `VITE_LEGACY_GIT_PATH`    re-enables the legacy isomorphic-git fallback
- *                               (FR-019; production builds default `false`)
  */
 
 import { z } from 'zod';
@@ -87,8 +85,6 @@ const curatedMirrorEnabled = boolFromEnv(env.VITE_ENABLE_CURATED_MIRROR, true);
 // VITE_DEV_MODE override; otherwise mirror import.meta.env.DEV.
 const devMode = env.VITE_DEV_MODE !== undefined ? boolFromEnv(env.VITE_DEV_MODE, isDev) : isDev;
 
-const legacyGitPathEnabled = boolFromEnv(env.VITE_LEGACY_GIT_PATH, false);
-
 // ────────────────────────────────────────────────────────────────────────────
 // Schema + parse
 // ────────────────────────────────────────────────────────────────────────────
@@ -102,8 +98,7 @@ const ConfigSchema = z
     telemetryEnabled: z.boolean(),
     githubAuthEnabled: z.boolean(),
     curatedMirrorEnabled: z.boolean(),
-    devMode: z.boolean(),
-    legacyGitPathEnabled: z.boolean()
+    devMode: z.boolean()
   })
   .strict();
 
@@ -121,8 +116,7 @@ export const config: StudioRuntimeConfig = ConfigSchema.parse({
   telemetryEnabled,
   githubAuthEnabled,
   curatedMirrorEnabled,
-  devMode,
-  legacyGitPathEnabled
+  devMode
 });
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -25,8 +25,6 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_CURATED_MIRROR?: string;
   /** When `'true'`, enables developer-only status copy and dev-mode hints. */
   readonly VITE_DEV_MODE?: string;
-  /** When `'true'`, re-enables the legacy `cors.isomorphic-git.org` clone fallback (FR-019). */
-  readonly VITE_LEGACY_GIT_PATH?: string;
 }
 
 interface ImportMeta {

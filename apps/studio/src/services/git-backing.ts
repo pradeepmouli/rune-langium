@@ -69,11 +69,7 @@ export interface InitOptions {
   defaultBranch?: string;
 }
 
-export async function initRepo(
-  fs: OpfsFs,
-  workspaceId: string,
-  options: InitOptions = {}
-): Promise<void> {
+export async function initRepo(fs: OpfsFs, workspaceId: string, options: InitOptions = {}): Promise<void> {
   const dir = repoDir(workspaceId);
   await git.init({
     fs: gitFs(fs) as unknown as Parameters<typeof git.init>[0]['fs'],
@@ -88,11 +84,7 @@ export interface CommitOptions {
   authorEmail: string;
 }
 
-export async function stageAndCommit(
-  fs: OpfsFs,
-  workspaceId: string,
-  options: CommitOptions
-): Promise<string> {
+export async function stageAndCommit(fs: OpfsFs, workspaceId: string, options: CommitOptions): Promise<string> {
   const dir = repoDir(workspaceId);
   const fsAdapter = gitFs(fs) as unknown as Parameters<typeof git.add>[0]['fs'];
   // Walk the working tree and stage every file under files/.
@@ -115,9 +107,7 @@ export async function detectSyncState(fs: OpfsFs, workspaceId: string): Promise<
   const matrix = await git.statusMatrix({ fs: fsAdapter, dir });
   // Each row: [filepath, head, workdir, stage]. Anything where workdir != stage
   // or workdir != head is a local change → ahead.
-  const dirty = matrix.some(
-    ([_path, head, workdir, stage]) => head !== workdir || workdir !== stage
-  );
+  const dirty = matrix.some(([_path, head, workdir, stage]) => head !== workdir || workdir !== stage);
   return dirty ? 'ahead' : 'clean';
 }
 
@@ -141,17 +131,11 @@ export interface CloneOptions {
  * (object store). The same shape the existing `initRepo` + `pushBranch`
  * functions assume.
  *
- * Routes through the studio's CORS proxy (currently
- * `cors.isomorphic-git.org`); per FR-019 the legacy clone path is gated
- * on `config.legacyGitPathEnabled`, but this function is the
- * github-backed-workspace path and runs unconditionally — the FR-019
- * gate applies only to the curated-archive fallback in `model-loader.ts`.
+ * Routes through the studio's CORS proxy (`cors.isomorphic-git.org`).
+ * This is the GitHub-backed workspace path and runs unconditionally;
+ * it is distinct from the curated-archive path in `model-loader.ts`.
  */
-export async function cloneRepository(
-  fs: OpfsFs,
-  workspaceId: string,
-  options: CloneOptions
-): Promise<void> {
+export async function cloneRepository(fs: OpfsFs, workspaceId: string, options: CloneOptions): Promise<void> {
   const dir = repoDir(workspaceId);
   await git.clone({
     fs: gitFs(fs) as unknown as Parameters<typeof git.clone>[0]['fs'],
@@ -181,11 +165,7 @@ export interface PushOptions {
   user: string;
 }
 
-export async function pushBranch(
-  fs: OpfsFs,
-  workspaceId: string,
-  options: PushOptions
-): Promise<void> {
+export async function pushBranch(fs: OpfsFs, workspaceId: string, options: PushOptions): Promise<void> {
   await git.push({
     fs: gitFs(fs) as unknown as Parameters<typeof git.push>[0]['fs'],
     http,
