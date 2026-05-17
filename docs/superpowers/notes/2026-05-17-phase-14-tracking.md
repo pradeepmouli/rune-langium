@@ -8,50 +8,52 @@ This doc captures 8 findings from the two reviews run on PR #191. They were inte
 
 ## Summary
 
-| # | Severity | Category | Title | Decision needed? |
+| # | Severity | Category | Title | Decision |
 |---|---|---|---|---|
-| C | P1 | RF perf / correctness | Data identity churns on every edit → all DataNode rerender | No — clean refactor |
-| D | P1 | Design conflict | Per-instance duplicate types share one expansion key | **YES** — per-instance vs shared semantics |
-| A | MED | Contract inconsistency | Choice roots: EditorPage allows, StructureView rejects | **YES** — narrow gating OR wire Choice root rendering |
-| B | MED | Contract inconsistency | Choice arms terminal & read-only despite editable target data | **YES** — defer explicitly OR wire arm parity |
-| E | P2 | RF UX | `fitView` runs every layout pass → viewport resets on edits | No — clean refactor |
-| F | P2 | RF perf / a11y | Decorative Handles in structure mode waste DOM | No — gate by variant |
-| G | P2 | RF latent | Top-level `width`/`height` on node; RF12 uses `style.*`/`measured` | No — preventive fix |
-| H | P2 | RF perf | `onlyRenderVisibleElements` not set on deep expansions | No — single prop |
+| C | P1 | RF perf / correctness | Data identity churns on every edit → all DataNode rerender | Phase 14c (3-part refactor) |
+| D | P1 | Design conflict | Per-instance duplicate types share one expansion key | **PER-INSTANCE** (XmlSpy match) — Phase 14d |
+| A | MED | Contract inconsistency | Choice roots: EditorPage allows, StructureView rejects | **WIRE** Choice root rendering — Phase 14e |
+| B | MED | Contract inconsistency | Choice arms terminal & read-only despite editable target data | **WIRE** arm parity — Phase 14e |
+| ~~E~~ | ~~P2~~ | ~~RF UX~~ | ~~`fitView` runs every layout pass → viewport resets on edits~~ | **DROPPED** — see § E |
+| F | P2 | RF perf / a11y | Decorative Handles in structure mode waste DOM | Phase 14b — gate by variant |
+| G | P2 | RF latent | Top-level `width`/`height` on node; RF12 uses `style.*`/`measured` | Phase 14b — preventive fix |
+| H | P2 | RF perf | `onlyRenderVisibleElements` not set on deep expansions | Phase 14b — single prop |
 | (nit) | — | RF | `useNavigation` called in structure variant but values unused | Bundle with C |
 | (nit) | — | RF | Full `expansionMap` passed to each DataNode (could be per-row slice) | Bundle with C |
 
 ## Recommended sequencing
 
-**Phase 14a — Decisions** (1 conversation, no code):
-- Resolve D (expansion semantics): per-instance or shared
-- Resolve A + B (Choice scope): narrow EditorPage gating to Data-only, OR wire Choice root + arm parity
-- Pick from the 3 doable-now items: C + E + F + G + H
+**Phase 14a — Decisions** (DONE, see Summary table):
+- D → per-instance (XmlSpy / Altova UModel / Liquid Studio / Oxygen XML match)
+- A → wire Choice root rendering (Direction 2)
+- B → wire Choice arm parity (Direction 2)
+- E → DROPPED per source-grep verification of RF12 internals
 
 **Phase 14b — Easy wins** (1 PR, ~half-day):
 - F (gate Handles by variant)
 - G (style.width/height)
 - H (onlyRenderVisibleElements)
-- E is **NOT** included — see detail section. The Opus reviewer's claim that `fitView` re-fires is contradicted by RF12 docs and needs a runtime reproduction first. Do the verification step BEFORE scheduling any 14b-style code work on it.
-
-**Phase 14b-pre — E verification** (10 min, no code change):
-- Run the studio locally, mount Structure View, expand a Data row, edit a NameCell, observe whether the viewport jumps
-- If viewport DOES jump → E is real; add the imperative-fitView refactor + regression test to Phase 14b (or split into 14b' as a separate PR)
-- If viewport stays put → drop E from the tracking entirely; the Opus reviewer was applying RF11 mental model to RF12
+- E is **DROPPED** — see § E for the source-grep verification. RF12 `fitView` prop is a one-shot initial fit; subsequent layout passes do NOT re-fit. The Opus reviewer applied an RF11 mental model.
 
 **Phase 14c — Data identity refactor** (1 PR, ~half-day):
 - C (hoist cellComponents/expansionMap/onToggleExpansion to React context, hook reads in DataNode/GroupContainerNode)
 - Nit consolidation (slice expansionMap per-row at the boundary)
 - Performance test that asserts a single-cell edit re-renders ≤1 DataNode (not all)
 
-**Phase 14d — Per-instance expansion semantics** (1 PR, design-dependent size):
-- D fix: implementation depends on decision in 14a
-- If per-instance: extend StructureExpansionKey with an instance-path discriminator, update layout to emit per-instance keys, update store persistence shape
-- If shared: keep current behavior, update Phase 13 docstrings + add a test that asserts "click on one Party instance expands all", remove the per-edge instance-id docstring's claim of "drills into its own copy"
+**Phase 14d — Per-instance expansion semantics** (this PR — branch `020-structure-view-phase-14d-per-instance-expansion`):
+- D fix: per-instance (XmlSpy / Altova UModel / Liquid Studio / Oxygen XML convention)
+- Extend `StructureExpansionKey` with optional `instancePath: ReadonlyArray<string>` (path of React Flow instance ids of ancestors leading to this row's owner; empty = root-level)
+- Update `expansionKey()` serializer: empty/undefined `instancePath` serializes to the SAME string as before (back-compat); populated path appends `::<path.join('>')>` suffix
+- Layout exposes `data.instancePath` on every emitted React Flow node (path = the React Flow node ids of ancestors; root = `[]`)
+- DataNode / GroupContainerNode chevrons read `data.instancePath` when building the row's expansion key
+- Adapter `shouldExpand` accepts `instancePath` and threads it through `walkAndExpand` / `walkBaseExpansions`
+- Migration story: old persisted keys (no `instancePath` suffix) parse as root-level expansions — zero data loss
 
-**Phase 14e — Choice parity** (1 PR per direction):
-- Direction 1 (narrow): EditorPage drops Choice/Enum from `focusedTypeId` derivation; NamespaceExplorer nav button disabled on non-Data rows; CHANGELOG narrows
-- Direction 2 (wire): StructureView accepts Choice roots; ChoiceNode receives cellComponents + expansion props; ChoiceNode renders chevron for arms whose target is expandable; arm expansion key contract
+**Phase 14e — Choice parity** (separate PR, Direction 2 chosen):
+- StructureView accepts Choice roots; `buildStructureGraph` extended to materialize Choice (and likely Enum) focused roots via `buildChoiceNode` / equivalent
+- ChoiceNode receives cellComponents + expansion props; renders chevron for arms whose target is expandable
+- Arm expansion key contract (likely `{namespaceUri, typeId: choiceTypeName, attrName: 'arms[index]'}` or similar)
+- Adapter tests for Choice-as-root materialization; ChoiceNode parity tests with DataNode chevron tests
 
 ## Detail per finding
 
@@ -88,7 +90,7 @@ This is cheaper to implement than C.2 + C.3 but does a per-edit O(n²) scan; acc
 
 ---
 
-### D — Per-instance duplicate types share one expansion key (P1, design conflict)
+### D — Per-instance duplicate types share one expansion key (P1, design conflict) — **RESOLVED: per-instance**
 
 **Files:** `packages/visual-editor/src/components/nodes/DataNode.tsx:112-115`, `packages/visual-editor/src/layout/structure-layout.ts:339-341`
 
@@ -98,11 +100,12 @@ const rowKey = { namespaceUri: ownerNamespaceUri, typeId: ownerTypeName, attrNam
 ```
 Click on `buyer.Party.address` chevron → flips the same map entry that drives `seller.Party.address`. Both subtrees expand together.
 
-**Design question:** Is this the intended contract?
-- **Per-instance** — Phase 13 finding 2's stated intent ("each expanded row should visibly drill into its own copy"). Needs: expansion key includes instance path; store persistence key includes instance discriminator.
-- **Shared** — current behavior; consistent with store's "expansion is per-type, not per-instance" persistence contract. Needs: docstring fix to drop the "drills into its own copy" claim; explicit test for coupled-expansion behavior; CHANGELOG entry calling out the UX.
-
-**Recommendation:** Pick shared (smaller blast radius, matches store contract) unless the CDM user feedback explicitly wants per-instance.
+**Decision (user-confirmed 2026-05-17): per-instance**, matching XmlSpy / Altova UModel / Liquid Studio / Oxygen XML conventions. Each visible occurrence of a type tracks its own expansion state. Implementation in Phase 14d:
+- `StructureExpansionKey` gains optional `instancePath: ReadonlyArray<string>` (React Flow instance ids of ancestors leading to this row's owner)
+- `expansionKey()` serializer is back-compatible: empty/undefined `instancePath` serializes to the same string as before (`${namespaceUri}::${typeId}::${attrName}`); populated path appends `::${path.join('>')}` (using `>` because `:` is the existing separator)
+- Layout exposes `data.instancePath` on every emitted React Flow node; renderers read it when building their row keys
+- Adapter `shouldExpand` accepts `instancePath` and threads it through recursion
+- Migration: zero data loss — old persisted keys parse as root-level (empty `instancePath`), which under the new model behaves as the root instance's per-instance state
 
 ---
 
@@ -138,17 +141,21 @@ Click on `buyer.Party.address` chevron → flips the same map entry that drives 
 
 ---
 
-### E — `fitView` re-runs on every layout pass (P2 — NEEDS VERIFICATION)
+### E — `fitView` re-runs on every layout pass (P2) — **DROPPED 2026-05-17**
 
 **File:** `packages/visual-editor/src/components/StructureView.tsx:124-128`
 
-**Opus reviewer claim:** `<ReactFlow fitView ... />` is sticky — re-fits on substantial node-set change. Combined with C, every keystroke can re-fit the viewport, jumping scroll/zoom. Every chevron click also re-fits.
+**Opus reviewer claim (REFUTED):** `<ReactFlow fitView ... />` re-fits on substantial node-set change → every keystroke jumps the viewport.
 
-**Codex challenge (PR #193 review):** Per RF12 docs, `fitView` prop fits the INITIAL nodes only; `fitViewOptions` customizes that initial call. Subsequent controlled `nodes` updates do NOT auto-refit. If correct, Phase 14b would spend work on a non-existent bug.
+**Verification (source-grep against @xyflow/react 12.10.2 bundle):**
+- `fitView` prop sets `fitViewQueued` state on first `setNodes` (bundle line 3198)
+- `setNodes` consumes `fitViewQueued` and clears it (line 3260–3290) — one-shot
+- `updateNodeInternals` also clears `fitViewQueued` (line 3314–3323) — one-shot
+- The state is never re-armed unless the prop's reference identity changes. The Structure View passes literal `true`, which has stable identity.
 
-**Verification needed BEFORE code:** mount the studio, open Structure View, expand a row, edit a cell — observe whether the viewport jumps. If it doesn't, drop E entirely; the only thing to track is the fitView-as-prop-vs-imperative-call style choice (negligible).
+**Conclusion:** `fitView` prop is a one-shot initial-fit. RF12 explicitly removed RF11's "re-fit on substantial change" behavior. Opus reviewer applied an RF11 mental model and was wrong. **No bug exists.**
 
-**If verified bug-fix is:** Drop the `fitView` prop. Add an inner component that calls `fitView()` imperatively via `useReactFlow` inside `useEffect` keyed on `focusedTypeId` only:
+**Inverted finding (lower priority, not in 14b):** The viewport does NOT re-center when `focusedTypeId` changes — this is a missing feature, not a regression. When a user navigates from `Trade` to `Party` via the explorer, the viewport stays where it was instead of refitting on the new root. If we want that behavior, the imperative-fitView refactor sketched in the original E recommendation IS the right shape — but as a feature add, not a fix:
 ```tsx
 function FitOnFocus({ focusedTypeId }: { focusedTypeId: string }) {
   const { fitView } = useReactFlow();
@@ -156,9 +163,7 @@ function FitOnFocus({ focusedTypeId }: { focusedTypeId: string }) {
   return null;
 }
 ```
-Mount inside `StructureFlowInner` (already inside the Provider).
-
-**Impact (if real):** UX — viewport state thrash on every interaction.
+Tracking note: file as a separate UX improvement ticket if user feedback requests it. Out of scope for Phase 14b.
 
 ---
 
