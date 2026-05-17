@@ -63,16 +63,55 @@ export function isTypeRefPayload(value: unknown): value is TypeRefPayload {
   );
 }
 
-/** Key used in the expansion map; encodes namespace + type + attribute. */
+/**
+ * Key used in the expansion map; encodes namespace + type + attribute, plus
+ * an optional per-instance discriminator.
+ *
+ * **Per-instance semantics (Phase 14d, spec 020).** Each visible occurrence of
+ * a type tracks its own expansion state — matching XmlSpy / Altova UModel /
+ * Liquid Studio / Oxygen XML conventions. The `instancePath` carries the chain
+ * of React Flow instance ids of the ancestors leading TO this row's owner (NOT
+ * including the owner itself). Two placements of the same type at the same
+ * depth produce different `instancePath`s because their parent instance ids
+ * differ (e.g. `Trade::buyer::Party` vs `Trade::seller::Party`), so chevrons
+ * inside them stay independent.
+ *
+ * **Back-compat / migration.** When `instancePath` is omitted or empty, the
+ * serialized form is identical to the pre-Phase-14d format (no suffix added).
+ * This means:
+ *   1. Old persisted keys deserialize and behave as "root-level" / no-ancestor
+ *      expansions — no data loss, no migration step required.
+ *   2. The root node always has `instancePath = []`, so its rows preserve the
+ *      old key shape and continue to work after a load from old persistence.
+ *
+ * The separator inside the path uses `>` (not `:`) because `:` is already the
+ * field separator and we need to round-trip the path through a single string.
+ */
 export interface StructureExpansionKey {
   readonly namespaceUri: string;
   readonly typeId: string;
   readonly attrName: string;
+  /**
+   * Chain of React Flow instance ids of ancestors leading to this row's owner,
+   * NOT including the owner. Empty/undefined = root-level instance (back-compat).
+   */
+  readonly instancePath?: ReadonlyArray<string>;
 }
 
-/** Serialise an expansion key for use as a Map / Record key. */
+/**
+ * Serialise an expansion key for use as a Map / Record key.
+ *
+ * **Format:**
+ * - No `instancePath` (or empty): `${namespaceUri}::${typeId}::${attrName}` (legacy form)
+ * - With `instancePath`: `${namespaceUri}::${typeId}::${attrName}::${path.join('>')}`
+ *
+ * The legacy form is preserved exactly so old persisted maps round-trip
+ * without migration. See `StructureExpansionKey` doc for the full rationale.
+ */
 export function expansionKey(k: StructureExpansionKey): string {
-  return `${k.namespaceUri}::${k.typeId}::${k.attrName}`;
+  const base = `${k.namespaceUri}::${k.typeId}::${k.attrName}`;
+  if (!k.instancePath || k.instancePath.length === 0) return base;
+  return `${base}::${k.instancePath.join('>')}`;
 }
 
 /** Single row inside a Data node, as the Structure View sees it. */

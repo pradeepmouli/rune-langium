@@ -385,6 +385,13 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
    * @param ancestorPath      Ordered list of canonical ids on the current path; mirrors
    *                          the ancestorPath used by the sizing pass so size lookups
    *                          retrieve the path-aware cache entry for this placement context.
+   * @param instanceAncestorPath  Ordered list of React Flow INSTANCE ids of ancestors of
+   *                          this node (NOT including this node itself). Used as
+   *                          `data.instancePath` — renderers read it to build per-instance
+   *                          expansion keys (Phase 14d). Two placements of the same type
+   *                          at the same depth produce different paths because their parent
+   *                          instance ids differ — that's what makes per-instance expansion
+   *                          chevrons independent across visible occurrences.
    */
   function placeNode(
     instanceId: string,
@@ -392,7 +399,8 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     parentInstanceId: string | undefined,
     position: { x: number; y: number },
     ancestors: ReadonlySet<string>,
-    ancestorPath: readonly string[]
+    ancestorPath: readonly string[],
+    instanceAncestorPath: readonly string[]
   ): void {
     const n = input.nodes.get(canonicalId);
     if (!n) return;
@@ -411,11 +419,16 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     // so they do not collide with the existing `'groupContainer'` renderer
     // (which expects `GroupContainerData = { label, nodeCount, scope, ... }`
     // — incompatible with the `StructureBaseContainer` payload we attach).
+    //
+    // `instancePath` exposes the chain of React Flow instance ids of this
+    // node's ancestors to the renderer (Phase 14d). DataNode/GroupContainerNode
+    // read it when building each row's expansion key so per-instance chevrons
+    // stay independent across visible occurrences of the same type.
     nodes.push({
       id: instanceId,
       type: n.kind === 'base' ? 'structureBase' : n.kind,
       position,
-      data: { ...n, variant: 'structure' },
+      data: { ...n, variant: 'structure', instancePath: instanceAncestorPath },
       parentId: parentInstanceId,
       extent: parentInstanceId ? 'parent' : undefined,
       width: sz.width,
@@ -428,6 +441,11 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     // their parent in the path — mirroring `childPath = [...ancestorPath, node.id]`
     // in the sizing pass.
     const childAncestorPath = [...ancestorPath, canonicalId];
+    // Instance path for children of this node: this node's own ancestors PLUS
+    // this node's instance id. Children of `Trade::buyer::Party` see
+    // `[Trade, Trade::buyer::Party]` regardless of which sibling's subtree they
+    // sit in — that's how per-instance disambiguation flows down the tree.
+    const childInstanceAncestorPath = [...instanceAncestorPath, instanceId];
 
     // Invariant: StructureChoiceNode is terminal in Phase 1's type (it has
     // `options` rows but no `expansions` field), so the recursion only fans
@@ -436,10 +454,10 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     // fail the exhaustiveness check below rather than silently dropping them.
     switch (n.kind) {
       case 'data':
-        placeDataChildren(n, instanceId, sz, nextAncestors, childAncestorPath);
+        placeDataChildren(n, instanceId, sz, nextAncestors, childAncestorPath, childInstanceAncestorPath);
         break;
       case 'base':
-        placeBaseChildren(n, instanceId, sz, nextAncestors, childAncestorPath);
+        placeBaseChildren(n, instanceId, sz, nextAncestors, childAncestorPath, childInstanceAncestorPath);
         break;
       case 'choice':
         // StructureChoiceNode is terminal — no expansions per type; nothing
@@ -457,7 +475,8 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     parentInstanceId: string,
     sz: SizedNode,
     ancestors: ReadonlySet<string>,
-    ancestorPath: readonly string[]
+    ancestorPath: readonly string[],
+    instanceAncestorPath: readonly string[]
   ): void {
     // yCursor tracks the running bottom of the children column. Each child is
     // placed at max(rowOffsetY, yCursor) so it aligns with its source row when
@@ -486,7 +505,8 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
           parentInstanceId,
           { x: COL_WIDTH + COL_GAP, y: childY },
           ancestors,
-          ancestorPath
+          ancestorPath,
+          instanceAncestorPath
         );
       }
 
@@ -499,7 +519,8 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     parentInstanceId: string,
     sz: SizedNode,
     ancestors: ReadonlySet<string>,
-    ancestorPath: readonly string[]
+    ancestorPath: readonly string[],
+    instanceAncestorPath: readonly string[]
   ): void {
     // 1. The derived child sits inside the yellow border below the base rows.
     //    The derived child is structurally singular per StructureBaseContainer
@@ -517,7 +538,8 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
           y: HEADER_HEIGHT + n.baseRows.length * ROW_HEIGHT + BASE_PADDING
         },
         ancestors,
-        ancestorPath
+        ancestorPath,
+        instanceAncestorPath
       );
     }
 
@@ -544,7 +566,8 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
           parentInstanceId,
           { x: rightColumnX, y: childY },
           ancestors,
-          ancestorPath
+          ancestorPath,
+          instanceAncestorPath
         );
       }
 
@@ -559,6 +582,9 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
   // `makeSizeCacheKey(rootNodeId, [rootNodeId])` by the sizing pass, so
   // the placeNode call must pass `[]` here (the pre-push path; placeNode
   // extends it with canonicalId before looking up the size).
-  placeNode(input.rootNodeId, input.rootNodeId, undefined, { x: 0, y: 0 }, new Set(), []);
+  // instanceAncestorPath also starts empty: the root has no ancestors, so its
+  // `data.instancePath` is `[]` — matching legacy/back-compat key serialization
+  // for root-row chevrons.
+  placeNode(input.rootNodeId, input.rootNodeId, undefined, { x: 0, y: 0 }, new Set(), [], []);
   return { nodes, edges };
 }

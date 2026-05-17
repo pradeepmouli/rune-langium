@@ -181,20 +181,60 @@ function buildRow(
   };
 }
 
+/**
+ * Decide whether `row` should be expanded into a child node for THIS visible
+ * occurrence of its owner.
+ *
+ * **Per-instance semantics (Phase 14d).** `instancePath` carries the chain of
+ * React Flow instance ids of the owner's ancestors (NOT including the owner
+ * itself). The adapter builds the expansion key with the same `instancePath`
+ * the renderer uses for its chevron, so a toggle on one visible occurrence
+ * only affects that occurrence's subtree.
+ *
+ * Empty/undefined `instancePath` produces the legacy key form, which preserves
+ * old persisted maps and behaves as "root-level / shared" for the root node.
+ *
+ * **Back-compat fallback.** When `instancePath` is non-empty, we ALSO check
+ * the legacy key (no instancePath). If either matches, expand. This lets old
+ * persisted expansion maps (which only have legacy keys) keep working AT ALL
+ * NESTING LEVELS after upgrade — without it, only root-row expansions would
+ * survive an upgrade, and deeply-nested user-expanded rows would silently
+ * collapse on the next session. Once the user toggles any chevron, the
+ * per-instance key gets written via the renderer's onToggleExpansion path,
+ * so over time the map naturally migrates to per-instance entries.
+ *
+ * The fallback is intentionally lossy in the per-instance direction: legacy
+ * keys expand ALL instances of a row. This matches the old shared semantics
+ * exactly, which is what we want for upgrade continuity.
+ */
 function shouldExpand(
   row: StructureRow,
   ownerNamespace: string,
   ownerTypeName: string,
-  expansionMap: ReadonlyMap<string, boolean>
+  expansionMap: ReadonlyMap<string, boolean>,
+  instancePath: ReadonlyArray<string>
 ): boolean {
   if (row.typeKind !== 'Data' && row.typeKind !== 'Choice') return false;
   if (!row.targetNodeId) return false;
-  const k = expansionKey({
+  const perInstanceKey = expansionKey({
     namespaceUri: ownerNamespace,
     typeId: ownerTypeName,
-    attrName: row.attrName
+    attrName: row.attrName,
+    instancePath
   });
-  return expansionMap.get(k) === true;
+  if (expansionMap.get(perInstanceKey) === true) return true;
+  // Back-compat fallback: also check the legacy key (no instancePath). For
+  // root-row chevrons (instancePath = []), this is a no-op because the
+  // per-instance and legacy keys serialize to the same string.
+  if (instancePath.length > 0) {
+    const legacyKey = expansionKey({
+      namespaceUri: ownerNamespace,
+      typeId: ownerTypeName,
+      attrName: row.attrName
+    });
+    if (expansionMap.get(legacyKey) === true) return true;
+  }
+  return false;
 }
 
 function choiceOptRefText(opt: AdapterChoiceOption): string {
@@ -235,6 +275,42 @@ function buildChoiceNode(node: AdapterNode, doc: AdapterDocument): StructureChoi
   };
 }
 
+/**
+ * Compose the React Flow instance id a layout placement would assign to an
+ * expansion child. Mirrors the layout's `makeInstanceId` so the adapter and
+ * layout agree on what `data.instancePath` should look like in renderer chevrons.
+ *
+ * Layout source of truth: `packages/visual-editor/src/layout/structure-layout.ts:339`.
+ */
+function adapterChildInstanceId(parentInstanceId: string, attrName: string, targetCanonicalId: string): string {
+  return `${parentInstanceId}::${attrName}::${targetCanonicalId}`;
+}
+
+/**
+ * Phase 14d helper: walk the inheritance chain of `focused` to determine the
+ * canonical id of the OUTERMOST base container wrapping it (or `focused.id`
+ * itself if there is no inheritance). Mirrors the wrapper-id construction in
+ * `materializeDataWithInheritance` so callers can pre-compute the outermost
+ * id before invoking materialization (needed when the outermost id is also
+ * used as the layout's rfId — i.e. for the root placement).
+ *
+ * Cycle protection mirrors the inheritance walk in
+ * `materializeDataWithInheritance`: a local `visited` set breaks malformed
+ * chains; well-formed inputs cannot self-extend.
+ */
+function computeOutermostCanonicalId(focused: AdapterNode, doc: AdapterDocument): string {
+  if (!focused.extends) return focused.id;
+  const visited = new Set<string>([focused.id]);
+  let outermost = focused.id;
+  let cursor: AdapterNode | undefined = findNodeByName(focused.extends, doc, focused.namespace);
+  while (cursor && !visited.has(cursor.id)) {
+    visited.add(cursor.id);
+    outermost = `${focused.id}::__base::${cursor.id}`;
+    cursor = cursor.extends ? findNodeByName(cursor.extends, doc, cursor.namespace) : undefined;
+  }
+  return outermost;
+}
+
 function walkAndExpand(
   node: AdapterNode,
   doc: AdapterDocument,
@@ -255,7 +331,24 @@ function walkAndExpand(
   // every cache-reuse so context-dependent suppressions don't become permanent
   // when a target is later revisited through a non-cyclic path. See the
   // `SuppressedEdge` doc for the full rationale.
-  suppressedEdges: SuppressedEdge[]
+  suppressedEdges: SuppressedEdge[],
+  // Phase 14d: per-instance expansion. `currentInstanceId` is the React Flow
+  // instance id that layout will assign to this node's placement (root: the
+  // canonical id; nested: makeInstanceId result from the parent's perspective).
+  // `instancePath` is the chain of ancestor instance ids leading to this node
+  // (NOT including this node itself) and is what `shouldExpand` uses to scope
+  // the expansion key for THIS node's rows. The chevron-renderer in DataNode
+  // sees the same `instancePath` via `data.instancePath` (injected by layout),
+  // so the keys match round-trip through the persistence layer.
+  //
+  // Note: the adapter still dedupes by canonical id. Two separate visible
+  // instances of the same type therefore share one `expansions` map — for the
+  // direct buyer.Party vs seller.Party case (both reached from Trade with the
+  // same canonical-id path `[Trade]`), the expansion set is the union. Full
+  // per-instance materialization (one StructureNode per instance) is a larger
+  // refactor and deferred to a future phase.
+  currentInstanceId: string,
+  instancePath: ReadonlyArray<string>
 ): void {
   const expansions = new Map<string, string>();
   const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
@@ -280,9 +373,11 @@ function walkAndExpand(
   // go out of scope on return acts as the implicit "leave" cleanup.
   const nextPath = new Set(path);
   nextPath.add(node.id);
+  // Children see this node's instance id appended to their instance path.
+  const childInstancePath: ReadonlyArray<string> = [...instancePath, currentInstanceId];
 
   for (const row of rows) {
-    if (shouldExpand(row, node.namespace, node.name, opts.expansionMap) && row.targetNodeId) {
+    if (shouldExpand(row, node.namespace, node.name, opts.expansionMap, instancePath) && row.targetNodeId) {
       const target = doc.nodes.find((n) => n.id === row.targetNodeId);
       if (!target) continue;
       // Defense-in-depth: re-check the target kind here so this guard cannot
@@ -311,6 +406,12 @@ function walkAndExpand(
         // must point at the OUTERMOST base container (if any) so the Data
         // target renders wrapped in its full inheritance chain — matching the
         // focused-root behavior in `buildStructureGraph`.
+        //
+        // Phase 14d: the layout uses the OUTERMOST canonical id (target's
+        // wrapper chain's outer) as the child's rfId — so we pass that into
+        // materialize, computed via the shared `computeOutermostCanonicalId`
+        // helper. Adapter rfId matches what the layout will use.
+        const targetOutermostCanonical = computeOutermostCanonicalId(target, doc);
         const expandedId = materializeDataWithInheritance(
           target,
           doc,
@@ -318,7 +419,9 @@ function walkAndExpand(
           out,
           nextPath,
           outerMostId,
-          suppressedEdges
+          suppressedEdges,
+          adapterChildInstanceId(currentInstanceId, row.attrName, targetOutermostCanonical),
+          childInstancePath
         );
         expansions.set(row.attrName, expandedId);
         // Promote any previously-suppressed edges that are now reachable now
@@ -363,7 +466,36 @@ function materializeDataWithInheritance(
   out: Map<string, StructureNode>,
   path: ReadonlySet<string>,
   outerMostId: Map<string, string>,
-  suppressedEdges: SuppressedEdge[]
+  suppressedEdges: SuppressedEdge[],
+  /**
+   * React Flow instance id that layout will assign to the OUTERMOST wrapper
+   * of this Data type (i.e., the outermost base container, or `focused.id`
+   * if there is no inheritance chain). This is what shows up as the rfId of
+   * the placed node and is the basis for child instance ids underneath.
+   *
+   * For the root focused type, this equals `focused.id` (no parent prefix).
+   * For an expanded child, it's the makeInstanceId result computed by the
+   * caller in `walkAndExpand`.
+   *
+   * Phase 14d: per-instance expansion. Threading instance ids and paths
+   * through here so `walkAndExpand` (called for the focused node and each
+   * base level) can scope row chevron keys per-instance.
+   */
+  outermostInstanceId: string,
+  /**
+   * Instance path that `walkAndExpand` should use for the FOCUSED node's rows
+   * (ancestors of the focused node — NOT including the outermost wrapper).
+   * For the root focused type, this is `[]`. For an expanded child, it's the
+   * caller's child-instance-path (`[...parentPath, parentInstanceId]`).
+   *
+   * Note: when `focused` has inheritance, the outermost wrapper is a base
+   * container — that container's own rows (`baseRows`) sit at the wrapper's
+   * own level, so their owner's instance path = `instancePath` and their
+   * owner's instance id = `outermostInstanceId`. The focused (innermost)
+   * Data node's rows sit one level deeper, with instance path extended by
+   * each intervening base container's instance id.
+   */
+  instancePath: ReadonlyArray<string>
 ): string {
   // Repeat-expansion fast path: same target reached via multiple references
   // (e.g. Portfolio.trade1 + Portfolio.trade2 both point at Trade). The
@@ -393,17 +525,6 @@ function materializeDataWithInheritance(
   // walks build `baseRowPath` from `path + base ids`, omitting `focused.id`.
   outerMostId.set(focused.id, focused.id);
 
-  // Materialize the focused Data node first. Its own type-reference
-  // expansions still need to walk through `walkAndExpand`. This must happen
-  // before the inheritance chain is built so the innermost base container's
-  // `childNodeId` can reference the now-present Data node.
-  walkAndExpand(focused, doc, opts, out, path, outerMostId, suppressedEdges);
-
-  if (!focused.extends) {
-    outerMostId.set(focused.id, focused.id);
-    return focused.id;
-  }
-
   // Collect ancestors from nearest base outward, with cycle protection.
   // A type cannot extend itself in well-formed input, but defensive code
   // must not infinite-loop on malformed chains. The `visited` set is local
@@ -411,13 +532,67 @@ function materializeDataWithInheritance(
   // chain is intrinsic — it doesn't depend on the expansion context.
   const visited = new Set<string>([focused.id]);
   const ancestors: AdapterNode[] = [];
-  let cursor: AdapterNode | undefined = findNodeByName(focused.extends, doc, focused.namespace);
+  let cursor: AdapterNode | undefined = focused.extends
+    ? findNodeByName(focused.extends, doc, focused.namespace)
+    : undefined;
   while (cursor && !visited.has(cursor.id)) {
     visited.add(cursor.id);
     ancestors.push(cursor);
     cursor = cursor.extends ? findNodeByName(cursor.extends, doc, cursor.namespace) : undefined;
   }
 
+  // Compute the canonical id chain of base containers (outermost FIRST).
+  // The outermost base wraps everything; the innermost base's `childNodeId`
+  // is the focused Data node. For no-inheritance, ancestors is empty and we
+  // skip directly to the focused walk below.
+  //
+  // `ancestors` is built INNERMOST → OUTERMOST during the chain walk, so
+  // reversing gives OUTERMOST → INNERMOST — the order the layout places them
+  // (outermost = root rfId, each inner is a `__derived` child of the next outer).
+  const outerToInner = [...ancestors].reverse();
+  const baseCanonicalIds = outerToInner.map((baseNode) => `${focused.id}::__base::${baseNode.id}`);
+
+  // Phase 14d: compute the rfId AND instancePath that each base container will
+  // have at placement time, plus the focused Data node's. The outermost
+  // container has rfId = `outermostInstanceId` (passed in) and instancePath =
+  // `instancePath` (passed in). Each inner is reached via the layout's
+  // `__derived` slot from the previous outer, so its rfId =
+  // `${outerRfId}::__derived::${innerCanonical}` and its instancePath =
+  // `[...outerPath, outerRfId]`.
+  //
+  // The focused Data node sits inside the innermost base container (or is the
+  // root itself when ancestors.length === 0) with the same `__derived` link.
+  const baseRfIds: string[] = [];
+  const basePaths: Array<ReadonlyArray<string>> = [];
+  let prevRfId = outermostInstanceId;
+  let prevPath: ReadonlyArray<string> = instancePath;
+  for (let i = 0; i < baseCanonicalIds.length; i++) {
+    if (i === 0) {
+      baseRfIds.push(outermostInstanceId);
+      basePaths.push(instancePath);
+    } else {
+      const myRfId = `${prevRfId}::__derived::${baseCanonicalIds[i]}`;
+      const myPath = [...prevPath, prevRfId];
+      baseRfIds.push(myRfId);
+      basePaths.push(myPath);
+    }
+    prevRfId = baseRfIds[i];
+    prevPath = basePaths[i];
+  }
+  // Focused node sits one __derived deeper than the innermost base (or is the
+  // root itself when no inheritance).
+  const focusedRfId = ancestors.length === 0 ? outermostInstanceId : `${prevRfId}::__derived::${focused.id}`;
+  const focusedPath: ReadonlyArray<string> = ancestors.length === 0 ? instancePath : [...prevPath, prevRfId];
+
+  // Materialize the focused Data node first. Its own type-reference
+  // expansions still need to walk through `walkAndExpand`. This must happen
+  // before the inheritance chain is built so the innermost base container's
+  // `childNodeId` can reference the now-present Data node.
+  walkAndExpand(focused, doc, opts, out, path, outerMostId, suppressedEdges, focusedRfId, focusedPath);
+
+  // No inheritance chain → no base container wrapping. The focused Data node
+  // is itself the outermost wrapper. (`focused.extends` can be set yet
+  // unresolvable; in that case ancestors is empty.)
   if (ancestors.length === 0) {
     outerMostId.set(focused.id, focused.id);
     return focused.id;
@@ -429,9 +604,19 @@ function materializeDataWithInheritance(
   // container. The last ancestor's container id is the outermost.
   let childId = focused.id;
   let outermost = focused.id;
-  for (const baseNode of ancestors) {
+  for (let ai = 0; ai < ancestors.length; ai++) {
+    const baseNode = ancestors[ai];
     const baseId = `${focused.id}::__base::${baseNode.id}`;
     const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
+
+    // Look up the rfId+path computed for this base container above. The
+    // ancestors loop walks INNERMOST → OUTERMOST, but baseRfIds/basePaths are
+    // indexed OUTERMOST → INNERMOST (the layout's placement order). Index
+    // conversion: innermost has ancestors index 0, outerToInner index
+    // ancestors.length - 1 — so outerToInner index = ancestors.length-1-ai.
+    const oi = ancestors.length - 1 - ai;
+    const baseRfId = baseRfIds[oi];
+    const baseRowInstancePath = basePaths[oi];
 
     // Spec §3.2: containment is the uniform mechanism for both inheritance
     // and type-reference. A complex-typed inherited row (e.g.
@@ -477,8 +662,13 @@ function materializeDataWithInheritance(
     };
     out.set(baseId, baseContainer);
 
+    // Children of this base container's expanded rows have instancePath =
+    // `[...baseRowInstancePath, baseRfId]`. Used when recursing into expansion
+    // targets via materializeDataWithInheritance.
+    const childExpansionInstancePath: ReadonlyArray<string> = [...baseRowInstancePath, baseRfId];
+
     for (const row of baseRows) {
-      if (!shouldExpand(row, baseNode.namespace, baseNode.name, opts.expansionMap)) continue;
+      if (!shouldExpand(row, baseNode.namespace, baseNode.name, opts.expansionMap, baseRowInstancePath)) continue;
       if (!row.targetNodeId) continue;
       const target = doc.nodes.find((n) => n.id === row.targetNodeId);
       if (!target) continue;
@@ -496,6 +686,7 @@ function materializeDataWithInheritance(
         continue;
       }
       if (target.$type === 'Data') {
+        const targetOutermostCanonical = computeOutermostCanonicalId(target, doc);
         const expandedId = materializeDataWithInheritance(
           target,
           doc,
@@ -503,7 +694,9 @@ function materializeDataWithInheritance(
           out,
           baseRowPath,
           outerMostId,
-          suppressedEdges
+          suppressedEdges,
+          adapterChildInstanceId(baseRfId, row.attrName, targetOutermostCanonical),
+          childExpansionInstancePath
         );
         baseExpansions.set(row.attrName, expandedId);
         replaySuppressedEdges(doc, opts, out, baseRowPath, outerMostId, suppressedEdges);
@@ -571,7 +764,25 @@ function replaySuppressedEdges(
         // call would have taken. If the target is already in `out`, the
         // `outerMostId` cache produces the outermost id; otherwise the chain
         // is built fresh and any nested cycles are handled recursively.
-        expandedId = materializeDataWithInheritance(targetNode, doc, opts, out, path, outerMostId, suppressedEdges);
+        //
+        // Phase 14d: replay paths use the target's CANONICAL id as the
+        // outermost instance id and an empty instance path. This matches the
+        // back-compat default and avoids reconstructing the original
+        // suppression context (which would require capturing it at
+        // suppression time). The replay only promotes the EDGE, so the
+        // expansion key would already have fired correctly during the
+        // original walkAndExpand pass — this is a side-table catch-up only.
+        expandedId = materializeDataWithInheritance(
+          targetNode,
+          doc,
+          opts,
+          out,
+          path,
+          outerMostId,
+          suppressedEdges,
+          entry.targetId,
+          []
+        );
       } else {
         expandedId = entry.targetId;
         if (!out.has(entry.targetId)) {
@@ -612,6 +823,12 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
     // don't outlive the cycle that caused them. See `SuppressedEdge` and
     // `replaySuppressedEdges` for the full rationale.
     const suppressedEdges: SuppressedEdge[] = [];
+    // Phase 14d: pre-compute the outermost canonical id from the inheritance
+    // chain so the adapter passes the SAME id to materialize that the layout
+    // will use as the root rfId. The layout calls `placeNode(rootId, rootId)`
+    // for the root — i.e. rfId === canonical id — so adapter and renderer
+    // chevron keys agree.
+    const outermostCanonicalId = computeOutermostCanonicalId(root, doc);
     const rootId = materializeDataWithInheritance(
       root,
       doc,
@@ -619,7 +836,9 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
       nodes,
       new Set<string>(),
       outerMostId,
-      suppressedEdges
+      suppressedEdges,
+      outermostCanonicalId,
+      []
     );
     // NOTE: no empty-path final replay. Suppressions are promoted only when
     // a target is *actually reached* through a non-cyclic path during the

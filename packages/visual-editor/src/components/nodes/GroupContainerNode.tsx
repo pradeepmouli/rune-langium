@@ -31,6 +31,15 @@ export interface GroupContainerBaseTypeData extends Record<string, unknown> {
    * round-trips correctly through the persistence layer.
    */
   onToggleExpansion?: (key: StructureExpansionKey) => void;
+  /**
+   * React Flow instance ids of this base container's ancestors (NOT including
+   * the container itself). Injected by `layoutStructureGraph` (Phase 14d).
+   * Used to scope each row's expansion key per-instance so chevrons on
+   * inherited rows of two visible occurrences of the same base type stay
+   * independent. Undefined / empty path serializes to the legacy key form
+   * (back-compat) — see `expansionKey()` for the migration story.
+   */
+  instancePath?: ReadonlyArray<string>;
 }
 
 export type GroupContainerData = GroupContainerInheritanceData | GroupContainerBaseTypeData;
@@ -71,7 +80,7 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
   // DataNode.tsx:113. Any other format would produce a key that the adapter never
   // looks for, leaving the chevron's "expanded" state visually correct but never
   // actually rendering the child.
-  const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion } = data;
+  const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion, instancePath } = data;
 
   return (
     <div className="rune-graph-group rune-graph-group--base">
@@ -83,7 +92,12 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
         {baseRows.map((row) => {
           const expandable = isRowExpandable(row.typeKind);
           const rowKey: StructureExpansionKey | undefined = expandable
-            ? { namespaceUri: baseTypeNamespaceUri, typeId: baseTypeName, attrName: row.attrName }
+            ? {
+                namespaceUri: baseTypeNamespaceUri,
+                typeId: baseTypeName,
+                attrName: row.attrName,
+                instancePath
+              }
             : undefined;
           const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;
           const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {

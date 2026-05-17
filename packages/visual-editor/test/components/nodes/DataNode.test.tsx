@@ -323,3 +323,139 @@ describe('DataNode — structure variant — cells forward canonical data.id, no
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 14d — per-instance row expansion chevrons
+// ---------------------------------------------------------------------------
+
+describe('DataNode — structure variant — per-instance chevron keys (Phase 14d)', () => {
+  // Two DataNode instances rendered for the same canonical Party but at
+  // different ancestor paths. Their row chevrons must fire with DISTINCT
+  // expansion keys so per-instance expansion state stays independent.
+
+  const partyRows: StructureRow[] = [
+    {
+      attrName: 'address',
+      typeName: 'Address',
+      typeKind: 'Data',
+      cardinality: '1..1',
+      isOptional: false,
+      isInherited: false
+    }
+  ];
+
+  function partyData(instancePath: ReadonlyArray<string>, onToggle: (k: StructureExpansionKey) => void) {
+    return {
+      $type: 'Data',
+      id: 'cdm.trade::Party', // canonical id — same across instances
+      kind: 'data',
+      name: 'Party',
+      namespaceUri: 'cdm.trade',
+      rows: partyRows,
+      expansions: new Map(),
+      variant: 'structure',
+      instancePath,
+      onToggleExpansion: onToggle
+    };
+  }
+
+  it('chevron fires with the injected instancePath in the key', () => {
+    const onToggle = vi.fn();
+    renderInFlow(
+      <DataNode
+        data={partyData(['cdm.trade::Trade'], onToggle) as any}
+        selected={false}
+        id="cdm.trade::Trade::buyer::cdm.trade::Party"
+        type="data"
+      />
+    );
+    fireEvent.click(screen.getByTestId('expand-row-address'));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(onToggle.mock.calls[0][0]).toEqual({
+      namespaceUri: 'cdm.trade',
+      typeId: 'Party',
+      attrName: 'address',
+      instancePath: ['cdm.trade::Trade']
+    } satisfies StructureExpansionKey);
+  });
+
+  it('two visible occurrences with different instancePath produce different chevron keys', () => {
+    // Renders two DataNodes back-to-back: one for buyer.Party (path includes
+    // the buyer instance id), one for seller.Party (path includes seller's).
+    // Each click should fire with the OWN instancePath, not the other's.
+    const buyerToggle = vi.fn();
+    const sellerToggle = vi.fn();
+    const { unmount } = renderInFlow(
+      <DataNode
+        data={partyData(['cdm.trade::Trade::buyer::cdm.trade::Party'], buyerToggle) as any}
+        selected={false}
+        id="cdm.trade::Trade::buyer::cdm.trade::Party::address::cdm.trade::Party"
+        type="data"
+      />
+    );
+    fireEvent.click(screen.getByTestId('expand-row-address'));
+    expect(buyerToggle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attrName: 'address',
+        instancePath: ['cdm.trade::Trade::buyer::cdm.trade::Party']
+      })
+    );
+    unmount();
+
+    renderInFlow(
+      <DataNode
+        data={partyData(['cdm.trade::Trade::seller::cdm.trade::Party'], sellerToggle) as any}
+        selected={false}
+        id="cdm.trade::Trade::seller::cdm.trade::Party::address::cdm.trade::Party"
+        type="data"
+      />
+    );
+    fireEvent.click(screen.getByTestId('expand-row-address'));
+    expect(sellerToggle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attrName: 'address',
+        instancePath: ['cdm.trade::Trade::seller::cdm.trade::Party']
+      })
+    );
+
+    // The two keys serialize to DIFFERENT strings, so they map to independent
+    // entries in the persistence layer — confirming per-instance independence.
+    const buyerKey = buyerToggle.mock.calls[0][0] as StructureExpansionKey;
+    const sellerKey = sellerToggle.mock.calls[0][0] as StructureExpansionKey;
+    expect(expansionKey(buyerKey)).not.toBe(expansionKey(sellerKey));
+  });
+
+  it('back-compat: omitted instancePath serializes to legacy key form', () => {
+    // When `data.instancePath` is absent (e.g., a unit test that omits it,
+    // or a renderer mounted outside the structure layout), the chevron key
+    // falls through to the legacy form. This preserves backward compatibility
+    // with persisted maps that predate per-instance keying.
+    const onToggle = vi.fn();
+    renderInFlow(
+      <DataNode
+        // Note: NO instancePath in data.
+        data={
+          {
+            $type: 'Data',
+            id: 'cdm.trade::Party',
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            rows: partyRows,
+            expansions: new Map(),
+            variant: 'structure',
+            onToggleExpansion: onToggle
+          } as any
+        }
+        selected={false}
+        id="cdm.trade::Party"
+        type="data"
+      />
+    );
+    fireEvent.click(screen.getByTestId('expand-row-address'));
+    const key = onToggle.mock.calls[0][0] as StructureExpansionKey;
+    expect(key.instancePath).toBeUndefined();
+    // Round-trip the serializer: produces the legacy form.
+    expect(expansionKey(key)).toBe('cdm.trade::Party::address');
+  });
+});

@@ -309,6 +309,241 @@ describe('layoutStructureGraph — sibling vertical alignment', () => {
   });
 });
 
+describe('layoutStructureGraph — data.instancePath injection (Phase 14d)', () => {
+  // Phase 14d: per-instance expansion semantics. Layout exposes the chain of
+  // React Flow instance ids of each node's ancestors via `data.instancePath`.
+  // Renderers read this to scope row chevrons per-instance, so two visible
+  // occurrences of the same type at different depths get distinct keys.
+
+  it('root node has empty data.instancePath (back-compat: legacy key format)', () => {
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+    const { nodes } = layoutStructureGraph(input);
+    const root = nodes[0];
+    expect((root.data as { instancePath?: ReadonlyArray<string> }).instancePath).toEqual([]);
+  });
+
+  it('expanded child has data.instancePath containing the parent rfId', () => {
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'party',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['party', 'Party']])
+          }
+        ],
+        [
+          'Party',
+          {
+            id: 'Party',
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+    const { nodes } = layoutStructureGraph(input);
+    const party = nodes.find((n) => (n.data as { id?: string }).id === 'Party')!;
+    expect(party).toBeDefined();
+    // Party is reached via Trade.party, so its only ancestor's instance id is
+    // the root's rfId ('Trade').
+    expect((party.data as { instancePath?: ReadonlyArray<string> }).instancePath).toEqual(['Trade']);
+  });
+
+  it('deeper expansion accumulates ancestor instance ids in data.instancePath', () => {
+    // Trade.party:Party, Party.address:Address. Address's path should include
+    // both Trade and the Party instance id (which carries the per-edge slot).
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'party',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['party', 'Party']])
+          }
+        ],
+        [
+          'Party',
+          {
+            id: 'Party',
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'address',
+                typeName: 'Address',
+                typeKind: 'Data',
+                targetNodeId: 'Address',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([['address', 'Address']])
+          }
+        ],
+        [
+          'Address',
+          {
+            id: 'Address',
+            kind: 'data',
+            name: 'Address',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+    const { nodes } = layoutStructureGraph(input);
+    const address = nodes.find((n) => (n.data as { id?: string }).id === 'Address')!;
+    expect(address).toBeDefined();
+    // Path: root Trade (rfId 'Trade'), then Party (rfId 'Trade::party::Party').
+    expect((address.data as { instancePath?: ReadonlyArray<string> }).instancePath).toEqual([
+      'Trade',
+      'Trade::party::Party'
+    ]);
+  });
+
+  it('sibling Party instances under the same parent share the same instancePath (canonical-path semantics)', () => {
+    // buyer.Party and seller.Party both have the same parent rfId (Trade), so
+    // their instancePath is identical (`[Trade]`). Per-instance disambiguation
+    // at this level is provided by the DIFFERENT attrNames on the parent's
+    // chevrons (`Trade.buyer` vs `Trade.seller`), not by the path itself.
+    // Deeper bifurcation (Party.address) IS path-distinguished because the
+    // Party instance ids differ (`Trade::buyer::Party` vs `Trade::seller::Party`).
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'buyer',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              },
+              {
+                attrName: 'seller',
+                typeName: 'Party',
+                typeKind: 'Data',
+                targetNodeId: 'Party',
+                targetNamespaceUri: 'cdm.trade',
+                cardinality: '1..1',
+                isOptional: false,
+                isInherited: false
+              }
+            ],
+            expansions: new Map([
+              ['buyer', 'Party'],
+              ['seller', 'Party']
+            ])
+          }
+        ],
+        [
+          'Party',
+          {
+            id: 'Party',
+            kind: 'data',
+            name: 'Party',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+    const { nodes } = layoutStructureGraph(input);
+    const partyInstances = nodes.filter((n) => (n.data as { id?: string }).id === 'Party');
+    expect(partyInstances).toHaveLength(2);
+    for (const inst of partyInstances) {
+      expect((inst.data as { instancePath?: ReadonlyArray<string> }).instancePath).toEqual(['Trade']);
+    }
+    // RfIds DO differ — that's how children of buyer.Party vs seller.Party get
+    // distinct paths one level deeper.
+    const rfIds = new Set(partyInstances.map((n) => n.id));
+    expect(rfIds).toEqual(new Set(['Trade::buyer::Party', 'Trade::seller::Party']));
+  });
+});
+
 describe('layoutStructureGraph — per-edge instances for repeated type refs (Finding 2)', () => {
   it('materialises one Node record per expansion edge when two rows reference the same target', () => {
     // Phase 13 / Finding 2 (spec 020): real schemas (CDM, FpML) routinely

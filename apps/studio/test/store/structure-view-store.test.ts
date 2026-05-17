@@ -268,6 +268,50 @@ describe('useStructureViewStore workspace persistence', () => {
     expect(saved).toEqual({ 'ns::T::b': true });
   });
 
+  it('back-compat: an old-format saved key (no instancePath) deserializes and behaves as a root-level expansion', async () => {
+    // Phase 14d migration story: pre-Phase-14d persistence wrote keys in the
+    // legacy form (no instancePath suffix). After upgrade, these must
+    // continue to round-trip — empty/undefined `instancePath` on the new
+    // `StructureExpansionKey` serializes to the same string as the old form.
+    const { saveWorkspace, saveStructureViewState } = await import('../../src/workspace/persistence.js');
+    await saveWorkspace({
+      id: 'ws-legacy',
+      name: 'ws-legacy',
+      kind: 'browser-only',
+      createdAt: '2026-05-14T00:00:00Z',
+      lastOpenedAt: '2026-05-14T00:00:00Z',
+      layout: { version: 1, writtenBy: 'test', dockview: null },
+      tabs: [],
+      activeTabPath: null,
+      curatedModels: [],
+      schemaVersion: 2
+    });
+    // Legacy-format key — no instancePath suffix.
+    await saveStructureViewState('ws-legacy', { 'cdm.trade::Trade::economics': true });
+
+    await useStructureViewStore.getState().setWorkspaceId('ws-legacy');
+
+    // Query with the new-shape key (omitting instancePath → empty path →
+    // serializes back to legacy form → matches the saved entry).
+    const newShapeKey: StructureExpansionKey = {
+      namespaceUri: 'cdm.trade',
+      typeId: 'Trade',
+      attrName: 'economics'
+    };
+    expect(useStructureViewStore.getState().isExpanded(newShapeKey)).toBe(true);
+
+    // Equivalently, an explicit empty-array `instancePath` matches the same
+    // saved entry — confirming the back-compat contract documented on
+    // `expansionKey()` in @rune-langium/visual-editor.
+    const explicitEmpty: StructureExpansionKey = {
+      namespaceUri: 'cdm.trade',
+      typeId: 'Trade',
+      attrName: 'economics',
+      instancePath: []
+    };
+    expect(useStructureViewStore.getState().isExpanded(explicitEmpty)).toBe(true);
+  });
+
   it('persists toggles back to the workspace record', async () => {
     const { saveWorkspace, loadStructureViewState } = await import('../../src/workspace/persistence.js');
     await saveWorkspace({

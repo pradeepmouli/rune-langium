@@ -47,6 +47,19 @@ interface StructureNodeData extends StructureDataNode {
    * expansion map (typically via useStructureViewStore.toggleExpansion).
    */
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
+  /**
+   * React Flow instance ids of this node's ancestors (NOT including this node
+   * itself). Injected by `layoutStructureGraph` (Phase 14d). Used to scope
+   * each row's expansion key per-instance: two visible occurrences of the
+   * same type have different `instancePath`s because their parent instance
+   * ids differ, so their row chevrons stay independent.
+   *
+   * Optional / may be undefined when this component is rendered outside the
+   * Structure View layout (e.g., direct unit tests that omit it). An
+   * undefined value serializes to the legacy expansion-key form — see
+   * `expansionKey()` doc for the back-compat contract.
+   */
+  readonly instancePath?: ReadonlyArray<string>;
 }
 
 /**
@@ -88,7 +101,7 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // .rune-node-rows, .rune-node-row, .rune-row-handle, .rune-node-children-slot
     // in styles.css — layout constants (ROW_HEIGHT=28, COL_WIDTH=260, etc.) are matched there.
     const rows = data.rows as ReadonlyArray<StructureRow>;
-    const { cellComponents, expansionMap, onToggleExpansion } = data;
+    const { cellComponents, expansionMap, onToggleExpansion, instancePath } = data;
     const NameCell = cellComponents?.name;
     const TypeCell = cellComponents?.type;
     const CardCell = cellComponents?.card;
@@ -97,6 +110,12 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // toggles round-trip through the persistence layer correctly.
     const ownerNamespaceUri = data.namespaceUri;
     const ownerTypeName = data.name;
+    // Phase 14d: per-instance expansion. `instancePath` is the chain of React
+    // Flow instance ids of this node's ancestors, injected by the layout pass.
+    // Two visible occurrences of the same type have different paths (because
+    // their parent instance ids differ), so their row chevrons stay independent.
+    // Undefined / empty path serializes to the legacy key form (back-compat).
+    const ownerInstancePath = instancePath;
 
     return (
       <div className={`rune-node rune-node-data rune-node-data--structure${selected ? ' rune-node-selected' : ''}`}>
@@ -110,7 +129,12 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
             {rows.map((row: StructureRow) => {
               const expandable = isRowExpandable(row.typeKind);
               const rowKey: StructureExpansionKey | undefined = expandable
-                ? { namespaceUri: ownerNamespaceUri, typeId: ownerTypeName, attrName: row.attrName }
+                ? {
+                    namespaceUri: ownerNamespaceUri,
+                    typeId: ownerTypeName,
+                    attrName: row.attrName,
+                    instancePath: ownerInstancePath
+                  }
                 : undefined;
               const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;
               const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
