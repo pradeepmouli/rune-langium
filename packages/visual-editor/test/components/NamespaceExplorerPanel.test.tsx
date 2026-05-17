@@ -181,6 +181,36 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onSelectNode).toHaveBeenCalledOnce();
   });
 
+  it('Enter on nav button does NOT bubble to row keydown (no spurious drag-source mark)', () => {
+    // Codex P2 regression: previously the nav button's keydown bubbled to the
+    // row's onKeyDown handler, marking the type as drag source AS WELL AS
+    // navigating. One keystroke triggered both actions. handleNavKeyDown's
+    // stopPropagation prevents that.
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+
+    navBtn.focus();
+    fireEvent.keyDown(navBtn, { key: 'Enter' });
+    fireEvent.click(navBtn); // native button click on Enter
+
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(onSetDragSource).not.toHaveBeenCalled();
+  });
+
+  it('Space on nav button does NOT bubble to row keydown', () => {
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+
+    navBtn.focus();
+    fireEvent.keyDown(navBtn, { key: ' ' });
+    fireEvent.click(navBtn);
+
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(onSetDragSource).not.toHaveBeenCalled();
+  });
+
   it('nav button is present for all type rows', () => {
     renderPanel();
     // Each type row in defaultNodes should have a corresponding nav button

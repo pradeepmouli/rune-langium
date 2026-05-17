@@ -462,6 +462,18 @@ function TypeItemRow({
     [onSelectNode]
   );
 
+  // Keyboard activation parity with handleNavClick: when the nav button has focus
+  // and the user presses Enter/Space, the browser fires keydown FIRST (which bubbles
+  // to the row's onKeyDown and marks drag source), THEN a synthetic click (handled
+  // by handleNavClick → navigates). Without stopPropagation here, one keystroke
+  // triggered BOTH actions. The button's default click activation still fires —
+  // we only stop the keydown from bubbling.
+  const handleNavKeyDown = useCallback((e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.stopPropagation();
+    }
+  }, []);
+
   return (
     <div
       role="button"
@@ -521,6 +533,7 @@ function TypeItemRow({
       <button
         type="button"
         onClick={handleNavClick}
+        onKeyDown={handleNavKeyDown}
         aria-label={`Navigate to ${row.name}`}
         data-testid={`ns-type-nav-${row.nodeId}`}
         className="ml-auto shrink-0 opacity-0 group-hover:opacity-60 focus:opacity-60 hover:!opacity-100 focus-visible:ring-1 focus-visible:ring-ring rounded transition-opacity"
