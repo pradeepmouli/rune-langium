@@ -307,8 +307,9 @@ describe('editor-store undo for Structure View Phase 0 actions', () => {
     const store = createEditorStore();
     const id = store.getState().createType('data', 'Trade', 'cdm.trade');
     store.getState().addAttribute(id, 'economics', 'OldType', '0..*');
+    const econId = store.getState().createType('data', 'Economics', 'cdm.trade');
 
-    store.getState().updateAttributeType(id, 'economics', 'Economics');
+    store.getState().updateAttributeType(id, 'economics', 'Economics', econId);
     expect(
       ((store.getState().nodes.find((n) => n.id === id)!.data as any).attributes as Array<any>)[0].typeCall.type
         .$refText

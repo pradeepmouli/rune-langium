@@ -207,14 +207,13 @@ export interface EditorActions {
   /**
    * Update the type ref on an attribute.
    *
-   * @param targetTypeId Optional canonical node id of the resolved target
-   *   (`namespace::Name`). When supplied, the store validates the id against
-   *   current nodes and writes a fully-qualified `$refText` if any other
-   *   node shares the bare name across namespaces (spec 020 Phase 13,
-   *   Finding 3). When omitted, falls back to legacy behavior (write the
-   *   bare name verbatim, no validation).
+   * @param targetTypeId Canonical node id of the resolved target
+   *   (`namespace::Name`). The store validates the id against current nodes
+   *   and writes a fully-qualified `$refText` when any other node shares the
+   *   bare name across namespaces (spec 020 Phase 13, Finding 3).
+   *   Stale or unknown ids are rejected (no-op).
    */
-  updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId?: string): void;
+  updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId: string): void;
   updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string): void;
   reorderAttribute(nodeId: string, fromIndex: number, toIndex: number): void;
   updateCardinality(nodeId: string, attrName: string, cardinality: string): void;
@@ -934,7 +933,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           }));
         },
 
-        updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId?: string) {
+        updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId: string) {
           const current = get();
           const node = current.nodes.find((n) => n.id === nodeId);
           if (!node) return;
@@ -945,23 +944,16 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           if (!firstMatch) return;
           const preservedCardinality = formatCardinality(firstMatch.card);
 
-          // Phase 13 / Finding 3: when caller supplies the canonical targetTypeId
-          // (drop-time path), validate that it exists in the current store and
-          // pick a $refText that disambiguates against same-named types in
-          // other namespaces. Reject (no-op) stale or unknown targetTypeIds —
-          // a drag payload pointing at a node that was deleted between drag
-          // and drop must NOT corrupt the AST silently.
-          let refText = newTypeName;
-          let resolvedTargetId: string | undefined;
-          if (targetTypeId !== undefined) {
-            const target = current.nodes.find((n) => n.id === targetTypeId);
-            if (!target) return; // stale payload — abort
-            const targetData = target.data as AnyGraphNode;
-            const targetNamespace = (targetData as { namespace?: string }).namespace;
-            if (!targetNamespace) return; // malformed target
-            refText = disambiguateTypeRef(targetTypeId, newTypeName, targetNamespace, current.nodes);
-            resolvedTargetId = targetTypeId;
-          }
+          // Phase 13 / Finding 3: validate that the canonical targetTypeId exists
+          // in the current store and pick a $refText that disambiguates against
+          // same-named types in other namespaces. Reject (no-op) stale or unknown
+          // ids — a drag payload pointing at a deleted node must NOT corrupt the AST.
+          const target = current.nodes.find((n) => n.id === targetTypeId);
+          if (!target) return; // stale payload — abort
+          const targetData = target.data as AnyGraphNode;
+          const targetNamespace = (targetData as { namespace?: string }).namespace;
+          if (!targetNamespace) return; // malformed target
+          const refText = disambiguateTypeRef(targetTypeId, newTypeName, targetNamespace, current.nodes);
 
           set((state) => {
             const updatedNodes = state.nodes.map((n) => {
@@ -986,19 +978,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             const filteredEdges = state.edges.filter(
               (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName)
             );
-            // Prefer the caller-supplied id (Finding 3 path: drop-time) when
-            // available so the edge target matches the exact node the user
-            // dropped. Fall back to legacy name-based lookup for callers that
-            // still use the bare-name signature.
-            const newTargetId =
-              resolvedTargetId ?? state.nodes.find((n) => (n.data as AnyGraphNode).name === newTypeName)?.id;
-            if (!newTargetId || newTargetId === nodeId) {
+            if (targetTypeId === nodeId) {
               return { nodes: updatedNodes, edges: filteredEdges };
             }
             const newEdge: TypeGraphEdge = {
-              id: `${nodeId}--attribute-ref--${attrName}--${newTargetId}`,
+              id: `${nodeId}--attribute-ref--${attrName}--${targetTypeId}`,
               source: nodeId,
-              target: newTargetId,
+              target: targetTypeId,
               type: 'attribute-ref',
               data: {
                 kind: 'attribute-ref' as const,
