@@ -55,9 +55,8 @@ interface StructureNodeData extends StructureDataNode {
    * ids differ, so their row chevrons stay independent.
    *
    * Optional / may be undefined when this component is rendered outside the
-   * Structure View layout (e.g., direct unit tests that omit it). An
-   * undefined value serializes to the legacy expansion-key form — see
-   * `expansionKey()` doc for the back-compat contract.
+   * Structure View layout (e.g., direct unit tests that omit it). Treated
+   * as an empty array: `ownerInstancePath = [...(instancePath ?? []), id]`.
    */
   readonly instancePath?: ReadonlyArray<string>;
 }
@@ -110,21 +109,18 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // toggles round-trip through the persistence layer correctly.
     const ownerNamespaceUri = data.namespaceUri;
     const ownerTypeName = data.name;
-    // Phase 14d (fix): per-instance expansion. The rowKey's instancePath must
-    // include self's React Flow id (`id`) so two visible occurrences of the same
-    // type at the same depth produce DISTINCT keys. `data.instancePath` carries
-    // the ancestors (NOT including self); appending `id` makes it self-inclusive.
+    // Per-instance expansion. The rowKey's instancePath must include self's
+    // React Flow id (`id`) so two visible occurrences of the same type at the
+    // same depth produce DISTINCT keys. `data.instancePath` carries the ancestors
+    // (NOT including self); appending `id` makes it self-inclusive.
     //
     // Example: buyer.Party and seller.Party both have `data.instancePath = ['Trade']`
-    // because their parent is Trade. Before this fix both chevrons serialized to
-    // the same key. After fix:
+    // because their parent is Trade. Each chevron serializes to a distinct key:
     //   buyer.Party:  instancePath = ['Trade', 'Trade::buyer::Party']
     //   seller.Party: instancePath = ['Trade', 'Trade::seller::Party']
     //
-    // The adapter's shouldExpand is updated in lockstep to check with the same
-    // self-inclusive path, so expansion round-trips correctly. Back-compat: the
-    // back-compat fallback in shouldExpand also checks the legacy (no-suffix) key,
-    // so persisted entries from before this fix keep working via the fallback.
+    // The adapter's shouldExpand checks with the same self-inclusive path, so
+    // expansion round-trips correctly through the store.
     const ownerInstancePath: ReadonlyArray<string> = [...(instancePath ?? []), id];
 
     return (

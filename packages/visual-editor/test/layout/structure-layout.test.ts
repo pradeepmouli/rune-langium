@@ -315,7 +315,7 @@ describe('layoutStructureGraph — data.instancePath injection (Phase 14d)', () 
   // Renderers read this to scope row chevrons per-instance, so two visible
   // occurrences of the same type at different depths get distinct keys.
 
-  it('root node has empty data.instancePath (back-compat: legacy key format)', () => {
+  it('root node has empty data.instancePath (root-level nodes have no ancestors)', () => {
     const input: StructureGraphInput = {
       rootNodeId: 'Trade',
       nodes: new Map([

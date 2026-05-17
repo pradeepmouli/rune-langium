@@ -36,8 +36,7 @@ export interface GroupContainerBaseTypeData extends Record<string, unknown> {
    * the container itself). Injected by `layoutStructureGraph` (Phase 14d).
    * Used to scope each row's expansion key per-instance so chevrons on
    * inherited rows of two visible occurrences of the same base type stay
-   * independent. Undefined / empty path serializes to the legacy key form
-   * (back-compat) — see `expansionKey()` for the migration story.
+   * independent. Treated as empty array when absent.
    */
   instancePath?: ReadonlyArray<string>;
 }

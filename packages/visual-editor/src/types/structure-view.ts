@@ -76,14 +76,6 @@ export function isTypeRefPayload(value: unknown): value is TypeRefPayload {
  * differ (e.g. `Trade::buyer::Party` vs `Trade::seller::Party`), so chevrons
  * inside them stay independent.
  *
- * **Back-compat / migration.** When `instancePath` is omitted or empty, the
- * serialized form is identical to the pre-Phase-14d format (no suffix added).
- * This means:
- *   1. Old persisted keys deserialize and behave as "root-level" / no-ancestor
- *      expansions — no data loss, no migration step required.
- *   2. The root node always has `instancePath = []`, so its rows preserve the
- *      old key shape and continue to work after a load from old persistence.
- *
  * The separator inside the path uses `>` (not `:`) because `:` is already the
  * field separator and we need to round-trip the path through a single string.
  */
@@ -93,7 +85,7 @@ export interface StructureExpansionKey {
   readonly attrName: string;
   /**
    * Chain of React Flow instance ids of ancestors leading to this row's owner,
-   * NOT including the owner. Empty/undefined = root-level instance (back-compat).
+   * NOT including the owner. Empty/undefined = root-level instance (no ancestors).
    */
   readonly instancePath?: ReadonlyArray<string>;
 }
@@ -102,11 +94,12 @@ export interface StructureExpansionKey {
  * Serialise an expansion key for use as a Map / Record key.
  *
  * **Format:**
- * - No `instancePath` (or empty): `${namespaceUri}::${typeId}::${attrName}` (legacy form)
+ * - No `instancePath` (or empty): `${namespaceUri}::${typeId}::${attrName}`
  * - With `instancePath`: `${namespaceUri}::${typeId}::${attrName}::${path.join('>')}`
  *
- * The legacy form is preserved exactly so old persisted maps round-trip
- * without migration. See `StructureExpansionKey` doc for the full rationale.
+ * This is the single deterministic per-instance key shape. Root-level rows
+ * (empty `instancePath`) serialize without a suffix; nested rows append the
+ * ancestor chain. `expansionKey` is the sole serializer — use it everywhere.
  */
 export function expansionKey(k: StructureExpansionKey): string {
   const base = `${k.namespaceUri}::${k.typeId}::${k.attrName}`;

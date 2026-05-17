@@ -450,12 +450,11 @@ describe('DataNode — structure variant — per-instance chevron keys (Phase 14
     expect(expansionKey(buyerKey)).not.toBe(expansionKey(sellerKey));
   });
 
-  it('back-compat: omitted data.instancePath still uses self rfId (no undefined in key)', () => {
+  it('omitted data.instancePath still uses self rfId (no undefined in key)', () => {
     // When `data.instancePath` is absent (e.g., a unit test that omits it),
-    // ownerInstancePath = [...[], id] = [id]. The key is NOT the legacy form;
-    // it includes the React Flow id. This is intentional — the back-compat
-    // fallback in shouldExpand also checks the legacy key (no-instancePath suffix),
-    // so old persisted maps still trigger expansion via the fallback.
+    // ownerInstancePath = [...[], id] = [id]. The key includes the React Flow
+    // id as the sole path element, matching the adapter's childInstancePath
+    // for root-level rows.
     const onToggle = vi.fn();
     renderInFlow(
       <DataNode

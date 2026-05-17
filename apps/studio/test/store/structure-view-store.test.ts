@@ -25,17 +25,12 @@ describe('useStructureViewStore expansionMap', () => {
     expect(useStructureViewStore.getState().isExpanded(KEY)).toBe(false);
   });
 
-  it('toggling expanded → collapsed writes an explicit false (Phase 14e Codex P2 fix)', () => {
+  it('toggling expanded → collapsed deletes the key (map stays compact)', () => {
     useStructureViewStore.getState().toggleExpansion(KEY);
     useStructureViewStore.getState().toggleExpansion(KEY);
 
-    // Phase 14e fix: toggleExpansion now writes explicit true/false on every
-    // toggle (not delete on collapse). The adapter's shouldExpand distinguishes
-    // an absent per-instance key (falls back to legacy) from an explicit false
-    // (respects the user's intent and prevents the legacy fallback from
-    // re-expanding). Map size grows by one per unique row interaction but is
-    // bounded by visible interactions; collapseAll / resetExpansion still prune.
-    expect(useStructureViewStore.getState().expansionMap.size).toBe(1);
+    // Delete-on-collapse: the map has no entry for a collapsed row.
+    expect(useStructureViewStore.getState().expansionMap.size).toBe(0);
     expect(useStructureViewStore.getState().isExpanded(KEY)).toBe(false);
   });
 
@@ -269,55 +264,10 @@ describe('useStructureViewStore workspace persistence', () => {
     // pending writes have landed.
     await new Promise((r) => setTimeout(r, 50));
 
-    // Phase 14e: toggleExpansion writes explicit true/false on every toggle
-    // (no longer deletes on collapse), so the persisted state records the
-    // user's explicit collapse intent for K1 alongside K2's expansion.
+    // Delete-on-collapse: the persisted state records only expanded rows.
+    // K1 was collapsed (deleted), K2 is expanded.
     const saved = await loadStructureViewState('ws-c');
-    expect(saved).toEqual({ 'ns::T::a': false, 'ns::T::b': true });
-  });
-
-  it('back-compat: an old-format saved key (no instancePath) deserializes and behaves as a root-level expansion', async () => {
-    // Phase 14d migration story: pre-Phase-14d persistence wrote keys in the
-    // legacy form (no instancePath suffix). After upgrade, these must
-    // continue to round-trip — empty/undefined `instancePath` on the new
-    // `StructureExpansionKey` serializes to the same string as the old form.
-    const { saveWorkspace, saveStructureViewState } = await import('../../src/workspace/persistence.js');
-    await saveWorkspace({
-      id: 'ws-legacy',
-      name: 'ws-legacy',
-      kind: 'browser-only',
-      createdAt: '2026-05-14T00:00:00Z',
-      lastOpenedAt: '2026-05-14T00:00:00Z',
-      layout: { version: 1, writtenBy: 'test', dockview: null },
-      tabs: [],
-      activeTabPath: null,
-      curatedModels: [],
-      schemaVersion: 2
-    });
-    // Legacy-format key — no instancePath suffix.
-    await saveStructureViewState('ws-legacy', { 'cdm.trade::Trade::economics': true });
-
-    await useStructureViewStore.getState().setWorkspaceId('ws-legacy');
-
-    // Query with the new-shape key (omitting instancePath → empty path →
-    // serializes back to legacy form → matches the saved entry).
-    const newShapeKey: StructureExpansionKey = {
-      namespaceUri: 'cdm.trade',
-      typeId: 'Trade',
-      attrName: 'economics'
-    };
-    expect(useStructureViewStore.getState().isExpanded(newShapeKey)).toBe(true);
-
-    // Equivalently, an explicit empty-array `instancePath` matches the same
-    // saved entry — confirming the back-compat contract documented on
-    // `expansionKey()` in @rune-langium/visual-editor.
-    const explicitEmpty: StructureExpansionKey = {
-      namespaceUri: 'cdm.trade',
-      typeId: 'Trade',
-      attrName: 'economics',
-      instancePath: []
-    };
-    expect(useStructureViewStore.getState().isExpanded(explicitEmpty)).toBe(true);
+    expect(saved).toEqual({ 'ns::T::b': true });
   });
 
   it('persists toggles back to the workspace record', async () => {

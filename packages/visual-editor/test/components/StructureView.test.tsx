@@ -292,10 +292,13 @@ describe('StructureView — adapter + layout integration', () => {
   });
 
   it('renders Economics node when expansion map marks it as expanded', () => {
+    // Per-instance key: Trade's root instance id is its canonical id 'cdm.trade::Trade'.
+    // Root-row chevrons use instancePath = [rootInstanceId] (self-inclusive).
     const key = expansionKey({
       namespaceUri: 'cdm.trade',
       typeId: 'Trade',
-      attrName: 'economics'
+      attrName: 'economics',
+      instancePath: ['cdm.trade::Trade']
     });
     const expansionMap = new Map([[key, true]]);
 

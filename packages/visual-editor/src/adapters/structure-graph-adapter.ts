@@ -192,25 +192,10 @@ function buildRow(
  * the renderer uses for its chevron, so a toggle on one visible occurrence
  * only affects that occurrence's subtree.
  *
- * Empty/undefined `instancePath` produces the legacy key form, which preserves
- * old persisted maps and behaves as "root-level / shared" for the root node.
- *
- * **Back-compat fallback.** When `instancePath` is non-empty, we ALSO check
- * the legacy key (no instancePath). But — Codex P2 review of PR #194: the
- * fallback must respect an EXPLICIT per-instance `false`, otherwise users
- * with legacy `true` entries can never collapse the corresponding row at
- * any deeper instance (the chevron writes `false` per-instance via
- * toggleExpansion, but shouldExpand falls back to legacy `true` and the row
- * stays expanded). Fix: check the per-instance key with `Map.has()` first.
- * If it's present at all (true OR false), respect it without falling back.
- * Only when the per-instance entry is completely absent do we check legacy.
- *
- * This lets old persisted expansion maps (which only have legacy keys) keep
- * working AT ALL NESTING LEVELS after upgrade — without losing data — while
- * allowing users to override at any visible instance.
- *
- * The fallback is intentionally lossy in the per-instance direction: legacy
- * keys expand ALL instances of a row (until the user explicitly toggles).
+ * The expansion map is checked with a plain `=== true` look-up on the
+ * per-instance key. Absent entries are collapsed; only an explicit `true`
+ * expands. `toggleExpansion` in the store writes `true` on expand and
+ * DELETES on collapse, so the map stays compact.
  */
 function shouldExpand(
   row: StructureRow,
@@ -221,30 +206,13 @@ function shouldExpand(
 ): boolean {
   if (row.typeKind !== 'Data' && row.typeKind !== 'Choice') return false;
   if (!row.targetNodeId) return false;
-  const perInstanceKey = expansionKey({
+  const key = expansionKey({
     namespaceUri: ownerNamespace,
     typeId: ownerTypeName,
     attrName: row.attrName,
     instancePath
   });
-  // Distinguish "explicit per-instance entry" from "absent". An explicit false
-  // wins over the legacy fallback so the user's collapse intent is respected.
-  if (expansionMap.has(perInstanceKey)) {
-    return expansionMap.get(perInstanceKey) === true;
-  }
-  // Back-compat fallback: legacy key only consulted when per-instance is
-  // completely unset. For root-row chevrons (instancePath = []) the
-  // per-instance and legacy keys serialize identically, so this branch is
-  // dormant for the root.
-  if (instancePath.length > 0) {
-    const legacyKey = expansionKey({
-      namespaceUri: ownerNamespace,
-      typeId: ownerTypeName,
-      attrName: row.attrName
-    });
-    if (expansionMap.get(legacyKey) === true) return true;
-  }
-  return false;
+  return expansionMap.get(key) === true;
 }
 
 function choiceOptRefText(opt: AdapterChoiceOption): string {
