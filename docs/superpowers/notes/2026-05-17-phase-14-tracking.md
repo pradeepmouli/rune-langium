@@ -91,9 +91,13 @@ Click on `buyer.Party.address` chevron → flips the same map entry that drives 
 
 **Two paths:**
 1. **Narrow EditorPage gating** to Data-only. Add UI cue on the explorer nav button (disabled / different affordance) for non-Data types. Simplest; honest about scope.
-2. **Wire Choice root rendering**: StructureView accepts Choice root, uses the existing `buildChoiceNode` adapter path, renders via ChoiceNode at the root. Real feature work.
+2. **Wire Choice root rendering**: needs MORE than a renderer change. Per Codex on PR #193: `buildStructureGraph` currently only materializes Data roots; `buildChoiceNode` is a private helper used only for expanded Choice targets within a Data structure. A Phase 14e PR that only touches StructureView would render nothing. Required work:
+   - Extend `buildStructureGraph` to accept Choice (and probably Enum) focused roots and materialize them via `buildChoiceNode` / equivalent
+   - Update `StructureGraphInput` shape if root-as-Choice differs structurally from root-as-Data
+   - Drop StructureView's `rootNode.$type !== 'Data'` rejection branch
+   - Add adapter tests for Choice-as-root materialization
 
-**Recommendation:** Direction 1 unless we want Choice roots as a first-class UX (which the spec didn't require).
+**Recommendation:** Direction 1 unless we want Choice roots as a first-class UX (which the spec didn't require). Direction 2 is real adapter + layout work, not a one-file change.
 
 ---
 
@@ -111,13 +115,17 @@ Click on `buyer.Party.address` chevron → flips the same map entry that drives 
 
 ---
 
-### E — `fitView` re-runs on every layout pass (P2)
+### E — `fitView` re-runs on every layout pass (P2 — NEEDS VERIFICATION)
 
 **File:** `packages/visual-editor/src/components/StructureView.tsx:124-128`
 
-**Problem:** `<ReactFlow fitView ... />` is sticky — re-fits on substantial node-set change. Combined with C, every keystroke can re-fit the viewport, jumping scroll/zoom. Every chevron click also re-fits.
+**Opus reviewer claim:** `<ReactFlow fitView ... />` is sticky — re-fits on substantial node-set change. Combined with C, every keystroke can re-fit the viewport, jumping scroll/zoom. Every chevron click also re-fits.
 
-**Fix:** Drop the `fitView` prop. Add an inner component that calls `fitView()` imperatively via `useReactFlow` inside `useEffect` keyed on `focusedTypeId` only:
+**Codex challenge (PR #193 review):** Per RF12 docs, `fitView` prop fits the INITIAL nodes only; `fitViewOptions` customizes that initial call. Subsequent controlled `nodes` updates do NOT auto-refit. If correct, Phase 14b would spend work on a non-existent bug.
+
+**Verification needed BEFORE code:** mount the studio, open Structure View, expand a row, edit a cell — observe whether the viewport jumps. If it doesn't, drop E entirely; the only thing to track is the fitView-as-prop-vs-imperative-call style choice (negligible).
+
+**If verified bug-fix is:** Drop the `fitView` prop. Add an inner component that calls `fitView()` imperatively via `useReactFlow` inside `useEffect` keyed on `focusedTypeId` only:
 ```tsx
 function FitOnFocus({ focusedTypeId }: { focusedTypeId: string }) {
   const { fitView } = useReactFlow();
@@ -127,7 +135,7 @@ function FitOnFocus({ focusedTypeId }: { focusedTypeId: string }) {
 ```
 Mount inside `StructureFlowInner` (already inside the Provider).
 
-**Impact:** UX — viewport state thrash on every interaction.
+**Impact (if real):** UX — viewport state thrash on every interaction.
 
 ---
 
