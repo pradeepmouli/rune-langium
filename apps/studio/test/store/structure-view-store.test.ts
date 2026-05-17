@@ -25,13 +25,18 @@ describe('useStructureViewStore expansionMap', () => {
     expect(useStructureViewStore.getState().isExpanded(KEY)).toBe(false);
   });
 
-  it('toggling expanded → collapsed deletes the key instead of writing false', () => {
+  it('toggling expanded → collapsed writes an explicit false (Phase 14e Codex P2 fix)', () => {
     useStructureViewStore.getState().toggleExpansion(KEY);
     useStructureViewStore.getState().toggleExpansion(KEY);
 
-    // Dead `false` entries would grow the persisted record unbounded over
-    // a session; absence is semantically equivalent and stays empty.
-    expect(useStructureViewStore.getState().expansionMap.size).toBe(0);
+    // Phase 14e fix: toggleExpansion now writes explicit true/false on every
+    // toggle (not delete on collapse). The adapter's shouldExpand distinguishes
+    // an absent per-instance key (falls back to legacy) from an explicit false
+    // (respects the user's intent and prevents the legacy fallback from
+    // re-expanding). Map size grows by one per unique row interaction but is
+    // bounded by visible interactions; collapseAll / resetExpansion still prune.
+    expect(useStructureViewStore.getState().expansionMap.size).toBe(1);
+    expect(useStructureViewStore.getState().isExpanded(KEY)).toBe(false);
   });
 
   it('collapseAll clears expansions in the focused namespace and leaves others alone', () => {
@@ -264,8 +269,11 @@ describe('useStructureViewStore workspace persistence', () => {
     // pending writes have landed.
     await new Promise((r) => setTimeout(r, 50));
 
+    // Phase 14e: toggleExpansion writes explicit true/false on every toggle
+    // (no longer deletes on collapse), so the persisted state records the
+    // user's explicit collapse intent for K1 alongside K2's expansion.
     const saved = await loadStructureViewState('ws-c');
-    expect(saved).toEqual({ 'ns::T::b': true });
+    expect(saved).toEqual({ 'ns::T::a': false, 'ns::T::b': true });
   });
 
   it('back-compat: an old-format saved key (no instancePath) deserializes and behaves as a root-level expansion', async () => {

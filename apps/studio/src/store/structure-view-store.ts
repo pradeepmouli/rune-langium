@@ -143,10 +143,15 @@ export const useStructureViewStore = create<StructureViewState>((set, get) => {
       // regardless of what the saved value turns out to be.
       const targetExpanded = get().expansionMap.get(k) !== true;
       const op: DeferredOp = (map) => {
-        // Delete on collapse so the persisted map doesn't accumulate dead
-        // `false` entries; isExpanded treats absence as collapsed.
-        if (targetExpanded) map.set(k, true);
-        else map.delete(k);
+        // Phase 14e (Codex P2 fix): write explicit true/false on every toggle.
+        // The adapter's shouldExpand now distinguishes "per-instance key
+        // present (any value)" from "absent" — an absent key falls back to
+        // the legacy `ns::Type::attr` form, which for users with legacy
+        // `true` entries would prevent collapse if we deleted on toggle-off.
+        // Writing explicit false anchors the user's intent against the
+        // legacy fallback. Map grows over time but is bounded by visible
+        // interactions; collapseAll/resetExpansion still prune.
+        map.set(k, targetExpanded);
       };
       applyOp(op);
     },

@@ -167,8 +167,8 @@ export * from './types/structure-view.js';
 export { StructureView } from './components/StructureView.js';
 export type { StructureViewProps, StructureCellComponents } from './components/StructureView.js';
 
-// Structure View adapter (Phase 2)
-export { buildStructureGraph } from './adapters/structure-graph-adapter.js';
+// Structure View adapter (Phase 2 / 14e)
+export { buildStructureGraph, findByCanonicalId, findAllByCanonicalId } from './adapters/structure-graph-adapter.js';
 export type {
   AdapterDocument,
   AdapterNode,

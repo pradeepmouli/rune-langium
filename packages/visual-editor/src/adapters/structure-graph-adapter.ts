@@ -75,26 +75,27 @@ export interface BuildOptions {
 }
 
 /**
- * Side-table entry capturing an expansion edge that was suppressed during
- * materialization because the target was an ancestor in the current recursion
- * path. Suppression is a *context-dependent* decision (it depends on which
- * path we reached the owner through), but the `outerMostId` cache is
- * context-independent. When a cached owner is reused in a different context
- * where the suppressed target is no longer an ancestor, the edge must be
- * promoted — that's what `replaySuppressedEdges` does.
+ * Phase 14e — per-instance materialization makes the SuppressedEdge side-table
+ * mechanism obsolete. Under canonical-id dedup, the cache shared one
+ * StructureNode across multiple visible references, so a containment edge
+ * suppressed by the cycle guard in one context could be promoted later when
+ * the same target was reached via a non-cyclic sibling path (replay). Under
+ * per-instance materialization, each visible reference builds its own
+ * StructureNode independently — there is no shared "completed sibling" to
+ * promote into. Cycles are still detected via the canonical-id `path` set
+ * (recursion ancestors), but the resulting suppression is purely local: the
+ * cyclic row's `expansions` map simply omits the cyclic edge. The row chip
+ * remains visible.
  *
- * Spec §3.2: containment is the single uniform mechanism for both inheritance
- * and type-reference. A cross-tree handle to a completed sibling (target in
- * `out` but not in the current ancestor path) must be preserved.
+ * Sibling cross-references (Trade.party AND Trade.counterparty → Party) are
+ * preserved naturally: each gets its own Party instance with its own subtree;
+ * the spec §3.2 "completed sibling" semantics now manifest as two visible
+ * instances of the same canonical type instead of a shared cross-tree handle.
+ *
+ * The `SuppressedEdge` interface and `replaySuppressedEdges` helper that this
+ * file used to expose are removed — kept here as a doc comment to explain why
+ * the cycle-guard branches don't push anything anymore.
  */
-interface SuppressedEdge {
-  /** Node id of the owner whose `expansions` map should receive this edge. */
-  readonly ownerNodeId: string;
-  readonly attrName: string;
-  readonly targetId: string;
-  /** Whether the target is a Data node (needs inheritance wrapping) or Choice. */
-  readonly targetKind: 'Data' | 'Choice';
-}
 
 // classifyType treats anything in BUILTIN_TYPES as a chip-only "primitive-like" leaf; UI does not drill into them.
 const BUILTIN_SET = new Set<string>(BUILTIN_TYPES);
@@ -195,17 +196,21 @@ function buildRow(
  * old persisted maps and behaves as "root-level / shared" for the root node.
  *
  * **Back-compat fallback.** When `instancePath` is non-empty, we ALSO check
- * the legacy key (no instancePath). If either matches, expand. This lets old
- * persisted expansion maps (which only have legacy keys) keep working AT ALL
- * NESTING LEVELS after upgrade — without it, only root-row expansions would
- * survive an upgrade, and deeply-nested user-expanded rows would silently
- * collapse on the next session. Once the user toggles any chevron, the
- * per-instance key gets written via the renderer's onToggleExpansion path,
- * so over time the map naturally migrates to per-instance entries.
+ * the legacy key (no instancePath). But — Codex P2 review of PR #194: the
+ * fallback must respect an EXPLICIT per-instance `false`, otherwise users
+ * with legacy `true` entries can never collapse the corresponding row at
+ * any deeper instance (the chevron writes `false` per-instance via
+ * toggleExpansion, but shouldExpand falls back to legacy `true` and the row
+ * stays expanded). Fix: check the per-instance key with `Map.has()` first.
+ * If it's present at all (true OR false), respect it without falling back.
+ * Only when the per-instance entry is completely absent do we check legacy.
+ *
+ * This lets old persisted expansion maps (which only have legacy keys) keep
+ * working AT ALL NESTING LEVELS after upgrade — without losing data — while
+ * allowing users to override at any visible instance.
  *
  * The fallback is intentionally lossy in the per-instance direction: legacy
- * keys expand ALL instances of a row. This matches the old shared semantics
- * exactly, which is what we want for upgrade continuity.
+ * keys expand ALL instances of a row (until the user explicitly toggles).
  */
 function shouldExpand(
   row: StructureRow,
@@ -222,10 +227,15 @@ function shouldExpand(
     attrName: row.attrName,
     instancePath
   });
-  if (expansionMap.get(perInstanceKey) === true) return true;
-  // Back-compat fallback: also check the legacy key (no instancePath). For
-  // root-row chevrons (instancePath = []), this is a no-op because the
-  // per-instance and legacy keys serialize to the same string.
+  // Distinguish "explicit per-instance entry" from "absent". An explicit false
+  // wins over the legacy fallback so the user's collapse intent is respected.
+  if (expansionMap.has(perInstanceKey)) {
+    return expansionMap.get(perInstanceKey) === true;
+  }
+  // Back-compat fallback: legacy key only consulted when per-instance is
+  // completely unset. For root-row chevrons (instancePath = []) the
+  // per-instance and legacy keys serialize identically, so this branch is
+  // dormant for the root.
   if (instancePath.length > 0) {
     const legacyKey = expansionKey({
       namespaceUri: ownerNamespace,
@@ -264,10 +274,11 @@ function buildChoiceArm(opt: AdapterChoiceOption, doc: AdapterDocument, ownerNam
   return { typeName: refText, typeKind, targetNodeId: target.id };
 }
 
-function buildChoiceNode(node: AdapterNode, doc: AdapterDocument): StructureChoiceNode {
+function buildChoiceNode(node: AdapterNode, doc: AdapterDocument, instanceId: string): StructureChoiceNode {
   const arms = (node.choiceOptions ?? []).map((opt) => buildChoiceArm(opt, doc, node.namespace));
   return {
     id: node.id,
+    instanceId,
     kind: 'choice',
     name: node.name,
     namespaceUri: node.namespace,
@@ -281,9 +292,21 @@ function buildChoiceNode(node: AdapterNode, doc: AdapterDocument): StructureChoi
  * layout agree on what `data.instancePath` should look like in renderer chevrons.
  *
  * Layout source of truth: `packages/visual-editor/src/layout/structure-layout.ts:339`.
+ *
+ * Phase 14e: this is also the key the adapter uses for `out` entries — each
+ * unique (parentInstanceId × attrName × canonicalTarget) gets its own
+ * StructureNode in the per-instance graph.
  */
 function adapterChildInstanceId(parentInstanceId: string, attrName: string, targetCanonicalId: string): string {
   return `${parentInstanceId}::${attrName}::${targetCanonicalId}`;
+}
+
+/**
+ * Compose the instance id of a base container nested one level deeper than its
+ * outer instance (via the layout's `__derived` slot).
+ */
+function adapterDerivedInstanceId(outerInstanceId: string, innerCanonicalId: string): string {
+  return `${outerInstanceId}::__derived::${innerCanonicalId}`;
 }
 
 /**
@@ -298,8 +321,12 @@ function adapterChildInstanceId(parentInstanceId: string, attrName: string, targ
  * `materializeDataWithInheritance`: a local `visited` set breaks malformed
  * chains; well-formed inputs cannot self-extend.
  */
-function computeOutermostCanonicalId(focused: AdapterNode, doc: AdapterDocument): string {
-  if (!focused.extends) return focused.id;
+function computeOutermostCanonicalId(focused: AdapterNode, doc: AdapterDocument, cache?: Map<string, string>): string {
+  if (cache?.has(focused.id)) return cache.get(focused.id) as string;
+  if (!focused.extends) {
+    cache?.set(focused.id, focused.id);
+    return focused.id;
+  }
   const visited = new Set<string>([focused.id]);
   let outermost = focused.id;
   let cursor: AdapterNode | undefined = findNodeByName(focused.extends, doc, focused.namespace);
@@ -308,56 +335,56 @@ function computeOutermostCanonicalId(focused: AdapterNode, doc: AdapterDocument)
     outermost = `${focused.id}::__base::${cursor.id}`;
     cursor = cursor.extends ? findNodeByName(cursor.extends, doc, cursor.namespace) : undefined;
   }
+  cache?.set(focused.id, outermost);
   return outermost;
 }
 
+/**
+ * Phase 14e — full per-instance materialization.
+ *
+ * Walk a Data node's rows and, for each expanded row, materialize a fresh
+ * per-instance subtree. Unlike the previous Phase 14d implementation, `out`
+ * is now keyed on instance ids (not canonical ids), so two visible occurrences
+ * of the same type (e.g. `buyer.Party` and `seller.Party`) produce two
+ * independent StructureDataNode entries with their own `expansions` maps.
+ *
+ * Toggling a chevron on one instance writes a per-instance store key (the
+ * renderer uses `data.instancePath` + self's rfId), and `shouldExpand` for
+ * the OTHER instance checks a different key — so siblings stay independent.
+ *
+ * Cycle protection is keyed on CANONICAL ids (cycles are a property of the
+ * type graph, not visible instances) — the `path` set carries canonical ids
+ * of recursion ancestors. A second SIBLING instance of an ancestor type is
+ * still legal; only re-entering the SAME ancestor (which would loop forever)
+ * is suppressed.
+ */
 function walkAndExpand(
   node: AdapterNode,
   doc: AdapterDocument,
   opts: BuildOptions,
   out: Map<string, StructureNode>,
-  // Ancestors of `node` in the current recursion stack. Edges to anything in
-  // this set would form a containment cycle in the Phase 3 React Flow layout
-  // (which treats `expansions` as parentId), so they are dropped at record
-  // time. Completed-sibling references (target already in `out` but NOT in
-  // `path`) are preserved — those render as cross-tree handles, not parents.
+  // Canonical ids of `node`'s ancestors in the current recursion stack. A
+  // target already on `path` forms a containment cycle in the layout — the
+  // edge is dropped, but the row chip remains visible. Per-instance semantics
+  // mean no cross-instance "completed sibling" promotion is needed.
   path: ReadonlySet<string>,
-  // Cache mapping a Data target's own id to the outermost-container id that
-  // wraps it (or the target's own id if there is no inheritance chain). Used
-  // by `materializeDataWithInheritance` so repeat expansions of the same
-  // target reuse the cached outermost id without re-walking.
-  outerMostId: Map<string, string>,
-  // Side-table of edges suppressed by the ancestor-cycle guard. Replayed on
-  // every cache-reuse so context-dependent suppressions don't become permanent
-  // when a target is later revisited through a non-cyclic path. See the
-  // `SuppressedEdge` doc for the full rationale.
-  suppressedEdges: SuppressedEdge[],
-  // Phase 14d: per-instance expansion. `currentInstanceId` is the React Flow
-  // instance id that layout will assign to this node's placement (root: the
-  // canonical id; nested: makeInstanceId result from the parent's perspective).
-  // `instancePath` is the chain of ancestor instance ids leading to this node
-  // (NOT including this node itself) and is what `shouldExpand` uses to scope
-  // the expansion key for THIS node's rows. The chevron-renderer in DataNode
-  // sees the same `instancePath` via `data.instancePath` (injected by layout),
-  // so the keys match round-trip through the persistence layer.
-  //
-  // Note: the adapter still dedupes by canonical id. Two separate visible
-  // instances of the same type therefore share one `expansions` map — for the
-  // direct buyer.Party vs seller.Party case (both reached from Trade with the
-  // same canonical-id path `[Trade]`), the expansion set is the union. Full
-  // per-instance materialization (one StructureNode per instance) is a larger
-  // refactor and deferred to a future phase.
+  // Cache mapping a Data target's canonical id to its outermost wrapper's
+  // canonical id. Performance-only.
+  outerMostCanonicalCache: Map<string, string>,
+  // INSTANCE id of the StructureNode being walked. Used as the `out` key for
+  // this node's `expansions` map AND as the parent instance id when computing
+  // child instance ids.
   currentInstanceId: string,
+  // Chain of ancestor instance ids leading to this node (NOT including this
+  // node itself).
   instancePath: ReadonlyArray<string>
 ): void {
   const expansions = new Map<string, string>();
   const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
 
-  // Reserve a placeholder so cyclic references terminate when we recurse —
-  // children that revisit this node will hit the `out.has(...)` guard below
-  // and re-use the placeholder rather than re-walking.
   const placeholder: StructureDataNode = {
     id: node.id,
+    instanceId: currentInstanceId,
     kind: 'data',
     name: node.name,
     namespaceUri: node.namespace,
@@ -366,103 +393,65 @@ function walkAndExpand(
     rows,
     expansions
   };
-  out.set(node.id, placeholder);
+  out.set(currentInstanceId, placeholder);
 
-  // Fresh per-call set keeps the ancestor path scoped to this recursion
-  // branch; siblings in unrelated branches don't share it. Letting `nextPath`
-  // go out of scope on return acts as the implicit "leave" cleanup.
+  // Cycle guard carries CANONICAL ids — cycles are properties of the type
+  // graph, not visible instances.
   const nextPath = new Set(path);
   nextPath.add(node.id);
-  // Children see this node's instance id appended to their instance path.
   const childInstancePath: ReadonlyArray<string> = [...instancePath, currentInstanceId];
 
   for (const row of rows) {
-    // Phase 14d (fix): expansion key must include self's rfId so the adapter
-    // key matches the chevron's rowKey (which now appends `id` to instancePath).
-    // `childInstancePath` = [...instancePath, currentInstanceId]; use that here
-    // so owner-rows keys align with the renderer — the renderer appends `id`
-    // (this node's rfId) to `data.instancePath` when building rowKey.
     if (shouldExpand(row, node.namespace, node.name, opts.expansionMap, childInstancePath) && row.targetNodeId) {
       const target = doc.nodes.find((n) => n.id === row.targetNodeId);
       if (!target) continue;
-      // Defense-in-depth: re-check the target kind here so this guard cannot
-      // disagree with shouldExpand's. If an Enum (or any future non-expandable
-      // kind) ever slips through, we skip without recording a dangling edge.
       if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
-      // Ancestor cycle guard: dropping both the expansion edge AND the
-      // recursion. The row still appears in `rows` as a chip referencing the
-      // ancestor by id; only the parent/child containment link is suppressed
-      // FOR THIS PATH. We record the suppression in the side table so a later
-      // visit through a different (non-cyclic) path can promote the edge —
-      // otherwise the context-dependent suppression would become permanent
-      // even after the cycle disappears (the Codex P2 cache-reuse defect).
       if (nextPath.has(target.id)) {
-        suppressedEdges.push({
-          ownerNodeId: node.id,
-          attrName: row.attrName,
-          targetId: target.id,
-          targetKind: target.$type
-        });
+        // Cyclic; drop the containment edge silently. The row chip remains.
         continue;
       }
       if (target.$type === 'Data') {
-        // Spec §3.2: containment is the single mechanism for both inheritance
-        // and type-reference and they compose uniformly. The expansion edge
-        // must point at the OUTERMOST base container (if any) so the Data
-        // target renders wrapped in its full inheritance chain — matching the
-        // focused-root behavior in `buildStructureGraph`.
-        //
-        // Phase 14d: the layout uses the OUTERMOST canonical id (target's
-        // wrapper chain's outer) as the child's rfId — so we pass that into
-        // materialize, computed via the shared `computeOutermostCanonicalId`
-        // helper. Adapter rfId matches what the layout will use.
-        const targetOutermostCanonical = computeOutermostCanonicalId(target, doc);
+        const targetOutermostCanonical = computeOutermostCanonicalId(target, doc, outerMostCanonicalCache);
+        const childInstanceId = adapterChildInstanceId(currentInstanceId, row.attrName, targetOutermostCanonical);
         const expandedId = materializeDataWithInheritance(
           target,
           doc,
           opts,
           out,
           nextPath,
-          outerMostId,
-          suppressedEdges,
-          adapterChildInstanceId(currentInstanceId, row.attrName, targetOutermostCanonical),
+          outerMostCanonicalCache,
+          childInstanceId,
           childInstancePath
         );
         expansions.set(row.attrName, expandedId);
-        // Promote any previously-suppressed edges that are now reachable now
-        // that `target` (and its subtree) is in `out`.
-        replaySuppressedEdges(doc, opts, out, nextPath, outerMostId, suppressedEdges);
       } else {
-        expansions.set(row.attrName, target.id);
-        if (!out.has(target.id)) {
-          out.set(target.id, buildChoiceNode(target, doc));
+        const childInstanceId = adapterChildInstanceId(currentInstanceId, row.attrName, target.id);
+        if (!out.has(childInstanceId)) {
+          out.set(childInstanceId, buildChoiceNode(target, doc, childInstanceId));
         }
-        // Choice has no expansions of its own, so no replay needed for the
-        // freshly-materialized target, but other cached subtrees may have
-        // edges that point at this Choice and were previously suppressed.
-        replaySuppressedEdges(doc, opts, out, nextPath, outerMostId, suppressedEdges);
+        expansions.set(row.attrName, childInstanceId);
       }
     }
   }
 }
 
 /**
- * Materialize a Data node into `out` with its full inheritance chain.
- * Returns the id that a containment edge should point at — the outermost
- * base container if the node has `extends`, or the node's own id if not.
+ * Materialize a Data node into `out` with its full inheritance chain, per
+ * instance. Returns the INSTANCE id that a containment edge should point at —
+ * either the outermost base container's instance id (if the node has
+ * `extends`) or the focused node's own instance id.
  *
  * Shared between `buildStructureGraph` (focused root) and `walkAndExpand`
  * (each expanded Data target). Containment is the single mechanism for both
- * inheritance and type-reference per spec §3.2; the two callers therefore
- * need identical wrapping behavior. Without this helper, expansion targets
- * would bypass the inheritance chain and render bare (no yellow base
- * containers, no inherited rows), violating §3.2's uniform composition.
+ * inheritance and type-reference per spec §3.2.
  *
- * The chain is walked once per target — repeat expansions of the same Data
- * target reuse the cached outermost id from `outerMostId` and skip
- * re-materialization. Inheritance cycles (A extends B extends A) are broken
- * by a local `visited` set, distinct from the type-reference recursion
- * ancestor `path` (those guard different cycle classes).
+ * Phase 14e (per-instance materialization): each call builds FRESH
+ * StructureNode entries keyed under instance ids; multiple visible
+ * occurrences of the same canonical type produce multiple, independent
+ * subtrees. The `outerMostCanonicalCache` is performance-only (canonical id
+ * → canonical outermost id); it does NOT short-circuit re-materialization.
+ * Inheritance-chain cycles are broken by a local `visited` set; expansion
+ * cycles are guarded by the canonical-id `path` set threaded through.
  */
 function materializeDataWithInheritance(
   focused: AdapterNode,
@@ -470,71 +459,26 @@ function materializeDataWithInheritance(
   opts: BuildOptions,
   out: Map<string, StructureNode>,
   path: ReadonlySet<string>,
-  outerMostId: Map<string, string>,
-  suppressedEdges: SuppressedEdge[],
+  outerMostCanonicalCache: Map<string, string>,
   /**
-   * React Flow instance id that layout will assign to the OUTERMOST wrapper
-   * of this Data type (i.e., the outermost base container, or `focused.id`
-   * if there is no inheritance chain). This is what shows up as the rfId of
-   * the placed node and is the basis for child instance ids underneath.
-   *
-   * For the root focused type, this equals `focused.id` (no parent prefix).
-   * For an expanded child, it's the makeInstanceId result computed by the
-   * caller in `walkAndExpand`.
-   *
-   * Phase 14d: per-instance expansion. Threading instance ids and paths
-   * through here so `walkAndExpand` (called for the focused node and each
-   * base level) can scope row chevron keys per-instance.
+   * INSTANCE id that the OUTERMOST wrapper of this Data type will carry (the
+   * outermost base container, or the focused node itself if no inheritance).
+   * Used both as the `out` key and as the basis for nested-container instance
+   * ids beneath this wrapper.
    */
   outermostInstanceId: string,
   /**
-   * Instance path that `walkAndExpand` should use for the FOCUSED node's rows
-   * (ancestors of the focused node — NOT including the outermost wrapper).
-   * For the root focused type, this is `[]`. For an expanded child, it's the
-   * caller's child-instance-path (`[...parentPath, parentInstanceId]`).
-   *
-   * Note: when `focused` has inheritance, the outermost wrapper is a base
-   * container — that container's own rows (`baseRows`) sit at the wrapper's
-   * own level, so their owner's instance path = `instancePath` and their
-   * owner's instance id = `outermostInstanceId`. The focused (innermost)
-   * Data node's rows sit one level deeper, with instance path extended by
-   * each intervening base container's instance id.
+   * Instance path for the OUTERMOST wrapper's `instancePath` (= ancestors of
+   * the wrapper, NOT including the wrapper itself). For the root this is
+   * `[]`; for an expanded child it's `[...parentPath, parentInstanceId]`.
+   * Inner containers (and the focused Data node) build their own deeper
+   * paths from this value.
    */
   instancePath: ReadonlyArray<string>
 ): string {
-  // Repeat-expansion fast path: same target reached via multiple references
-  // (e.g. Portfolio.trade1 + Portfolio.trade2 both point at Trade). The
-  // chain has already been built; reuse the cached outermost id.
-  //
-  // Note: the cache is for the *outermost wrapper id*, which is intrinsic to
-  // the target's inheritance chain and context-independent. Context-dependent
-  // expansion edges suppressed during the first materialization are tracked
-  // separately in `suppressedEdges` and replayed by the caller after this
-  // function returns.
-  const cached = outerMostId.get(focused.id);
-  if (cached !== undefined) return cached;
-
-  // Pre-seed the cache with a sentinel BEFORE walking the inheritance chain
-  // or recursing into the target's rows. If an inherited base-container row
-  // (e.g. `Base.child: Derived` where `Derived extends Base`) loops back at
-  // the focused type, the re-entry would otherwise recurse forever because
-  // the real cache entry is only written after the chain walk completes.
-  // The tentative value is `focused.id` — the value that would be returned
-  // if the chain turned out to be empty — and is overwritten with the real
-  // outermost id at end-of-materialize. On re-entry, the helper sees the
-  // sentinel and returns it as a cache hit, which is the correct cycle-
-  // collapsing behavior (Phase 3 cannot resolve a parent-cycle anyway, and
-  // the cache-replay logic will promote any non-cyclic alternate path
-  // discovered later). This is the Codex P2 cache-seeding defect: the
-  // ancestor `path` set alone is insufficient because base-container row
-  // walks build `baseRowPath` from `path + base ids`, omitting `focused.id`.
-  outerMostId.set(focused.id, focused.id);
-
-  // Collect ancestors from nearest base outward, with cycle protection.
-  // A type cannot extend itself in well-formed input, but defensive code
-  // must not infinite-loop on malformed chains. The `visited` set is local
-  // to this call (not threaded through) because a Data type's inheritance
-  // chain is intrinsic — it doesn't depend on the expansion context.
+  // Collect ancestors from nearest base outward, with inheritance-cycle
+  // protection. `visited` is intrinsic to the type's chain and local to
+  // this call.
   const visited = new Set<string>([focused.id]);
   const ancestors: AdapterNode[] = [];
   let cursor: AdapterNode | undefined = focused.extends
@@ -547,26 +491,14 @@ function materializeDataWithInheritance(
   }
 
   // Compute the canonical id chain of base containers (outermost FIRST).
-  // The outermost base wraps everything; the innermost base's `childNodeId`
-  // is the focused Data node. For no-inheritance, ancestors is empty and we
-  // skip directly to the focused walk below.
-  //
-  // `ancestors` is built INNERMOST → OUTERMOST during the chain walk, so
-  // reversing gives OUTERMOST → INNERMOST — the order the layout places them
-  // (outermost = root rfId, each inner is a `__derived` child of the next outer).
+  // ancestors is INNERMOST → OUTERMOST; reverse for layout placement order.
   const outerToInner = [...ancestors].reverse();
   const baseCanonicalIds = outerToInner.map((baseNode) => `${focused.id}::__base::${baseNode.id}`);
 
-  // Phase 14d: compute the rfId AND instancePath that each base container will
-  // have at placement time, plus the focused Data node's. The outermost
-  // container has rfId = `outermostInstanceId` (passed in) and instancePath =
-  // `instancePath` (passed in). Each inner is reached via the layout's
-  // `__derived` slot from the previous outer, so its rfId =
-  // `${outerRfId}::__derived::${innerCanonical}` and its instancePath =
-  // `[...outerPath, outerRfId]`.
-  //
-  // The focused Data node sits inside the innermost base container (or is the
-  // root itself when ancestors.length === 0) with the same `__derived` link.
+  // Compute the per-instance rfId AND instancePath for each base container,
+  // plus the focused Data node. The outermost container's rfId is
+  // `outermostInstanceId` (passed in); each inner is the layout's `__derived`
+  // slot of the previous outer.
   const baseRfIds: string[] = [];
   const basePaths: Array<ReadonlyArray<string>> = [];
   let prevRfId = outermostInstanceId;
@@ -576,7 +508,7 @@ function materializeDataWithInheritance(
       baseRfIds.push(outermostInstanceId);
       basePaths.push(instancePath);
     } else {
-      const myRfId = `${prevRfId}::__derived::${baseCanonicalIds[i]}`;
+      const myRfId = adapterDerivedInstanceId(prevRfId, baseCanonicalIds[i]);
       const myPath = [...prevPath, prevRfId];
       baseRfIds.push(myRfId);
       basePaths.push(myPath);
@@ -584,235 +516,110 @@ function materializeDataWithInheritance(
     prevRfId = baseRfIds[i];
     prevPath = basePaths[i];
   }
-  // Focused node sits one __derived deeper than the innermost base (or is the
-  // root itself when no inheritance).
-  const focusedRfId = ancestors.length === 0 ? outermostInstanceId : `${prevRfId}::__derived::${focused.id}`;
+  // Focused node sits one __derived deeper than the innermost base (or IS
+  // the outermost wrapper when there's no inheritance).
+  const focusedRfId = ancestors.length === 0 ? outermostInstanceId : adapterDerivedInstanceId(prevRfId, focused.id);
   const focusedPath: ReadonlyArray<string> = ancestors.length === 0 ? instancePath : [...prevPath, prevRfId];
 
-  // Materialize the focused Data node first. Its own type-reference
-  // expansions still need to walk through `walkAndExpand`. This must happen
-  // before the inheritance chain is built so the innermost base container's
-  // `childNodeId` can reference the now-present Data node.
-  walkAndExpand(focused, doc, opts, out, path, outerMostId, suppressedEdges, focusedRfId, focusedPath);
+  // Walk the focused Data node first. Under per-instance keying, the
+  // canonical-id `path` cycle guard is sufficient — if the focused canonical
+  // id is already on `path`, walkAndExpand's per-row check will suppress
+  // re-entry via the `nextPath.has(target.id)` guard before recursion. The
+  // pre-seed cache sentinel that the previous canonical-keyed implementation
+  // needed is no longer required: each call writes its own per-instance
+  // entry into `out` under a unique key, so there is no cross-instance
+  // collision to defend against.
+  walkAndExpand(focused, doc, opts, out, path, outerMostCanonicalCache, focusedRfId, focusedPath);
 
-  // No inheritance chain → no base container wrapping. The focused Data node
-  // is itself the outermost wrapper. (`focused.extends` can be set yet
-  // unresolvable; in that case ancestors is empty.)
+  // No inheritance chain → the focused Data node IS the outermost wrapper.
   if (ancestors.length === 0) {
-    outerMostId.set(focused.id, focused.id);
-    return focused.id;
+    outerMostCanonicalCache.set(focused.id, focused.id);
+    return focusedRfId;
   }
 
-  // Build containers inside-out so each parent container references the
-  // already-built child container id. The first ancestor (nearest base)
-  // wraps the focused Data node; subsequent ancestors wrap the previous
-  // container. The last ancestor's container id is the outermost.
-  let childId = focused.id;
-  let outermost = focused.id;
+  // Build containers inside-out. Each base container is its own
+  // per-instance entry keyed by its rfId, mirroring the layout placement.
+  let childInstanceId = focusedRfId;
+  let outermostCanonical = focused.id;
+  let outermostRfId = focusedRfId;
   for (let ai = 0; ai < ancestors.length; ai++) {
     const baseNode = ancestors[ai];
-    const baseId = `${focused.id}::__base::${baseNode.id}`;
+    const baseCanonicalId = `${focused.id}::__base::${baseNode.id}`;
     const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
 
-    // Look up the rfId+path computed for this base container above. The
-    // ancestors loop walks INNERMOST → OUTERMOST, but baseRfIds/basePaths are
-    // indexed OUTERMOST → INNERMOST (the layout's placement order). Index
-    // conversion: innermost has ancestors index 0, outerToInner index
-    // ancestors.length - 1 — so outerToInner index = ancestors.length-1-ai.
+    // Look up the rfId+path computed for this base container above. Loop
+    // walks INNERMOST → OUTERMOST; arrays are OUTERMOST → INNERMOST.
     const oi = ancestors.length - 1 - ai;
     const baseRfId = baseRfIds[oi];
     const baseRowInstancePath = basePaths[oi];
 
-    // Spec §3.2: containment is the uniform mechanism for both inheritance
-    // and type-reference. A complex-typed inherited row (e.g.
-    // `TradeBase.party: Party`) must be expandable in exactly the same way
-    // as a row on the derived type — the expansion edge is owned by the
-    // base level (this container), not the focused derived Data node, so
-    // the expansion key uses the base node's namespace+name (the attribute's
-    // declaration owner). This keeps expansion state stable whether the
-    // user views TradeBase directly or any descendant.
     const baseExpansions = new Map<string, string>();
-    // Add this base node to the recursion path while walking its rows so a
-    // self-referential inherited row (`BaseType.foo: BaseType`) does not
-    // form a containment cycle through expansion. Also add the synthetic
-    // base-container id itself so an inherited row that loops back to the
-    // *container* level (vs. the base node) is correctly suppressed.
-    //
-    // Crucially, include `focused.id` too: when an inherited row points back
-    // at the focused (descendant) type (`Base.child: Derived` where Derived
-    // extends Base), the SuppressedEdge mechanism must treat Derived as on
-    // the recursion path. Without this, the cycle-suppression check would
-    // miss the loop and the cache sentinel set above would only prevent
-    // runaway recursion — the edge would still be (wrongly) promoted as a
-    // containment edge, producing a parent-cycle Phase 3 can't lay out.
-    // Belt-and-braces with the cache sentinel: the sentinel stops runaway
-    // recursion; this keeps suppression semantics consistent with how
-    // ancestors are handled elsewhere.
+    // Cycle guard set carries CANONICAL ids. Include focused.id, the base
+    // type, and the synthetic container id so an inherited row that loops
+    // back to any of those levels is correctly suppressed.
     const baseRowPath = new Set(path);
     baseRowPath.add(focused.id);
     baseRowPath.add(baseNode.id);
-    baseRowPath.add(baseId);
+    baseRowPath.add(baseCanonicalId);
 
-    // Materialize the base container BEFORE walking its rows so that any
-    // suppressed-edge replay during target materialization can observe the
-    // base container in `out` and promote edges targeting it.
     const baseContainer: StructureBaseContainer = {
-      id: baseId,
+      id: baseCanonicalId,
+      instanceId: baseRfId,
       kind: 'base',
       baseTypeName: baseNode.name,
       baseTypeNamespaceUri: baseNode.namespace,
       baseRows,
-      childNodeId: childId,
+      childNodeId: childInstanceId,
       expansions: baseExpansions
     };
-    out.set(baseId, baseContainer);
+    out.set(baseRfId, baseContainer);
 
-    // Children of this base container's expanded rows have instancePath =
-    // `[...baseRowInstancePath, baseRfId]`. Used when recursing into expansion
-    // targets via materializeDataWithInheritance.
+    // Children of this base's expanded rows see this base container as their
+    // immediate parent: instancePath = `[...baseRowInstancePath, baseRfId]`.
     const childExpansionInstancePath: ReadonlyArray<string> = [...baseRowInstancePath, baseRfId];
 
     for (const row of baseRows) {
-      // Phase 14d (fix): use childExpansionInstancePath (= [...baseRowInstancePath, baseRfId])
-      // so this key matches the GroupContainerNode chevron's rowKey (which also appends `id`
-      // to `data.instancePath`). `baseRowInstancePath` is the ancestors of this base container;
-      // `baseRfId` is the container's own rfId — together they mirror the renderer's self-inclusive key.
       if (!shouldExpand(row, baseNode.namespace, baseNode.name, opts.expansionMap, childExpansionInstancePath))
         continue;
       if (!row.targetNodeId) continue;
       const target = doc.nodes.find((n) => n.id === row.targetNodeId);
       if (!target) continue;
       if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
-      // Suppression path mirrors `walkAndExpand`: record the edge in the side
-      // table so a later cache-reuse of this base container can replay and
-      // promote the edge if the cycle no longer holds.
       if (baseRowPath.has(target.id)) {
-        suppressedEdges.push({
-          ownerNodeId: baseId,
-          attrName: row.attrName,
-          targetId: target.id,
-          targetKind: target.$type
-        });
+        // Cyclic; drop the containment edge. Per-instance materialization
+        // means each visible occurrence is independent; no cross-instance
+        // replay needed.
         continue;
       }
       if (target.$type === 'Data') {
-        const targetOutermostCanonical = computeOutermostCanonicalId(target, doc);
+        const targetOutermostCanonical = computeOutermostCanonicalId(target, doc, outerMostCanonicalCache);
+        const targetInstanceId = adapterChildInstanceId(baseRfId, row.attrName, targetOutermostCanonical);
         const expandedId = materializeDataWithInheritance(
           target,
           doc,
           opts,
           out,
           baseRowPath,
-          outerMostId,
-          suppressedEdges,
-          adapterChildInstanceId(baseRfId, row.attrName, targetOutermostCanonical),
+          outerMostCanonicalCache,
+          targetInstanceId,
           childExpansionInstancePath
         );
         baseExpansions.set(row.attrName, expandedId);
-        replaySuppressedEdges(doc, opts, out, baseRowPath, outerMostId, suppressedEdges);
       } else {
-        baseExpansions.set(row.attrName, target.id);
-        if (!out.has(target.id)) {
-          out.set(target.id, buildChoiceNode(target, doc));
+        const targetInstanceId = adapterChildInstanceId(baseRfId, row.attrName, target.id);
+        if (!out.has(targetInstanceId)) {
+          out.set(targetInstanceId, buildChoiceNode(target, doc, targetInstanceId));
         }
-        replaySuppressedEdges(doc, opts, out, baseRowPath, outerMostId, suppressedEdges);
+        baseExpansions.set(row.attrName, targetInstanceId);
       }
     }
-    childId = baseId;
-    outermost = baseId;
+    childInstanceId = baseRfId;
+    outermostCanonical = baseCanonicalId;
+    outermostRfId = baseRfId;
   }
 
-  outerMostId.set(focused.id, outermost);
-  return outermost;
-}
-
-/**
- * Re-evaluate suppressed expansion edges against the current recursion path.
- *
- * The `outerMostId` cache makes wrapper-id resolution context-independent,
- * but expansion edges are context-dependent (they depend on whether the
- * target is an ancestor in the recursion path at the moment of suppression).
- * When a target is later reached through a path where the formerly-cycling
- * peer is now a *completed sibling* (in `out`, not in `path`), the
- * suppressed edge can — and must — be promoted to a real containment edge.
- *
- * Iterates to fixed point because promoting one edge may bring a new owner
- * into a state where its own previously-suppressed children become reachable.
- *
- * Spec §3.2: containment is the uniform mechanism for both inheritance and
- * type-reference; completed-sibling cross-references are first-class.
- */
-function replaySuppressedEdges(
-  doc: AdapterDocument,
-  opts: BuildOptions,
-  out: Map<string, StructureNode>,
-  path: ReadonlySet<string>,
-  outerMostId: Map<string, string>,
-  suppressedEdges: SuppressedEdge[]
-): void {
-  // Fixed-point: promotion may materialize a target whose own subtree
-  // previously suppressed edges that are now reachable. We bound iteration
-  // by the length of the suppressed list, which strictly decreases on every
-  // successful promotion.
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (let i = suppressedEdges.length - 1; i >= 0; i--) {
-      const entry = suppressedEdges[i];
-      // Sanity guard — owner must exist in `out`. If it doesn't, leave the
-      // entry alone so the eventual materialization can attach to it.
-      const owner = out.get(entry.ownerNodeId);
-      if (!owner) continue;
-      // Still cyclic in the current path? Leave it for a future replay.
-      if (path.has(entry.targetId)) continue;
-
-      let expandedId: string;
-      if (entry.targetKind === 'Data') {
-        const targetNode = doc.nodes.find((n) => n.id === entry.targetId);
-        if (!targetNode) continue;
-        // Reuse the same materialization path that the original (suppressed)
-        // call would have taken. If the target is already in `out`, the
-        // `outerMostId` cache produces the outermost id; otherwise the chain
-        // is built fresh and any nested cycles are handled recursively.
-        //
-        // Phase 14d: replay paths use the target's CANONICAL id as the
-        // outermost instance id and an empty instance path. This matches the
-        // back-compat default and avoids reconstructing the original
-        // suppression context (which would require capturing it at
-        // suppression time). The replay only promotes the EDGE, so the
-        // expansion key would already have fired correctly during the
-        // original walkAndExpand pass — this is a side-table catch-up only.
-        expandedId = materializeDataWithInheritance(
-          targetNode,
-          doc,
-          opts,
-          out,
-          path,
-          outerMostId,
-          suppressedEdges,
-          entry.targetId,
-          []
-        );
-      } else {
-        expandedId = entry.targetId;
-        if (!out.has(entry.targetId)) {
-          const choiceNode = doc.nodes.find((n) => n.id === entry.targetId);
-          if (!choiceNode) continue;
-          out.set(entry.targetId, buildChoiceNode(choiceNode, doc));
-        }
-      }
-
-      // Mutate the owner's expansions map in place. The `ReadonlyMap` view in
-      // the public type is a TypeScript-only constraint — the underlying Map
-      // is mutable and shared with this builder. Both `StructureDataNode` and
-      // `StructureBaseContainer` carry `expansions`, and both kinds can be
-      // owners (data-row suppression vs. inherited-row suppression).
-      const expansionsMap = (owner as StructureDataNode | StructureBaseContainer).expansions as Map<string, string>;
-      expansionsMap.set(entry.attrName, expandedId);
-      suppressedEdges.splice(i, 1);
-      changed = true;
-    }
-  }
+  outerMostCanonicalCache.set(focused.id, outermostCanonical);
+  return outermostRfId;
 }
 
 export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): StructureGraphInput {
@@ -823,43 +630,57 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
   }
 
   if (root.$type === 'Data') {
-    // Spec §3.2: Multi-level inheritance nests yellow inside yellow
-    // recursively. Both the focused root AND expansion targets must wrap
-    // in their full inheritance chain — the shared
-    // `materializeDataWithInheritance` helper enforces this symmetry.
-    const outerMostId = new Map<string, string>();
-    // Edges suppressed by the ancestor-cycle guard during recursion are held
-    // here and replayed after the walk so context-dependent suppressions
-    // don't outlive the cycle that caused them. See `SuppressedEdge` and
-    // `replaySuppressedEdges` for the full rationale.
-    const suppressedEdges: SuppressedEdge[] = [];
-    // Phase 14d: pre-compute the outermost canonical id from the inheritance
-    // chain so the adapter passes the SAME id to materialize that the layout
-    // will use as the root rfId. The layout calls `placeNode(rootId, rootId)`
-    // for the root — i.e. rfId === canonical id — so adapter and renderer
-    // chevron keys agree.
-    const outermostCanonicalId = computeOutermostCanonicalId(root, doc);
-    const rootId = materializeDataWithInheritance(
+    // Phase 14e — per-instance materialization. The `out` map is keyed by
+    // instance id (one entry per visible occurrence). `outerMostCanonicalCache`
+    // is canonical→canonical (performance only).
+    //
+    // Root instance id === outermost canonical id, matching the layout's
+    // root rfId convention so `data.instancePath = []` at the root.
+    const outerMostCanonicalCache = new Map<string, string>();
+    const outermostCanonicalId = computeOutermostCanonicalId(root, doc, outerMostCanonicalCache);
+    const rootInstanceId = materializeDataWithInheritance(
       root,
       doc,
       opts,
       nodes,
       new Set<string>(),
-      outerMostId,
-      suppressedEdges,
+      outerMostCanonicalCache,
       outermostCanonicalId,
       []
     );
-    // NOTE: no empty-path final replay. Suppressions are promoted only when
-    // a target is *actually reached* through a non-cyclic path during the
-    // walk (cache-hit replay inside `walkAndExpand` /
-    // `materializeDataWithInheritance`). Promoting them at empty path here
-    // would un-suppress pure cycles (Tree.parent → Tree, A → B → A with no
-    // alternate route) which the spec mandates stay suppressed — those
-    // edges have NO non-cyclic path and must remain dropped.
-    return { rootNodeId: rootId, nodes };
+    return { rootNodeId: rootInstanceId, nodes };
   }
-  // Choice as root handled in later tasks.
-
+  // Choice as root handled in later tasks; preserve the Phase 2 contract of
+  // an empty `nodes` map with `rootNodeId` echoing the focused id.
   return { rootNodeId: root.id, nodes };
+}
+
+/**
+ * Find the first StructureNode whose canonical id matches.
+ *
+ * Phase 14e: `StructureGraphInput.nodes` is keyed by INSTANCE id (per-instance
+ * materialization). Callers that need to look up a node by its canonical id —
+ * tests, AST navigation, cell editors — use this helper instead of `nodes.get`.
+ *
+ * If multiple visible instances share the canonical id (e.g. `buyer.Party`
+ * and `seller.Party`), the FIRST entry in iteration order is returned. Use
+ * `findAllByCanonicalId` for the full list.
+ */
+export function findByCanonicalId(
+  nodes: ReadonlyMap<string, StructureNode>,
+  canonicalId: string
+): StructureNode | undefined {
+  for (const node of nodes.values()) {
+    if (node.id === canonicalId) return node;
+  }
+  return undefined;
+}
+
+/** Return all StructureNodes whose canonical id matches. */
+export function findAllByCanonicalId(nodes: ReadonlyMap<string, StructureNode>, canonicalId: string): StructureNode[] {
+  const out: StructureNode[] = [];
+  for (const node of nodes.values()) {
+    if (node.id === canonicalId) out.push(node);
+  }
+  return out;
 }
