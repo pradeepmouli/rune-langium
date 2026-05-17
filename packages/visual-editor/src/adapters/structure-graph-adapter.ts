@@ -377,7 +377,12 @@ function walkAndExpand(
   const childInstancePath: ReadonlyArray<string> = [...instancePath, currentInstanceId];
 
   for (const row of rows) {
-    if (shouldExpand(row, node.namespace, node.name, opts.expansionMap, instancePath) && row.targetNodeId) {
+    // Phase 14d (fix): expansion key must include self's rfId so the adapter
+    // key matches the chevron's rowKey (which now appends `id` to instancePath).
+    // `childInstancePath` = [...instancePath, currentInstanceId]; use that here
+    // so owner-rows keys align with the renderer — the renderer appends `id`
+    // (this node's rfId) to `data.instancePath` when building rowKey.
+    if (shouldExpand(row, node.namespace, node.name, opts.expansionMap, childInstancePath) && row.targetNodeId) {
       const target = doc.nodes.find((n) => n.id === row.targetNodeId);
       if (!target) continue;
       // Defense-in-depth: re-check the target kind here so this guard cannot
@@ -668,7 +673,12 @@ function materializeDataWithInheritance(
     const childExpansionInstancePath: ReadonlyArray<string> = [...baseRowInstancePath, baseRfId];
 
     for (const row of baseRows) {
-      if (!shouldExpand(row, baseNode.namespace, baseNode.name, opts.expansionMap, baseRowInstancePath)) continue;
+      // Phase 14d (fix): use childExpansionInstancePath (= [...baseRowInstancePath, baseRfId])
+      // so this key matches the GroupContainerNode chevron's rowKey (which also appends `id`
+      // to `data.instancePath`). `baseRowInstancePath` is the ancestors of this base container;
+      // `baseRfId` is the container's own rfId — together they mirror the renderer's self-inclusive key.
+      if (!shouldExpand(row, baseNode.namespace, baseNode.name, opts.expansionMap, childExpansionInstancePath))
+        continue;
       if (!row.targetNodeId) continue;
       const target = doc.nodes.find((n) => n.id === row.targetNodeId);
       if (!target) continue;

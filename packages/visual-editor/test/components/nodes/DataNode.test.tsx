@@ -157,17 +157,27 @@ describe('DataNode — structure variant — row expansion control (Finding 1)',
     fireEvent.click(screen.getByTestId('expand-row-economics'));
     expect(onToggle).toHaveBeenCalledTimes(1);
     const calledWith = onToggle.mock.calls[0][0] as StructureExpansionKey;
+    // Phase 14d (fix): rowKey now includes self's rfId in instancePath.
+    // For the root node with id="cdm.trade::Trade" and no data.instancePath,
+    // ownerInstancePath = [...[], 'cdm.trade::Trade'] = ['cdm.trade::Trade'].
     // typeId is the bare type name (matches adapter shouldExpand contract);
     // namespaceUri matches the owner node's namespace.
     expect(calledWith).toEqual({
       namespaceUri: 'cdm.trade',
       typeId: 'Trade',
-      attrName: 'economics'
+      attrName: 'economics',
+      instancePath: ['cdm.trade::Trade']
     });
   });
 
   it('aria-expanded mirrors the expansionMap state (collapsed → false, expanded → true)', () => {
-    const key = expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'economics' });
+    // Phase 14d (fix): expansionMap key now includes self rfId in instancePath.
+    const key = expansionKey({
+      namespaceUri: 'cdm.trade',
+      typeId: 'Trade',
+      attrName: 'economics',
+      instancePath: ['cdm.trade::Trade']
+    });
     const expanded = new Map<string, boolean>([[key, true]]);
     const { rerender } = renderInFlow(
       <DataNode data={mixedData() as any} selected={false} id="cdm.trade::Trade" type="data" />
@@ -188,7 +198,13 @@ describe('DataNode — structure variant — row expansion control (Finding 1)',
   });
 
   it('aria-label describes the action (expand vs collapse) for AT users', () => {
-    const key = expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'economics' });
+    // Phase 14d (fix): expansionMap key now includes self rfId in instancePath.
+    const key = expansionKey({
+      namespaceUri: 'cdm.trade',
+      typeId: 'Trade',
+      attrName: 'economics',
+      instancePath: ['cdm.trade::Trade']
+    });
     const expanded = new Map<string, boolean>([[key, true]]);
     const { rerender } = renderInFlow(
       <DataNode data={mixedData() as any} selected={false} id="cdm.trade::Trade" type="data" />
@@ -325,7 +341,7 @@ describe('DataNode — structure variant — cells forward canonical data.id, no
 });
 
 // ---------------------------------------------------------------------------
-// Phase 14d — per-instance row expansion chevrons
+// Phase 14d — per-instance row expansion chevrons (updated for 14d fix)
 // ---------------------------------------------------------------------------
 
 describe('DataNode — structure variant — per-instance chevron keys (Phase 14d)', () => {
@@ -359,7 +375,10 @@ describe('DataNode — structure variant — per-instance chevron keys (Phase 14
     };
   }
 
-  it('chevron fires with the injected instancePath in the key', () => {
+  it('chevron fires with self rfId included in instancePath (self-inclusive key)', () => {
+    // Phase 14d (fix): ownerInstancePath = [...data.instancePath, id].
+    // data.instancePath = ['cdm.trade::Trade'], id = 'cdm.trade::Trade::buyer::cdm.trade::Party'
+    // → fired instancePath = ['cdm.trade::Trade', 'cdm.trade::Trade::buyer::cdm.trade::Party']
     const onToggle = vi.fn();
     renderInFlow(
       <DataNode
@@ -375,21 +394,25 @@ describe('DataNode — structure variant — per-instance chevron keys (Phase 14
       namespaceUri: 'cdm.trade',
       typeId: 'Party',
       attrName: 'address',
-      instancePath: ['cdm.trade::Trade']
+      instancePath: ['cdm.trade::Trade', 'cdm.trade::Trade::buyer::cdm.trade::Party']
     } satisfies StructureExpansionKey);
   });
 
-  it('two visible occurrences with different instancePath produce different chevron keys', () => {
-    // Renders two DataNodes back-to-back: one for buyer.Party (path includes
-    // the buyer instance id), one for seller.Party (path includes seller's).
-    // Each click should fire with the OWN instancePath, not the other's.
+  it('two visible occurrences with different rfIds produce different chevron keys', () => {
+    // Renders two DataNodes back-to-back: one for buyer.Party, one for seller.Party.
+    // Both have the same canonical data and data.instancePath = ['cdm.trade::Trade'],
+    // but different React Flow ids (rfIds). After the fix, each chevron's rowKey
+    // includes self's rfId, so the two keys are distinct.
     const buyerToggle = vi.fn();
     const sellerToggle = vi.fn();
+
+    // buyer.Party: data.instancePath=['cdm.trade::Trade'], id='cdm.trade::Trade::buyer::cdm.trade::Party'
+    // → fired instancePath = ['cdm.trade::Trade', 'cdm.trade::Trade::buyer::cdm.trade::Party']
     const { unmount } = renderInFlow(
       <DataNode
-        data={partyData(['cdm.trade::Trade::buyer::cdm.trade::Party'], buyerToggle) as any}
+        data={partyData(['cdm.trade::Trade'], buyerToggle) as any}
         selected={false}
-        id="cdm.trade::Trade::buyer::cdm.trade::Party::address::cdm.trade::Party"
+        id="cdm.trade::Trade::buyer::cdm.trade::Party"
         type="data"
       />
     );
@@ -397,16 +420,18 @@ describe('DataNode — structure variant — per-instance chevron keys (Phase 14
     expect(buyerToggle).toHaveBeenCalledWith(
       expect.objectContaining({
         attrName: 'address',
-        instancePath: ['cdm.trade::Trade::buyer::cdm.trade::Party']
+        instancePath: ['cdm.trade::Trade', 'cdm.trade::Trade::buyer::cdm.trade::Party']
       })
     );
     unmount();
 
+    // seller.Party: data.instancePath=['cdm.trade::Trade'], id='cdm.trade::Trade::seller::cdm.trade::Party'
+    // → fired instancePath = ['cdm.trade::Trade', 'cdm.trade::Trade::seller::cdm.trade::Party']
     renderInFlow(
       <DataNode
-        data={partyData(['cdm.trade::Trade::seller::cdm.trade::Party'], sellerToggle) as any}
+        data={partyData(['cdm.trade::Trade'], sellerToggle) as any}
         selected={false}
-        id="cdm.trade::Trade::seller::cdm.trade::Party::address::cdm.trade::Party"
+        id="cdm.trade::Trade::seller::cdm.trade::Party"
         type="data"
       />
     );
@@ -414,7 +439,7 @@ describe('DataNode — structure variant — per-instance chevron keys (Phase 14
     expect(sellerToggle).toHaveBeenCalledWith(
       expect.objectContaining({
         attrName: 'address',
-        instancePath: ['cdm.trade::Trade::seller::cdm.trade::Party']
+        instancePath: ['cdm.trade::Trade', 'cdm.trade::Trade::seller::cdm.trade::Party']
       })
     );
 
@@ -425,11 +450,12 @@ describe('DataNode — structure variant — per-instance chevron keys (Phase 14
     expect(expansionKey(buyerKey)).not.toBe(expansionKey(sellerKey));
   });
 
-  it('back-compat: omitted instancePath serializes to legacy key form', () => {
-    // When `data.instancePath` is absent (e.g., a unit test that omits it,
-    // or a renderer mounted outside the structure layout), the chevron key
-    // falls through to the legacy form. This preserves backward compatibility
-    // with persisted maps that predate per-instance keying.
+  it('back-compat: omitted data.instancePath still uses self rfId (no undefined in key)', () => {
+    // When `data.instancePath` is absent (e.g., a unit test that omits it),
+    // ownerInstancePath = [...[], id] = [id]. The key is NOT the legacy form;
+    // it includes the React Flow id. This is intentional — the back-compat
+    // fallback in shouldExpand also checks the legacy key (no-instancePath suffix),
+    // so old persisted maps still trigger expansion via the fallback.
     const onToggle = vi.fn();
     renderInFlow(
       <DataNode
@@ -454,8 +480,149 @@ describe('DataNode — structure variant — per-instance chevron keys (Phase 14
     );
     fireEvent.click(screen.getByTestId('expand-row-address'));
     const key = onToggle.mock.calls[0][0] as StructureExpansionKey;
-    expect(key.instancePath).toBeUndefined();
-    // Round-trip the serializer: produces the legacy form.
-    expect(expansionKey(key)).toBe('cdm.trade::Party::address');
+    // ownerInstancePath = [...(undefined ?? []), 'cdm.trade::Party'] = ['cdm.trade::Party']
+    expect(key.instancePath).toEqual(['cdm.trade::Party']);
+    // Serializes with the instance-path suffix (non-legacy form).
+    expect(expansionKey(key)).toBe('cdm.trade::Party::address::cdm.trade::Party');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 14d (fix) — regression: per-instance chevron parity at the same level
+//
+// This is the canonical regression test for the bug where buyer.Party.address
+// and seller.Party.address chevrons shared the same expansion key because
+// data.instancePath excluded self. After the fix, both instances have different
+// rfIds in their instancePath, so store entries are independent.
+// ---------------------------------------------------------------------------
+
+describe('DataNode — Phase 14d fix — full per-instance parity at duplicated-type level', () => {
+  // Scenario: Trade has buyer: Party and seller: Party, both expanded.
+  // Both Party nodes have data.instancePath = ['cdm.trade::Trade'] (ancestors only).
+  // The ONLY distinguishing factor is their rfId (React Flow id):
+  //   buyer's Party rfId: 'cdm.trade::Trade::buyer::cdm.trade::Party'
+  //   seller's Party rfId: 'cdm.trade::Trade::seller::cdm.trade::Party'
+  //
+  // After the fix, each chevron's rowKey appends self's rfId to instancePath,
+  // making the two keys diverge.
+
+  const partyRows: StructureRow[] = [
+    {
+      attrName: 'address',
+      typeName: 'Address',
+      typeKind: 'Data',
+      cardinality: '1..1',
+      isOptional: false,
+      isInherited: false
+    },
+    {
+      attrName: 'name',
+      typeName: 'string',
+      typeKind: 'BasicType',
+      cardinality: '1..1',
+      isOptional: false,
+      isInherited: false
+    }
+  ];
+
+  // Shared canonical data — same as what the layout would produce for both
+  // buyer.Party and seller.Party (same type, same rows, same namespaceUri).
+  const canonicalData = {
+    $type: 'Data',
+    id: 'cdm.trade::Party',
+    kind: 'data',
+    name: 'Party',
+    namespaceUri: 'cdm.trade',
+    rows: partyRows,
+    expansions: new Map(),
+    variant: 'structure',
+    // Same instancePath for both — ancestors exclude self (the documented limitation).
+    instancePath: ['cdm.trade::Trade']
+  };
+
+  const BUYER_RF_ID = 'cdm.trade::Trade::buyer::cdm.trade::Party';
+  const SELLER_RF_ID = 'cdm.trade::Trade::seller::cdm.trade::Party';
+
+  const BUYER_EXPANDED_KEY = expansionKey({
+    namespaceUri: 'cdm.trade',
+    typeId: 'Party',
+    attrName: 'address',
+    instancePath: ['cdm.trade::Trade', BUYER_RF_ID]
+  });
+  const SELLER_EXPANDED_KEY = expansionKey({
+    namespaceUri: 'cdm.trade',
+    typeId: 'Party',
+    attrName: 'address',
+    instancePath: ['cdm.trade::Trade', SELLER_RF_ID]
+  });
+
+  it('click on buyer.Party chevron fires key with buyer rfId, NOT seller rfId', () => {
+    const buyerToggle = vi.fn();
+    const { unmount } = renderInFlow(
+      <DataNode
+        data={{ ...canonicalData, onToggleExpansion: buyerToggle } as any}
+        selected={false}
+        id={BUYER_RF_ID}
+        type="data"
+      />
+    );
+    fireEvent.click(screen.getByTestId('expand-row-address'));
+    expect(buyerToggle).toHaveBeenCalledTimes(1);
+    const fired = buyerToggle.mock.calls[0][0] as StructureExpansionKey;
+    expect(fired.instancePath).toEqual(['cdm.trade::Trade', BUYER_RF_ID]);
+    expect(fired.instancePath).not.toContain(SELLER_RF_ID);
+    unmount();
+  });
+
+  it('click on seller.Party chevron fires key with seller rfId, NOT buyer rfId', () => {
+    const sellerToggle = vi.fn();
+    renderInFlow(
+      <DataNode
+        data={{ ...canonicalData, onToggleExpansion: sellerToggle } as any}
+        selected={false}
+        id={SELLER_RF_ID}
+        type="data"
+      />
+    );
+    fireEvent.click(screen.getByTestId('expand-row-address'));
+    expect(sellerToggle).toHaveBeenCalledTimes(1);
+    const fired = sellerToggle.mock.calls[0][0] as StructureExpansionKey;
+    expect(fired.instancePath).toEqual(['cdm.trade::Trade', SELLER_RF_ID]);
+    expect(fired.instancePath).not.toContain(BUYER_RF_ID);
+  });
+
+  it('buyer-expanded map makes buyer chevron EXPANDED and seller chevron COLLAPSED', () => {
+    // Simulate the user having expanded buyer.Party.address only.
+    const buyerOnlyMap = new Map<string, boolean>([[BUYER_EXPANDED_KEY, true]]);
+
+    // Buyer Party node — should show address as EXPANDED.
+    const { unmount: unmountBuyer } = renderInFlow(
+      <DataNode
+        data={{ ...canonicalData, expansionMap: buyerOnlyMap } as any}
+        selected={false}
+        id={BUYER_RF_ID}
+        type="data"
+      />
+    );
+    expect(screen.getByTestId('expand-row-address')).toHaveAttribute('aria-expanded', 'true');
+    unmountBuyer();
+
+    // Seller Party node — should show address as COLLAPSED (different key).
+    renderInFlow(
+      <DataNode
+        data={{ ...canonicalData, expansionMap: buyerOnlyMap } as any}
+        selected={false}
+        id={SELLER_RF_ID}
+        type="data"
+      />
+    );
+    expect(screen.getByTestId('expand-row-address')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('buyer and seller keys serialize to different strings — independent persistence entries', () => {
+    expect(BUYER_EXPANDED_KEY).not.toBe(SELLER_EXPANDED_KEY);
+    // Confirm the suffix contains the distinguishing rfId segment.
+    expect(BUYER_EXPANDED_KEY).toContain('buyer');
+    expect(SELLER_EXPANDED_KEY).toContain('seller');
   });
 });

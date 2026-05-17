@@ -54,7 +54,7 @@ function isRowExpandable(typeKind: StructureRow['typeKind']): boolean {
   return typeKind === 'Data' || typeKind === 'Choice';
 }
 
-export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>): React.ReactElement {
+export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeType>): React.ReactElement {
   if (data.scope === 'inheritance') {
     return (
       <div className="rune-graph-group">
@@ -82,6 +82,13 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
   // actually rendering the child.
   const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion, instancePath } = data;
 
+  // Phase 14d (fix): include self's React Flow id in the rowKey instancePath so
+  // two visible occurrences of the same base container at the same depth produce
+  // distinct keys. `data.instancePath` carries the ancestors (NOT including self);
+  // appending `id` makes it self-inclusive and aligns with the adapter's updated
+  // shouldExpand check (which also uses the self-inclusive path).
+  const ownerInstancePath: ReadonlyArray<string> = [...(instancePath ?? []), id];
+
   return (
     <div className="rune-graph-group rune-graph-group--base">
       <div className="rune-graph-group__header">
@@ -96,7 +103,7 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
                 namespaceUri: baseTypeNamespaceUri,
                 typeId: baseTypeName,
                 attrName: row.attrName,
-                instancePath
+                instancePath: ownerInstancePath
               }
             : undefined;
           const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;

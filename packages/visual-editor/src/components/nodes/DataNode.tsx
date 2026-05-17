@@ -110,12 +110,22 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // toggles round-trip through the persistence layer correctly.
     const ownerNamespaceUri = data.namespaceUri;
     const ownerTypeName = data.name;
-    // Phase 14d: per-instance expansion. `instancePath` is the chain of React
-    // Flow instance ids of this node's ancestors, injected by the layout pass.
-    // Two visible occurrences of the same type have different paths (because
-    // their parent instance ids differ), so their row chevrons stay independent.
-    // Undefined / empty path serializes to the legacy key form (back-compat).
-    const ownerInstancePath = instancePath;
+    // Phase 14d (fix): per-instance expansion. The rowKey's instancePath must
+    // include self's React Flow id (`id`) so two visible occurrences of the same
+    // type at the same depth produce DISTINCT keys. `data.instancePath` carries
+    // the ancestors (NOT including self); appending `id` makes it self-inclusive.
+    //
+    // Example: buyer.Party and seller.Party both have `data.instancePath = ['Trade']`
+    // because their parent is Trade. Before this fix both chevrons serialized to
+    // the same key. After fix:
+    //   buyer.Party:  instancePath = ['Trade', 'Trade::buyer::Party']
+    //   seller.Party: instancePath = ['Trade', 'Trade::seller::Party']
+    //
+    // The adapter's shouldExpand is updated in lockstep to check with the same
+    // self-inclusive path, so expansion round-trips correctly. Back-compat: the
+    // back-compat fallback in shouldExpand also checks the legacy (no-suffix) key,
+    // so persisted entries from before this fix keep working via the fallback.
+    const ownerInstancePath: ReadonlyArray<string> = [...(instancePath ?? []), id];
 
     return (
       <div className={`rune-node rune-node-data rune-node-data--structure${selected ? ' rune-node-selected' : ''}`}>

@@ -2277,6 +2277,15 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
     // per-instance entry is what fires the expansion (the legacy key is
     // checked as a fallback only). Verifying by enabling only the
     // per-instance entry (legacy absent) and confirming the row expands.
+    //
+    // Phase 14d (fix): the correct per-instance key for Party.address now
+    // includes self's rfId as the final element of instancePath. Party's rfId
+    // is computed by the adapter as `adapterChildInstanceId(TradeRfId, 'party', 'cdm.trade::Party')`:
+    //   = 'cdm.trade::Trade::party::cdm.trade::Party'
+    // The adapter's shouldExpand for Party's rows uses
+    //   childInstancePath = [...parentInstancePath, partyRfId]
+    //                     = ['cdm.trade::Trade', 'cdm.trade::Trade::party::cdm.trade::Party']
+    // which aligns with what the DataNode chevron fires after the fix.
     const fixture = {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
@@ -2307,8 +2316,14 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
         }
       ]
     };
-    // Per-instance key for Party.address (Party is reached via Trade, so its
-    // instancePath = ['cdm.trade::Trade']).
+    // Per-instance key for Trade.party: Trade's rows are checked with
+    //   childInstancePath = ['cdm.trade::Trade'] (= [...[], TradeRfId])
+    // The legacy key (no instancePath) matches via back-compat fallback.
+    //
+    // Per-instance key for Party.address: Party's rows are checked with
+    //   childInstancePath = ['cdm.trade::Trade', 'cdm.trade::Trade::party::cdm.trade::Party']
+    // This is the new self-inclusive format (ancestors + self rfId).
+    const partyRfId = 'cdm.trade::Trade::party::cdm.trade::Party';
     const result = buildStructureGraph(fixture, {
       focusedTypeId: 'cdm.trade::Trade',
       expansionMap: new Map([
@@ -2318,7 +2333,7 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
             namespaceUri: 'cdm.trade',
             typeId: 'Party',
             attrName: 'address',
-            instancePath: ['cdm.trade::Trade']
+            instancePath: ['cdm.trade::Trade', partyRfId]
           }),
           true
         ]
