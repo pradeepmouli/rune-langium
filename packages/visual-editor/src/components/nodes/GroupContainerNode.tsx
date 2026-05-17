@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { Node, NodeProps } from '@xyflow/react';
-import type { StructureRow } from '../../types/structure-view.js';
+import type { StructureExpansionKey, StructureRow } from '../../types/structure-view.js';
+import { expansionKey } from '../../types/structure-view.js';
 
 export interface GroupContainerInheritanceData extends Record<string, unknown> {
   scope: 'inheritance';
@@ -14,11 +16,34 @@ export interface GroupContainerInheritanceData extends Record<string, unknown> {
 export interface GroupContainerBaseTypeData extends Record<string, unknown> {
   scope: 'base-type';
   baseTypeName: string;
+  /** Namespace URI of the base type — needed to build the StructureExpansionKey for each row. */
+  baseTypeNamespaceUri: string;
   baseRows: ReadonlyArray<StructureRow>;
+  /**
+   * Per-key expansion state for rendering the expand/collapse chevron on inherited
+   * Data/Choice rows (Codex P2, PR #191). Injected by StructureView alongside
+   * onToggleExpansion. When absent, all rows render collapsed.
+   */
+  expansionMap?: ReadonlyMap<string, boolean>;
+  /**
+   * Callback fired when the user activates a row's expand/collapse control.
+   * The expansion key uses the base type's namespace + canonical typeId so it
+   * round-trips correctly through the persistence layer.
+   */
+  onToggleExpansion?: (key: StructureExpansionKey) => void;
 }
 
 export type GroupContainerData = GroupContainerInheritanceData | GroupContainerBaseTypeData;
 export type GroupContainerNodeType = Node<GroupContainerData, 'groupContainer'>;
+
+/**
+ * Row-level expansion is only meaningful for typeKinds whose target is itself a
+ * structured node (Data / Choice). Enum rows are terminal. Builtin and Unresolved
+ * have no expansion target. Mirrors the same helper in DataNode.tsx.
+ */
+function isRowExpandable(typeKind: StructureRow['typeKind']): boolean {
+  return typeKind === 'Data' || typeKind === 'Choice';
+}
 
 export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>): React.ReactElement {
   if (data.scope === 'inheritance') {
@@ -38,20 +63,66 @@ export function GroupContainerNode({ data }: NodeProps<GroupContainerNodeType>):
   // Core geometry handled by .rune-graph-group--base, .rune-graph-group__base-rows,
   // .rune-graph-group__base-row in styles.css — layout constants (ROW_HEIGHT=28,
   // BASE_PADDING=16, etc.) are matched there.
+  //
+  // Codex P2 / PR #191: each Data/Choice row now shows a chevron expand/collapse
+  // button (matching the DataNode pattern). The expansion key is keyed to the BASE
+  // type's canonical typeId (`${baseTypeNamespaceUri}::${baseTypeName}`) because
+  // the row belongs to the base type, not the derived type.
+  const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion } = data;
+  // The canonical typeId for base rows: `ns::Name` form — matches expansionKey contract.
+  const baseTypeId = `${baseTypeNamespaceUri}::${baseTypeName}`;
+
   return (
     <div className="rune-graph-group rune-graph-group--base">
       <div className="rune-graph-group__header">
-        <span className="rune-graph-group__title">{data.baseTypeName}</span>
+        <span className="rune-graph-group__title">{baseTypeName}</span>
         <span className="rune-graph-group__meta">base</span>
       </div>
       <div className="rune-graph-group__base-rows">
-        {data.baseRows.map((row) => (
-          <div key={row.attrName} className="rune-graph-group__base-row">
-            <span className="rune-cell-name">{row.attrName}</span>
-            <span className="rune-cell-type-chip rune-cell-type-chip--basic">{row.typeName}</span>
-            <span className="rune-cell-card">{row.cardinality}</span>
-          </div>
-        ))}
+        {baseRows.map((row) => {
+          const expandable = isRowExpandable(row.typeKind);
+          const rowKey: StructureExpansionKey | undefined = expandable
+            ? { namespaceUri: baseTypeNamespaceUri, typeId: baseTypeId, attrName: row.attrName }
+            : undefined;
+          const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;
+          const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (rowKey) onToggleExpansion?.(rowKey);
+          };
+          return (
+            <div
+              key={row.attrName}
+              className={`rune-graph-group__base-row${expandable ? ' has-expansion' : ''}`}
+              data-attr={row.attrName}
+            >
+              {expandable ? (
+                // Codex P2 (PR #191): row-level expand/collapse for inherited rows.
+                // Real <button> for native keyboard semantics (Enter/Space).
+                // nodrag/nopan keep React Flow from treating the click as a canvas gesture.
+                <button
+                  type="button"
+                  className="rune-row-expand nodrag nopan"
+                  onClick={handleToggle}
+                  aria-expanded={isExpanded}
+                  aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.attrName}`}
+                  data-testid={`base-expand-row-${row.attrName}`}
+                >
+                  {isExpanded ? (
+                    <ChevronDown size={12} aria-hidden="true" />
+                  ) : (
+                    <ChevronRight size={12} aria-hidden="true" />
+                  )}
+                </button>
+              ) : (
+                <span className="rune-row-expand-spacer" aria-hidden="true" />
+              )}
+              <span className="rune-cell-name">{row.attrName}</span>
+              <span className="rune-cell-type-chip rune-cell-type-chip--basic">{row.typeName}</span>
+              <span className="rune-cell-card">{row.cardinality}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -100,14 +100,22 @@ function StructureFlowInner({
     // don't participate in the name/type/card cellComponents contract. Choice
     // arms also have no per-arm expansion (StructureChoiceNode has no
     // `expansions` map), so onToggleExpansion is not piped through.
-    // 'groupContainer' nodes (GroupContainerNode) also have no cell-injection API.
+    //
+    // 'structureBase' nodes (GroupContainerNode base-type branch) also receive
+    // expansionMap + onToggleExpansion so inherited Data/Choice rows can be
+    // expanded/collapsed (Codex P2, PR #191). cellComponents is NOT injected —
+    // base rows are read-only inherited rows; editable cells on base rows would
+    // be a separate scope decision (spec §5 does not include inline-editing of
+    // inherited attributes in Phase 13).
     const needsInjection = cellComponents !== undefined || onToggleExpansion !== undefined;
     if (!needsInjection) {
       return { nodes: result.nodes as Node[], edges: result.edges as Edge[] };
     }
-    const injectedNodes = result.nodes.map((n) =>
-      n.type === 'data' ? { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } } : n
-    );
+    const injectedNodes = result.nodes.map((n) => {
+      if (n.type === 'data') return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
+      if (n.type === 'structureBase') return { ...n, data: { ...n.data, expansionMap, onToggleExpansion } };
+      return n;
+    });
     return { nodes: injectedNodes as Node[], edges: result.edges as Edge[] };
   }, [focusedTypeId, adapterDoc, expansionMap, cellComponents, onToggleExpansion]);
 
