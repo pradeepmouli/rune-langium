@@ -11,6 +11,11 @@
  *     WITHOUT an archiveLoader.
  *   - 019 Phase 0: the archiveLoader returns a LoadedModel with empty files[]
  *     and commitHash='latest'; no network fetch or OPFS write occurs.
+ *
+ * Regression (020 Codex P2, PR #195):
+ *   - Custom URL sources (no archiveUrl) must NOT receive an archiveLoader —
+ *     they should reach the git-clone path in model-loader.ts (FR-007).
+ *   - Sources with neither archiveUrl nor repoUrl throw NETWORK immediately.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -45,7 +50,17 @@ const CUSTOM_SOURCE: ModelSource = {
   repoUrl: 'https://github.com/my/repo.git',
   ref: 'main',
   paths: ['**/*.rosetta']
-  // no archiveUrl
+  // no archiveUrl — custom URL flow, goes through git-clone path (FR-007)
+};
+
+/** A degenerate source with neither archiveUrl nor repoUrl — should throw immediately. */
+const BARE_SOURCE: ModelSource = {
+  id: 'bare-xyz',
+  name: 'Bare Source',
+  repoUrl: '',
+  ref: 'main',
+  paths: ['**/*.rosetta']
+  // no archiveUrl, no repoUrl — unsupported
 };
 
 const FAKE_MODEL: LoadedModel = {
@@ -95,19 +110,37 @@ describe('useModelStore — archiveLoader DI (T015)', () => {
     expect((opts as { archiveLoader?: unknown }).archiveLoader).toBeUndefined();
   });
 
-  it('non-curated source throws NETWORK (no archive loader supplied)', async () => {
-    // model-loader rejects non-curated sources with NETWORK immediately.
+  it('source with no archiveUrl AND no repoUrl throws NETWORK immediately', async () => {
+    // model-loader throws NETWORK if there is neither an archive URL nor a git
+    // URL to clone — there is simply no way to load the source.
     vi.resetModules();
     vi.doUnmock('../../src/services/model-loader.js');
     const { loadModel } = await import('../../src/services/model-loader.js');
-    await expect(loadModel(CUSTOM_SOURCE)).rejects.toMatchObject({
+    await expect(loadModel(BARE_SOURCE)).rejects.toMatchObject({
       code: 'NETWORK',
-      message: expect.stringMatching(/only curated archive sources are supported/i)
+      message: expect.stringMatching(/no archive loader or git url/i)
     });
     // Re-mock so the rest of the suite continues to use loadModelMock.
     vi.doMock('../../src/services/model-loader.js', () => ({
       loadModel: (source: ModelSource, options: unknown) => loadModelMock(source, options)
     }));
+  });
+
+  it('custom URL source (no archiveUrl) does NOT receive archiveLoader — reaches git-clone path', async () => {
+    // FR-007 regression: the cleanup of legacyGitPathEnabled (commit 25cc5a07)
+    // incorrectly threw NETWORK for CUSTOM_SOURCE before the git-clone path
+    // was reached. Verify that model-store passes no archiveLoader for custom
+    // sources (git-clone path selection is model-loader's job, not the store's).
+    await useModelStore.getState().load(CUSTOM_SOURCE);
+
+    expect(loadModelMock).toHaveBeenCalledTimes(1);
+    const [src, opts] = loadModelMock.mock.calls[0]!;
+    expect(src).toBe(CUSTOM_SOURCE);
+    // store must NOT pass an archiveLoader — that would bypass the git-clone path
+    expect((opts as { archiveLoader?: unknown }).archiveLoader).toBeUndefined();
+    // store MUST still pass signal and onProgress for cancellation / progress
+    expect((opts as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal);
+    expect(typeof (opts as { onProgress?: unknown }).onProgress).toBe('function');
   });
 
   it('archiveLoader callback returns metadata-only LoadedModel without fetching (019 Phase 0)', async () => {
