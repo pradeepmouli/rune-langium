@@ -3184,3 +3184,142 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
     expect(result.nodes.size).toBe(3);
   });
 });
+
+describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', () => {
+  // Regression tests for the bug where a Choice with a self-referential arm
+  // rendered differently depending on how it was reached:
+  //
+  //   - Choice-as-root: buildStructureGraph seeded path with root.id → self-arm
+  //     was suppressed correctly.
+  //   - Choice-as-arm-target: path contained only Data ancestors, NOT the Choice's
+  //     own id → self-arm produced one bogus nested copy before terminating on
+  //     the second recursion.
+  //
+  // The fix: expandChoiceArms now adds node.id to path BEFORE iterating arms,
+  // matching walkAndExpand's convention.  Both entry paths now suppress self-arms.
+
+  // Fixture: Data type Outer has one attribute `payment: Payment`.
+  // Payment is a Choice with arms: CashPayment (Data, terminal) and Payment (self-ref).
+  const selfRefChoiceFixture = {
+    namespaces: [{ uri: 'cdm.trade' }],
+    nodes: [
+      {
+        id: 'cdm.trade::Outer',
+        $type: 'Data' as const,
+        name: 'Outer',
+        namespace: 'cdm.trade',
+        attributes: [
+          { name: 'payment', typeCall: { type: { $refText: 'Payment' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      },
+      {
+        id: 'cdm.trade::Payment',
+        $type: 'Choice' as const,
+        name: 'Payment',
+        namespace: 'cdm.trade',
+        choiceOptions: [
+          { typeCall: { type: { $refText: 'CashPayment' } } },
+          { typeCall: { type: { $refText: 'Payment' } } } // self-referential arm
+        ]
+      },
+      {
+        id: 'cdm.trade::CashPayment',
+        $type: 'Data' as const,
+        name: 'CashPayment',
+        namespace: 'cdm.trade',
+        attributes: [
+          { name: 'amount', typeCall: { type: { $refText: 'number' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      }
+    ]
+  };
+
+  it('Choice-as-arm-target: expanding the self-arm does not materialise a nested copy of the Choice', () => {
+    // Step 1: expand Outer.payment so Payment materialises as a Choice node.
+    // Step 2: expand the Payment self-arm on that Payment instance.
+    // Expected: graph contains Outer + Payment + CashPayment; NO second Payment.
+    const outerRfId = 'cdm.trade::Outer';
+    const paymentInstanceId = `${outerRfId}::payment::cdm.trade::Payment`;
+
+    const expansionMap = new Map([
+      // Expand Outer.payment
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Outer',
+          attrName: 'payment',
+          instancePath: [outerRfId]
+        }),
+        true as const
+      ],
+      // Expand the Payment self-arm on the materialised Payment instance
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Payment',
+          attrName: 'Payment',
+          instancePath: [outerRfId, paymentInstanceId]
+        }),
+        true as const
+      ]
+    ]);
+
+    const result = buildStructureGraph(selfRefChoiceFixture, {
+      focusedTypeId: 'cdm.trade::Outer',
+      expansionMap
+    });
+
+    // Payment appears exactly once — no nested second copy from the self-arm.
+    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Payment');
+    expect(paymentInstances).toHaveLength(1);
+
+    // The Payment Choice node must NOT have an expansion for the self-arm.
+    const payment = result.nodes.get(paymentInstanceId) as StructureChoiceNode;
+    expect(payment).toBeDefined();
+    expect(payment.kind).toBe('choice');
+    expect(payment.expansions.has('Payment')).toBe(false);
+
+    // CashPayment is NOT expanded in this test (no key for it) — arms are visible
+    // as chips but their expansion key is false, so no child materialises.
+    expect(findAllByCanonicalId(result.nodes, 'cdm.trade::CashPayment')).toHaveLength(0);
+
+    // Total: Outer + Payment = 2.
+    expect(result.nodes.size).toBe(2);
+  });
+
+  it('Choice-as-root: expanding the self-arm does not materialise a nested copy (symmetric lock)', () => {
+    // Focus Payment directly.  Expand the self-arm Payment.
+    // Expected: graph contains only Payment; no nested second Payment.
+    const rootInstanceId = 'cdm.trade::Payment';
+
+    const expansionMap = new Map([
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Payment',
+          attrName: 'Payment',
+          instancePath: [rootInstanceId]
+        }),
+        true as const
+      ]
+    ]);
+
+    const result = buildStructureGraph(selfRefChoiceFixture, {
+      focusedTypeId: 'cdm.trade::Payment',
+      expansionMap
+    });
+
+    // Payment appears exactly once.
+    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Payment');
+    expect(paymentInstances).toHaveLength(1);
+
+    // Self-arm is suppressed: no expansion entry for 'Payment'.
+    const payment = result.nodes.get(rootInstanceId) as StructureChoiceNode;
+    expect(payment).toBeDefined();
+    expect(payment.kind).toBe('choice');
+    expect(payment.expansions.has('Payment')).toBe(false);
+
+    // Total: only Payment root = 1.
+    expect(result.nodes.size).toBe(1);
+  });
+});

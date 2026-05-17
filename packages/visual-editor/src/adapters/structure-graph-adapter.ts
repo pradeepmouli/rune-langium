@@ -678,6 +678,20 @@ function expandChoiceArms(
   const expansions = new Map<string, string>();
   const childInstancePath: ReadonlyArray<string> = [...instancePath, currentInstanceId];
 
+  // Seed the cycle-protection path with the CURRENT Choice's canonical id before
+  // iterating arms. This mirrors walkAndExpand's convention (lines 397-398: `const
+  // nextPath = new Set(path); nextPath.add(node.id)` before the row loop) and
+  // ensures self-referential arms are suppressed regardless of the entry path.
+  //
+  // Without this, Choice-as-arm-target callers (walkAndExpand / materializeDataWithInheritance)
+  // pass a `path` containing only Data ancestors — so `path.has(node.id)` is false
+  // and a self-arm generates one bogus nested copy before terminating on the second
+  // recursion.  Choice-as-root callers (buildStructureGraph) pre-seed the Set with
+  // root.id, so they were already correct.  Hoisting the add here makes both paths
+  // uniform.
+  const nextPath = new Set(path);
+  nextPath.add(node.id);
+
   for (const opt of node.choiceOptions ?? []) {
     const arm = buildChoiceArm(opt, doc, node.namespace);
     if (arm.typeKind !== 'Data' && arm.typeKind !== 'Choice') continue;
@@ -693,13 +707,11 @@ function expandChoiceArms(
     const target = doc.nodes.find((n) => n.id === arm.targetNodeId);
     if (!target) continue;
     if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
-    if (path.has(target.id)) continue; // cycle — drop edge, keep chip
+    if (nextPath.has(target.id)) continue; // cycle — drop edge, keep chip
 
     if (target.$type === 'Data') {
       const targetOutermostCanonical = computeOutermostCanonicalId(target, doc, outerMostCanonicalCache);
       const childInstanceId = adapterChildInstanceId(currentInstanceId, arm.typeName, targetOutermostCanonical);
-      const nextPath = new Set(path);
-      nextPath.add(node.id);
       const expandedId = materializeDataWithInheritance(
         target,
         doc,
@@ -715,8 +727,6 @@ function expandChoiceArms(
       // target.$type === 'Choice'
       const childInstanceId = adapterChildInstanceId(currentInstanceId, arm.typeName, target.id);
       if (!out.has(childInstanceId)) {
-        const nextPath = new Set(path);
-        nextPath.add(node.id);
         const nestedArmExpansions = expandChoiceArms(
           target,
           doc,
