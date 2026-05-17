@@ -404,3 +404,75 @@ describe('ChoiceNode — structure variant — TypePickerCell injection on arm r
     expect(chips.length).toBe(dataArms.length);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 14e/B — Codex P2 silent-drop regression (PR #196)
+//
+// When TypePickerCell is injected as cellComponents.type on ChoiceNode,
+// the cell must receive:
+//   - nodeId  = canonical Choice node id (data.id), NOT the React Flow wrapper id
+//   - attrName = arm.typeName  (= the arm's current typeCall.$refText)
+//
+// The store's updateAttributeType action (after the fix) uses these to locate
+// and update the correct choiceOptions arm. This test asserts that ChoiceNode
+// passes the correct props to the injected cell — the store-level fix is covered
+// by editor-store-actions.test.ts.
+// ---------------------------------------------------------------------------
+
+describe('ChoiceNode — structure variant — TypePickerCell receives choiceId + armTypeName (Codex P2 regression)', () => {
+  const arms: StructureChoiceArm[] = [
+    { typeName: 'CashPayment', typeKind: 'Data', targetNodeId: 'payment::CashPayment' },
+    { typeName: 'BankTransfer', typeKind: 'Data', targetNodeId: 'payment::BankTransfer' }
+  ];
+
+  const choiceNodeData = {
+    id: 'payment::PaymentMethod',
+    kind: 'choice',
+    name: 'PaymentMethod',
+    namespaceUri: 'payment',
+    options: arms,
+    expansions: new Map(),
+    variant: 'structure'
+  };
+
+  it('passes canonical choiceId (data.id) and arm.typeName as attrName to each injected TypeCell', () => {
+    const captured: Array<{ nodeId: string; attrName: string }> = [];
+    const TypeCellSpy = ({
+      nodeId,
+      attrName
+    }: {
+      typeName: string;
+      typeKind: StructureRow['typeKind'];
+      nodeId: string;
+      attrName: string;
+    }) => {
+      captured.push({ nodeId, attrName });
+      return <span data-testid={`type-cell-${attrName}`} />;
+    };
+
+    const wrapperId = 'wrapper::instance::payment::PaymentMethod'; // React Flow wraps canonical id
+    renderInFlow(
+      <ChoiceNode
+        data={{ ...choiceNodeData, cellComponents: { type: TypeCellSpy } } as any}
+        selected={false}
+        id={wrapperId}
+        type="choice"
+      />
+    );
+
+    expect(captured).toHaveLength(arms.length);
+
+    // Every arm must use data.id (canonical), not the RF wrapper id.
+    for (const c of captured) {
+      expect(c.nodeId).toBe('payment::PaymentMethod');
+      expect(c.nodeId).not.toBe(wrapperId);
+    }
+
+    // attrName must equal the arm's typeName — this is the key the store uses
+    // to find and update the correct choiceOptions arm.
+    const cashCapture = captured.find((c) => c.attrName === 'CashPayment');
+    expect(cashCapture).toBeDefined();
+    const bankCapture = captured.find((c) => c.attrName === 'BankTransfer');
+    expect(bankCapture).toBeDefined();
+  });
+});

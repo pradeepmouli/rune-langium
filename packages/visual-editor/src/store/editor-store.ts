@@ -938,11 +938,23 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const node = current.nodes.find((n) => n.id === nodeId);
           if (!node) return;
           const d0 = node.data as AnyGraphNode;
-          if (d0.$type !== 'Data' && d0.$type !== 'Annotation') return;
+          // Allow Data, Annotation, AND Choice through — Choice arms are stored in
+          // `attributes` (typeCall.type.$refText), not in a separate array.
+          // Other $types (Enum, RosettaFunction, etc.) are still unsupported.
+          if (d0.$type !== 'Data' && d0.$type !== 'Annotation' && d0.$type !== 'Choice') return;
+
+          const isChoice = d0.$type === 'Choice';
           const attrs0 = ((d0 as any).attributes ?? []) as any[];
-          const firstMatch = attrs0.find((a) => a.name === attrName);
+
+          // Data/Annotation arms are matched by `name`; Choice arms are matched
+          // by `typeCall.type.$refText` because they have no distinct `.name` field.
+          const firstMatch = isChoice
+            ? attrs0.find((a: any) => (a.typeCall?.type?.$refText ?? a.typeCall) === attrName)
+            : attrs0.find((a: any) => a.name === attrName);
           if (!firstMatch) return;
-          const preservedCardinality = formatCardinality(firstMatch.card);
+
+          // Choice arms carry no cardinality; only preserve it for Data/Annotation.
+          const preservedCardinality = isChoice ? undefined : formatCardinality(firstMatch.card);
 
           // Phase 13 / Finding 3: validate that the canonical targetTypeId exists
           // in the current store and pick a $refText that disambiguates against
@@ -959,39 +971,68 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             const updatedNodes = state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
-              if (d.$type !== 'Data' && d.$type !== 'Annotation') return n;
+              if (d.$type !== 'Data' && d.$type !== 'Annotation' && d.$type !== 'Choice') return n;
               const attrs = ((d as any).attributes ?? []) as any[];
-              const next = attrs.map((a) =>
-                a.name === attrName
-                  ? {
-                      ...a,
-                      typeCall: {
-                        ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
-                        type: { $refText: refText }
-                      }
-                    }
-                  : a
-              );
+              const next = isChoice
+                ? attrs.map((a: any) =>
+                    (a.typeCall?.type?.$refText ?? a.typeCall) === attrName
+                      ? {
+                          ...a,
+                          typeCall: {
+                            ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
+                            type: { $refText: refText }
+                          }
+                        }
+                      : a
+                  )
+                : attrs.map((a: any) =>
+                    a.name === attrName
+                      ? {
+                          ...a,
+                          typeCall: {
+                            ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
+                            type: { $refText: refText }
+                          }
+                        }
+                      : a
+                  );
               return { ...n, data: { ...d, attributes: next } };
             });
 
-            const filteredEdges = state.edges.filter(
-              (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName)
-            );
+            // For Choice arms, remove the old choice-option edge (keyed by old type name).
+            // For Data/Annotation, remove the old attribute-ref edge.
+            const filteredEdges = isChoice
+              ? state.edges.filter(
+                  (e) => !(e.source === nodeId && e.data?.kind === 'choice-option' && e.data.label === attrName)
+                )
+              : state.edges.filter(
+                  (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName)
+                );
+
             if (targetTypeId === nodeId) {
               return { nodes: updatedNodes, edges: filteredEdges };
             }
-            const newEdge: TypeGraphEdge = {
-              id: `${nodeId}--attribute-ref--${attrName}--${targetTypeId}`,
-              source: nodeId,
-              target: targetTypeId,
-              type: 'attribute-ref',
-              data: {
-                kind: 'attribute-ref' as const,
-                label: attrName,
-                cardinality: preservedCardinality
-              } as EdgeData
-            };
+
+            // Choice arms use choice-option edges; Data/Annotation use attribute-ref edges.
+            const newEdge: TypeGraphEdge = isChoice
+              ? {
+                  id: `${nodeId}--choice-option--${refText}--${targetTypeId}`,
+                  source: nodeId,
+                  target: targetTypeId,
+                  type: 'choice-option',
+                  data: { kind: 'choice-option' as const, label: refText } as EdgeData
+                }
+              : {
+                  id: `${nodeId}--attribute-ref--${attrName}--${targetTypeId}`,
+                  source: nodeId,
+                  target: targetTypeId,
+                  type: 'attribute-ref',
+                  data: {
+                    kind: 'attribute-ref' as const,
+                    label: attrName,
+                    cardinality: preservedCardinality
+                  } as EdgeData
+                };
             return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
           });
         },

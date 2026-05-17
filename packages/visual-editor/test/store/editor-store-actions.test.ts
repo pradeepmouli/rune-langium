@@ -333,6 +333,196 @@ describe('EditorStore — choice operations', () => {
 });
 
 // ---------------------------------------------------------------------------
+// updateAttributeType — Choice node arm retype (Codex P2, PR #196)
+// ---------------------------------------------------------------------------
+
+// Two-arm fixture: PaymentType choice with CashPayment + BankTransfer.
+const CHOICE_TWO_ARM_SOURCE = `
+namespace test.payment
+version "1.0.0"
+
+type CashPayment:
+  amount number (1..1)
+
+type BankTransfer:
+  accountNumber string (1..1)
+
+type WirePayment:
+  swiftCode string (1..1)
+
+choice PaymentMethod:
+  CashPayment
+  BankTransfer
+`;
+
+// Two-namespace fixture for disambiguation tests — both have a type named "Wire".
+const CHOICE_AMBIGUOUS_SOURCE_A = `
+namespace payment.fast
+version "1.0.0"
+
+type Wire:
+  iban string (1..1)
+`;
+
+const CHOICE_AMBIGUOUS_SOURCE_B = `
+namespace payment.slow
+version "1.0.0"
+
+type Wire:
+  swiftCode string (1..1)
+
+choice TransferMethod:
+  Wire
+`;
+
+describe('EditorStore — updateAttributeType on Choice nodes (Codex P2 silent-drop fix)', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    store = createEditorStore();
+    const result = await parse(CHOICE_TWO_ARM_SOURCE);
+    store.getState().loadModels(result.value);
+  });
+
+  it('updates the matched arm typeCall.$refText; the other arm is unchanged', () => {
+    const nodes = store.getState().nodes;
+    const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
+    expect(choiceNode).toBeDefined();
+
+    const wireNode = nodes.find((n) => n.data.name === 'WirePayment');
+    expect(wireNode).toBeDefined();
+
+    // Drop WirePayment onto the CashPayment arm.
+    store.getState().updateAttributeType(choiceNode!.id, 'CashPayment', 'WirePayment', wireNode!.id);
+
+    const updated = store.getState().nodes.find((n) => n.id === choiceNode!.id);
+    const attrs = (updated!.data as any).attributes ?? [];
+
+    // The CashPayment arm is now WirePayment.
+    const updatedArm = attrs.find((a: any) => a.typeCall?.type?.$refText === 'WirePayment');
+    expect(updatedArm).toBeDefined();
+
+    // The BankTransfer arm is untouched.
+    const untouchedArm = attrs.find((a: any) => a.typeCall?.type?.$refText === 'BankTransfer');
+    expect(untouchedArm).toBeDefined();
+
+    // CashPayment arm no longer exists.
+    const oldArm = attrs.find((a: any) => a.typeCall?.type?.$refText === 'CashPayment');
+    expect(oldArm).toBeUndefined();
+  });
+
+  it('replaces the choice-option edge (old label removed, new label added)', () => {
+    const nodes = store.getState().nodes;
+    const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
+    const wireNode = nodes.find((n) => n.data.name === 'WirePayment');
+
+    store.getState().updateAttributeType(choiceNode!.id, 'CashPayment', 'WirePayment', wireNode!.id);
+
+    const edges = store.getState().edges;
+
+    // Old edge for CashPayment is gone.
+    const oldEdge = edges.find(
+      (e) => e.source === choiceNode!.id && e.data?.kind === 'choice-option' && e.data.label === 'CashPayment'
+    );
+    expect(oldEdge).toBeUndefined();
+
+    // New edge for WirePayment exists pointing at the wire node.
+    const newEdge = edges.find(
+      (e) => e.source === choiceNode!.id && e.data?.kind === 'choice-option' && e.data.label === 'WirePayment'
+    );
+    expect(newEdge).toBeDefined();
+    expect(newEdge!.target).toBe(wireNode!.id);
+  });
+
+  it('is a no-op when the stale targetTypeId does not exist in the store', () => {
+    const nodes = store.getState().nodes;
+    const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
+    const attrsBefore = [...((choiceNode!.data as any).attributes ?? [])];
+
+    // Pass a targetTypeId that does not exist in the store.
+    store.getState().updateAttributeType(choiceNode!.id, 'CashPayment', 'WirePayment', 'stale::NodeId');
+
+    const updated = store.getState().nodes.find((n) => n.id === choiceNode!.id);
+    const attrsAfter = (updated!.data as any).attributes ?? [];
+
+    // No change — stale payload must be rejected.
+    expect(attrsAfter.map((a: any) => a.typeCall?.type?.$refText)).toEqual(
+      attrsBefore.map((a: any) => a.typeCall?.type?.$refText)
+    );
+  });
+
+  it('is a no-op for genuinely unsupported $types (Enum, RosettaFunction, etc.)', () => {
+    const nodes = store.getState().nodes;
+    // There are no Enum or Function nodes in CHOICE_TWO_ARM_SOURCE, so use
+    // a Data node to confirm Data still works, then patch a fake node to test
+    // the guard. We test the guard directly via a node whose $type is 'RosettaEnumeration'.
+    const cashNode = nodes.find((n) => n.data.name === 'CashPayment');
+    expect(cashNode).toBeDefined();
+
+    // Inject a synthetic Enum node into the store state to confirm the guard holds.
+    const fakeEnumId = 'fake::EnumNode';
+    store.setState((prev: any) => ({
+      nodes: [
+        ...prev.nodes,
+        {
+          id: fakeEnumId,
+          position: { x: 0, y: 0 },
+          type: 'enum',
+          data: {
+            $type: 'RosettaEnumeration',
+            id: fakeEnumId,
+            name: 'FakeEnum',
+            namespace: 'fake',
+            enumValues: [{ name: 'VALUE_A' }]
+          }
+        }
+      ]
+    }));
+
+    const edgesBefore = store.getState().edges.length;
+    // Attempt to retype an arm on the enum node — must be a no-op.
+    store.getState().updateAttributeType(fakeEnumId, 'VALUE_A', 'VALUE_B');
+    const edgesAfter = store.getState().edges.length;
+
+    // No edges added/removed and the node is unchanged.
+    expect(edgesAfter).toBe(edgesBefore);
+    const enumNode = store.getState().nodes.find((n) => n.id === fakeEnumId);
+    expect((enumNode!.data as any).enumValues[0].name).toBe('VALUE_A');
+  });
+});
+
+describe('EditorStore — updateAttributeType on Choice nodes — cross-namespace disambiguation', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    const resultA = await parse(CHOICE_AMBIGUOUS_SOURCE_A, 'inmemory:///fast.rosetta');
+    const resultB = await parse(CHOICE_AMBIGUOUS_SOURCE_B, 'inmemory:///slow.rosetta');
+    store = createEditorStore();
+    store.getState().loadModels([resultA.value, resultB.value]);
+  });
+
+  it('writes a qualified $refText when two namespaces have a type with the same bare name', () => {
+    const nodes = store.getState().nodes;
+    const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
+    expect(choiceNode).toBeDefined();
+
+    // Find the "fast" Wire — it should get the namespace qualifier because "slow" Wire also exists.
+    const fastWire = nodes.find((n) => n.data.name === 'Wire' && (n.data as any).namespace === 'payment.fast');
+    expect(fastWire).toBeDefined();
+
+    // Drop fast Wire onto the TransferMethod's existing Wire arm.
+    store.getState().updateAttributeType(choiceNode!.id, 'Wire', 'Wire', fastWire!.id);
+
+    const updated = store.getState().nodes.find((n) => n.id === choiceNode!.id);
+    const attrs = (updated!.data as any).attributes ?? [];
+
+    // The qualified form must be written — bare "Wire" is ambiguous across two namespaces.
+    const arm = attrs[0];
+    expect(arm?.typeCall?.type?.$refText).toBe('payment.fast.Wire');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Condition operations + updateExpression
 // ---------------------------------------------------------------------------
 
