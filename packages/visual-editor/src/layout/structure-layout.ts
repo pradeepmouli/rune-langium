@@ -324,6 +324,21 @@ function sizeBase(
       ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, BASE_PADDING + HEADER_HEIGHT)
       : BASE_PADDING + HEADER_HEIGHT;
 
+  // e2e-batch fix #12 (Codex P1 follow-up): compute rowsColWidth FIRST so
+  // innerWidth + leftColumn placement can use it. Was computed AFTER
+  // innerWidth and then ignored, so wide base rows would overflow into the
+  // expansion gutter and right-column expansions would overlap the base
+  // rows. Codex caught it in the adversarial pass.
+  //
+  // baseRowsColWidth covers the base container's own inherited rows; the
+  // nested derived child's rowsColWidth keeps the parent wide enough for
+  // its own rows column. The base container's effective rowsColWidth is
+  // the max of those two — whichever needs more room sets the floor.
+  const baseRowsColWidth = estimateRowsColWidth(
+    node.baseRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality }))
+  );
+  const rowsColWidth = Math.max(baseRowsColWidth, childSize.rowsColWidth);
+
   // The base container wraps:
   //  - the base rows (top section, inside top padding)
   //  - the derived child below the base rows (+ ROW_GAP separator)
@@ -334,19 +349,13 @@ function sizeBase(
   // y: HEADER_HEIGHT + baseRows.length*ROW_HEIGHT + BASE_PADDING for the child.
   const leftColumnHeight = baseRowsHeight + childSize.height + BASE_PADDING;
   const innerHeight = Math.max(leftColumnHeight, rightColumnHeight);
-  const innerWidth =
-    expansionsWidth > 0
-      ? Math.max(COL_WIDTH, childSize.width) + COL_GAP + expansionsWidth
-      : Math.max(COL_WIDTH, childSize.width);
-
-  // e2e-batch fix #12: base container's rows-column width is the wider of
-  // (a) its own baseRows estimate, or (b) the nested derived child's columns
-  // — whichever is larger needs to fit. The derived child's full outer width
-  // (which may itself include expansions) is the load-bearing dimension here.
-  const baseRowsColWidth = estimateRowsColWidth(
-    node.baseRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality }))
-  );
-  const rowsColWidth = Math.max(baseRowsColWidth, childSize.rowsColWidth);
+  // Left column reserves the wider of (rowsColWidth, derived child's full
+  // outer width). rowsColWidth is already floor-clamped to COL_WIDTH by
+  // estimateRowsColWidth, so Math.max(rowsColWidth, childSize.width)
+  // preserves the previous "min COL_WIDTH" guarantee without needing an
+  // explicit COL_WIDTH term.
+  const leftColumnWidth = Math.max(rowsColWidth, childSize.width);
+  const innerWidth = expansionsWidth > 0 ? leftColumnWidth + COL_GAP + expansionsWidth : leftColumnWidth;
 
   return {
     width: innerWidth + BASE_PADDING * 2,
@@ -617,9 +626,16 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
 
     // 2. Base container's own row-level expansions (inherited rows the user
     //    expanded) sit in the right-hand column aligned with their base rows.
+    //
+    // e2e-batch fix #12 (Codex P1 follow-up): the right-column origin must
+    // mirror sizeBase's leftColumnWidth = max(rowsColWidth, childSize.width).
+    // Previously used Math.max(COL_WIDTH, leftColumnWidth) which ignored
+    // sz.rowsColWidth — for base containers whose own inherited rows are
+    // wider than the derived child, expansion children would have overlapped
+    // the base rows. Use sz.rowsColWidth (computed in sizeBase) as the floor.
     const derivedChildSize = sizes.get(makeSizeCacheKey(n.childNodeId));
-    const leftColumnWidth = derivedChildSize?.width ?? COL_WIDTH;
-    const rightColumnX = BASE_PADDING + Math.max(COL_WIDTH, leftColumnWidth) + COL_GAP;
+    const derivedChildWidth = derivedChildSize?.width ?? COL_WIDTH;
+    const rightColumnX = BASE_PADDING + Math.max(sz.rowsColWidth, derivedChildWidth) + COL_GAP;
 
     let yCursor = BASE_PADDING + HEADER_HEIGHT;
     for (const [attrName, childInstanceId] of n.expansions) {

@@ -212,6 +212,23 @@ function matchesPreviewSourceIdentity(current: FormPreviewTarget, candidate: For
   );
 }
 
+/**
+ * Render an unmapped Langium `$type` as a human-friendly kind label.
+ * Strips the `Rosetta` prefix and inserts spaces before interior capital
+ * letters, then lowercases the tail so the result reads as sentence case
+ * (`RosettaTypeAlias` → `Type alias`, `RosettaExternalRuleSource` →
+ * `External rule source`). Used as the fallback in
+ * `structureUnsupportedSelectedType`'s KIND_LABEL map so any newly-added
+ * Rosetta AST node type produces a passable label without code change.
+ */
+function formatUnknownKind(rawType: string): string {
+  const stripped = rawType.startsWith('Rosetta') ? rawType.slice('Rosetta'.length) : rawType;
+  // Insert a space before each interior capital, then lowercase everything
+  // except the first character.
+  const spaced = stripped.replace(/([a-z])([A-Z])/g, '$1 $2');
+  return spaced.charAt(0) + spaced.slice(1).toLowerCase();
+}
+
 function getFileKindBadge(name: string): string {
   const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
   switch (ext) {
@@ -358,13 +375,47 @@ export function EditorPage({
     if (!node) return null;
     const d = node.data as { $type?: string; typeKind?: string } | undefined;
     if (d?.$type) return d.$type;
-    // Map React Flow node.type (lowercase: 'data', 'choice', 'enum') or
-    // data.typeKind back to the Langium AST $type the StructureView gate expects.
+    // Map React Flow node.type (lowercase: 'data', 'choice', 'enum', 'func',
+    // 'record', 'typeAlias', 'basicType', 'annotation') or data.typeKind back
+    // to the Langium AST $type the StructureView gate + the unsupported-kind
+    // empty state both expect. Copilot review (e2e-batch adversarial) flagged
+    // the earlier 3-kind fallback as incomplete — it returned null for non-
+    // Data RF node types, so the contextual "X is a Function" empty state
+    // never fired for curated-loaded functions/records/etc.
     const kind = d?.typeKind ?? (node as { type?: string }).type;
-    if (kind === 'data' || kind === 'Data') return 'Data';
-    if (kind === 'choice' || kind === 'Choice') return 'Choice';
-    if (kind === 'enum' || kind === 'Enum' || kind === 'RosettaEnumeration') return 'RosettaEnumeration';
-    return null;
+    switch (kind) {
+      case 'data':
+      case 'Data':
+        return 'Data';
+      case 'choice':
+      case 'Choice':
+        return 'Choice';
+      case 'enum':
+      case 'Enum':
+      case 'RosettaEnumeration':
+        return 'RosettaEnumeration';
+      case 'func':
+      case 'Function':
+      case 'RosettaFunction':
+        return 'RosettaFunction';
+      case 'record':
+      case 'Record':
+      case 'RosettaRecordType':
+        return 'RosettaRecordType';
+      case 'typeAlias':
+      case 'TypeAlias':
+      case 'RosettaTypeAlias':
+        return 'RosettaTypeAlias';
+      case 'basicType':
+      case 'BasicType':
+      case 'RosettaBasicType':
+        return 'RosettaBasicType';
+      case 'annotation':
+      case 'Annotation':
+        return 'Annotation';
+      default:
+        return null;
+    }
   });
   const storeSetLayoutEngine = useEditorStore((s) => s.setLayoutEngine);
   const layoutEngineRef = useRef(storeLayoutEngine);
@@ -1419,16 +1470,36 @@ export function EditorPage({
     const node = storeNodes.find((n) => n.id === selectedNodeId);
     const name =
       (node?.data as { name?: string } | undefined)?.name ?? selectedNodeId.split('::').pop() ?? selectedNodeId;
-    // Map AST $type to a user-friendly kind label (RosettaFunction → Function, etc.)
+    // Map AST $type → user-friendly kind label. Codex review (e2e-batch
+    // adversarial) flagged the previous map as non-exhaustive — it omitted
+    // RosettaTypeAlias, RosettaBasicType, RosettaSynonymSource,
+    // RosettaExternalFunction, RosettaMetaType, RosettaBody, RosettaCorpus,
+    // RosettaSegment, RosettaExternalRuleSource, RosettaReport, RosettaRule,
+    // any of which a user could select from the explorer. Missing entries
+    // previously fell through to the raw $type string (ugly but not crash-y);
+    // now we cover the common cases AND `formatUnknownKind` strips the
+    // `Rosetta` prefix + inserts spaces so unmapped types still render as
+    // "Type alias" / "Basic type" / "Synonym source" etc.
     const KIND_LABEL: Record<string, string> = {
-      RosettaFunction: 'Function',
       Function: 'Function',
+      RosettaFunction: 'Function',
       TypeAlias: 'Type alias',
+      RosettaTypeAlias: 'Type alias',
       Record: 'Record',
+      RosettaRecordType: 'Record',
+      RosettaBasicType: 'Basic type',
       Annotation: 'Annotation',
-      RosettaRecordType: 'Record'
+      RosettaMetaType: 'Meta type',
+      RosettaSynonymSource: 'Synonym source',
+      RosettaExternalFunction: 'External function',
+      RosettaBody: 'Body',
+      RosettaCorpus: 'Corpus',
+      RosettaSegment: 'Segment',
+      RosettaExternalRuleSource: 'External rule source',
+      RosettaReport: 'Report',
+      RosettaRule: 'Rule'
     };
-    return { name, kind: KIND_LABEL[selectedNodeType] ?? selectedNodeType };
+    return { name, kind: KIND_LABEL[selectedNodeType] ?? formatUnknownKind(selectedNodeType) };
   }, [selectedNodeId, selectedNodeType, structureFocusedTypeId, storeNodes]);
 
   const adapterDocument = useMemo(

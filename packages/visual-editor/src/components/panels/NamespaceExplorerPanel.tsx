@@ -485,7 +485,19 @@ function TypeItemRow({
       }${isDragSource ? ' studio-type-row--drag-source' : ''}`}
       data-testid={`ns-type-${row.nodeId}`}
       data-drag-source={isDragSource ? 'true' : undefined}
-      aria-label={isDragSource ? `${row.name} — active drag source` : isSelected ? `${row.name} — selected` : row.name}
+      // Copilot review (e2e-batch adversarial) caught two a11y gaps:
+      //  1. role="button" row acts as a toggle (idle ↔ active drag source)
+      //     but had no aria-pressed. Screen readers couldn't communicate
+      //     the toggle state from aria-label mutation alone (label changes
+      //     aren't reliably re-announced without a live region).
+      //  2. Label dropped "selected" state when also drag-source (early
+      //     ternary). Now both states concatenate so users hear both when
+      //     both apply. aria-pressed is only set on rows that CAN be drag
+      //     sources (payload defined) — for unsupported-kind rows, the
+      //     attribute is omitted entirely so SR users don't get a stuck
+      //     "not pressed" announcement on a non-toggle row.
+      aria-pressed={payload !== undefined ? isDragSource : undefined}
+      aria-label={`${row.name}${isDragSource ? ' — active drag source' : ''}${isSelected ? ' — selected' : ''}`}
       draggable={payload !== undefined}
       onDragStart={handleDragStart}
       onClick={handleClick}
