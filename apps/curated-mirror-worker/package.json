@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "seed:local": "tsx scripts/seed-local-curated-mirror.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsgo --noEmit"
