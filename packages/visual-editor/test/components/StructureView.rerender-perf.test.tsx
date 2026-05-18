@@ -99,7 +99,16 @@ const tradeDoc: AdapterDocument = {
       name: 'Economics',
       namespace: 'cdm.trade',
       attributes: [
-        { name: 'notional', typeCall: { type: { $refText: 'number' } }, card: { inf: 0, sup: 1, unbounded: false } }
+        // astRange carried through to StructureRow per buildRow — adapter
+        // rebuilds the object identity per pass even when values are unchanged.
+        // Test fixture pins it so the perf comparator's structural astRange
+        // handling stays exercised (Codex P2 on PR #205).
+        {
+          name: 'notional',
+          typeCall: { type: { $refText: 'number' } },
+          card: { inf: 0, sup: 1, unbounded: false },
+          astRange: { start: 100, end: 110 }
+        }
       ]
     },
     {
@@ -108,8 +117,18 @@ const tradeDoc: AdapterDocument = {
       name: 'Trade',
       namespace: 'cdm.trade',
       attributes: [
-        { name: 'tradeDate', typeCall: { type: { $refText: 'date' } }, card: { inf: 0, sup: 1, unbounded: false } },
-        { name: 'economics', typeCall: { type: { $refText: 'Economics' } }, card: { inf: 0, unbounded: false } }
+        {
+          name: 'tradeDate',
+          typeCall: { type: { $refText: 'date' } },
+          card: { inf: 0, sup: 1, unbounded: false },
+          astRange: { start: 200, end: 210 }
+        },
+        {
+          name: 'economics',
+          typeCall: { type: { $refText: 'Economics' } },
+          card: { inf: 0, unbounded: false },
+          astRange: { start: 220, end: 230 }
+        }
       ]
     }
   ]
@@ -148,7 +167,10 @@ function cloneTradeDoc(renameEconomicsAttrTo?: string): AdapterDocument {
           {
             name: renameEconomicsAttrTo ?? 'notional',
             typeCall: { type: { $refText: 'number' } },
-            card: { inf: 0, sup: 1, unbounded: false }
+            card: { inf: 0, sup: 1, unbounded: false },
+            // Fresh astRange object with same values — mimics adapter reparse
+            // producing new identity for unchanged content.
+            astRange: { start: 100, end: 110 }
           }
         ]
       },
@@ -158,8 +180,18 @@ function cloneTradeDoc(renameEconomicsAttrTo?: string): AdapterDocument {
         name: 'Trade',
         namespace: 'cdm.trade',
         attributes: [
-          { name: 'tradeDate', typeCall: { type: { $refText: 'date' } }, card: { inf: 0, sup: 1, unbounded: false } },
-          { name: 'economics', typeCall: { type: { $refText: 'Economics' } }, card: { inf: 0, unbounded: false } }
+          {
+            name: 'tradeDate',
+            typeCall: { type: { $refText: 'date' } },
+            card: { inf: 0, sup: 1, unbounded: false },
+            astRange: { start: 200, end: 210 }
+          },
+          {
+            name: 'economics',
+            typeCall: { type: { $refText: 'Economics' } },
+            card: { inf: 0, unbounded: false },
+            astRange: { start: 220, end: 230 }
+          }
         ]
       }
     ]

@@ -43,8 +43,18 @@ function arraysEqual<T>(a: ReadonlyArray<T>, b: ReadonlyArray<T>, eq: (x: T, y: 
 
 /**
  * Shallow equality of two records (string-keyed). Used for individual
- * `StructureRow` / `StructureChoiceArm` objects whose fields are all
- * primitive.
+ * `StructureRow` / `StructureChoiceArm` objects whose fields are MOSTLY
+ * primitive but include one known nested object: `astRange: { start, end }`.
+ *
+ * The adapter rebuilds `astRange` per pass with fresh `{ start, end }` objects
+ * even when the parsed values are unchanged, so an `Object.is` walk would
+ * treat every row as "changed" and trigger the all-visible-node rerender
+ * fan-out the Phase 14c fix is supposed to prevent. `astRange` is compared
+ * structurally (start === start && end === end); everything else stays
+ * `Object.is` (strict primitive equality).
+ *
+ * If a future row field adds another nested object, extend this comparator
+ * the same way `node.data` is extended above.
  */
 function shallowRecordEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
@@ -55,7 +65,18 @@ function shallowRecordEqual(a: unknown, b: unknown): boolean {
   const bKeys = Object.keys(bo);
   if (aKeys.length !== bKeys.length) return false;
   for (const k of aKeys) {
-    if (!Object.is(ao[k], bo[k])) return false;
+    const av = ao[k];
+    const bv = bo[k];
+    if (Object.is(av, bv)) continue;
+    if (k === 'astRange') {
+      // `{ start, end }` — adapter rebuilds the object per pass; compare by value.
+      if (!av || !bv || typeof av !== 'object' || typeof bv !== 'object') return false;
+      const ar = av as { start?: unknown; end?: unknown };
+      const br = bv as { start?: unknown; end?: unknown };
+      if (!Object.is(ar.start, br.start) || !Object.is(ar.end, br.end)) return false;
+      continue;
+    }
+    return false;
   }
   return true;
 }
