@@ -17,7 +17,7 @@
  * @module
  */
 
-import React, { useMemo } from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import type { AdapterDocument } from '../adapters/structure-graph-adapter.js';
@@ -25,6 +25,177 @@ import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
 import { layoutStructureGraph } from '../layout/structure-layout.js';
 import { nodeTypes } from './nodes/index.js';
 import type { StructureExpansionKey, StructureRow } from '../types/structure-view.js';
+
+/**
+ * Compare two arrays element-wise. Falls back to a per-element equality
+ * function (defaults to `Object.is`) — used for `rows` arrays where the
+ * adapter emits fresh `StructureRow` arrays per pass but the individual
+ * rows are simple records that should be compared structurally.
+ */
+function arraysEqual<T>(a: ReadonlyArray<T>, b: ReadonlyArray<T>, eq: (x: T, y: T) => boolean = Object.is): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!eq(a[i], b[i])) return false;
+  }
+  return true;
+}
+
+/**
+ * Shallow equality of two records (string-keyed). Used for individual
+ * `StructureRow` / `StructureChoiceArm` objects whose fields are MOSTLY
+ * primitive but include one known nested object: `astRange: { start, end }`.
+ *
+ * The adapter rebuilds `astRange` per pass with fresh `{ start, end }` objects
+ * even when the parsed values are unchanged, so an `Object.is` walk would
+ * treat every row as "changed" and trigger the all-visible-node rerender
+ * fan-out the Phase 14c fix is supposed to prevent. `astRange` is compared
+ * structurally (start === start && end === end); everything else stays
+ * `Object.is` (strict primitive equality).
+ *
+ * If a future row field adds another nested object, extend this comparator
+ * the same way `node.data` is extended above.
+ */
+function shallowRecordEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  const ao = a as Record<string, unknown>;
+  const bo = b as Record<string, unknown>;
+  const aKeys = Object.keys(ao);
+  const bKeys = Object.keys(bo);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of aKeys) {
+    const av = ao[k];
+    const bv = bo[k];
+    if (Object.is(av, bv)) continue;
+    if (k === 'astRange') {
+      // `{ start, end }` — adapter rebuilds the object per pass; compare by value.
+      if (!av || !bv || typeof av !== 'object' || typeof bv !== 'object') return false;
+      const ar = av as { start?: unknown; end?: unknown };
+      const br = bv as { start?: unknown; end?: unknown };
+      if (!Object.is(ar.start, br.start) || !Object.is(ar.end, br.end)) return false;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Compare two `ReadonlyMap<string, string>` instances by content. Used
+ * for the `expansions` map on `StructureDataNode`/`StructureChoiceNode`/
+ * `StructureBaseContainer` which is rebuilt each adapter pass even when
+ * content is unchanged.
+ */
+function mapEqual(a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) {
+    if (b.get(k) !== v) return false;
+  }
+  return true;
+}
+
+/**
+ * Structural equality for a Structure View `node.data` payload. Walks the
+ * shape the adapter+layout produce (StructureDataNode | StructureChoiceNode |
+ * StructureBaseContainer | StructureEnumNode plus the layout's wrappers:
+ * `variant: 'structure'`, `instancePath: readonly string[]`, and the
+ * StructureFlowInner-injected `cellComponents`, `expansionMap`, and
+ * `onToggleExpansion`).
+ *
+ * Returns `true` when content is unchanged so the caller can preserve the
+ * previous node reference. React Flow shallow-compares `node.data` for its
+ * memo cache, so reference preservation lets the per-node memo skip
+ * re-rendering unchanged DataNode/ChoiceNode/GroupContainerNode instances.
+ *
+ * Trade-off: this comparator is bespoke for the StructureView node shape.
+ * It does NOT generalize to arbitrary `unknown` payloads. If a future
+ * adapter adds a field to StructureNode (e.g. a new nested object), the
+ * comparator falls through to `Object.is` for that field and the worst
+ * case is more frequent identity changes (correctness preserved; perf
+ * benefit regresses). Adding a field to the equality walk here is the
+ * targeted follow-up when that happens.
+ */
+function shallowEqualData(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  const ao = a as Record<string, unknown>;
+  const bo = b as Record<string, unknown>;
+  const aKeys = Object.keys(ao);
+  const bKeys = Object.keys(bo);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of aKeys) {
+    const av = ao[k];
+    const bv = bo[k];
+    if (Object.is(av, bv)) continue;
+    // Special-case the known-nested fields the adapter+layout rebuild per
+    // pass. Everything else falls through to Object.is (strict identity).
+    if (k === 'rows' || k === 'baseRows' || k === 'options') {
+      if (!Array.isArray(av) || !Array.isArray(bv)) return false;
+      if (!arraysEqual(av, bv, shallowRecordEqual)) return false;
+      continue;
+    }
+    if (k === 'values') {
+      // Enum value names: array of strings.
+      if (!Array.isArray(av) || !Array.isArray(bv)) return false;
+      if (!arraysEqual(av, bv, Object.is)) return false;
+      continue;
+    }
+    if (k === 'expansions') {
+      if (!(av instanceof Map) || !(bv instanceof Map)) return false;
+      if (!mapEqual(av as ReadonlyMap<string, string>, bv as ReadonlyMap<string, string>)) return false;
+      continue;
+    }
+    if (k === 'instancePath') {
+      // Array of React Flow instance ids (strings).
+      if (!Array.isArray(av) || !Array.isArray(bv)) return false;
+      if (!arraysEqual(av, bv, Object.is)) return false;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Identity-preserving merge of a fresh layout result into the previous
+ * one (Phase 14c, Approach B). For each new node, if a previous node with
+ * the same `id` exists AND its `data` payload is shallow-equal to the new
+ * one, return the previous node object reference. Otherwise return the
+ * new node as-is.
+ *
+ * React Flow shallow-compares `node.data` per node for memoization
+ * decisions, so preserving the previous `data` reference where content
+ * is unchanged stops the cascade where every keystroke re-renders every
+ * visible DataNode.
+ *
+ * O(n) using a Map index over the previous nodes (no quadratic scan).
+ */
+function preserveNodeIdentities(prev: ReadonlyArray<Node>, next: ReadonlyArray<Node>): Node[] {
+  if (prev.length === 0) return next as Node[];
+  const prevById = new Map<string, Node>();
+  for (const n of prev) prevById.set(n.id, n);
+  return next.map((n) => {
+    const p = prevById.get(n.id);
+    if (!p) return n;
+    // Compare top-level fields React Flow inspects for re-render decisions.
+    // Position changes legitimately mean layout moved; preserve identity
+    // only when position + parent + extent + size + data all match.
+    if (
+      p.position.x !== n.position.x ||
+      p.position.y !== n.position.y ||
+      p.parentId !== n.parentId ||
+      p.extent !== n.extent ||
+      p.type !== n.type ||
+      (p as { initialWidth?: number }).initialWidth !== (n as { initialWidth?: number }).initialWidth ||
+      (p as { initialHeight?: number }).initialHeight !== (n as { initialHeight?: number }).initialHeight
+    ) {
+      return n;
+    }
+    return shallowEqualData(p.data, n.data) ? p : n;
+  });
+}
 
 /** Shape injected into DataNode's structure-variant `data.cellComponents`. */
 export interface StructureCellComponents {
@@ -83,6 +254,15 @@ function StructureFlowInner({
   cellComponents,
   onToggleExpansion
 }: StructureFlowInnerProps): React.ReactElement {
+  // Phase 14c (Approach B): keep the previous useMemo result so we can
+  // identity-preserve unchanged nodes across re-renders. React Flow shallow-
+  // compares `node.data` per node for memoization; producing fresh object
+  // identities every layout pass — which is what the adapter+layout+injection
+  // stack does — busts that memo cache for every visible node, even when
+  // the underlying content is unchanged. Preserving the previous node
+  // reference where the data shallow-equals the new one limits the
+  // re-render fan-out to the actually-changed nodes.
+  const prevNodesRef = useRef<ReadonlyArray<Node>>([]);
   const { nodes, edges } = useMemo(() => {
     const input = buildStructureGraph(adapterDoc, {
       focusedTypeId,
@@ -109,17 +289,36 @@ function StructureFlowInner({
     // be a separate scope decision (spec §5 does not include inline-editing of
     // inherited attributes in Phase 13).
     const needsInjection = cellComponents !== undefined || onToggleExpansion !== undefined;
-    if (!needsInjection) {
-      return { nodes: result.nodes as Node[], edges: result.edges as Edge[] };
-    }
-    const injectedNodes = result.nodes.map((n) => {
-      if (n.type === 'data') return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
-      if (n.type === 'choice') return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
-      if (n.type === 'structureBase') return { ...n, data: { ...n.data, expansionMap, onToggleExpansion } };
-      return n;
-    });
-    return { nodes: injectedNodes as Node[], edges: result.edges as Edge[] };
+    const freshNodes: Node[] = needsInjection
+      ? (result.nodes.map((n) => {
+          if (n.type === 'data') return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
+          if (n.type === 'choice')
+            return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
+          if (n.type === 'structureBase') return { ...n, data: { ...n.data, expansionMap, onToggleExpansion } };
+          return n;
+        }) as Node[])
+      : (result.nodes as Node[]);
+
+    // Reuse previous node references where the new node's data is shallow-
+    // equal to the previous one. This lets React Flow's per-node memo skip
+    // re-rendering the unchanged DataNode/ChoiceNode/GroupContainerNode
+    // instances even though the upstream layout produced a fresh array.
+    //
+    // NOTE: this useMemo READS prevNodesRef but does NOT write it. The write
+    // happens in useLayoutEffect below — committing the cache only AFTER
+    // React has committed the render. Mutating the ref inside useMemo would
+    // be unsafe under concurrent rendering / StrictMode: an abandoned
+    // render's "stable" output would poison the cache for the next attempt.
+    const stableNodes = preserveNodeIdentities(prevNodesRef.current, freshNodes);
+    return { nodes: stableNodes, edges: result.edges as Edge[] };
   }, [focusedTypeId, adapterDoc, expansionMap, cellComponents, onToggleExpansion]);
+
+  // Commit the identity-preserving cache only after the render reaches
+  // commit phase. Abandoned/discarded renders (StrictMode double-invoke,
+  // concurrent priority preemption) never touch the cache.
+  useLayoutEffect(() => {
+    prevNodesRef.current = nodes;
+  }, [nodes]);
 
   return (
     <div data-testid="structure-view-flow" style={{ width: '100%', height: '100%', minHeight: 320 }}>
