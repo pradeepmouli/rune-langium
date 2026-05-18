@@ -23,7 +23,7 @@
     "@types/node": "^25.6.2",
     "esbuild": "^0.28.0",
     "pino-pretty": "^13.1.3",
-    "vitest": "^4.1.5",
+    "vitest": "^4.1.6",
     "wrangler": "^4.90.0"
   },
   "engines": {

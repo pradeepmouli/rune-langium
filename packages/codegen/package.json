@@ -37,7 +37,7 @@
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.5",
+    "vitest": "^4.1.6",
     "zod": "^4.4.3"
   },
   "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen",
