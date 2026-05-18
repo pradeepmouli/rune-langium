@@ -386,6 +386,17 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     const sz = sizes.get(makeSizeCacheKey(instanceId));
     if (!sz) return;
 
+    // Dimensions are emitted via THREE channels so all React Flow consumers see
+    // a consistent size:
+    //  - `style.width/height` — CSS render hint (drives the actual DOM size
+    //    before React Flow's auto-measure pass)
+    //  - `initialWidth/initialHeight` — RF12-specific initial-only fields read
+    //    by `getNodesBounds`, static `fitView`, and other pre-mount dimension
+    //    helpers (per RF12 migration docs — top-level `width/height` are now
+    //    output-only, populated by RF on measure)
+    // After mount, RF populates `node.measured` from the rendered DOM; if CSS
+    // drifts from the layout's pre-computed sz, measured wins for parent-extent
+    // clamping etc., but initial helpers still get the right answer pre-measure.
     nodes.push({
       id: instanceId,
       type: n.kind === 'base' ? 'structureBase' : n.kind,
@@ -393,6 +404,8 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       data: { ...n, variant: 'structure', instancePath: instanceAncestorPath },
       parentId: parentInstanceId,
       extent: parentInstanceId ? 'parent' : undefined,
+      initialWidth: sz.width,
+      initialHeight: sz.height,
       style: { width: sz.width, height: sz.height }
     } as Node);
 

@@ -1375,12 +1375,17 @@ describe('layoutStructureGraph — per-instance sizing (Phase 14e successor to C
 });
 
 describe('layoutStructureGraph — node dimensions on style (Finding G)', () => {
-  // RF12 contract: `node.measured` holds post-mount dimensions; `style.width/height`
-  // is the documented way to set initial sizing. Top-level `node.width`/`node.height`
-  // are initial-sizing-only and won't be updated by RF12 after mount.
-  // Setting dimensions via style.* ensures RF12's auto-measure on mount agrees
-  // with the pre-computed layout, so `extent: 'parent'` clamps children correctly.
-  it('emits style.width and style.height (not top-level width/height) on each node', () => {
+  // RF12 contract: `node.measured` holds post-mount dimensions. Pre-mount,
+  // RF12 reads `initialWidth/initialHeight` for utilities like `getNodesBounds`
+  // and static `fitView`. `style.width/height` is the CSS render hint that
+  // drives the actual DOM size. We emit dimensions on BOTH `initialWidth/Height`
+  // AND `style.width/height` so all consumers see consistent values:
+  //   - exported `layoutStructureGraph()` callers using RF helpers pre-mount
+  //     → read `initialWidth/Height`
+  //   - browser CSS / auto-measure → reads `style.width/height`
+  // Top-level `node.width/height` are now output-only (populated by RF after
+  // measure), so we deliberately leave them unset.
+  it('emits initialWidth/Height + style.width/height (not top-level width/height) on each node', () => {
     const input: StructureGraphInput = {
       rootNodeId: 'Trade',
       nodes: new Map([
@@ -1413,13 +1418,20 @@ describe('layoutStructureGraph — node dimensions on style (Finding G)', () => 
     expect(nodes).toHaveLength(1);
     const node = nodes[0];
 
-    // Dimensions must be on style, not top-level.
+    // Dimensions must be on style (CSS render hint).
     expect(typeof node.style?.width).toBe('number');
     expect(typeof node.style?.height).toBe('number');
     expect((node.style?.width as number) > 0).toBe(true);
     expect((node.style?.height as number) > 0).toBe(true);
 
-    // Top-level width/height must NOT be set (RF12 contract).
+    // Dimensions must ALSO be on initialWidth/initialHeight so RF12's pre-mount
+    // dimension helpers (getNodesBounds, static fitView) see the right size.
+    // Codex P2 on PR #197: omitting these made layoutStructureGraph callers see
+    // zero-sized nodes when using RF utilities before the nodes mount.
+    expect((node as { initialWidth?: number }).initialWidth).toBe(node.style?.width);
+    expect((node as { initialHeight?: number }).initialHeight).toBe(node.style?.height);
+
+    // Top-level width/height stay unset — RF12 populates them via measure on mount.
     expect(node.width).toBeUndefined();
     expect(node.height).toBeUndefined();
   });
