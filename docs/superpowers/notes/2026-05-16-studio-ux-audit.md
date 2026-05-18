@@ -8,7 +8,7 @@ specific and actionable (CuratedLoadErrorPanel, LspConnectionBadge), and
 the Inspector empty state is friendly. Three problems stand out:
 
 1. ~~**The Phase 7 Structure View tab is dead code in production.**~~ **RESOLVED 2026-05-16 (PR #185, Phase 7.5).** `VisualPreviewPanel.tsx` was deleted; `CenterStackPanel` gained a 4th `renderStructure` slot, and `EditorPage` wires the Structure View into it. The pane is reachable via the pane-switcher pill. Original finding: `VisualPreviewPanel.tsx` with a `Tabs` switch was being shadowed by an `EditorPage` override of `workspace.visualPreview`.
-2. ~~**The Phase 8 NamespaceExplorer drag-source affordance is also missing.**~~ **RESOLVED 2026-05-16 (PR #186 + later Phase 13 redesign).** `NamespaceExplorerPanel` now implements `draggable` rows + dual-MIME `handleDragStart` payload + single-click drag-source marking (`isDragSource` → `→` arrow). Navigation moved from double-click to a dedicated hover-visible nav button after the Phase 13 redesign (per `feedback_internal_review_loop_limits` reasoning — double-click was racy with single-click drag-source marking). Original finding: `onClick={onSelectNode}` only, no drag wiring.
+2. ~~**The Phase 8 NamespaceExplorer drag-source affordance is also missing.**~~ **RESOLVED (PR #183 Phase 8 + Phase 13 redesign).** `NamespaceExplorerPanel` now implements `draggable` rows + dual-MIME `handleDragStart` payload + single-click drag-source marking (`isDragSource` → `→` arrow). Navigation moved from double-click to a dedicated hover-visible nav button after the Phase 13 redesign (per `feedback_internal_review_loop_limits` reasoning — double-click was racy with single-click drag-source marking). Original finding: `onClick={onSelectNode}` only, no drag wiring.
 3. **The topbar contains four visible affordances that do nothing.** Cmd-K search input (no `onClick`), Validate button (no `onClick`), Share button (no `onClick`), and the PM avatar (no `onClick`). All three Activity Bar disabled buttons (Graph, Search, Notifications) plus two stub handlers (`onModelsClick={() => {}}`, `onSettingsClick={() => {}}`) compound the problem. Users will click these and nothing will happen — silently failing affordances erode trust faster than missing features.
 
 Beyond those three, the codebase is well-organised. Most findings below
@@ -88,15 +88,13 @@ ActivityBar (left rail) → DockShell with CenterStackPanel
   CenterStackPanel-fold direction was taken; `VisualPreviewPanel.tsx`
   was deleted; Structure is now a 4th peer pane.
 - ~~`NamespaceExplorerPanel.tsx:341, 156` — **Phase 8 drag-source semantics
-  not shipped.**~~ **RESOLVED 2026-05-16 (PR #186):** `draggable`,
+  not shipped.**~~ **RESOLVED (PR #183 Phase 8):** `draggable`,
   `onDragStart→setDragSource` (dual-MIME payload), and single-click
-  drag-source marking shipped. Navigation moved from double-click to a
-  dedicated hover-visible nav button after Phase 13 redesign.
-  (TypePickerCell, InheritanceCell) but the source side is unwired.
-  **Severity: Critical** (Phase 8 surface broken or never shipped).
-  Direction: add `draggable=true`, `onDragStart` calling
-  `setDragSource(payload)`, `onDoubleClick={onSelectNode}`, and a
-  per-row `→` indicator when `dragSource?.id === row.nodeId`.
+  drag-source marking shipped. Navigation later moved from double-click
+  to a dedicated hover-visible nav button in the Phase 13 redesign
+  (double-click was racy with single-click drag-source marking). The
+  original direction below ("add `onDoubleClick={onSelectNode}`") is
+  superseded by the nav-button affordance.
 - `EditorPage.tsx:1370-1376` — Cmd-K search trigger renders no handler.
   Clicking does nothing; tabbing onto it gives no focus indicator
   beyond browser default. **Severity: High.** Direction: at minimum
@@ -305,7 +303,7 @@ Not visible because the source-side code doesn't exist.
 | Severity | Flow | Location | Issue | Suggested wedge |
 |---|---|---|---|---|
 | ~~Critical~~ **RESOLVED** | Type editing | EditorPage.tsx:1309 | ~~Phase 7 Structure tab shadowed by `VisualPreviewPanelMounted` override~~ Fixed in PR #185 — `CenterStackPanel` now hosts Structure as 4th pane; `VisualPreviewPanel.tsx` deleted |
-| ~~Critical~~ **RESOLVED** | Type editing | NamespaceExplorerPanel.tsx:341 | ~~Phase 8 single-click drag-source / double-click nav not implemented~~ Fixed in PR #186 — `draggable` + dual-MIME `dragStart` + single-click drag-source mark; navigation via hover-visible nav button (replaced double-click in Phase 13) |
+| ~~Critical~~ **RESOLVED** | Type editing | NamespaceExplorerPanel.tsx:341 | ~~Phase 8 single-click drag-source / double-click nav not implemented~~ Fixed in PR #183 (Phase 8) — `draggable` + dual-MIME `dragStart` + single-click drag-source mark; navigation via hover-visible nav button (Phase 13 redesign superseded the original double-click direction) |
 | High | First-run | App.tsx:705-723 | No "Try a sample" path; curated archives buried below recents | Hoist one sample bundle as primary above secondary buttons |
 | High | Workspace open | WorkspaceSwitcher.tsx:46-58 | Recents are unstyled `<ul>` with no timestamps, kind icons, or hover state | Restyle with shadcn Card + relative time + kind badges |
 | High | Type editing | EditorPage.tsx:1373-1393 | Cmd-K, Validate, Share toolbar buttons have no onClick | Either wire stubs to "Coming soon" toast or hide |

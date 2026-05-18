@@ -3083,7 +3083,7 @@ git commit -m "feat(visual-editor): DataNode accepts injected cell components in
 
 **Outcome:** A working Structure View component renders inside a new tab in VisualPreviewPanel, defaults to fully collapsed, expands on hexagon-plus click.
 
-> **Implementation note (Phase 7.5 / 2026-05-16):** The VisualPreviewPanel tab-toggle approach below was **superseded** before merge. The studio UX audit caught that `EditorPage` overrides `workspace.visualPreview` with a `CenterStackPanel`-based mount, so a Tabs toggle inside `VisualPreviewPanel.tsx` would have been unreachable in production. Phase 7.5 (PR #185) deleted `VisualPreviewPanel.tsx` entirely and added a 4th `renderStructure` slot to `CenterStackPanel`. Structure View ships as a peer pane (not a tab) alongside Graph / Source / Inspector, toggled via the pane-switcher pill. The Task 7.3 steps below describing Radix Tabs inside `VisualPreviewPanel` were NOT executed as written; the equivalent wiring went into `CenterStackPanel.tsx` + `EditorPage.tsx` instead. Phase 7 tasks 7.1, 7.2, and 7.4+ proceeded as written; only 7.3 was rerouted.
+> **Implementation note (Phase 7.5 / 2026-05-16):** The VisualPreviewPanel tab-toggle approach below was **shipped as unreachable dead code, then superseded in Phase 7.5**. Task 7.3 went out as written and the Tabs implementation landed on master, but `EditorPage` was already overriding `workspace.visualPreview` with its own `CenterStackPanel`-based mount, so the Tabs toggle inside `VisualPreviewPanel.tsx` was never reachable by users. The studio UX audit (2026-05-16) surfaced the shadowing; Phase 7.5 (PR #185) deleted `VisualPreviewPanel.tsx` entirely and added a 4th `renderStructure` slot to `CenterStackPanel`. Structure View now ships as a peer pane (not a tab) alongside Graph / Source / Inspector, toggled via the pane-switcher pill. Phase 7 tasks 7.1, 7.2, and 7.4+ proceeded as written; 7.3's tabs were the part that got reworked.
 
 ## Task 7.1: StructureView — empty state
 
@@ -3323,6 +3323,8 @@ git commit -m "feat(studio): VisualPreviewPanel adds Structure tab alongside Gra
 # Phase 8 — NamespaceExplorer as drag-source palette
 
 **Outcome:** Single-click on a type item sets the drag source (`→` arrow appears); HTML5 draggable attributes are wired with the `application/x-rune-type-ref` MIME payload; double-click navigates.
+
+> **Implementation note (Phase 13 redesign):** the Phase 8 tasks below shipped as written (PR #183), including the `onDoubleClick → navigate` handler. The Phase 13 adversarial review (PR #191) rebooted the click semantics because double-click raced with single-click drag-source marking — quick double-clicks marked drag-source first, then the second click consumed itself as another drag-source toggle rather than a navigate. The redesigned contract puts navigation on a dedicated hover-visible nav button (`ChevronRight`), and single-click is the only mouse interaction that fires on the row body. `onDoubleClick` references in the Task 8.x steps below should be read as historical — the shipped code uses the nav-button affordance instead.
 
 ## Task 8.1: NamespaceExplorerPanel — draggable items + → arrow
 

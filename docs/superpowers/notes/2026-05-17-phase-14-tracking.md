@@ -19,7 +19,7 @@ This doc captures 8 findings from the two reviews run on PR #191. They were inte
 | F | P2 | RF perf / a11y | Decorative Handles in structure mode waste DOM | Phase 14b — gate by variant | **DONE (PR #197)** |
 | G | P2 | RF latent | Top-level `width`/`height` on node; RF12 uses `style.*`/`measured` | Phase 14b — preventive fix | **DONE (PR #197)** — uses `style.width/height` + `initialWidth/initialHeight` on every emission |
 | H | P2 | RF perf | `onlyRenderVisibleElements` not set on deep expansions | Phase 14b — single prop | **DONE (PR #197)** |
-| (nit) | — | RF | `useNavigation` called in structure variant but values unused | Bundle with C | **DONE** — bundled |
+| (nit) | — | RF | `useNavigation` called in structure variant but values unused | Bundle with C | **Not pursued** — `useNavigation()` is still called before the structure-variant branch in `DataNode`/`ChoiceNode` (it's also used by the graph variant in the same component). Removing the call would require splitting the component or making the hook conditional (forbidden by hooks rules). Acceptable cost given the hook returns memoized refs. |
 | (nit) | — | RF | Full `expansionMap` passed to each DataNode (could be per-row slice) | Bundle with C | Not pursued — Approach B made this moot |
 
 ## Recommended sequencing

@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Initial project setup** with TypeScript, Changesets, GitHub Actions CI/CD, pre-commit hooks (simple-git-hooks), Dependabot, oxlint/oxfmt, Vitest, AGENTS.md, MCP server configuration
 
 ### Changed
-- `NamespaceExplorerPanel` single-click semantics: was "navigate to type"; now "mark as active drag source". Double-click navigates. Updated 5 affected Playwright specs accordingly (including `namespace-explorer.spec.ts` which used a stale `.ns-type__name` selector removed in a prior redesign).
+- `NamespaceExplorerPanel` single-click semantics: was "navigate to type"; now "mark as active drag source". Navigation moved to a dedicated hover-visible nav button (`ChevronRight`) on each row — the originally-planned double-click navigate was dropped in the Phase 13 redesign because it raced with single-click drag-source marking. Updated 5 affected Playwright specs accordingly (including `namespace-explorer.spec.ts` which used a stale `.ns-type__name` selector removed in a prior redesign).
 - 51 mechanical react-doctor cleanup fixes across design-system, visual-editor, and studio (redundant ARIA roles, EMPTY_* module constants for stable memo references, real keys replacing array-index keys with index disambiguators for non-unique values, design-no-redundant-size/padding-axes shorthand)
 - Tightened stylelint custom rule `rune/no-literal-layout-px` to only exempt `var(--rune-*, ...)` SSoT references (design-system tokens on layout-coupled properties of `.rune-*` selectors are correctly flagged again, preventing drift from `STRUCTURE_LAYOUT_CONSTANTS`)
 
