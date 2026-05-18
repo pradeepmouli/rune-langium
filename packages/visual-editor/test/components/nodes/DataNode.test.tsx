@@ -48,10 +48,14 @@ describe('DataNode — structure variant', () => {
     expect(screen.getByTestId('data-node-children')).toBeInTheDocument();
   });
 
-  it('emits a per-row source Handle for each member', () => {
+  it('does NOT emit per-row source Handles (structure variant has no edges; Finding F)', () => {
+    // The structure layout emits zero edges and nodesConnectable=false; mounting
+    // Handles adds wasted DOM nodes, RF handle subscriptions, and a11y noise.
     renderInFlow(<DataNode data={data as any} selected={false} id="Trade" type="data" />);
-    expect(screen.getByTestId('row-handle-tradeDate')).toBeInTheDocument();
-    expect(screen.getByTestId('row-handle-economics')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-handle-tradeDate')).toBeNull();
+    expect(screen.queryByTestId('row-handle-economics')).toBeNull();
+    // No [data-handlepos] or [data-handleid] elements in the structure variant.
+    expect(document.querySelectorAll('[data-handlepos]').length).toBe(0);
   });
 
   it('renders injected cell components when provided in data.cellComponents', () => {
