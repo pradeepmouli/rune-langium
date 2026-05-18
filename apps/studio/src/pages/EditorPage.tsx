@@ -60,7 +60,21 @@ import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { Kbd } from '@rune-langium/design-system/ui/kbd';
-import { Maximize2, LayoutGrid, Network, Check, Download, Share2, Zap, Search, ChevronDown } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
+import {
+  Maximize2,
+  LayoutGrid,
+  Network,
+  Check,
+  Download,
+  Share2,
+  Zap,
+  Search,
+  ChevronDown,
+  Plus,
+  LogOut
+} from 'lucide-react';
+import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistence.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
@@ -184,6 +198,18 @@ export interface EditorPageProps {
   fileCount?: number;
   /** Called when the user wants to close the current workspace. */
   onClose?: () => void;
+  /**
+   * Called when the user picks a different workspace from the topbar
+   * dropdown (replaces "close + go to loader + click recent" with one
+   * click). When omitted, the dropdown's "Switch to…" section is hidden
+   * and only the close action remains.
+   */
+  onSwitchWorkspace?: (workspaceId: string) => void;
+  /**
+   * Called when the user picks "New workspace" from the topbar dropdown.
+   * When omitted, the menu item is hidden.
+   */
+  onCreateWorkspace?: () => void;
 }
 
 const DECL_KEYWORDS = /^(type|enum|func|choice|annotation|metaType|typeAlias|library\s+function|reporting\s+rule)\s+/;
@@ -307,13 +333,29 @@ export function EditorPage({
   studioVersion = '0.1.0',
   workspaceName,
   fileCount,
-  onClose
+  onClose,
+  onSwitchWorkspace,
+  onCreateWorkspace
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
   const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  // Topbar workspace dropdown — populated lazily when the popover opens
+  // so we don't read IDB on every EditorPage mount. Recents list is filtered
+  // to exclude the current workspace (no point switching to where you are).
+  const [workspaceMenuRecents, setWorkspaceMenuRecents] = useState<RecentWorkspaceRecord[]>([]);
+  const handleWorkspaceMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        void listRecents().then((rows) => {
+          setWorkspaceMenuRecents(rows.filter((r) => r.id !== workspaceId));
+        });
+      }
+    },
+    [workspaceId]
+  );
   const [groupedLayout, setGroupedLayout] = useState(false);
   const [graphLayoutDirection, setGraphLayoutDirection] = useState<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
   // Ref so ResizeObserver callbacks always see the latest value without stale closures.
@@ -1609,22 +1651,79 @@ export function EditorPage({
             <span className="studio-brand__name">Rune Studio</span>
           </div>
           <span className="studio-topbar__divider" />
-          <button
-            type="button"
-            className="studio-topbar__ws-btn"
-            onClick={onClose}
-            aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
-            title="Close workspace — return to start page"
-          >
-            <span className="studio-topbar__ws-mark" aria-hidden="true">
-              {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
-            </span>
-            <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
-            <span className="studio-topbar__ws-sub">
-              {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
-            </span>
-            <ChevronDown className="size-3" />
-          </button>
+          <Popover onOpenChange={handleWorkspaceMenuOpenChange}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="studio-topbar__ws-btn"
+                aria-label={`Workspace menu — ${workspaceName || 'workspace'}`}
+                title="Switch / create / close workspace"
+              >
+                <span className="studio-topbar__ws-mark" aria-hidden="true">
+                  {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
+                <span className="studio-topbar__ws-sub">
+                  {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
+                </span>
+                <ChevronDown className="size-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" sideOffset={6} className="w-72 p-1.5">
+              {/* Switch-to section — only shown when callback is provided AND
+                  there are recents OTHER than the current workspace. The
+                  dropdown was the user-reported gap (workspace tab had a
+                  ChevronDown that promised a menu but only fired onClose). */}
+              {onSwitchWorkspace && workspaceMenuRecents.length > 0 && (
+                <>
+                  <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Switch to
+                  </p>
+                  <ul className="space-y-0.5" role="menu">
+                    {workspaceMenuRecents.slice(0, 6).map((r) => (
+                      <li key={r.id} role="none">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
+                          onClick={() => onSwitchWorkspace(r.id)}
+                        >
+                          <span className="font-medium truncate flex-1">{r.name}</span>
+                          <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase tracking-wide">
+                            {r.kind === 'git-backed' ? 'GIT' : r.kind === 'folder-backed' ? 'FOLDER' : 'BROWSER'}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="my-1 border-t border-border" />
+                </>
+              )}
+              {onCreateWorkspace && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
+                  onClick={onCreateWorkspace}
+                >
+                  <Plus className="size-3.5 text-muted-foreground" />
+                  <span>New workspace</span>
+                </button>
+              )}
+              {onClose && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left text-destructive"
+                  onClick={onClose}
+                  aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
+                >
+                  <LogOut className="size-3.5" />
+                  <span>Close workspace</span>
+                </button>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
         <FileTabStrip files={files} activeFile={activeEditorFile} onSelectFile={openFileInSource} />
         <div className="studio-topbar__right">
