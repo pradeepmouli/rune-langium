@@ -141,35 +141,57 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
     if (!d || typeof d.namespace !== 'string') continue;
     namespacesSet.add(d.namespace);
 
-    if (d.$type === 'Data') {
+    // Codex P1 review (e2e-batch fix #1 follow-up): some hydration paths
+    // (curated /api/parse round-trips, deferred exports) attach `typeKind`
+    // to data but leave `$type` undefined. The `selectedNodeType` selector
+    // in this file already handles that fallback chain; the adapter
+    // projection MUST mirror it, otherwise nodes recognized as Data/Choice/
+    // Enum by selectedNodeType get filtered out here and Structure View
+    // shows the stale-selection state for them. Effective $type is the
+    // first defined of: $type → typeKind-mapped → node.type-mapped.
+    const effectiveType = ((): string | undefined => {
+      if (d.$type) return d.$type;
+      const k = (d as { typeKind?: string }).typeKind ?? (rfNode as { type?: string }).type;
+      if (k === 'data' || k === 'Data') return 'Data';
+      if (k === 'choice' || k === 'Choice') return 'Choice';
+      if (k === 'enum' || k === 'Enum' || k === 'RosettaEnumeration') return 'RosettaEnumeration';
+      return undefined;
+    })();
+
+    if (effectiveType === 'Data') {
+      // TS can't narrow `d` from the separate `effectiveType` local — cast
+      // to the Data shape we know the effective-type logic established.
+      const dd = d as Extract<AnyGraphNode, { $type: 'Data' }>;
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Data',
-        name: d.name,
-        namespace: d.namespace,
-        extends: d.superType?.$refText,
+        name: dd.name,
+        namespace: dd.namespace,
+        extends: dd.superType?.$refText,
         // `attributes` on AstNodeModel<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
-        attributes: (d.attributes ?? []) satisfies AdapterNode['attributes']
+        attributes: (dd.attributes ?? []) satisfies AdapterNode['attributes']
       });
-    } else if (d.$type === 'Choice') {
+    } else if (effectiveType === 'Choice') {
       // ChoiceOption AST shape: { $type, typeCall, … } — NO `name`, NO `card`.
       // Pass through to the new `choiceOptions` field on AdapterNode unchanged.
       // The adapter's buildChoiceArm consumes the real shape via typeCall only.
+      const dc = d as Extract<AnyGraphNode, { $type: 'Choice' }>;
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Choice',
-        name: d.name,
-        namespace: d.namespace,
-        choiceOptions: (d.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>
+        name: dc.name,
+        namespace: dc.namespace,
+        choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>
       });
-    } else if (d.$type === 'RosettaEnumeration') {
+    } else if (effectiveType === 'RosettaEnumeration') {
+      const de = d as Extract<AnyGraphNode, { $type: 'RosettaEnumeration' }>;
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Enum',
-        name: d.name,
-        namespace: d.namespace,
-        values: (d.enumValues ?? []) as Array<{ name: string }>
+        name: de.name,
+        namespace: de.namespace,
+        values: (de.enumValues ?? []) as Array<{ name: string }>
       });
     }
     // Other kinds (Function, RecordType, TypeAlias, etc.) are not relevant to Structure View

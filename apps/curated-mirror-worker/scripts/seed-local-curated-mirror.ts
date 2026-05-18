@@ -41,7 +41,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { buildSerializedWorkspaceArtifact } from '../src/serialized-artifact.js';
-import type { CuratedModelId } from '@rune-langium/curated-schema';
+import type { CuratedManifest, CuratedModelId } from '@rune-langium/curated-schema';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const WORKER_ROOT = dirname(SCRIPT_DIR);
@@ -123,36 +123,19 @@ function putR2(key: string, file: string, contentType: string): void {
   }
 }
 
-interface Manifest {
-  schemaVersion: 1;
-  modelId: string;
-  version: string;
-  sha256: string;
-  sizeBytes: number;
-  generatedAt: string;
-  upstreamCommit: string;
-  upstreamRef: string;
-  archiveUrl: string;
-  history: Array<{ version: string; archiveUrl: string }>;
-  artifacts?: {
-    serializedWorkspace: {
-      artifactPath: string;
-      langiumVersion: string;
-      sha256: string;
-      sizeBytes: number;
-    };
-  };
-}
-
 function buildManifest(input: {
-  modelId: string;
+  modelId: CuratedModelId;
   version: string;
   sha256: string;
   sizeBytes: number;
   generatedAt: string;
   artifactSha256: string;
   artifactSizeBytes: number;
-}): Manifest {
+}): CuratedManifest {
+  // Sonnet RF review (P1): use the canonical CuratedManifest type from
+  // @rune-langium/curated-schema rather than a hand-rolled interface.
+  // The schema is the contract; drift would silently produce malformed
+  // manifests that the studio's Zod validation rejects at runtime.
   return {
     schemaVersion: 1,
     modelId: input.modelId,
@@ -186,8 +169,9 @@ async function main(): Promise<void> {
   const generatedAt = new Date().toISOString();
   let ok = 0;
   try {
-    for (const [modelIdStr, files] of Object.entries(FIXTURES)) {
+    for (const modelIdStr of Object.keys(FIXTURES)) {
       const modelId = modelIdStr as CuratedModelId;
+      const files = FIXTURES[modelId];
       const workdir = join(tmp, modelId);
       execFileSync('mkdir', ['-p', workdir]);
 

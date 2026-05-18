@@ -360,7 +360,18 @@ function StructureFlowInner({
         // `Trade::buyer::Party` and would not match the explorer / inspector
         // selection contract). Falls back to `node.id` when `data.id` is
         // missing so the click still produces a write.
+        //
+        // Codex P1 review: skip clicks on synthetic wrapper nodes
+        // (`structureBase` — the GroupContainerNode renderer for base-type
+        // wraps). Their `data.id` is the synthetic wrapper key like
+        // `cdm.trade::Trade::__base::cdm.trade::TradeBase`, not a real
+        // graph node id — writing it to selectedNodeId would put the cross-
+        // pane sync into a no-such-node state. The base's actual selectable
+        // contents (header → base type, child → derived type) are accessed
+        // via clicking either of those nodes directly; the wrapper itself
+        // doesn't represent a navigable selection target.
         onNodeClick={(_, node) => {
+          if (node.type === 'structureBase') return;
           const canonicalId = (node.data as { id?: string } | undefined)?.id ?? node.id;
           onNodeSelect?.(canonicalId);
         }}
@@ -397,11 +408,15 @@ export function StructureView({
     // user gets actionable guidance instead of the generic "Select a type"
     // prompt that doesn't explain why their click didn't open anything.
     if (unsupportedSelectedType) {
+      // Copilot review: `kind` is non-optional on the prop type, so the
+      // previous `?? 'non-structural'` fallback was dead. Drop it; if a
+      // caller ever needs to omit `kind`, the right move is to relax the
+      // prop type at the same time.
       return (
         <div data-testid="structure-unsupported-kind-state">
           <p>
-            <strong>{unsupportedSelectedType.name}</strong> is a{' '}
-            <code>{unsupportedSelectedType.kind ?? 'non-structural'}</code> type and is not supported in Structure View.
+            <strong>{unsupportedSelectedType.name}</strong> is a <code>{unsupportedSelectedType.kind}</code> type and is
+            not supported in Structure View.
           </p>
           <p>Pick a Data, Choice, or Enum type from the Namespace Explorer to see its structure.</p>
         </div>

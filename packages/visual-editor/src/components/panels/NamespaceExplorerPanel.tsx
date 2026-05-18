@@ -13,7 +13,7 @@
 
 import { useState, useMemo, useCallback, useRef, memo } from 'react';
 import type { JSX, DragEvent, MouseEvent, KeyboardEvent } from 'react';
-import { ChevronRight, ChevronDown, Eye, EyeOff, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
+import { ChevronRight, ChevronDown, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
@@ -140,7 +140,12 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   expandedNamespaces,
   hiddenNodeIds,
   selectedNodeId,
-  onToggleNamespace,
+  // Copilot review: `onToggleNamespace` is intentionally unused inside the
+  // panel after the e2e-batch Eye/EyeOff button removal. The prop is kept
+  // on the public interface as a no-op pass-through so callers (currently
+  // EditorPage) don't need to thread different props for the panel vs.
+  // the Graph filter menu that still consumes the action.
+  onToggleNamespace: _onToggleNamespace,
   onExpandAll,
   onCollapseAll,
   onSelectNode,

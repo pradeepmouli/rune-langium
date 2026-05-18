@@ -833,7 +833,8 @@ button[data-navigable]:focus-visible {
 /* DataNode — structure variant ---------------------------------- */
 
 .rune-node-data--structure,
-.rune-node-choice--structure {
+.rune-node-choice--structure,
+.rune-node-enum--structure {
   /* Inherits .rune-node-data card baseline; structure layout
    * stacks the header, then a two-column body below it. */
   display: flex;
@@ -842,7 +843,11 @@ button[data-navigable]:focus-visible {
    * so dense schemas show more rows per visible viewport without scrolling.
    * Cascades down to row text, type chips, and cardinality pills. The graph
    * variant intentionally stays at --text-sm because graph nodes have fewer
-   * rows per node and benefit from larger glyphs. */
+   * rows per node and benefit from larger glyphs. Copilot review caught
+   * that .rune-node-enum--structure was missing from the selector list;
+   * with Phase 14e/A wiring Enum as an interactive root, enum nodes need
+   * the same density treatment as data/choice to avoid inconsistent row
+   * heights in the same Structure pane. */
   font-size: var(--text-xs, 0.75rem);
 }
 

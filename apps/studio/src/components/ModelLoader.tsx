@@ -6,7 +6,7 @@
  * Shows a dropdown of curated models, custom URL input, progress bar, and error display.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { getModelRegistry, createCustomModelSource } from '../services/model-registry.js';
@@ -73,6 +73,16 @@ function ProgressBar({ progress, sourceId }: { progress: LoadProgress; sourceId:
   );
 }
 
+/**
+ * After 30s, a curated-bundle chip stuck at `files.length === 0` is no
+ * longer "still loading" — likely the /api/parse round-trip failed
+ * silently (network drop, parse error swallowed upstream, broken
+ * publish with 0 files). Switch the chip from "loading…" to a stuck
+ * state so the user has feedback + can unload to retry. Sonnet RF
+ * review (P1).
+ */
+const HYDRATION_TIMEOUT_MS = 30_000;
+
 function LoadedModelBadge({ model }: { model: { source: ModelSource; files: { path: string }[] } }) {
   const unload = useModelStore((s) => s.unload);
   // The file count for curated bundles is hydrated asynchronously: the archive
@@ -82,15 +92,41 @@ function LoadedModelBadge({ model }: { model: { source: ModelSource; files: { pa
   // curated bundles (`archiveUrl` set on the source), show a loading hint
   // while files.length === 0 instead of the misleading zero. User-uploaded
   // models populate files synchronously at archive-load time, so the zero
-  // branch only fires for curated, which can't have a legitimate 0-file
-  // bundle (every published bundle has at least one .rosetta).
+  // branch only fires for curated.
   const isCurated = model.source.archiveUrl !== undefined;
-  const isHydrating = isCurated && model.files.length === 0;
-  const count = isHydrating ? 'loading…' : `${model.files.length} file${model.files.length === 1 ? '' : 's'}`;
+  const hasFiles = model.files.length > 0;
+  const isHydrating = isCurated && !hasFiles;
+
+  // Timeout escape: if the chip is still hydrating after HYDRATION_TIMEOUT_MS,
+  // treat it as a silent failure (parse error swallowed upstream, broken
+  // publish, etc.) and show actionable feedback. Without this the chip
+  // could stay "loading…" indefinitely with no way for the user to learn
+  // something went wrong. Reset when hydration completes successfully.
+  const [hasTimedOut, setHasTimedOut] = useState(false);
+  useEffect(() => {
+    if (hasFiles) {
+      if (hasTimedOut) setHasTimedOut(false);
+      return;
+    }
+    if (!isCurated) return;
+    const timer = setTimeout(() => setHasTimedOut(true), HYDRATION_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [hasFiles, isCurated, hasTimedOut]);
+
+  const count = hasFiles
+    ? `${model.files.length} file${model.files.length === 1 ? '' : 's'}`
+    : isHydrating && hasTimedOut
+      ? 'load failed — unload to retry'
+      : isHydrating
+        ? 'loading…'
+        : '0 files';
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-sm">
       <span className="font-medium">{model.source.name}</span>
-      <span className="text-muted-foreground" aria-live={isHydrating ? 'polite' : undefined}>
+      <span
+        className={`text-muted-foreground${isHydrating && hasTimedOut ? ' text-destructive' : ''}`}
+        aria-live={isHydrating ? 'polite' : undefined}
+      >
         ({count})
       </span>
       <Button

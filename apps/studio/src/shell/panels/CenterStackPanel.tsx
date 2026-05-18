@@ -162,14 +162,17 @@ export function CenterStackPanel({
                 // keeps flex-shrink working — without it overflowing children
                 // would force the pane wider than its share. `minHeight: 0`
                 // mirrors the same protection for the vertical axis.
+                //
+                // Codex P1 review: an earlier revision added
+                // `minInlineSize: 280px` when multi-pane to keep panes legible.
+                // That hard minimum × pane count clipped the rightmost panes at
+                // common laptop widths (3 panes × 280 = 840 + splitters > 800
+                // viewport). Dropped — `minWidth: 0` lets panes genuinely shrink,
+                // and the user can collapse panes via the pane-switcher pill
+                // when more space is needed for the active ones.
                 flex: `${fractions[i] ?? 1 / ordered.length} 1 0`,
                 minWidth: 0,
-                minHeight: 0,
-                // Each active pane gets a meaningful minimum so multi-pane
-                // mode (3-4 active) doesn't squash any pane below usability.
-                // 280px is the smallest width where Structure rows and the
-                // CodeMirror gutter+source both stay legible.
-                minInlineSize: ordered.length > 1 ? '280px' : undefined
+                minHeight: 0
               }}
             >
               {renderPane(pane)}
