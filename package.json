@@ -75,7 +75,7 @@
     "@changesets/cli": "^2.31.0",
     "@to-skills/cli": "^0.3.14",
     "@to-skills/vitepress": "^0.2.26",
-    "@types/node": "^25.6.2",
+    "@types/node": "^25.8.0",
     "@typescript/native-preview": "beta",
     "@vitest/coverage-v8": "^4.1.5",
     "@vitest/ui": "^4.1.5",
