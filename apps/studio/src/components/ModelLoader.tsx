@@ -75,10 +75,24 @@ function ProgressBar({ progress, sourceId }: { progress: LoadProgress; sourceId:
 
 function LoadedModelBadge({ model }: { model: { source: ModelSource; files: { path: string }[] } }) {
   const unload = useModelStore((s) => s.unload);
+  // The file count for curated bundles is hydrated asynchronously: the archive
+  // load completes (chip renders) BEFORE /api/parse round-trips back with the
+  // file list. Without this guard the chip flashes "(0 files)" then jumps to
+  // the real count once setCuratedFiles fires from App.applyParseResult. For
+  // curated bundles (`archiveUrl` set on the source), show a loading hint
+  // while files.length === 0 instead of the misleading zero. User-uploaded
+  // models populate files synchronously at archive-load time, so the zero
+  // branch only fires for curated, which can't have a legitimate 0-file
+  // bundle (every published bundle has at least one .rosetta).
+  const isCurated = model.source.archiveUrl !== undefined;
+  const isHydrating = isCurated && model.files.length === 0;
+  const count = isHydrating ? 'loading…' : `${model.files.length} file${model.files.length === 1 ? '' : 's'}`;
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-sm">
       <span className="font-medium">{model.source.name}</span>
-      <span className="text-muted-foreground">({model.files.length} files)</span>
+      <span className="text-muted-foreground" aria-live={isHydrating ? 'polite' : undefined}>
+        ({count})
+      </span>
       <Button
         variant="ghost"
         size="sm"
