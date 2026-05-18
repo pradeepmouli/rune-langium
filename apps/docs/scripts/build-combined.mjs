@@ -3,7 +3,6 @@
  * Combined build for Cloudflare Pages — produces a single tree at
  * `apps/docs/.vitepress/dist/` containing:
  *
- *   _redirects                    → SPA fallback for /rune-studio/studio/*
  *   rune-studio/                  → public subpath (www.daikonic.dev/rune-studio/)
  *     ├── <site/*>                → static landing page from `site/`
  *     ├── docs/                   → VitePress docs (base='/rune-studio/docs/')
@@ -160,11 +159,10 @@ copyDir(siteRoot, subpathDist, 'site → /rune-studio/');
 copyDir(docsRawDist, join(subpathDist, 'docs'), 'vitepress → /rune-studio/docs/');
 copyDir(studioDist, join(subpathDist, 'studio'), 'studio → /rune-studio/studio/');
 
-writeFileSync(
-  join(combinedDist, '_redirects'),
-  '/rune-studio/studio/* /rune-studio/studio/index.html 200\n'
-);
-console.log('[build-combined] Wrote _redirects with SPA fallback for /rune-studio/studio/*');
+// SPA deep-link fallback is handled by the Pages Function at
+// apps/studio/functions/rune-studio/studio/[[catchall]].ts (see that file for
+// rationale). A _redirects rule for this case triggered CF Pages' infinite-loop
+// detection and was silently ignored, so no _redirects file is written here.
 
 // Spec 019 Phase 1: pre-bundle Pages Functions to the REPO ROOT where CF Pages
 // git-integration scans for them. Plain copy of .ts source doesn't work
