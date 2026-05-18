@@ -393,8 +393,7 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       data: { ...n, variant: 'structure', instancePath: instanceAncestorPath },
       parentId: parentInstanceId,
       extent: parentInstanceId ? 'parent' : undefined,
-      width: sz.width,
-      height: sz.height
+      style: { width: sz.width, height: sz.height }
     } as Node);
 
     const nextAncestors = new Set(ancestors);
