@@ -90,12 +90,15 @@ describe('ChoiceNode — structure variant (Finding 1)', () => {
     expect(cards.length).toBe(0);
   });
 
-  it('renders a row handle per arm (keyed by typeName)', () => {
+  it('does NOT emit per-arm source Handles (structure variant has no edges; Finding F)', () => {
+    // The structure layout emits zero edges and nodesConnectable=false; mounting
+    // Handles adds wasted DOM nodes, RF handle subscriptions, and a11y noise.
     renderInFlow(
       <ChoiceNode data={structureData as any} selected={false} id="cdm.settlement::SettlementTerms" type="choice" />
     );
-    expect(screen.getByTestId('choice-arm-handle-CashSettlement')).toBeInTheDocument();
-    expect(screen.getByTestId('choice-arm-handle-PhysicalSettlement')).toBeInTheDocument();
+    expect(screen.queryByTestId('choice-arm-handle-CashSettlement')).toBeNull();
+    expect(screen.queryByTestId('choice-arm-handle-PhysicalSettlement')).toBeNull();
+    expect(document.querySelectorAll('[data-handlepos]').length).toBe(0);
   });
 
   it('does NOT fall through to graph-variant rendering (no data-summary attribute)', () => {

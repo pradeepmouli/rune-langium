@@ -45,7 +45,6 @@ export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
     const values = data.values as ReadonlyArray<string>;
     return (
       <div className={`rune-node rune-node-enum rune-node-enum--structure${selected ? ' rune-node-selected' : ''}`}>
-        <Handle type="target" position={handles.target} />
         <div className="rune-node-header">
           <NodeKindBadge kind="enum" />
           <span>{data.name}</span>
@@ -57,7 +56,6 @@ export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
             </div>
           ))}
         </div>
-        <Handle type="source" position={handles.source} />
       </div>
     );
   }

@@ -179,8 +179,9 @@ describe('layoutStructureGraph — expansion as child', () => {
     // right edge — equivalently, its left edge is at parent.width - child.width.
     // Asserting the property, not the COL_WIDTH constant, keeps the test
     // independent of layout tuning.
-    const tradeWidth = trade.width ?? 0;
-    const economicsWidth = economics.width ?? 0;
+    // (Finding G: dimensions are now on style.width/height per RF12 contract.)
+    const tradeWidth = (trade.style?.width as number | undefined) ?? 0;
+    const economicsWidth = (economics.style?.width as number | undefined) ?? 0;
     const economicsX = (economics.position as { x: number; y: number }).x;
     expect(economicsX).toBeGreaterThanOrEqual(tradeWidth - economicsWidth);
   });
@@ -297,14 +298,15 @@ describe('layoutStructureGraph — sibling vertical alignment', () => {
 
     const partyY = (party.position as { x: number; y: number }).y;
     const counterpartyY = (counterparty.position as { x: number; y: number }).y;
-    const partyHeight = party.height ?? 0;
+    // (Finding G: dimensions are now on style.width/height per RF12 contract.)
+    const partyHeight = (party.style?.height as number | undefined) ?? 0;
 
     // Determine sibling order by y so the assertion is robust to insertion
     // order, then assert non-overlap.
     const [first, second, firstHeight] =
       partyY <= counterpartyY
         ? [partyY, counterpartyY, partyHeight]
-        : [counterpartyY, partyY, counterparty.height ?? 0];
+        : [counterpartyY, partyY, (counterparty.style?.height as number | undefined) ?? 0];
     expect(second).toBeGreaterThanOrEqual(first + firstHeight);
   });
 });
@@ -967,9 +969,10 @@ describe('layoutStructureGraph — base container with expanded inherited row', 
     // independent of layout tuning.
     const partyX = (party.position as { x: number; y: number }).x;
     const tradeX = (trade.position as { x: number; y: number }).x;
-    const tradeWidth = trade.width ?? 0;
-    const partyWidth = party.width ?? 0;
-    const baseWidth = base.width ?? 0;
+    // (Finding G: dimensions are now on style.width/height per RF12 contract.)
+    const tradeWidth = (trade.style?.width as number | undefined) ?? 0;
+    const partyWidth = (party.style?.width as number | undefined) ?? 0;
+    const baseWidth = (base.style?.width as number | undefined) ?? 0;
     // Right column starts past the derived child's right edge.
     expect(partyX).toBeGreaterThanOrEqual(tradeX + tradeWidth);
     // And the expansion stays within the base container.
@@ -1158,8 +1161,9 @@ describe('layoutStructureGraph — late-row expansion sizing', () => {
     const parent = nodes.find((n) => (n.data as { id?: string }).id === 'Parent')!;
     const tall = nodes.find((n) => (n.data as { id?: string }).id === 'Tall')!;
     const tallY = (tall.position as { x: number; y: number }).y;
-    const tallHeight = tall.height ?? 0;
-    const parentHeight = parent.height ?? 0;
+    // (Finding G: dimensions are now on style.width/height per RF12 contract.)
+    const tallHeight = (tall.style?.height as number | undefined) ?? 0;
+    const parentHeight = (parent.style?.height as number | undefined) ?? 0;
     // Parent must enclose the child's bottom edge — would fail before the
     // sizing pass was taught to simulate placement's max(rowTop, yCursor).
     expect(parentHeight).toBeGreaterThanOrEqual(tallY + tallHeight);
@@ -1359,12 +1363,76 @@ describe('layoutStructureGraph — per-instance sizing (Phase 14e successor to C
     // The directly-placed B carries an expansion to its own A instance (which
     // itself has no expansions), so its sized envelope is larger than the
     // cyclic B (which has no expansions at all).
-    const bInsideAHeight = bInsideA!.height ?? 0;
-    const bDirectHeight = bDirect!.height ?? 0;
-    const bInsideAWidth = bInsideA!.width ?? 0;
-    const bDirectWidth = bDirect!.width ?? 0;
+    // (Finding G: dimensions are now on style.width/height per RF12 contract.)
+    const bInsideAHeight = (bInsideA!.style?.height as number | undefined) ?? 0;
+    const bDirectHeight = (bDirect!.style?.height as number | undefined) ?? 0;
+    const bInsideAWidth = (bInsideA!.style?.width as number | undefined) ?? 0;
+    const bDirectWidth = (bDirect!.style?.width as number | undefined) ?? 0;
 
     expect(bDirectHeight).toBeGreaterThan(bInsideAHeight);
     expect(bDirectWidth).toBeGreaterThan(bInsideAWidth);
+  });
+});
+
+describe('layoutStructureGraph — node dimensions on style (Finding G)', () => {
+  // RF12 contract: `node.measured` holds post-mount dimensions. Pre-mount,
+  // RF12 reads `initialWidth/initialHeight` for utilities like `getNodesBounds`
+  // and static `fitView`. `style.width/height` is the CSS render hint that
+  // drives the actual DOM size. We emit dimensions on BOTH `initialWidth/Height`
+  // AND `style.width/height` so all consumers see consistent values:
+  //   - exported `layoutStructureGraph()` callers using RF helpers pre-mount
+  //     → read `initialWidth/Height`
+  //   - browser CSS / auto-measure → reads `style.width/height`
+  // Top-level `node.width/height` are now output-only (populated by RF after
+  // measure), so we deliberately leave them unset.
+  it('emits initialWidth/Height + style.width/height (not top-level width/height) on each node', () => {
+    const input: StructureGraphInput = {
+      rootNodeId: 'Trade',
+      nodes: new Map([
+        [
+          'Trade',
+          {
+            id: 'Trade',
+            kind: 'data',
+            name: 'Trade',
+            namespaceUri: 'cdm.trade',
+            extendsName: undefined,
+            extendsNodeId: undefined,
+            rows: [
+              {
+                attrName: 'tradeDate',
+                typeName: 'date',
+                typeKind: 'BasicType',
+                cardinality: '0..1',
+                isOptional: true,
+                isInherited: false
+              }
+            ],
+            expansions: new Map()
+          }
+        ]
+      ])
+    };
+
+    const { nodes } = layoutStructureGraph(input);
+    expect(nodes).toHaveLength(1);
+    const node = nodes[0];
+
+    // Dimensions must be on style (CSS render hint).
+    expect(typeof node.style?.width).toBe('number');
+    expect(typeof node.style?.height).toBe('number');
+    expect((node.style?.width as number) > 0).toBe(true);
+    expect((node.style?.height as number) > 0).toBe(true);
+
+    // Dimensions must ALSO be on initialWidth/initialHeight so RF12's pre-mount
+    // dimension helpers (getNodesBounds, static fitView) see the right size.
+    // Codex P2 on PR #197: omitting these made layoutStructureGraph callers see
+    // zero-sized nodes when using RF utilities before the nodes mount.
+    expect((node as { initialWidth?: number }).initialWidth).toBe(node.style?.width);
+    expect((node as { initialHeight?: number }).initialHeight).toBe(node.style?.height);
+
+    // Top-level width/height stay unset — RF12 populates them via measure on mount.
+    expect(node.width).toBeUndefined();
+    expect(node.height).toBeUndefined();
   });
 });

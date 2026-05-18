@@ -9,7 +9,7 @@
  */
 
 import { memo, useCallback } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import type { AnyGraphNode } from '../../types.js';
@@ -125,7 +125,6 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
 
     return (
       <div className={`rune-node rune-node-data rune-node-data--structure${selected ? ' rune-node-selected' : ''}`}>
-        <Handle type="target" position={handles.target} />
         <div className="rune-node-header">
           <NodeKindBadge kind="data" />
           <span>{data.name}</span>
@@ -199,20 +198,13 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
                   ) : (
                     <span className="rune-cell-card">{row.cardinality}</span>
                   )}
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id={row.attrName}
-                    className="rune-row-handle"
-                    data-testid={`row-handle-${row.attrName}`}
-                  />
+                  {/* structure variant: no Handle — layout emits zero edges; nodesConnectable=false */}
                 </div>
               );
             })}
           </div>
           <div className="rune-node-children-slot" data-testid="data-node-children" />
         </div>
-        <Handle type="source" position={handles.source} />
       </div>
     );
   }

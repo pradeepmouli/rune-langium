@@ -131,6 +131,7 @@ function StructureFlowInner({
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
+        onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
       />
     </div>
