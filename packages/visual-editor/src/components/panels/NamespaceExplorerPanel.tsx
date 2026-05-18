@@ -61,8 +61,8 @@ export interface NamespaceExplorerPanelProps {
    */
   onSetDragSource?: (payload: TypeRefPayload) => void;
   /**
-   * @reserved Previously used for double-click undo-on-navigate; no longer
-   * consumed internally after Phase 13 redesign (row body is single-purpose).
+   * Previously used for double-click undo-on-navigate; no longer consumed
+   * internally after Phase 13 redesign (row body is single-purpose).
    * Retained on the interface for back-compat with EditorPage pass-through.
    */
   onClearDragSource?: () => void;
