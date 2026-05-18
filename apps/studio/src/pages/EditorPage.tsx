@@ -1435,15 +1435,27 @@ export function EditorPage({
   // Strategy (approach b from spec §3.4):
   //   1. Derive the file URI for the currently focused type from its nodeId.
   //   2. Retrieve LSP diagnostics for that URI from the diagnostics store.
-  //   3. Precompute a lineOffsets array from the file's source text so that
-  //      LSP line/character pairs can be converted to character offsets in O(log n)
-  //      via binary search (lineOffsets[line] + character = offset).
+  //   3. Precompute a `lineOffsets` array from the file's source text where
+  //      `lineOffsets[line] = character offset of the start of that line`.
+  //      Converting an LSP line/character pair to a character offset is then
+  //      O(1) direct indexing: `lineOffsets[line] + character`. (The reverse
+  //      conversion — offset → line — would need binary search; the previous
+  //      comment claimed binary search here in error. Copilot caught it.)
   //   4. Map each LspDiagnostic to a RangeDiagnostic and pass the resulting
   //      array into StructureView. DataNode calls useDiagnosticsForRange per row.
   //
   // Keeping the conversion here (rather than in a hook or in DataNode) lets
   // the memoized lineOffsets array amortize the cost across all rows in one
   // render pass instead of recomputing it once per row.
+  //
+  // **astRange-threading gap (deferred PR #207 follow-up):** in studio-created
+  // rows today, `StructureRow.astRange` is `undefined` because
+  // `graphNodesToAdapterDocument` forwards attributes from
+  // `stripAdditionalAstFields` (which strips `$cstNode`) and never derives an
+  // offset range. The wiring on this side (RangeDiagnostic[] → StructureView →
+  // useDiagnosticsForRange) is correct and exercised by synthetic tests; the
+  // severity marker just won't fire in production until upstream threading
+  // lands.
   // ---------------------------------------------------------------------------
 
   // Resolve file path for the focused structure node (ns::TypeName format).
@@ -1459,7 +1471,8 @@ export function EditorPage({
   }, [structureFilePath, files]);
 
   // Precomputed lineOffsets: lineOffsets[i] = character offset of the start
-  // of line i in structureFileContent. Binary-searchable for O(log n) conversion.
+  // of line i in structureFileContent. Direct-indexed (O(1)) for the
+  // line/character → offset conversion in `structureDiagnostics` below.
   const structureLineOffsets = useMemo<readonly number[]>(() => {
     if (!structureFileContent) return [];
     const offsets: number[] = [0];
@@ -1486,13 +1499,18 @@ export function EditorPage({
       return EMPTY_RANGE_DIAGNOSTICS;
     }
     const result: RangeDiagnostic[] = [];
+    const lineCount = structureLineOffsets.length;
     for (const d of structureLspDiagnostics) {
       const startLine = d.range.start.line;
       const endLine = d.range.end.line;
-      const startLineOffset = startLine < structureLineOffsets.length ? structureLineOffsets[startLine]! : 0;
-      const endLineOffset = endLine < structureLineOffsets.length ? structureLineOffsets[endLine]! : 0;
-      const start = startLineOffset + d.range.start.character;
-      const end = endLineOffset + d.range.end.character;
+      // Skip diagnostics whose line indices are out of bounds for the current
+      // source — this happens when source has changed but the diagnostic store
+      // hasn't caught up. Previously falling back to offset 0 would map stale
+      // diagnostics to the start of the file and produce false-positive markers
+      // on completely unrelated rows. Copilot caught this on PR #207.
+      if (startLine >= lineCount || endLine >= lineCount) continue;
+      const start = structureLineOffsets[startLine]! + d.range.start.character;
+      const end = structureLineOffsets[endLine]! + d.range.end.character;
       if (end > start) {
         result.push({ start, end, severity: d.severity ?? 3, message: d.message });
       }

@@ -18,7 +18,7 @@ import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
-import { useDiagnosticsForRange } from '../../hooks/useDiagnosticsForRange.js';
+import { useDiagnosticsForRange, diagnosticSeverityClass } from '../../hooks/useDiagnosticsForRange.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ interface StructureNodeData extends StructureDataNode {
   readonly instancePath?: ReadonlyArray<string>;
   /**
    * Spec §8 / §3.3 — navigate-to-enum callback. Injected by StructureView
-   * alongside cellComponents. Rows with `typeKind === 'enum'` render an ↗
+   * alongside cellComponents. Rows with `typeKind === 'Enum'` render an ↗
    * button that fires this with the enum's canonical typeId (ns::Name).
    */
   readonly onNavigateToEnumType?: (typeId: string) => void;
@@ -71,6 +71,15 @@ interface StructureNodeData extends StructureDataNode {
    * Spec §3.4 — pre-converted LSP diagnostics for the focused file. Ranges
    * are character offsets. Each row checks for overlap via useDiagnosticsForRange
    * and applies the appropriate severity CSS class to its left edge.
+   *
+   * **NOTE — astRange-threading gap:** in studio-created rows today,
+   * `StructureRow.astRange` is `undefined` because `graphNodesToAdapterDocument`
+   * forwards attributes from `stripAdditionalAstFields`, which strips
+   * `$cstNode` and never derives an offset range. The hook returns
+   * `undefined` in production so the severity class never applies. Tests
+   * inject synthetic astRange values to verify the end-to-end wiring,
+   * which is real and ready to fire once the upstream threads astRange.
+   * Tracking: this is the deferred half of spec §3.4 / spec 020 PR #207.
    */
   readonly structureDiagnostics?: readonly RangeDiagnostic[];
 }
@@ -87,13 +96,6 @@ function isRowExpandable(typeKind: StructureRow['typeKind']): boolean {
 
 function isStructureData(d: unknown): d is StructureNodeData {
   return typeof d === 'object' && d !== null && (d as { variant?: unknown }).variant === 'structure';
-}
-
-/** Maps RangeDiagnostic severity to the corresponding CSS modifier class. */
-function diagnosticSeverityClass(severity: 1 | 2 | 3 | 4): string {
-  if (severity === 1) return 'rune-node-row--diagnostic-error';
-  if (severity === 2) return 'rune-node-row--diagnostic-warn';
-  return 'rune-node-row--diagnostic-info';
 }
 
 /**

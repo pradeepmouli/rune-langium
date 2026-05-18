@@ -234,7 +234,7 @@ export interface StructureViewProps {
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
   /**
    * Spec §8 / §3.3 — navigate-to-enum callback. When provided, rows whose
-   * `typeKind === 'enum'` (and arms in ChoiceNode) render an ↗ inspect button
+   * `typeKind === 'Enum'` (and arms in ChoiceNode) render an ↗ inspect button
    * that fires this callback with the enum's canonical type id (ns::Name
    * format). EditorPage wires this to set `focusedTypeId` on the structure
    * view, drilling into the enum's values.
@@ -244,8 +244,14 @@ export interface StructureViewProps {
    * Spec §3.4 — pre-converted LSP diagnostics for the focused file. Ranges
    * must be character offsets (not line/character), pre-converted by EditorPage
    * via a memoized lineOffsets array. DataNode uses `useDiagnosticsForRange`
-   * to tint the left edge of rows with overlapping diagnostics.
-   * Pass a stable empty array when no diagnostics are available.
+   * to tint the left edge of rows with overlapping diagnostics. Pass a stable
+   * empty array when no diagnostics are available.
+   *
+   * **astRange-threading gap:** in production today, `StructureRow.astRange`
+   * is `undefined` because `graphNodesToAdapterDocument` doesn't derive it
+   * from `$cstNode` before strip. The end-to-end wiring is real and tested
+   * via synthetic astRange fixtures, but the severity class won't apply in
+   * production until the upstream threading lands (deferred follow-up).
    */
   readonly structureDiagnostics?: readonly RangeDiagnostic[];
 }

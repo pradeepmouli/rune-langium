@@ -71,3 +71,15 @@ export function useDiagnosticsForRange(
     return best;
   }, [astRange, diagnostics]);
 }
+
+/**
+ * Maps `RangeDiagnostic.severity` (LSP: 1=error, 2=warn, 3=info, 4=hint) to
+ * the corresponding `rune-node-row--diagnostic-*` CSS modifier class.
+ * Centralized so DataNode / ChoiceNode / future row consumers share one
+ * mapping and stay consistent if severities or class names change.
+ */
+export function diagnosticSeverityClass(severity: 1 | 2 | 3 | 4): string {
+  if (severity === 1) return 'rune-node-row--diagnostic-error';
+  if (severity === 2) return 'rune-node-row--diagnostic-warn';
+  return 'rune-node-row--diagnostic-info';
+}

@@ -33,7 +33,6 @@ import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
-import { useDiagnosticsForRange } from '../../hooks/useDiagnosticsForRange.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
 
 // ---------------------------------------------------------------------------
@@ -97,21 +96,19 @@ function armKindToRowKind(armKind: StructureChoiceArm['typeKind']): StructureRow
   return armKind === 'Builtin' ? 'BasicType' : armKind;
 }
 
-/** Maps RangeDiagnostic severity to the CSS modifier class (same as DataNode). */
-function diagnosticSeverityClass(severity: 1 | 2 | 3 | 4): string {
-  if (severity === 1) return 'rune-node-row--diagnostic-error';
-  if (severity === 2) return 'rune-node-row--diagnostic-warn';
-  return 'rune-node-row--diagnostic-info';
-}
-
 /**
- * Per-arm sub-component for ChoiceNode's structure variant. Extracted so that
- * `useDiagnosticsForRange` — a hook — can be called once per arm inside a
- * proper function component, which hooks rules require.
+ * Per-arm sub-component for ChoiceNode's structure variant. Kept as a
+ * dedicated function component so any per-arm hook (e.g. future
+ * useDiagnosticsForRange when arms carry astRange) can be added without
+ * violating hooks rules.
  *
- * Note: `StructureChoiceArm` does not carry `astRange` today, so the diagnostic
- * hook always returns `undefined`. The sub-component accepts the diagnostics
- * array for interface symmetry with DataNode (future arm astRange support).
+ * **astRange-threading gap:** `StructureChoiceArm` does NOT carry an
+ * astRange field today, so this row deliberately does NOT call
+ * `useDiagnosticsForRange` — the result would always be `undefined` and
+ * the diagnostic class would never apply (Copilot review caught this on
+ * PR #207). When arms gain astRange (mirroring the same fix DataNode rows
+ * need — see DataNode.tsx comment on `structureDiagnostics`), reintroduce
+ * the hook call here.
  */
 interface StructureChoiceArmRowProps {
   arm: StructureChoiceArm;
@@ -126,7 +123,6 @@ interface StructureChoiceArmRowProps {
   }>;
   nodeId: string;
   onNavigateToEnumType?: (typeId: string) => void;
-  structureDiagnostics: readonly RangeDiagnostic[];
 }
 
 function StructureChoiceArmRow({
@@ -136,16 +132,12 @@ function StructureChoiceArmRow({
   handleToggle,
   TypeCell,
   nodeId,
-  onNavigateToEnumType,
-  structureDiagnostics
+  onNavigateToEnumType
 }: StructureChoiceArmRowProps): React.ReactElement {
-  // StructureChoiceArm has no astRange yet; hook returns undefined.
-  const diagnostic = useDiagnosticsForRange(undefined, structureDiagnostics);
   const isEnum = arm.typeKind === 'Enum';
   const isUnresolved = arm.typeKind === 'Unresolved';
 
-  let rowClass = `rune-node-row${expandable ? ' has-expansion' : ''}`;
-  if (diagnostic) rowClass += ` ${diagnosticSeverityClass(diagnostic.severity)}`;
+  const rowClass = `rune-node-row${expandable ? ' has-expansion' : ''}`;
 
   const unresolvedTitle = `Type ${arm.typeName} not found in this namespace or its imports`;
 
@@ -228,16 +220,12 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
   // -------------------------------------------------------------------------
   if (isStructureChoice(data)) {
     const options = data.options as ReadonlyArray<StructureChoiceArm>;
-    const {
-      cellComponents,
-      expansionMap,
-      onToggleExpansion,
-      instancePath,
-      onNavigateToEnumType,
-      structureDiagnostics
-    } = data;
+    const { cellComponents, expansionMap, onToggleExpansion, instancePath, onNavigateToEnumType } = data;
     const TypeCell = cellComponents?.type;
-    const activeDiagnostics: readonly RangeDiagnostic[] = structureDiagnostics ?? [];
+    // `structureDiagnostics` is intentionally NOT destructured here — arms have
+    // no astRange today so we don't pass diagnostics through to the row (would
+    // be a no-op). See `StructureChoiceArmRow`'s docstring for the threading
+    // gap; reintroduce both ends when arms gain astRange.
     const ownerNamespaceUri = data.namespaceUri;
     const ownerTypeName = data.name;
     // Same self-inclusive instancePath convention as DataNode: ancestors + self.
@@ -281,7 +269,6 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
                 TypeCell={TypeCell}
                 nodeId={data.id}
                 onNavigateToEnumType={onNavigateToEnumType}
-                structureDiagnostics={activeDiagnostics}
               />
             );
           })}
