@@ -24,11 +24,12 @@
  *   5. Graph-variant ChoiceNode (pre-existing behavior) is unaffected.
  */
 
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { ChoiceNode } from '../../../src/components/nodes/ChoiceNode.js';
-import type { StructureChoiceArm } from '../../../src/types/structure-view.js';
+import type { StructureChoiceArm, StructureExpansionKey, StructureRow } from '../../../src/types/structure-view.js';
+import { expansionKey } from '../../../src/types/structure-view.js';
 
 // ---------------------------------------------------------------------------
 // Structure-variant fixture — mirrors shape emitted by layoutStructureGraph
@@ -55,6 +56,7 @@ const structureData = {
   name: 'SettlementTerms',
   namespaceUri: 'cdm.settlement',
   options,
+  expansions: new Map(),
   variant: 'structure'
 };
 
@@ -197,5 +199,280 @@ describe('ChoiceNode — graph variant (pre-existing behavior)', () => {
     // Use getAllByText since the same text may appear multiple times in some fixtures.
     expect(screen.getAllByText('CashSettlement').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('PhysicalSettlement').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 14e/B — Choice arm parity with Data row (chevron + TypePickerCell)
+// ---------------------------------------------------------------------------
+
+describe('ChoiceNode — structure variant — arm expansion chevron (Phase 14e/B)', () => {
+  // Mixed fixture: two expandable arms (Data, Choice), three terminal arms
+  // (Enum, Builtin, Unresolved). Chevron must show only for the first two.
+  const mixedArms: StructureChoiceArm[] = [
+    { typeName: 'CashSettlement', typeKind: 'Data', targetNodeId: 'cdm.settlement::CashSettlement' },
+    { typeName: 'PhysicalSettlement', typeKind: 'Choice', targetNodeId: 'cdm.settlement::PhysicalSettlement' },
+    { typeName: 'DayCount', typeKind: 'Enum', targetNodeId: 'cdm.base::DayCount' },
+    { typeName: 'string', typeKind: 'Builtin' },
+    { typeName: 'MissingType', typeKind: 'Unresolved' }
+  ];
+
+  function mixedData(extra?: object) {
+    return {
+      id: 'cdm.settlement::SettlementMethod',
+      kind: 'choice',
+      name: 'SettlementMethod',
+      namespaceUri: 'cdm.settlement',
+      options: mixedArms,
+      expansions: new Map(),
+      variant: 'structure',
+      ...extra
+    };
+  }
+
+  it('renders an expand button for Data and Choice arms; omits it for Enum / Builtin / Unresolved', () => {
+    renderInFlow(
+      <ChoiceNode data={mixedData() as any} selected={false} id="cdm.settlement::SettlementMethod" type="choice" />
+    );
+    expect(screen.getByTestId('choice-arm-expand-CashSettlement')).toBeInTheDocument(); // Data → chevron
+    expect(screen.getByTestId('choice-arm-expand-PhysicalSettlement')).toBeInTheDocument(); // Choice → chevron
+    expect(screen.queryByTestId('choice-arm-expand-DayCount')).toBeNull(); // Enum → no chevron
+    expect(screen.queryByTestId('choice-arm-expand-string')).toBeNull(); // Builtin → no chevron
+    expect(screen.queryByTestId('choice-arm-expand-MissingType')).toBeNull(); // Unresolved → no chevron
+  });
+
+  it('fires onToggleExpansion with the correct StructureExpansionKey shape on click', () => {
+    const onToggle = vi.fn();
+    renderInFlow(
+      <ChoiceNode
+        data={mixedData({ onToggleExpansion: onToggle }) as any}
+        selected={false}
+        id="cdm.settlement::SettlementMethod"
+        type="choice"
+      />
+    );
+    fireEvent.click(screen.getByTestId('choice-arm-expand-CashSettlement'));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    const calledWith = onToggle.mock.calls[0][0] as StructureExpansionKey;
+    // Arm expansion key contract: arm.typeName fills attrName slot.
+    // For the root Choice (no data.instancePath), ownerInstancePath = [self id].
+    expect(calledWith).toEqual({
+      namespaceUri: 'cdm.settlement',
+      typeId: 'SettlementMethod',
+      attrName: 'CashSettlement',
+      instancePath: ['cdm.settlement::SettlementMethod']
+    });
+  });
+
+  it('aria-expanded mirrors the expansionMap state (collapsed → false, expanded → true)', () => {
+    const key = expansionKey({
+      namespaceUri: 'cdm.settlement',
+      typeId: 'SettlementMethod',
+      attrName: 'CashSettlement',
+      instancePath: ['cdm.settlement::SettlementMethod']
+    });
+    const expanded = new Map<string, boolean>([[key, true]]);
+    const { rerender } = renderInFlow(
+      <ChoiceNode data={mixedData() as any} selected={false} id="cdm.settlement::SettlementMethod" type="choice" />
+    );
+    expect(screen.getByTestId('choice-arm-expand-CashSettlement')).toHaveAttribute('aria-expanded', 'false');
+    rerender(
+      <ReactFlowProvider>
+        <ChoiceNode
+          data={mixedData({ expansionMap: expanded }) as any}
+          selected={false}
+          id="cdm.settlement::SettlementMethod"
+          type="choice"
+        />
+      </ReactFlowProvider>
+    );
+    expect(screen.getByTestId('choice-arm-expand-CashSettlement')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('aria-label describes the action (expand vs collapse)', () => {
+    const key = expansionKey({
+      namespaceUri: 'cdm.settlement',
+      typeId: 'SettlementMethod',
+      attrName: 'CashSettlement',
+      instancePath: ['cdm.settlement::SettlementMethod']
+    });
+    const expanded = new Map<string, boolean>([[key, true]]);
+    const { rerender } = renderInFlow(
+      <ChoiceNode data={mixedData() as any} selected={false} id="cdm.settlement::SettlementMethod" type="choice" />
+    );
+    expect(screen.getByTestId('choice-arm-expand-CashSettlement')).toHaveAttribute(
+      'aria-label',
+      'Expand CashSettlement'
+    );
+    rerender(
+      <ReactFlowProvider>
+        <ChoiceNode
+          data={mixedData({ expansionMap: expanded }) as any}
+          selected={false}
+          id="cdm.settlement::SettlementMethod"
+          type="choice"
+        />
+      </ReactFlowProvider>
+    );
+    expect(screen.getByTestId('choice-arm-expand-CashSettlement')).toHaveAttribute(
+      'aria-label',
+      'Collapse CashSettlement'
+    );
+  });
+
+  it('does not call onToggleExpansion when callback is absent (safe no-op)', () => {
+    renderInFlow(
+      <ChoiceNode data={mixedData() as any} selected={false} id="cdm.settlement::SettlementMethod" type="choice" />
+    );
+    expect(() => fireEvent.click(screen.getByTestId('choice-arm-expand-CashSettlement'))).not.toThrow();
+  });
+});
+
+describe('ChoiceNode — structure variant — TypePickerCell injection on arm rows (Phase 14e/B)', () => {
+  const dataArms: StructureChoiceArm[] = [
+    { typeName: 'CashSettlement', typeKind: 'Data', targetNodeId: 'cdm.settlement::CashSettlement' },
+    { typeName: 'string', typeKind: 'Builtin' }
+  ];
+  const dataWithArms = {
+    id: 'cdm.settlement::SettlementMethod',
+    kind: 'choice',
+    name: 'SettlementMethod',
+    namespaceUri: 'cdm.settlement',
+    options: dataArms,
+    expansions: new Map(),
+    variant: 'structure'
+  };
+
+  it('renders TypePickerCell on every arm row when cellComponents.type is injected', () => {
+    const TypeCellSpy = ({ typeName, attrName }: { typeName: string; attrName: string }) => (
+      <span data-testid={`type-cell-${attrName}`}>{typeName}</span>
+    );
+    renderInFlow(
+      <ChoiceNode
+        data={{ ...dataWithArms, cellComponents: { type: TypeCellSpy } } as any}
+        selected={false}
+        id="cdm.settlement::SettlementMethod"
+        type="choice"
+      />
+    );
+    expect(screen.getByTestId('type-cell-CashSettlement')).toBeInTheDocument();
+    expect(screen.getByTestId('type-cell-string')).toBeInTheDocument();
+  });
+
+  it('TypeCell receives canonical data.id (NOT the React Flow wrapper id) and the arm typeName as attrName', () => {
+    const captured: Array<{ nodeId: string; attrName: string; typeKind: StructureRow['typeKind'] }> = [];
+    const TypeCellSpy = ({
+      nodeId,
+      attrName,
+      typeKind
+    }: {
+      nodeId: string;
+      typeName: string;
+      typeKind: StructureRow['typeKind'];
+      attrName: string;
+    }) => {
+      captured.push({ nodeId, attrName, typeKind });
+      return <span />;
+    };
+    const wrapperId = 'Trade::primary::cdm.settlement::SettlementMethod'; // RF instance id
+    renderInFlow(
+      <ChoiceNode
+        data={{ ...dataWithArms, cellComponents: { type: TypeCellSpy } } as any}
+        selected={false}
+        id={wrapperId}
+        type="choice"
+      />
+    );
+    expect(captured).toHaveLength(2);
+    for (const c of captured) {
+      // Canonical id is the data.id, never the wrapper id.
+      expect(c.nodeId).toBe('cdm.settlement::SettlementMethod');
+      expect(c.nodeId).not.toBe(wrapperId);
+    }
+    // typeKind round-trips: Builtin arm reads as BasicType for the cell.
+    const stringArm = captured.find((c) => c.attrName === 'string');
+    expect(stringArm?.typeKind).toBe('BasicType');
+    const dataArm = captured.find((c) => c.attrName === 'CashSettlement');
+    expect(dataArm?.typeKind).toBe('Data');
+  });
+
+  it('falls back to the type chip when cellComponents.type is absent', () => {
+    renderInFlow(
+      <ChoiceNode data={dataWithArms as any} selected={false} id="cdm.settlement::SettlementMethod" type="choice" />
+    );
+    const chips = document.querySelectorAll('.rune-cell-type-chip');
+    expect(chips.length).toBe(dataArms.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 14e/B — Codex P2 silent-drop regression (PR #196)
+//
+// When TypePickerCell is injected as cellComponents.type on ChoiceNode,
+// the cell must receive:
+//   - nodeId  = canonical Choice node id (data.id), NOT the React Flow wrapper id
+//   - attrName = arm.typeName  (= the arm's current typeCall.$refText)
+//
+// The store's updateAttributeType action (after the fix) uses these to locate
+// and update the correct choiceOptions arm. This test asserts that ChoiceNode
+// passes the correct props to the injected cell — the store-level fix is covered
+// by editor-store-actions.test.ts.
+// ---------------------------------------------------------------------------
+
+describe('ChoiceNode — structure variant — TypePickerCell receives choiceId + armTypeName (Codex P2 regression)', () => {
+  const arms: StructureChoiceArm[] = [
+    { typeName: 'CashPayment', typeKind: 'Data', targetNodeId: 'payment::CashPayment' },
+    { typeName: 'BankTransfer', typeKind: 'Data', targetNodeId: 'payment::BankTransfer' }
+  ];
+
+  const choiceNodeData = {
+    id: 'payment::PaymentMethod',
+    kind: 'choice',
+    name: 'PaymentMethod',
+    namespaceUri: 'payment',
+    options: arms,
+    expansions: new Map(),
+    variant: 'structure'
+  };
+
+  it('passes canonical choiceId (data.id) and arm.typeName as attrName to each injected TypeCell', () => {
+    const captured: Array<{ nodeId: string; attrName: string }> = [];
+    const TypeCellSpy = ({
+      nodeId,
+      attrName
+    }: {
+      typeName: string;
+      typeKind: StructureRow['typeKind'];
+      nodeId: string;
+      attrName: string;
+    }) => {
+      captured.push({ nodeId, attrName });
+      return <span data-testid={`type-cell-${attrName}`} />;
+    };
+
+    const wrapperId = 'wrapper::instance::payment::PaymentMethod'; // React Flow wraps canonical id
+    renderInFlow(
+      <ChoiceNode
+        data={{ ...choiceNodeData, cellComponents: { type: TypeCellSpy } } as any}
+        selected={false}
+        id={wrapperId}
+        type="choice"
+      />
+    );
+
+    expect(captured).toHaveLength(arms.length);
+
+    // Every arm must use data.id (canonical), not the RF wrapper id.
+    for (const c of captured) {
+      expect(c.nodeId).toBe('payment::PaymentMethod');
+      expect(c.nodeId).not.toBe(wrapperId);
+    }
+
+    // attrName must equal the arm's typeName — this is the key the store uses
+    // to find and update the correct choiceOptions arm.
+    const cashCapture = captured.find((c) => c.attrName === 'CashPayment');
+    expect(cashCapture).toBeDefined();
+    const bankCapture = captured.find((c) => c.attrName === 'BankTransfer');
+    expect(bankCapture).toBeDefined();
   });
 });

@@ -95,11 +95,12 @@ function StructureFlowInner({
     // 'data'-typed nodes so that DataNode's structure variant renders editable
     // cells and the per-row expand/collapse chevron (Finding 1).
     //
-    // 'choice' nodes (ChoiceNode structure variant) use StructureChoiceArm arms
-    // which carry only typeName/typeKind — no attrName or cardinality — so they
-    // don't participate in the name/type/card cellComponents contract. Choice
-    // arms also have no per-arm expansion (StructureChoiceNode has no
-    // `expansions` map), so onToggleExpansion is not piped through.
+    // Phase 14e/B: 'choice' nodes now ALSO receive cellComponents +
+    // expansionMap + onToggleExpansion. ChoiceNode's structure variant renders
+    // a TypePickerCell per arm (drop target so the arm's type can be retyped)
+    // AND an expansion chevron for arms whose target is Data or Choice. Arms
+    // targeting terminal kinds (Enum / Builtin / Unresolved) render a spacer
+    // for visual alignment but no chevron — there's no subtree to drill into.
     //
     // 'structureBase' nodes (GroupContainerNode base-type branch) also receive
     // expansionMap + onToggleExpansion so inherited Data/Choice rows can be
@@ -113,6 +114,7 @@ function StructureFlowInner({
     }
     const injectedNodes = result.nodes.map((n) => {
       if (n.type === 'data') return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
+      if (n.type === 'choice') return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
       if (n.type === 'structureBase') return { ...n, data: { ...n.data, expansionMap, onToggleExpansion } };
       return n;
     });
@@ -143,10 +145,10 @@ function StructureFlowInner({
  * `focusedTypeId` or `adapterDoc` is missing an empty-state placeholder is
  * rendered instead.
  *
- * An unsupported-root state is shown when `focusedTypeId` resolves to a
- * non-Data node (Choice, Enum, Function) or no longer exists in `adapterDoc`.
- * This prevents a blank canvas when `buildStructureGraph` returns an empty
- * node map for anything other than a Data root (Finding 2, PR #182 Codex review).
+ * Stale-selection state is shown when `focusedTypeId` no longer resolves to
+ * any node in `adapterDoc` (e.g. the type was renamed or deleted). Phase 14e/A
+ * extends root rendering to Data, Choice, and Enum — only an unknown id falls
+ * through to the unsupported-root branch.
  */
 export function StructureView({
   focusedTypeId,
@@ -161,20 +163,15 @@ export function StructureView({
     );
   }
 
-  // Detect unsupported root upfront — cheaper than building+laying out an empty
+  // Detect stale selections upfront — cheaper than building+laying out an empty
   // graph and gives a precise, user-friendly message instead of a blank canvas.
+  // Phase 14e/A: Data, Choice, and Enum roots all render; only an unknown id
+  // (deleted/renamed type) reaches the unsupported branch.
   const rootNode = adapterDoc.nodes.find((n) => n.id === focusedTypeId);
   if (!rootNode) {
     return (
       <div data-testid="structure-unsupported-root-state">
-        The selected type is no longer available. Select a Data type from the Namespace Explorer.
-      </div>
-    );
-  }
-  if (rootNode.$type !== 'Data') {
-    return (
-      <div data-testid="structure-unsupported-root-state">
-        Structure View shows the shape of Data types. Select a Data type from the Namespace Explorer.
+        The selected type is no longer available. Select a type from the Namespace Explorer.
       </div>
     );
   }

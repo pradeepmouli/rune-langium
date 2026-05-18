@@ -23,6 +23,7 @@ import type {
   StructureBaseContainer,
   StructureChoiceNode,
   StructureDataNode,
+  StructureEnumNode,
   StructureGraphInput,
   StructureNode
 } from '../types/structure-view.js';
@@ -153,16 +154,59 @@ function sizeData(
   return { width, height, rowOffsets };
 }
 
-function sizeChoice(node: StructureChoiceNode): SizedNode {
+function sizeChoice(
+  node: StructureChoiceNode,
+  sizes: Map<string, SizedNode>,
+  input: StructureGraphInput,
+  sizing: Set<string>
+): SizedNode {
   // StructureChoiceArm uses typeName as the row key (arms have no attrName —
   // their identity IS the referenced type).
   const rowOffsets = new Map<string, number>();
   for (let i = 0; i < node.options.length; i++) {
     rowOffsets.set(node.options[i].typeName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
+  const rowsHeight = HEADER_HEIGHT + node.options.length * ROW_HEIGHT;
+
+  // Phase 14e/B — Choice arms gained expansion. Mirror sizeData: walk the
+  // arm expansions, take the widest child, and simulate column height so
+  // late-arm expansions get the room they need.
+  //
+  // Test-fixture fallback: pre-Phase-14e layout fixtures construct Choice nodes
+  // by hand without `expansions`. Treat absent as an empty map so legacy
+  // fixtures keep working without churn (same approach as `nodeInstanceId`).
+  const expansions = node.expansions ?? EMPTY_EXPANSIONS;
+  let childrenWidth = 0;
+  for (const [, childInstanceId] of expansions) {
+    const child = input.nodes.get(childInstanceId);
+    if (!child) continue;
+    const childSize = sizeOf(child, sizes, input, sizing);
+    if (!childSize) continue;
+    childrenWidth = Math.max(childrenWidth, childSize.width);
+  }
+
+  const childrenHeight =
+    expansions.size > 0 ? simulateColumnHeight(expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT : 0;
+
+  const width = childrenWidth > 0 ? COL_WIDTH + COL_GAP + childrenWidth : COL_WIDTH;
+  const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
+  return { width, height, rowOffsets };
+}
+
+const EMPTY_EXPANSIONS: ReadonlyMap<string, string> = new Map();
+
+/**
+ * Size a read-only Enum node (Phase 14e/A). Mirrors `sizeChoice` for the
+ * value-only case (no expansions). Each value renders as a row at ROW_HEIGHT.
+ */
+function sizeEnum(node: StructureEnumNode): SizedNode {
+  const rowOffsets = new Map<string, number>();
+  for (let i = 0; i < node.values.length; i++) {
+    rowOffsets.set(node.values[i], HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+  }
   return {
     width: COL_WIDTH,
-    height: HEADER_HEIGHT + node.options.length * ROW_HEIGHT,
+    height: HEADER_HEIGHT + node.values.length * ROW_HEIGHT,
     rowOffsets
   };
 }
@@ -276,7 +320,8 @@ function sizeOf(
   try {
     let sized: SizedNode;
     if (node.kind === 'data') sized = sizeData(node, sizes, input, sizing);
-    else if (node.kind === 'choice') sized = sizeChoice(node);
+    else if (node.kind === 'choice') sized = sizeChoice(node, sizes, input, sizing);
+    else if (node.kind === 'enum') sized = sizeEnum(node);
     else sized = sizeBase(node, sizes, input, sizing);
     sizes.set(cacheKey, sized);
     return sized;
@@ -364,6 +409,11 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
         placeBaseChildren(n, sz, nextAncestors, childInstanceAncestorPath);
         break;
       case 'choice':
+        placeChoiceChildren(n, sz, nextAncestors, childInstanceAncestorPath);
+        break;
+      case 'enum':
+        // Phase 14e/A — Enum nodes are terminal; their value list renders
+        // as plain rows, no children to place.
         break;
       default: {
         const _exhaustive: never = n;
@@ -390,6 +440,44 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       // Cycle guard: skip placement when the target instance is already on the
       // recursion path (only possible for malformed input — the adapter's
       // SuppressedEdge mechanism prevents this for well-formed graphs).
+      if (!ancestors.has(childInstanceId)) {
+        placeNode(
+          childInstanceId,
+          nodeInstanceId(n),
+          { x: COL_WIDTH + COL_GAP, y: childY },
+          ancestors,
+          instanceAncestorPath
+        );
+      }
+
+      yCursor = childY + childSize.height + ROW_GAP;
+    }
+  }
+
+  /**
+   * Phase 14e/B — Choice arm expansion placement. Mirrors `placeDataChildren`
+   * but iterates `node.expansions` keyed by arm typeName (since arms have no
+   * attrName). The arm's row center comes from sizeChoice's rowOffsets which
+   * also key by typeName, so alignment works the same way.
+   */
+  function placeChoiceChildren(
+    n: StructureChoiceNode,
+    sz: SizedNode,
+    ancestors: ReadonlySet<string>,
+    instanceAncestorPath: readonly string[]
+  ): void {
+    // Same defensive default as sizeChoice — legacy test fixtures may omit
+    // the `expansions` map; treat as empty rather than crashing.
+    const expansions = n.expansions ?? EMPTY_EXPANSIONS;
+    let yCursor = HEADER_HEIGHT;
+    for (const [armTypeName, childInstanceId] of expansions) {
+      const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
+      if (!childSize) continue;
+
+      const rowCenter = sz.rowOffsets.get(armTypeName);
+      const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
+      const childY = Math.max(rowTop, yCursor);
+
       if (!ancestors.has(childInstanceId)) {
         placeNode(
           childInstanceId,

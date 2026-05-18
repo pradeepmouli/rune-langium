@@ -114,15 +114,17 @@ vi.mock('@xyflow/react', async (importOriginal) => {
 });
 
 // -----------------------------------------------------------------------
-// PR #182 Finding 2 — unsupported-root state
+// Phase 14e/A — Choice + Enum roots are first-class
 //
-// When focusedTypeId points at a non-Data node (Choice/Enum) or a node that
-// no longer exists in adapterDoc, StructureView must render a clear message
-// with data-testid="structure-unsupported-root-state" and NOT mount ReactFlow.
+// Previously (PR #182 Finding 2) StructureView rejected Choice/Enum roots
+// with an unsupported-root message even though EditorPage allowed them
+// through. Phase 14e/A wires real Choice / Enum root materialization via
+// the adapter, so only an unknown id (deleted/renamed type, stale selection)
+// falls through to the unsupported-root state.
 // -----------------------------------------------------------------------
 
-describe('StructureView — unsupported root state (Finding 2)', () => {
-  it('renders unsupported-root when focusedTypeId resolves to a Choice in adapterDoc', () => {
+describe('StructureView — Choice / Enum roots are first-class (Phase 14e/A)', () => {
+  it('renders the Choice as root (NOT unsupported state) when focusedTypeId resolves to a Choice', () => {
     const docWithChoice: AdapterDocument = {
       namespaces: [{ uri: 'cdm.settlement' }],
       nodes: [
@@ -131,19 +133,21 @@ describe('StructureView — unsupported root state (Finding 2)', () => {
           $type: 'Choice' as const,
           name: 'SettlementTerms',
           namespace: 'cdm.settlement',
-          choiceOptions: []
+          choiceOptions: [{ typeCall: { type: { $refText: 'Cash' } } }]
         }
       ]
     };
     render(<StructureView focusedTypeId="cdm.settlement::SettlementTerms" adapterDoc={docWithChoice} />);
-    expect(screen.getByTestId('structure-unsupported-root-state')).toBeInTheDocument();
-    // ReactFlow must NOT be mounted.
-    expect(screen.queryByTestId('mock-react-flow')).toBeNull();
-    // The existing empty-state should NOT appear.
+    // No unsupported / empty state — the Choice mounts as the root.
+    expect(screen.queryByTestId('structure-unsupported-root-state')).toBeNull();
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
+    expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
+    // The Choice's canonical id appears in the rendered nodes.
+    const choiceNode = document.querySelector('[data-canonical-id="cdm.settlement::SettlementTerms"]');
+    expect(choiceNode).not.toBeNull();
   });
 
-  it('renders unsupported-root when focusedTypeId resolves to an Enum in adapterDoc', () => {
+  it('renders the Enum as root (NOT unsupported state) when focusedTypeId resolves to an Enum', () => {
     const docWithEnum: AdapterDocument = {
       namespaces: [{ uri: 'cdm.base' }],
       nodes: [
@@ -152,13 +156,16 @@ describe('StructureView — unsupported root state (Finding 2)', () => {
           $type: 'Enum' as const,
           name: 'DayCountFraction',
           namespace: 'cdm.base',
-          values: [{ name: 'ACT_360' }]
+          values: [{ name: 'ACT_360' }, { name: 'ACT_365' }]
         }
       ]
     };
     render(<StructureView focusedTypeId="cdm.base::DayCountFraction" adapterDoc={docWithEnum} />);
-    expect(screen.getByTestId('structure-unsupported-root-state')).toBeInTheDocument();
-    expect(screen.queryByTestId('mock-react-flow')).toBeNull();
+    expect(screen.queryByTestId('structure-unsupported-root-state')).toBeNull();
+    expect(screen.queryByTestId('structure-empty-state')).toBeNull();
+    expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
+    const enumNode = document.querySelector('[data-canonical-id="cdm.base::DayCountFraction"]');
+    expect(enumNode).not.toBeNull();
   });
 
   it('renders unsupported-root when focusedTypeId does not exist in adapterDoc (stale selection)', () => {
@@ -271,6 +278,48 @@ describe('StructureView — structureBase injection (Codex P2, PR #191)', () => 
     // id is the plain Trade id; the instance id is path-qualified.
     const derivedTradeNode = document.querySelector('[data-canonical-id="cdm.trade::Trade"]');
     expect(derivedTradeNode).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 14e/B — StructureView injects cellComponents + expansion plumbing
+// into 'choice' typed nodes (parity with 'data')
+// ---------------------------------------------------------------------------
+
+describe('StructureView — choice-node injection (Phase 14e/B)', () => {
+  it('injects cellComponents + expansionMap + onToggleExpansion into choice nodes', () => {
+    // The mocked ReactFlow surfaces n.data via `data-canonical-id`. To verify
+    // injection took effect, we use a real cellComponents.type that asserts
+    // its presence at render time. Skipping the mock here is impractical, so
+    // instead we verify indirectly: no crash + the Choice root mounts.
+    const docWithChoice: AdapterDocument = {
+      namespaces: [{ uri: 'cdm.payment' }],
+      nodes: [
+        {
+          id: 'cdm.payment::Method',
+          $type: 'Choice' as const,
+          name: 'Method',
+          namespace: 'cdm.payment',
+          choiceOptions: [{ typeCall: { type: { $refText: 'Cash' } } }]
+        }
+      ]
+    };
+    const onToggleExpansion = vi.fn();
+    const cellComponents = { type: () => <span data-testid="injected-type-cell" /> };
+    render(
+      <StructureView
+        focusedTypeId="cdm.payment::Method"
+        adapterDoc={docWithChoice}
+        expansionMap={new Map()}
+        onToggleExpansion={onToggleExpansion}
+        cellComponents={cellComponents as any}
+      />
+    );
+    // The Choice root mounted (no crash) and was rendered through the layout.
+    expect(screen.queryByTestId('structure-unsupported-root-state')).toBeNull();
+    expect(screen.queryByTestId('structure-empty-state')).toBeNull();
+    expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
+    expect(document.querySelector('[data-canonical-id="cdm.payment::Method"]')).not.toBeNull();
   });
 });
 

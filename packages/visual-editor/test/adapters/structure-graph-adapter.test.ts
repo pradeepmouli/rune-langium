@@ -11,6 +11,7 @@ import {
   type StructureBaseContainer,
   type StructureChoiceNode,
   type StructureDataNode,
+  type StructureEnumNode,
   type StructureExpansionKey,
   expansionKey
 } from '../../src/types/structure-view.js';
@@ -879,7 +880,7 @@ describe('buildStructureGraph — cross-namespace references', () => {
     expect(b.expansions.size).toBe(0);
   });
 
-  it('returns an empty graph (no crash) when the focused root is a Choice', () => {
+  it('Phase 14e/A: materializes a Choice as the focused root with all arms visible', () => {
     const fixtureChoiceRoot = {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
@@ -899,10 +900,17 @@ describe('buildStructureGraph — cross-namespace references', () => {
       expansionMap: new Map()
     });
 
-    // Phase 2 scope: only Data roots are materialized. Choice-as-root falls
-    // through; the graph is empty but the rootNodeId still echoes the focus.
+    // Phase 14e/A: Choice roots are now first-class — rootNodeId echoes the
+    // focused id (also the root instance id) and the Choice node materializes
+    // with its arm options.
     expect(result.rootNodeId).toBe('cdm.trade::Payout');
-    expect(result.nodes.size).toBe(0);
+    expect(result.nodes.size).toBe(1);
+    const root = result.nodes.get('cdm.trade::Payout') as StructureChoiceNode;
+    expect(root.kind).toBe('choice');
+    expect(root.options).toHaveLength(1);
+    expect(root.options[0].typeName).toBe('string');
+    // No arms expanded by default.
+    expect(root.expansions.size).toBe(0);
   });
 
   it('resolves a fully-qualified reference like "cdm.product.Party"', () => {
@@ -2790,5 +2798,528 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
     expect(result.nodes.size).toBe(10);
     expect(findAllByCanonicalId(result.nodes, 'cdm.trade::Party')).toHaveLength(3);
     expect(findAllByCanonicalId(result.nodes, 'cdm.trade::Address')).toHaveLength(6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 14e/A — Choice + Enum focused roots (single-source-of-truth tests)
+// ---------------------------------------------------------------------------
+
+describe('buildStructureGraph — Choice as focused root (Phase 14e/A)', () => {
+  // Choice roots match XmlSpy / Altova UModel conventions: the Choice itself
+  // is the entry point, all arms are visible, and arms whose target is Data
+  // or Choice can be drilled with the same per-instance chevron contract used
+  // for Data attribute rows. Arms targeting terminal types (Enum / Builtin /
+  // Unresolved) remain visible but have no expansion key.
+
+  const choiceRootFixture = {
+    namespaces: [{ uri: 'cdm.payment' }],
+    nodes: [
+      {
+        id: 'cdm.payment::SettlementMethod',
+        $type: 'Choice' as const,
+        name: 'SettlementMethod',
+        namespace: 'cdm.payment',
+        choiceOptions: [
+          { typeCall: { type: { $refText: 'CashPayment' } } },
+          { typeCall: { type: { $refText: 'PhysicalDelivery' } } },
+          { typeCall: { type: { $refText: 'DayCount' } } }, // Enum — terminal
+          { typeCall: { type: { $refText: 'string' } } } // Builtin — terminal
+        ]
+      },
+      {
+        id: 'cdm.payment::CashPayment',
+        $type: 'Data' as const,
+        name: 'CashPayment',
+        namespace: 'cdm.payment',
+        attributes: [
+          { name: 'amount', typeCall: { type: { $refText: 'number' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      },
+      {
+        id: 'cdm.payment::PhysicalDelivery',
+        $type: 'Data' as const,
+        name: 'PhysicalDelivery',
+        namespace: 'cdm.payment',
+        attributes: []
+      },
+      {
+        id: 'cdm.payment::DayCount',
+        $type: 'Enum' as const,
+        name: 'DayCount',
+        namespace: 'cdm.payment',
+        values: [{ name: 'ACT_360' }]
+      }
+    ]
+  };
+
+  it('materializes the focused Choice as the root with all four arms visible', () => {
+    const result = buildStructureGraph(choiceRootFixture, {
+      focusedTypeId: 'cdm.payment::SettlementMethod',
+      expansionMap: new Map()
+    });
+    expect(result.rootNodeId).toBe('cdm.payment::SettlementMethod');
+    expect(result.nodes.size).toBe(1);
+    const root = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    expect(root.kind).toBe('choice');
+    expect(root.options).toHaveLength(4);
+    expect(root.options.map((a) => a.typeName)).toEqual(['CashPayment', 'PhysicalDelivery', 'DayCount', 'string']);
+    // typeKind classification: Data, Data, Enum, Builtin.
+    expect(root.options.map((a) => a.typeKind)).toEqual(['Data', 'Data', 'Enum', 'Builtin']);
+    // No arms expanded by default.
+    expect(root.expansions.size).toBe(0);
+  });
+
+  it('expanding a Data-targeting arm materializes the target as a child subtree', () => {
+    // Arm expansion key convention: arm.typeName fills the attrName slot.
+    const armKey: StructureExpansionKey = {
+      namespaceUri: 'cdm.payment',
+      typeId: 'SettlementMethod',
+      attrName: 'CashPayment',
+      instancePath: ['cdm.payment::SettlementMethod']
+    };
+    const result = buildStructureGraph(choiceRootFixture, {
+      focusedTypeId: 'cdm.payment::SettlementMethod',
+      expansionMap: new Map([[expansionKey(armKey), true]])
+    });
+    const root = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    expect(root.expansions.size).toBe(1);
+    const cashInstanceId = root.expansions.get('CashPayment');
+    expect(cashInstanceId).toBeDefined();
+    const cash = result.nodes.get(cashInstanceId!) as StructureDataNode;
+    expect(cash.kind).toBe('data');
+    expect(cash.name).toBe('CashPayment');
+    expect(cash.rows).toHaveLength(1);
+    expect(cash.rows[0].attrName).toBe('amount');
+  });
+
+  it('does NOT expand terminal arms (Enum / Builtin / Unresolved) even with an expansion key set', () => {
+    // Per the contract, terminal arm typeKinds are never written into the
+    // expansions map. A stray map entry for a terminal arm is a no-op.
+    const strayKey: StructureExpansionKey = {
+      namespaceUri: 'cdm.payment',
+      typeId: 'SettlementMethod',
+      attrName: 'DayCount', // Enum arm — terminal
+      instancePath: ['cdm.payment::SettlementMethod']
+    };
+    const result = buildStructureGraph(choiceRootFixture, {
+      focusedTypeId: 'cdm.payment::SettlementMethod',
+      expansionMap: new Map([[expansionKey(strayKey), true]])
+    });
+    const root = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    expect(root.expansions.size).toBe(0);
+    expect(root.expansions.has('DayCount')).toBe(false);
+    // No DayCount instance materialized.
+    expect(findAllByCanonicalId(result.nodes, 'cdm.payment::DayCount')).toHaveLength(0);
+  });
+});
+
+describe('buildStructureGraph — Enum as focused root (Phase 14e/A)', () => {
+  it('materializes the focused Enum as a single read-only node listing all values', () => {
+    const enumFixture = {
+      namespaces: [{ uri: 'cdm.base' }],
+      nodes: [
+        {
+          id: 'cdm.base::DayCountFraction',
+          $type: 'Enum' as const,
+          name: 'DayCountFraction',
+          namespace: 'cdm.base',
+          values: [{ name: 'ACT_360' }, { name: 'ACT_365' }, { name: 'THIRTY_360' }]
+        }
+      ]
+    };
+    const result = buildStructureGraph(enumFixture, {
+      focusedTypeId: 'cdm.base::DayCountFraction',
+      expansionMap: new Map()
+    });
+    expect(result.rootNodeId).toBe('cdm.base::DayCountFraction');
+    expect(result.nodes.size).toBe(1);
+    const root = result.nodes.get('cdm.base::DayCountFraction') as StructureEnumNode;
+    expect(root.kind).toBe('enum');
+    expect(root.name).toBe('DayCountFraction');
+    expect(root.values).toEqual(['ACT_360', 'ACT_365', 'THIRTY_360']);
+  });
+
+  it('materializes an empty Enum as a single node with empty values array (no crash)', () => {
+    const result = buildStructureGraph(
+      {
+        namespaces: [{ uri: 'cdm.base' }],
+        nodes: [
+          {
+            id: 'cdm.base::Empty',
+            $type: 'Enum' as const,
+            name: 'Empty',
+            namespace: 'cdm.base',
+            values: []
+          }
+        ]
+      },
+      { focusedTypeId: 'cdm.base::Empty', expansionMap: new Map() }
+    );
+    const root = result.nodes.get('cdm.base::Empty') as StructureEnumNode;
+    expect(root.kind).toBe('enum');
+    expect(root.values).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 14e/B — Choice arm expansion (per-instance, mirrors Data row)
+// ---------------------------------------------------------------------------
+
+describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B)', () => {
+  // Cross-cuts with Phase 14d's per-instance semantics. Two visible Choice
+  // instances each track their arms independently; toggling an arm in ONE
+  // does not expand the same arm in the OTHER.
+
+  const tradeWithTwoChoicesFixture = {
+    namespaces: [{ uri: 'cdm.trade' }],
+    nodes: [
+      {
+        id: 'cdm.trade::Trade',
+        $type: 'Data' as const,
+        name: 'Trade',
+        namespace: 'cdm.trade',
+        attributes: [
+          { name: 'primary', typeCall: { type: { $refText: 'Payment' } }, card: { inf: 1, sup: 1, unbounded: false } },
+          { name: 'secondary', typeCall: { type: { $refText: 'Payment' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      },
+      {
+        id: 'cdm.trade::Payment',
+        $type: 'Choice' as const,
+        name: 'Payment',
+        namespace: 'cdm.trade',
+        choiceOptions: [
+          { typeCall: { type: { $refText: 'CashPayment' } } },
+          { typeCall: { type: { $refText: 'BondPayment' } } }
+        ]
+      },
+      {
+        id: 'cdm.trade::CashPayment',
+        $type: 'Data' as const,
+        name: 'CashPayment',
+        namespace: 'cdm.trade',
+        attributes: [
+          { name: 'amount', typeCall: { type: { $refText: 'number' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      },
+      {
+        id: 'cdm.trade::BondPayment',
+        $type: 'Data' as const,
+        name: 'BondPayment',
+        namespace: 'cdm.trade',
+        attributes: []
+      }
+    ]
+  };
+
+  it('expanding payment.CashPayment when payment is a row of a Data type drills the Choice arm', () => {
+    // Focus a Data type with one Choice-typed attr; expand the attr; then expand
+    // one of the Choice's arms. The full per-instance chain must resolve.
+    const tradeRfId = 'cdm.trade::Trade';
+    const paymentInstanceId = `${tradeRfId}::primary::cdm.trade::Payment`;
+    const expansionMap = new Map([
+      // 1. expand Trade.primary (the Choice arm-bearer row)
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Trade',
+          attrName: 'primary',
+          instancePath: [tradeRfId]
+        }),
+        true
+      ],
+      // 2. expand the CashPayment arm on the materialized Payment instance
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Payment',
+          attrName: 'CashPayment',
+          instancePath: [tradeRfId, paymentInstanceId]
+        }),
+        true
+      ]
+    ]);
+    const result = buildStructureGraph(tradeWithTwoChoicesFixture, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap
+    });
+    const payment = findByCanonicalId(result.nodes, 'cdm.trade::Payment') as StructureChoiceNode;
+    expect(payment).toBeDefined();
+    expect(payment.expansions.size).toBe(1);
+    const cashInstanceId = payment.expansions.get('CashPayment');
+    expect(cashInstanceId).toBeDefined();
+    const cash = result.nodes.get(cashInstanceId!) as StructureDataNode;
+    expect(cash.kind).toBe('data');
+    expect(cash.name).toBe('CashPayment');
+  });
+
+  it('two Choice instances (primary + secondary) track arm expansions independently (per Phase 14d)', () => {
+    // Expand BOTH primary and secondary; then expand the CashPayment arm on
+    // ONLY the primary's Payment instance. The secondary's Payment must
+    // remain collapsed.
+    const tradeRfId = 'cdm.trade::Trade';
+    const primaryPaymentId = `${tradeRfId}::primary::cdm.trade::Payment`;
+    const secondaryPaymentId = `${tradeRfId}::secondary::cdm.trade::Payment`;
+    const expansionMap = new Map([
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Trade',
+          attrName: 'primary',
+          instancePath: [tradeRfId]
+        }),
+        true
+      ],
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Trade',
+          attrName: 'secondary',
+          instancePath: [tradeRfId]
+        }),
+        true
+      ],
+      // ONLY the primary's CashPayment is expanded.
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Payment',
+          attrName: 'CashPayment',
+          instancePath: [tradeRfId, primaryPaymentId]
+        }),
+        true
+      ]
+    ]);
+    const result = buildStructureGraph(tradeWithTwoChoicesFixture, {
+      focusedTypeId: 'cdm.trade::Trade',
+      expansionMap
+    });
+    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Payment') as StructureChoiceNode[];
+    expect(paymentInstances).toHaveLength(2);
+    const primary = paymentInstances.find((p) => p.instanceId === primaryPaymentId)!;
+    const secondary = paymentInstances.find((p) => p.instanceId === secondaryPaymentId)!;
+    expect(primary).toBeDefined();
+    expect(secondary).toBeDefined();
+    // Independence: primary has the CashPayment expansion; secondary does not.
+    expect(primary.expansions.size).toBe(1);
+    expect(primary.expansions.has('CashPayment')).toBe(true);
+    expect(secondary.expansions.size).toBe(0);
+    // Only one CashPayment instance materializes (under the primary).
+    expect(findAllByCanonicalId(result.nodes, 'cdm.trade::CashPayment')).toHaveLength(1);
+  });
+
+  it('Choice-as-root: expanding two arms produces two child subtrees side-by-side', () => {
+    // Verifies multi-arm expansion in the same Choice (used by the layout
+    // to place each child in the right-hand column aligned with its arm row).
+    const result = buildStructureGraph(
+      {
+        namespaces: [{ uri: 'cdm.payment' }],
+        nodes: [
+          {
+            id: 'cdm.payment::Payment',
+            $type: 'Choice' as const,
+            name: 'Payment',
+            namespace: 'cdm.payment',
+            choiceOptions: [
+              { typeCall: { type: { $refText: 'CashPayment' } } },
+              { typeCall: { type: { $refText: 'BondPayment' } } }
+            ]
+          },
+          {
+            id: 'cdm.payment::CashPayment',
+            $type: 'Data' as const,
+            name: 'CashPayment',
+            namespace: 'cdm.payment',
+            attributes: [
+              {
+                name: 'amount',
+                typeCall: { type: { $refText: 'number' } },
+                card: { inf: 1, sup: 1, unbounded: false }
+              }
+            ]
+          },
+          {
+            id: 'cdm.payment::BondPayment',
+            $type: 'Data' as const,
+            name: 'BondPayment',
+            namespace: 'cdm.payment',
+            attributes: [
+              { name: 'isin', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+            ]
+          }
+        ]
+      },
+      {
+        focusedTypeId: 'cdm.payment::Payment',
+        expansionMap: new Map([
+          [
+            expansionKey({
+              namespaceUri: 'cdm.payment',
+              typeId: 'Payment',
+              attrName: 'CashPayment',
+              instancePath: ['cdm.payment::Payment']
+            }),
+            true
+          ],
+          [
+            expansionKey({
+              namespaceUri: 'cdm.payment',
+              typeId: 'Payment',
+              attrName: 'BondPayment',
+              instancePath: ['cdm.payment::Payment']
+            }),
+            true
+          ]
+        ])
+      }
+    );
+    const payment = result.nodes.get('cdm.payment::Payment') as StructureChoiceNode;
+    expect(payment.expansions.size).toBe(2);
+    expect(payment.expansions.has('CashPayment')).toBe(true);
+    expect(payment.expansions.has('BondPayment')).toBe(true);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.payment::CashPayment')).toHaveLength(1);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.payment::BondPayment')).toHaveLength(1);
+    // Total: 1 Payment + 2 expanded children = 3.
+    expect(result.nodes.size).toBe(3);
+  });
+});
+
+describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', () => {
+  // Regression tests for the bug where a Choice with a self-referential arm
+  // rendered differently depending on how it was reached:
+  //
+  //   - Choice-as-root: buildStructureGraph seeded path with root.id → self-arm
+  //     was suppressed correctly.
+  //   - Choice-as-arm-target: path contained only Data ancestors, NOT the Choice's
+  //     own id → self-arm produced one bogus nested copy before terminating on
+  //     the second recursion.
+  //
+  // The fix: expandChoiceArms now adds node.id to path BEFORE iterating arms,
+  // matching walkAndExpand's convention.  Both entry paths now suppress self-arms.
+
+  // Fixture: Data type Outer has one attribute `payment: Payment`.
+  // Payment is a Choice with arms: CashPayment (Data, terminal) and Payment (self-ref).
+  const selfRefChoiceFixture = {
+    namespaces: [{ uri: 'cdm.trade' }],
+    nodes: [
+      {
+        id: 'cdm.trade::Outer',
+        $type: 'Data' as const,
+        name: 'Outer',
+        namespace: 'cdm.trade',
+        attributes: [
+          { name: 'payment', typeCall: { type: { $refText: 'Payment' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      },
+      {
+        id: 'cdm.trade::Payment',
+        $type: 'Choice' as const,
+        name: 'Payment',
+        namespace: 'cdm.trade',
+        choiceOptions: [
+          { typeCall: { type: { $refText: 'CashPayment' } } },
+          { typeCall: { type: { $refText: 'Payment' } } } // self-referential arm
+        ]
+      },
+      {
+        id: 'cdm.trade::CashPayment',
+        $type: 'Data' as const,
+        name: 'CashPayment',
+        namespace: 'cdm.trade',
+        attributes: [
+          { name: 'amount', typeCall: { type: { $refText: 'number' } }, card: { inf: 1, sup: 1, unbounded: false } }
+        ]
+      }
+    ]
+  };
+
+  it('Choice-as-arm-target: expanding the self-arm does not materialise a nested copy of the Choice', () => {
+    // Step 1: expand Outer.payment so Payment materialises as a Choice node.
+    // Step 2: expand the Payment self-arm on that Payment instance.
+    // Expected: graph contains Outer + Payment + CashPayment; NO second Payment.
+    const outerRfId = 'cdm.trade::Outer';
+    const paymentInstanceId = `${outerRfId}::payment::cdm.trade::Payment`;
+
+    const expansionMap = new Map([
+      // Expand Outer.payment
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Outer',
+          attrName: 'payment',
+          instancePath: [outerRfId]
+        }),
+        true as const
+      ],
+      // Expand the Payment self-arm on the materialised Payment instance
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Payment',
+          attrName: 'Payment',
+          instancePath: [outerRfId, paymentInstanceId]
+        }),
+        true as const
+      ]
+    ]);
+
+    const result = buildStructureGraph(selfRefChoiceFixture, {
+      focusedTypeId: 'cdm.trade::Outer',
+      expansionMap
+    });
+
+    // Payment appears exactly once — no nested second copy from the self-arm.
+    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Payment');
+    expect(paymentInstances).toHaveLength(1);
+
+    // The Payment Choice node must NOT have an expansion for the self-arm.
+    const payment = result.nodes.get(paymentInstanceId) as StructureChoiceNode;
+    expect(payment).toBeDefined();
+    expect(payment.kind).toBe('choice');
+    expect(payment.expansions.has('Payment')).toBe(false);
+
+    // CashPayment is NOT expanded in this test (no key for it) — arms are visible
+    // as chips but their expansion key is false, so no child materialises.
+    expect(findAllByCanonicalId(result.nodes, 'cdm.trade::CashPayment')).toHaveLength(0);
+
+    // Total: Outer + Payment = 2.
+    expect(result.nodes.size).toBe(2);
+  });
+
+  it('Choice-as-root: expanding the self-arm does not materialise a nested copy (symmetric lock)', () => {
+    // Focus Payment directly.  Expand the self-arm Payment.
+    // Expected: graph contains only Payment; no nested second Payment.
+    const rootInstanceId = 'cdm.trade::Payment';
+
+    const expansionMap = new Map([
+      [
+        expansionKey({
+          namespaceUri: 'cdm.trade',
+          typeId: 'Payment',
+          attrName: 'Payment',
+          instancePath: [rootInstanceId]
+        }),
+        true as const
+      ]
+    ]);
+
+    const result = buildStructureGraph(selfRefChoiceFixture, {
+      focusedTypeId: 'cdm.trade::Payment',
+      expansionMap
+    });
+
+    // Payment appears exactly once.
+    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Payment');
+    expect(paymentInstances).toHaveLength(1);
+
+    // Self-arm is suppressed: no expansion entry for 'Payment'.
+    const payment = result.nodes.get(rootInstanceId) as StructureChoiceNode;
+    expect(payment).toBeDefined();
+    expect(payment.kind).toBe('choice');
+    expect(payment.expansions.has('Payment')).toBe(false);
+
+    // Total: only Payment root = 1.
+    expect(result.nodes.size).toBe(1);
   });
 });
