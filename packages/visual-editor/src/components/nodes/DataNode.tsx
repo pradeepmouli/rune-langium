@@ -101,6 +101,11 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // in styles.css — layout constants (ROW_HEIGHT=28, COL_WIDTH=260, etc.) are matched there.
     const rows = data.rows as ReadonlyArray<StructureRow>;
     const { cellComponents, expansionMap, onToggleExpansion, instancePath } = data;
+    // e2e-batch fix #12: per-node rows-column width from the layout.
+    // Layout's estimateRowsColWidth() sizes this from row content so CDM-scale
+    // type names don't clip. Inline-style overrides the --rune-col-width CSS
+    // fallback when present.
+    const rowsColWidth = (data as { rowsColWidth?: number }).rowsColWidth;
     const NameCell = cellComponents?.name;
     const TypeCell = cellComponents?.type;
     const CardCell = cellComponents?.card;
@@ -130,7 +135,7 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
           <span>{data.name}</span>
         </div>
         <div className="rune-node-body rune-node-body--two-col">
-          <div className="rune-node-rows">
+          <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
             {rows.map((row: StructureRow) => {
               const expandable = isRowExpandable(row.typeKind);
               const rowKey: StructureExpansionKey | undefined = expandable

@@ -867,6 +867,29 @@
     color: var(--foreground);
   }
 
+  /* e2e-batch fix #5: drag-source row state. Was rendered as a `→` glyph
+   * inline in the row, which visually competed with the right-aligned
+   * ChevronRight nav button (both are arrow shapes). Replaced with a
+   * left-edge color stripe + subtle background tint — clear "this is the
+   * active drag source" signal without using an arrow. */
+  .studio-app .studio-type-row--drag-source {
+    box-shadow: inset 2px 0 0 0 var(--primary);
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--primary), transparent 92%),
+      color-mix(in oklch, var(--primary), transparent 98%)
+    );
+  }
+  .studio-app .studio-type-row--drag-source.studio-type-row--selected {
+    /* When a row is both drag-source AND selected, blend by stacking the
+     * stripe over the selected gradient so neither overrides the other. */
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--primary), transparent 80%),
+      transparent
+    );
+  }
+
   /* ─── Accent underline on active dockview tabs ────────────────────
    * Matches the design's orange underline bar on active tabs in the
    * right column (Code/Form) and bottom dock (Problems/Messages).

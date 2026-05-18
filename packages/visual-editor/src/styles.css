@@ -784,7 +784,12 @@ button[data-navigable]:focus-visible {
 :root {
   --rune-row-height: 28px;
   --rune-header-height: 28px;
-  --rune-col-width: 260px;
+  /* Fallback rows-column width — used when the per-node `data.rowsColWidth`
+   * isn't passed (legacy callers, test fixtures). Real per-node widths flow
+   * through inline style on `.rune-node-rows` from the layout (e2e-batch fix
+   * #12). Bumped from 260 → 320 to match the new `STRUCTURE_LAYOUT_CONSTANTS
+   * .COL_WIDTH` floor so CSS-only renders still get the wider baseline. */
+  --rune-col-width: 320px;
   --rune-col-gap: 32px;
   --rune-row-gap: 8px;
   --rune-base-padding: 16px;

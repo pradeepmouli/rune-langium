@@ -480,10 +480,12 @@ function TypeItemRow({
     <div
       role="button"
       tabIndex={0}
-      className={`group relative ml-4 flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
+      className={`studio-type-row group relative ml-4 flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
         isSelected ? 'studio-type-row--selected' : isVisible ? 'text-foreground' : 'text-muted-foreground opacity-60'
-      }`}
+      }${isDragSource ? ' studio-type-row--drag-source' : ''}`}
       data-testid={`ns-type-${row.nodeId}`}
+      data-drag-source={isDragSource ? 'true' : undefined}
+      aria-label={isDragSource ? `${row.name} — active drag source` : isSelected ? `${row.name} — selected` : row.name}
       draggable={payload !== undefined}
       onDragStart={handleDragStart}
       onClick={handleClick}
@@ -491,15 +493,16 @@ function TypeItemRow({
     >
       {isSelected && <span className="studio-type-pip" />}
 
-      {/* Phase 13 amend: → state indicator moved to left of glyph so it does
-          not visually compete with the right-aligned navigation button.
-          It remains as a low-cost affordance for sighted users to spot which
-          row is the active drag source at a glance. */}
-      {isDragSource && (
-        <span className="rune-type-item__arrow text-primary text-xs" aria-label="active drag source">
-          →
-        </span>
-      )}
+      {/* e2e-batch fix #5: replaced the `→` drag-source marker with a
+          left-edge color accent. The user reported "two arrows on the
+          namespace explorer rows... unclear which does what" — the previous
+          `→` glyph visually competed with the right-aligned ChevronRight
+          nav button (both are right-pointing arrows). The accent stripe
+          gives a clear "active drag source" state without using an arrow
+          glyph, so the only arrow icon on the row is the nav button.
+          aria-label preserved on the row body via `data-drag-source` —
+          screen readers learn the state from the row, not a separate
+          element. */}
 
       <span
         className="studio-type-glyph"
