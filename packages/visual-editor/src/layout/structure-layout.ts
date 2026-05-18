@@ -530,11 +530,18 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       // Cycle guard: skip placement when the target instance is already on the
       // recursion path (only possible for malformed input — the adapter's
       // SuppressedEdge mechanism prevents this for well-formed graphs).
+      //
+      // e2e-batch fix #12 follow-up (caught by Sonnet RF review): use
+      // `sz.rowsColWidth` for child x-offset, not the global COL_WIDTH. After
+      // per-node column widths, any parent wider than COL_WIDTH (320) would
+      // have placed children OVERLAPPING the left column. The size pass
+      // already widens the parent's `width` to `rowsColWidth + COL_GAP +
+      // childrenWidth`, so placement must mirror that origin.
       if (!ancestors.has(childInstanceId)) {
         placeNode(
           childInstanceId,
           nodeInstanceId(n),
-          { x: COL_WIDTH + COL_GAP, y: childY },
+          { x: sz.rowsColWidth + COL_GAP, y: childY },
           ancestors,
           instanceAncestorPath
         );
@@ -568,11 +575,13 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
       const childY = Math.max(rowTop, yCursor);
 
+      // e2e-batch fix #12 follow-up — same per-node width fix as
+      // placeDataChildren. See that function's comment for rationale.
       if (!ancestors.has(childInstanceId)) {
         placeNode(
           childInstanceId,
           nodeInstanceId(n),
-          { x: COL_WIDTH + COL_GAP, y: childY },
+          { x: sz.rowsColWidth + COL_GAP, y: childY },
           ancestors,
           instanceAncestorPath
         );
