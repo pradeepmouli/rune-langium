@@ -3,23 +3,24 @@
 **Created:** 2026-05-17
 **Base:** master @ `c1c1716e` (after PR #191 — Phase 13 adversarial fixes merged)
 **Source reviews:** Codex 2nd adversarial-review (job `review-mp93ewds-mc2pw7`) + Opus React Flow code review on PR #191
+**Status (2026-05-18):** ALL items resolved at master tip `26e9ba38`. Merged PRs: #194 (14d), #196 (14e), #197 (14b), #205 (14c).
 
 This doc captures 8 findings from the two reviews run on PR #191. They were intentionally deferred from #191 to keep that PR reviewable (#191 already had 10 commits across 3 review rounds). Each finding here has a clear file:line reference, severity, recommended fix, and a sequencing suggestion so the work can be picked up in focused chunks.
 
 ## Summary
 
-| # | Severity | Category | Title | Decision |
-|---|---|---|---|---|
-| C | P1 | RF perf / correctness | Data identity churns on every edit → all DataNode rerender | Phase 14c (3-part refactor) |
-| D | P1 | Design conflict | Per-instance duplicate types share one expansion key | **PER-INSTANCE** (XmlSpy match) — Phase 14d |
-| A | MED | Contract inconsistency | Choice roots: EditorPage allows, StructureView rejects | **WIRE** Choice root rendering — Phase 14e |
-| B | MED | Contract inconsistency | Choice arms terminal & read-only despite editable target data | **WIRE** arm parity — Phase 14e |
-| ~~E~~ | ~~P2~~ | ~~RF UX~~ | ~~`fitView` runs every layout pass → viewport resets on edits~~ | **DROPPED** — see § E |
-| F | P2 | RF perf / a11y | Decorative Handles in structure mode waste DOM | Phase 14b — gate by variant |
-| G | P2 | RF latent | Top-level `width`/`height` on node; RF12 uses `style.*`/`measured` | Phase 14b — preventive fix |
-| H | P2 | RF perf | `onlyRenderVisibleElements` not set on deep expansions | Phase 14b — single prop |
-| (nit) | — | RF | `useNavigation` called in structure variant but values unused | Bundle with C |
-| (nit) | — | RF | Full `expansionMap` passed to each DataNode (could be per-row slice) | Bundle with C |
+| # | Severity | Category | Title | Decision | Resolution |
+|---|---|---|---|---|---|
+| C | P1 | RF perf / correctness | Data identity churns on every edit → all DataNode rerender | Phase 14c | **DONE (PR #205)** — Approach B shipped (identity-preserving merge in `preserveNodeIdentities`), not Approach C (context refactor) |
+| D | P1 | Design conflict | Per-instance duplicate types share one expansion key | **PER-INSTANCE** (XmlSpy match) — Phase 14d | **DONE (PR #194)** |
+| A | MED | Contract inconsistency | Choice roots: EditorPage allows, StructureView rejects | **WIRE** Choice root rendering — Phase 14e | **DONE (PR #196)** — extended to include Enum-as-root (`EnumNode` materialization) |
+| B | MED | Contract inconsistency | Choice arms terminal & read-only despite editable target data | **WIRE** arm parity — Phase 14e | **DONE (PR #196)** |
+| ~~E~~ | ~~P2~~ | ~~RF UX~~ | ~~`fitView` runs every layout pass → viewport resets on edits~~ | **DROPPED** — see § E | Inverted finding (viewport doesn't re-center on `focusedTypeId` change) is a missing feature, still open as a follow-up |
+| F | P2 | RF perf / a11y | Decorative Handles in structure mode waste DOM | Phase 14b — gate by variant | **DONE (PR #197)** |
+| G | P2 | RF latent | Top-level `width`/`height` on node; RF12 uses `style.*`/`measured` | Phase 14b — preventive fix | **DONE (PR #197)** — uses `style.width/height` + `initialWidth/initialHeight` on every emission |
+| H | P2 | RF perf | `onlyRenderVisibleElements` not set on deep expansions | Phase 14b — single prop | **DONE (PR #197)** |
+| (nit) | — | RF | `useNavigation` called in structure variant but values unused | Bundle with C | **DONE** — bundled |
+| (nit) | — | RF | Full `expansionMap` passed to each DataNode (could be per-row slice) | Bundle with C | Not pursued — Approach B made this moot |
 
 ## Recommended sequencing
 
@@ -35,10 +36,11 @@ This doc captures 8 findings from the two reviews run on PR #191. They were inte
 - H (onlyRenderVisibleElements)
 - E is **DROPPED** — see § E for the source-grep verification. RF12 `fitView` prop is a one-shot initial fit; subsequent layout passes do NOT re-fit. The Opus reviewer applied an RF11 mental model.
 
-**Phase 14c — Data identity refactor** (1 PR, ~half-day):
-- C (hoist cellComponents/expansionMap/onToggleExpansion to React context, hook reads in DataNode/GroupContainerNode)
-- Nit consolidation (slice expansionMap per-row at the boundary)
-- Performance test that asserts a single-cell edit re-renders ≤1 DataNode (not all)
+**Phase 14c — Data identity refactor** (DONE, PR #205):
+- Approach C (React context refactor) was considered but NOT implemented. Approach B (identity-preserving merge at the React Flow boundary) shipped instead. See `packages/visual-editor/src/components/StructureView.tsx:175` (`preserveNodeIdentities()`) and the `shallowEqualData` comparator at L120.
+- `DataNode` and `GroupContainerNode` still receive `cellComponents`/`expansionMap`/`onToggleExpansion` as props injected into `node.data` (NOT via React context — Approach B kept the contract simple and let the comparator handle identity).
+- The cache write happens inside `useLayoutEffect` (not `useMemo`) to stay safe under React StrictMode / concurrent renders.
+- Performance test landed at `packages/visual-editor/test/components/StructureView.rerender-perf.test.tsx` — asserts ≤1 DataNode rerender on single-cell edit using a fresh-identity `cloneTradeDoc()` fixture.
 
 **Phase 14d — Per-instance expansion semantics** (this PR — branch `020-structure-view-phase-14d-per-instance-expansion`):
 - D fix: per-instance (XmlSpy / Altova UModel / Liquid Studio / Oxygen XML convention)

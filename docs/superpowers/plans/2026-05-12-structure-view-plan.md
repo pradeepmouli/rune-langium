@@ -3083,6 +3083,8 @@ git commit -m "feat(visual-editor): DataNode accepts injected cell components in
 
 **Outcome:** A working Structure View component renders inside a new tab in VisualPreviewPanel, defaults to fully collapsed, expands on hexagon-plus click.
 
+> **Implementation note (Phase 7.5 / 2026-05-16):** The VisualPreviewPanel tab-toggle approach below was **superseded** before merge. The studio UX audit caught that `EditorPage` overrides `workspace.visualPreview` with a `CenterStackPanel`-based mount, so a Tabs toggle inside `VisualPreviewPanel.tsx` would have been unreachable in production. Phase 7.5 (PR #185) deleted `VisualPreviewPanel.tsx` entirely and added a 4th `renderStructure` slot to `CenterStackPanel`. Structure View ships as a peer pane (not a tab) alongside Graph / Source / Inspector, toggled via the pane-switcher pill. The Task 7.3 steps below describing Radix Tabs inside `VisualPreviewPanel` were NOT executed as written; the equivalent wiring went into `CenterStackPanel.tsx` + `EditorPage.tsx` instead. Phase 7 tasks 7.1, 7.2, and 7.4+ proceeded as written; only 7.3 was rerouted.
+
 ## Task 7.1: StructureView — empty state
 
 **Files:**

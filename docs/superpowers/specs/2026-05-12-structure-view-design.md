@@ -13,34 +13,32 @@ The view exists alongside — not in place of — the existing graph view, switc
 
 ## 2. Architecture
 
-### 2.1 Placement — tab inside VisualPreviewPanel
+### 2.1 Placement — 4-pane peer in `CenterStackPanel` *(SUPERSEDED 2026-05-16, PR #185)*
 
-The new view is a Radix `Tabs` toggle inside `apps/studio/src/shell/panels/VisualPreviewPanel.tsx`:
+> **Original design (not shipped):** the new view was specified as a Radix `Tabs` toggle inside `apps/studio/src/shell/panels/VisualPreviewPanel.tsx`. The studio UX audit (`docs/superpowers/notes/2026-05-16-studio-ux-audit.md`) surfaced that `EditorPage` was overriding `workspace.visualPreview` with its own `CenterStackPanel`-based mount, so a Tabs toggle inside `VisualPreviewPanel` would have been unreachable.
 
-```
-VisualPreviewPanel
-├── Tab: Graph     → RuneTypeGraph (existing)
-└── Tab: Structure → StructureView (new)
-```
-
-The right rail relies on a dockview layout preset: `InspectorPanel` plays the "Details" role and `NamespaceExplorerPanel` plays the "Components" role, both reused as-is for rendering. The dockview state persists the active tab across reloads.
+**As shipped:** Structure View is a 4th peer pane inside `CenterStackPanel` alongside Graph / Source / Inspector. The pane is toggled via the pane-switcher pill at the top of the center stack. `VisualPreviewPanel.tsx` was deleted in Phase 7.5; `CenterStackPanel` is now the unified host. The right rail still relies on the dockview layout preset — `InspectorPanel` plays the "Details" role and `NamespaceExplorerPanel` plays the "Components" role, both reused as-is for rendering.
 
 ### 2.2 Code map
 
 | File | Status | Purpose |
 |---|---|---|
-| `apps/studio/src/shell/panels/VisualPreviewPanel.tsx` | modified | Tab toggle (Graph / Structure); persists active tab |
-| `packages/visual-editor/src/components/StructureView.tsx` | **new** (~300 LOC) | React Flow surface for the Structure tab |
-| `packages/visual-editor/src/layout/structure-layout.ts` | **new** (~200 LOC) | Recursive containment + internal LR layout |
-| `packages/visual-editor/src/adapters/structure-graph-adapter.ts` | **new** (~250 LOC) | Langium AST → Structure-view graph; per-row expansion state |
+| ~~`apps/studio/src/shell/panels/VisualPreviewPanel.tsx`~~ | **deleted in Phase 7.5** | Original Tabs-toggle approach was superseded; `CenterStackPanel` became the unified 4-pane host |
+| `apps/studio/src/shell/panels/CenterStackPanel.tsx` | modified | Added 4th `renderStructure` slot alongside Graph / Source / Inspector |
+| `apps/studio/src/pages/EditorPage.tsx` | modified | Mount site: wires `StructureView` into `CenterStackPanel`'s 4th slot; memoizes `structureCellComponents` |
+| `packages/visual-editor/src/components/StructureView.tsx` | **new** | React Flow surface for the Structure pane; identity-preserving node merge at the RF boundary (Phase 14c) |
+| `packages/visual-editor/src/layout/structure-layout.ts` | **new** | Recursive containment + internal LR layout; emits `style.width/height` + `initialWidth/initialHeight` (Phase 14b) |
+| `packages/visual-editor/src/adapters/structure-graph-adapter.ts` | **new** | Langium AST → Structure-view graph; per-instance materialization (Phase 14d); Data / Choice / Enum root materialization (Phase 14e/A) |
 | `packages/visual-editor/src/components/editors/structure/` | **new** | Inline cell editors: `NameCell`, `TypePickerCell`, `CardinalityCell`, `InheritanceCell` |
-| `packages/visual-editor/src/hooks/useTypeRefDrop.ts` | **new** (~80 LOC) | Shared drag-over/drop helper for all consumer surfaces |
-| `packages/visual-editor/src/components/nodes/DataNode.tsx` | modified | `variant: 'graph' \| 'structure'`; 2-column body in structure variant; per-row source `Handle`s; optional inline-cell components |
-| `packages/visual-editor/src/components/nodes/GroupContainerNode.tsx` | modified | New `scope: 'base-type'` variant — yellow body renders base's own rows directly |
-| `packages/visual-editor/src/components/nodes/ChoiceNode.tsx` | reused as-is | Consumed as expansion target |
-| `packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx` | modified | Single-click marks drag-source (→ arrow appears); items are `draggable`; double-click navigates |
-| `apps/studio/src/shell/panels/InspectorPanel.tsx` (TypeSelectorField) | modified | Drop target via `useTypeRefDrop` |
+| `packages/visual-editor/src/hooks/useTypeRefDrop.ts` | **new** | Shared drag-over/drop helper for all consumer surfaces |
+| `packages/visual-editor/src/components/nodes/DataNode.tsx` | modified | `variant: 'graph' \| 'structure'`; 2-column body in structure variant; per-instance expansion chevrons (Phase 14d); Handles gated to graph variant (Phase 14b) |
+| `packages/visual-editor/src/components/nodes/GroupContainerNode.tsx` | modified | New `scope: 'base-type'` variant — yellow body renders base's own rows directly; per-instance chevrons |
+| `packages/visual-editor/src/components/nodes/ChoiceNode.tsx` | modified (Phase 14e/B) | Structure variant with per-arm `TypePickerCell` cells and expansion chevrons; serves as both expansion target and focused root |
+| `packages/visual-editor/src/components/nodes/EnumNode.tsx` | **new (Phase 14e/A)** | Read-only terminal node for Enum-as-root mode |
+| `packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx` | modified | Single-click marks drag-source (→ arrow appears); items are `draggable`; navigation via dedicated nav button (hover-visible `ChevronRight`) — replaced double-click after Phase 13 redesign |
+| ~~`apps/studio/src/shell/panels/InspectorPanel.tsx` (TypeSelectorField)~~ | **deferred** | Inspector form remains a stub; `useTypeRefDrop` is ready to wire when the form lands |
 | `apps/studio/src/components/SourceEditor.tsx` | modified | CodeMirror 6 drop extension; inserts qualified type name at drop position |
+| `apps/studio/functions/rune-studio/studio/[[catchall]].ts` | **new** | Cloudflare Pages catch-all function for SPA deep-link fallback (PR #204) |
 | `packages/visual-editor/src/styles.css` | modified | Universal visual tightening (see §4) |
 
 **Zero parallel state.** Inline edits, drag-drops, and tab switches all converge on the existing studio store and Inspector edit pipeline. zundo history, LSP diagnostics, and source write-back stay unified.
@@ -51,7 +49,9 @@ The right rail relies on a dockview layout preset: `InspectorPanel` plays the "D
 
 - **TYPE node** (`DataNode`) — a Rosetta `type` declaration. Header shows `[type] <name>` with optional `extends <base>` badge. Body in `structure` variant is a 2-column grid: **rows on the left, expansions on the right**, both inside the same border.
 - **CHOICE node** (`ChoiceNode`) — a Rosetta `oneOf` choice. Header shows `[choice] <name>`; rows are choice options.
-- **ENUM** — never rendered as a canvas node. When an attribute's type is an enum, the type cell is a reference chip with an `↗` glyph; click → focuses that enum in the Inspector. Rendering of the enum itself remains the Inspector's responsibility.
+- **ENUM** — context-dependent rendering (Phase 14e/A revision):
+  - **Enum-as-attribute** (an attribute whose type is an enum, inside a Data or Choice structure): the type cell is a reference chip with the enum-tinted style; the row gets an `↗` inspect-arrow that refocuses the Structure View on the enum as root. (See the "display affordances" follow-up PR for the `↗` button.)
+  - **Enum-as-root** (the focused type id IS an Enum): `buildEnumNode()` materializes a read-only `EnumNode` canvas node listing the enum's values. The user reaches this via the explorer nav button or via the `↗` from an enum-typed attribute row.
 - **Base-type container** (`GroupContainerNode` with `scope: 'base-type'`) — yellow dashed container that represents the base type of an inheritance relation. The base's own attribute rows render directly inside the yellow body; the derived type is a nested `DataNode` below those rows, containing only the derived's new additions.
 
 ### 3.2 Recursive containment rule
