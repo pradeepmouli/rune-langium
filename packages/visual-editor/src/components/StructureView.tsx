@@ -17,7 +17,7 @@
  * @module
  */
 
-import React, { useMemo, useRef } from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import type { AdapterDocument } from '../adapters/structure-graph-adapter.js';
@@ -32,7 +32,7 @@ import type { StructureExpansionKey, StructureRow } from '../types/structure-vie
  * adapter emits fresh `StructureRow` arrays per pass but the individual
  * rows are simple records that should be compared structurally.
  */
-function arraysEqual<T>(a: ReadonlyArray<T>, b: ReadonlyArray<T>, eq: (x: T, y: T) => boolean): boolean {
+function arraysEqual<T>(a: ReadonlyArray<T>, b: ReadonlyArray<T>, eq: (x: T, y: T) => boolean = Object.is): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -303,10 +303,22 @@ function StructureFlowInner({
     // equal to the previous one. This lets React Flow's per-node memo skip
     // re-rendering the unchanged DataNode/ChoiceNode/GroupContainerNode
     // instances even though the upstream layout produced a fresh array.
+    //
+    // NOTE: this useMemo READS prevNodesRef but does NOT write it. The write
+    // happens in useLayoutEffect below — committing the cache only AFTER
+    // React has committed the render. Mutating the ref inside useMemo would
+    // be unsafe under concurrent rendering / StrictMode: an abandoned
+    // render's "stable" output would poison the cache for the next attempt.
     const stableNodes = preserveNodeIdentities(prevNodesRef.current, freshNodes);
-    prevNodesRef.current = stableNodes;
     return { nodes: stableNodes, edges: result.edges as Edge[] };
   }, [focusedTypeId, adapterDoc, expansionMap, cellComponents, onToggleExpansion]);
+
+  // Commit the identity-preserving cache only after the render reaches
+  // commit phase. Abandoned/discarded renders (StrictMode double-invoke,
+  // concurrent priority preemption) never touch the cache.
+  useLayoutEffect(() => {
+    prevNodesRef.current = nodes;
+  }, [nodes]);
 
   return (
     <div data-testid="structure-view-flow" style={{ width: '100%', height: '100%', minHeight: 320 }}>
