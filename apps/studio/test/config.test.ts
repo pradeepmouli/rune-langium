@@ -11,7 +11,7 @@
  *  (b) dev defaults route LSP same-origin to `/api/lsp/ws`
  *  (c) override via `VITE_LSP_WS_URL` wins
  *  (d) malformed URL throws at module load
- *  (e) `legacyGitPathEnabled` defaults to `false`
+ *  (e) service feature flags have correct production defaults
  *  (i) lspSessionUrl defaults to same-origin `/api/lsp/session`
  */
 
@@ -29,7 +29,6 @@ interface StudioEnv {
   readonly VITE_ENABLE_GITHUB_AUTH?: string;
   readonly VITE_ENABLE_CURATED_MIRROR?: string;
   readonly VITE_DEV_MODE?: string;
-  readonly VITE_LEGACY_GIT_PATH?: string;
   readonly VITE_HOME_URL?: string;
   readonly VITE_DOCS_URL?: string;
   readonly VITE_GITHUB_URL?: string;
@@ -124,13 +123,12 @@ describe('studio config singleton (014 T009/T011)', () => {
     ).rejects.toThrow();
   });
 
-  it('(e) legacyGitPathEnabled defaults to false', async () => {
+  it('(e) service feature flags have correct production defaults', async () => {
     const { config } = await loadConfig({
       DEV: false,
       PROD: true,
       MODE: 'production'
     });
-    expect(config.legacyGitPathEnabled).toBe(false);
     expect(config.telemetryEnabled).toBe(false);
     expect(config.githubAuthEnabled).toBe(true);
     expect(config.curatedMirrorEnabled).toBe(true);

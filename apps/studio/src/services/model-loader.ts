@@ -2,24 +2,25 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Git-based model loader using isomorphic-git.
- * Clones public repositories, discovers .rosetta files, and yields progress.
+ * Model loader — routes to the appropriate load path based on the source.
+ *
+ * - If `source.archiveUrl` is set AND `options.archiveLoader` is supplied,
+ *   routes to the curated-archive (CF R2) path. This is the preferred path
+ *   for deployed Studio (curated models).
+ * - If `source.archiveUrl` is NOT set but `source.repoUrl` is set, routes
+ *   to the git-clone path (isomorphic-git). This path is used by the
+ *   "+ Load from custom URL" UI flow (FR-007).
+ * - If neither condition is met, throws NETWORK.
+ *
  * @see specs/008-core-editor-features/contracts/model-loader-api.md
  */
 
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import { InMemoryFs } from './in-memory-fs.js';
-import type {
-  ModelSource,
-  CachedModel,
-  CachedFile,
-  LoadProgress,
-  LoadedModel
-} from '../types/model-types.js';
+import type { ModelSource, CachedModel, CachedFile, LoadProgress, LoadedModel } from '../types/model-types.js';
 import { ModelLoadError } from '../types/model-types.js';
 import { getCachedModel, getCachedModelIfFresh, setCachedModel } from './model-cache.js';
-import { config } from '../config.js';
 
 const CORS_PROXY = 'https://cors.isomorphic-git.org';
 
@@ -30,8 +31,8 @@ interface LoadOptions {
   /**
    * When `source.archiveUrl` is set (curated entries on the deployed CF
    * site), the caller can supply a curated-archive loader to short-circuit
-   * the slow git-clone path. Dependency-injected so this module stays
-   * decoupled from OPFS imports — the actual implementation lives in
+   * the git-clone path. Dependency-injected so this module stays decoupled
+   * from OPFS imports — the actual implementation lives in
    * `./curated-loader.ts` and is wired by the component layer
    * (ModelLoader.tsx).
    */
@@ -45,17 +46,14 @@ interface LoadOptions {
  * Load a Rune DSL model.
  *
  * - If `source.archiveUrl` is set AND `options.archiveLoader` is supplied,
- *   route to the curated-archive (CF R2) path. This is the fast, reliable
+ *   routes to the curated-archive (CF R2) path. This is the fast, reliable
  *   path for deployed Studio.
- * - Otherwise fall through to the git-clone path (existing behaviour;
- *   covers user-supplied custom URLs).
+ * - Otherwise falls through to the git-clone path for custom-URL sources
+ *   that carry a `source.repoUrl` but no `archiveUrl` (FR-007).
  *
  * The progress + cancellation surface is identical across both paths.
  */
-export async function loadModel(
-  source: ModelSource,
-  options: LoadOptions = {}
-): Promise<LoadedModel> {
+export async function loadModel(source: ModelSource, options: LoadOptions = {}): Promise<LoadedModel> {
   const { signal, useCache = true, onProgress, archiveLoader } = options;
 
   if (source.archiveUrl && archiveLoader) {
@@ -68,16 +66,12 @@ export async function loadModel(
     throw new ModelLoadError('CANCELLED', 'Load cancelled');
   }
 
-  // FR-019 — the legacy isomorphic-git clone path is unreachable in
-  // production builds. `config.legacyGitPathEnabled` defaults to `false`
-  // (see apps/studio/src/config.ts) so even custom-URL sources surface a
-  // clear error rather than silently hitting `cors.isomorphic-git.org`.
-  // Setting `VITE_LEGACY_GIT_PATH=true` at build time re-opens the path
-  // for local-dev contributors who explicitly want it.
-  if (!config.legacyGitPathEnabled) {
+  // No archiveUrl — fall through to the git-clone path (custom-URL sources).
+  // If there's no repoUrl either, there's nothing to clone.
+  if (!source.repoUrl) {
     throw new ModelLoadError(
       'NETWORK',
-      `Legacy git path is disabled in this build (config.legacyGitPathEnabled=false). Use a curated archive URL or enable the legacy path locally via VITE_LEGACY_GIT_PATH=true.`
+      `No archive loader or git URL available for "${source.name}". Only curated archive sources and custom git URLs are supported.`
     );
   }
 
@@ -174,9 +168,7 @@ export async function loadModel(
       if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
 
       const filePath = rosettaFiles[i]!;
-      const content = new TextDecoder().decode(
-        (await fs.promises.readFile(`${dir}/${filePath}`)) as Uint8Array
-      );
+      const content = new TextDecoder().decode((await fs.promises.readFile(`${dir}/${filePath}`)) as Uint8Array);
       const namespace = extractNamespace(content);
 
       files.push({ path: filePath, content, namespace });
@@ -209,10 +201,7 @@ export async function loadModel(
     const msg = (e as Error).message ?? String(e);
 
     if (msg.includes('404') || msg.includes('not found')) {
-      throw new ModelLoadError(
-        'NOT_FOUND',
-        `Repository or ref not found: ${source.repoUrl}@${source.ref}`
-      );
+      throw new ModelLoadError('NOT_FOUND', `Repository or ref not found: ${source.repoUrl}@${source.ref}`);
     }
     // Anything else maps to NETWORK — we can't reliably distinguish
     // network errors from programming bugs by string-matching the message,
@@ -226,11 +215,7 @@ export async function loadModel(
  * Recursively discover .rosetta files matching the source's path patterns.
  * Supports simple glob patterns with ** and *.
  */
-async function discoverRosettaFiles(
-  fs: InMemoryFs,
-  baseDir: string,
-  patterns: string[]
-): Promise<string[]> {
+async function discoverRosettaFiles(fs: InMemoryFs, baseDir: string, patterns: string[]): Promise<string[]> {
   const allFiles = await walkDirectory(fs, baseDir, '');
   const rosettaFiles = allFiles.filter((f) => f.endsWith('.rosetta'));
 
@@ -238,17 +223,11 @@ async function discoverRosettaFiles(
     return rosettaFiles;
   }
 
-  return rosettaFiles.filter((filePath) =>
-    patterns.some((pattern) => matchGlob(filePath, pattern))
-  );
+  return rosettaFiles.filter((filePath) => patterns.some((pattern) => matchGlob(filePath, pattern)));
 }
 
 /** Recursively walk a directory tree and collect all file paths. */
-async function walkDirectory(
-  fs: InMemoryFs,
-  baseDir: string,
-  relativePath: string
-): Promise<string[]> {
+async function walkDirectory(fs: InMemoryFs, baseDir: string, relativePath: string): Promise<string[]> {
   const fullPath = relativePath ? `${baseDir}/${relativePath}` : baseDir;
   const entries = (await fs.promises.readdir(fullPath)) as string[];
   const results: string[] = [];
@@ -276,11 +255,7 @@ async function walkDirectory(
 
 /** Simple glob matching for patterns like "src/main/rosetta/**\/*.rosetta". */
 function matchGlob(filePath: string, pattern: string): boolean {
-  const regex = pattern
-    .replace(/\./g, '\\.')
-    .replace(/\*\*/g, '§§')
-    .replace(/\*/g, '[^/]*')
-    .replace(/§§/g, '.*');
+  const regex = pattern.replace(/\./g, '\\.').replace(/\*\*/g, '§§').replace(/\*/g, '[^/]*').replace(/§§/g, '.*');
   return new RegExp(`^${regex}$`).test(filePath);
 }
 

@@ -21,14 +21,9 @@ export interface Env {
   rune_curated_mirror: R2Bucket;
   CURATED_SOURCES: string;
   ALLOWED_ORIGIN: string;
-  /**
-   * Wrangler `[vars.RETENTION]` is rendered as a top-level string env var
-   * named `RETENTION_ARCHIVES_PER_MODEL`, NOT as a nested object — wrangler
-   * doesn't preserve nested table shape for runtime env. Keep both forms
-   * supported for ops convenience: read the flat name first, fall back to
-   * the legacy nested shape if a future wrangler change re-enables it.
-   */
+  /** Flat env var set via `[vars]` in wrangler.toml. Preferred form. */
   RETENTION_ARCHIVES_PER_MODEL?: string;
+  /** Nested fallback form (read by `readRetention` for ops convenience). */
   RETENTION?: { ARCHIVES_PER_MODEL?: string };
 }
 
@@ -66,17 +61,11 @@ function errMessage(err: unknown): string {
 }
 
 export default {
-  async scheduled(
-    _controller: ScheduledController,
-    env: Env,
-    _ctx: ExecutionContext
-  ): Promise<void> {
+  async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     const sources = parseSources(env);
     await publishCuratedMirrors({
       sources,
-      bucket: env.rune_curated_mirror as unknown as Parameters<
-        typeof publishCuratedMirrors
-      >[0]['bucket'],
+      bucket: env.rune_curated_mirror as unknown as Parameters<typeof publishCuratedMirrors>[0]['bucket'],
       retention: readRetention(env)
     });
   },

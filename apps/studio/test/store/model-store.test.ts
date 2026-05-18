@@ -2,17 +2,20 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * T015 — model-store curated/legacy path DI tests (014, US1).
+ * T015 — model-store curated path DI tests (014, US1).
  *
  * Asserts the wiring landed in T014 and updated for 019 Phase 0:
  *   - When `source.archiveUrl` is set, `loadModel(...)` is called WITH an
  *     `archiveLoader` (metadata-only path — no archive fetch, no OPFS write).
  *   - When `source.archiveUrl` is NOT set, `loadModel(...)` is called
- *     WITHOUT an archiveLoader (custom-URL git path stays available).
- *   - The legacy `git.clone` from isomorphic-git is NEVER invoked when
- *     `archiveUrl` is set (regression guard for FR-019).
+ *     WITHOUT an archiveLoader.
  *   - 019 Phase 0: the archiveLoader returns a LoadedModel with empty files[]
  *     and commitHash='latest'; no network fetch or OPFS write occurs.
+ *
+ * Regression (020 Codex P2, PR #195):
+ *   - Custom URL sources (no archiveUrl) must NOT receive an archiveLoader —
+ *     they should reach the git-clone path in model-loader.ts (FR-007).
+ *   - Sources with neither archiveUrl nor repoUrl throw NETWORK immediately.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -28,16 +31,7 @@ vi.mock('../../src/services/model-loader.js', () => ({
   loadModel: (source: ModelSource, options: unknown) => loadModelMock(source, options)
 }));
 
-// Spy on isomorphic-git's `clone`. The model-loader.ts legacy path imports
-// `git from 'isomorphic-git'` and calls `git.clone`; if our wiring works,
-// that call must never happen when archiveUrl is set.
-const gitCloneSpy = vi.fn();
-vi.mock('isomorphic-git', () => {
-  const stub = { clone: (...args: unknown[]) => gitCloneSpy(...args) };
-  return { default: stub, clone: (...args: unknown[]) => gitCloneSpy(...args) };
-});
-
-// Run the store import AFTER the mocks above so the store's transitive
+// Run the store import AFTER the mock above so the store's transitive
 // loadModel binding picks up our spy.
 const { useModelStore } = await import('../../src/store/model-store.js');
 
@@ -56,7 +50,17 @@ const CUSTOM_SOURCE: ModelSource = {
   repoUrl: 'https://github.com/my/repo.git',
   ref: 'main',
   paths: ['**/*.rosetta']
-  // no archiveUrl
+  // no archiveUrl — custom URL flow, goes through git-clone path (FR-007)
+};
+
+/** A degenerate source with neither archiveUrl nor repoUrl — should throw immediately. */
+const BARE_SOURCE: ModelSource = {
+  id: 'bare-xyz',
+  name: 'Bare Source',
+  repoUrl: '',
+  ref: 'main',
+  paths: ['**/*.rosetta']
+  // no archiveUrl, no repoUrl — unsupported
 };
 
 const FAKE_MODEL: LoadedModel = {
@@ -69,7 +73,6 @@ const FAKE_MODEL: LoadedModel = {
 beforeEach(() => {
   loadModelMock.mockReset();
   loadModelMock.mockResolvedValue(FAKE_MODEL);
-  gitCloneSpy.mockReset();
   // Reset store state so each test starts clean.
   useModelStore.setState({
     models: new Map(),
@@ -107,52 +110,37 @@ describe('useModelStore — archiveLoader DI (T015)', () => {
     expect((opts as { archiveLoader?: unknown }).archiveLoader).toBeUndefined();
   });
 
-  it('legacy git.clone is NOT invoked when archiveUrl is set', async () => {
-    // 019 Phase 0: the archive loader no longer fetches anything — it returns
-    // metadata only. git.clone must never be called for curated sources.
-    loadModelMock.mockImplementation(async (source: ModelSource, options: { archiveLoader?: unknown }) => {
-      if (source.archiveUrl && typeof options.archiveLoader === 'function') {
-        // Skip invoking the archiveLoader to keep the test synchronous;
-        // the wiring assertion is captured by mock.calls above.
-        return FAKE_MODEL;
-      }
-      return FAKE_MODEL;
-    });
-
-    await useModelStore.getState().load(CURATED_SOURCE);
-    expect(gitCloneSpy).not.toHaveBeenCalled();
-  });
-
-  it('legacy git path throws when archiveUrl is missing AND legacyGitPathEnabled=false (T017)', async () => {
-    // The store passes through to the real model-loader for non-curated
-    // sources. With the FR-019 gate landed in T017, that path MUST throw
-    // a ModelLoadError before reaching git.clone().
+  it('source with no archiveUrl AND no repoUrl throws NETWORK immediately', async () => {
+    // model-loader throws NETWORK if there is neither an archive URL nor a git
+    // URL to clone — there is simply no way to load the source.
     vi.resetModules();
-    // Restore real model-loader for this case so we exercise the gate.
     vi.doUnmock('../../src/services/model-loader.js');
-    vi.doMock('../../src/config.js', () => ({
-      config: {
-        legacyGitPathEnabled: false,
-        // The rest of the fields aren't read by model-loader.ts; satisfy
-        // TypeScript by providing the same shape.
-        lspWsUrl: 'ws://localhost:3001',
-        lspSessionUrl: 'http://localhost:3001/lsp/session',
-        telemetryEndpoint: 'http://localhost:5173/api/telemetry/v1/event',
-        devMode: true
-      },
-      studioConfig: { homeUrl: '', docsUrl: '', githubUrl: '' }
-    }));
     const { loadModel } = await import('../../src/services/model-loader.js');
-    await expect(loadModel(CUSTOM_SOURCE)).rejects.toMatchObject({
+    await expect(loadModel(BARE_SOURCE)).rejects.toMatchObject({
       code: 'NETWORK',
-      message: expect.stringMatching(/legacy git path is disabled/i)
+      message: expect.stringMatching(/no archive loader or git url/i)
     });
-    expect(gitCloneSpy).not.toHaveBeenCalled();
     // Re-mock so the rest of the suite continues to use loadModelMock.
     vi.doMock('../../src/services/model-loader.js', () => ({
       loadModel: (source: ModelSource, options: unknown) => loadModelMock(source, options)
     }));
-    vi.doUnmock('../../src/config.js');
+  });
+
+  it('custom URL source (no archiveUrl) does NOT receive archiveLoader — reaches git-clone path', async () => {
+    // FR-007 regression: the cleanup of legacyGitPathEnabled (commit 25cc5a07)
+    // incorrectly threw NETWORK for CUSTOM_SOURCE before the git-clone path
+    // was reached. Verify that model-store passes no archiveLoader for custom
+    // sources (git-clone path selection is model-loader's job, not the store's).
+    await useModelStore.getState().load(CUSTOM_SOURCE);
+
+    expect(loadModelMock).toHaveBeenCalledTimes(1);
+    const [src, opts] = loadModelMock.mock.calls[0]!;
+    expect(src).toBe(CUSTOM_SOURCE);
+    // store must NOT pass an archiveLoader — that would bypass the git-clone path
+    expect((opts as { archiveLoader?: unknown }).archiveLoader).toBeUndefined();
+    // store MUST still pass signal and onProgress for cancellation / progress
+    expect((opts as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal);
+    expect(typeof (opts as { onProgress?: unknown }).onProgress).toBe('function');
   });
 
   it('archiveLoader callback returns metadata-only LoadedModel without fetching (019 Phase 0)', async () => {

@@ -551,8 +551,9 @@ describe('EditorStore — updateAttributeType', () => {
     const store = createEditorStore();
     const id = store.getState().createType('data', 'Trade', 'cdm.trade');
     store.getState().addAttribute(id, 'economics', 'OldType', '0..*');
+    const econId = store.getState().createType('data', 'Economics', 'cdm.trade');
 
-    store.getState().updateAttributeType(id, 'economics', 'Economics');
+    store.getState().updateAttributeType(id, 'economics', 'Economics', econId);
 
     const node = store.getState().nodes.find((n) => n.id === id)!;
     const attrs = ((node.data as any).attributes ?? []) as Array<any>;
@@ -564,8 +565,9 @@ describe('EditorStore — updateAttributeType', () => {
     const store = createEditorStore();
     const id = store.getState().createType('data', 'Trade', 'cdm.trade');
     store.getState().addAttribute(id, 'economics', 'OldType', '0..*');
+    const xId = store.getState().createType('data', 'X', 'cdm.trade');
 
-    expect(() => store.getState().updateAttributeType(id, 'missing', 'X')).not.toThrow();
+    expect(() => store.getState().updateAttributeType(id, 'missing', 'X', xId)).not.toThrow();
     const node = store.getState().nodes.find((n) => n.id === id)!;
     const attrs = ((node.data as any).attributes ?? []) as Array<any>;
     expect(attrs[0].name).toBe('economics');
@@ -576,13 +578,14 @@ describe('EditorStore — updateAttributeType', () => {
     const store = createEditorStore();
     const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
     const oldId = store.getState().createType('data', 'OldEconomics', 'cdm.trade');
+    const stringId = store.getState().createType('data', 'string', 'cdm.trade');
     store.getState().addAttribute(tradeId, 'economics', 'OldEconomics', '0..1');
 
     expect(
       store.getState().edges.some((e) => e.source === tradeId && e.target === oldId && e.data?.kind === 'attribute-ref')
     ).toBe(true);
 
-    store.getState().updateAttributeType(tradeId, 'economics', 'string');
+    store.getState().updateAttributeType(tradeId, 'economics', 'string', stringId);
 
     expect(
       store.getState().edges.some((e) => e.source === tradeId && e.target === oldId && e.data?.kind === 'attribute-ref')
@@ -595,7 +598,7 @@ describe('EditorStore — updateAttributeType', () => {
     store.getState().addAttribute(tradeId, 'economics', 'string', '0..1');
     const newId = store.getState().createType('data', 'Economics', 'cdm.trade');
 
-    store.getState().updateAttributeType(tradeId, 'economics', 'Economics');
+    store.getState().updateAttributeType(tradeId, 'economics', 'Economics', newId);
 
     const edge = store
       .getState()
@@ -610,7 +613,7 @@ describe('EditorStore — updateAttributeType', () => {
     store.getState().addAttribute(tradeId, 'economics', 'string', '0..*');
     const newId = store.getState().createType('data', 'Economics', 'cdm.trade');
 
-    store.getState().updateAttributeType(tradeId, 'economics', 'Economics');
+    store.getState().updateAttributeType(tradeId, 'economics', 'Economics', newId);
 
     const edge = store
       .getState()
@@ -622,9 +625,11 @@ describe('EditorStore — updateAttributeType', () => {
     const store = createEditorStore();
     const id = store.getState().createType('data', 'Trade', 'cdm.trade');
     store.getState().addAttribute(id, 'economics', 'OldType', '0..1');
+    const xId = store.getState().createType('data', 'X', 'cdm.trade');
+    // Capture after all setup mutations so only the updateAttributeType call is measured.
     const stackBefore = store.temporal.getState().pastStates.length;
 
-    store.getState().updateAttributeType(id, 'missing', 'X');
+    store.getState().updateAttributeType(id, 'missing', 'X', xId);
 
     expect(store.temporal.getState().pastStates.length).toBe(stackBefore);
   });
@@ -634,8 +639,9 @@ describe('EditorStore — updateAttributeType', () => {
     const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
     store.getState().addAttribute(tradeId, 'economics', 'string', '0..1');
     store.getState().addAttribute(tradeId, 'economics', 'string', '0..1');
+    const econId = store.getState().createType('data', 'Economics', 'cdm.trade');
 
-    store.getState().updateAttributeType(tradeId, 'economics', 'Economics');
+    store.getState().updateAttributeType(tradeId, 'economics', 'Economics', econId);
 
     const node = store.getState().nodes.find((n) => n.id === tradeId)!;
     const attrs = ((node.data as any).attributes ?? []) as Array<any>;
@@ -710,24 +716,6 @@ describe('EditorStore — updateAttributeType (Finding 3: cross-namespace qualif
     expect(p.typeCall.type.$refText).toBe('OldType'); // unchanged
     // No new edges either.
     expect(store.getState().edges.length).toBe(before.edges.length);
-  });
-
-  it('preserves legacy bare-name behavior when targetTypeId is omitted (back-compat)', () => {
-    const store = createEditorStore();
-    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
-    store.getState().addAttribute(tradeId, 'p', 'string', '0..1');
-    // Even with two Party types in different namespaces, the legacy
-    // 3-arg call writes the bare name (callers that haven't migrated yet
-    // must not get a surprise qualification).
-    store.getState().createType('data', 'Party', 'ns.a');
-    store.getState().createType('data', 'Party', 'ns.b');
-
-    store.getState().updateAttributeType(tradeId, 'p', 'Party');
-
-    const node = store.getState().nodes.find((n) => n.id === tradeId)!;
-    const attrs = ((node.data as any).attributes ?? []) as Array<any>;
-    const p = attrs.find((a) => a.name === 'p')!;
-    expect(p.typeCall.type.$refText).toBe('Party');
   });
 });
 

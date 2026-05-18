@@ -103,8 +103,8 @@ const VALID_CURATED_IDS = new Set<string>(CURATED_MODEL_IDS);
 
 /**
  * Build the `archiveLoader` callback the model-loader DI hook expects.
- * Returns `undefined` when no curated archive URL is set on the source —
- * that way the legacy git path stays in scope for custom-URL flows.
+ * Returns `undefined` when no curated archive URL is set on the source
+ * (non-curated sources are rejected by model-loader with NETWORK error).
  *
  * 019 Phase 0: The loader no longer fetches the .tar.gz archive or writes
  * to OPFS. It records { id, version: 'latest' } as bundle metadata only.
@@ -215,7 +215,7 @@ export const useModelStore = create<ModelStore>((set, get) => ({
 
       const currentErrors = new Map(get().errors);
       const err = e as { code?: ModelLoadErrorCode; category?: string; message?: string };
-      // CuratedLoadError exposes `.category` (FR-002 enum); legacy git path
+      // CuratedLoadError exposes `.category` (FR-002 enum); ModelLoadError
       // uses `.code`. Either is forwarded into the store as the `code`
       // field — ModelLoader.tsx normalises via ErrorCategorySchema.
       currentErrors.set(source.id, {
