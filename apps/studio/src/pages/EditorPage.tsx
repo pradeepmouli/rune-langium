@@ -344,10 +344,27 @@ export function EditorPage({
   // Derive $type of the currently-selected node to gate which ids get forwarded
   // to StructureView as focusedTypeId. Using a separate selector avoids breaking
   // zustand's referential-equality optimisation that would fire on every nodes mutation.
+  //
+  // Defensive derivation (e2e-batch fix): the curated/deferred-export path
+  // attaches $type to data.$type, but earlier hydration variants stored kind
+  // info on data.typeKind or only on the React Flow node.type. Fall through to
+  // every known source so curated-loaded nodes also derive a valid type and
+  // route through to Structure View (issue #1 — curated bundles showed empty
+  // structure pane because selectedNodeType was null even though Inspector
+  // populated from the same node).
   const selectedNodeType = useEditorStore((s) => {
     if (!s.selectedNodeId) return null;
     const node = s.nodes.find((n) => n.id === s.selectedNodeId);
-    return (node?.data as { $type?: string } | undefined)?.$type ?? null;
+    if (!node) return null;
+    const d = node.data as { $type?: string; typeKind?: string } | undefined;
+    if (d?.$type) return d.$type;
+    // Map React Flow node.type (lowercase: 'data', 'choice', 'enum') or
+    // data.typeKind back to the Langium AST $type the StructureView gate expects.
+    const kind = d?.typeKind ?? (node as { type?: string }).type;
+    if (kind === 'data' || kind === 'Data') return 'Data';
+    if (kind === 'choice' || kind === 'Choice') return 'Choice';
+    if (kind === 'enum' || kind === 'Enum' || kind === 'RosettaEnumeration') return 'RosettaEnumeration';
+    return null;
   });
   const storeSetLayoutEngine = useEditorStore((s) => s.setLayoutEngine);
   const layoutEngineRef = useRef(storeLayoutEngine);
@@ -1390,6 +1407,30 @@ export function EditorPage({
     return undefined;
   }, [selectedNodeId, selectedNodeType]);
 
+  // e2e-batch fix #10: when the user has selected a type whose kind isn't
+  // supported in Structure View, expose the name + kind so the empty state can
+  // explain WHY the pane is blank instead of repeating the generic prompt.
+  // Selected-but-supported types fall through to the regular focused-type
+  // render path; unsupported types produce { name, kind } for the targeted
+  // empty state in StructureView.
+  const structureUnsupportedSelectedType = useMemo<{ name: string; kind: string } | undefined>(() => {
+    if (!selectedNodeId || structureFocusedTypeId) return undefined;
+    if (!selectedNodeType) return undefined;
+    const node = storeNodes.find((n) => n.id === selectedNodeId);
+    const name =
+      (node?.data as { name?: string } | undefined)?.name ?? selectedNodeId.split('::').pop() ?? selectedNodeId;
+    // Map AST $type to a user-friendly kind label (RosettaFunction → Function, etc.)
+    const KIND_LABEL: Record<string, string> = {
+      RosettaFunction: 'Function',
+      Function: 'Function',
+      TypeAlias: 'Type alias',
+      Record: 'Record',
+      Annotation: 'Annotation',
+      RosettaRecordType: 'Record'
+    };
+    return { name, kind: KIND_LABEL[selectedNodeType] ?? selectedNodeType };
+  }, [selectedNodeId, selectedNodeType, structureFocusedTypeId, storeNodes]);
+
   const adapterDocument = useMemo(
     () => (storeNodes.length > 0 ? graphNodesToAdapterDocument(storeNodes) : undefined),
     [storeNodes]
@@ -1416,9 +1457,19 @@ export function EditorPage({
         expansionMap={expansionMap}
         cellComponents={structureCellComponents}
         onToggleExpansion={toggleExpansion}
+        unsupportedSelectedType={structureUnsupportedSelectedType}
+        onNodeSelect={(canonicalId) => storeSelectNode(canonicalId, { reapplyFocusMode: false })}
       />
     ),
-    [structureFocusedTypeId, adapterDocument, expansionMap, structureCellComponents, toggleExpansion]
+    [
+      structureFocusedTypeId,
+      adapterDocument,
+      expansionMap,
+      structureCellComponents,
+      toggleExpansion,
+      structureUnsupportedSelectedType,
+      storeSelectNode
+    ]
   );
 
   const VisualPreviewPanelMounted = useCallback(

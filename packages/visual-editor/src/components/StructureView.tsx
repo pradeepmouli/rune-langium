@@ -231,6 +231,24 @@ export interface StructureViewProps {
    * the click flips the relevant entry in `expansionMap`.
    */
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
+  /**
+   * When `focusedTypeId` is undefined because the user selected a type whose
+   * kind isn't supported in Structure View (Function / TypeAlias / Record /
+   * Annotation), pass the selected type's name and kind here so the empty
+   * state can render actionable guidance instead of the generic prompt
+   * (e2e-batch fix #10). When the user has selected nothing or a supported
+   * kind, leave this undefined.
+   */
+  readonly unsupportedSelectedType?: { name: string; kind: string };
+  /**
+   * Selection sync (e2e-batch fix #3): fired when the user clicks any node in
+   * the rendered Structure tree. Receives the canonical type id (e.g.
+   * `'cdm.trade::Trade'`) — NOT the per-instance React Flow node id, so the
+   * receiver can write straight to a single `selectedNodeId` slice that the
+   * Graph / Source / Inspector also read from. EditorPage wires this to
+   * `useEditorStore.selectNode`.
+   */
+  readonly onNodeSelect?: (canonicalTypeId: string) => void;
 }
 
 const EMPTY_EXPANSION_MAP: ReadonlyMap<string, boolean> = new Map();
@@ -241,6 +259,7 @@ interface StructureFlowInnerProps {
   readonly expansionMap: ReadonlyMap<string, boolean>;
   readonly cellComponents?: StructureCellComponents;
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
+  readonly onNodeSelect?: (canonicalTypeId: string) => void;
 }
 
 /**
@@ -252,7 +271,8 @@ function StructureFlowInner({
   adapterDoc,
   expansionMap,
   cellComponents,
-  onToggleExpansion
+  onToggleExpansion,
+  onNodeSelect
 }: StructureFlowInnerProps): React.ReactElement {
   // Phase 14c (Approach B): keep the previous useMemo result so we can
   // identity-preserve unchanged nodes across re-renders. React Flow shallow-
@@ -332,6 +352,18 @@ function StructureFlowInner({
         elementsSelectable={false}
         onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
+        // e2e-batch fix #3: selection sync — clicking any node in the
+        // Structure tree writes the OWNER type's canonical id to the shared
+        // selection slice. We extract `node.data.id` (the canonical type id
+        // stamped by the adapter, e.g. `cdm.trade::Trade`) rather than the
+        // React Flow `node.id` (which carries the per-instance suffix like
+        // `Trade::buyer::Party` and would not match the explorer / inspector
+        // selection contract). Falls back to `node.id` when `data.id` is
+        // missing so the click still produces a write.
+        onNodeClick={(_, node) => {
+          const canonicalId = (node.data as { id?: string } | undefined)?.id ?? node.id;
+          onNodeSelect?.(canonicalId);
+        }}
       />
     </div>
   );
@@ -355,9 +387,26 @@ export function StructureView({
   adapterDoc,
   expansionMap,
   cellComponents,
-  onToggleExpansion
+  onToggleExpansion,
+  unsupportedSelectedType,
+  onNodeSelect
 }: StructureViewProps): React.ReactElement {
   if (!focusedTypeId || !adapterDoc) {
+    // e2e-batch fix (#10): distinguish "nothing selected" from "selected an
+    // unsupported kind (Function / TypeAlias / Record / Annotation)" so the
+    // user gets actionable guidance instead of the generic "Select a type"
+    // prompt that doesn't explain why their click didn't open anything.
+    if (unsupportedSelectedType) {
+      return (
+        <div data-testid="structure-unsupported-kind-state">
+          <p>
+            <strong>{unsupportedSelectedType.name}</strong> is a{' '}
+            <code>{unsupportedSelectedType.kind ?? 'non-structural'}</code> type and is not supported in Structure View.
+          </p>
+          <p>Pick a Data, Choice, or Enum type from the Namespace Explorer to see its structure.</p>
+        </div>
+      );
+    }
     return (
       <div data-testid="structure-empty-state">Select a type from the Namespace Explorer to view its structure.</div>
     );
@@ -384,6 +433,7 @@ export function StructureView({
         expansionMap={expansionMap ?? EMPTY_EXPANSION_MAP}
         cellComponents={cellComponents}
         onToggleExpansion={onToggleExpansion}
+        onNodeSelect={onNodeSelect}
       />
     </ReactFlowProvider>
   );

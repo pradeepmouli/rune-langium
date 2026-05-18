@@ -154,7 +154,23 @@ export function CenterStackPanel({
             <div
               className="studio-center-stack__pane"
               data-pane={pane}
-              style={{ flex: `${fractions[i] ?? 1 / ordered.length} 1 0%` }}
+              style={{
+                // e2e-batch fix: was `flex: <grow> 1 0%`, which gives a 0% basis
+                // and stops children from growing past the equal split. Inner
+                // panes (Structure View especially) need a real basis so their
+                // content (React Flow tree) can size correctly. `minWidth: 0`
+                // keeps flex-shrink working — without it overflowing children
+                // would force the pane wider than its share. `minHeight: 0`
+                // mirrors the same protection for the vertical axis.
+                flex: `${fractions[i] ?? 1 / ordered.length} 1 0`,
+                minWidth: 0,
+                minHeight: 0,
+                // Each active pane gets a meaningful minimum so multi-pane
+                // mode (3-4 active) doesn't squash any pane below usability.
+                // 280px is the smallest width where Structure rows and the
+                // CodeMirror gutter+source both stay legible.
+                minInlineSize: ordered.length > 1 ? '280px' : undefined
+              }}
             >
               {renderPane(pane)}
             </div>

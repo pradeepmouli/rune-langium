@@ -827,11 +827,18 @@ button[data-navigable]:focus-visible {
 
 /* DataNode — structure variant ---------------------------------- */
 
-.rune-node-data--structure {
+.rune-node-data--structure,
+.rune-node-choice--structure {
   /* Inherits .rune-node-data card baseline; structure layout
    * stacks the header, then a two-column body below it. */
   display: flex;
   flex-direction: column;
+  /* e2e-batch fix #13: reduce structure-variant text by one notch (sm → xs)
+   * so dense schemas show more rows per visible viewport without scrolling.
+   * Cascades down to row text, type chips, and cardinality pills. The graph
+   * variant intentionally stays at --text-sm because graph nodes have fewer
+   * rows per node and benefit from larger glyphs. */
+  font-size: var(--text-xs, 0.75rem);
 }
 
 /* Wire HEADER_HEIGHT SSoT: the structure-variant header must render at

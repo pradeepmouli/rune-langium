@@ -283,7 +283,6 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                       <NamespaceHeaderRow
                         row={row}
                         isGraphVisible={expandedNamespaces.has(row.namespace)}
-                        onToggleGraphVisibility={() => onToggleNamespace(row.namespace)}
                         onToggleTreeExpand={() => toggleTreeExpand(row.namespace)}
                       />
                     ) : (
@@ -316,19 +315,26 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
 
 interface NamespaceHeaderRowProps {
   row: Extract<FlatTreeRow, { kind: 'namespace' }>;
+  /**
+   * Whether this namespace is currently visible in the Graph view. Kept for
+   * styling the row's text color (visible → foreground, hidden → muted) so
+   * users can see at a glance which namespaces the Graph filter has hidden.
+   * Toggle UI for visibility was removed from the explorer (e2e-batch fix):
+   * visibility is a Graph-only concept, managed via the Graph filter menu.
+   */
   isGraphVisible: boolean;
-  onToggleGraphVisibility: () => void;
   onToggleTreeExpand: () => void;
 }
 
-function NamespaceHeaderRow({
-  row,
-  isGraphVisible,
-  onToggleGraphVisibility,
-  onToggleTreeExpand
-}: NamespaceHeaderRowProps): JSX.Element {
+function NamespaceHeaderRow({ row, isGraphVisible, onToggleTreeExpand }: NamespaceHeaderRowProps): JSX.Element {
+  // e2e-batch fix #11: signal that this namespace contains draggable items.
+  // A subtle "grip" affordance appears on hover so users discover that types
+  // INSIDE the namespace can be dragged to drop targets (Structure rows,
+  // Source editor). The namespace header itself isn't draggable today —
+  // that would need a new NamespaceRef payload kind — but the hover hint
+  // points users toward the per-type drag affordance once expanded.
   return (
-    <div data-testid={`ns-row-${row.namespace}`}>
+    <div data-testid={`ns-row-${row.namespace}`} className="group">
       <div
         className={`flex items-center gap-1 px-2 py-1 text-sm hover:bg-accent/50 cursor-default ${
           isGraphVisible ? 'text-foreground' : 'text-muted-foreground'
@@ -344,23 +350,19 @@ function NamespaceHeaderRow({
           {row.expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </Button>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={onToggleGraphVisibility}
-              aria-label={isGraphVisible ? 'Hide namespace from graph' : 'Show namespace on graph'}
-              className="shrink-0"
-            >
-              {isGraphVisible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5 text-muted-foreground" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{isGraphVisible ? 'Hide from graph' : 'Show on graph'}</TooltipContent>
-        </Tooltip>
-
         <span className="flex-1 truncate text-xs font-medium cursor-pointer" onClick={onToggleTreeExpand}>
           {row.namespace}
+        </span>
+
+        {/* Drag-source affordance hint (hover-only). Subtle ⋮⋮ icon signals to
+            the user that types inside are draggable. Stays hidden until hover
+            so it doesn't compete visually with the type-count chiclet. */}
+        <span
+          className="shrink-0 px-1 text-[10px] leading-none text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100"
+          aria-hidden="true"
+          title="Types in this namespace can be dragged onto Structure rows or the Source editor"
+        >
+          ⋮⋮
         </span>
 
         <span className="number-chiclet">{row.typeCount}</span>
