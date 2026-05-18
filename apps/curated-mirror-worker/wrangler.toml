@@ -59,6 +59,9 @@ ALLOWED_ORIGIN = "https://www.daikonic.dev"
 RETENTION_ARCHIVES_PER_MODEL = "14"
 
 # inspector_port avoids EADDRINUSE when multiple workers run in parallel.
+# port 8789 leaves 8788 free for `wrangler pages dev` (apps/studio/dev:pages),
+# which is the orchestrator that binds to this worker via the CURATED_MIRROR
+# service binding. apps/studio's dev:full script starts both in parallel.
 [dev]
-port = 8788
+port = 8789
 inspector_port = 9231
