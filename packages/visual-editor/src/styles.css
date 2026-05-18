@@ -952,6 +952,16 @@ button[data-navigable]:focus-visible {
    * Padding uses --rune-row-gap (8px) as the inset. */
   border-left: 1px dashed var(--border, rgba(255, 255, 255, 0.06));
   padding-left: var(--rune-row-gap);
+  /* Copilot e2e-batch review flagged a potential overflow when a node has
+   * NO expansions: the slot's margin-left + border + padding could push
+   * the inner content past the layout's pre-computed sz.width. In
+   * practice this is invisible because (a) `.rune-node` has
+   * `overflow: hidden` which clips anything past the outer frame, and
+   * (b) `flex: 1 1 auto` shrinks the slot to 0 width when there's no
+   * remaining space (no expansion children = empty slot, no content
+   * pressure, slot collapses). The decorative border-left is also
+   * clipped in the no-children case. If a future change adds visible
+   * inner content to the slot DOM (e.g., a placeholder), revisit. */
 }
 
 /* GroupContainerNode — base-type scope -------------------------- */
