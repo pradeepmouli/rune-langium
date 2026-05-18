@@ -88,13 +88,27 @@ interface SizedNode {
  * and locale glyphs can render wider than the estimate; the COL_WIDTH_MAX cap
  * + CSS `text-overflow: ellipsis` are the safety net.
  */
-function estimateRowsColWidth(rowTexts: ReadonlyArray<{ name: string; typeName: string; card: string }>): number {
+function estimateRowsColWidth(
+  rowTexts: ReadonlyArray<{ name: string; typeName: string; card: string }>,
+  /**
+   * The node's HEADER text — the type's own name (`data.name`). Header
+   * width is the `NodeKindBadge` (~50px) + the name itself, and the
+   * header can be LONGER than any row's content (e.g. a Data type named
+   * `AdjustableOrAdjustedOrRelativeDate` with short attributes). Without
+   * including the header in the floor, the visual verification on dev
+   * caught the header truncating with text-overflow ellipsis even though
+   * all rows fit. e2e-batch follow-up #12.
+   */
+  headerName: string = ''
+): number {
   const CHAR_W = 7;
   // chrome: row padding (8) + chevron (14) + gap (4) + type chip horiz padding
   // (16) + card pill horiz padding (12) + inter-cell gaps (4*4=16) + right
   // padding (8) ≈ 78. Round up for safety margin.
   const CHROME = 84;
-  let max = 0;
+  // Header chrome: kind badge (50) + L/R padding (8+8) + safety margin (10) ≈ 76.
+  const HEADER_CHROME = 76;
+  let max = headerName.length * CHAR_W + HEADER_CHROME;
   for (const r of rowTexts) {
     const w = (r.name.length + r.typeName.length + r.card.length) * CHAR_W + CHROME;
     if (w > max) max = w;
@@ -194,9 +208,12 @@ function sizeData(
       ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT
       : 0;
 
-  // e2e-batch fix #12: per-node rows-column width based on content.
+  // e2e-batch fix #12: per-node rows-column width based on content +
+  // header name (follow-up: visual verification on dev caught long headers
+  // truncating when row content was short).
   const rowsColWidth = estimateRowsColWidth(
-    rows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality }))
+    rows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality })),
+    node.name
   );
   const width = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
   const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
@@ -237,11 +254,12 @@ function sizeChoice(
   const childrenHeight =
     expansions.size > 0 ? simulateColumnHeight(expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT : 0;
 
-  // e2e-batch fix #12: per-node rows-column width based on arm content.
-  // Choice arms have no attrName / cardinality — pass empty strings so the
-  // estimator only widens for long typeNames.
+  // e2e-batch fix #12: per-node rows-column width based on arm content +
+  // header name. Choice arms have no attrName / cardinality — pass empty
+  // strings so the estimator only widens for long typeNames.
   const rowsColWidth = estimateRowsColWidth(
-    node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '' }))
+    node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '' })),
+    node.name
   );
   const width = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
   const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
@@ -260,7 +278,10 @@ function sizeEnum(node: StructureEnumNode): SizedNode {
     rowOffsets.set(node.values[i], HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
   // e2e-batch fix #12: per-node width based on the longest enum value name.
-  const rowsColWidth = estimateRowsColWidth(node.values.map((v) => ({ name: v, typeName: '', card: '' })));
+  const rowsColWidth = estimateRowsColWidth(
+    node.values.map((v) => ({ name: v, typeName: '', card: '' })),
+    node.name
+  );
   return {
     width: rowsColWidth,
     height: HEADER_HEIGHT + node.values.length * ROW_HEIGHT,
@@ -335,7 +356,8 @@ function sizeBase(
   // its own rows column. The base container's effective rowsColWidth is
   // the max of those two — whichever needs more room sets the floor.
   const baseRowsColWidth = estimateRowsColWidth(
-    node.baseRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality }))
+    node.baseRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality })),
+    node.baseTypeName
   );
   const rowsColWidth = Math.max(baseRowsColWidth, childSize.rowsColWidth);
 
