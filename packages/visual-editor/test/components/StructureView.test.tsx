@@ -102,8 +102,17 @@ vi.mock('@xyflow/react', async (importOriginal) => {
     // layout's per-node data payload). The mock surfaces both so tests can
     // assert against the stable canonical id rather than the path-dependent
     // instance id.
-    ReactFlow: ({ nodes }: { nodes: Array<{ id: string; data: { id?: string } }> }) => (
-      <div data-testid="mock-react-flow">
+    ReactFlow: ({
+      nodes,
+      onlyRenderVisibleElements
+    }: {
+      nodes: Array<{ id: string; data: { id?: string } }>;
+      onlyRenderVisibleElements?: boolean;
+    }) => (
+      <div
+        data-testid="mock-react-flow"
+        data-only-render-visible={onlyRenderVisibleElements === true ? 'true' : 'false'}
+      >
         {nodes.map((n) => (
           <div key={n.id} data-testid={`rf-node-${n.id}`} data-node-id={n.id} data-canonical-id={n.data?.id ?? n.id} />
         ))}
@@ -358,5 +367,25 @@ describe('StructureView — adapter + layout integration', () => {
     // is a per-edge instance id (`cdm.trade::Trade::economics::cdm.trade::Economics`).
     const economicsByCanonical = document.querySelector('[data-canonical-id="cdm.trade::Economics"]');
     expect(economicsByCanonical).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Finding H — onlyRenderVisibleElements prop (020-14b)
+//
+// Deeply expanded schemas (CDM Trade 3-4 levels) emit hundreds of
+// containment-nested nodes. React Flow renders all of them by default even
+// when most are off-viewport. onlyRenderVisibleElements culls offscreen nodes
+// — a favorable trade-off for a read-only viewer with no edges and no minimap.
+// Perf benefit is only observable in real-browser scroll/pan; this test just
+// asserts the prop is passed so CI catches regressions.
+// ---------------------------------------------------------------------------
+
+describe('StructureView — onlyRenderVisibleElements (Finding H)', () => {
+  it('passes onlyRenderVisibleElements to ReactFlow', () => {
+    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={tradeDoc} />);
+    expect(screen.queryByTestId('structure-empty-state')).toBeNull();
+    const flow = screen.getByTestId('mock-react-flow');
+    expect(flow.getAttribute('data-only-render-visible')).toBe('true');
   });
 });
