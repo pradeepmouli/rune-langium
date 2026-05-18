@@ -1067,3 +1067,79 @@ button[data-navigable]:focus-visible {
   outline: 2px solid var(--primary, #00D4AA);
   outline-offset: 1px;
 }
+
+/* ── Spec 020 §3.3 — row-level affordance glyphs ────────────────────────────
+ *
+ * .rune-row-glyph: shared base for the enum-nav (↗) and unresolved (?)
+ * glyphs that appear after the type chip on qualifying rows.
+ *
+ * --enum-nav is a <button> (keyboard-accessible); --unresolved is a <span
+ * role="img"> (indicator only, no action).
+ * ────────────────────────────────────────────────────────────────────────── */
+
+.rune-row-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  font-size: var(--text-xs, 0.75rem);
+  line-height: 1;
+  border-radius: 2px;
+  cursor: default;
+}
+
+/* Enum-nav ↗ button */
+.rune-row-glyph--enum-nav {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--color-enum-text, #8B7BF4);
+  cursor: pointer;
+}
+
+.rune-row-glyph--enum-nav:hover {
+  color: var(--foreground, #FFFFFF);
+  background: color-mix(in oklch, var(--color-enum-text, #8B7BF4) 20%, transparent);
+}
+
+.rune-row-glyph--enum-nav:focus-visible {
+  outline: 2px solid var(--primary, #00D4AA);
+  outline-offset: 1px;
+}
+
+/* Unresolved-type ? indicator */
+.rune-row-glyph--unresolved {
+  color: var(--destructive, #FF6058);
+  background: color-mix(in oklch, var(--destructive, #FF6058) 14%, transparent);
+  font-weight: 600;
+}
+
+/* ── Spec 020 §3.4 — diagnostic left-edge severity markers ──────────────────
+ *
+ * Applied on top of .rune-node-row when useDiagnosticsForRange finds an
+ * overlapping diagnostic. Border-left conventions follow .rune-node-row.optional
+ * and .rune-node-row.editing — 3px solid (slightly thicker for visibility at
+ * small row heights) + matching left-padding indent.
+ *
+ * Token fallbacks use the same values as the chip variants above:
+ *   --destructive, --warning, --info — check styles.css chip rules for
+ *   the full token reference.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+.rune-node-row--diagnostic-error {
+  border-left: 3px solid var(--destructive, #FF6058);
+  padding-left: var(--rune-row-indent, 6px);
+}
+
+.rune-node-row--diagnostic-warn {
+  border-left: 3px solid var(--warning, #ecc94b);
+  padding-left: var(--rune-row-indent, 6px);
+}
+
+.rune-node-row--diagnostic-info {
+  border-left: 3px solid var(--info, #63b3ed);
+  padding-left: var(--rune-row-indent, 6px);
+}
