@@ -102,16 +102,24 @@ function LoadedModelBadge({ model }: { model: { source: ModelSource; files: { pa
   // publish, etc.) and show actionable feedback. Without this the chip
   // could stay "loading…" indefinitely with no way for the user to learn
   // something went wrong. Reset when hydration completes successfully.
+  //
+  // Sonnet RF nit: hasTimedOut is intentionally NOT in the deps array.
+  // Including it caused a redundant timer re-arm whenever the timeout
+  // fired (effect re-runs → arms a new 30s timer → immediately replaced
+  // by the next effect's cleanup). The reset path is keyed on hasFiles
+  // turning true, which IS in deps; no need for hasTimedOut to drive a
+  // re-run on its own.
   const [hasTimedOut, setHasTimedOut] = useState(false);
   useEffect(() => {
     if (hasFiles) {
-      if (hasTimedOut) setHasTimedOut(false);
+      setHasTimedOut(false);
       return;
     }
     if (!isCurated) return;
     const timer = setTimeout(() => setHasTimedOut(true), HYDRATION_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [hasFiles, isCurated, hasTimedOut]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasFiles, isCurated]);
 
   const count = hasFiles
     ? `${model.files.length} file${model.files.length === 1 ? '' : 's'}`

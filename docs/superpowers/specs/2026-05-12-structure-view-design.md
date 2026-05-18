@@ -212,6 +212,8 @@ Five flows; all reuse existing studio plumbing.
 
 **5 · Expansion state.** Owned by Structure View; persisted to IndexedDB; per-namespace; default fully collapsed.
 
+> **Effective-type resolution rule (e2e-batch PR, Codex P1 follow-up):** the original design assumed every graph node carries `data.$type` (e.g. `'Data'`, `'Choice'`, `'RosettaEnumeration'`). Curated hydration paths (`/api/parse` round-trips, deferred-export loaders) sometimes attach `data.typeKind` (`'data'`/`'choice'`/`'enum'`) or only the React Flow `node.type` instead, without setting `$type`. Both `selectedNodeType` (`apps/studio/src/pages/EditorPage.tsx`, the gate that decides what reaches Structure View) AND `graphNodesToAdapterDocument` (the same file, the projection that builds the `AdapterDocument` Structure View consumes) MUST resolve the effective type via the same fallback chain: `data.$type → data.typeKind → node.type`. A one-sided fallback produces a "selection forwarded but no matching node in adapter" dead-end where Structure shows the stale-selection state for legitimately-loaded curated types.
+
 ## 8. Edge cases
 
 The **collapse-by-default** default resolves most cases naturally — nothing recursive or deep is rendered until the user explicitly walks into it.
