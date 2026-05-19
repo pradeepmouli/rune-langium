@@ -158,10 +158,22 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
       return undefined;
     })();
 
+    // Copilot review (e2e-batch confirmation pass): the previous
+    // `Extract<AnyGraphNode, { $type: 'Data' }>` casts asserted nodes
+    // belong to the $type-discriminated union — which is exactly what
+    // fallback nodes (the ones that took this path because `$type` was
+    // MISSING) violate. The asserts happened to work at runtime because
+    // only structural fields get read, but the type system was being
+    // lied to. Use shape-of-what-we-read structural types instead so
+    // (a) TS surfaces a real error if the read shape ever drifts and
+    // (b) we're not pretending fallback nodes have a $type field.
     if (effectiveType === 'Data') {
-      // TS can't narrow `d` from the separate `effectiveType` local — cast
-      // to the Data shape we know the effective-type logic established.
-      const dd = d as Extract<AnyGraphNode, { $type: 'Data' }>;
+      const dd = d as {
+        name: string;
+        namespace: string;
+        superType?: { $refText?: string };
+        attributes?: readonly unknown[];
+      };
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Data',
@@ -170,13 +182,13 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         extends: dd.superType?.$refText,
         // `attributes` on AstNodeModel<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
-        attributes: (dd.attributes ?? []) satisfies AdapterNode['attributes']
+        attributes: (dd.attributes ?? []) as AdapterNode['attributes']
       });
     } else if (effectiveType === 'Choice') {
       // ChoiceOption AST shape: { $type, typeCall, … } — NO `name`, NO `card`.
       // Pass through to the new `choiceOptions` field on AdapterNode unchanged.
       // The adapter's buildChoiceArm consumes the real shape via typeCall only.
-      const dc = d as Extract<AnyGraphNode, { $type: 'Choice' }>;
+      const dc = d as { name: string; namespace: string; attributes?: readonly unknown[] };
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Choice',
@@ -185,7 +197,7 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>
       });
     } else if (effectiveType === 'RosettaEnumeration') {
-      const de = d as Extract<AnyGraphNode, { $type: 'RosettaEnumeration' }>;
+      const de = d as { name: string; namespace: string; enumValues?: readonly unknown[] };
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Enum',
