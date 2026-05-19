@@ -27,13 +27,40 @@ describe('EditorStore', () => {
       expect(state.edges.length).toBeGreaterThan(0);
     });
 
-    it('resets selection on load', async () => {
+    it('preserves selection on reload if the selected node still exists in the merged graph', async () => {
+      // Reload contract change: the previous implementation unconditionally
+      // reset selectedNodeId to null on every loadModels call, which clobbered
+      // user selection any time EditorPage's useEffect re-fired (debounced
+      // re-parse, async hydration completing, deferredExports churn). The
+      // visible symptom was that explorer clicks would set Inspector /
+      // Structure briefly, then a follow-up re-parse would wipe them while
+      // the Form preview pane (which reads from a separate previewStore that
+      // doesn't auto-clear) kept showing stale content. Selection now persists
+      // when the previously-selected id is still present in the new graph.
       const result = await parse(COMBINED_MODEL_SOURCE);
       store.getState().loadModels(result.value);
       const nodes = store.getState().nodes;
-      store.getState().selectNode(nodes[0]!.id);
+      const selectedId = nodes[0]!.id;
+      store.getState().selectNode(selectedId);
 
-      // Reload
+      // Reload with the same models — the previously-selected id is still
+      // present, so selection MUST persist.
+      store.getState().loadModels(result.value);
+      expect(store.getState().selectedNodeId).toBe(selectedId);
+    });
+
+    it('clears selection on reload if the selected id is gone from the merged graph', async () => {
+      // Complementary contract: when the selected node has been renamed or
+      // deleted between reloads, selection is correctly cleared. This is
+      // what protects Inspector / Structure from rendering against a stale
+      // id that no longer matches any storeNodes entry. selectNode is
+      // permissive (doesn't validate id existence on its own), so we set a
+      // known-bad id and verify the next loadModels drops it.
+      const result = await parse(COMBINED_MODEL_SOURCE);
+      store.getState().loadModels(result.value);
+      const namespace = store.getState().nodes[0]!.data.namespace;
+      store.getState().selectNode(`${namespace}::__definitely_not_a_real_type__`);
+
       store.getState().loadModels(result.value);
       expect(store.getState().selectedNodeId).toBeNull();
     });

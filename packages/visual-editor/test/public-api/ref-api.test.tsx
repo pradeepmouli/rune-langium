@@ -152,6 +152,14 @@ describe('RuneTypeGraph ref API', () => {
   it('selection goes through the store', async () => {
     const result = await parse(COMBINED_MODEL_SOURCE);
     loadModelsIntoStore(result.value);
+    // Tests in this file share the singleton useEditorStore; explicitly
+    // clear any selection bled in from earlier tests. (loadModels no longer
+    // unconditionally resets selection — it preserves selection when the
+    // selected id is still in the merged graph — so we cannot rely on the
+    // load call to scrub state for us.)
+    act(() => {
+      useEditorStore.getState().selectNode(null);
+    });
 
     render(<RuneTypeGraph />);
 
