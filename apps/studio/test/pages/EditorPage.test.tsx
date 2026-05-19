@@ -319,7 +319,11 @@ vi.mock('lucide-react', () => ({
   Layers: () => React.createElement('span'),
   Database: () => React.createElement('span'),
   Bell: () => React.createElement('span'),
-  Settings: () => React.createElement('span')
+  Settings: () => React.createElement('span'),
+  // Workspace dropdown (e2e-batch): EditorPage adds Plus + LogOut icons
+  // for the Popover menu items (new workspace / close workspace).
+  Plus: () => React.createElement('span'),
+  LogOut: () => React.createElement('span')
 }));
 
 vi.mock('../../src/components/GraphFilterMenu.js', () => ({
