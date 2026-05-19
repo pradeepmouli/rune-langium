@@ -18,6 +18,8 @@ import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
+import { useDiagnosticsForRange, diagnosticSeverityClass } from '../../hooks/useDiagnosticsForRange.js';
+import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
 
 // ---------------------------------------------------------------------------
 // Structure-variant types (Finding 4)
@@ -59,6 +61,27 @@ interface StructureNodeData extends StructureDataNode {
    * as an empty array: `ownerInstancePath = [...(instancePath ?? []), id]`.
    */
   readonly instancePath?: ReadonlyArray<string>;
+  /**
+   * Spec §8 / §3.3 — navigate-to-enum callback. Injected by StructureView
+   * alongside cellComponents. Rows with `typeKind === 'Enum'` render an ↗
+   * button that fires this with the enum's canonical typeId (ns::Name).
+   */
+  readonly onNavigateToEnumType?: (typeId: string) => void;
+  /**
+   * Spec §3.4 — pre-converted LSP diagnostics for the focused file. Ranges
+   * are character offsets. Each row checks for overlap via useDiagnosticsForRange
+   * and applies the appropriate severity CSS class to its left edge.
+   *
+   * **NOTE — astRange-threading gap:** in studio-created rows today,
+   * `StructureRow.astRange` is `undefined` because `graphNodesToAdapterDocument`
+   * forwards attributes from `stripAdditionalAstFields`, which strips
+   * `$cstNode` and never derives an offset range. The hook returns
+   * `undefined` in production so the severity class never applies. Tests
+   * inject synthetic astRange values to verify the end-to-end wiring,
+   * which is real and ready to fire once the upstream threads astRange.
+   * Tracking: this is the deferred half of spec §3.4 / spec 020 PR #207.
+   */
+  readonly structureDiagnostics?: readonly RangeDiagnostic[];
 }
 
 /**
@@ -73,6 +96,116 @@ function isRowExpandable(typeKind: StructureRow['typeKind']): boolean {
 
 function isStructureData(d: unknown): d is StructureNodeData {
   return typeof d === 'object' && d !== null && (d as { variant?: unknown }).variant === 'structure';
+}
+
+/**
+ * Per-row sub-component for the structure variant. Extracted so that
+ * `useDiagnosticsForRange` — a hook — can be called once per row inside a
+ * proper function component, which hooks rules require.
+ */
+interface StructureDataRowProps {
+  row: StructureRow;
+  expandable: boolean;
+  isExpanded: boolean;
+  handleToggle: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  NameCell?: React.ComponentType<{ value: string; nodeId: string; attrName: string }>;
+  TypeCell?: React.ComponentType<{
+    typeName: string;
+    typeKind: StructureRow['typeKind'];
+    nodeId: string;
+    attrName: string;
+  }>;
+  CardCell?: React.ComponentType<{ value: string; nodeId: string; attrName: string }>;
+  nodeId: string;
+  onNavigateToEnumType?: (typeId: string) => void;
+  structureDiagnostics: readonly RangeDiagnostic[];
+}
+
+function StructureDataRow({
+  row,
+  expandable,
+  isExpanded,
+  handleToggle,
+  NameCell,
+  TypeCell,
+  CardCell,
+  nodeId,
+  onNavigateToEnumType,
+  structureDiagnostics
+}: StructureDataRowProps): React.ReactElement {
+  const diagnostic = useDiagnosticsForRange(row.astRange, structureDiagnostics);
+  const isEnum = row.typeKind === 'Enum';
+  const isUnresolved = row.typeKind === 'Unresolved';
+
+  let rowClass = `rune-node-row${expandable ? ' has-expansion' : ''}`;
+  if (diagnostic) rowClass += ` ${diagnosticSeverityClass(diagnostic.severity)}`;
+
+  const unresolvedTitle = diagnostic?.message ?? `Type ${row.typeName} not found in this namespace or its imports`;
+
+  return (
+    <div className={rowClass} data-attr={row.attrName}>
+      {expandable ? (
+        <button
+          type="button"
+          className="rune-row-expand nodrag nopan"
+          onClick={handleToggle}
+          aria-expanded={isExpanded}
+          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.attrName}`}
+          data-testid={`expand-row-${row.attrName}`}
+        >
+          {isExpanded ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
+        </button>
+      ) : (
+        <span className="rune-row-expand-spacer" aria-hidden="true" />
+      )}
+      {NameCell ? (
+        <NameCell value={row.attrName} nodeId={nodeId} attrName={row.attrName} />
+      ) : (
+        <span className="rune-cell-name">{row.attrName}</span>
+      )}
+      {TypeCell ? (
+        <TypeCell typeName={row.typeName} typeKind={row.typeKind} nodeId={nodeId} attrName={row.attrName} />
+      ) : (
+        // Finding 3: row.typeName is string (not undefined) per StructureRow; render '?' if empty.
+        <span className="rune-cell-type-chip">{row.typeName || '?'}</span>
+      )}
+      {/* Spec §3.3 — enum-nav glyph (↗): navigate into the enum type as root. */}
+      {isEnum && onNavigateToEnumType && row.targetNodeId ? (
+        <button
+          type="button"
+          className="rune-row-glyph rune-row-glyph--enum-nav nodrag nopan"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onNavigateToEnumType(row.targetNodeId!);
+          }}
+          aria-label={`Navigate to ${row.typeName}`}
+          title={`Navigate to ${row.typeName}`}
+          data-testid={`enum-nav-${row.attrName}`}
+        >
+          ↗
+        </button>
+      ) : null}
+      {/* Spec §3.3 — unresolved-ref indicator (?): shows LSP error as tooltip. */}
+      {isUnresolved ? (
+        <span
+          className="rune-row-glyph rune-row-glyph--unresolved"
+          title={unresolvedTitle}
+          aria-label={`Unresolved type: ${row.typeName}`}
+          role="img"
+          data-testid={`unresolved-${row.attrName}`}
+        >
+          ?
+        </span>
+      ) : null}
+      {CardCell ? (
+        <CardCell value={row.cardinality} nodeId={nodeId} attrName={row.attrName} />
+      ) : (
+        <span className="rune-cell-card">{row.cardinality}</span>
+      )}
+      {/* structure variant: no Handle — layout emits zero edges; nodesConnectable=false */}
+    </div>
+  );
 }
 
 export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps) {
@@ -95,12 +228,19 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     // Finding 1: consume StructureRow shape from data.rows (not data.attributes).
     // StructureRow.typeName, .attrName, .cardinality are already pre-formatted strings
     // from the adapter — no getTypeRefText / formatCardinality needed here.
-    // TODO(Phase 10) visual tightening: gradient/shadow/font polish.
+    // Phase 10 has shipped (commit 01ea4af9 "tightened CSS variables") — removed TODO.
     // Core geometry handled by .rune-node-data--structure, .rune-node-body--two-col,
     // .rune-node-rows, .rune-node-row, .rune-row-handle, .rune-node-children-slot
     // in styles.css — layout constants (ROW_HEIGHT=28, COL_WIDTH=260, etc.) are matched there.
     const rows = data.rows as ReadonlyArray<StructureRow>;
-    const { cellComponents, expansionMap, onToggleExpansion, instancePath } = data;
+    const {
+      cellComponents,
+      expansionMap,
+      onToggleExpansion,
+      instancePath,
+      onNavigateToEnumType,
+      structureDiagnostics
+    } = data;
     // e2e-batch fix #12: per-node rows-column width from the layout.
     // Layout's estimateRowsColWidth() sizes this from row content so CDM-scale
     // type names don't clip. Inline-style overrides the --rune-col-width CSS
@@ -109,6 +249,7 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     const NameCell = cellComponents?.name;
     const TypeCell = cellComponents?.type;
     const CardCell = cellComponents?.card;
+    const activeDiagnostics: readonly RangeDiagnostic[] = structureDiagnostics ?? [];
     // Adapter's expansion-key contract uses the bare type name as `typeId`
     // (see structure-graph-adapter.ts `shouldExpand`). Mirror that here so
     // toggles round-trip through the persistence layer correctly.
@@ -153,58 +294,19 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
                 if (rowKey) onToggleExpansion?.(rowKey);
               };
               return (
-                <div
+                <StructureDataRow
                   key={row.attrName}
-                  className={`rune-node-row${expandable ? ' has-expansion' : ''}`}
-                  data-attr={row.attrName}
-                >
-                  {expandable ? (
-                    // Finding 1 (spec 020 Phase 13): row-level expand/collapse
-                    // control. Real <button> for native keyboard semantics
-                    // (Enter/Space). aria-expanded + aria-label give AT users
-                    // both the state and the action label. nodrag/nopan keep
-                    // React Flow from interpreting the click as a canvas
-                    // pan/drag gesture.
-                    <button
-                      type="button"
-                      className="rune-row-expand nodrag nopan"
-                      onClick={handleToggle}
-                      aria-expanded={isExpanded}
-                      aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.attrName}`}
-                      data-testid={`expand-row-${row.attrName}`}
-                    >
-                      {isExpanded ? (
-                        <ChevronDown size={12} aria-hidden="true" />
-                      ) : (
-                        <ChevronRight size={12} aria-hidden="true" />
-                      )}
-                    </button>
-                  ) : (
-                    <span className="rune-row-expand-spacer" aria-hidden="true" />
-                  )}
-                  {NameCell ? (
-                    <NameCell value={row.attrName} nodeId={data.id} attrName={row.attrName} />
-                  ) : (
-                    <span className="rune-cell-name">{row.attrName}</span>
-                  )}
-                  {TypeCell ? (
-                    <TypeCell
-                      typeName={row.typeName}
-                      typeKind={row.typeKind}
-                      nodeId={data.id}
-                      attrName={row.attrName}
-                    />
-                  ) : (
-                    // Finding 3: row.typeName is string (not undefined) per StructureRow; render '?' if empty.
-                    <span className="rune-cell-type-chip">{row.typeName || '?'}</span>
-                  )}
-                  {CardCell ? (
-                    <CardCell value={row.cardinality} nodeId={data.id} attrName={row.attrName} />
-                  ) : (
-                    <span className="rune-cell-card">{row.cardinality}</span>
-                  )}
-                  {/* structure variant: no Handle — layout emits zero edges; nodesConnectable=false */}
-                </div>
+                  row={row}
+                  expandable={expandable}
+                  isExpanded={isExpanded}
+                  handleToggle={handleToggle}
+                  NameCell={NameCell}
+                  TypeCell={TypeCell}
+                  CardCell={CardCell}
+                  nodeId={data.id}
+                  onNavigateToEnumType={onNavigateToEnumType}
+                  structureDiagnostics={activeDiagnostics}
+                />
               );
             })}
           </div>
