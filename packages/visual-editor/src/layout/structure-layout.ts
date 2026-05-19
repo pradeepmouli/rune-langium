@@ -200,27 +200,21 @@ function sizeData(
     rowOffsets.set(rows[i].attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
 
-  // Vertical-stack layout for inner-node expansions (post-polish per user
-  // feedback): expanded children now sit BELOW the rows instead of in a
-  // right-hand column. The container therefore grows vertically when
-  // expansions are revealed, not horizontally. The base-type container
-  // (sizeBase) keeps its right-column expansion layout — that surface
-  // already reads correctly because its inheritance chain stacks
-  // vertically through nested base containers.
   let childrenWidth = 0;
-  let childrenStackHeight = 0;
-  let childCount = 0;
   for (const [, childInstanceId] of node.expansions) {
     const child = input.nodes.get(childInstanceId);
     if (!child) continue;
     const childSize = sizeOf(child, sizes, input, sizing);
     if (!childSize) continue;
     childrenWidth = Math.max(childrenWidth, childSize.width);
-    childrenStackHeight += childSize.height;
-    childCount++;
   }
-  if (childCount > 1) childrenStackHeight += (childCount - 1) * ROW_GAP;
-  const childrenBlockHeight = childCount > 0 ? childrenStackHeight + ROW_GAP : 0;
+
+  // Height of the right-hand expansions column matches what the placement pass
+  // will actually produce (row-aligned + non-overlapping), not the naive sum.
+  const childrenHeight =
+    node.expansions.size > 0
+      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT
+      : 0;
 
   // e2e-batch fix #12: per-node rows-column width based on content +
   // header name (follow-up: visual verification on dev caught long headers
@@ -229,11 +223,8 @@ function sizeData(
     rows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality })),
     node.name
   );
-  // Container width is the wider of (own rows column, widest child) so a
-  // child wider than the parent can still fit when stacked below.
-  const width = childCount > 0 ? Math.max(rowsColWidth, childrenWidth) : rowsColWidth;
-  // Container height is rows + (optional gap + stacked children).
-  const height = rowsHeight + childrenBlockHeight;
+  const width = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
+  const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
   return { width, height, rowsColWidth, rowOffsets };
 }
 
@@ -251,26 +242,25 @@ function sizeChoice(
   }
   const rowsHeight = HEADER_HEIGHT + node.options.length * ROW_HEIGHT;
 
-  // Phase 14e/B — Choice arms gained expansion. Vertical-stack layout
-  // matches sizeData (post-polish): expanded children stack BELOW the
-  // arm rows, the container grows vertically. Test-fixture fallback:
-  // pre-Phase-14e layout fixtures construct Choice nodes by hand without
-  // `expansions`; treat absent as empty map so they keep working.
+  // Phase 14e/B — Choice arms gained expansion. Mirror sizeData: walk the
+  // arm expansions, take the widest child, and simulate column height so
+  // late-arm expansions get the room they need.
+  //
+  // Test-fixture fallback: pre-Phase-14e layout fixtures construct Choice nodes
+  // by hand without `expansions`. Treat absent as an empty map so legacy
+  // fixtures keep working without churn (same approach as `nodeInstanceId`).
   const expansions = node.expansions ?? EMPTY_EXPANSIONS;
   let childrenWidth = 0;
-  let childrenStackHeight = 0;
-  let childCount = 0;
   for (const [, childInstanceId] of expansions) {
     const child = input.nodes.get(childInstanceId);
     if (!child) continue;
     const childSize = sizeOf(child, sizes, input, sizing);
     if (!childSize) continue;
     childrenWidth = Math.max(childrenWidth, childSize.width);
-    childrenStackHeight += childSize.height;
-    childCount++;
   }
-  if (childCount > 1) childrenStackHeight += (childCount - 1) * ROW_GAP;
-  const childrenBlockHeight = childCount > 0 ? childrenStackHeight + ROW_GAP : 0;
+
+  const childrenHeight =
+    expansions.size > 0 ? simulateColumnHeight(expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT : 0;
 
   // e2e-batch fix #12: per-node rows-column width based on arm content +
   // header name. Choice arms have no attrName / cardinality — pass empty
@@ -279,8 +269,8 @@ function sizeChoice(
     node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '' })),
     node.name
   );
-  const width = childCount > 0 ? Math.max(rowsColWidth, childrenWidth) : rowsColWidth;
-  const height = rowsHeight + childrenBlockHeight;
+  const width = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
+  const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
   return { width, height, rowsColWidth, rowOffsets };
 }
 
@@ -563,34 +553,40 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
 
   function placeDataChildren(
     n: StructureDataNode,
-    // `sz` was used by the previous right-column placement (to read
-    // `sz.rowsColWidth`/`sz.rowOffsets`); the vertical-stack layout
-    // derives both vertical-cursor and child x from n + sizes only.
-    // Underscore-prefix keeps the signature aligned with the matching
-    // place* functions called from the same dispatch site.
-    _sz: SizedNode,
+    sz: SizedNode,
     ancestors: ReadonlySet<string>,
     instanceAncestorPath: readonly string[]
   ): void {
-    // Vertical-stack placement: children are placed BELOW the parent's
-    // own rows (x=0, y starts after rowsHeight + ROW_GAP gap). Iteration
-    // order in `n.expansions` (Map insertion order) is the stack order.
-    // The right-column / row-aligned positioning was replaced post-polish
-    // so the container grows vertically when expansions are revealed.
-    const rowsHeight = HEADER_HEIGHT + n.rows.length * ROW_HEIGHT;
-    let yCursor = rowsHeight + ROW_GAP;
-    for (const [, childInstanceId] of n.expansions) {
+    let yCursor = HEADER_HEIGHT;
+    for (const [attrName, childInstanceId] of n.expansions) {
       const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
       if (!childSize) continue;
+
+      const rowCenter = sz.rowOffsets.get(attrName);
+      const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
+      const childY = Math.max(rowTop, yCursor);
 
       // Cycle guard: skip placement when the target instance is already on the
       // recursion path (only possible for malformed input — the adapter's
       // SuppressedEdge mechanism prevents this for well-formed graphs).
+      //
+      // e2e-batch fix #12 follow-up (caught by Sonnet RF review): use
+      // `sz.rowsColWidth` for child x-offset, not the global COL_WIDTH. After
+      // per-node column widths, any parent wider than COL_WIDTH (320) would
+      // have placed children OVERLAPPING the left column. The size pass
+      // already widens the parent's `width` to `rowsColWidth + COL_GAP +
+      // childrenWidth`, so placement must mirror that origin.
       if (!ancestors.has(childInstanceId)) {
-        placeNode(childInstanceId, nodeInstanceId(n), { x: 0, y: yCursor }, ancestors, instanceAncestorPath);
+        placeNode(
+          childInstanceId,
+          nodeInstanceId(n),
+          { x: sz.rowsColWidth + COL_GAP, y: childY },
+          ancestors,
+          instanceAncestorPath
+        );
       }
 
-      yCursor += childSize.height + ROW_GAP;
+      yCursor = childY + childSize.height + ROW_GAP;
     }
   }
 
@@ -602,26 +598,35 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
    */
   function placeChoiceChildren(
     n: StructureChoiceNode,
-    // See placeDataChildren — sz is unused under the vertical-stack
-    // layout. Signature kept aligned with the dispatch site.
-    _sz: SizedNode,
+    sz: SizedNode,
     ancestors: ReadonlySet<string>,
     instanceAncestorPath: readonly string[]
   ): void {
-    // Vertical-stack placement matches placeDataChildren: arm expansions
-    // stack below the parent Choice node's rows. Defensive default for
-    // legacy fixtures missing the `expansions` map.
+    // Same defensive default as sizeChoice — legacy test fixtures may omit
+    // the `expansions` map; treat as empty rather than crashing.
     const expansions = n.expansions ?? EMPTY_EXPANSIONS;
-    const rowsHeight = HEADER_HEIGHT + n.options.length * ROW_HEIGHT;
-    let yCursor = rowsHeight + ROW_GAP;
-    for (const [, childInstanceId] of expansions) {
+    let yCursor = HEADER_HEIGHT;
+    for (const [armTypeName, childInstanceId] of expansions) {
       const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
       if (!childSize) continue;
 
+      const rowCenter = sz.rowOffsets.get(armTypeName);
+      const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
+      const childY = Math.max(rowTop, yCursor);
+
+      // e2e-batch fix #12 follow-up — same per-node width fix as
+      // placeDataChildren. See that function's comment for rationale.
       if (!ancestors.has(childInstanceId)) {
-        placeNode(childInstanceId, nodeInstanceId(n), { x: 0, y: yCursor }, ancestors, instanceAncestorPath);
+        placeNode(
+          childInstanceId,
+          nodeInstanceId(n),
+          { x: sz.rowsColWidth + COL_GAP, y: childY },
+          ancestors,
+          instanceAncestorPath
+        );
       }
-      yCursor += childSize.height + ROW_GAP;
+
+      yCursor = childY + childSize.height + ROW_GAP;
     }
   }
 
