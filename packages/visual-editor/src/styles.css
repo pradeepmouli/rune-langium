@@ -187,12 +187,29 @@
   align-items: center;
   flex-shrink: 0;
   font-size: var(--text-xs, 10px);
-  padding: var(--space-1, 1px) var(--space-3, 6px);
-  margin: var(--space-1, 1px);
+  /* Tightened (post-polish): 1px×6px padding / 1px margin made the pill
+   * read as the dominant header element, especially in the structure-
+   * variant where the header is dense. 0×4px / 0 margin keeps the pill
+   * legible but stops it from competing with the type name. */
+  padding: 0 var(--rune-chip-padding-x);
+  margin: 0;
   border-radius: var(--radius-sm, 3px);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* Push the kind pill to the right edge inside structure-variant headers
+ * — mirrors the base-type container which inherits `justify-content:
+ * space-between` from .rune-graph-group__header. With DOM order [pill,
+ * name] preserved (screen-readers announce kind first), margin-left:auto
+ * is what flips the visual to name-left / pill-right. Scoped to
+ * structure variants so the graph variant (where node bodies are taller
+ * and the badge belongs near the name) stays untouched. */
+.rune-node-data--structure .rune-node-header .rune-node-kind-badge,
+.rune-node-choice--structure .rune-node-header .rune-node-kind-badge,
+.rune-node-enum--structure .rune-node-header .rune-node-kind-badge {
+  margin-left: auto;
 }
 
 .rune-kind-badge--data {
@@ -808,7 +825,7 @@ button[data-navigable]:focus-visible {
   --rune-col-width: 320px;
   --rune-col-gap: 32px;
   --rune-row-gap: 8px;
-  --rune-base-padding: 8px;
+  --rune-base-padding: 4px;
   /* Phase 10.2 — ornament constants (chip/pill/row-indent).
    * Not layout-bearing in the structure-layout.ts sense (they don't
    * couple to row y-offsets), but declared here so the stylelint rule
@@ -866,6 +883,28 @@ button[data-navigable]:focus-visible {
    * the same density treatment as data/choice to avoid inconsistent row
    * heights in the same Structure pane. */
   font-size: var(--text-xs, 0.75rem);
+}
+
+/* Drop a further notch on the member/attribute cell content inside
+ * structure-variant nodes and base containers — the row text was still
+ * reading a touch large against the tight 12px header. 11px keeps the
+ * type chip and cardinality pill legible while letting more of the
+ * schema fit per viewport. Header text (var(--text-sm) in .rune-node-
+ * header) is intentionally NOT touched — keeps the type identity
+ * readable at a glance. */
+.rune-node-data--structure .rune-cell-name,
+.rune-node-data--structure .rune-cell-card,
+.rune-node-data--structure .rune-cell-type-chip,
+.rune-node-choice--structure .rune-cell-name,
+.rune-node-choice--structure .rune-cell-card,
+.rune-node-choice--structure .rune-cell-type-chip,
+.rune-node-enum--structure .rune-cell-name,
+.rune-node-enum--structure .rune-cell-card,
+.rune-node-enum--structure .rune-cell-type-chip,
+.rune-graph-group--base .rune-cell-name,
+.rune-graph-group--base .rune-cell-card,
+.rune-graph-group--base .rune-cell-type-chip {
+  font-size: 11px;
 }
 
 /* Wire HEADER_HEIGHT SSoT: the structure-variant header must render at
@@ -1044,20 +1083,14 @@ button[data-navigable]:focus-visible {
  * The 10px uppercase reading was correct for a faint cluster label, but
  * here the container holds a real type — its name should read like one. */
 .rune-graph-group--base .rune-graph-group__header {
-  /* Drop the inherited 0 14px padding so the header text aligns flush
-   * with the inherited rows below (which sit at the container's outer
+  /* Drop the inherited 0 14px padding so the title aligns flush with
+   * the inherited rows below (which sit at the container's outer
    * --rune-base-padding edge, no extra X padding). Without this the
-   * title was offset ~14px further inward than the rows, making the
-   * container look like it had bigger padding than its inner node — the
-   * exact symptom user flagged. */
+   * title was offset ~14px further inward than the rows. Keeps the
+   * parent's `justify-content: space-between` so the "base" pill flows
+   * to the right edge — same pattern as the inner DataNode header (kind
+   * badge gets margin-left: auto). */
   padding: 0;
-  /* Header reads left-to-right (pill → title), matching .rune-node-header
-   * which puts the kind badge on the left of the type name. Without this
-   * override the inherited `space-between` from .rune-graph-group__header
-   * (which is correct for the Graph-view inheritance container) would
-   * push the title to the far right and leave a big empty middle. */
-  justify-content: flex-start;
-  gap: var(--space-2, 8px);
   border-bottom: 1px solid color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 78%, transparent);
 }
 
