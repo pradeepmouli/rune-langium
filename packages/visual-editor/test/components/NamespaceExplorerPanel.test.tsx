@@ -168,6 +168,21 @@ describe('NamespaceExplorerPanel', () => {
     expect(onSetDragSource).not.toHaveBeenCalled();
   });
 
+  it('click on type-name button calls onSelectNode and does NOT mark drag source', () => {
+    // UX feedback: the row name visually reads as a hyperlink (hover-underline),
+    // so clicking it should navigate — matching the dedicated nav button. The
+    // row body (outside the name and chevron) still marks drag source so the
+    // single-purpose click target for "make this the drag source" is preserved.
+    const onSetDragSource = vi.fn();
+    const { props } = renderPanel({ onSetDragSource });
+    const nameBtn = screen.getByTestId('ns-type-name-com.model::Trade');
+
+    fireEvent.click(nameBtn);
+
+    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(onSetDragSource).not.toHaveBeenCalled();
+  });
+
   it('keyboard activate nav button (Enter) calls onSelectNode', async () => {
     const { props } = renderPanel();
     const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
