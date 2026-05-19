@@ -118,7 +118,12 @@ vi.mock('@xyflow/react', async (importOriginal) => {
         ))}
       </div>
     ),
-    ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
+    ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    // Auto-fit useEffect in StructureView calls useReactFlow().fitView().
+    // The passthrough ReactFlowProvider mock doesn't initialise the real
+    // zustand store, so the actual hook throws. Stub fitView as a no-op
+    // since these tests don't exercise viewport behaviour.
+    useReactFlow: () => ({ fitView: () => {} })
   };
 });
 

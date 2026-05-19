@@ -17,8 +17,8 @@
  * @module
  */
 
-import React, { useLayoutEffect, useMemo, useRef } from 'react';
-import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import type { AdapterDocument } from '../adapters/structure-graph-adapter.js';
 import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
@@ -399,6 +399,26 @@ function StructureFlowInner({
   useLayoutEffect(() => {
     prevNodesRef.current = nodes;
   }, [nodes]);
+
+  // Auto-fit on focus or expansion change. User feedback: when nodes are
+  // expanded the structure tree grows past the viewport edge. Re-fitting
+  // when the focused type changes OR the expansion map size changes
+  // keeps the whole tree on screen. `padding: 0.1` leaves a 10% margin;
+  // `duration: 300` matches the node-chrome transition for visual
+  // coherence. We use `expansionMap.size` (not the map identity) so
+  // unrelated identity churn doesn't trigger spurious fits.
+  const rf = useReactFlow();
+  const expansionCount = expansionMap?.size ?? 0;
+  useEffect(() => {
+    if (!focusedTypeId) return;
+    if (nodes.length === 0) return;
+    // requestAnimationFrame so the new node positions have been
+    // committed before fitView reads them.
+    const id = requestAnimationFrame(() => {
+      rf.fitView({ padding: 0.1, duration: 300 });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [focusedTypeId, expansionCount, nodes.length, rf]);
 
   return (
     <div data-testid="structure-view-flow" style={{ width: '100%', height: '100%', minHeight: 320 }}>

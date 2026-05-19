@@ -121,7 +121,9 @@
 /* ── Node base ────────────────────────────────────────────────── */
 
 .rune-node {
-  border-radius: var(--radius-md, 8px);
+  /* UX rec #2: 12px radius reads as the modern 2024+ canvas language
+     ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
+  border-radius: var(--radius-lg, 12px);
   border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
   position: relative;
   overflow: hidden;
@@ -131,7 +133,13 @@
   min-width: 200px;
   color: var(--color-node-text, var(--foreground, #E8E6E1));
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  /* UX rec #3: 240ms ease-out reads as motion (the 150ms previous value
+     was too fast to register). background-color added so the selection
+     ramp animates cleanly. */
+  transition:
+    border-color 240ms ease-out,
+    box-shadow 240ms ease-out,
+    background-color 240ms ease-out;
 }
 
 .rune-node::before {
@@ -755,12 +763,19 @@ button[data-navigable]:focus-visible {
 
 /* ── Selection / search highlight ─────────────────────────────── */
 
+/* UX rec #1: collapse selection from 4 visual channels (border tint +
+   background tint + outer glow + 2 shadows) to 2 (border + single
+   composite shadow). Agentok's selection reads instantly because exactly
+   ONE thing changes — ours competed with itself. The kind-accent rail
+   on the left edge (set by `.rune-node::before` above) carries the kind
+   color in the unselected state; selection just promotes the border to
+   that same kind accent at full opacity so the eye locks on the chosen
+   node without having to parse multiple competing channels. */
 .rune-node-selected {
-  border-color: oklch(0.78 0.17 168 / 0.5);
-  background: oklch(0.78 0.17 168 / 0.08);
+  border-color: var(--node-accent, oklch(0.78 0.17 168));
   box-shadow:
-    0 0 20px oklch(0.78 0.17 168 / 0.12),
-    0 2px 8px oklch(0 0 0 / 0.3);
+    inset 0 0 0 1px var(--node-accent, oklch(0.78 0.17 168 / 0.6)),
+    0 8px 24px oklch(0 0 0 / 0.35);
 }
 
 .rune-node-search-match {
@@ -903,6 +918,20 @@ button[data-navigable]:focus-visible {
   gap: var(--rune-row-gap);
   padding: 0 8px;
   position: relative; /* anchor per-row Handle */
+  /* UX rec #7: row hover + focus-within so the row reads as a target
+     even before the user clicks an interactive child (the chevron / name
+     cell). Without this rows flatline visually until interacted with. */
+  transition: background-color 140ms ease;
+}
+
+.rune-node-row:hover {
+  background-color: color-mix(in oklch, var(--accent, oklch(0.78 0.17 168)) 6%, transparent);
+}
+
+.rune-node-row:focus-within {
+  outline: 2px solid color-mix(in oklch, var(--ring, var(--accent, oklch(0.78 0.17 168))) 70%, transparent);
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 
 .rune-row-handle {

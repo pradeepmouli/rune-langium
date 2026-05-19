@@ -2382,6 +2382,21 @@
   overflow: hidden;
 }
 
+/* Aa font-size button — applies CSS `zoom` to the center-stack panes so
+   the entire pane content (text + chrome + layout) scales proportionally
+   without breaking React Flow's internal coordinate math (zoom is applied
+   at the outer container before RF reads its layout). Three discrete
+   steps: sm = 0.9, md = 1.0 (default, no override), lg = 1.125. The
+   data-attribute is written on the document root by FontScaleButton.tsx
+   so the same scale persists across all pane types and survives the
+   pane-switcher hide/show cycle. */
+:root[data-font-scale='sm'] .studio-app .studio-center-stack__pane {
+  zoom: 0.9;
+}
+:root[data-font-scale='lg'] .studio-app .studio-center-stack__pane {
+  zoom: 1.125;
+}
+
 .studio-app .studio-center-stack__split {
   width: 5px;
   margin: 0 -2px;
