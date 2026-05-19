@@ -1012,9 +1012,69 @@ button[data-navigable]:focus-visible {
    * placeBaseChildren for the y-coord coupling — row offsets and child
    * positions all add BASE_PADDING so layout coords align with rendered rows. */
   padding: var(--rune-base-padding);
+  /* Chrome borrowed from `.rune-node` (radius, drop-shadow, transition)
+   * so the container reads as a peer of its inherited child instead of
+   * an oversized different-language shape — per user feedback after the
+   * agentok.ai polish pass. Two things INTENTIONALLY override the node
+   * chrome and identify this as a base-type container:
+   *   1. dashed yellow border (instead of solid neutral)
+   *   2. translucent yellow fill (instead of opaque card)
+   * Everything else (radius, shadow, motion) tracks .rune-node. */
   border: 2px dashed var(--color-base-type, #d4a017);
   background: var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
-  border-radius: 8px;
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition:
+    border-color 240ms ease-out,
+    box-shadow 240ms ease-out,
+    background-color 240ms ease-out;
+}
+
+.rune-graph-group--base:hover {
+  /* Matches `.rune-node:hover` lift so a container hovers like its
+   * peer. The translucent yellow fill stays untouched. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 22px oklch(0 0 0 / 0.24);
+}
+
+/* Header typography in base-scope tracks .rune-node-header rather than
+ * the tiny uppercase title used for the Graph-view inheritance group.
+ * The 10px uppercase reading was correct for a faint cluster label, but
+ * here the container holds a real type — its name should read like one. */
+.rune-graph-group--base .rune-graph-group__header {
+  /* Drop the inherited 0 14px padding so the header text aligns flush
+   * with the inherited rows below (which sit at the container's outer
+   * --rune-base-padding edge, no extra X padding). Without this the
+   * title was offset ~14px further inward than the rows, making the
+   * container look like it had bigger padding than its inner node — the
+   * exact symptom user flagged. */
+  padding: 0;
+  border-bottom: 1px solid color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 78%, transparent);
+}
+
+.rune-graph-group--base .rune-graph-group__title {
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-node-text, var(--foreground, #e8e6e1));
+}
+
+/* "base" meta becomes a kind-badge pill — same dimensions and typography
+ * as `.rune-node-kind-badge`, coloured with the base-type accent. */
+.rune-graph-group--base .rune-graph-group__meta {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: var(--text-xs, 10px);
+  padding: var(--rune-chip-padding-y) var(--rune-chip-padding-x);
+  border-radius: var(--radius-sm, 3px);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: color-mix(in oklch, var(--color-base-type, #d4a017) 22%, transparent);
+  color: color-mix(in oklch, var(--color-base-type, #d4a017) 72%, white 28%);
 }
 
 .rune-graph-group__base-rows {
