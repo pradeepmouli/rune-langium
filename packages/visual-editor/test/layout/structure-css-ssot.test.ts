@@ -48,6 +48,56 @@ describe('Structure layout SSoT — CSS custom props match TS constants', () => 
   }
 });
 
+// ── Part C: layout-coupled gaps reference the right SSoT variable ────────
+//
+// Part A catches *value* drift (e.g. someone changes --rune-base-padding to
+// 5px while BASE_PADDING stays 4). It does NOT catch *variable choice* drift:
+// a CSS rule whose declared property is layout-coupled but reads the WRONG
+// --rune-* var. That happened with .rune-graph-group__base-rows once already
+// — it used --rune-row-gap (8px) for the gap before the inner data child even
+// though structure-layout.ts's sizeBase reserves exactly BASE_PADDING (4px)
+// for that gap. Result: the inner DataNode rendered 4px below the dashed
+// base container border.
+//
+// Add one entry per layout-coupled gap. Each entry asserts that the property
+// on the listed selector resolves to the named --rune-* var (no literal).
+describe('Structure layout SSoT — layout-coupled gaps use the correct variable', () => {
+  const cases: Array<{ selector: string; property: string; expectedVar: string; rationale: string }> = [
+    {
+      selector: '.rune-graph-group__base-rows',
+      property: 'margin-bottom',
+      expectedVar: '--rune-base-padding',
+      rationale:
+        'sizeBase in structure-layout.ts adds BASE_PADDING (not ROW_GAP) between the last base row and the inner derived child. CSS must mirror that.'
+    }
+  ];
+
+  for (const { selector, property, expectedVar, rationale } of cases) {
+    it(`${selector} { ${property}: var(${expectedVar}) } — ${rationale}`, () => {
+      // Match the rule block for the selector. We accept the selector being
+      // part of a comma-separated list, but anchor on word boundaries to avoid
+      // matching e.g. `.rune-graph-group__base-rows-foo`.
+      const blockRe = new RegExp(
+        `(?:^|[\\s,])${selector.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}(?:[\\s,][^{]*)?\\{([^}]*)\\}`,
+        'm'
+      );
+      const blockMatch = css.match(blockRe);
+      expect(blockMatch, `expected to find a rule block for "${selector}"`).not.toBeNull();
+      // Strip /* ... */ comments (CSS comments can span multiple lines and
+      // contain '*' chars, which trips up a single-pass property regex).
+      const body = blockMatch![1].replace(/\/\*[\s\S]*?\*\//g, '');
+      // Find the property line: `property: value;` (last one wins in CSS, so use the last match).
+      const propRe = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+);`, 'g');
+      let last: RegExpExecArray | null = null;
+      let m: RegExpExecArray | null;
+      while ((m = propRe.exec(body)) !== null) last = m;
+      expect(last, `expected "${selector}" to declare "${property}"`).not.toBeNull();
+      const value = last![1].trim();
+      expect(value).toMatch(new RegExp(`var\\(${expectedVar}\\b`));
+    });
+  }
+});
+
 // ── Part B: every --rune-* custom property is referenced at least once ───────
 
 describe('Structure layout SSoT — every --rune-* var is referenced (not just declared)', () => {

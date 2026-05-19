@@ -1149,7 +1149,13 @@ button[data-navigable]:focus-visible {
   flex-direction: column;
   /* No `gap` between rows — layout math (structure-layout.ts) packs rows at
    * exactly ROW_HEIGHT without inter-row spacing. */
-  margin-bottom: var(--rune-row-gap); /* gap before the nested child data node */
+  /* Gap before the nested child data node MUST equal BASE_PADDING in
+   * structure-layout.ts (sizeBase: leftColumnHeight = baseRowsHeight +
+   * childSize.height + BASE_PADDING; placeBaseChildren: y = HEADER_HEIGHT +
+   * baseRows.length*ROW_HEIGHT + BASE_PADDING). Using --rune-row-gap (8px)
+   * here made the rendered child sit 4px below the container's reserved
+   * bottom, so the inner DataNode overflowed the dashed base border. */
+  margin-bottom: var(--rune-base-padding);
 }
 
 .rune-graph-group__base-row {
