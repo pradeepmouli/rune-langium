@@ -2,10 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { createRuneDslServices } from '@rune-langium/core';
-import type {
-  CuratedModelId,
-  CuratedSerializedWorkspaceArtifact
-} from '@rune-langium/curated-schema';
+import type { CuratedModelId, CuratedSerializedWorkspaceArtifact } from '@rune-langium/curated-schema';
 import { URI } from 'langium';
 import { gzip, inflate } from 'pako';
 import { sha256Hex } from './manifest.js';
@@ -109,9 +106,7 @@ export async function buildSerializedWorkspaceArtifact(
   };
 }
 
-function readRosettaFilesFromTarGz(
-  archiveBytes: Uint8Array
-): Array<{ path: string; content: string }> {
+function readRosettaFilesFromTarGz(archiveBytes: Uint8Array): Array<{ path: string; content: string }> {
   const tar = inflate(archiveBytes);
   const decoder = new TextDecoder('utf-8');
   const files: Array<{ path: string; content: string }> = [];
@@ -126,7 +121,7 @@ function readRosettaFilesFromTarGz(
     const dataBlocks = Math.ceil(entry.size / BLOCK);
     const dataEnd = entry.dataOffset + entry.size;
     if (entry.typeflag === '0' || entry.typeflag === '\0' || entry.typeflag === '') {
-      if (entry.path.endsWith('.rosetta')) {
+      if (entry.path.endsWith('.rosetta') && !isAppleDoubleEntry(entry.path)) {
         files.push({
           path: entry.path,
           content: decoder.decode(tar.subarray(entry.dataOffset, dataEnd))
@@ -168,6 +163,27 @@ function parseTarEntry(block: Uint8Array, dataOffset: number): TarEntry {
     typeflag,
     dataOffset
   };
+}
+
+/**
+ * macOS BSD `tar` emits AppleDouble companion files (`._<basename>`,
+ * typeflag '0', ~163 bytes each) for every source file that has extended
+ * attributes. The companion's path ends in the same `.rosetta` suffix as
+ * the real file, so a naive `path.endsWith('.rosetta')` check counts
+ * them and Langium then parses 163 bytes of AppleDouble binary metadata
+ * as Rosetta source — producing one ghost document per real document
+ * and doubling the artifact size.
+ *
+ * Prod doesn't hit this in practice because GitHub codeload archives
+ * strip xattrs, but the seed (which tars from a workdir on a macOS
+ * volume) does. Skipping any path whose basename starts with `._`
+ * defends against both producers without losing legitimate content
+ * (no real Rosetta file should start with `._`).
+ */
+function isAppleDoubleEntry(path: string): boolean {
+  const slash = path.lastIndexOf('/');
+  const base = slash >= 0 ? path.slice(slash + 1) : path;
+  return base.startsWith('._');
 }
 
 function cleanPath(raw: string): string {

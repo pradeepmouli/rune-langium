@@ -131,7 +131,14 @@ function makeArchive(modelId: string, files: Record<string, string>, workdir: st
     writeFileSync(fullPath, content, 'utf8');
   }
   const archivePath = join(workdir, `${modelId}.tar.gz`);
-  execFileSync('tar', ['-czf', archivePath, '-C', workdir, ...Object.keys(files)]);
+  // COPYFILE_DISABLE=1 stops macOS BSD tar from emitting AppleDouble
+  // `._<name>` companion files (xattr metadata blocks ~163B each). Even
+  // though serialized-artifact.ts's reader now defends against them, we
+  // keep the producer clean so the resulting tar matches what GitHub
+  // codeload archives look like (the production publisher's source).
+  execFileSync('tar', ['-czf', archivePath, '-C', workdir, ...Object.keys(files)], {
+    env: { ...process.env, COPYFILE_DISABLE: '1' }
+  });
   return new Uint8Array(readFileSync(archivePath));
 }
 
