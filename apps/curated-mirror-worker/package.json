@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "seed:local": "tsx scripts/seed-local-curated-mirror.ts",
+    "seed:local": "NODE_OPTIONS='--max-old-space-size=4096' tsx scripts/seed-local-curated-mirror.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsgo --noEmit"

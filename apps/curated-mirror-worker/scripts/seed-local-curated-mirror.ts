@@ -28,15 +28,27 @@
  *     curated/{id}/manifest.json                 — metadata + history + artifact ref
  *
  * FIXTURE CONTENT:
- *   Intentionally minimal — one or two .rosetta files per bundle, just
- *   enough for the studio to surface types in the explorer. Production
- *   archives are populated by the cron-triggered publisher (src/publisher.ts)
- *   from real CDM/FpML/rune-dsl GitHub releases.
+ *   Sourced from the real local corpora under `.resources/` (gitignored;
+ *   ~142 CDM files, ~42 FpML files, ~2 rune-dsl files at time of writing).
+ *   Earlier revisions inlined 1–2 toy `.rosetta` strings per bundle but
+ *   that's too sparse to exercise Structure View / Graph / Excel codegen
+ *   at production scale — the auto-fit, mutex panes, font-scale, and
+ *   selection treatments all need real-volume data to validate. The
+ *   production CF Pages deploy is populated by the cron-triggered
+ *   publisher (src/publisher.ts) from real CDM/FpML/rune-dsl GitHub
+ *   releases; this seed mirrors that scale locally.
+ *
+ *   NOTE: parsing ~142 CDM files through Langium is heap-heavy (the
+ *   conversation-summary OOM history of curated-fetch.ts at 128 MB CF
+ *   Worker memory motivated the `*.serialized.json.gz` artifact pattern
+ *   in the first place). The seed script's `seed:local` npm task sets
+ *   `NODE_OPTIONS=--max-old-space-size=4096` to match CI's
+ *   curated-artifacts.yml workflow heap budget.
  */
 
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -45,44 +57,62 @@ import type { CuratedManifest, CuratedModelId } from '@rune-langium/curated-sche
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const WORKER_ROOT = dirname(SCRIPT_DIR);
+const REPO_ROOT = dirname(dirname(WORKER_ROOT));
+const RESOURCES_ROOT = join(REPO_ROOT, '.resources');
 const BUCKET = 'rune-curated-mirror';
 
 /**
- * Tiny per-model fixtures. Paths inside the tar mimic the production
- * archive layout (codeload.github.com wraps the repo root in
- * `{repo}-{ref}/`); `buildSerializedWorkspaceArtifact` strips the
- * top-level wrapper when walking the entries.
+ * Recursively collect `*.rosetta` files from a `.resources/` subdirectory
+ * and return them keyed by their tar archive path (production archive
+ * layout: wrapper directory at the root, then `rosetta-source/` or a
+ * bundle-specific subpath). The seed reads from the real local CDM/FpML/
+ * rune-dsl corpora under `.resources/` so dev:full exercises the same
+ * scale of data the production CF Pages deploy serves (~142 CDM files /
+ * ~42 FpML files / ~2 rune-dsl files).
+ *
+ * The archive wrapper paths mirror what `buildSerializedWorkspaceArtifact`
+ * already expects to strip (it walks tar entries and removes the top-
+ * level wrapper directory to match the URI convention the curated-loader
+ * uses on the studio side).
+ */
+function loadResourceTree(resourceSubdir: string, archiveWrapper: string): Record<string, string> {
+  const root = join(RESOURCES_ROOT, resourceSubdir);
+  let entries: string[];
+  try {
+    entries = readdirSync(root);
+  } catch {
+    console.warn(`[seed] WARN: .resources/${resourceSubdir} not found — bundle will be empty`);
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const name of entries) {
+    const full = join(root, name);
+    const st = statSync(full);
+    if (!st.isFile() || !name.endsWith('.rosetta')) continue;
+    // Flat layout: every .rosetta file ends up at <wrapper>/<basename>.
+    // Matches the existing seed convention while scaling to the full
+    // .resources corpus.
+    out[`${archiveWrapper}/${basename(name)}`] = readFileSync(full, 'utf8');
+  }
+  return out;
+}
+
+/**
+ * Per-model fixtures, sourced from the real corpora under `.resources/`.
+ * User feedback: the previous 3-file synthetic fixture was too sparse to
+ * exercise Structure / Graph / Excel codegen meaningfully — and the only
+ * way to validate performance characteristics (auto-fit, mutex panes,
+ * font-scale zoom) at production data scale is to bundle the same
+ * volume that the prod CF Pages deploy serves.
+ *
+ * Paths inside the tar mimic the production archive layout
+ * (codeload.github.com wraps the repo root in `{repo}-{ref}/`);
+ * `buildSerializedWorkspaceArtifact` strips the top-level wrapper.
  */
 const FIXTURES: Record<CuratedModelId, Record<string, string>> = {
-  cdm: {
-    'common-domain-model-local/rosetta-source/cdm-base-datetime.rosetta': `namespace cdm.base.datetime
-
-type AdjustableDate:
-  unadjustedDate date (1..1)
-  adjustedDate date (0..1)
-`,
-    'common-domain-model-local/rosetta-source/cdm-trade.rosetta': `namespace cdm.trade
-
-type Trade:
-  tradeDate date (1..1)
-  notional number (1..1)
-`
-  },
-  fpml: {
-    'fpml-local/fpml-basic.rosetta': `namespace fpml.basic
-
-type Party:
-  partyId string (1..1)
-  partyName string (0..1)
-`
-  },
-  'rune-dsl': {
-    'rune-dsl-local/builtins.rosetta': `namespace com.rosetta.model.local
-
-type LocalString:
-  value string (1..1)
-`
-  }
+  cdm: loadResourceTree('cdm', 'common-domain-model-local/rosetta-source'),
+  fpml: loadResourceTree('rune-fpml', 'fpml-local'),
+  'rune-dsl': loadResourceTree('rune-dsl', 'rune-dsl-local')
 };
 
 const PUBLIC_ROOT = 'https://www.daikonic.dev/curated';
