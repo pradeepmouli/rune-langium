@@ -230,6 +230,8 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
     const ownerTypeName = data.name;
     // Same self-inclusive instancePath convention as DataNode: ancestors + self.
     const ownerInstancePath: ReadonlyArray<string> = [...(instancePath ?? []), id];
+    // e2e-batch fix #12: per-node rows-column width from the layout.
+    const rowsColWidth = (data as { rowsColWidth?: number }).rowsColWidth;
 
     return (
       <div className={`rune-node rune-node-choice rune-node-choice--structure${selected ? ' rune-node-selected' : ''}`}>
@@ -237,7 +239,7 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
           <NodeKindBadge kind="choice" />
           <span>{data.name}</span>
         </div>
-        <div className="rune-node-rows">
+        <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
           {options.map((arm: StructureChoiceArm) => {
             const expandable = isArmExpandable(arm.typeKind);
             // Arm expansion key convention (Phase 14e/B): arm.typeName fills

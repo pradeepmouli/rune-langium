@@ -53,7 +53,14 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    outDir: 'dist'
+    outDir: 'dist',
+    // e2e-batch fix #9: enable hidden sourcemaps for prod debuggability.
+    // 'hidden' generates .map files but doesn't add the //# sourceMappingURL
+    // comment in the bundle, so they aren't auto-fetched by browsers but ARE
+    // available for symbolicating crash reports + opening via DevTools "Load
+    // sourcemap" workflow. Previously prod TypeErrors (e.g. `at Dg
+    // (index-_w0h5L6_.js:11247)`) were undebuggable.
+    sourcemap: 'hidden'
   },
   worker: {
     format: 'es'

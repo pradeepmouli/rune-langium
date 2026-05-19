@@ -211,17 +211,55 @@ pnpm --filter @rune-langium/studio exec vitest run test/components/SourceEditor.
 ## Local development with Pages Functions
 
 The studio's Download (spec 018) and LSP (spec 019) endpoints are hosted as
-Cloudflare Pages Functions under `apps/studio/functions/api/`. To exercise
-them locally:
+Cloudflare Pages Functions under `apps/studio/functions/api/`. Three
+workflows depending on what you're iterating on:
 
-1. Start Vite (the SPA dev server):
-   ```bash
-   pnpm dev
-   ```
-2. In a second terminal, start the Pages dev proxy:
-   ```bash
-   pnpm dev:pages
-   ```
-3. Open `http://localhost:8788/` — the SPA from Vite plus `/api/*` from the Functions.
+### A. UI-only iteration → `pnpm dev`
 
-Preview features (per-namespace LSP, code preview) run client-side and do not need the Pages dev proxy. Network features (Download, parseWorkspace fallback) do.
+Fast HMR, vite only. Visit `http://localhost:5173/rune-studio/studio/`.
+LSP + curated parse endpoints will 404 in the status bar (no Pages
+Functions are running), but every other UI surface works and changes
+reflect instantly. Use this for component / styling / state-machine
+work.
+
+### B. Full backend stack → `pnpm dev:full`
+
+One command, four processes: vite (5173) + lsp-worker (8790) +
+curated-mirror-worker (8789) + wrangler pages dev (8788). Visit
+`http://localhost:8788/rune-studio/studio/`. LSP_SESSION + CURATED_MIRROR
+service bindings show `[connected]`; `/api/lsp/session` + `/api/parse`
+work end-to-end.
+
+> **Gotcha:** wrangler's `env.ASSETS.fetch` (used by the SPA catch-all
+> Pages Function) serves the LOCAL `dist/` directory, NOT vite's dev
+> modules. This means HMR doesn't reach the browser at `:8788` —
+> wrangler keeps serving the built bundle. The `predev:full` hook
+> runs `pnpm build` so the bundle is at least FRESH at startup; UI
+> changes made during a `dev:full` session won't appear until you
+> either (a) restart `dev:full` or (b) run `pnpm build` in another
+> terminal. For tight UI iteration use workflow A above; switch to
+> workflow B when you need to test LSP / curated parse integration.
+
+### Curated mirror — local fixture seeding
+
+The curated-mirror-worker starts with an EMPTY in-memory R2 bucket. To
+exercise the curated CDM/FpML/rune-dsl flow locally, seed the bucket
+in a separate terminal after `dev:full` is up:
+
+```bash
+pnpm --filter @rune-langium/curated-mirror-worker run seed:local
+```
+
+This writes 3 tiny fixture bundles (one .rosetta type each) plus their
+serialized JSON artifacts at the same R2 paths the production cron
+publisher uses. Then click the CDM / FpML / rune-dsl chips in the
+loader — they'll populate with real type counts and the namespaces
+appear in the explorer.
+
+### Workflow choice cheat-sheet
+
+| Iterating on | Use | URL |
+|---|---|---|
+| UI components, styling, state | `pnpm dev` | `http://localhost:5173/rune-studio/studio/` |
+| Pages Functions (`/api/*`) | `pnpm dev:pages` (vite must be running separately) | `http://localhost:8788/` |
+| LSP + curated + Pages Functions all together | `pnpm dev:full` (+ seed:local for curated) | `http://localhost:8788/rune-studio/studio/` |

@@ -13,7 +13,7 @@
 
 import { useState, useMemo, useCallback, useRef, memo } from 'react';
 import type { JSX, DragEvent, MouseEvent, KeyboardEvent } from 'react';
-import { ChevronRight, ChevronDown, Eye, EyeOff, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
+import { ChevronRight, ChevronDown, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
@@ -140,7 +140,12 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   expandedNamespaces,
   hiddenNodeIds,
   selectedNodeId,
-  onToggleNamespace,
+  // Copilot review: `onToggleNamespace` is intentionally unused inside the
+  // panel after the e2e-batch Eye/EyeOff button removal. The prop is kept
+  // on the public interface as a no-op pass-through so callers (currently
+  // EditorPage) don't need to thread different props for the panel vs.
+  // the Graph filter menu that still consumes the action.
+  onToggleNamespace: _onToggleNamespace,
   onExpandAll,
   onCollapseAll,
   onSelectNode,
@@ -283,7 +288,6 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                       <NamespaceHeaderRow
                         row={row}
                         isGraphVisible={expandedNamespaces.has(row.namespace)}
-                        onToggleGraphVisibility={() => onToggleNamespace(row.namespace)}
                         onToggleTreeExpand={() => toggleTreeExpand(row.namespace)}
                       />
                     ) : (
@@ -316,19 +320,26 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
 
 interface NamespaceHeaderRowProps {
   row: Extract<FlatTreeRow, { kind: 'namespace' }>;
+  /**
+   * Whether this namespace is currently visible in the Graph view. Kept for
+   * styling the row's text color (visible → foreground, hidden → muted) so
+   * users can see at a glance which namespaces the Graph filter has hidden.
+   * Toggle UI for visibility was removed from the explorer (e2e-batch fix):
+   * visibility is a Graph-only concept, managed via the Graph filter menu.
+   */
   isGraphVisible: boolean;
-  onToggleGraphVisibility: () => void;
   onToggleTreeExpand: () => void;
 }
 
-function NamespaceHeaderRow({
-  row,
-  isGraphVisible,
-  onToggleGraphVisibility,
-  onToggleTreeExpand
-}: NamespaceHeaderRowProps): JSX.Element {
+function NamespaceHeaderRow({ row, isGraphVisible, onToggleTreeExpand }: NamespaceHeaderRowProps): JSX.Element {
+  // e2e-batch fix #11: signal that this namespace contains draggable items.
+  // A subtle "grip" affordance appears on hover so users discover that types
+  // INSIDE the namespace can be dragged to drop targets (Structure rows,
+  // Source editor). The namespace header itself isn't draggable today —
+  // that would need a new NamespaceRef payload kind — but the hover hint
+  // points users toward the per-type drag affordance once expanded.
   return (
-    <div data-testid={`ns-row-${row.namespace}`}>
+    <div data-testid={`ns-row-${row.namespace}`} className="group">
       <div
         className={`flex items-center gap-1 px-2 py-1 text-sm hover:bg-accent/50 cursor-default ${
           isGraphVisible ? 'text-foreground' : 'text-muted-foreground'
@@ -344,23 +355,19 @@ function NamespaceHeaderRow({
           {row.expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </Button>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={onToggleGraphVisibility}
-              aria-label={isGraphVisible ? 'Hide namespace from graph' : 'Show namespace on graph'}
-              className="shrink-0"
-            >
-              {isGraphVisible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5 text-muted-foreground" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{isGraphVisible ? 'Hide from graph' : 'Show on graph'}</TooltipContent>
-        </Tooltip>
-
         <span className="flex-1 truncate text-xs font-medium cursor-pointer" onClick={onToggleTreeExpand}>
           {row.namespace}
+        </span>
+
+        {/* Drag-source affordance hint (hover-only). Subtle ⋮⋮ icon signals to
+            the user that types inside are draggable. Stays hidden until hover
+            so it doesn't compete visually with the type-count chiclet. */}
+        <span
+          className="shrink-0 px-1 text-[10px] leading-none text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100"
+          aria-hidden="true"
+          title="Types in this namespace can be dragged onto Structure rows or the Source editor"
+        >
+          ⋮⋮
         </span>
 
         <span className="number-chiclet">{row.typeCount}</span>
@@ -478,10 +485,24 @@ function TypeItemRow({
     <div
       role="button"
       tabIndex={0}
-      className={`group relative ml-4 flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
+      className={`studio-type-row group relative ml-4 flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
         isSelected ? 'studio-type-row--selected' : isVisible ? 'text-foreground' : 'text-muted-foreground opacity-60'
-      }`}
+      }${isDragSource ? ' studio-type-row--drag-source' : ''}`}
       data-testid={`ns-type-${row.nodeId}`}
+      data-drag-source={isDragSource ? 'true' : undefined}
+      // Copilot review (e2e-batch adversarial) caught two a11y gaps:
+      //  1. role="button" row acts as a toggle (idle ↔ active drag source)
+      //     but had no aria-pressed. Screen readers couldn't communicate
+      //     the toggle state from aria-label mutation alone (label changes
+      //     aren't reliably re-announced without a live region).
+      //  2. Label dropped "selected" state when also drag-source (early
+      //     ternary). Now both states concatenate so users hear both when
+      //     both apply. aria-pressed is only set on rows that CAN be drag
+      //     sources (payload defined) — for unsupported-kind rows, the
+      //     attribute is omitted entirely so SR users don't get a stuck
+      //     "not pressed" announcement on a non-toggle row.
+      aria-pressed={payload !== undefined ? isDragSource : undefined}
+      aria-label={`${row.name}${isDragSource ? ' — active drag source' : ''}${isSelected ? ' — selected' : ''}`}
       draggable={payload !== undefined}
       onDragStart={handleDragStart}
       onClick={handleClick}
@@ -489,15 +510,16 @@ function TypeItemRow({
     >
       {isSelected && <span className="studio-type-pip" />}
 
-      {/* Phase 13 amend: → state indicator moved to left of glyph so it does
-          not visually compete with the right-aligned navigation button.
-          It remains as a low-cost affordance for sighted users to spot which
-          row is the active drag source at a glance. */}
-      {isDragSource && (
-        <span className="rune-type-item__arrow text-primary text-xs" aria-label="active drag source">
-          →
-        </span>
-      )}
+      {/* e2e-batch fix #5: replaced the `→` drag-source marker with a
+          left-edge color accent. The user reported "two arrows on the
+          namespace explorer rows... unclear which does what" — the previous
+          `→` glyph visually competed with the right-aligned ChevronRight
+          nav button (both are right-pointing arrows). The accent stripe
+          gives a clear "active drag source" state without using an arrow
+          glyph, so the only arrow icon on the row is the nav button.
+          aria-label preserved on the row body via `data-drag-source` —
+          screen readers learn the state from the row, not a separate
+          element. */}
 
       <span
         className="studio-type-glyph"

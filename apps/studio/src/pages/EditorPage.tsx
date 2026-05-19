@@ -61,7 +61,21 @@ import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { Kbd } from '@rune-langium/design-system/ui/kbd';
-import { Maximize2, LayoutGrid, Network, Check, Download, Share2, Zap, Search, ChevronDown } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
+import {
+  Maximize2,
+  LayoutGrid,
+  Network,
+  Check,
+  Download,
+  Share2,
+  Zap,
+  Search,
+  ChevronDown,
+  Plus,
+  LogOut
+} from 'lucide-react';
+import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistence.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
@@ -135,35 +149,69 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
     if (!d || typeof d.namespace !== 'string') continue;
     namespacesSet.add(d.namespace);
 
-    if (d.$type === 'Data') {
+    // Codex P1 review (e2e-batch fix #1 follow-up): some hydration paths
+    // (curated /api/parse round-trips, deferred exports) attach `typeKind`
+    // to data but leave `$type` undefined. The `selectedNodeType` selector
+    // in this file already handles that fallback chain; the adapter
+    // projection MUST mirror it, otherwise nodes recognized as Data/Choice/
+    // Enum by selectedNodeType get filtered out here and Structure View
+    // shows the stale-selection state for them. Effective $type is the
+    // first defined of: $type → typeKind-mapped → node.type-mapped.
+    const effectiveType = ((): string | undefined => {
+      if (d.$type) return d.$type;
+      const k = (d as { typeKind?: string }).typeKind ?? (rfNode as { type?: string }).type;
+      if (k === 'data' || k === 'Data') return 'Data';
+      if (k === 'choice' || k === 'Choice') return 'Choice';
+      if (k === 'enum' || k === 'Enum' || k === 'RosettaEnumeration') return 'RosettaEnumeration';
+      return undefined;
+    })();
+
+    // Copilot review (e2e-batch confirmation pass): the previous
+    // `Extract<AnyGraphNode, { $type: 'Data' }>` casts asserted nodes
+    // belong to the $type-discriminated union — which is exactly what
+    // fallback nodes (the ones that took this path because `$type` was
+    // MISSING) violate. The asserts happened to work at runtime because
+    // only structural fields get read, but the type system was being
+    // lied to. Use shape-of-what-we-read structural types instead so
+    // (a) TS surfaces a real error if the read shape ever drifts and
+    // (b) we're not pretending fallback nodes have a $type field.
+    if (effectiveType === 'Data') {
+      const dd = d as {
+        name: string;
+        namespace: string;
+        superType?: { $refText?: string };
+        attributes?: readonly unknown[];
+      };
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Data',
-        name: d.name,
-        namespace: d.namespace,
-        extends: d.superType?.$refText,
+        name: dd.name,
+        namespace: dd.namespace,
+        extends: dd.superType?.$refText,
         // `attributes` on AstNodeModel<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
-        attributes: (d.attributes ?? []) satisfies AdapterNode['attributes']
+        attributes: (dd.attributes ?? []) as AdapterNode['attributes']
       });
-    } else if (d.$type === 'Choice') {
+    } else if (effectiveType === 'Choice') {
       // ChoiceOption AST shape: { $type, typeCall, … } — NO `name`, NO `card`.
       // Pass through to the new `choiceOptions` field on AdapterNode unchanged.
       // The adapter's buildChoiceArm consumes the real shape via typeCall only.
+      const dc = d as { name: string; namespace: string; attributes?: readonly unknown[] };
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Choice',
-        name: d.name,
-        namespace: d.namespace,
-        choiceOptions: (d.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>
+        name: dc.name,
+        namespace: dc.namespace,
+        choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>
       });
-    } else if (d.$type === 'RosettaEnumeration') {
+    } else if (effectiveType === 'RosettaEnumeration') {
+      const de = d as { name: string; namespace: string; enumValues?: readonly unknown[] };
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Enum',
-        name: d.name,
-        namespace: d.namespace,
-        values: (d.enumValues ?? []) as Array<{ name: string }>
+        name: de.name,
+        namespace: de.namespace,
+        values: (de.enumValues ?? []) as Array<{ name: string }>
       });
     }
     // Other kinds (Function, RecordType, TypeAlias, etc.) are not relevant to Structure View
@@ -192,6 +240,18 @@ export interface EditorPageProps {
   fileCount?: number;
   /** Called when the user wants to close the current workspace. */
   onClose?: () => void;
+  /**
+   * Called when the user picks a different workspace from the topbar
+   * dropdown (replaces "close + go to loader + click recent" with one
+   * click). When omitted, the dropdown's "Switch to…" section is hidden
+   * and only the close action remains.
+   */
+  onSwitchWorkspace?: (workspaceId: string) => void;
+  /**
+   * Called when the user picks "New workspace" from the topbar dropdown.
+   * When omitted, the menu item is hidden.
+   */
+  onCreateWorkspace?: () => void;
 }
 
 const DECL_KEYWORDS = /^(type|enum|func|choice|annotation|metaType|typeAlias|library\s+function|reporting\s+rule)\s+/;
@@ -218,6 +278,23 @@ function matchesPreviewSourceIdentity(current: FormPreviewTarget, candidate: For
     current.sourceRange?.start.line === candidate.sourceRange?.start.line &&
     current.sourceRange?.start.character === candidate.sourceRange?.start.character
   );
+}
+
+/**
+ * Render an unmapped Langium `$type` as a human-friendly kind label.
+ * Strips the `Rosetta` prefix and inserts spaces before interior capital
+ * letters, then lowercases the tail so the result reads as sentence case
+ * (`RosettaTypeAlias` → `Type alias`, `RosettaExternalRuleSource` →
+ * `External rule source`). Used as the fallback in
+ * `structureUnsupportedSelectedType`'s KIND_LABEL map so any newly-added
+ * Rosetta AST node type produces a passable label without code change.
+ */
+function formatUnknownKind(rawType: string): string {
+  const stripped = rawType.startsWith('Rosetta') ? rawType.slice('Rosetta'.length) : rawType;
+  // Insert a space before each interior capital, then lowercase everything
+  // except the first character.
+  const spaced = stripped.replace(/([a-z])([A-Z])/g, '$1 $2');
+  return spaced.charAt(0) + spaced.slice(1).toLowerCase();
 }
 
 function getFileKindBadge(name: string): string {
@@ -298,13 +375,29 @@ export function EditorPage({
   studioVersion = '0.1.0',
   workspaceName,
   fileCount,
-  onClose
+  onClose,
+  onSwitchWorkspace,
+  onCreateWorkspace
 }: EditorPageProps) {
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
   const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  // Topbar workspace dropdown — populated lazily when the popover opens
+  // so we don't read IDB on every EditorPage mount. Recents list is filtered
+  // to exclude the current workspace (no point switching to where you are).
+  const [workspaceMenuRecents, setWorkspaceMenuRecents] = useState<RecentWorkspaceRecord[]>([]);
+  const handleWorkspaceMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        void listRecents().then((rows) => {
+          setWorkspaceMenuRecents(rows.filter((r) => r.id !== workspaceId));
+        });
+      }
+    },
+    [workspaceId]
+  );
   const [groupedLayout, setGroupedLayout] = useState(false);
   const [graphLayoutDirection, setGraphLayoutDirection] = useState<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
   // Ref so ResizeObserver callbacks always see the latest value without stale closures.
@@ -352,10 +445,61 @@ export function EditorPage({
   // Derive $type of the currently-selected node to gate which ids get forwarded
   // to StructureView as focusedTypeId. Using a separate selector avoids breaking
   // zustand's referential-equality optimisation that would fire on every nodes mutation.
+  //
+  // Defensive derivation (e2e-batch fix): the curated/deferred-export path
+  // attaches $type to data.$type, but earlier hydration variants stored kind
+  // info on data.typeKind or only on the React Flow node.type. Fall through to
+  // every known source so curated-loaded nodes also derive a valid type and
+  // route through to Structure View (issue #1 — curated bundles showed empty
+  // structure pane because selectedNodeType was null even though Inspector
+  // populated from the same node).
   const selectedNodeType = useEditorStore((s) => {
     if (!s.selectedNodeId) return null;
     const node = s.nodes.find((n) => n.id === s.selectedNodeId);
-    return (node?.data as { $type?: string } | undefined)?.$type ?? null;
+    if (!node) return null;
+    const d = node.data as { $type?: string; typeKind?: string } | undefined;
+    if (d?.$type) return d.$type;
+    // Map React Flow node.type (lowercase: 'data', 'choice', 'enum', 'func',
+    // 'record', 'typeAlias', 'basicType', 'annotation') or data.typeKind back
+    // to the Langium AST $type the StructureView gate + the unsupported-kind
+    // empty state both expect. Copilot review (e2e-batch adversarial) flagged
+    // the earlier 3-kind fallback as incomplete — it returned null for non-
+    // Data RF node types, so the contextual "X is a Function" empty state
+    // never fired for curated-loaded functions/records/etc.
+    const kind = d?.typeKind ?? (node as { type?: string }).type;
+    switch (kind) {
+      case 'data':
+      case 'Data':
+        return 'Data';
+      case 'choice':
+      case 'Choice':
+        return 'Choice';
+      case 'enum':
+      case 'Enum':
+      case 'RosettaEnumeration':
+        return 'RosettaEnumeration';
+      case 'func':
+      case 'Function':
+      case 'RosettaFunction':
+        return 'RosettaFunction';
+      case 'record':
+      case 'Record':
+      case 'RosettaRecordType':
+        return 'RosettaRecordType';
+      case 'typeAlias':
+      case 'TypeAlias':
+      case 'RosettaTypeAlias':
+        return 'RosettaTypeAlias';
+      case 'basicType':
+      case 'BasicType':
+      case 'RosettaBasicType':
+        return 'RosettaBasicType';
+      case 'annotation':
+      case 'Annotation':
+        return 'Annotation';
+      default:
+        return null;
+    }
   });
   const storeSetLayoutEngine = useEditorStore((s) => s.setLayoutEngine);
   const layoutEngineRef = useRef(storeLayoutEngine);
@@ -1398,6 +1542,50 @@ export function EditorPage({
     return undefined;
   }, [selectedNodeId, selectedNodeType]);
 
+  // e2e-batch fix #10: when the user has selected a type whose kind isn't
+  // supported in Structure View, expose the name + kind so the empty state can
+  // explain WHY the pane is blank instead of repeating the generic prompt.
+  // Selected-but-supported types fall through to the regular focused-type
+  // render path; unsupported types produce { name, kind } for the targeted
+  // empty state in StructureView.
+  const structureUnsupportedSelectedType = useMemo<{ name: string; kind: string } | undefined>(() => {
+    if (!selectedNodeId || structureFocusedTypeId) return undefined;
+    if (!selectedNodeType) return undefined;
+    const node = storeNodes.find((n) => n.id === selectedNodeId);
+    const name =
+      (node?.data as { name?: string } | undefined)?.name ?? selectedNodeId.split('::').pop() ?? selectedNodeId;
+    // Map AST $type → user-friendly kind label. Codex review (e2e-batch
+    // adversarial) flagged the previous map as non-exhaustive — it omitted
+    // RosettaTypeAlias, RosettaBasicType, RosettaSynonymSource,
+    // RosettaExternalFunction, RosettaMetaType, RosettaBody, RosettaCorpus,
+    // RosettaSegment, RosettaExternalRuleSource, RosettaReport, RosettaRule,
+    // any of which a user could select from the explorer. Missing entries
+    // previously fell through to the raw $type string (ugly but not crash-y);
+    // now we cover the common cases AND `formatUnknownKind` strips the
+    // `Rosetta` prefix + inserts spaces so unmapped types still render as
+    // "Type alias" / "Basic type" / "Synonym source" etc.
+    const KIND_LABEL: Record<string, string> = {
+      Function: 'Function',
+      RosettaFunction: 'Function',
+      TypeAlias: 'Type alias',
+      RosettaTypeAlias: 'Type alias',
+      Record: 'Record',
+      RosettaRecordType: 'Record',
+      RosettaBasicType: 'Basic type',
+      Annotation: 'Annotation',
+      RosettaMetaType: 'Meta type',
+      RosettaSynonymSource: 'Synonym source',
+      RosettaExternalFunction: 'External function',
+      RosettaBody: 'Body',
+      RosettaCorpus: 'Corpus',
+      RosettaSegment: 'Segment',
+      RosettaExternalRuleSource: 'External rule source',
+      RosettaReport: 'Report',
+      RosettaRule: 'Rule'
+    };
+    return { name, kind: KIND_LABEL[selectedNodeType] ?? formatUnknownKind(selectedNodeType) };
+  }, [selectedNodeId, selectedNodeType, structureFocusedTypeId, storeNodes]);
+
   const adapterDocument = useMemo(
     () => (storeNodes.length > 0 ? graphNodesToAdapterDocument(storeNodes) : undefined),
     [storeNodes]
@@ -1526,6 +1714,8 @@ export function EditorPage({
         expansionMap={expansionMap}
         cellComponents={structureCellComponents}
         onToggleExpansion={toggleExpansion}
+        unsupportedSelectedType={structureUnsupportedSelectedType}
+        onNodeSelect={(canonicalId) => storeSelectNode(canonicalId, { reapplyFocusMode: false })}
         onNavigateToEnumType={handleStructureNavigateToEnumType}
         structureDiagnostics={structureDiagnostics}
       />
@@ -1536,6 +1726,8 @@ export function EditorPage({
       expansionMap,
       structureCellComponents,
       toggleExpansion,
+      structureUnsupportedSelectedType,
+      storeSelectNode,
       handleStructureNavigateToEnumType,
       structureDiagnostics
     ]
@@ -1607,22 +1799,79 @@ export function EditorPage({
             <span className="studio-brand__name">Rune Studio</span>
           </div>
           <span className="studio-topbar__divider" />
-          <button
-            type="button"
-            className="studio-topbar__ws-btn"
-            onClick={onClose}
-            aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
-            title="Close workspace — return to start page"
-          >
-            <span className="studio-topbar__ws-mark" aria-hidden="true">
-              {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
-            </span>
-            <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
-            <span className="studio-topbar__ws-sub">
-              {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
-            </span>
-            <ChevronDown className="size-3" />
-          </button>
+          <Popover onOpenChange={handleWorkspaceMenuOpenChange}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="studio-topbar__ws-btn"
+                aria-label={`Workspace menu — ${workspaceName || 'workspace'}`}
+                title="Switch / create / close workspace"
+              >
+                <span className="studio-topbar__ws-mark" aria-hidden="true">
+                  {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
+                <span className="studio-topbar__ws-sub">
+                  {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
+                </span>
+                <ChevronDown className="size-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" sideOffset={6} className="w-72 p-1.5">
+              {/* Switch-to section — only shown when callback is provided AND
+                  there are recents OTHER than the current workspace. The
+                  dropdown was the user-reported gap (workspace tab had a
+                  ChevronDown that promised a menu but only fired onClose). */}
+              {onSwitchWorkspace && workspaceMenuRecents.length > 0 && (
+                <>
+                  <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Switch to
+                  </p>
+                  <ul className="space-y-0.5" role="menu">
+                    {workspaceMenuRecents.slice(0, 6).map((r) => (
+                      <li key={r.id} role="none">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
+                          onClick={() => onSwitchWorkspace(r.id)}
+                        >
+                          <span className="font-medium truncate flex-1">{r.name}</span>
+                          <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase tracking-wide">
+                            {r.kind === 'git-backed' ? 'GIT' : r.kind === 'folder-backed' ? 'FOLDER' : 'BROWSER'}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="my-1 border-t border-border" />
+                </>
+              )}
+              {onCreateWorkspace && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
+                  onClick={onCreateWorkspace}
+                >
+                  <Plus className="size-3.5 text-muted-foreground" />
+                  <span>New workspace</span>
+                </button>
+              )}
+              {onClose && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left text-destructive"
+                  onClick={onClose}
+                  aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
+                >
+                  <LogOut className="size-3.5" />
+                  <span>Close workspace</span>
+                </button>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
         <FileTabStrip files={files} activeFile={activeEditorFile} onSelectFile={openFileInSource} />
         <div className="studio-topbar__right">

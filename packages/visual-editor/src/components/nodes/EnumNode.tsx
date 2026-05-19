@@ -43,13 +43,15 @@ export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
   // -------------------------------------------------------------------------
   if (isStructureEnum(data)) {
     const values = data.values as ReadonlyArray<string>;
+    // e2e-batch fix #12: per-node rows-column width from the layout.
+    const rowsColWidth = (data as { rowsColWidth?: number }).rowsColWidth;
     return (
       <div className={`rune-node rune-node-enum rune-node-enum--structure${selected ? ' rune-node-selected' : ''}`}>
         <div className="rune-node-header">
           <NodeKindBadge kind="enum" />
           <span>{data.name}</span>
         </div>
-        <div className="rune-node-rows">
+        <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
           {values.map((value) => (
             <div key={value} className="rune-node-row" data-attr={value}>
               <span className="rune-cell-name">{value}</span>

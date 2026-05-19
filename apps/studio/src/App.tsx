@@ -736,6 +736,8 @@ function AppContent() {
             workspaceName={restoredWorkspace?.name}
             fileCount={userFiles.length}
             onClose={handleReset}
+            onSwitchWorkspace={handleSwitchWorkspace}
+            onCreateWorkspace={handleCreateWorkspace}
           />
         )}
 
@@ -764,6 +766,8 @@ function AppContent() {
             workspaceName={restoredWorkspace?.name}
             fileCount={userFiles.length}
             onClose={handleReset}
+            onSwitchWorkspace={handleSwitchWorkspace}
+            onCreateWorkspace={handleCreateWorkspace}
           />
         )}
       </main>

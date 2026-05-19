@@ -298,22 +298,31 @@ describe('NamespaceExplorerPanel', () => {
     expect(dataTransfer.effectAllowed).toBe('link');
   });
 
-  it('renders → arrow when dragSourceId matches the row nodeId', () => {
+  // e2e-batch fix #5: the drag-source visual marker was a `→` glyph that
+  // visually competed with the right-aligned ChevronRight nav button. It was
+  // replaced with a left-edge color stripe driven by the
+  // `studio-type-row--drag-source` class + `data-drag-source` attribute on
+  // the row body. These tests now assert the new contract — the row body
+  // owns the state, no separate glyph element exists.
+  it('marks the row as drag source when dragSourceId matches the row nodeId', () => {
     renderPanel({ dragSourceId: 'com.model::Trade' });
-    const arrow = screen.getByLabelText('active drag source');
-    expect(arrow).toBeTruthy();
-  });
-
-  it('does NOT render → arrow when dragSourceId does not match', () => {
-    renderPanel({ dragSourceId: 'com.lib::Date' });
-    // Trade row should not have the arrow
     const tradeRow = screen.getByTestId('ns-type-com.model::Trade');
-    expect(tradeRow.querySelector('[aria-label="active drag source"]')).toBeNull();
+    expect(tradeRow.getAttribute('data-drag-source')).toBe('true');
+    expect(tradeRow.className).toContain('studio-type-row--drag-source');
+    expect(tradeRow.getAttribute('aria-label')).toContain('active drag source');
   });
 
-  it('does NOT render → arrow when dragSourceId is absent', () => {
+  it('does NOT mark the row as drag source when dragSourceId does not match', () => {
+    renderPanel({ dragSourceId: 'com.lib::Date' });
+    const tradeRow = screen.getByTestId('ns-type-com.model::Trade');
+    expect(tradeRow.getAttribute('data-drag-source')).toBeNull();
+    expect(tradeRow.className).not.toContain('studio-type-row--drag-source');
+  });
+
+  it('does NOT mark any row as drag source when dragSourceId is absent', () => {
     renderPanel();
-    expect(screen.queryByLabelText('active drag source')).toBeNull();
+    const rows = document.querySelectorAll('[data-drag-source="true"]');
+    expect(rows.length).toBe(0);
   });
 
   // -------------------------------------------------------------------------

@@ -40,7 +40,16 @@ import type {
 export const STRUCTURE_LAYOUT_CONSTANTS = {
   ROW_HEIGHT: 28,
   HEADER_HEIGHT: 28,
-  COL_WIDTH: 260,
+  /**
+   * Minimum rows-column width. The actual per-node width grows from this
+   * baseline based on row content via `estimateRowsColWidth` (e2e-batch fix
+   * #12 — was 260, which clipped most CDM type names). MIN is the floor; the
+   * effective width is `max(MIN, estimated)`, capped by `COL_WIDTH_MAX` to
+   * prevent runaway widths from pathologically long identifiers.
+   */
+  COL_WIDTH: 320,
+  /** Upper clamp on per-node rows-column width — keeps long identifiers from breaking layout. */
+  COL_WIDTH_MAX: 600,
   COL_GAP: 32,
   ROW_GAP: 8,
   /** Padding inside a base GroupContainer's yellow border. */
@@ -48,13 +57,63 @@ export const STRUCTURE_LAYOUT_CONSTANTS = {
 } as const;
 
 // Internal aliases — keep call sites inside this module readable.
-const { ROW_HEIGHT, HEADER_HEIGHT, COL_WIDTH, COL_GAP, ROW_GAP, BASE_PADDING } = STRUCTURE_LAYOUT_CONSTANTS;
+const { ROW_HEIGHT, HEADER_HEIGHT, COL_WIDTH, COL_WIDTH_MAX, COL_GAP, ROW_GAP, BASE_PADDING } =
+  STRUCTURE_LAYOUT_CONSTANTS;
 
 interface SizedNode {
+  /** Outer width — includes rowsColWidth + (optional COL_GAP + childrenWidth). */
   width: number;
   height: number;
+  /**
+   * Per-node rows-column width (e2e-batch fix #12). Computed from content so
+   * dense CDM types like `AdjustableOrAdjustedOrRelativeDate` aren't clipped
+   * by a global COL_WIDTH. The DataNode/ChoiceNode/EnumNode renderers pick this
+   * up via `data.rowsColWidth` and set it as inline style on `.rune-node-rows`,
+   * overriding the `--rune-col-width` CSS fallback.
+   */
+  rowsColWidth: number;
   /** attrName → vertical center of the row inside the node body. */
   rowOffsets: Map<string, number>;
+}
+
+/**
+ * Estimate the rendered width of the rows column for a Data/Choice/Enum node.
+ * Uses a conservative monospace-ish character-width estimate (~7px @ 12px font)
+ * plus chrome overhead (chevron, type chip padding, cardinality pill, gaps,
+ * row padding). Result is clamped to [COL_WIDTH, COL_WIDTH_MAX].
+ *
+ * This isn't pixel-perfect — that would need post-mount measurement — but it's
+ * accurate enough to stop CDM-scale type names from clipping at the
+ * previously-fixed 260px column. Tradeoff acknowledged: variable-pitch fonts
+ * and locale glyphs can render wider than the estimate; the COL_WIDTH_MAX cap
+ * + CSS `text-overflow: ellipsis` are the safety net.
+ */
+function estimateRowsColWidth(
+  rowTexts: ReadonlyArray<{ name: string; typeName: string; card: string }>,
+  /**
+   * The node's HEADER text — the type's own name (`data.name`). Header
+   * width is the `NodeKindBadge` (~50px) + the name itself, and the
+   * header can be LONGER than any row's content (e.g. a Data type named
+   * `AdjustableOrAdjustedOrRelativeDate` with short attributes). Without
+   * including the header in the floor, the visual verification on dev
+   * caught the header truncating with text-overflow ellipsis even though
+   * all rows fit. e2e-batch follow-up #12.
+   */
+  headerName: string = ''
+): number {
+  const CHAR_W = 7;
+  // chrome: row padding (8) + chevron (14) + gap (4) + type chip horiz padding
+  // (16) + card pill horiz padding (12) + inter-cell gaps (4*4=16) + right
+  // padding (8) ≈ 78. Round up for safety margin.
+  const CHROME = 84;
+  // Header chrome: kind badge (50) + L/R padding (8+8) + safety margin (10) ≈ 76.
+  const HEADER_CHROME = 76;
+  let max = headerName.length * CHAR_W + HEADER_CHROME;
+  for (const r of rowTexts) {
+    const w = (r.name.length + r.typeName.length + r.card.length) * CHAR_W + CHROME;
+    if (w > max) max = w;
+  }
+  return Math.min(COL_WIDTH_MAX, Math.max(COL_WIDTH, max));
 }
 
 /**
@@ -149,9 +208,16 @@ function sizeData(
       ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT
       : 0;
 
-  const width = childrenWidth > 0 ? COL_WIDTH + COL_GAP + childrenWidth : COL_WIDTH;
+  // e2e-batch fix #12: per-node rows-column width based on content +
+  // header name (follow-up: visual verification on dev caught long headers
+  // truncating when row content was short).
+  const rowsColWidth = estimateRowsColWidth(
+    rows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality })),
+    node.name
+  );
+  const width = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
   const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
-  return { width, height, rowOffsets };
+  return { width, height, rowsColWidth, rowOffsets };
 }
 
 function sizeChoice(
@@ -188,9 +254,16 @@ function sizeChoice(
   const childrenHeight =
     expansions.size > 0 ? simulateColumnHeight(expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT : 0;
 
-  const width = childrenWidth > 0 ? COL_WIDTH + COL_GAP + childrenWidth : COL_WIDTH;
+  // e2e-batch fix #12: per-node rows-column width based on arm content +
+  // header name. Choice arms have no attrName / cardinality — pass empty
+  // strings so the estimator only widens for long typeNames.
+  const rowsColWidth = estimateRowsColWidth(
+    node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '' })),
+    node.name
+  );
+  const width = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
   const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
-  return { width, height, rowOffsets };
+  return { width, height, rowsColWidth, rowOffsets };
 }
 
 const EMPTY_EXPANSIONS: ReadonlyMap<string, string> = new Map();
@@ -204,9 +277,15 @@ function sizeEnum(node: StructureEnumNode): SizedNode {
   for (let i = 0; i < node.values.length; i++) {
     rowOffsets.set(node.values[i], HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
+  // e2e-batch fix #12: per-node width based on the longest enum value name.
+  const rowsColWidth = estimateRowsColWidth(
+    node.values.map((v) => ({ name: v, typeName: '', card: '' })),
+    node.name
+  );
   return {
-    width: COL_WIDTH,
+    width: rowsColWidth,
     height: HEADER_HEIGHT + node.values.length * ROW_HEIGHT,
+    rowsColWidth,
     rowOffsets
   };
 }
@@ -226,9 +305,10 @@ function sizeBase(
     ? (sizeOf(child, sizes, input, sizing) ?? {
         width: COL_WIDTH,
         height: HEADER_HEIGHT,
+        rowsColWidth: COL_WIDTH,
         rowOffsets: new Map()
       })
-    : { width: COL_WIDTH, height: HEADER_HEIGHT, rowOffsets: new Map() };
+    : { width: COL_WIDTH, height: HEADER_HEIGHT, rowsColWidth: COL_WIDTH, rowOffsets: new Map() };
 
   const baseRowsHeight = HEADER_HEIGHT + node.baseRows.length * ROW_HEIGHT;
 
@@ -265,6 +345,22 @@ function sizeBase(
       ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, BASE_PADDING + HEADER_HEIGHT)
       : BASE_PADDING + HEADER_HEIGHT;
 
+  // e2e-batch fix #12 (Codex P1 follow-up): compute rowsColWidth FIRST so
+  // innerWidth + leftColumn placement can use it. Was computed AFTER
+  // innerWidth and then ignored, so wide base rows would overflow into the
+  // expansion gutter and right-column expansions would overlap the base
+  // rows. Codex caught it in the adversarial pass.
+  //
+  // baseRowsColWidth covers the base container's own inherited rows; the
+  // nested derived child's rowsColWidth keeps the parent wide enough for
+  // its own rows column. The base container's effective rowsColWidth is
+  // the max of those two — whichever needs more room sets the floor.
+  const baseRowsColWidth = estimateRowsColWidth(
+    node.baseRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality })),
+    node.baseTypeName
+  );
+  const rowsColWidth = Math.max(baseRowsColWidth, childSize.rowsColWidth);
+
   // The base container wraps:
   //  - the base rows (top section, inside top padding)
   //  - the derived child below the base rows (+ ROW_GAP separator)
@@ -275,14 +371,18 @@ function sizeBase(
   // y: HEADER_HEIGHT + baseRows.length*ROW_HEIGHT + BASE_PADDING for the child.
   const leftColumnHeight = baseRowsHeight + childSize.height + BASE_PADDING;
   const innerHeight = Math.max(leftColumnHeight, rightColumnHeight);
-  const innerWidth =
-    expansionsWidth > 0
-      ? Math.max(COL_WIDTH, childSize.width) + COL_GAP + expansionsWidth
-      : Math.max(COL_WIDTH, childSize.width);
+  // Left column reserves the wider of (rowsColWidth, derived child's full
+  // outer width). rowsColWidth is already floor-clamped to COL_WIDTH by
+  // estimateRowsColWidth, so Math.max(rowsColWidth, childSize.width)
+  // preserves the previous "min COL_WIDTH" guarantee without needing an
+  // explicit COL_WIDTH term.
+  const leftColumnWidth = Math.max(rowsColWidth, childSize.width);
+  const innerWidth = expansionsWidth > 0 ? leftColumnWidth + COL_GAP + expansionsWidth : leftColumnWidth;
 
   return {
     width: innerWidth + BASE_PADDING * 2,
     height: innerHeight + BASE_PADDING * 2,
+    rowsColWidth,
     rowOffsets
   };
 }
@@ -312,7 +412,12 @@ function sizeOf(
   const cached = sizes.get(cacheKey);
   if (cached) return cached;
   if (sizing.has(instanceId)) {
-    const placeholder: SizedNode = { width: COL_WIDTH, height: HEADER_HEIGHT, rowOffsets: new Map() };
+    const placeholder: SizedNode = {
+      width: COL_WIDTH,
+      height: HEADER_HEIGHT,
+      rowsColWidth: COL_WIDTH,
+      rowOffsets: new Map()
+    };
     sizes.set(cacheKey, placeholder);
     return placeholder;
   }
@@ -401,7 +506,11 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       id: instanceId,
       type: n.kind === 'base' ? 'structureBase' : n.kind,
       position,
-      data: { ...n, variant: 'structure', instancePath: instanceAncestorPath },
+      // e2e-batch fix #12: `rowsColWidth` flows through to DataNode /
+      // ChoiceNode / EnumNode / GroupContainerNode renderers as inline
+      // style on `.rune-node-rows`. Each node sets its own rows-column
+      // width based on content estimate so CDM-scale type names don't clip.
+      data: { ...n, variant: 'structure', instancePath: instanceAncestorPath, rowsColWidth: sz.rowsColWidth },
       parentId: parentInstanceId,
       extent: parentInstanceId ? 'parent' : undefined,
       initialWidth: sz.width,
@@ -452,11 +561,18 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       // Cycle guard: skip placement when the target instance is already on the
       // recursion path (only possible for malformed input — the adapter's
       // SuppressedEdge mechanism prevents this for well-formed graphs).
+      //
+      // e2e-batch fix #12 follow-up (caught by Sonnet RF review): use
+      // `sz.rowsColWidth` for child x-offset, not the global COL_WIDTH. After
+      // per-node column widths, any parent wider than COL_WIDTH (320) would
+      // have placed children OVERLAPPING the left column. The size pass
+      // already widens the parent's `width` to `rowsColWidth + COL_GAP +
+      // childrenWidth`, so placement must mirror that origin.
       if (!ancestors.has(childInstanceId)) {
         placeNode(
           childInstanceId,
           nodeInstanceId(n),
-          { x: COL_WIDTH + COL_GAP, y: childY },
+          { x: sz.rowsColWidth + COL_GAP, y: childY },
           ancestors,
           instanceAncestorPath
         );
@@ -490,11 +606,13 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
       const childY = Math.max(rowTop, yCursor);
 
+      // e2e-batch fix #12 follow-up — same per-node width fix as
+      // placeDataChildren. See that function's comment for rationale.
       if (!ancestors.has(childInstanceId)) {
         placeNode(
           childInstanceId,
           nodeInstanceId(n),
-          { x: COL_WIDTH + COL_GAP, y: childY },
+          { x: sz.rowsColWidth + COL_GAP, y: childY },
           ancestors,
           instanceAncestorPath
         );
@@ -530,9 +648,16 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
 
     // 2. Base container's own row-level expansions (inherited rows the user
     //    expanded) sit in the right-hand column aligned with their base rows.
+    //
+    // e2e-batch fix #12 (Codex P1 follow-up): the right-column origin must
+    // mirror sizeBase's leftColumnWidth = max(rowsColWidth, childSize.width).
+    // Previously used Math.max(COL_WIDTH, leftColumnWidth) which ignored
+    // sz.rowsColWidth — for base containers whose own inherited rows are
+    // wider than the derived child, expansion children would have overlapped
+    // the base rows. Use sz.rowsColWidth (computed in sizeBase) as the floor.
     const derivedChildSize = sizes.get(makeSizeCacheKey(n.childNodeId));
-    const leftColumnWidth = derivedChildSize?.width ?? COL_WIDTH;
-    const rightColumnX = BASE_PADDING + Math.max(COL_WIDTH, leftColumnWidth) + COL_GAP;
+    const derivedChildWidth = derivedChildSize?.width ?? COL_WIDTH;
+    const rightColumnX = BASE_PADDING + Math.max(sz.rowsColWidth, derivedChildWidth) + COL_GAP;
 
     let yCursor = BASE_PADDING + HEADER_HEIGHT;
     for (const [attrName, childInstanceId] of n.expansions) {

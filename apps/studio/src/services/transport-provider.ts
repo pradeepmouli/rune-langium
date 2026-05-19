@@ -231,8 +231,16 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
    * timing out on a no-op channel.
    */
   function createPagesFunctionUnavailableError(cause: unknown): Error {
+    // e2e-batch fix #7: prefer `window.location.origin + /api/lsp/session` over
+    // `config.lspSessionUrl` in the error message. If VITE_DEV_MODE leaks into
+    // a prod build, `config.lspSessionUrl` can be the dev default (containing
+    // `localhost:5173`) even though the actual fetch happened at the prod
+    // origin via the relative URL fallback. Showing the actual origin keeps
+    // the message accurate when env detection misfires.
+    const actualUrl =
+      typeof window !== 'undefined' ? `${window.location.origin}/api/lsp/session` : config.lspSessionUrl;
     const errorMessage = config.devMode
-      ? `Pages Function LSP unreachable (${describeCause(cause)}) — verify ${config.lspSessionUrl} is deployed and CORS allows ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
+      ? `Pages Function LSP unreachable (${describeCause(cause)}) — verify ${actualUrl} is reachable from ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
       : 'Editor running offline — language services unavailable';
     if (config.devMode) {
       console.warn('[TransportProvider] Pages Function LSP step failed:', cause);

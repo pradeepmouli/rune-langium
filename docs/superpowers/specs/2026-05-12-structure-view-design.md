@@ -73,6 +73,8 @@ Each row in a Data node body:
 └─────────────┴──────────────────┴──────────┴─────┘
 ```
 
+> **Node width (e2e-batch PR):** the rows column is **content-estimated per node** rather than fixed. Each node's `data.rowsColWidth` is computed by `estimateRowsColWidth(rows)` in `structure-layout.ts`, summing name + typeName + cardinality character widths + chrome overhead, clamped to `[COL_WIDTH=320, COL_WIDTH_MAX=600]`. Renderers apply it as inline `style.width` on `.rune-node-rows`, overriding the `--rune-col-width` CSS fallback. Original spec assumed a globally-fixed `COL_WIDTH=260` — that floor was too small for CDM-scale type names like `AdjustableOrAdjustedOrRelativeDate`. The width is estimated (not measured) — cost is one extra layout pass; tradeoff is that variable-pitch fonts may render slightly wider than the estimate (text-overflow: ellipsis is the safety net beyond 600px).
+
 - **Name cell** — click to inline-edit; validates against Langium scope for duplicates.
 - **Type cell** — small **chip** with a subtle background tint keyed to target kind (Data = muted blue; Choice = muted orange; Enum = muted amber; basic types = muted gray). Click to navigate-refocus the canvas on that type. Drop target for drag-from-NamespaceExplorer.
 - **Cardinality cell** — small **monospace pill** (`0..1`, `1..1`, `0..*`, `2..2`). Click to open a popover editor.
@@ -158,7 +160,7 @@ Persisted to IndexedDB via studio's existing workspace-metadata layer (`apps/stu
 
 | Action | Result |
 |---|---|
-| Single-click | Marks the type as the active drag-source; renders a `→` arrow next to its name. Studio's focused type does NOT change. |
+| Single-click | Marks the type as the active drag-source. The row gets a left-edge color stripe + tinted background gradient (was `→` glyph in the original design; updated in the e2e-batch PR — the glyph visually competed with the right-aligned navigate ChevronRight, both being right-pointing arrows). Screen readers hear the state via the row's own `aria-label` (`"<name> — active drag source"`) and `aria-pressed="true"`. Studio's focused type does NOT change. |
 | Drag-and-drop onto a drop target | Drop target consumes the type reference (see drop targets below). |
 | Hover-visible nav button (`ChevronRight`) | Refocus Structure View on that type as the new root. *(Replaces the originally-specified double-click navigate, which was dropped in the Phase 13 redesign — double-click raced with single-click drag-source marking.)* |
 
@@ -210,6 +212,8 @@ Five flows; all reuse existing studio plumbing.
 
 **5 · Expansion state.** Owned by Structure View; persisted to IndexedDB; per-namespace; default fully collapsed.
 
+> **Effective-type resolution rule (e2e-batch PR, Codex P1 follow-up):** the original design assumed every graph node carries `data.$type` (e.g. `'Data'`, `'Choice'`, `'RosettaEnumeration'`). Curated hydration paths (`/api/parse` round-trips, deferred-export loaders) sometimes attach `data.typeKind` (`'data'`/`'choice'`/`'enum'`) or only the React Flow `node.type` instead, without setting `$type`. Both `selectedNodeType` (`apps/studio/src/pages/EditorPage.tsx`, the gate that decides what reaches Structure View) AND `graphNodesToAdapterDocument` (the same file, the projection that builds the `AdapterDocument` Structure View consumes) MUST resolve the effective type via the same fallback chain: `data.$type → data.typeKind → node.type`. A one-sided fallback produces a "selection forwarded but no matching node in adapter" dead-end where Structure shows the stale-selection state for legitimately-loaded curated types.
+
 ## 8. Edge cases
 
 The **collapse-by-default** default resolves most cases naturally — nothing recursive or deep is rendered until the user explicitly walks into it.
@@ -223,6 +227,7 @@ The **collapse-by-default** default resolves most cases naturally — nothing re
 | Unresolved reference (broken import / typo) | Adapter detects via `Reference.error`; type chip rendered in `--destructive` tint; hexagon-plus replaced with `?`; tooltip surfaces the LSP error. |
 | Concurrent edits (source-editor change during open Structure cell edit) | Source-editor wins. Pending Structure cell edit is discarded with a transient toast (`"Source changed — edit discarded"`); focus is dropped; cell re-reads from fresh AST. Same rule Inspector follows today. |
 | Empty state (Structure tab opened with no focused type) | Centered prompt: `Select a type from the Namespace Explorer to view its structure.` |
+| Unsupported kind selected (Function, TypeAlias, Record, Annotation, BasicType, etc.) | Targeted prompt naming the selected type + its kind label, directing the user to pick a Data / Choice / Enum type. Empty state branches on `unsupportedSelectedType` prop computed in EditorPage via `selectedNodeType` + a friendly-label map (with `formatUnknownKind` fallback for unmapped AST `$type` strings). Added in the e2e-batch PR after the original generic prompt was reported as non-actionable. |
 
 ## 9. Testing
 

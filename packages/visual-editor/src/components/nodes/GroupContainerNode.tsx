@@ -20,6 +20,16 @@ export interface GroupContainerBaseTypeData extends Record<string, unknown> {
   baseTypeNamespaceUri: string;
   baseRows: ReadonlyArray<StructureRow>;
   /**
+   * Per-node rows-column width (e2e-batch fix #12 follow-up; Codex rescue
+   * P2). Layout's `sizeBase` computes `max(baseRowsColWidth, derived
+   * child rowsColWidth)` and threads it via `placeNode`; without reading
+   * it here the inherited base-rows container stretches to the full
+   * outer width, letting long inherited row text bleed into the right
+   * expansion column. Optional for legacy callers (test fixtures) that
+   * construct GroupContainerBaseTypeData by hand.
+   */
+  rowsColWidth?: number;
+  /**
    * Per-key expansion state for rendering the expand/collapse chevron on inherited
    * Data/Choice rows (Codex P2, PR #191). Injected by StructureView alongside
    * onToggleExpansion. When absent, all rows render collapsed.
@@ -79,7 +89,8 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
   // DataNode.tsx:113. Any other format would produce a key that the adapter never
   // looks for, leaving the chevron's "expanded" state visually correct but never
   // actually rendering the child.
-  const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion, instancePath } = data;
+  const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion, instancePath, rowsColWidth } =
+    data;
 
   // Phase 14d (fix): include self's React Flow id in the rowKey instancePath so
   // two visible occurrences of the same base container at the same depth produce
@@ -94,7 +105,7 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
         <span className="rune-graph-group__title">{baseTypeName}</span>
         <span className="rune-graph-group__meta">base</span>
       </div>
-      <div className="rune-graph-group__base-rows">
+      <div className="rune-graph-group__base-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
         {baseRows.map((row) => {
           const expandable = isRowExpandable(row.typeKind);
           const rowKey: StructureExpansionKey | undefined = expandable

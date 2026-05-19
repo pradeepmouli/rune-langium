@@ -233,6 +233,24 @@ export interface StructureViewProps {
    */
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
   /**
+   * When `focusedTypeId` is undefined because the user selected a type whose
+   * kind isn't supported in Structure View (Function / TypeAlias / Record /
+   * Annotation), pass the selected type's name and kind here so the empty
+   * state can render actionable guidance instead of the generic prompt
+   * (e2e-batch fix #10). When the user has selected nothing or a supported
+   * kind, leave this undefined.
+   */
+  readonly unsupportedSelectedType?: { name: string; kind: string };
+  /**
+   * Selection sync (e2e-batch fix #3): fired when the user clicks any node in
+   * the rendered Structure tree. Receives the canonical type id (e.g.
+   * `'cdm.trade::Trade'`) — NOT the per-instance React Flow node id, so the
+   * receiver can write straight to a single `selectedNodeId` slice that the
+   * Graph / Source / Inspector also read from. EditorPage wires this to
+   * `useEditorStore.selectNode`.
+   */
+  readonly onNodeSelect?: (canonicalTypeId: string) => void;
+  /**
    * Spec §8 / §3.3 — navigate-to-enum callback. When provided, rows whose
    * `typeKind === 'Enum'` (and arms in ChoiceNode) render an ↗ inspect button
    * that fires this callback with the enum's canonical type id (ns::Name
@@ -264,6 +282,7 @@ interface StructureFlowInnerProps {
   readonly expansionMap: ReadonlyMap<string, boolean>;
   readonly cellComponents?: StructureCellComponents;
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
+  readonly onNodeSelect?: (canonicalTypeId: string) => void;
   readonly onNavigateToEnumType?: (typeId: string) => void;
   readonly structureDiagnostics?: readonly RangeDiagnostic[];
 }
@@ -278,6 +297,7 @@ function StructureFlowInner({
   expansionMap,
   cellComponents,
   onToggleExpansion,
+  onNodeSelect,
   onNavigateToEnumType,
   structureDiagnostics
 }: StructureFlowInnerProps): React.ReactElement {
@@ -392,6 +412,29 @@ function StructureFlowInner({
         elementsSelectable={false}
         onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
+        // e2e-batch fix #3: selection sync — clicking any node in the
+        // Structure tree writes the OWNER type's canonical id to the shared
+        // selection slice. We extract `node.data.id` (the canonical type id
+        // stamped by the adapter, e.g. `cdm.trade::Trade`) rather than the
+        // React Flow `node.id` (which carries the per-instance suffix like
+        // `Trade::buyer::Party` and would not match the explorer / inspector
+        // selection contract). Falls back to `node.id` when `data.id` is
+        // missing so the click still produces a write.
+        //
+        // Codex P1 review: skip clicks on synthetic wrapper nodes
+        // (`structureBase` — the GroupContainerNode renderer for base-type
+        // wraps). Their `data.id` is the synthetic wrapper key like
+        // `cdm.trade::Trade::__base::cdm.trade::TradeBase`, not a real
+        // graph node id — writing it to selectedNodeId would put the cross-
+        // pane sync into a no-such-node state. The base's actual selectable
+        // contents (header → base type, child → derived type) are accessed
+        // via clicking either of those nodes directly; the wrapper itself
+        // doesn't represent a navigable selection target.
+        onNodeClick={(_, node) => {
+          if (node.type === 'structureBase') return;
+          const canonicalId = (node.data as { id?: string } | undefined)?.id ?? node.id;
+          onNodeSelect?.(canonicalId);
+        }}
       />
     </div>
   );
@@ -416,10 +459,31 @@ export function StructureView({
   expansionMap,
   cellComponents,
   onToggleExpansion,
+  unsupportedSelectedType,
+  onNodeSelect,
   onNavigateToEnumType,
   structureDiagnostics
 }: StructureViewProps): React.ReactElement {
   if (!focusedTypeId || !adapterDoc) {
+    // e2e-batch fix (#10): distinguish "nothing selected" from "selected an
+    // unsupported kind (Function / TypeAlias / Record / Annotation)" so the
+    // user gets actionable guidance instead of the generic "Select a type"
+    // prompt that doesn't explain why their click didn't open anything.
+    if (unsupportedSelectedType) {
+      // Copilot review: `kind` is non-optional on the prop type, so the
+      // previous `?? 'non-structural'` fallback was dead. Drop it; if a
+      // caller ever needs to omit `kind`, the right move is to relax the
+      // prop type at the same time.
+      return (
+        <div data-testid="structure-unsupported-kind-state">
+          <p>
+            <strong>{unsupportedSelectedType.name}</strong> is a <code>{unsupportedSelectedType.kind}</code> type and is
+            not supported in Structure View.
+          </p>
+          <p>Pick a Data, Choice, or Enum type from the Namespace Explorer to see its structure.</p>
+        </div>
+      );
+    }
     return (
       <div data-testid="structure-empty-state">Select a type from the Namespace Explorer to view its structure.</div>
     );
@@ -446,6 +510,7 @@ export function StructureView({
         expansionMap={expansionMap ?? EMPTY_EXPANSION_MAP}
         cellComponents={cellComponents}
         onToggleExpansion={onToggleExpansion}
+        onNodeSelect={onNodeSelect}
         onNavigateToEnumType={onNavigateToEnumType}
         structureDiagnostics={structureDiagnostics}
       />
