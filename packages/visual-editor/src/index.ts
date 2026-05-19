@@ -115,7 +115,8 @@ export {
   classExprSynonymsToStrings,
   enumSynonymsToStrings,
   AST_TYPE_TO_NODE_TYPE,
-  NODE_TYPE_TO_AST_TYPE
+  NODE_TYPE_TO_AST_TYPE,
+  resolveNodeKind
 } from './adapters/model-helpers.js';
 
 // Layout

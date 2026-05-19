@@ -32,7 +32,7 @@ import {
   CardinalityCell,
   TypePickerCell,
   BUILTIN_TYPES,
-  AST_TYPE_TO_NODE_TYPE,
+  resolveNodeKind,
   useEditorStore
 } from '@rune-langium/visual-editor';
 import type {
@@ -1209,7 +1209,7 @@ export function EditorPage({
     const graphOptions: TypeOption[] = storeNodes.map((n) => ({
       value: n.id,
       label: n.data.name,
-      kind: (AST_TYPE_TO_NODE_TYPE[(n.data as any).$type] ?? 'data') as TypeOption['kind'],
+      kind: resolveNodeKind(n) as TypeOption['kind'],
       namespace: n.data.namespace
     }));
     return [...builtinOptions, ...graphOptions];

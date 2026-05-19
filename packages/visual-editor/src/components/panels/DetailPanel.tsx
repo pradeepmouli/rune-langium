@@ -12,7 +12,7 @@ import { AlertCircle, GitFork } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import { AST_TYPE_TO_NODE_TYPE, formatCardinality, getTypeRefText, getRefText } from '../../adapters/model-helpers.js';
+import { resolveNodeKind, formatCardinality, getTypeRefText, getRefText } from '../../adapters/model-helpers.js';
 import { TypeLink } from '../editors/TypeLink.js';
 import type { AnyGraphNode, ValidationError, NavigateToNodeCallback } from '../../types.js';
 
@@ -32,7 +32,7 @@ export interface DetailPanelProps {
 
 /** Extract a flat list of {name, typeName, cardinality} from any node type. */
 function extractMembers(d: any): Array<{ name: string; typeName?: string; cardinality?: string }> {
-  const kind = AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data';
+  const kind = resolveNodeKind(d);
   switch (kind) {
     case 'data':
     case 'annotation':
@@ -74,7 +74,7 @@ export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds, refOnly }:
   if (!nodeData) return null;
 
   const d = nodeData as any;
-  const kind = AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data';
+  const kind = resolveNodeKind(d);
   const parentName = getRefText(d.superType) ?? getRefText(d.parent) ?? getRefText(d.superFunction);
   const members = extractMembers(d);
   const errors: ValidationError[] = d.errors ?? [];
