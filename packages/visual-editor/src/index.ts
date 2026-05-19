@@ -146,6 +146,8 @@ export { useExpressionAutocomplete } from './hooks/useExpressionAutocomplete.js'
 export type { CompletionItem, UseExpressionAutocompleteResult } from './hooks/useExpressionAutocomplete.js';
 export { useTypeRefDrop } from './hooks/useTypeRefDrop.js';
 export type { UseTypeRefDropOptions, UseTypeRefDropResult } from './hooks/useTypeRefDrop.js';
+export { useDiagnosticsForRange } from './hooks/useDiagnosticsForRange.js';
+export type { RangeDiagnostic } from './hooks/useDiagnosticsForRange.js';
 
 // Validation utilities
 export {

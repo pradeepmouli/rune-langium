@@ -25,6 +25,7 @@ import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
 import { layoutStructureGraph } from '../layout/structure-layout.js';
 import { nodeTypes } from './nodes/index.js';
 import type { StructureExpansionKey, StructureRow } from '../types/structure-view.js';
+import type { RangeDiagnostic } from '../hooks/useDiagnosticsForRange.js';
 
 /**
  * Compare two arrays element-wise. Falls back to a per-element equality
@@ -231,6 +232,28 @@ export interface StructureViewProps {
    * the click flips the relevant entry in `expansionMap`.
    */
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
+  /**
+   * Spec §8 / §3.3 — navigate-to-enum callback. When provided, rows whose
+   * `typeKind === 'Enum'` (and arms in ChoiceNode) render an ↗ inspect button
+   * that fires this callback with the enum's canonical type id (ns::Name
+   * format). EditorPage wires this to set `focusedTypeId` on the structure
+   * view, drilling into the enum's values.
+   */
+  readonly onNavigateToEnumType?: (typeId: string) => void;
+  /**
+   * Spec §3.4 — pre-converted LSP diagnostics for the focused file. Ranges
+   * must be character offsets (not line/character), pre-converted by EditorPage
+   * via a memoized lineOffsets array. DataNode uses `useDiagnosticsForRange`
+   * to tint the left edge of rows with overlapping diagnostics. Pass a stable
+   * empty array when no diagnostics are available.
+   *
+   * **astRange-threading gap:** in production today, `StructureRow.astRange`
+   * is `undefined` because `graphNodesToAdapterDocument` doesn't derive it
+   * from `$cstNode` before strip. The end-to-end wiring is real and tested
+   * via synthetic astRange fixtures, but the severity class won't apply in
+   * production until the upstream threading lands (deferred follow-up).
+   */
+  readonly structureDiagnostics?: readonly RangeDiagnostic[];
 }
 
 const EMPTY_EXPANSION_MAP: ReadonlyMap<string, boolean> = new Map();
@@ -241,6 +264,8 @@ interface StructureFlowInnerProps {
   readonly expansionMap: ReadonlyMap<string, boolean>;
   readonly cellComponents?: StructureCellComponents;
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
+  readonly onNavigateToEnumType?: (typeId: string) => void;
+  readonly structureDiagnostics?: readonly RangeDiagnostic[];
 }
 
 /**
@@ -252,7 +277,9 @@ function StructureFlowInner({
   adapterDoc,
   expansionMap,
   cellComponents,
-  onToggleExpansion
+  onToggleExpansion,
+  onNavigateToEnumType,
+  structureDiagnostics
 }: StructureFlowInnerProps): React.ReactElement {
   // Phase 14c (Approach B): keep the previous useMemo result so we can
   // identity-preserve unchanged nodes across re-renders. React Flow shallow-
@@ -288,12 +315,37 @@ function StructureFlowInner({
     // base rows are read-only inherited rows; editable cells on base rows would
     // be a separate scope decision (spec §5 does not include inline-editing of
     // inherited attributes in Phase 13).
-    const needsInjection = cellComponents !== undefined || onToggleExpansion !== undefined;
+    const needsInjection =
+      cellComponents !== undefined ||
+      onToggleExpansion !== undefined ||
+      onNavigateToEnumType !== undefined ||
+      (structureDiagnostics !== undefined && structureDiagnostics.length > 0);
     const freshNodes: Node[] = needsInjection
       ? (result.nodes.map((n) => {
-          if (n.type === 'data') return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
+          if (n.type === 'data')
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                cellComponents,
+                expansionMap,
+                onToggleExpansion,
+                onNavigateToEnumType,
+                structureDiagnostics
+              }
+            };
           if (n.type === 'choice')
-            return { ...n, data: { ...n.data, cellComponents, expansionMap, onToggleExpansion } };
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                cellComponents,
+                expansionMap,
+                onToggleExpansion,
+                onNavigateToEnumType,
+                structureDiagnostics
+              }
+            };
           if (n.type === 'structureBase') return { ...n, data: { ...n.data, expansionMap, onToggleExpansion } };
           return n;
         }) as Node[])
@@ -311,7 +363,15 @@ function StructureFlowInner({
     // render's "stable" output would poison the cache for the next attempt.
     const stableNodes = preserveNodeIdentities(prevNodesRef.current, freshNodes);
     return { nodes: stableNodes, edges: result.edges as Edge[] };
-  }, [focusedTypeId, adapterDoc, expansionMap, cellComponents, onToggleExpansion]);
+  }, [
+    focusedTypeId,
+    adapterDoc,
+    expansionMap,
+    cellComponents,
+    onToggleExpansion,
+    onNavigateToEnumType,
+    structureDiagnostics
+  ]);
 
   // Commit the identity-preserving cache only after the render reaches
   // commit phase. Abandoned/discarded renders (StrictMode double-invoke,
@@ -355,7 +415,9 @@ export function StructureView({
   adapterDoc,
   expansionMap,
   cellComponents,
-  onToggleExpansion
+  onToggleExpansion,
+  onNavigateToEnumType,
+  structureDiagnostics
 }: StructureViewProps): React.ReactElement {
   if (!focusedTypeId || !adapterDoc) {
     return (
@@ -384,6 +446,8 @@ export function StructureView({
         expansionMap={expansionMap ?? EMPTY_EXPANSION_MAP}
         cellComponents={cellComponents}
         onToggleExpansion={onToggleExpansion}
+        onNavigateToEnumType={onNavigateToEnumType}
+        structureDiagnostics={structureDiagnostics}
       />
     </ReactFlowProvider>
   );

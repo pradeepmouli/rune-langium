@@ -67,7 +67,7 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
   }
 
   // scope === 'base-type'
-  // TODO(Phase 10) visual tightening: gradient/shadow/font polish.
+  // Phase 10 has shipped (commit 01ea4af9 "tightened CSS variables") — removed TODO.
   // Core geometry handled by .rune-graph-group--base, .rune-graph-group__base-rows,
   // .rune-graph-group__base-row in styles.css — layout constants (ROW_HEIGHT=28,
   // BASE_PADDING=16, etc.) are matched there.

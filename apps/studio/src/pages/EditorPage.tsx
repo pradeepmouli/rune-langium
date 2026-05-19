@@ -45,7 +45,8 @@ import type {
   LayoutDirection,
   AdapterChoiceOption,
   AdapterDocument,
-  AdapterNode
+  AdapterNode,
+  RangeDiagnostic
 } from '@rune-langium/visual-editor';
 import { useStructureViewStore } from '../store/structure-view-store.js';
 import type { RosettaModel } from '@rune-langium/core';
@@ -102,6 +103,13 @@ type DeferredExportEntry = {
  * reference stable so `useEffect`'s shallow-equality dep check works.
  */
 const EMPTY_DEFERRED_EXPORTS: ReadonlyArray<DeferredExportEntry> = Object.freeze([]);
+
+/**
+ * Stable empty diagnostics array — stable module-level reference so that
+ * renderStructurePane's useMemo dep check doesn't false-positive when
+ * there are no diagnostics for the focused file.
+ */
+const EMPTY_RANGE_DIAGNOSTICS: readonly RangeDiagnostic[] = Object.freeze([]);
 
 // ---------------------------------------------------------------------------
 // Adapter: TypeGraphNode[] → AdapterDocument
@@ -1408,6 +1416,108 @@ export function EditorPage({
     []
   );
 
+  // ---------------------------------------------------------------------------
+  // Spec §8 / §3.3 — enum-nav callback for StructureView (affordance 1).
+  // Sets the focused type in the structure pane to the given enum typeId,
+  // which re-roots the structure graph on that enum. Also selects the node
+  // in the editor store so the inspector + other panels stay in sync.
+  // ---------------------------------------------------------------------------
+  const handleStructureNavigateToEnumType = useCallback(
+    (typeId: string) => {
+      storeSelectNode(typeId, { reapplyFocusMode: false });
+    },
+    [storeSelectNode]
+  );
+
+  // ---------------------------------------------------------------------------
+  // Spec §3.4 — diagnostic left-edge marker for StructureView (affordance 3).
+  //
+  // Strategy (approach b from spec §3.4):
+  //   1. Derive the file URI for the currently focused type from its nodeId.
+  //   2. Retrieve LSP diagnostics for that URI from the diagnostics store.
+  //   3. Precompute a `lineOffsets` array from the file's source text where
+  //      `lineOffsets[line] = character offset of the start of that line`.
+  //      Converting an LSP line/character pair to a character offset is then
+  //      O(1) direct indexing: `lineOffsets[line] + character`. (The reverse
+  //      conversion — offset → line — would need binary search; the previous
+  //      comment claimed binary search here in error. Copilot caught it.)
+  //   4. Map each LspDiagnostic to a RangeDiagnostic and pass the resulting
+  //      array into StructureView. DataNode calls useDiagnosticsForRange per row.
+  //
+  // Keeping the conversion here (rather than in a hook or in DataNode) lets
+  // the memoized lineOffsets array amortize the cost across all rows in one
+  // render pass instead of recomputing it once per row.
+  //
+  // **astRange-threading gap (deferred PR #207 follow-up):** in studio-created
+  // rows today, `StructureRow.astRange` is `undefined` because
+  // `graphNodesToAdapterDocument` forwards attributes from
+  // `stripAdditionalAstFields` (which strips `$cstNode`) and never derives an
+  // offset range. The wiring on this side (RangeDiagnostic[] → StructureView →
+  // useDiagnosticsForRange) is correct and exercised by synthetic tests; the
+  // severity marker just won't fire in production until upstream threading
+  // lands.
+  // ---------------------------------------------------------------------------
+
+  // Resolve file path for the focused structure node (ns::TypeName format).
+  const structureFilePath = useMemo(() => {
+    if (!structureFocusedTypeId) return undefined;
+    return nodeIdToFilePath.get(structureFocusedTypeId);
+  }, [structureFocusedTypeId, nodeIdToFilePath]);
+
+  // Source text for the focused file (to build lineOffsets).
+  const structureFileContent = useMemo(() => {
+    if (!structureFilePath) return undefined;
+    return files.find((f) => f.path === structureFilePath)?.content;
+  }, [structureFilePath, files]);
+
+  // Precomputed lineOffsets: lineOffsets[i] = character offset of the start
+  // of line i in structureFileContent. Direct-indexed (O(1)) for the
+  // line/character → offset conversion in `structureDiagnostics` below.
+  const structureLineOffsets = useMemo<readonly number[]>(() => {
+    if (!structureFileContent) return [];
+    const offsets: number[] = [0];
+    for (let i = 0; i < structureFileContent.length; i++) {
+      if (structureFileContent[i] === '\n') {
+        offsets.push(i + 1);
+      }
+    }
+    return offsets;
+  }, [structureFileContent]);
+
+  // Raw LSP diagnostics for the focused file.
+  // `fileDiagnostics` is already subscribed at line ~968 via useDiagnosticsStore() —
+  // reuse that reference here; no duplicate subscriber needed.
+  const structureLspDiagnostics = useMemo(() => {
+    if (!structureFilePath) return undefined;
+    const uri = pathToUri(structureFilePath);
+    return fileDiagnostics.get(uri);
+  }, [structureFilePath, fileDiagnostics]);
+
+  // Convert LSP diagnostics (line/character) to RangeDiagnostic (character offsets).
+  const structureDiagnostics = useMemo<readonly RangeDiagnostic[]>(() => {
+    if (!structureLspDiagnostics || structureLspDiagnostics.length === 0 || structureLineOffsets.length === 0) {
+      return EMPTY_RANGE_DIAGNOSTICS;
+    }
+    const result: RangeDiagnostic[] = [];
+    const lineCount = structureLineOffsets.length;
+    for (const d of structureLspDiagnostics) {
+      const startLine = d.range.start.line;
+      const endLine = d.range.end.line;
+      // Skip diagnostics whose line indices are out of bounds for the current
+      // source — this happens when source has changed but the diagnostic store
+      // hasn't caught up. Previously falling back to offset 0 would map stale
+      // diagnostics to the start of the file and produce false-positive markers
+      // on completely unrelated rows. Copilot caught this on PR #207.
+      if (startLine >= lineCount || endLine >= lineCount) continue;
+      const start = structureLineOffsets[startLine]! + d.range.start.character;
+      const end = structureLineOffsets[endLine]! + d.range.end.character;
+      if (end > start) {
+        result.push({ start, end, severity: d.severity ?? 3, message: d.message });
+      }
+    }
+    return result.length > 0 ? result : EMPTY_RANGE_DIAGNOSTICS;
+  }, [structureLspDiagnostics, structureLineOffsets]);
+
   const renderStructurePane = useCallback(
     () => (
       <StructureView
@@ -1416,9 +1526,19 @@ export function EditorPage({
         expansionMap={expansionMap}
         cellComponents={structureCellComponents}
         onToggleExpansion={toggleExpansion}
+        onNavigateToEnumType={handleStructureNavigateToEnumType}
+        structureDiagnostics={structureDiagnostics}
       />
     ),
-    [structureFocusedTypeId, adapterDocument, expansionMap, structureCellComponents, toggleExpansion]
+    [
+      structureFocusedTypeId,
+      adapterDocument,
+      expansionMap,
+      structureCellComponents,
+      toggleExpansion,
+      handleStructureNavigateToEnumType,
+      structureDiagnostics
+    ]
   );
 
   const VisualPreviewPanelMounted = useCallback(
