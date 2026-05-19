@@ -211,17 +211,19 @@
 /* Right-align the type chip + cardinality pill in structure-variant
  * rows so the name reads on the left and the type metadata clusters on
  * the right edge — same name-left / metadata-right rhythm as the
- * headers (kind pill on right). The actual flex children of a row are
- * `.rune-cell-type-wrap` and `.rune-cell-card-wrap` (the chip + pill
- * are nested inside those wraps), so margin-left:auto MUST land on the
- * wrap. Targeting the chip directly is a no-op because the wrap is what
- * the parent flex sees. The card-wrap follows naturally on its right
- * because of the parent flex gap. Scoped to structure variants AND
- * base containers so graph-variant rows (less dense, different reading)
- * stay as-is. */
+ * headers (kind pill on right). Two markup variants:
+ *   - Inner Data/Choice rows wrap the chip in `.rune-cell-type-wrap`
+ *     (the wrap is the direct flex child; auto-margin lands here).
+ *   - Base container rows put `.rune-cell-type-chip` directly inside
+ *     `.rune-graph-group__base-row` (GroupContainerNode renders raw,
+ *     no wrap).
+ * Both selectors get auto-margin so the right-edge cluster works
+ * regardless of which renderer produced the row. The card pill follows
+ * on its right via the parent flex gap. Scoped so graph-variant rows
+ * (less dense, different reading) stay as-is. */
 .rune-node-data--structure .rune-node-row .rune-cell-type-wrap,
 .rune-node-choice--structure .rune-node-row .rune-cell-type-wrap,
-.rune-graph-group--base .rune-graph-group__base-row .rune-cell-type-wrap {
+.rune-graph-group--base .rune-graph-group__base-row .rune-cell-type-chip {
   margin-left: auto;
 }
 
