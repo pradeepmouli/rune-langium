@@ -1,7 +1,7 @@
 # Codegen Whole-Model Variants — Design Spec
 
 **Feature Branch**: `019-codegen-whole-model-variants`
-**Status**: ✅ **Shipped** — merged into master via PR #166 (`581ced9d`) on 2026-05-14
+**Status**: 🟡 **Phase 0.5 shipped** — base architecture merged via PR #166 (`581ced9d`) on 2026-05-14. **§5.1 Download config modal added 2026-05-19** as a Phase 2 prerequisite; not yet implemented.
 **Created**: 2026-05-14
 **Author**: Pradeep Mouli (with Claude Code)
 **Depends on**: spec 018 Phase 0 (PR #165, merged)
@@ -23,7 +23,7 @@ All five sub-phases of §8 are landed:
 - `GenericModelEmitter` validates the layout string (`'barrel' | 'single-file'`) instead of an unchecked cast; unknown layouts produce a fatal `invalid-layout` diagnostic.
 - Per-target option-block JSDoc clarifies the library/Pages-Function default split.
 
-This spec is preserved as historical reference. Subsequent work (Phase 1 Excel emitter, Task #88 curated bundles) builds on top of the architecture defined here.
+Subsequent work (Phase 1 Excel emitter, Task #88 curated bundles) builds on top of the architecture defined here. **§5.1 (download config modal) was added 2026-05-19** to spec the UX that gates Phase 2 (SQL + Markdown) — those emitters introduce dialect / TOC-style options that need a config surface before the request fires, and namespace subsetting becomes meaningful when an output is multi-namespace by default.
 
 ---
 
@@ -357,11 +357,94 @@ GraphQL SDL ships only as `WholeModelEmitter`. Single `schema.graphql` file plus
 
 ## 5. Studio UX
 
-**No visible change to the targets table.** The current `[Download]` button on each row continues to fire one POST to `/api/codegen`. The server applies the per-emitter default layout (from §4) when the request omits `options.<target>.layout`. Power users hitting `/api/codegen` programmatically can override.
-
-**Optional: a settings sub-menu** on each row (deferred to a follow-up if users ask for it). For now, the per-emitter defaults are designed to match the expected use case (downloaded artifact = self-contained drop-in).
+**No visible change to the targets table for the default flow.** The current `[Download]` button on each row continues to fire one POST to `/api/codegen`. The server applies the per-emitter default layout (from §4) when the request omits `options.<target>.layout`. Power users hitting `/api/codegen` programmatically can override.
 
 The Preview path (`[View]` button + in-browser codegen-worker) **always uses `layout: 'per-namespace'`**, because Preview's whole UX is per-file: the file dropdown lets users navigate one namespace at a time. Bundled views would defeat that affordance. This is enforced in the codegen-worker, not the emitter.
+
+### 5.1 Download config modal (Phase 2 prerequisite)
+
+The "settings sub-menu" deferred in the original version of this section is promoted to a real feature: a **config modal** that opens when the user clicks Download on a target row. The modal collects target-specific options + a namespace subset before the request fires, so a user can:
+
+- Pick the layout for layout-aware targets (`per-namespace` / `barrel` / `single-file`) — overrides the Pages Function's opinionated default for this one request.
+- Pick target-specific options that don't fit a layout enum (e.g. SQL dialect `postgres` / `mssql`; Markdown TOC style `flat` / `grouped-by-namespace`; Excel sheet subset).
+- **Pick the namespace subset to emit.** Default is "all loaded namespaces"; user can narrow.
+- **Auto-select cross-namespace dependencies.** When the user picks a namespace, every namespace it references (transitively, via `extends`, attribute type refs, choice arms, function inputs/outputs) is automatically pulled into the selection. The user sees the auto-selected set highlighted with a different chip styling so the implication is visible. They can deselect a dependency only by removing the namespace that pulled it in (preventing partial-graph emit that produces unresolved refs in the output).
+
+**Trigger contract:** `[Download]` button click → modal opens. `[View]` is unaffected (per-namespace by definition; nothing to configure beyond the namespace dropdown that already exists in the Preview pane).
+
+**Modal contract** (single shared component, target-specific content panels):
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Generate Zod                                            [×] │
+├─────────────────────────────────────────────────────────────┤
+│  Layout                                                       │
+│   ◯ Per-namespace (one .zod.ts per namespace + barrel)       │
+│   ◉ Barrel  (one barrel + per-namespace files)               │
+│   ◯ Single-file  (model.zod.ts)                              │
+│                                                               │
+│  Options                                                      │
+│   ☑ Suppress boilerplate (omit re-exports & comment headers)│
+│                                                               │
+│  Namespaces  (3 selected, 7 total)                            │
+│   ☑ cdm.trade                                                 │
+│   ▣ cdm.base.datetime           (pulled by cdm.trade)         │
+│   ▣ cdm.product                 (pulled by cdm.trade)         │
+│   ☐ cdm.event                                                 │
+│   ☐ cdm.legal                                                 │
+│   ☐ cdm.observable                                            │
+│   ☐ cdm.regulation                                            │
+│                                                               │
+│  [Cancel]                                       [Generate]   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- `☑` = explicit user selection
+- `▣` = auto-pulled dependency (read-only checkbox; tooltip lists which user-selected namespace pulled it in)
+- `☐` = unselected (transitively unreachable from the user's selections)
+
+**Per-target content panels:**
+
+| Target | Layout choices | Other options |
+|---|---|---|
+| Zod | per-namespace ✓ / barrel ✓ / single-file ✓ | `suppressBoilerplate: boolean` |
+| TypeScript | per-namespace ✓ / barrel ✓ / single-file ✓ | `suppressBoilerplate: boolean` |
+| JSON Schema | per-namespace ✓ / single-file ✓ (no barrel — single-file IS the canonical multi-namespace shape) | none |
+| SQL (Phase 2) | per-namespace ✓ / single-file ✓ | `dialect: 'postgres' \| 'mssql'`; `includeForeignKeys: boolean` |
+| Markdown (Phase 2) | per-namespace ✓ / single-file ✓ | `tocStyle: 'flat' \| 'grouped-by-namespace'`; `includeConditions: boolean` |
+| Excel | (whole-model, no layout) | `sheets: { types: boolean; enums: boolean; conditions: boolean; functions: boolean; rules: boolean; summary: boolean }` (default all true) |
+| GraphQL (Phase 3) | (whole-model, no layout) | `directives: 'none' \| 'apollo' \| 'pothos'` (default `none`) |
+
+### 5.2 Cross-namespace dependency graph (powers the auto-select cascade)
+
+The set of "namespaces pulled in by a user-selected namespace N" is the transitive closure of the cross-namespace reference set:
+
+```
+deps(N) = N ∪ { ns(T) | T is referenced from some node in N where ns(T) ≠ N }
+       ∪ deps(ns(T)) for each such T
+```
+
+The reference sources are:
+1. **Extends:** every `type X extends Y` where `Y` is in a different namespace.
+2. **Attribute type refs:** every `attrName: TypeRef` where the resolved `TypeRef` is in a different namespace.
+3. **Choice arm refs:** every choice option whose target type is in a different namespace.
+4. **Function inputs/outputs/rule conditions:** every type reference inside a function or rule body (incl. inherited rules) that resolves cross-namespace.
+
+The dependency graph is computed **at adapter time** (one pass over `AdapterDocument.nodes`) and surfaced as a `ReadonlyMap<namespaceUri, ReadonlySet<namespaceUri>>` on the codegen-store. The modal subscribes to it; auto-select cascade is one set-union per user toggle (O(N) where N is the number of namespaces).
+
+**Cycle handling:** the closure is a fixed-point computation that terminates when no new namespaces are added; cycles between namespaces are naturally absorbed in the same closure step. No special cycle detection needed.
+
+**Why force-include rather than warn-only:** emitting a partial graph that references an excluded namespace produces output that doesn't compile (Zod: unresolved imports; SQL: dangling FK refs; GraphQL: undefined types). The "user can't deselect a pulled dependency" rule prevents producing broken artifacts. If a user really wants the subset, they un-check the originating namespace; the cascade then drops the dependencies that no other selected namespace pulls in.
+
+### 5.3 Modal → /api/codegen wiring
+
+The modal's `[Generate]` action assembles the existing request payload with:
+- `targets: [<chosen>]` (single target, same as before)
+- `options.<target>.layout = <chosen>` (overrides Pages Function default)
+- `options.<target>.<other> = <chosen>` (target-specific knobs)
+- `namespaces: <selected ∪ pulled>` — a NEW request field that the Pages Function passes to `generate()` as the namespace filter (existing filter mechanism in `packages/codegen/src/generator.ts`, currently always passes all namespaces from the adapter).
+
+`/api/codegen` validates `namespaces` against `IMPLEMENTED_TARGETS`'s knowledge of which targets accept namespace filtering (Excel: all-or-nothing via `sheets` option; everything else: filterable). If the modal sends an unfilterable target with a partial namespace set, the server returns `400 namespace-filter-unsupported` and the modal shows an inline error.
 
 ---
 
@@ -372,6 +455,8 @@ The Preview path (`[View]` button + in-browser codegen-worker) **always uses `la
 A multi-namespace `layout: 'per-namespace+barrel'` Zod request still returns a zip — barrel + per-namespace files + runtime sidecar all bundled. The `downloadFilename` helper already names multi-output responses `<target>-output.zip` (PR #165 round-2 fix); the contents differ based on layout.
 
 A `layout: 'single-file'` request always returns a single artifact regardless of namespace count, named per the emitter (`model.zod.ts`, `model.schema.json`, etc.).
+
+**§5.1 (download config modal) adds one new request field:** `body.namespaces?: string[]` — an optional namespace allowlist. When present, the Pages Function passes it to `generate()` as a namespace filter. When absent (legacy callers, direct `curl` users, programmatic use), all namespaces in the parsed workspace are emitted (existing behavior). The filter is validated against the target's capability: targets that can't meaningfully subset (currently none — even Excel can subset by reading only the matching sheets' rows from the filtered namespaces) accept the filter; if a future target can't, the Pages Function returns `400 namespace-filter-unsupported`.
 
 ---
 
@@ -440,6 +525,7 @@ Phases 0.5.2 / 0.5.3 / 0.5.4 are independent and can ship as separate PRs agains
 2. **Large-model `single-file` guardrails** — **RESOLVED: fatal diagnostic above a configurable threshold.** Default per `LanguageProfile.singleFileLimits` is `{ maxNamespaces: 50, maxBytes: 1_048_576 }` for Zod / TypeScript. When `layout === 'single-file'` and either limit is exceeded, `GenericModelEmitter` returns a single output with a `severity: 'error'`, `code: 'single-file-too-large'` diagnostic instead of the concatenated content. Strict-mode callers (CLI, `/api/codegen`) get a `GeneratorError`; non-strict callers see the diagnostic and decide how to surface it. Limits are per-target via the Profile so JSON Schema / SQL (whose `single-file` is canonical) can omit them.
 3. **Markdown `index.md` shape** — DEFERRED to the Phase 2 Markdown spec. Phase 0.5 reserves `options.markdown.layout: 'barrel'` as the default; rendering details (flat list vs nested by type-kind) are owned by Phase 2.
 4. **GraphQL `per-namespace` option** — DEFERRED unless requested. GraphQL SDLs are typically one-file-per-service, so per-namespace splits don't match how SDLs are consumed. No `NamespaceEmitter` for GraphQL; it ships only via `WHOLE_MODEL_EMITTERS`.
+5. **Download config modal** (originally deferred in §5 as "settings sub-menu") — **PROMOTED to §5.1 on 2026-05-19.** Phase 2 introduces target-specific options (SQL dialect, Markdown TOC style) that can't reasonably ride on opinionated Pages-Function defaults — users need to choose at request time. The modal also adds a namespace allowlist with cross-namespace dependency auto-select cascade (§5.2). Wiring + cascade graph are unimplemented; the spec describes the contract Phase 2 ships against.
 
 ---
 
