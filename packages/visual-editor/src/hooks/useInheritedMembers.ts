@@ -13,12 +13,7 @@
 
 import { useMemo } from 'react';
 import type { AnyGraphNode, TypeGraphNode } from '../types.js';
-import {
-  getRefText,
-  AST_TYPE_TO_NODE_TYPE,
-  getTypeRefText,
-  formatCardinality
-} from '../adapters/model-helpers.js';
+import { getRefText, resolveNodeKind, getTypeRefText, formatCardinality } from '../adapters/model-helpers.js';
 
 // Narrow shapes for type-safe access to union members
 interface RefShape {
@@ -114,7 +109,7 @@ export function useInheritedMembers(
         groups.push({
           ancestorName: pd.name as string,
           namespace: pd.namespace as string,
-          kind: AST_TYPE_TO_NODE_TYPE[pd.$type] ?? 'data',
+          kind: resolveNodeKind(parentNode),
           members
         });
       }
@@ -344,8 +339,7 @@ export function useEffectiveMembers(
   const inheritedGroups = useInheritedMembers(nodeData, allNodes);
 
   return useMemo(() => {
-    if (!nodeData)
-      return { effective: [], overrideNames: new Set<string>(), inheritedNames: new Set<string>() };
+    if (!nodeData) return { effective: [], overrideNames: new Set<string>(), inheritedNames: new Set<string>() };
 
     const localMembers = getMembers(nodeData);
     const localNames = new Set<string>();

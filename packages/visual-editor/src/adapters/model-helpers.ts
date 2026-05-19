@@ -218,3 +218,59 @@ export const NODE_TYPE_TO_AST_TYPE: Record<string, string> = {
   basicType: 'RosettaBasicType',
   annotation: 'Annotation'
 };
+
+/**
+ * Lookup that accepts EITHER an AST `$type` (e.g. `'Data'`, `'RosettaEnumeration'`)
+ * or a React-Flow node-type / `typeKind` value (e.g. `'data'`, `'enum'`) and
+ * returns the React-Flow node-type. Combines AST_TYPE_TO_NODE_TYPE with
+ * identity entries so a single keyed lookup handles both shapes — needed
+ * because the curated hydration path attaches `typeKind` (node-type form)
+ * to node data while user-authored Langium ASTs carry `$type` (AST form).
+ */
+const NODE_KIND_LOOKUP: Record<string, string> = {
+  ...AST_TYPE_TO_NODE_TYPE,
+  // Identity entries so node-type/typeKind values resolve without a second pass.
+  data: 'data',
+  choice: 'choice',
+  enum: 'enum',
+  func: 'func',
+  record: 'record',
+  typeAlias: 'typeAlias',
+  basicType: 'basicType',
+  annotation: 'annotation'
+};
+
+/**
+ * Resolve the React-Flow node-kind (`'data' | 'choice' | 'enum' | ...`) for
+ * a node or its data payload, honoring the curated-fallback chain.
+ *
+ * Curated AST nodes arrive without a populated `$type` because the
+ * serialized hydration documents from `/api/parse` use `typeKind` (and the
+ * React Flow `node.type` is also set during projection). The naive lookup
+ * `AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data'` silently degraded all curated
+ * enum / choice / func / record entries to `'data'`, so panels that asked
+ * "what kind is this?" looked for `attributes` on nodes that don't have
+ * them and rendered empty (Inspector / Graph node body / namespace tree
+ * icon all hit this).
+ *
+ * Accepts either a React-Flow node (`{ data, type }`) or the inner `data`
+ * payload directly. Fallback order:
+ *   1. `data.$type`  (Langium AST form, user-authored nodes)
+ *   2. `data.typeKind` (curated hydration form)
+ *   3. `node.type`  (React-Flow projection form)
+ *   4. `'data'`  (last-resort default; matches the legacy `?? 'data'` behaviour)
+ *
+ * Use this helper instead of indexing `AST_TYPE_TO_NODE_TYPE` directly.
+ * The `rune/no-raw-node-kind-lookup` eslint rule enforces this.
+ */
+export function resolveNodeKind(nodeOrData: unknown): string {
+  if (nodeOrData == null) return 'data';
+  const obj = nodeOrData as { data?: unknown; type?: string };
+  const d = (obj.data ?? obj) as { $type?: string; typeKind?: string } | undefined;
+  return (
+    NODE_KIND_LOOKUP[d?.$type ?? ''] ??
+    NODE_KIND_LOOKUP[d?.typeKind ?? ''] ??
+    NODE_KIND_LOOKUP[obj?.type ?? ''] ??
+    'data'
+  );
+}

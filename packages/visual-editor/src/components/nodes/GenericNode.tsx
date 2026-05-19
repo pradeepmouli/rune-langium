@@ -13,7 +13,7 @@ import { memo, useCallback } from 'react';
 import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode, TypeKind } from '../../types.js';
-import { AST_TYPE_TO_NODE_TYPE, getTypeRefText, formatCardinality, getRefText } from '../../adapters/model-helpers.js';
+import { resolveNodeKind, getTypeRefText, formatCardinality, getRefText } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
 
@@ -27,7 +27,7 @@ const KIND_CSS: Record<string, string> = {
 
 export const GenericNode = memo(function GenericNode({ data, selected }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
-  const kind = (AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data') as TypeKind;
+  const kind = resolveNodeKind(d) as TypeKind;
   const kindCss = KIND_CSS[kind] ?? '';
   const parentName = getRefText((d as any).superType);
   const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();

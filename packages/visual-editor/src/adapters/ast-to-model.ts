@@ -32,20 +32,8 @@ import type {
   RosettaRecordType,
   RosettaTypeAlias
 } from '@rune-langium/core';
-import type {
-  TypeGraphNode,
-  TypeGraphEdge,
-  AnyGraphNode,
-  GraphNode,
-  GraphFilters,
-  TypeKind
-} from '../types.js';
-import {
-  getTypeRefText,
-  getRefText,
-  formatCardinality,
-  AST_TYPE_TO_NODE_TYPE
-} from './model-helpers.js';
+import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode, GraphNode, GraphFilters, TypeKind } from '../types.js';
+import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
 import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
 
 // ---------------------------------------------------------------------------
@@ -73,20 +61,10 @@ function makeNodeId(namespace: string, name: string): string {
   return `${namespace}::${name}`;
 }
 
-function passesFilter(
-  kind: TypeKind,
-  namespace: string,
-  name: string,
-  filters?: GraphFilters
-): boolean {
+function passesFilter(kind: TypeKind, namespace: string, name: string, filters?: GraphFilters): boolean {
   if (!filters) return true;
   if (filters.kinds && filters.kinds.length > 0 && !filters.kinds.includes(kind)) return false;
-  if (
-    filters.namespaces &&
-    filters.namespaces.length > 0 &&
-    !filters.namespaces.includes(namespace)
-  )
-    return false;
+  if (filters.namespaces && filters.namespaces.length > 0 && !filters.namespaces.includes(namespace)) return false;
   if (filters.namePattern) {
     const regex = new RegExp(filters.namePattern, 'i');
     if (!regex.test(name)) return false;
@@ -104,7 +82,7 @@ function buildGraphNode<T extends { $type: string; name: string }>(
   nodeId: string,
   isReadOnly: boolean
 ): TypeGraphNode {
-  const nodeType = AST_TYPE_TO_NODE_TYPE[element.$type] ?? 'data';
+  const nodeType = resolveNodeKind(element);
   const astData = stripAdditionalAstFields(element);
   const data = {
     ...astData,
@@ -188,15 +166,12 @@ export function astToModel(
     const m = model as RosettaModel;
     const namespace = getNamespace(m);
     const elements: RosettaRootElement[] = (m.elements ?? []) as RosettaRootElement[];
-    const modelUri = (
-      m as unknown as { $document?: { uri?: { toString(): string } } }
-    ).$document?.uri?.toString();
+    const modelUri = (m as unknown as { $document?: { uri?: { toString(): string } } }).$document?.uri?.toString();
     const isReadOnly = modelUri?.startsWith('system://') ?? false;
 
     for (const element of elements) {
       const name = (element as { name?: string }).name ?? 'unknown';
-      const $type = (element as { $type?: string }).$type;
-      const kind = (AST_TYPE_TO_NODE_TYPE[$type ?? ''] ?? 'data') as TypeKind;
+      const kind = resolveNodeKind(element) as TypeKind;
 
       if (!passesFilter(kind, namespace, name, filters)) continue;
       const nodeId = makeNodeId(namespace, name);
@@ -212,9 +187,7 @@ export function astToModel(
         isRosettaBasicType(element) ||
         isAnnotation(element)
       ) {
-        nodes.push(
-          buildGraphNode(element as { $type: string; name: string }, namespace, nodeId, isReadOnly)
-        );
+        nodes.push(buildGraphNode(element as { $type: string; name: string }, namespace, nodeId, isReadOnly));
         nodeIdSet.add(nodeId);
       }
     }
@@ -249,13 +222,7 @@ export function astToModel(
         }
       }
       // Attribute reference edges
-      edges.push(
-        ...getAttributeEdges(
-          node.id,
-          (data.attributes ?? []) as unknown as MemberLikeRef[],
-          nameToNodeId
-        )
-      );
+      edges.push(...getAttributeEdges(node.id, (data.attributes ?? []) as unknown as MemberLikeRef[], nameToNodeId));
     } else if ($type === 'Choice') {
       const choice = d as GraphNode<Choice>;
       // Choice option edges
@@ -292,17 +259,9 @@ export function astToModel(
     } else if ($type === 'RosettaFunction') {
       const func = d as GraphNode<RosettaFunction>;
       // Input parameter type references
-      edges.push(
-        ...getAttributeEdges(
-          node.id,
-          (func.inputs ?? []) as unknown as MemberLikeRef[],
-          nameToNodeId
-        )
-      );
+      edges.push(...getAttributeEdges(node.id, (func.inputs ?? []) as unknown as MemberLikeRef[], nameToNodeId));
       // Output type reference
-      const outputTypeName = getTypeRefText(
-        (func.output as unknown as MemberLikeRef | undefined)?.typeCall
-      );
+      const outputTypeName = getTypeRefText((func.output as unknown as MemberLikeRef | undefined)?.typeCall);
       if (outputTypeName) {
         const targetNodeId = nameToNodeId.get(outputTypeName);
         if (targetNodeId && targetNodeId !== node.id) {
@@ -331,18 +290,10 @@ export function astToModel(
       }
     } else if ($type === 'RosettaRecordType') {
       const record = d as GraphNode<RosettaRecordType>;
-      edges.push(
-        ...getAttributeEdges(
-          node.id,
-          (record.features ?? []) as unknown as MemberLikeRef[],
-          nameToNodeId
-        )
-      );
+      edges.push(...getAttributeEdges(node.id, (record.features ?? []) as unknown as MemberLikeRef[], nameToNodeId));
     } else if ($type === 'RosettaTypeAlias') {
       const alias = d as GraphNode<RosettaTypeAlias>;
-      const targetType = getTypeRefText(
-        (alias as unknown as { typeCall?: { type?: { $refText?: string } } }).typeCall
-      );
+      const targetType = getTypeRefText((alias as unknown as { typeCall?: { type?: { $refText?: string } } }).typeCall);
       if (targetType) {
         const targetNodeId = nameToNodeId.get(targetType);
         if (targetNodeId && targetNodeId !== node.id) {
@@ -369,15 +320,13 @@ export function astToModel(
         return t && !nameToNodeId.has(t);
       });
     } else if ($type === 'RosettaFunction') {
-      const members = ((d as GraphNode<RosettaFunction>).inputs ??
-        []) as unknown as MemberLikeRef[];
+      const members = ((d as GraphNode<RosettaFunction>).inputs ?? []) as unknown as MemberLikeRef[];
       (d as { hasExternalRefs: boolean }).hasExternalRefs = members.some((m) => {
         const t = getTypeRefText(m.typeCall);
         return t && !nameToNodeId.has(t);
       });
     } else if ($type === 'RosettaRecordType') {
-      const members = ((d as GraphNode<RosettaRecordType>).features ??
-        []) as unknown as MemberLikeRef[];
+      const members = ((d as GraphNode<RosettaRecordType>).features ?? []) as unknown as MemberLikeRef[];
       (d as { hasExternalRefs: boolean }).hasExternalRefs = members.some((m) => {
         const t = getTypeRefText(m.typeCall);
         return t && !nameToNodeId.has(t);

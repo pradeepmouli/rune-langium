@@ -532,9 +532,34 @@ function TypeItemRow({
         {KIND_LETTER[row.typeKind]}
       </span>
 
-      <span className="flex-1 truncate hover:underline" title={`${row.name} [${KIND_LABELS[row.typeKind]}]`}>
+      {/* The name span doubles as the primary navigation affordance — its
+          hover-underline matches the visual contract of a link, and a single
+          click here navigates (matches the dedicated nav button below).
+          stopPropagation prevents the row body's drag-source-set from also
+          firing alongside the navigation. The row body click (anywhere else
+          on the row) still marks the row as the drag source. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelectNode();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.stopPropagation();
+          }
+        }}
+        className="flex-1 truncate text-left hover:underline focus-visible:underline focus-visible:outline-none"
+        title={
+          !isVisible
+            ? `${row.name} [${KIND_LABELS[row.typeKind]}] — hidden in graph (toggle visibility in the graph filter menu)`
+            : `${row.name} [${KIND_LABELS[row.typeKind]}] — click to open`
+        }
+        data-testid={`ns-type-name-${row.nodeId}`}
+        aria-label={`Open ${row.name}`}
+      >
         {row.name}
-      </span>
+      </button>
 
       {refCount > 0 && (
         <Tooltip>
@@ -558,7 +583,7 @@ function TypeItemRow({
         onKeyDown={handleNavKeyDown}
         aria-label={`Navigate to ${row.name}`}
         data-testid={`ns-type-nav-${row.nodeId}`}
-        className="ml-auto shrink-0 opacity-0 group-hover:opacity-60 focus:opacity-60 hover:!opacity-100 focus-visible:ring-1 focus-visible:ring-ring rounded transition-opacity"
+        className="ml-auto shrink-0 opacity-30 group-hover:opacity-70 focus:opacity-100 hover:!opacity-100 focus-visible:ring-1 focus-visible:ring-ring rounded transition-opacity"
         tabIndex={0}
       >
         <ChevronRight className="size-3" />

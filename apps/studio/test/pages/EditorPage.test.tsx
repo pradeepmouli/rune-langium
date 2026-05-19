@@ -225,6 +225,17 @@ vi.mock('@rune-langium/visual-editor', () => ({
   TypePickerCell: structureViewMockState.SENTINEL_TYPE_CELL,
   BUILTIN_TYPES: [],
   AST_TYPE_TO_NODE_TYPE: {},
+  // Mirrors the production helper's fallback chain
+  // (data.$type → data.typeKind → node.type → 'data'). Kept as a tiny
+  // hand-rolled stub instead of re-importing the real helper so the mock
+  // module stays a self-contained set of explicit exports — adding new
+  // production exports here is intentional friction.
+  resolveNodeKind: (nodeOrData: unknown) => {
+    if (nodeOrData == null) return 'data';
+    const obj = nodeOrData as { data?: unknown; type?: string };
+    const d = (obj.data ?? obj) as { $type?: string; typeKind?: string } | undefined;
+    return d?.$type ?? d?.typeKind ?? obj?.type ?? 'data';
+  },
   useEditorStore
 }));
 

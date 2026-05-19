@@ -6,14 +6,8 @@
  * for the NamespaceExplorerPanel.
  */
 
-import type {
-  TypeGraphNode,
-  TypeKind,
-  NamespaceTreeNode,
-  NamespaceTypeEntry,
-  AnyGraphNode
-} from '../types.js';
-import { AST_TYPE_TO_NODE_TYPE } from '../adapters/model-helpers.js';
+import type { TypeGraphNode, TypeKind, NamespaceTreeNode, NamespaceTypeEntry, AnyGraphNode } from '../types.js';
+import { resolveNodeKind } from '../adapters/model-helpers.js';
 
 /**
  * Flattened row for virtualized rendering of the namespace tree.
@@ -47,7 +41,7 @@ export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] 
     nsMap.get(ns)!.push({
       nodeId: node.id,
       name: d.name as string,
-      kind: (AST_TYPE_TO_NODE_TYPE[d.$type] ?? 'data') as TypeKind
+      kind: resolveNodeKind(node) as TypeKind
     });
   }
 

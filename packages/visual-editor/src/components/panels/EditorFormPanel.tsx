@@ -34,7 +34,7 @@ import type {
   TypeGraphNode,
   ExpressionEditorSlotProps
 } from '../../types.js';
-import { AST_TYPE_TO_NODE_TYPE } from '../../adapters/model-helpers.js';
+import { resolveNodeKind } from '../../adapters/model-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Error Boundary
@@ -198,7 +198,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
 
   // ---- Dispatch by $type → kind --------------------------------------------
 
-  const kind = AST_TYPE_TO_NODE_TYPE[(nodeData as any).$type] ?? 'data';
+  const kind = resolveNodeKind(nodeData);
 
   function renderForm() {
     switch (kind) {
