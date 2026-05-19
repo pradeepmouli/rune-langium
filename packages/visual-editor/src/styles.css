@@ -173,6 +173,13 @@
   border-bottom: 1px solid color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 78%, transparent);
   display: flex;
   align-items: center;
+  /* justify-content + `order: 2` on the kind pill flips the visual order
+   * to [name ............ kind-pill] while keeping DOM order [pill, name]
+   * so screen readers still announce the kind classifier first. The
+   * earlier `margin-left: auto` rule didn't achieve this — it pushed the
+   * pill to the right but the name followed it on the right because of
+   * DOM order, producing [..........auto..........][pill][name]. */
+  justify-content: space-between;
   gap: var(--rune-header-padding-y);
   position: relative;
   background: transparent;
@@ -199,13 +206,13 @@
   letter-spacing: 0.5px;
 }
 
-/* Push the kind pill to the right edge in ALL .rune-node-header
- * instances (structure AND graph variants). DOM order stays [pill, name]
- * so screen-readers announce the kind classifier first; the auto margin
- * flips the visual to name-left / pill-right, matching the base
- * container's [title, base-pill] layout. */
+/* Visual order swap for the kind pill: DOM is [pill, name] (screen-
+ * readers announce the kind classifier first), but the visual reading
+ * is [name, pill] with name flushed left and pill on the right edge.
+ * `order: 2` moves the pill after the name in the flex layout; the
+ * header's `justify-content: space-between` does the actual distribution. */
 .rune-node-header .rune-node-kind-badge {
-  margin-left: auto;
+  order: 2;
 }
 
 /* Right-align the type chip + cardinality pill in structure-variant
@@ -1109,7 +1116,7 @@ button[data-navigable]:focus-visible {
    * parent's `justify-content: space-between` so the "base" pill flows
    * to the right edge — same pattern as the inner DataNode header (kind
    * badge gets margin-left: auto). */
-  padding: 0;
+  padding: 1px;
   border-bottom: 1px solid color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 78%, transparent);
 }
 

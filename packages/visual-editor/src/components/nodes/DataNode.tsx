@@ -11,7 +11,7 @@
 import { memo, useCallback } from 'react';
 import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, Minus } from 'lucide-react';
 import type { AnyGraphNode } from '../../types.js';
 import type { StructureDataNode, StructureExpansionKey, StructureRow } from '../../types/structure-view.js';
 import { expansionKey } from '../../types/structure-view.js';
@@ -144,20 +144,6 @@ function StructureDataRow({
 
   return (
     <div className={rowClass} data-attr={row.attrName}>
-      {expandable ? (
-        <button
-          type="button"
-          className="rune-row-expand nodrag nopan"
-          onClick={handleToggle}
-          aria-expanded={isExpanded}
-          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.attrName}`}
-          data-testid={`expand-row-${row.attrName}`}
-        >
-          {isExpanded ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
-        </button>
-      ) : (
-        <span className="rune-row-expand-spacer" aria-hidden="true" />
-      )}
       {NameCell ? (
         <NameCell value={row.attrName} nodeId={nodeId} attrName={row.attrName} />
       ) : (
@@ -203,6 +189,24 @@ function StructureDataRow({
       ) : (
         <span className="rune-cell-card">{row.cardinality}</span>
       )}
+      {/* Expand/collapse control moved to the RIGHT edge of the row
+          (was leading-edge before this iteration) and switched from a
+          chevron to a +/− icon to match the form-preview Add/Remove
+          treatment. Plus = "expand (add the child structure to view)",
+          Minus = "collapse (remove it)". `nodrag nopan` keeps React
+          Flow from treating the click as a canvas gesture. */}
+      {expandable ? (
+        <button
+          type="button"
+          className="rune-row-expand rune-row-expand--right nodrag nopan"
+          onClick={handleToggle}
+          aria-expanded={isExpanded}
+          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.attrName}`}
+          data-testid={`expand-row-${row.attrName}`}
+        >
+          {isExpanded ? <Minus size={12} aria-hidden="true" /> : <Plus size={12} aria-hidden="true" />}
+        </button>
+      ) : null}
       {/* structure variant: no Handle — layout emits zero edges; nodesConnectable=false */}
     </div>
   );

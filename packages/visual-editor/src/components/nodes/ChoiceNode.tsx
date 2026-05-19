@@ -21,7 +21,7 @@
 import { memo, useCallback } from 'react';
 import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, Minus } from 'lucide-react';
 import type { AnyGraphNode } from '../../types.js';
 import type {
   StructureChoiceNode,
@@ -143,20 +143,6 @@ function StructureChoiceArmRow({
 
   return (
     <div className={rowClass} data-attr={arm.typeName}>
-      {expandable ? (
-        <button
-          type="button"
-          className="rune-row-expand nodrag nopan"
-          onClick={handleToggle}
-          aria-expanded={isExpanded}
-          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${arm.typeName}`}
-          data-testid={`choice-arm-expand-${arm.typeName}`}
-        >
-          {isExpanded ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
-        </button>
-      ) : (
-        <span className="rune-row-expand-spacer" aria-hidden="true" />
-      )}
       {TypeCell ? (
         // Cells receive the canonical node id (data.id), not the
         // React Flow wrapper id — matches DataNode's contract so
@@ -199,6 +185,20 @@ function StructureChoiceArmRow({
         >
           ?
         </span>
+      ) : null}
+      {/* Expand/collapse moved to right edge with +/− icons —
+          matches DataNode and the form-preview Add/Remove treatment. */}
+      {expandable ? (
+        <button
+          type="button"
+          className="rune-row-expand rune-row-expand--right nodrag nopan"
+          onClick={handleToggle}
+          aria-expanded={isExpanded}
+          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${arm.typeName}`}
+          data-testid={`choice-arm-expand-${arm.typeName}`}
+        >
+          {isExpanded ? <Minus size={12} aria-hidden="true" /> : <Plus size={12} aria-hidden="true" />}
+        </button>
       ) : null}
       {/* structure variant: no Handle — layout emits zero edges; nodesConnectable=false */}
     </div>

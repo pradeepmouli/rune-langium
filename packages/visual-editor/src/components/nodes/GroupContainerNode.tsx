@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Minus } from 'lucide-react';
 import type { Node, NodeProps } from '@xyflow/react';
 import type { StructureExpansionKey, StructureRow } from '../../types/structure-view.js';
 import { expansionKey } from '../../types/structure-view.js';
@@ -133,30 +133,26 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
               className={`rune-graph-group__base-row${expandable ? ' has-expansion' : ''}`}
               data-attr={row.attrName}
             >
+              <span className="rune-cell-name">{row.attrName}</span>
+              <span className="rune-cell-type-chip rune-cell-type-chip--basic">{row.typeName}</span>
+              <span className="rune-cell-card">{row.cardinality}</span>
+              {/* Codex P2 (PR #191): row-level expand/collapse for inherited rows.
+                  Moved to right edge with +/− icons per the post-polish iteration —
+                  matches DataNode/ChoiceNode and the form-preview Add/Remove
+                  treatment. nodrag/nopan keep React Flow from treating the click
+                  as a canvas gesture. */}
               {expandable ? (
-                // Codex P2 (PR #191): row-level expand/collapse for inherited rows.
-                // Real <button> for native keyboard semantics (Enter/Space).
-                // nodrag/nopan keep React Flow from treating the click as a canvas gesture.
                 <button
                   type="button"
-                  className="rune-row-expand nodrag nopan"
+                  className="rune-row-expand rune-row-expand--right nodrag nopan"
                   onClick={handleToggle}
                   aria-expanded={isExpanded}
                   aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.attrName}`}
                   data-testid={`base-expand-row-${row.attrName}`}
                 >
-                  {isExpanded ? (
-                    <ChevronDown size={12} aria-hidden="true" />
-                  ) : (
-                    <ChevronRight size={12} aria-hidden="true" />
-                  )}
+                  {isExpanded ? <Minus size={12} aria-hidden="true" /> : <Plus size={12} aria-hidden="true" />}
                 </button>
-              ) : (
-                <span className="rune-row-expand-spacer" aria-hidden="true" />
-              )}
-              <span className="rune-cell-name">{row.attrName}</span>
-              <span className="rune-cell-type-chip rune-cell-type-chip--basic">{row.typeName}</span>
-              <span className="rune-cell-card">{row.cardinality}</span>
+              ) : null}
             </div>
           );
         })}
