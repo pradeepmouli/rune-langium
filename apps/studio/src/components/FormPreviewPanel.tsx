@@ -521,27 +521,46 @@ function PreviewFieldControl({
     return (
       <FieldSet className="gap-1.5 p-2">
         <FieldLegend variant="label" className="text-muted-foreground">
-          {field.label}
+          {/* Inline + icon button for "add another item to the array",
+              same pattern as the optional-object section. aria-label
+              preserves the original "Add <Field> item" phrasing for
+              screen readers. */}
+          <span className="inline-flex items-center gap-1.5">
+            {field.label}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => onArrayAdd(field, arrayIndices)}
+              aria-label={`Add ${field.label} item`}
+              title={`Add ${field.label} item`}
+            >
+              <Plus className="size-3" />
+            </Button>
+          </span>
         </FieldLegend>
-        <Button type="button" variant="ghost" size="xs" onClick={() => onArrayAdd(field, arrayIndices)}>
-          Add {field.label} item
-        </Button>
         {arrayError ? <FieldError message={arrayError} /> : null}
         {child
           ? items.map((_, index) => (
               <div key={`${field.path}-item-${index}`} className="space-y-1 p-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
                     {child.label} {index + 1}
+                    {/* − icon replaces the verbose "Remove <Field> N"
+                        text per the same +/- treatment as the section
+                        toggle and the array add. aria-label keeps the
+                        full phrasing for screen readers. */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => onArrayRemove(field, index, arrayIndices)}
+                      aria-label={`Remove ${child.label} ${index + 1}`}
+                      title={`Remove ${child.label} ${index + 1}`}
+                    >
+                      <Minus className="size-3" />
+                    </Button>
                   </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => onArrayRemove(field, index, arrayIndices)}
-                  >
-                    Remove {child.label} {index + 1}
-                  </Button>
                 </div>
                 <PreviewFieldControl
                   field={child}
