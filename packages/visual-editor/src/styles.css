@@ -1245,6 +1245,15 @@ button[data-navigable]:focus-visible {
   outline-offset: 1px;
 }
 
+/* Inspector TypeSelector drop target — same outline language as the
+ * Structure-view TypePickerCell. The drop target is the wrapping span
+ * around the Select trigger; the visual focus ring lands on the
+ * trigger button so the user sees exactly where the drop will commit. */
+[data-type-selector-drop][data-drop-over='true'] [data-slot='type-selector'] {
+  outline: 2px solid var(--primary, #00D4AA);
+  outline-offset: 1px;
+}
+
 /* ── Spec 020 §3.3 — row-level affordance glyphs ────────────────────────────
  *
  * .rune-row-glyph: shared base for the enum-nav (↗) and unresolved (?)
