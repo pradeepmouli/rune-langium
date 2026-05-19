@@ -199,16 +199,26 @@
   letter-spacing: 0.5px;
 }
 
-/* Push the kind pill to the right edge inside structure-variant headers
- * — mirrors the base-type container which inherits `justify-content:
- * space-between` from .rune-graph-group__header. With DOM order [pill,
- * name] preserved (screen-readers announce kind first), margin-left:auto
- * is what flips the visual to name-left / pill-right. Scoped to
- * structure variants so the graph variant (where node bodies are taller
- * and the badge belongs near the name) stays untouched. */
-.rune-node-data--structure .rune-node-header .rune-node-kind-badge,
-.rune-node-choice--structure .rune-node-header .rune-node-kind-badge,
-.rune-node-enum--structure .rune-node-header .rune-node-kind-badge {
+/* Push the kind pill to the right edge in ALL .rune-node-header
+ * instances (structure AND graph variants). DOM order stays [pill, name]
+ * so screen-readers announce the kind classifier first; the auto margin
+ * flips the visual to name-left / pill-right, matching the base
+ * container's [title, base-pill] layout. */
+.rune-node-header .rune-node-kind-badge {
+  margin-left: auto;
+}
+
+/* Right-align the type chip + cardinality pill in structure-variant
+ * rows so the name reads on the left and the type metadata clusters on
+ * the right edge — same name-left / metadata-right rhythm as the
+ * headers (kind pill on right). margin-left:auto on the type chip
+ * absorbs the row's free space; the card pill follows naturally on
+ * its right because of the parent flex gap. Scoped to structure
+ * variants AND base containers so graph-variant rows (less dense,
+ * different reading) stay as-is. */
+.rune-node-data--structure .rune-node-row .rune-cell-type-chip,
+.rune-node-choice--structure .rune-node-row .rune-cell-type-chip,
+.rune-graph-group--base .rune-graph-group__base-row .rune-cell-type-chip {
   margin-left: auto;
 }
 
@@ -1060,7 +1070,11 @@ button[data-navigable]:focus-visible {
    *   1. dashed yellow border (instead of solid neutral)
    *   2. translucent yellow fill (instead of opaque card)
    * Everything else (radius, shadow, motion) tracks .rune-node. */
-  border: 2px dashed var(--color-base-type, #d4a017);
+  /* Dashed border 1px (down from 2px) per user feedback — thinner reads
+   * as "subtle scaffolding around an inherited content block" instead
+   * of an outlined sibling competing with the inner node's solid 1px
+   * border. */
+  border: 1px dashed var(--color-base-type, #d4a017);
   background: var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
   border-radius: var(--radius-lg, 12px);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
