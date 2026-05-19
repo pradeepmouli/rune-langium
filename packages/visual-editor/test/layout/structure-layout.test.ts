@@ -989,7 +989,7 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     // with their base row, and the derived child clears the base rows + gap.
     //
     // Constants (must stay in sync with structure-layout.ts):
-    const BASE_PADDING = 16;
+    const BASE_PADDING = 8;
     const HEADER_HEIGHT = 28;
     const ROW_HEIGHT = 28;
     const ROW_GAP = 8;
@@ -1076,8 +1076,12 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     const expectedPartyY = row0Center - ROW_HEIGHT / 2; // = rowTop for row 0
     expect((party.position as { x: number; y: number }).y).toBe(expectedPartyY);
 
-    // BASE_PADDING must equal 16 — documents the CSS coupling in the test.
-    expect(BASE_PADDING).toBe(16);
+    // BASE_PADDING must equal 8 — documents the CSS coupling in the test.
+    // Halved from 16 during the structure-pane polish so the base container
+    // reads as a peer of its inherited DataNode child (matches the inner
+    // node's --rune-body-padding-y). styles.css `--rune-base-padding` is
+    // the CSS mirror; structure-css-ssot.test.ts asserts they stay synced.
+    expect(BASE_PADDING).toBe(8);
   });
 });
 

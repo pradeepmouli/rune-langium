@@ -102,8 +102,11 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
   return (
     <div className="rune-graph-group rune-graph-group--base">
       <div className="rune-graph-group__header">
-        <span className="rune-graph-group__title">{baseTypeName}</span>
+        {/* base-scope header reads left-to-right: kind-pill → type name,
+            mirroring DataNode/ChoiceNode/EnumNode header order so the
+            container sits visually parallel to its inherited node child. */}
         <span className="rune-graph-group__meta">base</span>
+        <span className="rune-graph-group__title">{baseTypeName}</span>
       </div>
       <div className="rune-graph-group__base-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
         {baseRows.map((row) => {

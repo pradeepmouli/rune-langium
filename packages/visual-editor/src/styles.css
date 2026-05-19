@@ -808,7 +808,7 @@ button[data-navigable]:focus-visible {
   --rune-col-width: 320px;
   --rune-col-gap: 32px;
   --rune-row-gap: 8px;
-  --rune-base-padding: 16px;
+  --rune-base-padding: 8px;
   /* Phase 10.2 — ornament constants (chip/pill/row-indent).
    * Not layout-bearing in the structure-layout.ts sense (they don't
    * couple to row y-offsets), but declared here so the stylelint rule
@@ -850,7 +850,8 @@ button[data-navigable]:focus-visible {
 
 .rune-node-data--structure,
 .rune-node-choice--structure,
-.rune-node-enum--structure {
+.rune-node-enum--structure,
+.rune-graph-group--base {
   /* Inherits .rune-node-data card baseline; structure layout
    * stacks the header, then a two-column body below it. */
   display: flex;
@@ -1050,6 +1051,13 @@ button[data-navigable]:focus-visible {
    * container look like it had bigger padding than its inner node — the
    * exact symptom user flagged. */
   padding: 0;
+  /* Header reads left-to-right (pill → title), matching .rune-node-header
+   * which puts the kind badge on the left of the type name. Without this
+   * override the inherited `space-between` from .rune-graph-group__header
+   * (which is correct for the Graph-view inheritance container) would
+   * push the title to the far right and leave a big empty middle. */
+  justify-content: flex-start;
+  gap: var(--space-2, 8px);
   border-bottom: 1px solid color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 78%, transparent);
 }
 

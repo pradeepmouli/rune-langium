@@ -52,8 +52,15 @@ export const STRUCTURE_LAYOUT_CONSTANTS = {
   COL_WIDTH_MAX: 600,
   COL_GAP: 32,
   ROW_GAP: 8,
-  /** Padding inside a base GroupContainer's yellow border. */
-  BASE_PADDING: 16
+  /**
+   * Padding inside a base GroupContainer's yellow dashed border.
+   * Halved from 16 → 8 (post-polish) to match the inner Data/Choice
+   * node's --rune-body-padding-y, so the base container reads as a
+   * peer of its inherited node child instead of looking double-padded.
+   * CSS mirror lives in styles.css `--rune-base-padding`; both must
+   * stay in sync (structure-css-ssot.test.ts asserts this).
+   */
+  BASE_PADDING: 8
 } as const;
 
 // Internal aliases — keep call sites inside this module readable.
