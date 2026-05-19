@@ -13,34 +13,32 @@ The view exists alongside — not in place of — the existing graph view, switc
 
 ## 2. Architecture
 
-### 2.1 Placement — tab inside VisualPreviewPanel
+### 2.1 Placement — 4-pane peer in `CenterStackPanel`
 
-The new view is a Radix `Tabs` toggle inside `apps/studio/src/shell/panels/VisualPreviewPanel.tsx`:
+> **Original design — SUPERSEDED 2026-05-16 (PR #185, Phase 7.5):** the new view was first specified as a Radix `Tabs` toggle inside `apps/studio/src/shell/panels/VisualPreviewPanel.tsx`. That implementation shipped in Phase 7 but landed as unreachable dead code — `EditorPage` overrode `workspace.visualPreview` with its own `CenterStackPanel`-based mount, so the Tabs toggle was never reachable in production. The studio UX audit (`docs/superpowers/notes/2026-05-16-studio-ux-audit.md`) surfaced the shadowing; Phase 7.5 deleted `VisualPreviewPanel.tsx` and rerouted Structure View into `CenterStackPanel`.
 
-```
-VisualPreviewPanel
-├── Tab: Graph     → RuneTypeGraph (existing)
-└── Tab: Structure → StructureView (new)
-```
-
-The right rail relies on a dockview layout preset: `InspectorPanel` plays the "Details" role and `NamespaceExplorerPanel` plays the "Components" role, both reused as-is for rendering. The dockview state persists the active tab across reloads.
+**As shipped (current):** Structure View is a 4th peer pane inside `CenterStackPanel` alongside Graph / Source / Inspector. The pane is toggled via the pane-switcher pill at the top of the center stack. `VisualPreviewPanel.tsx` no longer exists; `CenterStackPanel` is the unified host. The right rail still relies on the dockview layout preset — `InspectorPanel` plays the "Details" role and `NamespaceExplorerPanel` plays the "Components" role, both reused as-is for rendering.
 
 ### 2.2 Code map
 
 | File | Status | Purpose |
 |---|---|---|
-| `apps/studio/src/shell/panels/VisualPreviewPanel.tsx` | modified | Tab toggle (Graph / Structure); persists active tab |
-| `packages/visual-editor/src/components/StructureView.tsx` | **new** (~300 LOC) | React Flow surface for the Structure tab |
-| `packages/visual-editor/src/layout/structure-layout.ts` | **new** (~200 LOC) | Recursive containment + internal LR layout |
-| `packages/visual-editor/src/adapters/structure-graph-adapter.ts` | **new** (~250 LOC) | Langium AST → Structure-view graph; per-row expansion state |
+| ~~`apps/studio/src/shell/panels/VisualPreviewPanel.tsx`~~ | **deleted in Phase 7.5** | Original Tabs-toggle approach was superseded; `CenterStackPanel` became the unified 4-pane host |
+| `apps/studio/src/shell/panels/CenterStackPanel.tsx` | modified | Added 4th `renderStructure` slot alongside Graph / Source / Inspector |
+| `apps/studio/src/pages/EditorPage.tsx` | modified | Mount site: wires `StructureView` into `CenterStackPanel`'s 4th slot; memoizes `structureCellComponents` |
+| `packages/visual-editor/src/components/StructureView.tsx` | **new** | React Flow surface for the Structure pane; identity-preserving node merge at the RF boundary (Phase 14c) |
+| `packages/visual-editor/src/layout/structure-layout.ts` | **new** | Recursive containment + internal LR layout; emits `style.width/height` + `initialWidth/initialHeight` (Phase 14b) |
+| `packages/visual-editor/src/adapters/structure-graph-adapter.ts` | **new** | Langium AST → Structure-view graph; per-instance materialization (Phase 14d); Data / Choice / Enum root materialization (Phase 14e/A) |
 | `packages/visual-editor/src/components/editors/structure/` | **new** | Inline cell editors: `NameCell`, `TypePickerCell`, `CardinalityCell`, `InheritanceCell` |
-| `packages/visual-editor/src/hooks/useTypeRefDrop.ts` | **new** (~80 LOC) | Shared drag-over/drop helper for all consumer surfaces |
-| `packages/visual-editor/src/components/nodes/DataNode.tsx` | modified | `variant: 'graph' \| 'structure'`; 2-column body in structure variant; per-row source `Handle`s; optional inline-cell components |
-| `packages/visual-editor/src/components/nodes/GroupContainerNode.tsx` | modified | New `scope: 'base-type'` variant — yellow body renders base's own rows directly |
-| `packages/visual-editor/src/components/nodes/ChoiceNode.tsx` | reused as-is | Consumed as expansion target |
-| `packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx` | modified | Single-click marks drag-source (→ arrow appears); items are `draggable`; double-click navigates |
-| `apps/studio/src/shell/panels/InspectorPanel.tsx` (TypeSelectorField) | modified | Drop target via `useTypeRefDrop` |
+| `packages/visual-editor/src/hooks/useTypeRefDrop.ts` | **new** | Shared drag-over/drop helper for all consumer surfaces |
+| `packages/visual-editor/src/components/nodes/DataNode.tsx` | modified | `variant: 'graph' \| 'structure'`; 2-column body in structure variant; per-instance expansion chevrons (Phase 14d); Handles gated to graph variant (Phase 14b) |
+| `packages/visual-editor/src/components/nodes/GroupContainerNode.tsx` | modified | New `scope: 'base-type'` variant — yellow body renders base's own rows directly; per-instance chevrons |
+| `packages/visual-editor/src/components/nodes/ChoiceNode.tsx` | modified (Phase 14e/B) | Structure variant with per-arm `TypePickerCell` cells and expansion chevrons; serves as both expansion target and focused root |
+| `packages/visual-editor/src/components/nodes/EnumNode.tsx` | **new (Phase 14e/A)** | Read-only terminal node for Enum-as-root mode |
+| `packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx` | modified | Single-click marks drag-source (→ arrow appears); items are `draggable`; navigation via dedicated hover-visible nav button (`ChevronRight`) — the originally-planned double-click navigate was dropped in the Phase 13 redesign because it raced with single-click drag-source marking |
+| `apps/studio/src/shell/panels/InspectorPanel.tsx` (TypeSelectorField) | **partially deferred** | Inspector form IS mounted today via `EditorFormPanel`; what remains deferred is wiring `useTypeRefDrop` into the inspector's type-reference field |
 | `apps/studio/src/components/SourceEditor.tsx` | modified | CodeMirror 6 drop extension; inserts qualified type name at drop position |
+| `apps/studio/functions/rune-studio/studio/[[catchall]].ts` | **new** | Cloudflare Pages catch-all function for SPA deep-link fallback (PR #204) |
 | `packages/visual-editor/src/styles.css` | modified | Universal visual tightening (see §4) |
 
 **Zero parallel state.** Inline edits, drag-drops, and tab switches all converge on the existing studio store and Inspector edit pipeline. zundo history, LSP diagnostics, and source write-back stay unified.
@@ -51,7 +49,9 @@ The right rail relies on a dockview layout preset: `InspectorPanel` plays the "D
 
 - **TYPE node** (`DataNode`) — a Rosetta `type` declaration. Header shows `[type] <name>` with optional `extends <base>` badge. Body in `structure` variant is a 2-column grid: **rows on the left, expansions on the right**, both inside the same border.
 - **CHOICE node** (`ChoiceNode`) — a Rosetta `oneOf` choice. Header shows `[choice] <name>`; rows are choice options.
-- **ENUM** — never rendered as a canvas node. When an attribute's type is an enum, the type cell is a reference chip with an `↗` glyph; click → focuses that enum in the Inspector. Rendering of the enum itself remains the Inspector's responsibility.
+- **ENUM** — context-dependent rendering (Phase 14e/A revision):
+  - **Enum-as-attribute** (an attribute whose type is an enum, inside a Data or Choice structure): the type cell is a reference chip with the enum-tinted style. An `↗` inspect-arrow button that refocuses the Structure View on the enum as root is **planned for follow-up PR #207** (not yet merged); users today can reach an enum root only via the explorer nav button on the enum's own row.
+  - **Enum-as-root** (the focused type id IS an Enum): `buildEnumNode()` materializes a read-only `EnumNode` canvas node listing the enum's values. The user reaches this via the explorer nav button.
 - **Base-type container** (`GroupContainerNode` with `scope: 'base-type'`) — yellow dashed container that represents the base type of an inheritance relation. The base's own attribute rows render directly inside the yellow body; the derived type is a nested `DataNode` below those rows, containing only the derived's new additions.
 
 ### 3.2 Recursive containment rule
@@ -160,7 +160,7 @@ Persisted to IndexedDB via studio's existing workspace-metadata layer (`apps/stu
 |---|---|
 | Single-click | Marks the type as the active drag-source; renders a `→` arrow next to its name. Studio's focused type does NOT change. |
 | Drag-and-drop onto a drop target | Drop target consumes the type reference (see drop targets below). |
-| Double-click | Refocus Structure View on that type as the new root. |
+| Hover-visible nav button (`ChevronRight`) | Refocus Structure View on that type as the new root. *(Replaces the originally-specified double-click navigate, which was dropped in the Phase 13 redesign — double-click raced with single-click drag-source marking.)* |
 
 **Drag payload:**
 
@@ -189,7 +189,7 @@ useTypeRefDrop({
 | Surface | `onDrop` action |
 |---|---|
 | Structure View row (`DataNode` 2-column body) | `editor-store.updateAttributeType(row.nodeId, row.attrName, payload)` |
-| Inspector TypeSelectorField | **Deferred to a follow-up** — the Inspector form is a stub today; `useTypeRefDrop` is built and ready for this surface when the Inspector form lands. |
+| Inspector TypeSelectorField | **Partially deferred** — the Inspector form IS mounted today via `EditorFormPanel`; what remains deferred is wiring `useTypeRefDrop` into its type-reference field. The hook is built and ready. |
 | Source editor (CodeMirror 6) | Insert qualified name (`<namespace>.<typeId>`) at `EditorView.posAtCoords(event)` via a transaction |
 
 **Source-editor caveat (v1):** No auto-import. If the dropped type is in another namespace and not yet imported, the LSP surfaces an unresolved-reference diagnostic; the existing LSP quick-fix resolves it. Auto-import logic is deferred to v2.
@@ -200,7 +200,7 @@ The CodeMirror drop handler is registered as a `EditorView.domEventHandlers({ dr
 
 Five flows; all reuse existing studio plumbing.
 
-**1 · Selection sync.** Single `useStudioStore.selection` slice. Three writers: Structure row click, source-editor cursor, NamespaceExplorer double-click. Subscribers: Inspector, Structure View, source editor.
+**1 · Selection sync.** Single `useStudioStore.selection` slice. Three writers: Structure row click, source-editor cursor, NamespaceExplorer nav-button click (originally specified as double-click; redesigned in Phase 13). Subscribers: Inspector, Structure View, source editor.
 
 **2 · Edit dispatch.** Inline cell edit → Inspector store action → AST mutation in the LSP worker → new document state → React Flow re-renders.
 
@@ -242,7 +242,7 @@ The **collapse-by-default** default resolves most cases naturally — nothing re
 **Integration (Playwright, in `apps/studio`):**
 
 - Open Structure tab; default fully collapsed; empty-state prompt with no focused type.
-- Focus via NamespaceExplorer double-click → root populates.
+- Focus via NamespaceExplorer nav-button click → root populates. (Originally specified as double-click; redesigned in Phase 13.)
 - Hexagon-plus expands; nested node aligns with source row.
 - Inline rename → source editor reflects within 1 frame.
 - Drag from NamespaceExplorer → drop on Structure row / Inspector field / source editor — each updates state through unified dispatch.
