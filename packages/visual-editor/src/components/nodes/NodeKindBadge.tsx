@@ -10,7 +10,7 @@ export interface NodeKindBadgeProps {
 }
 
 const COMPACT_KIND_LABELS: Record<TypeKind, string> = {
-  data: 'Type',
+  data: 'Data',
   choice: 'Choice',
   enum: 'Enum',
   func: 'Function',
