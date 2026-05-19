@@ -1365,8 +1365,13 @@ describe('layoutStructureGraph — per-instance sizing (Phase 14e successor to C
     expect(bDirect).toBeDefined();
 
     // The directly-placed B carries an expansion to its own A instance (which
-    // itself has no expansions), so its sized envelope is larger than the
-    // cyclic B (which has no expansions at all).
+    // itself has no expansions), so its sized envelope is taller than the
+    // cyclic B (which has no expansions at all). Width does NOT grow under
+    // the vertical-stack expansion layout — it's now `max(rowsColWidth,
+    // childWidth)`, so a child sized to the same COL_WIDTH floor as the
+    // parent doesn't widen the parent. (Pre-iteration the right-column
+    // layout grew width with `rowsColWidth + COL_GAP + childrenWidth`,
+    // which this test originally asserted via toBeGreaterThan(bInsideAWidth).)
     // (Finding G: dimensions are now on style.width/height per RF12 contract.)
     const bInsideAHeight = (bInsideA!.style?.height as number | undefined) ?? 0;
     const bDirectHeight = (bDirect!.style?.height as number | undefined) ?? 0;
@@ -1374,7 +1379,7 @@ describe('layoutStructureGraph — per-instance sizing (Phase 14e successor to C
     const bDirectWidth = (bDirect!.style?.width as number | undefined) ?? 0;
 
     expect(bDirectHeight).toBeGreaterThan(bInsideAHeight);
-    expect(bDirectWidth).toBeGreaterThan(bInsideAWidth);
+    expect(bDirectWidth).toBeGreaterThanOrEqual(bInsideAWidth);
   });
 });
 
