@@ -297,4 +297,22 @@
     outline: 2px solid var(--ring, var(--primary, currentColor));
     outline-offset: 2px;
   }
+
+  /* ── Global ::selection ─────────────────────────────────────────
+   * Browser-native blue text-selection reads poorly on the dark
+   * Daikon palette (foreground falls back to the unreadable native
+   * white on near-black surfaces). Use a tinted variant of --primary
+   * (the same family the focus ring + accent edge use), at 38% mix
+   * with transparent so the selection still reads as colored but
+   * doesn't overpower the underlying text. --foreground stays the
+   * text colour so contrast against the tint is preserved.
+   *
+   * Out-of-scope: CodeMirror's `.cm-selectionBackground` (handled by
+   * the editor's own theme extension in styles.css) — CodeMirror
+   * doesn't use the native browser selection, so this rule has no
+   * effect on the code editor. */
+  ::selection {
+    background: color-mix(in oklch, var(--primary, var(--accent, currentColor)) 38%, transparent);
+    color: var(--foreground, inherit);
+  }
 }
