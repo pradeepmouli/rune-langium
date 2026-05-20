@@ -133,14 +133,27 @@ read_singleton_lock_pid() {
 # the given directory. `ps -ax -o pid,command` works on macOS + Linux
 # (Copilot review on PR #213 — the prior comment overpromised POSIX
 # portability; `-ax` is BSD-style and `-o command=` isn't in POSIX-1).
-# The awk match anchors on the exact flag value to avoid prefix collisions
-# (mcp-chrome-abc vs mcp-chrome-abc123).
+#
+# Codex P1 review on PR #213: we can't use per-field equality
+# (`$i == "--user-data-dir=" dir`) because `ps -o command=` joins argv
+# entries with single spaces — if `dir` contains a space (e.g. `$HOME` like
+# `/Users/Some Name/...`), the flag and its value get split across multiple
+# awk fields and the equality check never matches. The script would then
+# misclassify a LIVE chrome profile as orphan and remove its SingletonLock,
+# disrupting an active MCP Chrome session. Use `index()` on the full line
+# instead, with an explicit "next char must be space or end-of-line" check
+# so prefix collisions (mcp-chrome-abc vs mcp-chrome-abc123) still don't
+# match. The first field of $0 is always the PID under `pid=,command=`.
 pids_for_user_data_dir() {
   target_dir="$1"
   ps -ax -o pid=,command= 2>/dev/null | awk -v dir="$target_dir" '
     {
-      for (i = 1; i <= NF; i++) {
-        if ($i == "--user-data-dir=" dir) {
+      needle = "--user-data-dir=" dir
+      pos = index($0, needle)
+      if (pos > 0) {
+        end = pos + length(needle)
+        next_char = substr($0, end, 1)
+        if (next_char == "" || next_char == " ") {
           print $1
           next
         }
