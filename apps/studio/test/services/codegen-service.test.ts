@@ -153,6 +153,62 @@ describe('BrowserCodegenProxy — hosted vs local endpoint branching', () => {
   });
 });
 
+describe('BrowserCodegenProxy — DEFAULT_CODEGEN_URL composition (P1 #220)', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  /**
+   * Codex P1 (PR #220): the default base must compose with `/api/generate`
+   * to a deployed route. Before the fix it was `/api/codegen`, which yielded
+   * `/api/codegen/api/generate` — a path that matches no Pages Function or
+   * Worker route, so the ExportDialog probe + every generation request
+   * silently failed whenever `VITE_CODEGEN_URL` was unset.
+   *
+   * The fix sets the browser default to `/rune-studio`, matching the
+   * deployed wrangler route `www.daikonic.dev/rune-studio/api/generate/*`
+   * and the explicit override set by `build-combined.mjs`.
+   *
+   * These tests construct a proxy with NO constructor arg and NO env so the
+   * `DEFAULT_CODEGEN_URL` fallback fires. We assert the composed URL is the
+   * one the deployed Worker actually serves.
+   */
+  it('default-browser fallback composes to /rune-studio/api/generate (POST)', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ files: [], errors: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    );
+    const proxy = new BrowserCodegenProxy();
+    await proxy.generate({ language: 'typescript', files: [] });
+    expect(fetchSpy.mock.calls[0]![0]).toBe('/rune-studio/api/generate');
+    // The forbidden composition that Codex caught — must never reappear.
+    expect(fetchSpy.mock.calls[0]![0]).not.toContain('/api/codegen/api/generate');
+  });
+
+  it('default-browser fallback composes to /rune-studio/api/generate/health (availability probe)', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: 'ok', languages: [] }), { status: 200 })
+    );
+    const proxy = new BrowserCodegenProxy();
+    await proxy.isAvailable();
+    expect(fetchSpy.mock.calls[0]![0]).toBe('/rune-studio/api/generate/health');
+    expect(fetchSpy.mock.calls[0]![0]).not.toContain('/api/codegen');
+  });
+
+  it('default-browser fallback is treated as hosted (Turnstile + cookie credentials path)', () => {
+    const proxy = new BrowserCodegenProxy();
+    expect(proxy.isHostedService()).toBe(true);
+  });
+});
+
 describe('BrowserCodegenProxy.isHostedService()', () => {
   it('returns true for relative base URLs (CF deploy)', () => {
     expect(new BrowserCodegenProxy('/rune-studio').isHostedService()).toBe(true);

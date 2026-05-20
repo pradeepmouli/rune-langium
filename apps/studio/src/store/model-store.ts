@@ -283,6 +283,20 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     ) {
       return;
     }
+    // Defect A safety net: refuse to wipe a non-empty curated file list
+    // with an empty one. The prod-smoke 2026-05-20 report described the
+    // 4768-type explorer collapsing back to 22 base types during an edit
+    // session — a partial /api/parse response (transient server error,
+    // mid-flight reparse, race between the model-watching effect and the
+    // debounced reparse) could surface `files: []` for a bundle that's
+    // still very much loaded. The atomic re-merge in App.tsx's
+    // model-watching useEffect re-emits the full bundle on the next pass,
+    // so silently dropping the wipe is the correct conservative behaviour.
+    // Callers that legitimately want to clear a curated bundle should
+    // route through `unload(sourceId)` instead.
+    if (files.length === 0 && existing.files.length > 0) {
+      return;
+    }
     const updated = new Map(models);
     updated.set(sourceId, { ...existing, files });
     set({ models: updated });

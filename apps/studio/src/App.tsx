@@ -20,13 +20,14 @@ import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles, BUNDLE_MARKER_SUFFIX } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
+import { getModelSource } from './services/model-registry.js';
 import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
 import { config, studioConfig } from './config.js';
 import * as persistence from './workspace/persistence.js';
-import type { WorkspaceRecord } from './workspace/persistence.js';
+import type { CuratedModelBinding, WorkspaceRecord } from './workspace/persistence.js';
 import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
 import { deleteWorkspaceFiles, loadWorkspaceFiles, saveWorkspaceFiles } from './workspace/workspace-files.js';
 import { WorkspaceManager } from './workspace/workspace-manager.js';
@@ -106,6 +107,56 @@ function getLspSessionId(): string {
   return fresh;
 }
 
+/**
+ * Project the in-memory `loadedModels` map into the persistable
+ * `CuratedModelBinding[]` shape stored on `WorkspaceRecord.curatedModels`.
+ *
+ * Only curated bundles (sources with an `archiveUrl`) round-trip — the
+ * custom-URL / git-clone path doesn't have a stable identity to re-load
+ * on restore, so persisting it would surface stale entries we couldn't
+ * resolve back to a registry source. See `CuratedModelBinding` for the
+ * schema.
+ *
+ * Prod-smoke 2026-05-20 (Defect D1): the prior wiring loaded curated
+ * bundles into the in-memory store but never wrote them back to IDB.
+ * On refresh the workspace rehydrated with `curatedModels: []` and the
+ * 4768-type explorer collapsed to the 22 built-in types because nothing
+ * triggered a re-load.
+ */
+function deriveCuratedBindings(loadedModels: Map<string, LoadedModel>): CuratedModelBinding[] {
+  const bindings: CuratedModelBinding[] = [];
+  for (const model of loadedModels.values()) {
+    if (!model.source.archiveUrl) continue;
+    bindings.push({
+      modelId: model.source.id,
+      loadedVersion: model.commitHash || 'latest',
+      loadedAt: new Date(model.loadedAt).toISOString(),
+      updateAvailable: false
+    });
+  }
+  // Stable order so the equality check below doesn't flap on Map iteration order.
+  bindings.sort((a, b) => a.modelId.localeCompare(b.modelId));
+  return bindings;
+}
+
+/**
+ * Equality check for `CuratedModelBinding[]` that skips `loadedAt` (a
+ * timestamp that drifts on every re-load even when the bundle identity
+ * is unchanged). Used to short-circuit the persist effect so a tab-focus
+ * re-render doesn't rewrite IDB on every render.
+ */
+function curatedBindingsEqual(a: CuratedModelBinding[], b: CuratedModelBinding[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i]!;
+    const right = b[i]!;
+    if (left.modelId !== right.modelId) return false;
+    if (left.loadedVersion !== right.loadedVersion) return false;
+    if (left.updateAvailable !== right.updateAvailable) return false;
+  }
+  return true;
+}
+
 function deriveWorkspaceName(files: readonly WorkspaceFile[]): string {
   const firstFile = files[0];
   if (!firstFile) {
@@ -137,6 +188,18 @@ function AppContent() {
   });
   const [bootState, setBootState] = useState<BootState>('checking');
   const [restoredWorkspace, setRestoredWorkspace] = useState<WorkspaceRecord | null>(null);
+  // Tracks the workspace.id for which the in-memory model-store has settled
+  // (every curated binding declared on the workspace has finished its load
+  // attempt — success or failure — since the most recent restoreWorkspace).
+  // Until this matches the active workspace.id, the curated-binding persist
+  // effect is a no-op so a switch A→B can't accidentally write A's bundles
+  // (which still live in the global model-store during B's restore) into B's
+  // record. See restoreWorkspace + the persist effect for the lifecycle.
+  //
+  // Stored in state (not a ref) because the persist effect needs to re-run
+  // when sync completes — refs don't trigger re-renders, so the effect would
+  // see stale values.
+  const [curatedSyncedWorkspaceId, setCuratedSyncedWorkspaceId] = useState<string | null>(null);
 
   const lspClientRef = useRef<LspClientService | null>(null);
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
@@ -234,9 +297,22 @@ function AppContent() {
 
   const createWorkspaceRecord = useCallback(async (name: string): Promise<WorkspaceRecord> => {
     const now = new Date().toISOString();
+    // Auto-suffix the name when an existing workspace already claims it
+    // (Defect D2 / prod-smoke 2026-05-20): the switcher / recents list
+    // surfaced two identical `untitled BROWSER` entries with no way to
+    // distinguish which was which. Disambiguate at creation time so every
+    // workspace record carries a unique label.
+    const recents = await persistence.listRecents().catch(() => [] as Awaited<ReturnType<typeof persistence.listRecents>>);
+    const takenNames = new Set(recents.map((r) => r.name));
+    let uniqueName = name;
+    if (takenNames.has(uniqueName)) {
+      let suffix = 2;
+      while (takenNames.has(`${name} (${suffix})`)) suffix += 1;
+      uniqueName = `${name} (${suffix})`;
+    }
     const workspace: WorkspaceRecord = {
       id: makeWorkspaceId(),
-      name,
+      name: uniqueName,
       kind: 'browser-only',
       createdAt: now,
       lastOpenedAt: now,
@@ -256,11 +332,33 @@ function AppContent() {
     return workspace;
   }, []);
 
+  // Capture the workspace ID active when `restoreWorkspace` is called so the
+  // eviction step inside it knows whether we're cold-starting (no prior) or
+  // switching (prior workspace differs). The ref pattern avoids stale-closure
+  // issues that would dog a useCallback-captured `restoredWorkspace`.
+  const restoredWorkspaceRef = useRef<WorkspaceRecord | null>(null);
+  useEffect(() => {
+    restoredWorkspaceRef.current = restoredWorkspace;
+  }, [restoredWorkspace]);
+
   const restoreWorkspace = useCallback(
     async (workspace: WorkspaceRecord): Promise<boolean> => {
+      const previousWorkspaceId = restoredWorkspaceRef.current?.id ?? null;
       const restoredFiles = await loadWorkspaceFiles(workspace.id);
       if (restoredFiles.length === 0) {
+        // Defect D3: switching to an OPFS-empty workspace left the previous
+        // workspace's `files`/`models` state in place. The App then matched
+        // `bootState === 'start' && userFiles.length > 0` and re-mounted
+        // EditorPage with the stale untitled.rosetta tab — a phantom file
+        // that didn't exist in OPFS for the workspace the user just opened.
+        // Clear the carry-over state so the start page renders cleanly.
         setRestoredWorkspace(null);
+        setFiles([]);
+        setModels([]);
+        setParsedModels([]);
+        setErrors(new Map());
+        setDeferredExports([]);
+        setCuratedSyncedWorkspaceId(null);
         return false;
       }
 
@@ -269,8 +367,98 @@ function AppContent() {
         lastOpenedAt: new Date().toISOString()
       };
       await persistence.saveWorkspace(nextWorkspace);
+      // Mark curated-bindings sync as "pending for this workspace" BEFORE
+      // updating restoredWorkspace, so the persist effect sees a non-matching
+      // synced id on its first run after the switch and bails out. Without
+      // this gate, persisting fires immediately with whatever is currently
+      // in the global model-store — which during an A→B switch still holds
+      // A's bundles, overwriting B's saved curatedModels with stale state
+      // (Codex P1, PR #220).
+      setCuratedSyncedWorkspaceId(null);
       setRestoredWorkspace(nextWorkspace);
-      await syncWorkspaceToEditor(restoredFiles);
+      try {
+        // On a workspace SWITCH (previous workspace exists and differs from
+        // the destination), evict any bundles from the global model-store
+        // that aren't declared by the destination workspace. Without this
+        // step the model-store accumulates bundles across switches: opening
+        // A (curated: [cdm]) and then B (curated: [fpml]) would leave [cdm,
+        // fpml] in the store, and the persist effect would write `[cdm,
+        // fpml]` back to B's record — silently inheriting A's bindings.
+        //
+        // The persist-gate (`curatedSyncedWorkspaceId`) alone isn't enough:
+        // it stops the persist effect from firing too early, but once it
+        // opens with stale bundles still in the store, the derived set is
+        // still polluted. Eviction makes the store a faithful projection of
+        // the destination workspace's declared bindings before the gate is
+        // opened.
+        //
+        // We intentionally SKIP eviction on cold-start restore (no prior
+        // workspace) because at that point the model-store's contents
+        // reflect bundles the USER loaded since mount — they belong to
+        // *this* workspace and should be persisted into its record, not
+        // discarded. The D1 fix (persistence test) relies on that path.
+        const isSwitch = previousWorkspaceId !== null && previousWorkspaceId !== workspace.id;
+        if (isSwitch) {
+          const declaredIds = new Set((workspace.curatedModels ?? []).map((b) => b.modelId));
+          let currentModelIds: string[] = [];
+          try {
+            currentModelIds = Array.from(useModelStore.getState().models.keys());
+          } catch {
+            /* mocked store without getState — treat as empty (nothing to evict). */
+          }
+          const toEvict = currentModelIds.filter((id) => !declaredIds.has(id));
+          if (toEvict.length > 0) {
+            const storeUnload = useModelStore.getState().unload;
+            for (const id of toEvict) {
+              storeUnload(id);
+            }
+          }
+        }
+
+        await syncWorkspaceToEditor(restoredFiles);
+
+        // Replay any curated bundles bound to this workspace (D1 fix). Without
+        // this, refresh / switch-workspace would drop CDM/FpML/etc. because
+        // the in-memory model-store starts empty on every mount.
+        //
+        // We schedule the loads in parallel and await them all here so the
+        // sync-settled flag flips only after the in-memory store reflects
+        // the workspace's declared bindings. `load(source)` resolves on both
+        // success and failure (errors land in the store's `errors` map), so
+        // a single slow / failing archive can't pin the flag at `null`
+        // forever. Loads still run in parallel — total cost is bounded by
+        // the slowest load, not the sum.
+        //
+        // `useModelStore.getState()` is gated on `declared.length > 0` so
+        // tests that mock `useModelStore` as a bare hook (without a `.getState`
+        // method) — which is fine when the workspace has no curated bindings —
+        // continue to work unchanged. The pre-existing wiring did the same.
+        const declared = workspace.curatedModels ?? [];
+        if (declared.length > 0) {
+          const modelStoreLoad = useModelStore.getState().load;
+          const loadPromises: Promise<void>[] = [];
+          for (const binding of declared) {
+            const source = getModelSource(binding.modelId);
+            if (!source) continue;
+            loadPromises.push(modelStoreLoad(source));
+          }
+          if (loadPromises.length > 0) {
+            // Don't surface errors here — each failed load already records its
+            // error in the model-store and the UI shows it via ModelLoader.
+            await Promise.allSettled(loadPromises);
+          }
+        }
+      } finally {
+        // Flip the gate even if `syncWorkspaceToEditor` or a curated load
+        // threw — `restoredWorkspace` was already set above, and the persist
+        // effect needs the gate to open so any genuinely loaded bundles
+        // (including those that succeeded before the throw) reach IDB. Parse
+        // errors live in a separate channel (`reportWorkspaceError`) and
+        // don't invalidate the curated-binding snapshot. Without the
+        // try/finally a parse failure during the very first restore would
+        // strand the gate closed for the remainder of the session.
+        setCuratedSyncedWorkspaceId(nextWorkspace.id);
+      }
       return true;
     },
     [syncWorkspaceToEditor]
@@ -351,6 +539,38 @@ function AppContent() {
     loadedModelsRef.current = loadedModels;
   }, [loadedModels]);
 
+  // Persist curated-bundle bindings whenever the active workspace has one
+  // and the in-memory set changes. Without this, a refresh / switch / close
+  // path rehydrates the workspace from IDB with `curatedModels: []` and the
+  // explorer collapses from N curated namespaces to just the built-in 22
+  // types (D1). The equality guard short-circuits the IDB write when the
+  // binding identity is unchanged so a per-keystroke re-render doesn't
+  // churn IndexedDB. Equality skips `loadedAt` because timestamps would
+  // flap every load even when the bundle id+version is identical.
+  //
+  // Codex P1 (PR #220): the effect MUST wait for workspace-specific model
+  // sync to complete before writing. During a switch A → B, the global
+  // model-store still holds A's bundles for the brief window between
+  // `setRestoredWorkspace(B)` and the completion of B's curated reloads.
+  // Without `curatedSyncedWorkspaceId === restoredWorkspace.id`, the
+  // first effect run after the switch would derive A's bundles, compare
+  // against B's declared set, and overwrite B's record with stale A data.
+  // `restoreWorkspace` flips the synced id ONLY after Promise.allSettled
+  // over the declared loads, so by the time this gate opens the model-
+  // store is a faithful projection of B's declared bindings.
+  useEffect(() => {
+    if (!restoredWorkspace) return;
+    if (curatedSyncedWorkspaceId !== restoredWorkspace.id) return;
+    const nextBindings = deriveCuratedBindings(loadedModels);
+    const prevBindings = restoredWorkspace.curatedModels ?? [];
+    if (curatedBindingsEqual(prevBindings, nextBindings)) return;
+    const nextWorkspace = { ...restoredWorkspace, curatedModels: nextBindings } as WorkspaceRecord;
+    void persistence.saveWorkspace(nextWorkspace).catch((err) => {
+      reportWorkspaceError('Failed to save curated bundle bindings to browser storage', err);
+    });
+    setRestoredWorkspace(nextWorkspace);
+  }, [curatedSyncedWorkspaceId, loadedModels, reportWorkspaceError, restoredWorkspace]);
+
   useEffect(() => {
     if (bootState === 'restored') {
       document.body.setAttribute('data-workspace-active', 'true');
@@ -410,6 +630,13 @@ function AppContent() {
       if (!workspace) {
         workspace = await createWorkspaceRecord(deriveWorkspaceName(loadedFiles));
         setRestoredWorkspace(workspace);
+        // Fresh workspace has no declared curated bindings, so curated
+        // sync is trivially "settled" — opening the persist gate so any
+        // bundles the user loads next get persisted. Without this the
+        // user could load a curated bundle into a fresh workspace and
+        // the bindings would never reach IDB because the gate would
+        // stay closed (no restoreWorkspace call ever flipped it).
+        setCuratedSyncedWorkspaceId(workspace.id);
       }
 
       await saveWorkspaceFiles(workspace.id, loadedFiles);
@@ -472,31 +699,10 @@ function AppContent() {
     // placeholder is shown with no way to load new files.
     setBootState('start');
     setRestoredWorkspace(null);
+    setCuratedSyncedWorkspaceId(null);
     setWorkspaceError(null);
     setWorkspaceNotice(null);
   }, [reportWorkspaceError, restoredWorkspace]);
-
-  useEffect(() => {
-    setRuneStudioTestApi((current) => ({
-      ...current,
-      replaceWorkspaceFiles: async (workspaceFiles: WorkspaceFile[]) => {
-        if (restoredWorkspace) {
-          await saveWorkspaceFiles(restoredWorkspace.id, workspaceFiles);
-        }
-        await syncWorkspaceToEditor(workspaceFiles);
-      }
-    }));
-    return () => {
-      setRuneStudioTestApi((current) => {
-        if (!current) {
-          return current;
-        }
-        const next = { ...current };
-        delete next.replaceWorkspaceFiles;
-        return next;
-      });
-    };
-  }, [restoredWorkspace, syncWorkspaceToEditor]);
 
   /** Switch to a recent workspace from the start page list (T029). */
   const handleSwitchWorkspace = useCallback(
@@ -525,10 +731,35 @@ function AppContent() {
     [reportWorkspaceError, restoreWorkspace]
   );
 
+  useEffect(() => {
+    setRuneStudioTestApi((current) => ({
+      ...current,
+      replaceWorkspaceFiles: async (workspaceFiles: WorkspaceFile[]) => {
+        if (restoredWorkspace) {
+          await saveWorkspaceFiles(restoredWorkspace.id, workspaceFiles);
+        }
+        await syncWorkspaceToEditor(workspaceFiles);
+      },
+      switchWorkspace: handleSwitchWorkspace
+    }));
+    return () => {
+      setRuneStudioTestApi((current) => {
+        if (!current) {
+          return current;
+        }
+        const next = { ...current };
+        delete next.replaceWorkspaceFiles;
+        delete next.switchWorkspace;
+        return next;
+      });
+    };
+  }, [handleSwitchWorkspace, restoredWorkspace, syncWorkspaceToEditor]);
+
   /** New-workspace affordance from the recents list — same path as FileLoader. */
   const handleCreateWorkspace = useCallback(() => {
     setBootState('start');
     setRestoredWorkspace(null);
+    setCuratedSyncedWorkspaceId(null);
     setWorkspaceNotice(null);
   }, []);
 
@@ -592,6 +823,7 @@ function AppContent() {
         await deleteWorkspaceFiles(workspaceId);
         if (restoredWorkspace?.id === workspaceId) {
           setRestoredWorkspace(null);
+          setCuratedSyncedWorkspaceId(null);
           setFiles([]);
           setModels([]);
           setParsedModels([]);

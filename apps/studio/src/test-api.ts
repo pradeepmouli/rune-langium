@@ -6,6 +6,15 @@ import type { WorkspaceFile } from './services/workspace.js';
 export interface RuneStudioTestApi {
   createCodegenWorker?(): Worker;
   replaceWorkspaceFiles?(files: WorkspaceFile[]): Promise<void>;
+  /**
+   * Drive the same workspace-switch flow the WorkspaceSwitcher / start-page
+   * Recents list invokes. Exposed for the curated-binding switch-race
+   * regression (Codex P1, PR #220) — testing the race requires that
+   * `restoreWorkspace` runs with a prior `restoredWorkspace` set so the
+   * eviction step engages. Cold-start render doesn't satisfy that
+   * precondition.
+   */
+  switchWorkspace?(workspaceId: string): Promise<void>;
 }
 
 const IS_TEST_MODE =

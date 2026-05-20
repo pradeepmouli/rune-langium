@@ -285,4 +285,56 @@ describe('useModelStore — setCuratedFiles (refOnly post-/api/parse)', () => {
     expect(useModelStore.getState().models).not.toBe(afterFirst);
     expect(useModelStore.getState().models.get('cdm')?.files[0]?.serializedModelJson).toBe(json2);
   });
+
+  // Defect A safety net (prod-smoke 2026-05-20): a transient /api/parse
+  // response (server hiccup, mid-flight reparse race) MUST NOT wipe a
+  // bundle's already-loaded curated files with an empty list. The user
+  // saw the 4768-type explorer collapse back to 22 base types in an
+  // active session because some parse path called `setCuratedFiles('cdm', [])`
+  // while CDM was demonstrably still loaded.
+  it('refuses to wipe a non-empty bundle with an empty file list (Defect A)', () => {
+    const json1 = '{"a":1}' as never;
+    useModelStore
+      .getState()
+      .setCuratedFiles('cdm', [
+        { path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json1 },
+        { path: 'b.rosetta', content: '', namespace: 'b', refOnly: true, serializedModelJson: json1 }
+      ]);
+    const populated = useModelStore.getState().models;
+    expect(populated.get('cdm')?.files).toHaveLength(2);
+
+    // Empty payload — must be silently dropped, leaving the bundle intact.
+    useModelStore.getState().setCuratedFiles('cdm', []);
+    expect(useModelStore.getState().models).toBe(populated);
+    expect(useModelStore.getState().models.get('cdm')?.files).toHaveLength(2);
+  });
+
+  it('still allows an explicit transition from empty → non-empty (initial hydration)', () => {
+    // The empty-list guard only applies when we're about to OVERWRITE
+    // a non-empty list. Going from `files: []` → `files: [x, y]` (the
+    // first hydration after archive-load) must still update so the
+    // ModelLoader badge transitions from "(loading…)" to "(N files)".
+    useModelStore.setState({
+      models: new Map([
+        [
+          'cdm',
+          {
+            source: CURATED_SOURCE,
+            commitHash: '2026-05-13',
+            files: [],
+            loadedAt: 0
+          }
+        ]
+      ]),
+      loading: new Map(),
+      errors: new Map()
+    });
+    const json1 = '{"a":1}' as never;
+    useModelStore
+      .getState()
+      .setCuratedFiles('cdm', [
+        { path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json1 }
+      ]);
+    expect(useModelStore.getState().models.get('cdm')?.files).toHaveLength(1);
+  });
 });
