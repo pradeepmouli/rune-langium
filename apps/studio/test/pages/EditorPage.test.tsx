@@ -335,7 +335,11 @@ vi.mock('lucide-react', () => ({
   // for the Popover menu items (new workspace / close workspace).
   Plus: () => React.createElement('span'),
   LogOut: () => React.createElement('span'),
-  CaseSensitive: () => React.createElement('span')
+  CaseSensitive: () => React.createElement('span'),
+  // Dialog primitive's close button uses `X` from lucide-react. The curated
+  // models modal in EditorPage pulls Dialog in transitively even when it
+  // isn't open, so the lucide-react mock has to cover X too.
+  X: () => React.createElement('span')
 }));
 
 vi.mock('../../src/components/GraphFilterMenu.js', () => ({

@@ -56,12 +56,20 @@ import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { LspConnectionBadge } from '../components/LspConnectionBadge.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
+import { ModelLoader } from '../components/ModelLoader.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { Kbd } from '@rune-langium/design-system/ui/kbd';
 import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@rune-langium/design-system/ui/dialog';
 import {
   Maximize2,
   LayoutGrid,
@@ -385,6 +393,12 @@ export function EditorPage({
   const sourceEditorRef = useRef<SourceEditorRef>(null);
   const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  // Curated Models modal — wired from the ActivityBar's Database button.
+  // The Welcome screen renders <ModelLoader /> inline; inside EditorPage we
+  // reuse the same component in a Dialog so the affordance stays discoverable
+  // once a workspace is open. A richer bottom-bar multi-selector is deferred
+  // to a future task; the modal is the minimal landing.
+  const [showCuratedModels, setShowCuratedModels] = useState(false);
   // Topbar workspace dropdown — populated lazily when the popover opens
   // so we don't read IDB on every EditorPage mount. Recents list is filtered
   // to exclude the current workspace (no point switching to where you are).
@@ -1913,7 +1927,11 @@ export function EditorPage({
         </div>
       </header>
       <div className="flex flex-1 min-h-0">
-        <ActivityBar onWorkspaceClick={() => onClose?.()} onModelsClick={() => {}} onSettingsClick={() => {}} />
+        <ActivityBar
+          onWorkspaceClick={() => onClose?.()}
+          onModelsClick={() => setShowCuratedModels(true)}
+          onSettingsClick={() => {}}
+        />
         <div className="flex-1 min-h-0">
           <DockShell
             studioVersion={studioVersion}
@@ -1946,6 +1964,34 @@ export function EditorPage({
         getUserFiles={getSerializedFiles}
         validateModel={validateModelForExport}
       />
+
+      {/*
+        Curated Models dialog — reuses the same <ModelLoader /> the welcome
+        screen mounts. ModelLoader pulls from useModelStore directly so no
+        props need to be threaded through. We leave the dialog open after a
+        load click so the user can see progress/badges. Dismiss paths
+        (Radix defaults): Esc, the X close button, AND click on the overlay
+        outside the dialog content — all close via `onOpenChange(false)`.
+        If "Esc only / outside-click does nothing" is ever wanted, attach
+        `onInteractOutside={(e) => e.preventDefault()}` to DialogContent
+        (Copilot review on PR #215). A future task will replace this with
+        a bottom-bar multi-selector — see PR description.
+      */}
+      <Dialog open={showCuratedModels} onOpenChange={setShowCuratedModels}>
+        <DialogContent
+          className="w-[640px] max-w-[92vw] max-h-[80vh] overflow-y-auto"
+          data-testid="curated-models-dialog"
+          overlayProps={{ 'data-testid': 'curated-models-dialog-overlay' }}
+        >
+          <DialogHeader>
+            <DialogTitle>Reference Models</DialogTitle>
+            <DialogDescription>
+              Load curated reference bundles to explore them alongside your workspace.
+            </DialogDescription>
+          </DialogHeader>
+          <ModelLoader />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
