@@ -19,7 +19,9 @@
 
 import { useCallback } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
+import { X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
+import { Button } from '@rune-langium/design-system/ui/button';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 
 // ---------------------------------------------------------------------------
@@ -206,16 +208,21 @@ function EnumValueRow({
           Revert
         </button>
       ) : (
-        <button
+        // Icon-button replaces literal "✕" Unicode glyph. Same pattern as
+        // AttributeRow / ChoiceOptionRow / FunctionInputRow — lucide <X />
+        // in a ghost icon-button with hover:text-destructive preserved.
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={() => onRemove(nodeId, name)}
           disabled={disabled}
           aria-label={`Remove value ${name || 'unnamed'}`}
-          className="shrink-0 p-1 text-muted-foreground hover:text-destructive
-            disabled:opacity-50 disabled:cursor-not-allowed"
+          title={`Remove value ${name || 'unnamed'}`}
+          className="shrink-0 text-muted-foreground hover:text-destructive"
         >
-          ✕
-        </button>
+          <X className="size-3" />
+        </Button>
       )}
     </div>
   );
@@ -234,12 +241,7 @@ export interface InheritedEnumValueRowProps {
   onOverride: () => void;
 }
 
-function InheritedEnumValueRow({
-  name,
-  displayName,
-  ancestorName,
-  onOverride
-}: InheritedEnumValueRowProps) {
+function InheritedEnumValueRow({ name, displayName, ancestorName, onOverride }: InheritedEnumValueRowProps) {
   return (
     <div
       data-slot="inherited-enum-value-row"
@@ -251,20 +253,13 @@ function InheritedEnumValueRow({
       {/* Spacer aligns with drag handle */}
       <span className="w-3 shrink-0" />
 
-      <span className="flex-1 min-w-0 px-2 py-1 text-sm text-muted-foreground font-mono truncate">
-        {name}
-      </span>
+      <span className="flex-1 min-w-0 px-2 py-1 text-sm text-muted-foreground font-mono truncate">{name}</span>
 
       {displayName && (
-        <span className="flex-1 min-w-0 px-2 py-1 text-sm text-muted-foreground italic truncate">
-          {displayName}
-        </span>
+        <span className="flex-1 min-w-0 px-2 py-1 text-sm text-muted-foreground italic truncate">{displayName}</span>
       )}
 
-      <span
-        data-slot="inherited-from-label"
-        className="text-xs text-muted-foreground italic whitespace-nowrap"
-      >
+      <span data-slot="inherited-from-label" className="text-xs text-muted-foreground italic whitespace-nowrap">
         inherited from {ancestorName}
       </span>
 

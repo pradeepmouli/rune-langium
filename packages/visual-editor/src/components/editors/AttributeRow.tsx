@@ -29,6 +29,8 @@
 
 import { useCallback, useMemo } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { X } from 'lucide-react';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { CardinalityPicker } from './CardinalityPicker.js';
@@ -282,17 +284,26 @@ function AttributeRow({
             Revert
           </button>
         ) : (
-          <button
+          // Icon-button replaces the literal "✕" Unicode glyph (font-
+          // dependent baseline jitter) with a lucide <X /> in a ghost
+          // icon-button — matches FormPreviewPanel's remove affordance.
+          // `<X />` is the conventional remove glyph; `<Minus />` reads
+          // as "collapse / decrement", which is wrong for an explicit
+          // deletion. The hover-destructive treatment is preserved via
+          // the `hover:text-destructive` class override.
+          <Button
             data-slot="attribute-remove"
             type="button"
+            variant="ghost"
+            size="icon-xs"
             onClick={() => onRemove(index)}
             disabled={disabled}
-            className="shrink-0 p-0.5 text-muted-foreground hover:text-destructive
-              disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label={`Remove attribute ${committedName || 'unnamed'}`}
+            title={`Remove attribute ${committedName || 'unnamed'}`}
+            className="shrink-0 text-muted-foreground hover:text-destructive"
           >
-            ✕
-          </button>
+            <X className="size-3" />
+          </Button>
         )}
       </div>
     </div>

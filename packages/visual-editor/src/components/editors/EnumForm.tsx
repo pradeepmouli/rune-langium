@@ -34,6 +34,8 @@ import { FormProvider, Controller, useFieldArray, type Control } from 'react-hoo
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { Plus } from 'lucide-react';
 import { EnumValueRow, InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
@@ -286,16 +288,19 @@ function EnumForm({
           <FieldSet className="gap-1">
             <FieldLegend variant="label" className="mb-0 text-muted-foreground flex items-center justify-between">
               <span>Values ({fields.length + inheritedCount})</span>
-              <button
+              {/* Icon-only add button matches FormPreviewPanel; see
+                  DataTypeForm for the rationale. */}
+              <Button
                 data-slot="add-value-btn"
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 onClick={handleAddValue}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary
-                  border border-border rounded px-2 py-0.5
-                  hover:bg-card hover:border-input transition-colors"
+                aria-label="Add value"
+                title="Add value"
               >
-                + Add Value
-              </button>
+                <Plus className="size-3" />
+              </Button>
             </FieldLegend>
 
             <PaginatedEnumValues
@@ -363,7 +368,7 @@ function PaginatedEnumValues({
   if (effectiveValues.length === 0) {
     return (
       <p className="text-xs text-muted-foreground italic py-2 text-center">
-        No values defined. Click &quot;+ Add Value&quot; to create one.
+        No values defined. Use the + button above to add one.
       </p>
     );
   }

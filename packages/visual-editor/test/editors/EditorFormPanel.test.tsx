@@ -167,8 +167,9 @@ describe('EditorFormPanel', () => {
 
     // DataTypeForm renders a "Data" badge
     expect(screen.getAllByText('Data').length).toBeGreaterThanOrEqual(1);
-    // Should show add-attribute button
-    expect(screen.getByText(/Add Attribute/)).toBeDefined();
+    // Should show add-attribute button (icon-only post-migration; query
+    // by aria-label).
+    expect(screen.getByLabelText('Add attribute')).toBeDefined();
   });
 
   it('renders a parsed AST-backed node without recursing through runtime fields', async () => {
@@ -193,7 +194,7 @@ describe('EditorFormPanel', () => {
     );
 
     expect(screen.getByRole('complementary')).toBeInTheDocument();
-    expect(screen.getByText(/Add Attribute/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Add attribute')).toBeInTheDocument();
   });
 
   it('renders DetailPanel for read-only nodes', () => {

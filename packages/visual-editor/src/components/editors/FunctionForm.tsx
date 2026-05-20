@@ -39,6 +39,8 @@ import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-lang
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { Badge } from '@rune-langium/design-system/ui/badge';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { Plus } from 'lucide-react';
 import { TypeSelector } from './TypeSelector.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { MetadataSection } from './MetadataSection.js';
@@ -327,16 +329,20 @@ function FunctionForm({
                   placeholder="Type..."
                 />
               </div>
-              <button
+              {/* Icon-only add button matches FormPreviewPanel; see
+                  DataTypeForm for the rationale. */}
+              <Button
                 data-slot="add-input-btn"
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 onClick={handleAddInput}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary
-                  border border-border rounded px-2 py-0.5
-                  hover:bg-card hover:border-input transition-colors whitespace-nowrap"
+                aria-label="Add input"
+                title="Add input"
+                className="shrink-0"
               >
-                + Add Input
-              </button>
+                <Plus className="size-3" />
+              </Button>
             </div>
           </FieldSet>
 

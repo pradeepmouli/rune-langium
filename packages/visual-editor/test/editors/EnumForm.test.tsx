@@ -101,12 +101,14 @@ describe('EnumForm', () => {
     expect(nameInputs.length).toBe(3);
   });
 
-  it('triggers addEnumValue when "Add Value" is clicked', () => {
+  it('triggers addEnumValue when add-value button is clicked', () => {
     const actions = makeActions();
 
     render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
-    const addBtn = screen.getByText(/Add Value/);
+    // Post-icon-button migration: add-value is an icon-only <Button>
+    // with aria-label="Add value".
+    const addBtn = screen.getByLabelText('Add value');
     fireEvent.click(addBtn);
 
     expect(actions.addEnumValue).toHaveBeenCalledWith('node-1', '', undefined);

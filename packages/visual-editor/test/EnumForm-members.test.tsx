@@ -72,18 +72,13 @@ describe('EnumForm — list-style member editing (T031, FR-015)', () => {
     vi.useRealTimers();
   });
 
-  it('fires addEnumValue with correct args when "Add Value" button is clicked', () => {
+  it('fires addEnumValue with correct args when add-value button is clicked', () => {
     const actions = makeActions();
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
-    const addBtn = screen.getByText(/Add Value/);
+    // Post-icon-button migration: add-value is an icon-only <Button>
+    // with aria-label="Add value".
+    const addBtn = screen.getByLabelText('Add value');
     fireEvent.click(addBtn);
 
     expect(actions.addEnumValue).toHaveBeenCalledWith('node-1', '', undefined);
@@ -91,14 +86,7 @@ describe('EnumForm — list-style member editing (T031, FR-015)', () => {
 
   it('fires removeEnumValue with the correct value name when a remove button is clicked', () => {
     const actions = makeActions();
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const removeBtns = screen.getAllByLabelText(/remove value/i);
     fireEvent.click(removeBtns[0]!);
@@ -107,14 +95,7 @@ describe('EnumForm — list-style member editing (T031, FR-015)', () => {
   });
 
   it('renders the correct number of value rows for the members list', () => {
-    render(
-      <EnumForm
-        nodeId="node-1"
-        data={makeEnumData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
-    );
+    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
 
     const valueNameInputs = screen.getAllByLabelText(/value name/i);
     expect(valueNameInputs.length).toBe(2);
