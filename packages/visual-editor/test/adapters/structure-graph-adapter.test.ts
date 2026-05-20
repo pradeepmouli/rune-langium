@@ -753,6 +753,150 @@ describe('buildStructureGraph — malformed typeCall', () => {
     expect(row.typeKind).toBe('Unresolved');
     expect(row.targetNodeId).toBeUndefined();
   });
+
+  // Regression — surfaced by 2026-05-20 prod-smoke check.
+  // A single keystroke in the source editor blanked the studio: during the
+  // partial-parse window, an Attribute node arrived with `typeCall` entirely
+  // undefined (not just `typeCall.type` undefined). `typeRefText` did
+  // `attr.typeCall.type?.$refText` which crashed on `.type` reading from
+  // undefined, killing the Structure View useMemo and bubbling to the
+  // ErrorBoundary. Treat missing `typeCall` the same as the pre-existing
+  // missing-`typeCall.type` case: render as Unresolved with empty typeName.
+  it('handles typeCall === undefined (partial-parse) without throwing', () => {
+    const fixture = {
+      namespaces: [{ uri: 'x' }],
+      nodes: [
+        {
+          id: 'x::Thing',
+          $type: 'Data' as const,
+          name: 'Thing',
+          namespace: 'x',
+          attributes: [
+            // AdapterAttribute's `typeCall` is now optional (PR #219 follow-up
+            // to a Copilot review — type widened to reflect partial-parse
+            // tolerance), so this is a plain object literal, no cast needed.
+            {
+              name: 'midKeystroke',
+              typeCall: undefined,
+              card: { inf: 0, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+    let result!: ReturnType<typeof buildStructureGraph>;
+    expect(() => {
+      result = buildStructureGraph(fixture, {
+        focusedTypeId: 'x::Thing',
+        expansionMap: new Map()
+      });
+    }).not.toThrow();
+    const row = (result.nodes.get('x::Thing') as StructureDataNode).rows[0]!;
+    expect(row.typeName).toBe('');
+    expect(row.typeKind).toBe('Unresolved');
+    expect(row.targetNodeId).toBeUndefined();
+  });
+
+  it('handles attr.card === undefined (partial-parse) without throwing', () => {
+    const fixture = {
+      namespaces: [{ uri: 'x' }],
+      nodes: [
+        {
+          id: 'x::Thing',
+          $type: 'Data' as const,
+          name: 'Thing',
+          namespace: 'x',
+          attributes: [
+            // AdapterAttribute's `card` is now optional (Copilot review,
+            // PR #219) — no cast needed.
+            {
+              name: 'noCardYet',
+              typeCall: { type: { $refText: 'string' } },
+              card: undefined
+            }
+          ]
+        }
+      ]
+    };
+    let result!: ReturnType<typeof buildStructureGraph>;
+    expect(() => {
+      result = buildStructureGraph(fixture, {
+        focusedTypeId: 'x::Thing',
+        expansionMap: new Map()
+      });
+    }).not.toThrow();
+    const row = (result.nodes.get('x::Thing') as StructureDataNode).rows[0]!;
+    // Defaults to DSL `0..1` so the row still renders.
+    expect(row.cardinality).toBe('0..1');
+    expect(row.isOptional).toBe(true);
+  });
+
+  it('handles a null entry in attributes (partial-parse) without throwing', () => {
+    const fixture = {
+      namespaces: [{ uri: 'x' }],
+      nodes: [
+        {
+          id: 'x::Thing',
+          $type: 'Data' as const,
+          name: 'Thing',
+          namespace: 'x',
+          attributes: [
+            // AdapterNode.attributes is now `ReadonlyArray<AdapterAttribute |
+            // null | undefined>` (Copilot review, PR #219) — null is a
+            // first-class entry, no cast needed.
+            null,
+            { name: 'ok', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
+          ]
+        }
+      ]
+    };
+    let result!: ReturnType<typeof buildStructureGraph>;
+    expect(() => {
+      result = buildStructureGraph(fixture, {
+        focusedTypeId: 'x::Thing',
+        expansionMap: new Map()
+      });
+    }).not.toThrow();
+    const root = result.nodes.get('x::Thing') as StructureDataNode;
+    // The null entry is filtered out; the well-formed row survives.
+    expect(root.rows).toHaveLength(1);
+    expect(root.rows[0]!.attrName).toBe('ok');
+  });
+
+  it('handles a Choice with an undefined arm typeCall (partial-parse) without throwing', () => {
+    const fixture = {
+      namespaces: [{ uri: 'x' }],
+      nodes: [
+        {
+          id: 'x::Pick',
+          $type: 'Choice' as const,
+          name: 'Pick',
+          namespace: 'x',
+          choiceOptions: [
+            // AdapterChoiceOption.typeCall is now optional (Copilot review,
+            // PR #219) — no cast needed.
+            { typeCall: undefined },
+            { typeCall: { type: { $refText: 'string' } } }
+          ]
+        }
+      ]
+    };
+    let result!: ReturnType<typeof buildStructureGraph>;
+    expect(() => {
+      result = buildStructureGraph(fixture, {
+        focusedTypeId: 'x::Pick',
+        expansionMap: new Map()
+      });
+    }).not.toThrow();
+    const choice = result.nodes.get('x::Pick') as StructureChoiceNode;
+    expect(choice.options).toHaveLength(2);
+    // First arm: buildChoiceArm's empty-refText branch substitutes the
+    // sentinel '<unresolved>' typeName.
+    expect(choice.options[0]!.typeName).toBe('<unresolved>');
+    expect(choice.options[0]!.typeKind).toBe('Unresolved');
+    // Second arm classifies as Builtin (BUILTIN_TYPES includes 'string').
+    expect(choice.options[1]!.typeName).toBe('string');
+  });
 });
 
 describe('buildStructureGraph — cardinality formatting', () => {
