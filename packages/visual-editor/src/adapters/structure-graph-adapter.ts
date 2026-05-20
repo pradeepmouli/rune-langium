@@ -35,20 +35,35 @@ export interface AdapterNode {
   readonly name: string;
   readonly namespace: string;
   readonly extends?: string;
-  /** Data nodes carry their attributes here. */
-  readonly attributes?: ReadonlyArray<AdapterAttribute>;
+  /**
+   * Data nodes carry their attributes here. Array entries may be `null`
+   * during partial-parse state (the user has typed `attrs:` but the parser
+   * hasn't materialized the entry yet); the adapter filters those out.
+   * Type widened from `ReadonlyArray<AdapterAttribute>` to
+   * `ReadonlyArray<AdapterAttribute | null | undefined>` so consumers
+   * reading the type as documentation see the true runtime contract
+   * (Copilot review on PR #219; the alternative would be to sanitize at
+   * the projection boundary, but the adapter is the canonical tolerator).
+   */
+  readonly attributes?: ReadonlyArray<AdapterAttribute | null | undefined>;
   /** Choice nodes carry their arms here — real ChoiceOption AST shape (typeCall only, no name/card). */
-  readonly choiceOptions?: ReadonlyArray<AdapterChoiceOption>;
+  readonly choiceOptions?: ReadonlyArray<AdapterChoiceOption | null | undefined>;
   readonly values?: ReadonlyArray<{ name: string }>;
 }
 
 /**
  * Mirrors the real ChoiceOption AST shape: only `typeCall`, no `name`, no `card`.
  * Choice arms are alternatives ("pick one of these types"), not attributes.
+ *
+ * `typeCall` is optional because partial-parse state (the user has typed
+ * `arm:` but no type name yet) yields entries with `typeCall === undefined`.
+ * The adapter substitutes a sentinel — see `buildChoiceArm`. Widened type
+ * (vs. strict + defensive guards) keeps the runtime contract honest for
+ * downstream consumers (Copilot review on PR #219).
  */
 export interface AdapterChoiceOption {
   /** The type reference in the same union form as AdapterAttribute.typeCall. */
-  readonly typeCall: { readonly type?: { readonly $refText?: string } } | string;
+  readonly typeCall?: { readonly type?: { readonly $refText?: string } } | string;
 }
 
 /**
@@ -64,9 +79,18 @@ export interface AdapterCardinality {
 }
 
 export interface AdapterAttribute {
-  readonly name: string;
-  readonly typeCall: { readonly type?: { readonly $refText?: string } } | string;
-  readonly card: AdapterCardinality;
+  /**
+   * All three core fields are optional because partial-parse state — the user
+   * has typed `attrs:` but the parser hasn't finished resolving the row yet —
+   * yields entries with one or more missing. The adapter substitutes
+   * sentinels (empty string name, '<unresolved>' typeName, `0..1` card)
+   * rather than throwing. Type widening here (vs. defensive guards in
+   * `buildRow` only) keeps the runtime contract honest for downstream
+   * consumers reading the type as documentation (Copilot review on PR #219).
+   */
+  readonly name?: string;
+  readonly typeCall?: { readonly type?: { readonly $refText?: string } } | string;
+  readonly card?: AdapterCardinality;
   readonly astRange?: { start: number; end: number };
 }
 

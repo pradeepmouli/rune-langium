@@ -772,31 +772,25 @@ describe('buildStructureGraph — malformed typeCall', () => {
           name: 'Thing',
           namespace: 'x',
           attributes: [
-            // `as unknown as ...` because the type contract requires `typeCall`;
-            // the runtime shape during partial-parse violates it.
+            // AdapterAttribute's `typeCall` is now optional (PR #219 follow-up
+            // to a Copilot review — type widened to reflect partial-parse
+            // tolerance), so this is a plain object literal, no cast needed.
             {
               name: 'midKeystroke',
               typeCall: undefined,
               card: { inf: 0, sup: 1, unbounded: false }
-            } as unknown as {
-              name: string;
-              typeCall: { type?: { $refText?: string } };
-              card: { inf: number; sup?: number; unbounded: boolean };
             }
           ]
         }
       ]
     };
-    expect(() =>
-      buildStructureGraph(fixture, {
+    let result!: ReturnType<typeof buildStructureGraph>;
+    expect(() => {
+      result = buildStructureGraph(fixture, {
         focusedTypeId: 'x::Thing',
         expansionMap: new Map()
-      })
-    ).not.toThrow();
-    const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'x::Thing',
-      expansionMap: new Map()
-    });
+      });
+    }).not.toThrow();
     const row = (result.nodes.get('x::Thing') as StructureDataNode).rows[0]!;
     expect(row.typeName).toBe('');
     expect(row.typeKind).toBe('Unresolved');
@@ -813,30 +807,25 @@ describe('buildStructureGraph — malformed typeCall', () => {
           name: 'Thing',
           namespace: 'x',
           attributes: [
+            // AdapterAttribute's `card` is now optional (Copilot review,
+            // PR #219) — no cast needed.
             {
               name: 'noCardYet',
               typeCall: { type: { $refText: 'string' } },
               card: undefined
-            } as unknown as {
-              name: string;
-              typeCall: { type?: { $refText?: string } };
-              card: { inf: number; sup?: number; unbounded: boolean };
             }
           ]
         }
       ]
     };
-    expect(() =>
-      buildStructureGraph(fixture, {
+    let result!: ReturnType<typeof buildStructureGraph>;
+    expect(() => {
+      result = buildStructureGraph(fixture, {
         focusedTypeId: 'x::Thing',
         expansionMap: new Map()
-      })
-    ).not.toThrow();
-    const row = (
-      buildStructureGraph(fixture, { focusedTypeId: 'x::Thing', expansionMap: new Map() }).nodes.get(
-        'x::Thing'
-      ) as StructureDataNode
-    ).rows[0]!;
+      });
+    }).not.toThrow();
+    const row = (result.nodes.get('x::Thing') as StructureDataNode).rows[0]!;
     // Defaults to DSL `0..1` so the row still renders.
     expect(row.cardinality).toBe('0..1');
     expect(row.isOptional).toBe(true);
@@ -852,26 +841,23 @@ describe('buildStructureGraph — malformed typeCall', () => {
           name: 'Thing',
           namespace: 'x',
           attributes: [
-            null as unknown as {
-              name: string;
-              typeCall: { type?: { $refText?: string } };
-              card: { inf: number; sup?: number; unbounded: boolean };
-            },
+            // AdapterNode.attributes is now `ReadonlyArray<AdapterAttribute |
+            // null | undefined>` (Copilot review, PR #219) — null is a
+            // first-class entry, no cast needed.
+            null,
             { name: 'ok', typeCall: { type: { $refText: 'string' } }, card: { inf: 1, sup: 1, unbounded: false } }
           ]
         }
       ]
     };
-    expect(() =>
-      buildStructureGraph(fixture, {
+    let result!: ReturnType<typeof buildStructureGraph>;
+    expect(() => {
+      result = buildStructureGraph(fixture, {
         focusedTypeId: 'x::Thing',
         expansionMap: new Map()
-      })
-    ).not.toThrow();
-    const root = buildStructureGraph(fixture, {
-      focusedTypeId: 'x::Thing',
-      expansionMap: new Map()
-    }).nodes.get('x::Thing') as StructureDataNode;
+      });
+    }).not.toThrow();
+    const root = result.nodes.get('x::Thing') as StructureDataNode;
     // The null entry is filtered out; the well-formed row survives.
     expect(root.rows).toHaveLength(1);
     expect(root.rows[0]!.attrName).toBe('ok');
@@ -887,22 +873,22 @@ describe('buildStructureGraph — malformed typeCall', () => {
           name: 'Pick',
           namespace: 'x',
           choiceOptions: [
-            { typeCall: undefined } as unknown as { typeCall: { type?: { $refText?: string } } },
+            // AdapterChoiceOption.typeCall is now optional (Copilot review,
+            // PR #219) — no cast needed.
+            { typeCall: undefined },
             { typeCall: { type: { $refText: 'string' } } }
           ]
         }
       ]
     };
-    expect(() =>
-      buildStructureGraph(fixture, {
+    let result!: ReturnType<typeof buildStructureGraph>;
+    expect(() => {
+      result = buildStructureGraph(fixture, {
         focusedTypeId: 'x::Pick',
         expansionMap: new Map()
-      })
-    ).not.toThrow();
-    const choice = buildStructureGraph(fixture, {
-      focusedTypeId: 'x::Pick',
-      expansionMap: new Map()
-    }).nodes.get('x::Pick') as StructureChoiceNode;
+      });
+    }).not.toThrow();
+    const choice = result.nodes.get('x::Pick') as StructureChoiceNode;
     expect(choice.options).toHaveLength(2);
     // First arm: buildChoiceArm's empty-refText branch substitutes the
     // sentinel '<unresolved>' typeName.
