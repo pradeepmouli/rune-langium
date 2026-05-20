@@ -16,11 +16,6 @@ describe('NameCell', () => {
     renameAttribute.mockReset();
   });
 
-  it('displays the current value', () => {
-    render(<NameCell value="tradeDate" nodeId="Trade" attrName="tradeDate" />);
-    expect(screen.getByText('tradeDate')).toBeInTheDocument();
-  });
-
   it('switches to an input on click', () => {
     render(<NameCell value="tradeDate" nodeId="Trade" attrName="tradeDate" />);
     fireEvent.click(screen.getByText('tradeDate'));

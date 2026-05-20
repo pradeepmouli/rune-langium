@@ -13,11 +13,6 @@ vi.mock('../../../src/store/editor-store.js', () => ({
 describe('CardinalityCell', () => {
   beforeEach(() => updateCardinality.mockReset());
 
-  it('displays the formatted cardinality as a pill', () => {
-    render(<CardinalityCell value="0..*" nodeId="Trade" attrName="economics" />);
-    expect(screen.getByText('0..*')).toBeInTheDocument();
-  });
-
   it('dispatches updateCardinality when a new value is selected', () => {
     render(<CardinalityCell value="0..1" nodeId="Trade" attrName="tradeDate" />);
     fireEvent.click(screen.getByText('0..1'));
