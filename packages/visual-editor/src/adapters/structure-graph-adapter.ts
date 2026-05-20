@@ -83,7 +83,7 @@ export interface AdapterAttribute {
    * All three core fields are optional because partial-parse state — the user
    * has typed `attrs:` but the parser hasn't finished resolving the row yet —
    * yields entries with one or more missing. The adapter substitutes
-   * sentinels (empty string name, '<unresolved>' typeName, `0..1` card)
+   * sentinels (empty string name, `<unresolved>` typeName, `0..1` card)
    * rather than throwing. Type widening here (vs. defensive guards in
    * `buildRow` only) keeps the runtime contract honest for downstream
    * consumers reading the type as documentation (Copilot review on PR #219).
