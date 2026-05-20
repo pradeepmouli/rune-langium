@@ -167,9 +167,33 @@ pids_for_user_data_dir() {
 # (which may outlive the chrome process that wrote them).
 collect_mcp_user_data_dirs() {
   {
-    # From running processes.
-    ps -ax -o command= 2>/dev/null | tr ' ' '\n' | \
-      awk -F= '/^--user-data-dir=/ { print $2 }'
+    # From running processes. Codex P2 review on PR #213: the prior
+    # `tr ' ' '\n'` tokenization broke any `--user-data-dir=` value
+    # containing a space (e.g. `$HOME` like `/Users/Some Name/...`)
+    # because the value got split across multiple newline-separated
+    # tokens. Result: the truncated path failed the allow-list check,
+    # the profile was silently skipped, and an orphan whose lock had
+    # gone missing would never be reaped.
+    #
+    # Fix: parse `--user-data-dir=` from the full line via awk's index(),
+    # then capture from after the `=` until either the next ` --` flag
+    # boundary OR end-of-line. Mirrors the `pids_for_user_data_dir`
+    # change for the P1 (per-process matching) — both functions now
+    # use the same line-anchored parsing.
+    ps -ax -o command= 2>/dev/null | awk '
+      {
+        marker = "--user-data-dir="
+        pos = index($0, marker)
+        if (pos == 0) next
+        rest = substr($0, pos + length(marker))
+        # Truncate at the first " --" (space+double-dash, the canonical
+        # chrome flag delimiter) so embedded path-spaces survive while a
+        # following flag does not get captured into the value.
+        end = index(rest, " --")
+        if (end > 0) rest = substr(rest, 1, end - 1)
+        print rest
+      }
+    '
     # From on-disk locks under each known root. Set IFS to newline so the
     # `for root` loop splits $MCP_USER_DATA_DIR_ROOTS on newlines only —
     # paths containing spaces (e.g. `$HOME` like `/Users/Some Name/...`)
