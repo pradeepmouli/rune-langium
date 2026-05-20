@@ -145,8 +145,14 @@
 /* ── Node base ────────────────────────────────────────────────── */
 
 .rune-node {
-  /* UX rec #2: 12px radius reads as the modern 2024+ canvas language
-     ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
+  /* Elevated card chrome — the radius / border / background / two-tier
+   * shadow combo is the shared `.studio-card` idiom defined in
+   * design-system/theme.css. Declarations are echoed here (rather than
+   * adding the className in JSX, which is out of scope for this CSS-
+   * only pass) so the rule remains self-contained.
+   *
+   * UX rec #2: 12px radius reads as the modern 2024+ canvas language
+   * ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
   border-radius: var(--radius-lg, 12px);
   border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
   position: relative;
@@ -157,9 +163,8 @@
   min-width: 200px;
   color: var(--color-node-text, var(--foreground, #E8E6E1));
   /* Two-tier soft shadow — close inner anchors the card to the canvas, wider
-   * outer gives quiet float. Reads as depth without being heavy. Matches the
-   * idiom used by `.rune-graph-group--base` so a base container and its
-   * nested derived child share the same depth language. */
+   * outer gives quiet float. Reads as depth without being heavy. SSoT:
+   * `.studio-card` in design-system/theme.css. */
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 2px 6px rgba(0, 0, 0, 0.10);
@@ -1206,10 +1211,13 @@ button[data-navigable]:focus-visible {
     ),
     var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
   border-radius: var(--radius-lg, 12px);
-  /* Two-tier soft shadow — close inner shadow grounds the container against
-   * the canvas, wider outer shadow gives it a quiet float. Reads as depth
-   * without competing with the inner node's own shadow (which is even
-   * lighter at 0 1px 2px / 0.04). */
+  /* Two-tier soft shadow — close inner shadow grounds the container
+   * against the canvas, wider outer shadow gives it a quiet float.
+   * INTENTIONALLY DIVERGES from `.studio-card` SSoT
+   * (design-system/theme.css): the outer layer is heavier
+   * (0 4px 12px / 0.12 vs the card's 0 2px 6px / 0.10) because this
+   * container sits BEHIND its child node — without the extra lift,
+   * the inner node's shadow visually merges with the container's. */
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 4px 12px rgba(0, 0, 0, 0.12);

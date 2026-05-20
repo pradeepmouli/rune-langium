@@ -2513,12 +2513,17 @@ html {
 }
 
 /* Panel surface: rounded corners, slightly elevated over the dark gap.
- * Two-tier soft shadow mirrors `.rune-node` chrome (visual-editor styles.css)
- * so a Dockview panel and a structure node on the same dark canvas read with
- * matching elevation. The 0.5px hairline ring is kept as a third stacked
- * layer so the sash hover indicator still has a border to fight against. */
+ * Composes the `.studio-card` chrome (radius / background / two-tier
+ * shadow) defined in design-system/theme.css so a Dockview panel and
+ * a `.rune-node` on the same dark canvas read with matching elevation.
+ * The 0.5px hairline ring is layered ABOVE the card shadow as a fourth
+ * stacked layer so the sash hover indicator still has a border to
+ * fight against — that's the one studio-specific addition. The 1px
+ * solid border from `.studio-card` is intentionally suppressed (panels
+ * sit flush against each other; a hairline ring reads better than a
+ * full border at the panel edge). */
 .studio-app .dockview-theme-abyss .dv-groupview {
-  border-radius: 12px;
+  border-radius: var(--radius-lg, 12px);
   overflow: hidden;
   background: var(--card);
   box-shadow:
