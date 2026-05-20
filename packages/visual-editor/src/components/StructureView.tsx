@@ -425,15 +425,32 @@ function StructureFlowInner({
 
   // Auto-fit on focus or expansion change. User feedback: when nodes are
   // expanded the structure tree grows past the viewport edge. Re-fitting
-  // when the focused type changes OR the expansion map size changes
-  // keeps the whole tree on screen. `padding: 0.1` leaves a 10% margin;
+  // when the focused type changes OR the expansion content changes keeps
+  // the whole tree on screen. `padding: 0.1` leaves a 10% margin;
   // `duration: 300` matches the node-chrome transition for visual
-  // coherence. We use `expansionMap.size` (not the map identity) so
-  // unrelated identity churn doesn't trigger spurious fits.
+  // coherence.
+  //
+  // P2 review (PR #210): the dependency must capture content identity, not
+  // just `expansionMap.size`. A "swap" change (collapse one branch and
+  // expand another in the same render, or a model refresh that keeps the
+  // entry count constant) leaves `.size` unchanged but moves the tree
+  // geometry, leaving the newly expanded content outside the viewport
+  // with no refit. The map's object reference is rebuilt every render
+  // upstream, so depending on the Map directly would refit on every
+  // render. A content hash of the sorted entries gives correct
+  // same-count-swap detection without firing spuriously.
+  //
+  // Copilot review: `focusedTypeId` and `expansionMap` are non-optional
+  // on StructureFlowInnerProps; the previous `if (!focusedTypeId) return`
+  // and `expansionMap?.size` guards were dead.
   const rf = useReactFlow();
-  const expansionCount = expansionMap?.size ?? 0;
+  const expansionSignature = useMemo(() => {
+    const entries: string[] = [];
+    for (const [k, v] of expansionMap) entries.push(`${k}=${v ? '1' : '0'}`);
+    entries.sort();
+    return entries.join('|');
+  }, [expansionMap]);
   useEffect(() => {
-    if (!focusedTypeId) return;
     if (nodes.length === 0) return;
     // requestAnimationFrame so the new node positions have been
     // committed before fitView reads them.
@@ -441,7 +458,7 @@ function StructureFlowInner({
       rf.fitView({ padding: 0.1, duration: 300 });
     });
     return () => cancelAnimationFrame(id);
-  }, [focusedTypeId, expansionCount, nodes.length, rf]);
+  }, [focusedTypeId, expansionSignature, nodes.length, rf]);
 
   return (
     <div data-testid="structure-view-flow" style={{ width: '100%', height: '100%', minHeight: 320 }}>

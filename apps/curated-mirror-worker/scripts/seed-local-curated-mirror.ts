@@ -48,7 +48,7 @@
 
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname, basename } from 'node:path';
+import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -77,23 +77,69 @@ const BUCKET = 'rune-curated-mirror';
  */
 function loadResourceTree(resourceSubdir: string, archiveWrapper: string): Record<string, string> {
   const root = join(RESOURCES_ROOT, resourceSubdir);
-  let entries: string[];
+  // Verify the resource root exists up-front. P1 review (PR #210): silently
+  // returning `{}` for a missing corpus produced a downstream tar failure
+  // ("Cowardly refusing to create an empty archive") that masked the actual
+  // misconfiguration. Fail loudly with a setup hint so fresh checkouts get
+  // an actionable error instead of an opaque archive-creation crash.
   try {
-    entries = readdirSync(root);
-  } catch {
-    console.warn(`[seed] WARN: .resources/${resourceSubdir} not found — bundle will be empty`);
-    return {};
+    const st = statSync(root);
+    if (!st.isDirectory()) {
+      throw new Error(`.resources/${resourceSubdir} exists but is not a directory`);
+    }
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ENOENT') {
+      throw new Error(
+        `[seed] Missing corpus directory: ${root}\n` +
+          `       The '.resources/' tree is gitignored and must be populated locally before\n` +
+          `       running 'seed:local'. Expected subdirectory: .resources/${resourceSubdir}/\n` +
+          `       Populate it by cloning the upstream model repo into that location, e.g.:\n` +
+          `         git clone https://github.com/finos/common-domain-model .resources/cdm\n` +
+          `         git clone https://github.com/finos/rune-dsl .resources/rune-dsl\n` +
+          `         git clone https://github.com/finos/rune-fpml .resources/rune-fpml\n` +
+          `       (The seed walks each subtree recursively for *.rosetta files.)`
+      );
+    }
+    throw err;
   }
+
+  // P2 review (PR #210): walk the subtree recursively so common Rosetta
+  // corpus layouts (e.g. `<repo>/rosetta-source/src/main/rosetta/...`)
+  // produce non-empty fixture sets. The previous flat readdir dropped every
+  // nested directory and returned `{}` for any non-flat layout. Keys are
+  // computed relative to `root` and prefixed with `archiveWrapper` so the
+  // tar archive preserves the subdirectory structure (matching the on-disk
+  // layout, which is what `buildSerializedWorkspaceArtifact` expects after
+  // stripping the wrapper directory).
   const out: Record<string, string> = {};
-  for (const name of entries) {
-    const full = join(root, name);
-    const st = statSync(full);
-    if (!st.isFile() || !name.endsWith('.rosetta')) continue;
-    // Flat layout: every .rosetta file ends up at <wrapper>/<basename>.
-    // Matches the existing seed convention while scaling to the full
-    // .resources corpus.
-    out[`${archiveWrapper}/${basename(name)}`] = readFileSync(full, 'utf8');
+  const stack: string[] = [root];
+  while (stack.length > 0) {
+    const dir = stack.pop()!;
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      const st = statSync(full);
+      if (st.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!st.isFile() || !name.endsWith('.rosetta')) continue;
+      // Preserve nested path relative to the resource root so the archive
+      // mirrors the on-disk layout. Posix separators (`/`) are required by
+      // tar; relative() uses platform separators on Windows so normalize.
+      const rel = relative(root, full).split(/[\\/]/).join('/');
+      out[`${archiveWrapper}/${rel}`] = readFileSync(full, 'utf8');
+    }
   }
+
+  if (Object.keys(out).length === 0) {
+    throw new Error(
+      `[seed] No *.rosetta files found under ${root}.\n` +
+        `       The directory exists but contains no Rosetta sources. Verify the corpus\n` +
+        `       was cloned completely and that '*.rosetta' files are present somewhere\n` +
+        `       under .resources/${resourceSubdir}/.`
+    );
+  }
+
   return out;
 }
 

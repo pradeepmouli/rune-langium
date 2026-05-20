@@ -256,11 +256,21 @@ export function TypeSelector({
   const acceptKinds: ReadonlyArray<TypeRefPayload['kind']> = useMemo(() => {
     if (disabled) return [];
     const all: ReadonlyArray<TypeRefPayload['kind']> = ['Data', 'Choice', 'Enum', 'BasicType'];
+    // "No filter specified" (undefined or empty array) means the selector
+    // accepts every draggable kind — that's the caller's signal of "I have
+    // no opinion about kinds; let any type-ref drop through".
     if (!filterKinds || filterKinds.length === 0) return all;
     const mapped = all.filter((k) =>
       filterKinds.includes(k === 'BasicType' ? 'basicType' : (k.toLowerCase() as TypeKind))
     );
-    return mapped.length > 0 ? mapped : all;
+    // P2 review (PR #210): when filterKinds is NON-empty but maps to zero
+    // draggable kinds (e.g. caller passed `['builtin', 'func', 'typeAlias']`,
+    // none of which have draggable analogs in TypeRefPayload), reject all
+    // drops. The previous `mapped.length > 0 ? mapped : all` fallback
+    // silently widened the contract to accept everything — bypassing the
+    // caller's stated filter. "Specified an opinion but no draggable kinds
+    // match" is a stricter signal than "specified no opinion at all".
+    return mapped;
   }, [disabled, filterKinds]);
   const handleDrop = useCallback(
     (payload: TypeRefPayload) => {

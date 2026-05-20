@@ -13,6 +13,8 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import type { JSX, DragEvent, MouseEvent, KeyboardEvent } from 'react';
+// KeyboardEvent stays imported — the nav button still needs handleNavKeyDown
+// to stop Enter/Space from bubbling. Only the row-level keydown was dropped.
 import { ArrowUpRight, ChevronRight, ChevronDown, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -440,20 +442,16 @@ function TypeItemRow({
     e.dataTransfer.effectAllowed = 'link';
   };
 
-  // Row body keyboard: Enter/Space delegates to the nav button (the only
-  // click-actionable element). Click on the row body itself is a no-op —
-  // user iteration removed both the drag-source-mark and the name-button
-  // navigation; the only operations are dragging or clicking the arrow.
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        onSelectNode();
-        setJustNavigated(true);
-      }
-    },
-    [onSelectNode]
-  );
+  // P2 a11y review (PR #210): the row body no longer advertises button
+  // semantics. The previous `role="button"` + `tabIndex={0}` + Enter/Space
+  // handler combination announced the row as an interactive control to AT,
+  // but the mouse-click path had been intentionally removed (drag-source-
+  // mark gone; navigation is now the nav-arrow button's sole responsibility).
+  // Keeping the keyboard activation alive while removing mouse activation
+  // produced inconsistent affordances across input modalities. The row is
+  // now a plain `<div>` — the embedded nav-arrow `<button>` is the only
+  // interactive element, and it is independently keyboard-focusable
+  // (tabIndex=0, descriptive aria-label).
 
   // Nav-click triggers selection AND flashes the row briefly so the user
   // gets confirmation that the navigate fired — without it the explorer
@@ -487,8 +485,6 @@ function TypeItemRow({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
       className={`studio-type-row group relative ml-4 flex cursor-grab items-center gap-1.5 px-2 py-0.5 text-xs text-foreground hover:bg-accent/50${
         isSelected ? ' studio-type-row--selected' : ''
       }${justNavigated ? ' studio-type-row--just-navigated' : ''}`}
@@ -499,10 +495,11 @@ function TypeItemRow({
       // in graph" treatment was removed per user feedback ("doesn't
       // accomplish anything and is confusing") so every row looks the
       // same regardless of graph visibility state.
-      aria-label={`${row.name}${isSelected ? ' — selected' : ''}`}
+      //
+      // P2 a11y (PR #210): no role/tabIndex/keydown — the row is not a
+      // button semantically. The nav-arrow inside is the interactive element.
       draggable={payload !== undefined}
       onDragStart={handleDragStart}
-      onKeyDown={handleKeyDown}
     >
       {isSelected && <span className="studio-type-pip" />}
 

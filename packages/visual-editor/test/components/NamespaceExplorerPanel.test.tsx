@@ -310,29 +310,38 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   // -------------------------------------------------------------------------
-  // a11y — keyboard activation (post-iteration)
+  // a11y — row body is NOT a button (PR #210 P2 review)
   //
-  // Row body Enter/Space delegates to the nav action (single click target).
-  // The visual cursor is `cursor-grab` so users see the row is draggable;
-  // keyboard users get the same navigate action they'd get clicking the
-  // arrow with the mouse.
+  // The row body advertises no button semantics — no `role`, no `tabIndex`,
+  // no Enter/Space activation. The nav-arrow `<button>` embedded in the row
+  // is the sole interactive control; it is independently keyboard-focusable
+  // (tabIndex=0, descriptive aria-label) and handles the navigate action.
+  // Keeping keyboard activation on the row while removing mouse activation
+  // would have given AT users a phantom action sighted users can't trigger.
   // -------------------------------------------------------------------------
 
-  it('Enter key on row body fires onSelectNode (parity with nav-button click)', () => {
+  it('row body has no button role and is not in the tab order', () => {
+    renderPanel();
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    expect(typeRow.getAttribute('role')).toBeNull();
+    expect(typeRow.getAttribute('tabindex')).toBeNull();
+  });
+
+  it('Enter key on row body does NOT fire onSelectNode (no button semantics)', () => {
     const { props } = renderPanel();
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
     fireEvent.keyDown(typeRow, { key: 'Enter' });
-    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
-  it('Space key on row body fires onSelectNode (parity with nav-button click)', () => {
+  it('Space key on row body does NOT fire onSelectNode (no button semantics)', () => {
     const { props } = renderPanel();
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
     fireEvent.keyDown(typeRow, { key: ' ' });
-    expect(props.onSelectNode).toHaveBeenCalledOnce();
+    expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
-  it('nav button has independent tabIndex=0 (keyboard-focusable separately from row)', () => {
+  it('nav button has independent tabIndex=0 (keyboard-focusable)', () => {
     renderPanel();
     const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
     expect(navBtn.getAttribute('tabindex')).toBe('0');
@@ -351,13 +360,6 @@ describe('NamespaceExplorerPanel', () => {
     fireEvent.keyDown(typeRow, { key: 'ArrowDown' });
     expect(props.onSelectNode).not.toHaveBeenCalled();
     expect(onSetDragSource).not.toHaveBeenCalled();
-  });
-
-  it('type rows have role=button and tabIndex=0 for keyboard accessibility', () => {
-    renderPanel();
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
-    expect(typeRow.getAttribute('role')).toBe('button');
-    expect(typeRow.getAttribute('tabindex')).toBe('0');
   });
 
   // -------------------------------------------------------------------------
