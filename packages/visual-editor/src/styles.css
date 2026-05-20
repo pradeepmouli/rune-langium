@@ -74,18 +74,42 @@
 }
 
 .rune-graph-group {
+  /* Inheritance cluster chrome — graph view's `groupByInheritance` mode.
+   *
+   * Visual-grammar parity with `.rune-graph-group--base` (audit item #8,
+   * PR #210): the base-container idiom (dotted-at-55% colored border,
+   * tinted gradient, two-tier shadow) reads as "typed scope containing
+   * a child". An inheritance cluster is a SOFTER organizational unit —
+   * a layout grouping of related types, not a typed container — so it
+   * borrows the same idiom in a quieter register:
+   *
+   *   - Border: 1px dotted at ~32% of --muted-foreground (vs base's 55%
+   *     of --color-base-type). Same stroke style, lower contrast, no
+   *     identity color — signals "grouping" instead of "scope".
+   *   - Gradient: very faint neutral tint (5% → 2% of --muted-foreground)
+   *     instead of base's yellow tint. Quiet depth without claiming identity.
+   *   - Shadow: two-tier but lighter (.05 / .08 vs base's .08 / .12)
+   *     so the cluster floats below base containers in the visual
+   *     hierarchy when both appear in the same canvas.
+   *
+   * If the visual grammar drifts here again, re-read audit item #8:
+   * cluster ≠ container. The shared dotted-border idiom is the
+   * signal; the color/intensity carry the distinction. */
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
-  border-radius: 18px;
-  border: 1px solid color-mix(in oklch, var(--primary, #00d4aa) 14%, transparent);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px dotted color-mix(in oklch, var(--muted-foreground, #8a8a96) 32%, transparent);
   background:
-    linear-gradient(180deg, oklch(0.19 0.02 280 / 0.4), oklch(0.15 0.02 280 / 0.16)),
-    radial-gradient(circle at top left, oklch(0.78 0.17 168 / 0.04), transparent 46%);
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--muted-foreground, #8a8a96) 5%, transparent) 0%,
+      color-mix(in oklch, var(--muted-foreground, #8a8a96) 2%, transparent) 100%
+    );
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
-    0 8px 22px oklch(0 0 0 / 0.12);
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .rune-graph-group__header {

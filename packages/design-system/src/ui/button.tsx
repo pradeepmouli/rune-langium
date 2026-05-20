@@ -37,7 +37,15 @@ const buttonVariants = cva(
         sm: 'h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5',
         lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
         icon: 'size-9',
-        'icon-xs': "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
+        // PR #210 audit item #6: shrunk from size-6 (24px) to size-4 (16px)
+        // so inline-icon buttons sit at the same visual weight as the canvas
+        // structure-row `.rune-row-expand` (14px). Default svg sizing kept
+        // at size-3 (12px) → 2px ring inside the button, matching the chip.
+        // Consumers that need a larger button (NamespaceExplorer toolbar,
+        // ConditionSection / AnnotationSection reorder/delete) already
+        // override with `className="size-5"` or hold size-3.5 glyphs that
+        // remain legible inside the new 16px box.
+        'icon-xs': "size-4 rounded-md [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8',
         'icon-lg': 'size-10'
       }

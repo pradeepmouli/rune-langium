@@ -237,7 +237,7 @@ function EnumForm({
           {/* Header: Name + Badge */}
           <div
             data-slot="form-header"
-            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-4 py-3 border-b bg-muted"
+            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-3 py-2 border-b bg-muted"
           >
             <Controller
               control={form.control}

@@ -2374,12 +2374,19 @@
   --dv-separator-border: transparent;
 }
 
-/* Panel surface: rounded corners, slightly elevated over the dark gap. */
+/* Panel surface: rounded corners, slightly elevated over the dark gap.
+ * Two-tier soft shadow mirrors `.rune-node` chrome (visual-editor styles.css)
+ * so a Dockview panel and a structure node on the same dark canvas read with
+ * matching elevation. The 0.5px hairline ring is kept as a third stacked
+ * layer so the sash hover indicator still has a border to fight against. */
 .studio-app .dockview-theme-abyss .dv-groupview {
   border-radius: 12px;
   overflow: hidden;
   background: var(--card);
-  box-shadow: 0 0 0 0.5px var(--border);
+  box-shadow:
+    0 0 0 0.5px var(--border),
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 2px 6px rgba(0, 0, 0, 0.10);
 }
 
 /* Tab header background matches card surface; top corners follow panel radius. */
