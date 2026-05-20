@@ -100,10 +100,16 @@ echo "[dev-cleanup] dev ports clear (5173, 8788, 8789, 8790)"
 # Idempotent: if there are no orphans and no stale locks, the section is a
 # silent no-op (no log spam on every `pnpm dev:full`).
 
-MCP_USER_DATA_DIR_ROOTS="
-$HOME/Library/Caches/ms-playwright
-$HOME/.cache/chrome-devtools-mcp
-"
+# Newline-delimited so paths containing spaces (e.g. a `$HOME` like
+# `/Users/Some Name/...`) survive iteration intact; consumer loops below
+# use `while IFS= read -r` to honor the boundaries instead of relying on
+# shell word-splitting (Copilot review on PR #213). Allow-list covers
+# macOS Playwright (Library/Caches/ms-playwright) AND Linux Playwright
+# (~/.cache/ms-playwright — Codex P2 review on PR #213) PLUS
+# chrome-devtools-mcp which uses ~/.cache on both platforms.
+MCP_USER_DATA_DIR_ROOTS="$HOME/Library/Caches/ms-playwright
+$HOME/.cache/ms-playwright
+$HOME/.cache/chrome-devtools-mcp"
 
 mcp_killed=0
 mcp_skipped_live=0
@@ -124,9 +130,11 @@ read_singleton_lock_pid() {
 }
 
 # Print every chrome process PID whose --user-data-dir= flag exactly equals
-# the given directory. `ps -ax -o pid,command` is POSIX-portable on macOS
-# and Linux; the awk match anchors on the exact flag value to avoid prefix
-# collisions (mcp-chrome-abc vs mcp-chrome-abc123).
+# the given directory. `ps -ax -o pid,command` works on macOS + Linux
+# (Copilot review on PR #213 — the prior comment overpromised POSIX
+# portability; `-ax` is BSD-style and `-o command=` isn't in POSIX-1).
+# The awk match anchors on the exact flag value to avoid prefix collisions
+# (mcp-chrome-abc vs mcp-chrome-abc123).
 pids_for_user_data_dir() {
   target_dir="$1"
   ps -ax -o pid=,command= 2>/dev/null | awk -v dir="$target_dir" '
@@ -149,21 +157,38 @@ collect_mcp_user_data_dirs() {
     # From running processes.
     ps -ax -o command= 2>/dev/null | tr ' ' '\n' | \
       awk -F= '/^--user-data-dir=/ { print $2 }'
-    # From on-disk locks under each known root.
+    # From on-disk locks under each known root. Set IFS to newline so the
+    # `for root` loop splits $MCP_USER_DATA_DIR_ROOTS on newlines only —
+    # paths containing spaces (e.g. `$HOME` like `/Users/Some Name/...`)
+    # iterate intact (Copilot review on PR #213).
+    OLDIFS=$IFS
+    IFS='
+'
     for root in $MCP_USER_DATA_DIR_ROOTS; do
       [ -d "$root" ] || continue
       # -maxdepth 3 covers ms-playwright/<dir>/SingletonLock and
-      # chrome-devtools-mcp/<dir>/SingletonLock. -L follows the symlink for
-      # the type check but we only want the path itself.
+      # chrome-devtools-mcp/<dir>/SingletonLock. SingletonLock IS a
+      # symlink — we want the lock's own path, not its target, so we do
+      # NOT pass -L to find (Copilot review on PR #213 — earlier comment
+      # incorrectly claimed `-L` was used).
       find "$root" -maxdepth 3 -name SingletonLock 2>/dev/null | \
         while IFS= read -r lock; do
           dirname "$lock"
         done
     done
+    IFS=$OLDIFS
   } | sort -u
 }
 
+# IFS-to-newline so the outer `for udd` and inner `for root` both split on
+# newline only — handles paths with spaces correctly (Copilot review on
+# PR #213). Restored at the end of the section to avoid leaking IFS into
+# the rest of the script.
+OLDIFS=$IFS
+IFS='
+'
 for udd in $(collect_mcp_user_data_dirs); do
+  [ -n "$udd" ] || continue
   # Path allow-list: must live under a known MCP cache root. Anything else
   # (the user's regular Chrome profile, a Playwright test run from another
   # project, an Arc/Brave profile) is silently ignored.
@@ -217,6 +242,10 @@ for udd in $(collect_mcp_user_data_dirs); do
     mcp_locks_removed=1
   fi
 done
+# Restore IFS so the trailing summary echoes below don't inherit our
+# newline-only splitting (Copilot review on PR #213 — paired with the
+# `OLDIFS=$IFS; IFS=$'\n'` block above the loop).
+IFS=$OLDIFS
 
 if [ "$mcp_killed" -eq 1 ]; then
   # Same settle pause rationale as the port loop: give chrome's exit-handler
