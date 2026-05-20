@@ -206,7 +206,7 @@ export function FormPreviewPanel({
       <section
         aria-label="Form preview"
         data-testid="panel-formPreview"
-        className="flex h-full flex-col overflow-auto p-3"
+        className="studio-scroll flex h-full flex-col overflow-auto p-3"
       >
         {isWaiting ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -229,7 +229,7 @@ export function FormPreviewPanel({
       role="region"
       aria-label="Form preview"
       data-testid="panel-formPreview"
-      className="flex h-full flex-col overflow-auto"
+      className="studio-scroll flex h-full flex-col overflow-auto"
     >
       <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
         <h2 className="truncate text-sm font-semibold">{schema.title}</h2>
@@ -249,7 +249,7 @@ export function FormPreviewPanel({
       >
         {summaryMessage}
       </p>
-      <form className="preview-panel__body space-y-3 overflow-auto p-3">
+      <form className="preview-panel__body studio-scroll space-y-3 overflow-auto p-3">
         {schema.kind === 'choice' ? (
           <ChoiceFieldGroup
             fields={schema.fields}
@@ -295,7 +295,7 @@ export function FormPreviewPanel({
             {executionResult !== undefined ? (
               <div className="execution-result mt-2">
                 <span className="text-[11px] font-medium text-muted-foreground">Output:</span>
-                <pre className="preview-panel__sample-output mt-0.5 overflow-auto p-2 text-[11px] leading-5 text-foreground">
+                <pre className="preview-panel__sample-output studio-scroll mt-0.5 overflow-auto p-2 text-[11px] leading-5 text-foreground">
                   {JSON.stringify(executionResult, null, 2)}
                 </pre>
               </div>
@@ -307,7 +307,7 @@ export function FormPreviewPanel({
           <div className="space-y-2 border-t border-border p-2">
             <pre
               aria-label="Sample data output"
-              className="preview-panel__sample-output max-h-56 overflow-auto p-2 text-[11px] leading-5 text-foreground"
+              className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-[11px] leading-5 text-foreground"
               data-testid="sample-data-output"
             >
               {activeSample?.serialized ?? '{}'}

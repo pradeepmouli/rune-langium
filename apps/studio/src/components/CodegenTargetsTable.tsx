@@ -63,7 +63,10 @@ export function CodegenTargetsTable({
   activeTarget
 }: CodegenTargetsTableProps): React.ReactElement {
   return (
-    <div data-testid="codegen-targets-table" className="preview-panel__targets-table flex flex-col overflow-auto">
+    <div
+      data-testid="codegen-targets-table"
+      className="preview-panel__targets-table studio-scroll flex flex-col overflow-auto"
+    >
       <table className="w-full border-collapse text-sm">
         <thead className="sticky top-0 border-b border-border/70 bg-card/40 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           <tr>

@@ -222,7 +222,7 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
         </div>
       ) : null}
 
-      <div ref={scrollRef} className="flex-1 overflow-auto">
+      <div ref={scrollRef} className="studio-scroll flex-1 overflow-auto">
         <div
           style={{
             height: `${virtualizer.getTotalSize()}px`,

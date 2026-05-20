@@ -412,11 +412,18 @@ export function ExportDialog({ getUserFiles, getReferenceFiles, open, onClose, v
                             Download
                           </Button>
                         </div>
-                        <ScrollArea className="flex-1 border border-border rounded bg-muted/30">
-                          <pre className="p-3 text-xs font-mono whitespace-pre overflow-x-auto">
-                            {selectedFile.content}
-                          </pre>
-                        </ScrollArea>
+                        {/* Self-scrolling <pre> with .studio-scroll chrome —
+                            previously double-wrapped in a Radix <ScrollArea>
+                            (same anti-pattern PR #217 fixed for
+                            NamespaceExplorer: outer Radix viewport's pretty
+                            scrollbar appears but the inner element already
+                            owns the overflow, so the visible scrollbar
+                            doesn't actually drive the scroll). Drop the
+                            wrapper, let the <pre> handle its own scroll
+                            via the shared .studio-scroll class. */}
+                        <pre className="studio-scroll flex-1 border border-border rounded bg-muted/30 p-3 text-xs font-mono whitespace-pre overflow-auto">
+                          {selectedFile.content}
+                        </pre>
                       </>
                     )}
                   </div>

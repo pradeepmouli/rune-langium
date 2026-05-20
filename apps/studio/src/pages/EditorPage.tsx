@@ -59,7 +59,6 @@ import { ExportDialog } from '../components/ExportDialog.js';
 import { ModelLoader } from '../components/ModelLoader.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
-import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { Kbd } from '@rune-langium/design-system/ui/kbd';
 import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
@@ -1304,9 +1303,17 @@ export function EditorPage({
 
   // ---------- panel components rendered inside dockview ----------
 
+  // NamespaceExplorerPanel manages its own scrolling — the virtualizer
+  // (useVirtualTree) must own the scroll element to compute viewport
+  // metrics. Wrapping it in a Radix <ScrollArea> creates a double
+  // scroll container: the inner virtualized div grows to its natural
+  // size and never scrolls, while the outer Radix viewport scrolls
+  // with `scrollbar-width: none` (so no native bar shows) and only
+  // lazy-mounts its custom scrollbar on hover — producing the
+  // "looks nice but un-clickable" scrollbar the user reported.
   const FileTreePanelMounted = useCallback(
     () => (
-      <ScrollArea className="h-full">
+      <div className="h-full">
         <NamespaceExplorerPanel
           nodes={storeNodes}
           expandedNamespaces={expandedNamespaces}
@@ -1320,7 +1327,7 @@ export function EditorPage({
           onSetDragSource={setDragSource}
           onClearDragSource={clearDragSource}
         />
-      </ScrollArea>
+      </div>
     ),
     [
       storeNodes,
@@ -1520,7 +1527,7 @@ export function EditorPage({
 
   const renderInspectorPane = useCallback(
     () => (
-      <div className="flex flex-col min-h-0 h-full overflow-auto">
+      <div className="studio-scroll flex flex-col min-h-0 h-full overflow-auto">
         <EditorFormPanel
           nodeData={selectedNodeData}
           nodeId={selectedNodeId}
