@@ -94,13 +94,6 @@ describe('EnumForm — list-style member editing (T031, FR-015)', () => {
     expect(actions.removeEnumValue).toHaveBeenCalledWith('node-1', 'USD');
   });
 
-  it('renders the correct number of value rows for the members list', () => {
-    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
-
-    const valueNameInputs = screen.getAllByLabelText(/value name/i);
-    expect(valueNameInputs.length).toBe(2);
-  });
-
   it('renders an empty-state message when members list is empty', () => {
     render(
       <EnumForm

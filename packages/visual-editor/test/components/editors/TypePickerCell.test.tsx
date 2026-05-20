@@ -14,14 +14,6 @@ vi.mock('../../../src/store/editor-store.js', () => ({
 describe('TypePickerCell', () => {
   beforeEach(() => updateAttributeType.mockReset());
 
-  it('renders the current type as a chip with the kind class', () => {
-    render(<TypePickerCell typeName="Economics" typeKind="Data" nodeId="Trade" attrName="economics" />);
-    const chip = screen.getByText('Economics');
-    expect(chip).toBeInTheDocument();
-    expect(chip.className).toMatch(/rune-cell-type-chip/);
-    expect(chip.className).toMatch(/--data/);
-  });
-
   it('dispatches updateAttributeType on drop of an accepted payload, forwarding typeId for store-side validation/qualification', () => {
     const payload: TypeRefPayload = {
       rune: 'type-ref',

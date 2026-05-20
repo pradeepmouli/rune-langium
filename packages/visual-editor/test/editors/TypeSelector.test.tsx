@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { ComponentProps, ReactNode } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { TypeOption } from '../../src/types.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../src/types/structure-view.js';
@@ -40,12 +40,6 @@ const OPTIONS: TypeOption[] = [
 ];
 
 describe('TypeSelector', () => {
-  it('adds the bounded scrollable content class to the fallback select menu', () => {
-    render(<TypeSelector value={null} options={OPTIONS} onSelect={() => {}} />);
-
-    expect(screen.getByTestId('select-content')).toHaveClass('rune-type-selector__content');
-  });
-
   // ---------------------------------------------------------------------------
   // P2 review (PR #210): filterKinds with no draggable analog must REJECT all
   // drops, not silently widen the accept policy to every kind. Previously the

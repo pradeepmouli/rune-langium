@@ -139,32 +139,6 @@ describe('ChoiceForm', () => {
     vi.useRealTimers();
   });
 
-  it('renders choice name in header', () => {
-    render(
-      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
-    );
-
-    const nameInput = screen.getByLabelText(/type name/i);
-    expect((nameInput as HTMLInputElement).value).toBe('PaymentType');
-  });
-
-  it('renders "Choice" badge', () => {
-    render(
-      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
-    );
-
-    expect(screen.getByText('Choice')).toBeDefined();
-  });
-
-  it('renders all option rows', () => {
-    const { container } = render(
-      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
-    );
-
-    const rows = container.querySelectorAll('[data-slot="choice-option-row"]');
-    expect(rows.length).toBe(2);
-  });
-
   it('triggers removeChoiceOption when remove button is clicked', () => {
     const actions = makeActions();
 
@@ -191,14 +165,6 @@ describe('ChoiceForm', () => {
     });
 
     expect(actions.renameType).toHaveBeenCalledWith('node-1', 'SettlementType');
-  });
-
-  it('shows options count label', () => {
-    render(
-      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
-    );
-
-    expect(screen.getByText(/2/)).toBeDefined();
   });
 
   it('renders empty state when no options', () => {

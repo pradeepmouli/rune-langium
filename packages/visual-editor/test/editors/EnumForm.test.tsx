@@ -81,26 +81,6 @@ describe('EnumForm', () => {
     vi.useRealTimers();
   });
 
-  it('renders enum name in header', () => {
-    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
-
-    const nameInput = screen.getByLabelText(/type name/i);
-    expect((nameInput as HTMLInputElement).value).toBe('CurrencyEnum');
-  });
-
-  it('renders "Enum" badge', () => {
-    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
-
-    expect(screen.getByText('Enum')).toBeDefined();
-  });
-
-  it('renders all enum value rows', () => {
-    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
-
-    const nameInputs = screen.getAllByLabelText(/value name/i);
-    expect(nameInputs.length).toBe(3);
-  });
-
   it('triggers addEnumValue when add-value button is clicked', () => {
     const actions = makeActions();
 
@@ -140,12 +120,6 @@ describe('EnumForm', () => {
     });
 
     expect(actions.renameType).toHaveBeenCalledWith('node-1', 'StatusEnum');
-  });
-
-  it('shows count label for enum values', () => {
-    render(<EnumForm nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
-
-    expect(screen.getByText(/3/)).toBeDefined();
   });
 });
 

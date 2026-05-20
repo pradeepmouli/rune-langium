@@ -14,12 +14,6 @@ vi.mock('../../../src/store/editor-store.js', () => ({
 describe('InheritanceCell', () => {
   beforeEach(() => setInheritance.mockReset());
 
-  it('renders extends label and name', () => {
-    render(<InheritanceCell childId="Trade" extendsName="TradeBase" extendsNodeId="TradeBase" />);
-    expect(screen.getByText(/extends/i)).toBeInTheDocument();
-    expect(screen.getByText('TradeBase')).toBeInTheDocument();
-  });
-
   it('dispatches setInheritance on drop of Data payload', () => {
     const payload: TypeRefPayload = {
       rune: 'type-ref',

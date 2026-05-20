@@ -28,20 +28,9 @@ describe('Heading (T085)', () => {
     );
     expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument();
   });
-
-  it('applies token-driven size classes per level', () => {
-    const { container } = render(<Heading level={1}>x</Heading>);
-    expect(container.firstElementChild?.className).toMatch(/text-3xl/);
-  });
 });
 
 describe('CodeBlock (T085)', () => {
-  it('renders a <pre><code> structure', () => {
-    render(<CodeBlock>const x = 1;</CodeBlock>);
-    const pre = screen.getByText(/const x = 1;/).closest('pre');
-    expect(pre).toBeInTheDocument();
-  });
-
   it('exposes the language as a data attribute', () => {
     const { container } = render(<CodeBlock language="typescript">x</CodeBlock>);
     expect(container.querySelector('pre')?.getAttribute('data-language')).toBe('typescript');

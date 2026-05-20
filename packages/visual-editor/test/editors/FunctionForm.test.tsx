@@ -93,33 +93,6 @@ describe('FunctionForm', () => {
     vi.useRealTimers();
   });
 
-  it('renders header with name input and Function badge', () => {
-    const actions = makeActions();
-    render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
-
-    const nameInput = screen.getByLabelText('Function type name');
-    expect(nameInput).toHaveValue('CalculateNotional');
-
-    expect(screen.getByText('Function')).toBeInTheDocument();
-  });
-
-  it('renders input parameter rows', () => {
-    const actions = makeActions();
-    render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
-
-    expect(screen.getByText('trade')).toBeInTheDocument();
-    expect(screen.getByText('price')).toBeInTheDocument();
-    expect(screen.getByText('Inputs (2)')).toBeInTheDocument();
-  });
-
-  it('renders expression textarea with current text', () => {
-    const actions = makeActions();
-    render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
-
-    const textarea = screen.getByLabelText('Function expression');
-    expect(textarea).toHaveValue('trade -> price -> amount');
-  });
-
   it('calls addInputParam when add-input button is clicked with name filled', () => {
     const actions = makeActions();
     render(

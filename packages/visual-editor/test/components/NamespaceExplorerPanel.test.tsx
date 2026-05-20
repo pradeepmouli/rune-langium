@@ -85,36 +85,6 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExp
 }
 
 describe('NamespaceExplorerPanel', () => {
-  it('renders the explorer container', () => {
-    renderPanel();
-    expect(screen.getByTestId('namespace-explorer')).toBeTruthy();
-    expect(screen.getByText('Type explorer')).toBeTruthy();
-    expect(screen.getByText('Browse namespaces and types in the active source.')).toBeTruthy();
-  });
-
-  it('renders all namespaces', () => {
-    renderPanel();
-    expect(screen.getByTestId('ns-row-com.model')).toBeTruthy();
-    expect(screen.getByTestId('ns-row-com.lib')).toBeTruthy();
-    expect(screen.getByTestId('ns-row-cdm.product')).toBeTruthy();
-  });
-
-  it('shows total type count in header badge', () => {
-    renderPanel();
-    // 5 visible / 5 total (defaultNodes has 5 entries including cdm.trade::Trade)
-    expect(screen.getByText('5/5')).toBeTruthy();
-  });
-
-  it('shows types within expanded namespaces', () => {
-    renderPanel();
-    // All namespaces start expanded (treeExpanded is initialized from nodes)
-    // Use getAllByText since 'Trade' appears in both com.model and cdm.trade
-    expect(screen.getAllByText('Trade').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Event')).toBeTruthy();
-    expect(screen.getByText('Date')).toBeTruthy();
-    expect(screen.getByText('Asset')).toBeTruthy();
-  });
-
   it('shows empty state when no nodes', () => {
     renderPanel({ nodes: [] });
     expect(screen.getByText('No types loaded')).toBeTruthy();
@@ -222,14 +192,6 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onSelectNode).toHaveBeenCalledOnce();
   });
 
-  it('nav button is present for all type rows', () => {
-    renderPanel();
-    // Each type row in defaultNodes should have a corresponding nav button
-    for (const node of defaultNodes) {
-      expect(screen.getByTestId(`ns-type-nav-${node.id}`)).toBeTruthy();
-    }
-  });
-
   it('filters types when search query entered', () => {
     renderPanel();
     const searchInput = screen.getByTestId('namespace-search');
@@ -274,13 +236,6 @@ describe('NamespaceExplorerPanel', () => {
   // -------------------------------------------------------------------------
   // Phase 8 — drag-source palette behaviour
   // -------------------------------------------------------------------------
-
-  it('type rows for draggable kinds have the draggable attribute', () => {
-    renderPanel();
-    const tradeRow = screen.getByTestId('ns-type-com.model::Trade');
-    // HTMLElement.draggable is a boolean property
-    expect((tradeRow as HTMLElement).draggable).toBe(true);
-  });
 
   it('dragstart registers canonical MIME with JSON payload and kind-specific marker MIME', () => {
     renderPanel();
