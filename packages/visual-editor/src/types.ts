@@ -457,7 +457,14 @@ export interface RuneTypeGraphCallbacks {
   onContextMenu?: (position: { x: number; y: number }) => void;
   onTypeCreated?: (nodeId: string, kind: TypeKind, name: string) => void;
   onTypeDeleted?: (nodeId: string) => void;
-  onModelChanged?: (serialized: Map<string, string>) => void;
+  /**
+   * Fires after every committed edit. May return a Promise — the caller's
+   * source-sync effect does NOT await it (fire-and-forget); the optional
+   * Promise lets consumers do async work (e.g. parse-driven smart merges
+   * against original source) without TypeScript complaining at the call
+   * site.
+   */
+  onModelChanged?: (serialized: Map<string, string>) => void | Promise<void>;
   onValidationChange?: (errors: ValidationError[]) => void;
 }
 
