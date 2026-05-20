@@ -514,7 +514,40 @@ export async function dispatchWorkerRequest(req: WorkerRequest): Promise<WorkerR
 // Register message listener (only when running as a worker)
 // ---------------------------------------------------------------------------
 
-if (typeof self !== 'undefined' && typeof self.postMessage === 'function') {
+/**
+ * Detect whether this module is executing inside a DedicatedWorkerGlobalScope.
+ *
+ * The previous guard (`typeof self !== 'undefined' && typeof self.postMessage
+ * === 'function'`) was true in BOTH worker and main-thread contexts because in
+ * browsers `self === window` and `window.postMessage` exists for cross-window
+ * messaging. Since `services/workspace.ts` statically imports this module for
+ * its response type guards, that meant the main bundle was registering a
+ * `message` listener on `window` and feeding every arriving event (browser
+ * extensions, embedded analytics beacons, cross-origin frames, etc.) into
+ * `dispatchWorkerRequest`. Those messages carry arbitrary `event.data`, so
+ * `req.type` threw `TypeError: Cannot read properties of undefined (reading
+ * 'type')` on every cold load in prod.
+ *
+ * Checking `WorkerGlobalScope` (and `importScripts`, which is worker-only)
+ * keeps the listener scoped to actual Web Worker execution while remaining
+ * safe in SSR / Node test environments where `self` is undefined.
+ *
+ * Surfaced by the 2026-05-20 prod-smoke check.
+ */
+function isWorkerGlobalScope(): boolean {
+  if (typeof self === 'undefined') return false;
+  // `WorkerGlobalScope` only exists inside a worker; in the main thread it's
+  // undefined even though `self` resolves to `window`.
+  const WorkerGlobalScopeCtor = (globalThis as { WorkerGlobalScope?: unknown }).WorkerGlobalScope;
+  if (typeof WorkerGlobalScopeCtor === 'function' && self instanceof (WorkerGlobalScopeCtor as new () => unknown)) {
+    return true;
+  }
+  // Fallback: `importScripts` is only defined on DedicatedWorkerGlobalScope and
+  // SharedWorkerGlobalScope; it's never on `window`.
+  return typeof (self as { importScripts?: unknown }).importScripts === 'function';
+}
+
+if (isWorkerGlobalScope()) {
   self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
     const response = await dispatchWorkerRequest(e.data);
     self.postMessage(response);
