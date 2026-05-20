@@ -71,6 +71,7 @@ import { findInheritanceGroups } from '../layout/grouped-layout.js';
 import { getNodeHeight, getNodeWidth } from '../layout/node-dimensions.js';
 import { shouldReplaceLayoutPositions } from './layout-sync.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
+import { serializeModel } from '@rune-langium/core';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
 import type {
@@ -375,6 +376,71 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     });
     setEdges(visibleEdges);
   }, [layoutedNodes, visibleEdges, setNodes, setEdges]);
+
+  // ---------------------------------------------------------------------------
+  // Source-text sync — fire `onModelChanged` automatically whenever the store's
+  // node/edge DATA changes (inspector edits, structure-view drops, undo/redo).
+  //
+  // Background (2026-05-20 prod-smoke check, Defect B): inspector and structure
+  // attribute edits landed in the editor-store but never propagated to the
+  // CodeMirror source pane. The `onModelChanged` callback (documented at
+  // `RuneTypeGraphCallbacks.onModelChanged` to fire "after every committed
+  // edit") only fired when callers imperatively invoked `ref.exportRosetta()`.
+  // Without a push subscription, the store and the source files diverged on
+  // every mutation.
+  //
+  // We serialise after every store change, compare with the previous
+  // serialised output, and skip the callback when nothing changed (e.g. when a
+  // viewport pan or pure position update fires this effect). String equality
+  // is cheap relative to the React/CodeMirror reconciliation it gates.
+  // ---------------------------------------------------------------------------
+  const onModelChangedRef = useRef(callbacks?.onModelChanged);
+  useEffect(() => {
+    onModelChangedRef.current = callbacks?.onModelChanged;
+  }, [callbacks?.onModelChanged]);
+
+  const lastSerializedRef = useRef<Map<string, string> | null>(null);
+  const hasFiredInitialSerializeRef = useRef(false);
+
+  useEffect(() => {
+    const handler = onModelChangedRef.current;
+    if (!handler) return;
+    if (storeNodes.length === 0) return;
+
+    const outputModels = modelsToAst(storeNodes, storeEdges);
+    const next = new Map<string, string>();
+    for (const model of outputModels) {
+      try {
+        next.set(model.name, serializeModel(model));
+      } catch {
+        next.set(model.name, `// Error serializing ${model.name}`);
+      }
+    }
+
+    // Skip the very first emission after mount — at load time the source
+    // pane already has the authoritative parsed text, and re-emitting would
+    // mark every file dirty for no user-visible reason.
+    if (!hasFiredInitialSerializeRef.current) {
+      hasFiredInitialSerializeRef.current = true;
+      lastSerializedRef.current = next;
+      return;
+    }
+
+    const prev = lastSerializedRef.current;
+    if (prev && prev.size === next.size) {
+      let changed = false;
+      for (const [k, v] of next) {
+        if (prev.get(k) !== v) {
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) return;
+    }
+
+    lastSerializedRef.current = next;
+    handler(next);
+  }, [storeNodes, storeEdges]);
 
   const graphNodes = useMemo(() => nodes.filter(isTypeGraphNode), [nodes]);
   const nodesInitialized = useNodesInitialized();
@@ -821,7 +887,12 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         const result = new Map<string, string>();
         for (const model of outputModels) {
           try {
-            result.set(model.name, `// ${model.name} (${model.elements.length} elements)`);
+            // Use the real serializer from @rune-langium/core. The prior
+            // placeholder emitted a single-line comment instead of actual
+            // .rosetta text, so inspector/structure edits never reached the
+            // source pane downstream of onModelChanged (2026-05-20 prod-smoke
+            // check, Defect B).
+            result.set(model.name, serializeModel(model));
           } catch {
             result.set(model.name, `// Error serializing ${model.name}`);
           }
