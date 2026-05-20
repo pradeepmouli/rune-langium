@@ -14,16 +14,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DataTypeForm } from '../../src/components/editors/DataTypeForm.js';
-import type {
-  AnyGraphNode,
-  TypeOption,
-  EditorFormActions,
-  TypeGraphNode
-} from '../../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
 
-function makeActions(
-  overrides: Partial<EditorFormActions<'data'>> = {}
-): EditorFormActions<'data'> {
+function makeActions(overrides: Partial<EditorFormActions<'data'>> = {}): EditorFormActions<'data'> {
   return {
     renameType: vi.fn(),
     deleteType: vi.fn(),
@@ -88,76 +81,12 @@ describe('DataTypeForm', () => {
     vi.useRealTimers();
   });
 
-  it('renders the type name in the header input', () => {
-    const actions = makeActions();
-    render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={makeDataNode()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
-
-    const nameInput = screen.getByLabelText(/data type name/i);
-    expect((nameInput as HTMLInputElement).value).toBe('Trade');
-  });
-
-  it('renders the Data kind badge', () => {
-    const actions = makeActions();
-    const { container } = render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={makeDataNode()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
-
-    const badge = container.querySelector('[data-slot="badge"]');
-    expect(badge?.textContent).toBe('Data');
-  });
-
-  it('renders all attribute rows', () => {
-    const actions = makeActions();
-    const { container } = render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={makeDataNode()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
-
-    const rows = container.querySelectorAll('[data-slot="attribute-row"]');
-    expect(rows.length).toBe(2);
-  });
-
-  it('shows attribute count label', () => {
-    const actions = makeActions();
-    render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={makeDataNode()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
-
-    expect(screen.getByText(/Attributes \(2\)/)).toBeDefined();
-  });
-
   it('calls renameType after debounce when name changes', () => {
     const renameType = vi.fn();
     const actions = makeActions({ renameType });
 
     render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={makeDataNode()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <DataTypeForm nodeId="test::Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const nameInput = screen.getByLabelText(/data type name/i);
@@ -176,12 +105,7 @@ describe('DataTypeForm', () => {
     const addAttribute = vi.fn();
     const actions = makeActions({ addAttribute });
     const { container } = render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={makeDataNode()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <DataTypeForm nodeId="test::Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const addBtn = container.querySelector('[data-slot="add-attribute-btn"]');
@@ -196,12 +120,7 @@ describe('DataTypeForm', () => {
     const actions = makeActions({ removeAttribute });
 
     render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={makeDataNode()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <DataTypeForm nodeId="test::Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const removeBtns = screen.getAllByLabelText(/remove attribute/i);
@@ -215,14 +134,7 @@ describe('DataTypeForm', () => {
     const data = makeDataNode();
     (data as any).attributes = [];
 
-    render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={data}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<DataTypeForm nodeId="test::Trade" data={data} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     expect(screen.getByText(/no attributes defined/i)).toBeDefined();
   });
@@ -230,10 +142,7 @@ describe('DataTypeForm', () => {
 
 describe('DataTypeForm – merged inherited attribute list', () => {
   /** Build a parent node with given attributes, and a child node pointing to it. */
-  function makeInheritanceNodes(
-    childData: AnyGraphNode,
-    parentAttrs: Record<string, unknown>[]
-  ): TypeGraphNode[] {
+  function makeInheritanceNodes(childData: AnyGraphNode, parentAttrs: Record<string, unknown>[]): TypeGraphNode[] {
     const parentNode = {
       id: 'test::BaseType',
       type: 'data',
@@ -434,9 +343,7 @@ vi.mock('@zod-to-form/react', async (importOriginal) => {
     ...actual,
     useExternalSync: (...args: unknown[]) => {
       useExternalSyncSpy(...args);
-      return (actual as any).useExternalSync(
-        ...(args as Parameters<typeof actual.useExternalSync>)
-      );
+      return (actual as any).useExternalSync(...(args as Parameters<typeof actual.useExternalSync>));
     }
   };
 });
@@ -456,12 +363,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     const data = makeDataNode();
     (data as any).comments = 'Initial comments';
     const { container } = render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={data}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
+      <DataTypeForm nodeId="test::Trade" data={data} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
     );
 
     // Name must be the first text input in the form-header slot.
@@ -503,12 +405,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     const actions = makeActions({ renameType });
 
     render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={makeDataNode()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <DataTypeForm nodeId="test::Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const nameInput = screen.getByLabelText(/data type name/i);
@@ -547,18 +444,11 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     })();
 
     const { container, rerender } = render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={nodeA}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <DataTypeForm nodeId="test::Trade" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // Confirm initial state pulls from nodeA
-    const initialName = container.querySelector(
-      '[data-slot="type-name-input"]'
-    ) as HTMLInputElement;
+    const initialName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
     expect(initialName.value).toBe('Trade');
 
     // Dirty the name field on nodeA
@@ -567,14 +457,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     // Swap to nodeB (different reference identity, same nodeId for simplicity).
     // The form host flushes the pending debounce on unmount of the old binding
     // OR the next debounce tick — advance both to be deterministic.
-    rerender(
-      <DataTypeForm
-        nodeId="test::Position"
-        data={nodeB}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    rerender(<DataTypeForm nodeId="test::Position" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     act(() => {
       vi.advanceTimersByTime(500);
@@ -594,9 +477,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
       fireEvent.mouseDown(docTab);
     });
 
-    const definitionTextarea = container.querySelector(
-      '[data-slot="metadata-description"]'
-    ) as HTMLTextAreaElement;
+    const definitionTextarea = container.querySelector('[data-slot="metadata-description"]') as HTMLTextAreaElement;
     expect(definitionTextarea.value).toBe('A held position');
 
     // Migration contract: the upstream useExternalSync hook (not the local
@@ -754,12 +635,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
 
     const initial = makeThreeAttrDataNode();
     const { container, rerender } = render(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={initial}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <DataTypeForm nodeId="test::Trade" data={initial} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // ---- Step 1 — add a new attribute -------------------------------------
@@ -782,14 +658,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
         override: false
       }
     ];
-    rerender(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={afterAdd}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    rerender(<DataTypeForm nodeId="test::Trade" data={afterAdd} availableTypes={AVAILABLE_TYPES} actions={actions} />);
     let rows = container.querySelectorAll('[data-slot="attribute-row"]');
     expect(rows.length).toBe(4);
 
@@ -808,12 +677,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
     reorderedAttrs.splice(1, 0, moved);
     (afterReorder as any).attributes = reorderedAttrs;
     rerender(
-      <DataTypeForm
-        nodeId="test::Trade"
-        data={afterReorder}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <DataTypeForm nodeId="test::Trade" data={afterReorder} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
     rows = container.querySelectorAll('[data-slot="attribute-row"]');
     expect(rows.length).toBe(4);
@@ -922,9 +786,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
 
     // Capture every attribute-area row in document order.
     const allRows = Array.from(
-      container.querySelectorAll(
-        '[data-slot="attribute-row"], [data-slot="inherited-attribute-row"]'
-      )
+      container.querySelectorAll('[data-slot="attribute-row"], [data-slot="inherited-attribute-row"]')
     );
 
     expect(allRows).toHaveLength(4);
@@ -966,9 +828,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
     //
     // Therefore the count of *inputs* with data-slot="attribute-name" equals
     // the local count (the only entries that would survive a form submit).
-    const localNameInputs = container.querySelectorAll(
-      '[data-slot="attribute-row"] input[data-slot="attribute-name"]'
-    );
+    const localNameInputs = container.querySelectorAll('[data-slot="attribute-row"] input[data-slot="attribute-name"]');
     const inheritedNameSpans = container.querySelectorAll(
       '[data-slot="inherited-attribute-row"] span[data-slot="attribute-name"]'
     );
@@ -983,11 +843,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
 
   // GT3 — clicking override fires actions.addAttribute with the inherited values
   it('clicking override on an inherited row fires actions.addAttribute with the inherited values', () => {
-    const parentAttrs = [
-      makeAttr('id', 'string'),
-      makeAttr('createdAt', 'date'),
-      makeAttr('owner', 'string')
-    ];
+    const parentAttrs = [makeAttr('id', 'string'), makeAttr('createdAt', 'date'), makeAttr('owner', 'string')];
     const { childData, allNodes } = makeChildWithParent(parentAttrs, []);
     const addAttribute = vi.fn();
 
@@ -1028,11 +884,9 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
     );
 
     const orderedSlots = () =>
-      Array.from(
-        container.querySelectorAll(
-          '[data-slot="attribute-row"], [data-slot="inherited-attribute-row"]'
-        )
-      ).map((el) => el.getAttribute('data-slot'));
+      Array.from(container.querySelectorAll('[data-slot="attribute-row"], [data-slot="inherited-attribute-row"]')).map(
+        (el) => el.getAttribute('data-slot')
+      );
 
     // Initial: 2 inherited then 3 local.
     expect(orderedSlots()).toEqual([

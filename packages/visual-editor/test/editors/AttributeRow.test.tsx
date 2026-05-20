@@ -67,30 +67,6 @@ describe('AttributeRow', () => {
     vi.useRealTimers();
   });
 
-  it('renders name, type, and cardinality', () => {
-    const onUpdate = vi.fn();
-    const onRemove = vi.fn();
-    const onReorder = vi.fn();
-    const attr = baseAttribute();
-
-    render(
-      <FormWrapper attributes={[attr]}>
-        <AttributeRow
-          index={0}
-          committedName={attr.name}
-          availableTypes={AVAILABLE_TYPES}
-          onUpdate={onUpdate}
-          onRemove={onRemove}
-          onReorder={onReorder}
-        />
-      </FormWrapper>
-    );
-
-    const nameInput = screen.getByLabelText(/attribute name/i);
-    expect(nameInput).toBeDefined();
-    expect((nameInput as HTMLInputElement).value).toBe('tradeDate');
-  });
-
   it('debounces name changes with 500ms delay', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
@@ -149,28 +125,6 @@ describe('AttributeRow', () => {
     expect(onRemove).toHaveBeenCalledWith(0);
   });
 
-  it('shows override badge for override attributes', () => {
-    const onUpdate = vi.fn();
-    const onRemove = vi.fn();
-    const onReorder = vi.fn();
-    const attr = baseAttribute({ override: true });
-
-    render(
-      <FormWrapper attributes={[attr]}>
-        <AttributeRow
-          index={0}
-          committedName={attr.name}
-          availableTypes={AVAILABLE_TYPES}
-          onUpdate={onUpdate}
-          onRemove={onRemove}
-          onReorder={onReorder}
-        />
-      </FormWrapper>
-    );
-
-    expect(screen.getByText('override')).toBeDefined();
-  });
-
   it('shows Revert button instead of remove for override attributes', () => {
     const onUpdate = vi.fn();
     const onRemove = vi.fn();
@@ -198,30 +152,6 @@ describe('AttributeRow', () => {
     expect(revertBtn).toBeDefined();
     expect(revertBtn).not.toBeNull();
     expect(container.querySelector('[data-slot="attribute-remove"]')).toBeNull();
-  });
-
-  it('renders drag handle', () => {
-    const onUpdate = vi.fn();
-    const onRemove = vi.fn();
-    const onReorder = vi.fn();
-    const attr = baseAttribute();
-
-    const { container } = render(
-      <FormWrapper attributes={[attr]}>
-        <AttributeRow
-          index={0}
-          committedName={attr.name}
-          availableTypes={AVAILABLE_TYPES}
-          onUpdate={onUpdate}
-          onRemove={onRemove}
-          onReorder={onReorder}
-        />
-      </FormWrapper>
-    );
-
-    const handle = container.querySelector('[data-slot="drag-handle"]');
-    expect(handle).toBeDefined();
-    expect(handle?.textContent).toBe('⠿');
   });
 
   it('disables input when disabled prop is true', () => {

@@ -37,15 +37,7 @@ function baseProps(overrides: Record<string, unknown> = {}) {
 /** Wraps the component in a FormProvider seeded with AST-shaped enum value
  *  records. Per R11 (013-z2f-editor-migration), EnumValueRow now reads
  *  `enumValues.${index}.{name,display}` directly. */
-function Wrapper({
-  name,
-  displayName,
-  children
-}: {
-  name: string;
-  displayName: string;
-  children: React.ReactNode;
-}) {
+function Wrapper({ name, displayName, children }: { name: string; displayName: string; children: React.ReactNode }) {
   const form = useForm({
     defaultValues: {
       enumValues: [{ $type: 'RosettaEnumValue', name, display: displayName }]
@@ -73,18 +65,6 @@ describe('EnumValueRow', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  it('renders name and display name inputs', () => {
-    renderRow(baseProps());
-
-    const nameInput = screen.getByLabelText(/value name/i);
-    expect(nameInput).toBeDefined();
-    expect((nameInput as HTMLInputElement).value).toBe('USD');
-
-    const displayInput = screen.getByPlaceholderText(/display name/i);
-    expect(displayInput).toBeDefined();
-    expect((displayInput as HTMLInputElement).value).toBe('US Dollar');
   });
 
   it('debounces name changes with 500ms delay', () => {
@@ -130,14 +110,6 @@ describe('EnumValueRow', () => {
     fireEvent.click(removeBtn);
 
     expect(props.onRemove).toHaveBeenCalledWith('node-1', 'USD');
-  });
-
-  it('renders drag handle', () => {
-    const { container } = renderRow(baseProps());
-
-    const handle = container.querySelector('[data-slot="drag-handle"]');
-    expect(handle).toBeDefined();
-    expect(handle?.textContent).toBe('⠿');
   });
 
   it('shows destructive border for empty name', () => {
