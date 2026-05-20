@@ -20,13 +20,14 @@ import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles, BUNDLE_MARKER_SUFFIX } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
+import { getModelSource } from './services/model-registry.js';
 import type { LoadedModel } from './types/model-types.js';
 import { createLspClientService, type LspClientService } from './services/lsp-client.js';
 import { createTransportProvider, type TransportState } from './services/transport-provider.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
 import { config, studioConfig } from './config.js';
 import * as persistence from './workspace/persistence.js';
-import type { WorkspaceRecord } from './workspace/persistence.js';
+import type { CuratedModelBinding, WorkspaceRecord } from './workspace/persistence.js';
 import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
 import { deleteWorkspaceFiles, loadWorkspaceFiles, saveWorkspaceFiles } from './workspace/workspace-files.js';
 import { WorkspaceManager } from './workspace/workspace-manager.js';
@@ -104,6 +105,56 @@ function getLspSessionId(): string {
     // reloads. The DO will be isolated per-mount instead of per-tab.
   }
   return fresh;
+}
+
+/**
+ * Project the in-memory `loadedModels` map into the persistable
+ * `CuratedModelBinding[]` shape stored on `WorkspaceRecord.curatedModels`.
+ *
+ * Only curated bundles (sources with an `archiveUrl`) round-trip — the
+ * custom-URL / git-clone path doesn't have a stable identity to re-load
+ * on restore, so persisting it would surface stale entries we couldn't
+ * resolve back to a registry source. See `CuratedModelBinding` for the
+ * schema.
+ *
+ * Prod-smoke 2026-05-20 (Defect D1): the prior wiring loaded curated
+ * bundles into the in-memory store but never wrote them back to IDB.
+ * On refresh the workspace rehydrated with `curatedModels: []` and the
+ * 4768-type explorer collapsed to the 22 built-in types because nothing
+ * triggered a re-load.
+ */
+function deriveCuratedBindings(loadedModels: Map<string, LoadedModel>): CuratedModelBinding[] {
+  const bindings: CuratedModelBinding[] = [];
+  for (const model of loadedModels.values()) {
+    if (!model.source.archiveUrl) continue;
+    bindings.push({
+      modelId: model.source.id,
+      loadedVersion: model.commitHash || 'latest',
+      loadedAt: new Date(model.loadedAt).toISOString(),
+      updateAvailable: false
+    });
+  }
+  // Stable order so the equality check below doesn't flap on Map iteration order.
+  bindings.sort((a, b) => a.modelId.localeCompare(b.modelId));
+  return bindings;
+}
+
+/**
+ * Equality check for `CuratedModelBinding[]` that skips `loadedAt` (a
+ * timestamp that drifts on every re-load even when the bundle identity
+ * is unchanged). Used to short-circuit the persist effect so a tab-focus
+ * re-render doesn't rewrite IDB on every render.
+ */
+function curatedBindingsEqual(a: CuratedModelBinding[], b: CuratedModelBinding[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i]!;
+    const right = b[i]!;
+    if (left.modelId !== right.modelId) return false;
+    if (left.loadedVersion !== right.loadedVersion) return false;
+    if (left.updateAvailable !== right.updateAvailable) return false;
+  }
+  return true;
 }
 
 function deriveWorkspaceName(files: readonly WorkspaceFile[]): string {
@@ -271,6 +322,21 @@ function AppContent() {
       await persistence.saveWorkspace(nextWorkspace);
       setRestoredWorkspace(nextWorkspace);
       await syncWorkspaceToEditor(restoredFiles);
+
+      // Replay any curated bundles bound to this workspace (D1 fix). Without
+      // this, refresh / switch-workspace would drop CDM/FpML/etc. because
+      // the in-memory model-store starts empty on every mount. We kick the
+      // loads in parallel but don't await — the model-store-watching effect
+      // below merges file lists in as each load completes, and waiting would
+      // block restore on slow archive fetches.
+      if (workspace.curatedModels && workspace.curatedModels.length > 0) {
+        const modelStoreLoad = useModelStore.getState().load;
+        for (const binding of workspace.curatedModels) {
+          const source = getModelSource(binding.modelId);
+          if (!source) continue;
+          void modelStoreLoad(source);
+        }
+      }
       return true;
     },
     [syncWorkspaceToEditor]
@@ -350,6 +416,26 @@ function AppContent() {
   useEffect(() => {
     loadedModelsRef.current = loadedModels;
   }, [loadedModels]);
+
+  // Persist curated-bundle bindings whenever the active workspace has one
+  // and the in-memory set changes. Without this, a refresh / switch / close
+  // path rehydrates the workspace from IDB with `curatedModels: []` and the
+  // explorer collapses from N curated namespaces to just the built-in 22
+  // types (D1). The equality guard short-circuits the IDB write when the
+  // binding identity is unchanged so a per-keystroke re-render doesn't
+  // churn IndexedDB. Equality skips `loadedAt` because timestamps would
+  // flap every load even when the bundle id+version is identical.
+  useEffect(() => {
+    if (!restoredWorkspace) return;
+    const nextBindings = deriveCuratedBindings(loadedModels);
+    const prevBindings = restoredWorkspace.curatedModels ?? [];
+    if (curatedBindingsEqual(prevBindings, nextBindings)) return;
+    const nextWorkspace = { ...restoredWorkspace, curatedModels: nextBindings } as WorkspaceRecord;
+    void persistence.saveWorkspace(nextWorkspace).catch((err) => {
+      reportWorkspaceError('Failed to save curated bundle bindings to browser storage', err);
+    });
+    setRestoredWorkspace(nextWorkspace);
+  }, [loadedModels, reportWorkspaceError, restoredWorkspace]);
 
   useEffect(() => {
     if (bootState === 'restored') {
