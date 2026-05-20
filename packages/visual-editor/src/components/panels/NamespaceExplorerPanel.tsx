@@ -258,8 +258,14 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
           </IconButtonGroup>
         </div>
 
-        {/* Virtualized Tree */}
-        <div ref={scrollRef} className="flex-1 overflow-auto" data-testid="namespace-tree">
+        {/* Virtualized Tree.
+         *
+         * `studio-scroll` is the shared scrollbar-chrome class defined in
+         * apps/studio/src/styles.css. It uses native ::-webkit-scrollbar +
+         * scrollbar-* properties so the scrollbar is fully draggable and
+         * click-to-page works — see PR commit message for the click-through
+         * root cause (was: wrapped in a redundant Radix ScrollArea). */}
+        <div ref={scrollRef} className="studio-scroll flex-1 overflow-auto" data-testid="namespace-tree">
           {flatRows.length === 0 && (
             <p className="px-3 py-4 text-xs text-center text-muted-foreground">
               {searchQuery ? 'No matching types or namespaces' : 'No types loaded'}

@@ -428,7 +428,7 @@ function DataTypeForm({
           </TabsList>
 
           {/* Members tab — attributes */}
-          <TabsContent value="members" className="flex-1 overflow-y-auto p-3 mt-0">
+          <TabsContent value="members" className="studio-scroll flex-1 overflow-y-auto p-3 mt-0">
             <FieldSet className="gap-1">
               <FieldLegend variant="label" className="mb-0 text-muted-foreground flex items-center justify-between">
                 <span>Attributes ({fields.length + inheritedCount})</span>
@@ -497,7 +497,7 @@ function DataTypeForm({
           </TabsContent>
 
           {/* Conditions tab */}
-          <TabsContent value="conditions" className="flex-1 overflow-y-auto p-3 mt-0">
+          <TabsContent value="conditions" className="studio-scroll flex-1 overflow-y-auto p-3 mt-0">
             <ConditionSection
               label="Conditions"
               conditions={d.conditions}
@@ -511,7 +511,7 @@ function DataTypeForm({
           </TabsContent>
 
           {/* Doc tab — description, comments, synonyms */}
-          <TabsContent value="doc" className="flex-1 overflow-y-auto p-3 mt-0">
+          <TabsContent value="doc" className="studio-scroll flex-1 overflow-y-auto p-3 mt-0">
             <MetadataSection
               onDefinitionCommit={commitDefinition}
               onCommentsCommit={commitComments}
@@ -521,7 +521,7 @@ function DataTypeForm({
           </TabsContent>
 
           {/* Meta tab — annotations */}
-          <TabsContent value="meta" className="flex-1 overflow-y-auto p-3 mt-0">
+          <TabsContent value="meta" className="studio-scroll flex-1 overflow-y-auto p-3 mt-0">
             <AnnotationSection
               annotations={d.annotations}
               onAdd={handleAddAnnotation}

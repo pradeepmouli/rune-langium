@@ -204,7 +204,7 @@ function ConditionRow({
 
           {/* Expression */}
           {readOnly ? (
-            <pre className="text-xs font-mono bg-muted/50 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
+            <pre className="studio-scroll text-xs font-mono bg-muted/50 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
               {condition.expressionText || '(empty)'}
             </pre>
           ) : renderExpressionEditor ? (

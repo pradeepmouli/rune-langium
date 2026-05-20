@@ -387,7 +387,7 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
           <div
             ref={editorContainerRef}
             data-testid="code-preview-editor"
-            className="preview-panel__editor min-w-0 flex-1 overflow-auto"
+            className="preview-panel__editor studio-scroll min-w-0 flex-1 overflow-auto"
           />
         </>
       ) : null}

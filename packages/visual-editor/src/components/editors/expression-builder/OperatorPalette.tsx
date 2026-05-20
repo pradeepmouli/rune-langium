@@ -93,7 +93,7 @@ export function OperatorPalette({
         onChange={(e) => setSearch(e.target.value)}
         data-testid="palette-search"
       />
-      <div className="max-h-60 overflow-y-auto">
+      <div className="studio-scroll max-h-60 overflow-y-auto">
         {categories.map((category) => {
           const filtered = category.operators.filter(
             (op) =>

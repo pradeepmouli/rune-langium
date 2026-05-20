@@ -293,7 +293,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       className="flex flex-col h-full overflow-hidden"
       tabIndex={-1}
     >
-      <div data-slot="panel-content" className="flex-1 overflow-y-auto">
+      <div data-slot="panel-content" className="studio-scroll flex-1 overflow-y-auto">
         <FormErrorBoundary nodeId={nodeId}>{renderForm()}</FormErrorBoundary>
       </div>
     </aside>

@@ -206,6 +206,16 @@
    * resolve every var(--dv-*) reference in apps/studio/src/styles.css. */
   --dv-sash-color: rgba(124, 140, 172, 0.2);
   --dv-active-sash-color: rgba(94, 234, 212, 0.9);
+
+  /* Studio scrollbar chrome — consumed by the shared `.studio-scroll`
+   * rule (apps/studio/src/styles.css) and by per-element rules in both
+   * apps/studio/src/styles.css and packages/visual-editor/src/styles.css.
+   * Defined here so the FR-025 no-undefined-vars guard resolves them
+   * and so the dark / light theme variants below can override the thumb
+   * color if the surface tone changes meaningfully. */
+  --studio-scrollbar-width: 8px;
+  --studio-scrollbar-thumb: color-mix(in oklch, var(--border) 82%, white 18%);
+  --studio-scrollbar-thumb-hover: color-mix(in oklch, var(--border) 60%, white 40%);
 }
 
 .dark {
