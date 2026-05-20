@@ -297,14 +297,32 @@ function isLocalLanguagesEnvelope(value: unknown): value is { languages: Array<{
 /**
  * Default codegen service URL. Override via VITE_CODEGEN_URL env var.
  *
- * In the browser we resolve to the same-origin Worker route (`/api/codegen`)
- * so prod builds never leak a `localhost:8377` URL when the env var is unset
- * (which is the default path under `pnpm build` + Cloudflare Pages deploys).
- * The Node/SSR fallback keeps the wrangler-dev URL so CLI consumers and
- * type-checks continue to point at `pnpm dev:codegen`'s default port.
+ * In the browser we resolve to the same-origin Worker route base
+ * (`/rune-studio`) so the proxy's URL composition yields
+ * `/rune-studio/api/generate` (POST) and `/rune-studio/api/generate/health`
+ * (GET) — the actual hosted contract served by the `rune-codegen-worker`
+ * via the wrangler route `www.daikonic.dev/rune-studio/api/generate/*`.
+ *
+ * Earlier defaults were broken:
+ *   - `http://localhost:8377` shipped a dev-server URL in prod bundles.
+ *   - `/api/codegen` composed to `/api/codegen/api/generate`, a path that
+ *     matches NO deployed route (the Pages Function at `/api/codegen` is a
+ *     *different* API — it's the studio's Download flow, not the legacy
+ *     `/api/generate` ExportDialog contract). That broke the availability
+ *     probe + every generation request when `VITE_CODEGEN_URL` was unset.
+ *
+ * The Node/SSR fallback keeps the wrangler-dev URL (`http://localhost:8377`)
+ * so CLI consumers and type-checks continue to point at `pnpm dev:codegen`'s
+ * default port. This branch only runs in `typeof window === 'undefined'`
+ * contexts (test setup, SSR) — it never reaches the prod browser bundle.
+ *
+ * The canonical production override is set explicitly by
+ * `apps/docs/scripts/build-combined.mjs` (`VITE_CODEGEN_URL=/rune-studio`).
+ * This default exists so a standalone studio build (no combined-docs step)
+ * still produces a working bundle.
  */
 const DEFAULT_CODEGEN_URL =
-  typeof window === 'undefined' ? 'http://localhost:8377' : '/api/codegen';
+  typeof window === 'undefined' ? 'http://localhost:8377' : '/rune-studio';
 
 export interface GenerateOptions {
   /**
