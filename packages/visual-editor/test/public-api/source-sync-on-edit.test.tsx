@@ -84,8 +84,12 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
     render(<RuneTypeGraph callbacks={{ onModelChanged }} />);
 
     // Allow the initial-skip effect to record the baseline serialisation.
-    await waitFor(() => {
-      expect(true).toBe(true);
+    // We can't deterministically `waitFor` the no-op skip, so settle a
+    // microtask + macrotask boundary instead — this matches what the
+    // following `mockClear()` is meant to start cleanly from.
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
     });
 
     onModelChanged.mockClear();
@@ -144,9 +148,10 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
     await loadCombinedModel();
     const { rerender } = render(<RuneTypeGraph callbacks={{ onModelChanged }} />);
 
-    // Allow the initial mount to complete.
-    await waitFor(() => {
-      expect(true).toBe(true);
+    // Allow the initial mount to complete (initial-skip effect runs).
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
     });
 
     onModelChanged.mockClear();
@@ -155,6 +160,45 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
     rerender(<RuneTypeGraph callbacks={{ onModelChanged }} />);
 
     // Give effects a chance to run.
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(onModelChanged).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 2026-05-20, Copilot hygiene comment on PR #221: the source-sync
+   * effect depended only on `[storeNodes, storeEdges]` and computed the
+   * full `modelsToAst` + `serializeModel` pipeline on every position
+   * mutation (drag, layout, fit). Equality was checked at the serialised
+   * output, so the callback didn't fire — but the work still ran on
+   * every viewport tick. We now bail at a cheap content fingerprint
+   * before doing any of that.
+   */
+  it('does not re-emit onModelChanged on position-only mutations', async () => {
+    const onModelChanged = vi.fn();
+    await loadCombinedModel();
+    render(<RuneTypeGraph callbacks={{ onModelChanged }} />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    onModelChanged.mockClear();
+
+    // Move a node — this updates ReactFlow node.position and writes the
+    // same value into node.data.position via applyReactFlowNodeChanges.
+    const tradeNode = useEditorStore.getState().nodes.find((n) => n.data.name === 'Trade')!;
+    act(() => {
+      useEditorStore.getState().applyReactFlowNodeChanges([
+        {
+          type: 'position',
+          id: tradeNode.id,
+          position: { x: tradeNode.position.x + 100, y: tradeNode.position.y + 50 }
+        }
+      ]);
+    });
+
     await new Promise((r) => setTimeout(r, 0));
 
     expect(onModelChanged).not.toHaveBeenCalled();

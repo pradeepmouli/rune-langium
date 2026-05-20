@@ -129,6 +129,49 @@ function isTypeGraphNode(node: DisplayGraphNode): node is TypeGraphNode {
   return !isGroupContainerNode(node);
 }
 
+/**
+ * Cheap content fingerprint used by the source-sync effect to skip
+ * position-only re-renders before paying for `modelsToAst` +
+ * `serializeModel`. ReactFlow's `applyReactFlowNodeChanges` updates node
+ * `position` (and writes the same value into `node.data.position`) on
+ * every drag tick / fit-view; if we don't bail here, every viewport pan
+ * runs the full serialize pipeline.
+ *
+ * We include node id, $type, name, namespace, and a JSON of all AST
+ * fields EXCEPT `position`. Edge ids and `data.kind` capture
+ * inheritance / reference structure cheaply. We intentionally exclude
+ * `errors`, `hasExternalRefs`, etc. — they are derived display state,
+ * not authored content.
+ */
+function computeContentFingerprint(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): string {
+  const nodeParts: string[] = [];
+  // Sort by id so reordering (e.g. drag-reorder) doesn't churn the
+  // fingerprint — graph-content equivalence is what we care about.
+  const sortedNodes = [...nodes].sort((a, b) => a.id.localeCompare(b.id));
+  for (const n of sortedNodes) {
+    const d = n.data as Record<string, unknown>;
+    // Project to the AST-relevant subset: skip GraphMetadata that
+    // changes on view-only operations.
+    const projection: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(d)) {
+      if (k === 'position' || k === 'errors' || k === 'hasExternalRefs') continue;
+      projection[k] = v;
+    }
+    try {
+      nodeParts.push(`${n.id}:${JSON.stringify(projection)}`);
+    } catch {
+      // Cyclic structures (shouldn't happen post-strip but be safe).
+      nodeParts.push(`${n.id}:?`);
+    }
+  }
+  const edgeParts: string[] = [];
+  const sortedEdges = [...edges].sort((a, b) => a.id.localeCompare(b.id));
+  for (const e of sortedEdges) {
+    edgeParts.push(`${e.id}:${e.data?.kind ?? ''}`);
+  }
+  return `n=${nodeParts.join('|')}#e=${edgeParts.join('|')}`;
+}
+
 function createViewportSignature(
   nodes: Array<{ id: string }>,
   edges: Array<{ id: string }>,
@@ -401,11 +444,22 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
 
   const lastSerializedRef = useRef<Map<string, string> | null>(null);
   const hasFiredInitialSerializeRef = useRef(false);
+  // Position-only changes (drag, layout, fit) re-render the effect because
+  // `storeNodes` is a new array reference even though node `.data` is the
+  // same. Compute a cheap content fingerprint that ignores `position` and
+  // bail before doing the heavier `modelsToAst` + `serializeModel` work.
+  // The previous code did equality at the *serialized output* layer only,
+  // which still paid full serialisation cost on every drag tick.
+  const lastContentFingerprintRef = useRef<string | null>(null);
 
   useEffect(() => {
     const handler = onModelChangedRef.current;
     if (!handler) return;
     if (storeNodes.length === 0) return;
+
+    const fingerprint = computeContentFingerprint(storeNodes, storeEdges);
+    if (lastContentFingerprintRef.current === fingerprint) return;
+    lastContentFingerprintRef.current = fingerprint;
 
     const outputModels = modelsToAst(storeNodes, storeEdges);
     const next = new Map<string, string>();
@@ -439,7 +493,10 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     }
 
     lastSerializedRef.current = next;
-    handler(next);
+    // Fire-and-forget — the handler may return a Promise (e.g. studio's
+    // async smart-merge), but the source-sync effect intentionally does
+    // not await it.
+    void handler(next);
   }, [storeNodes, storeEdges]);
 
   const graphNodes = useMemo(() => nodes.filter(isTypeGraphNode), [nodes]);
