@@ -273,4 +273,28 @@
   code, kbd, pre, samp {
     font-family: var(--font-mono);
   }
+
+  /* ── Global :focus-visible baseline ─────────────────────────────
+   * Same paradigm as the scrollbar baseline above (PR #217): every
+   * interactive element gets the same 2px outline + 2px offset, in
+   * --ring, by default. Per-element rules only need to OPT OUT
+   * (where the ring is clipped inside `overflow: hidden` chrome —
+   * `outline-offset: -2px` is the documented escape hatch) instead
+   * of re-declaring the ring colour/width on every button.
+   *
+   * `:where(...)` keeps specificity at 0,0,0 so per-component
+   * outline rules (offset overrides for clipped chrome, etc.) win
+   * without needing `!important`. The fallback chain on --ring keeps
+   * the rule meaningful in standalone design-system stories that
+   * mount without the studio's :root palette.
+   *
+   * Out-of-scope (intentionally NOT covered):
+   * - React Flow internal handles (the library owns its DOM focus)
+   * - CodeMirror's `.cm-content` (handled by its own theme)
+   * - Radix Slot wrappers — they forward focus to the wrapped
+   *   element, which matches one of the selectors below. */
+  :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex='-1']), [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='option']):focus-visible {
+    outline: 2px solid var(--ring, var(--primary, currentColor));
+    outline-offset: 2px;
+  }
 }

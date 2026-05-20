@@ -700,10 +700,8 @@ html {
       0 14px 30px -18px color-mix(in srgb, var(--primary) 32%, transparent);
   }
 
-  .studio-app .studio-topbar__ws-btn:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
+  /* :focus-visible ring covered by the global baseline in
+   * design-system/theme.css (2px solid var(--ring) + 2px offset). */
 
   .studio-app .studio-topbar__ws-btn:active {
     transform: translateY(0.5px);
@@ -766,9 +764,9 @@ html {
     background: color-mix(in srgb, var(--card) 80%, var(--accent));
   }
 
+  /* :focus-visible ring covered by the global baseline; this rule
+   * only still exists to flip text color on keyboard focus. */
   .studio-app .studio-topbar__cmdk:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
     color: var(--foreground);
   }
 
@@ -817,10 +815,7 @@ html {
       0 8px 22px -6px color-mix(in oklch, var(--primary), transparent 35%);
   }
 
-  .studio-app .studio-topbar__generate:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
+  /* :focus-visible ring covered by the global baseline. */
 
   .studio-app .studio-topbar__generate:active {
     transform: translateY(0.5px) scale(0.99);
@@ -1740,20 +1735,12 @@ html {
 }
 
 /* ---------- Focus-visible for namespace explorer ---------- */
-/* T058 (014/FR-026) — outline-offset normalised to 2px so it
- * matches the design-system Button rule and the landing/docs
- * `:focus-visible` baseline. Width and colour family are unchanged. */
-.ns-explorer__action-btn:focus-visible,
-.ns-row__chevron:focus-visible,
-.ns-row__visibility:focus-visible,
-.ns-type__visibility:focus-visible,
-.studio-source-view__tab:focus-visible,
-.studio-source-editor__tab:focus-visible,
-.studio-source-editor__tab-close:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
+/* The shared 2px ring is covered by the global :focus-visible
+ * baseline in design-system/theme.css. We keep two things here:
+ *  1. `:focus:not(:focus-visible)` suppression so mouse-focus
+ *     doesn't draw a ring on these inline action buttons.
+ *  2. A `border-radius` hint on link focus so the rectangular ring
+ *     matches the link's rounded chrome. */
 .ns-explorer__action-btn:focus:not(:focus-visible),
 .ns-row__chevron:focus:not(:focus-visible),
 .ns-row__visibility:focus:not(:focus-visible),
@@ -1762,8 +1749,6 @@ html {
 }
 
 .studio-links a:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
 
