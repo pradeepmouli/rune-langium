@@ -216,6 +216,19 @@
   --studio-scrollbar-width: 8px;
   --studio-scrollbar-thumb: color-mix(in oklch, var(--border) 82%, white 18%);
   --studio-scrollbar-thumb-hover: color-mix(in oklch, var(--border) 60%, white 40%);
+
+  /* Motion duration tokens — one knob per tier so per-component
+   * transitions don't drift between 140ms / 150ms / 240ms ease /
+   * ease-out variants.
+   *   --motion-fast (140ms ease) — hover, focus, color flips, scrollbar
+   *                                 thumb hover, small affordances
+   *   --motion-default (240ms ease-out) — node selection ramp, card
+   *                                 elevation, larger surface changes
+   * Intentionally NOT applied via `transition-property: all` on `*`;
+   * components opt in by referencing the token (e.g.
+   * `transition: background-color var(--motion-fast)`). */
+  --motion-fast: 140ms ease;
+  --motion-default: 240ms ease-out;
 }
 
 .dark {
@@ -272,5 +285,99 @@
   }
   code, kbd, pre, samp {
     font-family: var(--font-mono);
+  }
+
+  /* ── Global :focus-visible baseline ─────────────────────────────
+   * Same paradigm as the scrollbar baseline above (PR #217): every
+   * interactive element gets the same 2px outline + 2px offset, in
+   * --ring, by default. Per-element rules only need to OPT OUT
+   * (where the ring is clipped inside `overflow: hidden` chrome —
+   * `outline-offset: -2px` is the documented escape hatch) instead
+   * of re-declaring the ring colour/width on every button.
+   *
+   * `:where(...)` keeps specificity at 0,0,0 so per-component
+   * outline rules (offset overrides for clipped chrome, etc.) win
+   * without needing `!important`. The fallback chain on --ring keeps
+   * the rule meaningful in standalone design-system stories that
+   * mount without the studio's :root palette.
+   *
+   * Out-of-scope (intentionally NOT covered):
+   * - React Flow internal handles (the library owns its DOM focus)
+   * - CodeMirror's `.cm-content` (handled by its own theme)
+   * - Radix Slot wrappers — they forward focus to the wrapped
+   *   element, which matches one of the selectors below. */
+  :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex='-1']), [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='option']):focus-visible {
+    outline: 2px solid var(--ring, var(--primary, currentColor));
+    outline-offset: 2px;
+  }
+
+  /* ── Global ::selection ─────────────────────────────────────────
+   * Browser-native blue text-selection reads poorly on the dark
+   * Daikon palette (foreground falls back to the unreadable native
+   * white on near-black surfaces). Use a tinted variant of --primary
+   * (the same family the focus ring + accent edge use), at 38% mix
+   * with transparent so the selection still reads as colored but
+   * doesn't overpower the underlying text. --foreground stays the
+   * text colour so contrast against the tint is preserved.
+   *
+   * Out-of-scope: CodeMirror's `.cm-selectionBackground` (handled by
+   * the editor's own theme extension in styles.css) — CodeMirror
+   * doesn't use the native browser selection, so this rule has no
+   * effect on the code editor. */
+  ::selection {
+    background: color-mix(in oklch, var(--primary, var(--accent, currentColor)) 38%, transparent);
+    color: var(--foreground, inherit);
+  }
+
+  /* ── Global :disabled / [aria-disabled='true'] state ────────────
+   * Per-component disabled rules drifted between opacity 0.3 / 0.35
+   * / 0.5 / 0.4 + cursor handling. Promote a single 0.4 + not-allowed
+   * baseline so every disabled control reads identically.
+   *
+   * `:where(...)` keeps specificity at 0 so per-component overrides
+   * (e.g. a heavier 0.5 fade for a destructive button, or a 0.35 for
+   * a sidebar pill where the surface is already tinted) can win
+   * without `!important`.
+   *
+   * `pointer-events: none` is deliberately NOT set here — some
+   * components (Radix tooltip wrappers, drag-and-drop sources) want
+   * to receive hover events even when their inner control is
+   * disabled. Per-component rules opt in to `pointer-events: none`
+   * when needed (see e.g. .studio-rail__btn:disabled below). */
+  :where(:disabled, [aria-disabled='true']) {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ── .studio-card — shared elevated-surface chrome ──────────────
+   * Same paradigm as the scrollbar baseline above: promote the
+   * 12px-radius / 1px-border / two-tier-shadow combo that ad-hoc
+   * declarations on `.rune-node` (visual-editor), `.dv-groupview`
+   * (studio dockview), and similar surfaces all converge on into a
+   * single utility. New surfaces can drop in `<div className=
+   * "studio-card">` and get matching chrome instead of re-declaring.
+   *
+   * Per existing component rules that need to differ on ONE
+   * dimension (e.g. `.rune-graph-group--base` uses a heavier
+   * `0 4px 12px / 0.12` outer shadow because it sits behind its
+   * children, not beside them) — those keep their own rules and
+   * note the divergence inline. The point of this utility is the
+   * shared CONCEPT, not zero-byte minification.
+   *
+   * Tokens used:
+   *   --radius-lg (8px → derived; 12px feels right for the canvas
+   *                language and matches existing .rune-node / .dv-groupview)
+   *   --border    (1px hairline using the design-system border colour)
+   *   --card      (surface-3 in the Daikon palette)
+   * The shadow stays as literal rgba because it's a depth cue, not a
+   * brand colour — keeping it as a token would imply theming, but a
+   * card shadow at 0.08 / 0.10 reads the same in every theme. */
+  .studio-card {
+    border-radius: var(--radius-lg, 12px);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+    background: var(--card, var(--background));
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 2px 6px rgba(0, 0, 0, 0.10);
   }
 }

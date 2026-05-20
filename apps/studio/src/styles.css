@@ -91,7 +91,7 @@ html {
   border-radius: 999px;
   background-clip: padding-box;
   background-color: var(--studio-scrollbar-thumb);
-  transition: background-color 140ms ease;
+  transition: background-color var(--motion-fast);
 }
 
 *::-webkit-scrollbar-thumb:hover {
@@ -118,7 +118,7 @@ html {
   border-radius: 999px;
   background-clip: padding-box;
   background-color: var(--studio-scrollbar-thumb);
-  transition: background-color 140ms ease;
+  transition: background-color var(--motion-fast);
 }
 
 .studio-scroll::-webkit-scrollbar-thumb:hover {
@@ -362,10 +362,10 @@ html {
     user-select: none;
     color: color-mix(in srgb, var(--foreground) 52%, transparent);
     transition:
-      color 140ms ease,
-      background-color 140ms ease,
-      box-shadow 140ms ease,
-      opacity 140ms ease;
+      color var(--motion-fast),
+      background-color var(--motion-fast),
+      box-shadow var(--motion-fast),
+      opacity var(--motion-fast);
   }
 
   .studio-app .dockview-theme-abyss .dv-tab .dv-default-tab {
@@ -501,9 +501,11 @@ html {
     background: var(--accent);
   }
 
+  /* opacity (0.35 vs the 0.4 baseline) + pointer-events:none is the
+   * only divergence from the global :disabled rule. The 0.35 reads
+   * better against the sidebar's already-tinted surface. */
   .studio-app .studio-rail__btn:disabled {
     opacity: 0.35;
-    cursor: not-allowed;
     pointer-events: none;
   }
 
@@ -700,10 +702,8 @@ html {
       0 14px 30px -18px color-mix(in srgb, var(--primary) 32%, transparent);
   }
 
-  .studio-app .studio-topbar__ws-btn:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
+  /* :focus-visible ring covered by the global baseline in
+   * design-system/theme.css (2px solid var(--ring) + 2px offset). */
 
   .studio-app .studio-topbar__ws-btn:active {
     transform: translateY(0.5px);
@@ -766,9 +766,9 @@ html {
     background: color-mix(in srgb, var(--card) 80%, var(--accent));
   }
 
+  /* :focus-visible ring covered by the global baseline; this rule
+   * only still exists to flip text color on keyboard focus. */
   .studio-app .studio-topbar__cmdk:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
     color: var(--foreground);
   }
 
@@ -817,10 +817,7 @@ html {
       0 8px 22px -6px color-mix(in oklch, var(--primary), transparent 35%);
   }
 
-  .studio-app .studio-topbar__generate:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
+  /* :focus-visible ring covered by the global baseline. */
 
   .studio-app .studio-topbar__generate:active {
     transform: translateY(0.5px) scale(0.99);
@@ -1319,6 +1316,10 @@ html {
   flex-shrink: 0;
 }
 
+/* Diverges from the global :disabled (0.4 + not-allowed): visibility
+ * toggles intentionally read as 0.3 / `default` cursor because they
+ * indicate a state-locked row (no parent visibility to inherit from)
+ * rather than a click-disabled control. */
 .ns-type__visibility:disabled {
   cursor: default;
   opacity: 0.3;
@@ -1527,9 +1528,9 @@ html {
   border-radius: 8px;
   color: color-mix(in srgb, var(--foreground) 56%, transparent);
   transition:
-    background-color 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease;
+    background-color var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast);
 }
 
 .studio-source-editor__tab-shell:hover {
@@ -1561,7 +1562,7 @@ html {
   letter-spacing: -0.01em;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 140ms ease;
+  transition: color var(--motion-fast);
 }
 
 .studio-source-editor__tab--active {
@@ -1602,9 +1603,9 @@ html {
   color: color-mix(in srgb, var(--foreground) 42%, transparent);
   opacity: 0;
   transition:
-    opacity 140ms ease,
-    color 140ms ease,
-    background-color 140ms ease;
+    opacity var(--motion-fast),
+    color var(--motion-fast),
+    background-color var(--motion-fast);
 }
 
 .studio-source-editor__tab-shell:hover .studio-source-editor__tab-close,
@@ -1740,20 +1741,12 @@ html {
 }
 
 /* ---------- Focus-visible for namespace explorer ---------- */
-/* T058 (014/FR-026) — outline-offset normalised to 2px so it
- * matches the design-system Button rule and the landing/docs
- * `:focus-visible` baseline. Width and colour family are unchanged. */
-.ns-explorer__action-btn:focus-visible,
-.ns-row__chevron:focus-visible,
-.ns-row__visibility:focus-visible,
-.ns-type__visibility:focus-visible,
-.studio-source-view__tab:focus-visible,
-.studio-source-editor__tab:focus-visible,
-.studio-source-editor__tab-close:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
+/* The shared 2px ring is covered by the global :focus-visible
+ * baseline in design-system/theme.css. We keep two things here:
+ *  1. `:focus:not(:focus-visible)` suppression so mouse-focus
+ *     doesn't draw a ring on these inline action buttons.
+ *  2. A `border-radius` hint on link focus so the rectangular ring
+ *     matches the link's rounded chrome. */
 .ns-explorer__action-btn:focus:not(:focus-visible),
 .ns-row__chevron:focus:not(:focus-visible),
 .ns-row__visibility:focus:not(:focus-visible),
@@ -1762,8 +1755,6 @@ html {
 }
 
 .studio-links a:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
 
@@ -1890,10 +1881,12 @@ html {
   background: var(--primary);
 }
 
+/* Form submit buttons fade harder (0.5) than the global :disabled
+ * (0.4) so the heavier "this is not currently submittable" signal
+ * reads against the saturated primary background. */
 .rune-type-creator__submit:disabled,
 .rune-attribute-editor__submit:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .rune-type-creator__cancel,
@@ -1954,13 +1947,15 @@ html {
   border-color: var(--border);
 }
 
-/* Disabled form controls */
+/* Disabled form controls — opacity diverges (0.5 vs the 0.4
+ * baseline) so the input greys deeper than a button; the
+ * background-color swap (--card → --background) is the carrier
+ * signal that the field is locked. */
 [data-slot='enum-form'] input:disabled,
 [data-slot='function-form'] input:disabled,
 [data-slot='data-type-form'] input:disabled,
 [data-slot='expression-editor']:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
   background-color: var(--background);
 }
 
@@ -2518,12 +2513,17 @@ html {
 }
 
 /* Panel surface: rounded corners, slightly elevated over the dark gap.
- * Two-tier soft shadow mirrors `.rune-node` chrome (visual-editor styles.css)
- * so a Dockview panel and a structure node on the same dark canvas read with
- * matching elevation. The 0.5px hairline ring is kept as a third stacked
- * layer so the sash hover indicator still has a border to fight against. */
+ * Composes the `.studio-card` chrome (radius / background / two-tier
+ * shadow) defined in design-system/theme.css so a Dockview panel and
+ * a `.rune-node` on the same dark canvas read with matching elevation.
+ * The 0.5px hairline ring is layered ABOVE the card shadow as a fourth
+ * stacked layer so the sash hover indicator still has a border to
+ * fight against — that's the one studio-specific addition. The 1px
+ * solid border from `.studio-card` is intentionally suppressed (panels
+ * sit flush against each other; a hairline ring reads better than a
+ * full border at the panel edge). */
 .studio-app .dockview-theme-abyss .dv-groupview {
-  border-radius: 12px;
+  border-radius: var(--radius-lg, 12px);
   overflow: hidden;
   background: var(--card);
   box-shadow:

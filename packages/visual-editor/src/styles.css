@@ -48,8 +48,8 @@
 
 .rune-flow-node-shell {
   transition:
-    opacity 140ms ease,
-    filter 140ms ease;
+    opacity var(--motion-fast, 140ms ease),
+    filter var(--motion-fast, 140ms ease);
 }
 
 .rune-flow-node-shell--dimmed {
@@ -145,8 +145,14 @@
 /* ── Node base ────────────────────────────────────────────────── */
 
 .rune-node {
-  /* UX rec #2: 12px radius reads as the modern 2024+ canvas language
-     ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
+  /* Elevated card chrome — the radius / border / background / two-tier
+   * shadow combo is the shared `.studio-card` idiom defined in
+   * design-system/theme.css. Declarations are echoed here (rather than
+   * adding the className in JSX, which is out of scope for this CSS-
+   * only pass) so the rule remains self-contained.
+   *
+   * UX rec #2: 12px radius reads as the modern 2024+ canvas language
+   * ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
   border-radius: var(--radius-lg, 12px);
   border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
   position: relative;
@@ -157,19 +163,18 @@
   min-width: 200px;
   color: var(--color-node-text, var(--foreground, #E8E6E1));
   /* Two-tier soft shadow — close inner anchors the card to the canvas, wider
-   * outer gives quiet float. Reads as depth without being heavy. Matches the
-   * idiom used by `.rune-graph-group--base` so a base container and its
-   * nested derived child share the same depth language. */
+   * outer gives quiet float. Reads as depth without being heavy. SSoT:
+   * `.studio-card` in design-system/theme.css. */
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 2px 6px rgba(0, 0, 0, 0.10);
-  /* UX rec #3: 240ms ease-out reads as motion (the 150ms previous value
-     was too fast to register). background-color added so the selection
-     ramp animates cleanly. */
+  /* UX rec #3: --motion-default (240ms ease-out) reads as motion (the
+     150ms previous value was too fast to register). background-color
+     added so the selection ramp animates cleanly. */
   transition:
-    border-color 240ms ease-out,
-    box-shadow 240ms ease-out,
-    background-color 240ms ease-out;
+    border-color var(--motion-default, 240ms ease-out),
+    box-shadow var(--motion-default, 240ms ease-out),
+    background-color var(--motion-default, 240ms ease-out);
 }
 
 .rune-node::before {
@@ -508,9 +513,9 @@ button[data-navigable]:focus-visible {
   color: var(--color-node-text, #E8E6E1);
   pointer-events: all;
   transition:
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    background-color 140ms ease;
+    border-color var(--motion-fast, 140ms ease),
+    box-shadow var(--motion-fast, 140ms ease),
+    background-color var(--motion-fast, 140ms ease);
 }
 
 .rune-edge-label__cardinality {
@@ -685,9 +690,9 @@ button[data-navigable]:focus-visible {
   border-radius: 10px;
   background: color-mix(in oklch, var(--muted, #2a2a33) 20%, transparent);
   transition:
-    border-color 140ms ease,
-    background-color 140ms ease,
-    box-shadow 140ms ease;
+    border-color var(--motion-fast, 140ms ease),
+    background-color var(--motion-fast, 140ms ease),
+    box-shadow var(--motion-fast, 140ms ease);
   font-size: 12px;
   line-height: 10px;
 }
@@ -768,7 +773,7 @@ button[data-navigable]:focus-visible {
 
 .rune-type-reference__link--navigable {
   cursor: pointer;
-  transition: color 140ms ease;
+  transition: color var(--motion-fast, 140ms ease);
 }
 
 .rune-type-reference__link--navigable:hover,
@@ -1073,7 +1078,7 @@ button[data-navigable]:focus-visible {
   /* UX rec #7: row hover + focus-within so the row reads as a target
      even before the user clicks an interactive child (the chevron / name
      cell). Without this rows flatline visually until interacted with. */
-  transition: background-color 140ms ease;
+  transition: background-color var(--motion-fast, 140ms ease);
 }
 
 .rune-node-row:hover {
@@ -1206,17 +1211,20 @@ button[data-navigable]:focus-visible {
     ),
     var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
   border-radius: var(--radius-lg, 12px);
-  /* Two-tier soft shadow — close inner shadow grounds the container against
-   * the canvas, wider outer shadow gives it a quiet float. Reads as depth
-   * without competing with the inner node's own shadow (which is even
-   * lighter at 0 1px 2px / 0.04). */
+  /* Two-tier soft shadow — close inner shadow grounds the container
+   * against the canvas, wider outer shadow gives it a quiet float.
+   * INTENTIONALLY DIVERGES from `.studio-card` SSoT
+   * (design-system/theme.css): the outer layer is heavier
+   * (0 4px 12px / 0.12 vs the card's 0 2px 6px / 0.10) because this
+   * container sits BEHIND its child node — without the extra lift,
+   * the inner node's shadow visually merges with the container's. */
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 4px 12px rgba(0, 0, 0, 0.12);
   transition:
-    border-color 240ms ease-out,
-    box-shadow 240ms ease-out,
-    background-color 240ms ease-out;
+    border-color var(--motion-default, 240ms ease-out),
+    box-shadow var(--motion-default, 240ms ease-out),
+    background-color var(--motion-default, 240ms ease-out);
 }
 
 .rune-graph-group--base:hover {
