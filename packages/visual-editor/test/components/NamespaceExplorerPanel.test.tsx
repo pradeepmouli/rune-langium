@@ -133,54 +133,51 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Phase 13 amend: row body is single-purpose (drag-source mark only)
-  // Navigation moved to the dedicated nav button (chevron-right).
+  // Row click model (post-iteration): the only click-actionable element in
+  // the row is the navigate arrow on the right. The row body and the type
+  // name are NOT click targets — the only operations on the row are HTML5
+  // drag (to add the type as a ref) and Enter/Space (which delegates to the
+  // navigate action for keyboard parity with the arrow click). The earlier
+  // "click-to-mark-as-drag-source" semantic and the "click-on-name-to-
+  // navigate" semantic were both removed because the user reported them
+  // as confusing — every visual affordance in the row now points at "drag
+  // or click the arrow", nothing else.
   // -------------------------------------------------------------------------
 
-  it('single-click on row body calls onSetDragSource and does NOT navigate', () => {
+  it('single-click on the row body is a no-op (drag-source-mark removed)', () => {
     const onSetDragSource = vi.fn();
     const { props } = renderPanel({ onSetDragSource });
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
 
     fireEvent.click(typeRow);
 
-    expect(onSetDragSource).toHaveBeenCalledOnce();
-    const payload = onSetDragSource.mock.calls[0]![0];
-    expect(isTypeRefPayload(payload)).toBe(true);
-    expect(payload.typeId).toBe('com.model::Trade');
-    expect(payload.typeName).toBe('Trade');
-    expect(payload.namespaceUri).toBe('com.model');
-    expect(payload.kind).toBe('Data');
-    // onSelectNode must NOT be called when clicking the row body
+    expect(onSetDragSource).not.toHaveBeenCalled();
     expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
-  it('click on nav button calls onSelectNode and does NOT mark drag source', () => {
-    const onSetDragSource = vi.fn();
-    const { props } = renderPanel({ onSetDragSource });
+  it('click on nav button calls onSelectNode', () => {
+    const { props } = renderPanel();
     const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
 
     fireEvent.click(navBtn);
 
-    // Navigation must be triggered
     expect(props.onSelectNode).toHaveBeenCalledOnce();
-    // Drag-source mark must NOT be triggered (stopPropagation prevents row body click)
-    expect(onSetDragSource).not.toHaveBeenCalled();
   });
 
-  it('click on type-name button calls onSelectNode and does NOT mark drag source', () => {
-    // UX feedback: the row name visually reads as a hyperlink (hover-underline),
-    // so clicking it should navigate — matching the dedicated nav button. The
-    // row body (outside the name and chevron) still marks drag source so the
-    // single-purpose click target for "make this the drag source" is preserved.
-    const onSetDragSource = vi.fn();
-    const { props } = renderPanel({ onSetDragSource });
-    const nameBtn = screen.getByTestId('ns-type-name-com.model::Trade');
+  it('nav click triggers the just-navigated CSS pulse on the row', () => {
+    // Navigation feedback: clicking the arrow flashes the row briefly so
+    // the user knows their click registered before focus moves to the
+    // navigated target. The pulse is a CSS animation keyed by the
+    // `studio-type-row--just-navigated` class, toggled by a useState +
+    // 500ms setTimeout in TypeItemRow.
+    const { props } = renderPanel();
+    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
 
-    fireEvent.click(nameBtn);
+    fireEvent.click(navBtn);
 
     expect(props.onSelectNode).toHaveBeenCalledOnce();
-    expect(onSetDragSource).not.toHaveBeenCalled();
+    expect(typeRow.className).toContain('studio-type-row--just-navigated');
   });
 
   it('keyboard activate nav button (Enter) calls onSelectNode', async () => {
@@ -196,13 +193,13 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onSelectNode).toHaveBeenCalledOnce();
   });
 
-  it('Enter on nav button does NOT bubble to row keydown (no spurious drag-source mark)', () => {
-    // Codex P2 regression: previously the nav button's keydown bubbled to the
-    // row's onKeyDown handler, marking the type as drag source AS WELL AS
-    // navigating. One keystroke triggered both actions. handleNavKeyDown's
-    // stopPropagation prevents that.
-    const onSetDragSource = vi.fn();
-    const { props } = renderPanel({ onSetDragSource });
+  it('Enter on nav button does NOT bubble to row keydown (no double-fire)', () => {
+    // Codex P2 regression: previously the nav button's keydown bubbled to
+    // the row's onKeyDown handler, AND the native button click activation
+    // also fired — one keystroke triggered onSelectNode twice (once via
+    // bubble, once via click). handleNavKeyDown's stopPropagation prevents
+    // that, so the count stays exactly 1.
+    const { props } = renderPanel();
     const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
 
     navBtn.focus();
@@ -210,20 +207,19 @@ describe('NamespaceExplorerPanel', () => {
     fireEvent.click(navBtn); // native button click on Enter
 
     expect(props.onSelectNode).toHaveBeenCalledOnce();
-    expect(onSetDragSource).not.toHaveBeenCalled();
   });
 
   it('Space on nav button does NOT bubble to row keydown', () => {
-    const onSetDragSource = vi.fn();
-    const { props } = renderPanel({ onSetDragSource });
+    const { props } = renderPanel();
     const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
 
     navBtn.focus();
     fireEvent.keyDown(navBtn, { key: ' ' });
     fireEvent.click(navBtn);
 
+    // One activation = one onSelectNode call (no double-fire from keydown
+    // bubbling to the row's onKeyDown AND the button's native click).
     expect(props.onSelectNode).toHaveBeenCalledOnce();
-    expect(onSetDragSource).not.toHaveBeenCalled();
   });
 
   it('nav button is present for all type rows', () => {
@@ -313,60 +309,39 @@ describe('NamespaceExplorerPanel', () => {
     expect(dataTransfer.effectAllowed).toBe('link');
   });
 
-  // e2e-batch fix #5: the drag-source visual marker was a `→` glyph that
-  // visually competed with the right-aligned ChevronRight nav button. It was
-  // replaced with a left-edge color stripe driven by the
-  // `studio-type-row--drag-source` class + `data-drag-source` attribute on
-  // the row body. These tests now assert the new contract — the row body
-  // owns the state, no separate glyph element exists.
-  it('marks the row as drag source when dragSourceId matches the row nodeId', () => {
-    renderPanel({ dragSourceId: 'com.model::Trade' });
-    const tradeRow = screen.getByTestId('ns-type-com.model::Trade');
-    expect(tradeRow.getAttribute('data-drag-source')).toBe('true');
-    expect(tradeRow.className).toContain('studio-type-row--drag-source');
-    expect(tradeRow.getAttribute('aria-label')).toContain('active drag source');
-  });
-
-  it('does NOT mark the row as drag source when dragSourceId does not match', () => {
-    renderPanel({ dragSourceId: 'com.lib::Date' });
-    const tradeRow = screen.getByTestId('ns-type-com.model::Trade');
-    expect(tradeRow.getAttribute('data-drag-source')).toBeNull();
-    expect(tradeRow.className).not.toContain('studio-type-row--drag-source');
-  });
-
-  it('does NOT mark any row as drag source when dragSourceId is absent', () => {
-    renderPanel();
-    const rows = document.querySelectorAll('[data-drag-source="true"]');
-    expect(rows.length).toBe(0);
-  });
-
   // -------------------------------------------------------------------------
-  // a11y — keyboard activation (Phase 13 amend)
+  // a11y — row body is NOT a button (PR #210 P2 review)
   //
-  // Row body Enter/Space → mark drag source (single-purpose, matches click)
-  // Nav button Enter     → navigate (via native button activation)
+  // The row body advertises no button semantics — no `role`, no `tabIndex`,
+  // no Enter/Space activation. The nav-arrow `<button>` embedded in the row
+  // is the sole interactive control; it is independently keyboard-focusable
+  // (tabIndex=0, descriptive aria-label) and handles the navigate action.
+  // Keeping keyboard activation on the row while removing mouse activation
+  // would have given AT users a phantom action sighted users can't trigger.
   // -------------------------------------------------------------------------
 
-  it('Enter key on row body marks drag source (does NOT navigate)', () => {
-    const onSetDragSource = vi.fn();
-    const { props } = renderPanel({ onSetDragSource });
+  it('row body has no button role and is not in the tab order', () => {
+    renderPanel();
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    expect(typeRow.getAttribute('role')).toBeNull();
+    expect(typeRow.getAttribute('tabindex')).toBeNull();
+  });
+
+  it('Enter key on row body does NOT fire onSelectNode (no button semantics)', () => {
+    const { props } = renderPanel();
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
     fireEvent.keyDown(typeRow, { key: 'Enter' });
-    expect(onSetDragSource).toHaveBeenCalledOnce();
-    // Row body Enter must NOT navigate — that's the nav button's job
     expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
-  it('Space key on row body marks drag source (does NOT navigate)', () => {
-    const onSetDragSource = vi.fn();
-    const { props } = renderPanel({ onSetDragSource });
+  it('Space key on row body does NOT fire onSelectNode (no button semantics)', () => {
+    const { props } = renderPanel();
     const typeRow = screen.getByTestId('ns-type-com.model::Trade');
     fireEvent.keyDown(typeRow, { key: ' ' });
-    expect(onSetDragSource).toHaveBeenCalledOnce();
     expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
-  it('nav button has independent tabIndex=0 (keyboard-focusable separately from row)', () => {
+  it('nav button has independent tabIndex=0 (keyboard-focusable)', () => {
     renderPanel();
     const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
     expect(navBtn.getAttribute('tabindex')).toBe('0');
@@ -385,13 +360,6 @@ describe('NamespaceExplorerPanel', () => {
     fireEvent.keyDown(typeRow, { key: 'ArrowDown' });
     expect(props.onSelectNode).not.toHaveBeenCalled();
     expect(onSetDragSource).not.toHaveBeenCalled();
-  });
-
-  it('type rows have role=button and tabIndex=0 for keyboard accessibility', () => {
-    renderPanel();
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
-    expect(typeRow.getAttribute('role')).toBe('button');
-    expect(typeRow.getAttribute('tabindex')).toBe('0');
   });
 
   // -------------------------------------------------------------------------

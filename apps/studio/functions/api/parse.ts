@@ -117,22 +117,27 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       bundleId?: string;
     }> = [];
 
-    // The legacy deferredExports summary mirrors what handleParseWorkspace produces.
-    // Carries the real file name so EditorPage's "click node → open in source"
-    // lookup (files.find(f => f.path === filePath)) can match it. If multiple
-    // files share a namespace the first file wins — same behaviour as the browser
-    // worker's handleParseWorkspace (Map keyed by namespace).
-    const deferredExportsByNamespace: Record<
-      string,
-      { filePath: string; entries: Array<{ type: string; name: string }> }
-    > = {};
+    // The deferredExports summary mirrors what handleParseWorkspace produces:
+    // ONE entry per file (not per namespace). A single namespace can span
+    // multiple .rosetta files (e.g. cdm.base.datetime is split across
+    // -type/-enum/-func), and the studio's nodeIdToFilePath map needs each
+    // exported name to point at the file that actually declares it so
+    // linkDocument hits the right deferred-model JSON. Collapsing per
+    // namespace was the root cause of "curated nodes show empty in
+    // Structure/Inspector" — every node-id mapped to the first file's
+    // filePath and linkDocument materialized the wrong AST.
+    const deferredExportsList: Array<{
+      filePath: string;
+      namespace: string;
+      entries: Array<{ type: string; name: string }>;
+    }> = [];
 
     // Only spin up Langium services when there are user files to parse.
     // Curated-only requests (files: [], curatedBundles: [...]) skip the
     // ~1.8 MB langium import + createRuneDslServices entirely — the
     // curated path consumes pre-parsed JSON via curated-fetch.ts.
     if (body.files.length > 0) {
-      await parseUserFiles(body.files, errors, documentsForHydration, deferredExportsByNamespace);
+      await parseUserFiles(body.files, errors, documentsForHydration, deferredExportsList);
     }
 
     // Fetch curated bundles via the CURATED_MIRROR service binding so the
@@ -160,7 +165,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             // user-file namespaces (Codex P2 review). Without this the corpus
             // hydrates correctly but its read-only nodes are invisible until
             // an editor link triggers linkDocument and pulls them on-demand.
-            mergeCuratedDocIntoDeferredExports(doc, deferredExportsByNamespace);
+            mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
           }
         } catch (err) {
           if (err instanceof CuratedBundleUnavailableError) {
@@ -194,13 +199,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         // parsedModels intentionally absent — server cannot send Langium ASTs
         // (circular $container refs). Task 0.5 rebuilds this client-side from
         // hydrationState.documents if needed.
-        deferredExports: Object.entries(deferredExportsByNamespace).map(
-          ([namespace, { filePath: nsFilePath, entries }]) => ({
-            filePath: nsFilePath,
-            namespace,
-            exports: entries
-          })
-        ),
+        deferredExports: deferredExportsList.map(({ filePath: entryFilePath, namespace, entries }) => ({
+          filePath: entryFilePath,
+          namespace,
+          exports: entries
+        })),
         errors,
         hydrationState: { documents: documentsForHydration }
       }),
@@ -237,7 +240,7 @@ async function parseUserFiles(
     serializedModel: string;
     exports: Array<{ type: string; name: string; path: string }>;
   }>,
-  deferredExportsByNamespace: Record<string, { filePath: string; entries: Array<{ type: string; name: string }> }>
+  deferredExportsList: Array<{ filePath: string; namespace: string; entries: Array<{ type: string; name: string }> }>
 ): Promise<void> {
   const [{ createRuneDslServices }, { EmptyFileSystem }] = await Promise.all([
     import('@rune-langium/core'),
@@ -308,9 +311,14 @@ async function parseUserFiles(
     });
 
     if (namespace) {
-      const existing = deferredExportsByNamespace[namespace] ?? { filePath, entries: [] };
-      for (const e of exports) existing.entries.push({ type: e.type, name: e.name });
-      deferredExportsByNamespace[namespace] = existing;
+      // Emit ONE entry per file so the studio's nodeIdToFilePath builder
+      // can route each name to the file that declares it. See the comment
+      // in handlePost where deferredExportsList is initialized.
+      deferredExportsList.push({
+        filePath,
+        namespace,
+        entries: exports.map((e) => ({ type: e.type, name: e.name }))
+      });
     }
   }
 }
@@ -359,9 +367,21 @@ function preserveCstText(model: any): void {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
- * Extract the curated doc's namespace from its serialized model and merge
- * its exports into the per-namespace deferredExports map. Mutates the
- * passed map in place to match the same shape user-file parses produce.
+ * Extract the curated doc's namespace from its serialized model and append
+ * a per-FILE entry to the deferredExports list. Mutates the passed list in
+ * place to match the same shape the in-browser parser-worker produces
+ * (apps/studio/src/workers/parser-worker.ts:handleParseWorkspace emits one
+ * entry per file, not per namespace).
+ *
+ * Why per-file and not per-namespace: a single namespace (e.g.
+ * `cdm.base.datetime`) can be split across multiple `.rosetta` files
+ * (`-type.rosetta`, `-enum.rosetta`, `-func.rosetta`). The earlier
+ * per-namespace collapse would assign ALL of that namespace's exports to
+ * whichever file was iterated first, so the studio's nodeIdToFilePath
+ * map (EditorPage.tsx) would route every linkDocument call to the wrong
+ * file. Cross-file linking then never fires for the file that actually
+ * declares the clicked type, and curated nodes appear bodiless because
+ * their AST never gets hydrated.
  *
  * Namespace comes from the top-level `name` field of the Langium-serialized
  * RosettaModel. We slice off the model preamble and run a small regex
@@ -370,7 +390,7 @@ function preserveCstText(model: any): void {
  */
 function mergeCuratedDocIntoDeferredExports(
   doc: { uri: string; serializedModel: string; exports: Array<{ type: string; name: string; path: string }> },
-  deferredExportsByNamespace: Record<string, { filePath: string; entries: Array<{ type: string; name: string }> }>
+  deferredExportsList: Array<{ filePath: string; namespace: string; entries: Array<{ type: string; name: string }> }>
 ): void {
   const preamble = doc.serializedModel.slice(0, 256);
   const nameMatch = /"name"\s*:\s*"([^"]+)"/.exec(preamble);
@@ -378,9 +398,11 @@ function mergeCuratedDocIntoDeferredExports(
   const namespace = nameMatch[1].replace(/^"|"$/g, '');
   if (!namespace) return;
 
-  const existing = deferredExportsByNamespace[namespace] ?? { filePath: doc.uri, entries: [] };
-  for (const e of doc.exports) existing.entries.push({ type: e.type, name: e.name });
-  deferredExportsByNamespace[namespace] = existing;
+  deferredExportsList.push({
+    filePath: doc.uri,
+    namespace,
+    entries: doc.exports.map((e) => ({ type: e.type, name: e.name }))
+  });
 }
 
 /**

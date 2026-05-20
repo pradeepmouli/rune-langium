@@ -152,23 +152,14 @@ describe('FormPreviewPanel', () => {
     render(<FormPreviewPanel schema={undefined} status={{ state: 'waiting' }} />);
 
     expect(screen.getByRole('region', { name: /form preview/i })).toBeInTheDocument();
-    expect(
-      screen.getByText(/select a type from the graph, file tree, or source editor/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/select a type from the graph, file tree, or source editor/i)).toBeInTheDocument();
   });
 
   it('shows a waiting state when generation is in progress for a selected type', () => {
-    render(
-      <FormPreviewPanel
-        schema={undefined}
-        status={{ state: 'waiting', targetId: tradeSchema.targetId }}
-      />
-    );
+    render(<FormPreviewPanel schema={undefined} status={{ state: 'waiting', targetId: tradeSchema.targetId }} />);
 
     expect(screen.getByText(/generating preview for the selected type/i)).toBeInTheDocument();
-    expect(
-      screen.queryByText(/select a type from the graph, file tree, or source editor/i)
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/select a type from the graph, file tree, or source editor/i)).not.toBeInTheDocument();
   });
 
   it('shows an unavailable state when no preview can be generated yet', () => {
@@ -189,12 +180,7 @@ describe('FormPreviewPanel', () => {
   });
 
   it('renders scalar, enum, nested object, and array controls from the preview schema', () => {
-    render(
-      <FormPreviewPanel
-        schema={tradeSchema}
-        status={{ state: 'ready', targetId: tradeSchema.targetId }}
-      />
-    );
+    render(<FormPreviewPanel schema={tradeSchema} status={{ state: 'ready', targetId: tradeSchema.targetId }} />);
 
     expect(screen.getByRole('heading', { name: 'Trade' })).toBeInTheDocument();
     expect(screen.getByLabelText('id')).toHaveAttribute('type', 'text');
@@ -282,21 +268,14 @@ describe('FormPreviewPanel', () => {
 
     // Field descriptions are no longer rendered (removed in restyle)
     expect(screen.queryByText(/mapped via exported subschema defaults/i)).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/uses partydefaults\.name component mapping/i)
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/uses partydefaults\.name component mapping/i)).not.toBeInTheDocument();
     // But the fields themselves remain
     expect(screen.getByText('counterparty')).toBeInTheDocument();
     expect(screen.getByText('Legal name')).toBeInTheDocument();
   });
 
   it('does not surface raw source locations in the form UI', () => {
-    render(
-      <FormPreviewPanel
-        schema={tradeSchema}
-        status={{ state: 'ready', targetId: tradeSchema.targetId }}
-      />
-    );
+    render(<FormPreviewPanel schema={tradeSchema} status={{ state: 'ready', targetId: tradeSchema.targetId }} />);
 
     expect(screen.queryByText(/preview\.rosetta:12:5/i)).not.toBeInTheDocument();
     // Field descriptions are no longer rendered (removed in restyle)
@@ -363,7 +342,10 @@ describe('FormPreviewPanel', () => {
     );
 
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
-    expect(screen.getByText(/section omitted from the sample/i)).toBeInTheDocument();
+    // The "Section omitted from the sample." caption was removed — the
+    // absent nested children (no Name input rendered) is the affordance.
+    // The Add button stays accessible via its aria-label even though the
+    // label text is replaced by a + icon.
     expect(screen.getByTestId('sample-data-output')).not.toHaveTextContent('counterparty');
 
     fireEvent.click(screen.getByRole('button', { name: /add counterparty/i }));
@@ -380,12 +362,7 @@ describe('FormPreviewPanel', () => {
   });
 
   it('stores numeric sample values as numbers instead of strings', () => {
-    render(
-      <FormPreviewPanel
-        schema={numericSchema}
-        status={{ state: 'ready', targetId: numericSchema.targetId }}
-      />
-    );
+    render(<FormPreviewPanel schema={numericSchema} status={{ state: 'ready', targetId: numericSchema.targetId }} />);
 
     fireEvent.change(screen.getByLabelText('Quantity'), {
       target: { value: '42', valueAsNumber: 42 }

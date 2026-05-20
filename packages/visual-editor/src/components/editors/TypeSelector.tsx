@@ -10,7 +10,7 @@
  * when render-props are not provided.
  */
 
-import { useState, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { TypeOption, TypeKind } from '../../types.js';
 import { badgeVariants } from '@rune-langium/design-system/ui/badge';
 import {
@@ -22,6 +22,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@rune-langium/design-system/ui/select';
+import { useTypeRefDrop } from '../../hooks/useTypeRefDrop.js';
+import type { TypeRefPayload } from '../../types/structure-view.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -241,10 +243,54 @@ export function TypeSelector({
     }
   };
 
+  // Accept a drag from the namespace explorer (same dual-MIME contract as
+  // StructureView's TypePickerCell) so dropping a type-ref on the
+  // Inspector's type selector picks that type. The dropped payload's
+  // `typeId` is the canonical `namespace::Name` identifier the store
+  // expects for cross-namespace resolution; we forward it directly to
+  // `onSelect`, matching how a click on a SelectItem would behave
+  // (the SelectItem's value is also the canonical id). `accept` mirrors
+  // the optional `filterKinds` prop so the selector silently ignores
+  // drops of kinds it isn't allowed to accept (e.g. dragging a Function
+  // onto a typeAlias-only selector).
+  const acceptKinds: ReadonlyArray<TypeRefPayload['kind']> = useMemo(() => {
+    if (disabled) return [];
+    const all: ReadonlyArray<TypeRefPayload['kind']> = ['Data', 'Choice', 'Enum', 'BasicType'];
+    // "No filter specified" (undefined or empty array) means the selector
+    // accepts every draggable kind — that's the caller's signal of "I have
+    // no opinion about kinds; let any type-ref drop through".
+    if (!filterKinds || filterKinds.length === 0) return all;
+    const mapped = all.filter((k) =>
+      filterKinds.includes(k === 'BasicType' ? 'basicType' : (k.toLowerCase() as TypeKind))
+    );
+    // P2 review (PR #210): when filterKinds is NON-empty but maps to zero
+    // draggable kinds (e.g. caller passed `['builtin', 'func', 'typeAlias']`,
+    // none of which have draggable analogs in TypeRefPayload), reject all
+    // drops. The previous `mapped.length > 0 ? mapped : all` fallback
+    // silently widened the contract to accept everything — bypassing the
+    // caller's stated filter. "Specified an opinion but no draggable kinds
+    // match" is a stricter signal than "specified no opinion at all".
+    return mapped;
+  }, [disabled, filterKinds]);
+  const handleDrop = useCallback(
+    (payload: TypeRefPayload) => {
+      handleSelect(payload.typeId);
+    },
+    // handleSelect is stable per render in this component; including it
+    // is safe and keeps the linter happy.
+    [handleSelect]
+  );
+  const { dragOverHandlers, isOver } = useTypeRefDrop({ accept: acceptKinds, onDrop: handleDrop });
+  const dropAttrs = {
+    ...dragOverHandlers,
+    'data-drop-over': isOver ? 'true' : undefined,
+    'data-type-selector-drop': 'true'
+  };
+
   // Composition mode: use render-props
   if (renderTrigger && renderPopover) {
     return (
-      <>
+      <span {...dropAttrs} className="inline-block">
         {renderTrigger({
           selected,
           placeholder,
@@ -261,40 +307,45 @@ export function TypeSelector({
             allowClear,
             selectedValue: value
           })}
-      </>
+      </span>
     );
   }
 
-  // Fallback mode: shadcn Select
+  // Fallback mode: shadcn Select. Wrap the Select in a drop-target span
+  // so the trigger AND any popover-hovering area can accept type-ref
+  // drops. The `data-drop-over` attribute drives the focus-ring style in
+  // styles.css (see `[data-type-selector-drop][data-drop-over]`).
   const NONE_SENTINEL = '__none__';
   return (
-    <Select
-      value={value ?? NONE_SENTINEL}
-      onValueChange={(val) => handleSelect(val === NONE_SENTINEL ? null : val)}
-      disabled={disabled}
-    >
-      <SelectTrigger data-slot="type-selector" className={`h-7 text-xs px-2 ${triggerClassName ?? ''}`.trim()}>
-        <SelectValue placeholder={allowClear ? '— None —' : placeholder} />
-      </SelectTrigger>
-      <SelectContent className="rune-type-selector__content">
-        {allowClear && <SelectItem value={NONE_SENTINEL}>— None —</SelectItem>}
-        {groups.map((group) => (
-          <SelectGroup key={group.label}>
-            <SelectLabel>{group.label}</SelectLabel>
-            {group.options.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                <span className="inline-flex items-center gap-1.5">
-                  <span
-                    className={`inline-block size-2 rounded-full shrink-0 ${getKindDotClass(opt.kind)}`}
-                    aria-hidden="true"
-                  />
-                  {opt.label}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        ))}
-      </SelectContent>
-    </Select>
+    <span {...dropAttrs} className="inline-block w-full">
+      <Select
+        value={value ?? NONE_SENTINEL}
+        onValueChange={(val) => handleSelect(val === NONE_SENTINEL ? null : val)}
+        disabled={disabled}
+      >
+        <SelectTrigger data-slot="type-selector" className={`h-7 text-xs px-2 ${triggerClassName ?? ''}`.trim()}>
+          <SelectValue placeholder={allowClear ? '— None —' : placeholder} />
+        </SelectTrigger>
+        <SelectContent className="rune-type-selector__content">
+          {allowClear && <SelectItem value={NONE_SENTINEL}>— None —</SelectItem>}
+          {groups.map((group) => (
+            <SelectGroup key={group.label}>
+              <SelectLabel>{group.label}</SelectLabel>
+              {group.options.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className={`inline-block size-2 rounded-full shrink-0 ${getKindDotClass(opt.kind)}`}
+                      aria-hidden="true"
+                    />
+                    {opt.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ))}
+        </SelectContent>
+      </Select>
+    </span>
   );
 }

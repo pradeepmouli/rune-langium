@@ -11,7 +11,7 @@
 import { memo, useCallback } from 'react';
 import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, Minus } from 'lucide-react';
 import type { AnyGraphNode } from '../../types.js';
 import type { StructureDataNode, StructureExpansionKey, StructureRow } from '../../types/structure-view.js';
 import { expansionKey } from '../../types/structure-view.js';
@@ -20,6 +20,7 @@ import { getHandlePositions, useNavigation, resolveTypeNodeId } from './Navigati
 import { NodeKindBadge } from './NodeKindBadge.js';
 import { useDiagnosticsForRange, diagnosticSeverityClass } from '../../hooks/useDiagnosticsForRange.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
+import { STRUCTURE_LAYOUT_CONSTANTS } from '../../layout/structure-layout.js';
 
 // ---------------------------------------------------------------------------
 // Structure-variant types (Finding 4)
@@ -37,6 +38,25 @@ interface StructureNodeData extends StructureDataNode {
     }>;
     card?: React.ComponentType<{ value: string; nodeId: string; attrName: string }>;
   };
+  /**
+   * Per-node rows-column width (e2e-batch fix #12) — referenced by the
+   * inline-style `width` on `.rune-node-rows` so per-node estimates
+   * override the global `--rune-col-width` fallback.
+   */
+  readonly rowsColWidth?: number;
+  /**
+   * Visual-polish #11 (PR #210) — layout-emitted geometry feeding the SVG
+   * row→child connector overlay. `rowOffsets` and `childYByAttrName` are
+   * keyed by attrName; entries exist only for rows whose expansion is
+   * currently materialized (the placement pass writes them in
+   * `placeDataChildren`). `connectorGeometry` carries the wrapper-relative
+   * x of both the row-right and child-left edges so the renderer doesn't
+   * have to know whether the variant has a body padding wrapper. All three
+   * absent / empty means nothing to draw.
+   */
+  readonly rowOffsets?: ReadonlyMap<string, number>;
+  readonly childYByAttrName?: ReadonlyMap<string, number>;
+  readonly connectorGeometry?: { readonly rowRightX: number; readonly childLeftX: number };
   /**
    * Per-key expansion state for rendering the expand/collapse chevron
    * (Finding 1, spec 020 Phase 13). When absent, all rows render
@@ -94,6 +114,102 @@ function isRowExpandable(typeKind: StructureRow['typeKind']): boolean {
   return typeKind === 'Data' || typeKind === 'Choice';
 }
 
+// ---------------------------------------------------------------------------
+// Row → child SVG connector overlay (visual-polish #11, PR #210)
+// ---------------------------------------------------------------------------
+//
+// Each parent structure node renders its own absolutely-positioned SVG that
+// links every materialized row's right edge to the corresponding child's
+// header center. Self-contained per parent — no global coordinator.
+//
+// The visual-only CORNER_RADIUS lives here (not in STRUCTURE_LAYOUT_CONSTANTS)
+// because it isn't layout-coupled; it only affects path-shape rendering. The
+// audit's item #11 rationale: visual constants stay with the visual code,
+// only layout-coupled values get promoted to the SSoT.
+//
+// The helper is duplicated across DataNode / ChoiceNode / GroupContainerNode
+// rather than extracted to a shared module to keep each node's rendering
+// self-contained per the audit's #11 constraint. The duplication is ~30
+// lines per file and the geometry is identical — see ChoiceNode.tsx and
+// GroupContainerNode.tsx for matching implementations.
+
+const CONNECTOR_CORNER_RADIUS = 4;
+
+function buildConnectorPath(startX: number, startY: number, endX: number, endY: number): string {
+  if (startY === endY) {
+    return `M ${startX} ${startY} L ${endX} ${endY}`;
+  }
+  // Stepped path: horizontal half the gutter, vertical to child level, horizontal in.
+  // Mid-x is derived from the actual start/end distance so the bend stays
+  // centered in the visible gutter regardless of any per-variant padding
+  // offset (Data inserts NODE_PADDING in the gap; Choice does not).
+  const gap = endX - startX;
+  const midX = startX + gap / 2;
+  const goingDown = endY > startY;
+  const r = Math.min(CONNECTOR_CORNER_RADIUS, Math.abs(endY - startY) / 2, gap / 4);
+  const v1 = goingDown ? startY + r : startY - r;
+  const v2 = goingDown ? endY - r : endY + r;
+  const sweepIn = goingDown ? 1 : 0;
+  const sweepOut = goingDown ? 0 : 1;
+  return [
+    `M ${startX} ${startY}`,
+    `H ${midX - r}`,
+    `A ${r} ${r} 0 0 ${sweepIn} ${midX} ${v1}`,
+    `V ${v2}`,
+    `A ${r} ${r} 0 0 ${sweepOut} ${midX + r} ${endY}`,
+    `H ${endX}`
+  ].join(' ');
+}
+
+interface RowConnectorOverlayProps {
+  readonly rowOffsets?: ReadonlyMap<string, number>;
+  readonly childYByAttrName?: ReadonlyMap<string, number>;
+  /** Wrapper-relative x of the row's right edge — start point of every connector. */
+  readonly rowRightX: number;
+  /** Wrapper-relative x of the child's left edge — end point of every connector. */
+  readonly childLeftX: number;
+}
+
+function RowConnectorOverlay({
+  rowOffsets,
+  childYByAttrName,
+  rowRightX,
+  childLeftX
+}: RowConnectorOverlayProps): React.ReactElement | null {
+  if (!rowOffsets || !childYByAttrName || childYByAttrName.size === 0) return null;
+  const { HEADER_HEIGHT } = STRUCTURE_LAYOUT_CONSTANTS;
+  const paths: React.ReactElement[] = [];
+  for (const [attrName, childY] of childYByAttrName) {
+    const rowCenter = rowOffsets.get(attrName);
+    if (rowCenter === undefined) continue;
+    const endY = childY + HEADER_HEIGHT / 2;
+    paths.push(
+      <path
+        key={attrName}
+        className="rune-row-connector"
+        d={buildConnectorPath(rowRightX, rowCenter, childLeftX, endY)}
+      />
+    );
+  }
+  if (paths.length === 0) return null;
+  return (
+    <svg
+      className="rune-row-connector-overlay"
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        overflow: 'visible'
+      }}
+    >
+      {paths}
+    </svg>
+  );
+}
+
 function isStructureData(d: unknown): d is StructureNodeData {
   return typeof d === 'object' && d !== null && (d as { variant?: unknown }).variant === 'structure';
 }
@@ -144,20 +260,6 @@ function StructureDataRow({
 
   return (
     <div className={rowClass} data-attr={row.attrName}>
-      {expandable ? (
-        <button
-          type="button"
-          className="rune-row-expand nodrag nopan"
-          onClick={handleToggle}
-          aria-expanded={isExpanded}
-          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.attrName}`}
-          data-testid={`expand-row-${row.attrName}`}
-        >
-          {isExpanded ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
-        </button>
-      ) : (
-        <span className="rune-row-expand-spacer" aria-hidden="true" />
-      )}
       {NameCell ? (
         <NameCell value={row.attrName} nodeId={nodeId} attrName={row.attrName} />
       ) : (
@@ -203,6 +305,24 @@ function StructureDataRow({
       ) : (
         <span className="rune-cell-card">{row.cardinality}</span>
       )}
+      {/* Expand/collapse control moved to the RIGHT edge of the row
+          (was leading-edge before this iteration) and switched from a
+          chevron to a +/− icon to match the form-preview Add/Remove
+          treatment. Plus = "expand (add the child structure to view)",
+          Minus = "collapse (remove it)". `nodrag nopan` keeps React
+          Flow from treating the click as a canvas gesture. */}
+      {expandable ? (
+        <button
+          type="button"
+          className="rune-row-expand rune-row-expand--right nodrag nopan"
+          onClick={handleToggle}
+          aria-expanded={isExpanded}
+          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.attrName}`}
+          data-testid={`expand-row-${row.attrName}`}
+        >
+          {isExpanded ? <Minus size={12} aria-hidden="true" /> : <Plus size={12} aria-hidden="true" />}
+        </button>
+      ) : null}
       {/* structure variant: no Handle — layout emits zero edges; nodesConnectable=false */}
     </div>
   );
@@ -239,13 +359,22 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
       onToggleExpansion,
       instancePath,
       onNavigateToEnumType,
-      structureDiagnostics
+      structureDiagnostics,
+      // Visual-polish #11 (PR #210): connector overlay inputs threaded by
+      // layoutStructureGraph. rowOffsets is keyed by attrName;
+      // childYByAttrName contains one entry per materialized expansion;
+      // connectorGeometry carries the row-right/child-left x coordinates so
+      // the renderer doesn't have to know about per-variant body padding.
+      // See RowConnectorOverlay.
+      rowOffsets,
+      childYByAttrName,
+      connectorGeometry
     } = data;
     // e2e-batch fix #12: per-node rows-column width from the layout.
     // Layout's estimateRowsColWidth() sizes this from row content so CDM-scale
     // type names don't clip. Inline-style overrides the --rune-col-width CSS
     // fallback when present.
-    const rowsColWidth = (data as { rowsColWidth?: number }).rowsColWidth;
+    const rowsColWidth = data.rowsColWidth;
     const NameCell = cellComponents?.name;
     const TypeCell = cellComponents?.type;
     const CardCell = cellComponents?.card;
@@ -312,6 +441,20 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
           </div>
           <div className="rune-node-children-slot" data-testid="data-node-children" />
         </div>
+        {/* Visual-polish #11 (PR #210): SVG connector from row→child for each
+            materialized expansion. Rendered AFTER the body so it paints over,
+            but the SVG itself is pointer-events:none / aria-hidden, so it
+            doesn't interfere with row controls or screen readers. All
+            geometry (rowRightX, childLeftX, rowOffsets, childYByAttrName) is
+            threaded from the layout — the renderer is purely a path emitter. */}
+        {connectorGeometry ? (
+          <RowConnectorOverlay
+            rowOffsets={rowOffsets}
+            childYByAttrName={childYByAttrName}
+            rowRightX={connectorGeometry.rowRightX}
+            childLeftX={connectorGeometry.childLeftX}
+          />
+        ) : null}
       </div>
     );
   }

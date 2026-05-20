@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Minus } from 'lucide-react';
 import type { Node, NodeProps } from '@xyflow/react';
 import type { StructureExpansionKey, StructureRow } from '../../types/structure-view.js';
 import { expansionKey } from '../../types/structure-view.js';
+import { STRUCTURE_LAYOUT_CONSTANTS } from '../../layout/structure-layout.js';
 
 export interface GroupContainerInheritanceData extends Record<string, unknown> {
   scope: 'inheritance';
@@ -49,6 +50,20 @@ export interface GroupContainerBaseTypeData extends Record<string, unknown> {
    * independent. Treated as empty array when absent.
    */
   instancePath?: ReadonlyArray<string>;
+  /**
+   * Visual-polish #11 (PR #210) — layout-emitted geometry feeding the SVG
+   * row→child connector overlay for the base container's own (inherited
+   * row) expansions. Keys match `baseRows[*].attrName`. The derived child
+   * is intentionally NOT included — it has its own visual relationship via
+   * the dotted-border containment, and adding a connector would duplicate
+   * that signal. `connectorGeometry` carries the wrapper-relative
+   * row-right / child-left x; base's right column starts at `BASE_PADDING
+   * + max(rowsColWidth, derivedChildWidth) + COL_GAP`, which the layout
+   * resolves before threading it here.
+   */
+  rowOffsets?: ReadonlyMap<string, number>;
+  childYByAttrName?: ReadonlyMap<string, number>;
+  connectorGeometry?: { readonly rowRightX: number; readonly childLeftX: number };
 }
 
 export type GroupContainerData = GroupContainerInheritanceData | GroupContainerBaseTypeData;
@@ -61,6 +76,87 @@ export type GroupContainerNodeType = Node<GroupContainerData, 'groupContainer'>;
  */
 function isRowExpandable(typeKind: StructureRow['typeKind']): boolean {
   return typeKind === 'Data' || typeKind === 'Choice';
+}
+
+// ---------------------------------------------------------------------------
+// Row → child SVG connector overlay (visual-polish #11, PR #210)
+// ---------------------------------------------------------------------------
+// Mirror of DataNode's RowConnectorOverlay — see that file for the design
+// rationale. Base containers only draw connectors for ROW-level expansions
+// (inherited rows the user expanded into the right column); the derived
+// child inside the dashed border is NOT connected — it has its own visual
+// relationship via the containment chrome, and a connector would duplicate
+// that signal.
+
+const CONNECTOR_CORNER_RADIUS = 4;
+
+function buildConnectorPath(startX: number, startY: number, endX: number, endY: number): string {
+  if (startY === endY) {
+    return `M ${startX} ${startY} L ${endX} ${endY}`;
+  }
+  const gap = endX - startX;
+  const midX = startX + gap / 2;
+  const goingDown = endY > startY;
+  const r = Math.min(CONNECTOR_CORNER_RADIUS, Math.abs(endY - startY) / 2, gap / 4);
+  const v1 = goingDown ? startY + r : startY - r;
+  const v2 = goingDown ? endY - r : endY + r;
+  const sweepIn = goingDown ? 1 : 0;
+  const sweepOut = goingDown ? 0 : 1;
+  return [
+    `M ${startX} ${startY}`,
+    `H ${midX - r}`,
+    `A ${r} ${r} 0 0 ${sweepIn} ${midX} ${v1}`,
+    `V ${v2}`,
+    `A ${r} ${r} 0 0 ${sweepOut} ${midX + r} ${endY}`,
+    `H ${endX}`
+  ].join(' ');
+}
+
+interface RowConnectorOverlayProps {
+  readonly rowOffsets?: ReadonlyMap<string, number>;
+  readonly childYByAttrName?: ReadonlyMap<string, number>;
+  readonly rowRightX: number;
+  readonly childLeftX: number;
+}
+
+function RowConnectorOverlay({
+  rowOffsets,
+  childYByAttrName,
+  rowRightX,
+  childLeftX
+}: RowConnectorOverlayProps): React.ReactElement | null {
+  if (!rowOffsets || !childYByAttrName || childYByAttrName.size === 0) return null;
+  const { HEADER_HEIGHT } = STRUCTURE_LAYOUT_CONSTANTS;
+  const paths: React.ReactElement[] = [];
+  for (const [attrName, childY] of childYByAttrName) {
+    const rowCenter = rowOffsets.get(attrName);
+    if (rowCenter === undefined) continue;
+    const endY = childY + HEADER_HEIGHT / 2;
+    paths.push(
+      <path
+        key={attrName}
+        className="rune-row-connector"
+        d={buildConnectorPath(rowRightX, rowCenter, childLeftX, endY)}
+      />
+    );
+  }
+  if (paths.length === 0) return null;
+  return (
+    <svg
+      className="rune-row-connector-overlay"
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        overflow: 'visible'
+      }}
+    >
+      {paths}
+    </svg>
+  );
 }
 
 export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeType>): React.ReactElement {
@@ -89,8 +185,22 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
   // DataNode.tsx:113. Any other format would produce a key that the adapter never
   // looks for, leaving the chevron's "expanded" state visually correct but never
   // actually rendering the child.
-  const { baseTypeName, baseTypeNamespaceUri, baseRows, expansionMap, onToggleExpansion, instancePath, rowsColWidth } =
-    data;
+  const {
+    baseTypeName,
+    baseTypeNamespaceUri,
+    baseRows,
+    expansionMap,
+    onToggleExpansion,
+    instancePath,
+    rowsColWidth,
+    // Visual-polish #11 (PR #210): connector overlay inputs threaded by
+    // layoutStructureGraph from `placeBaseChildren`. Only inherited-row
+    // expansions are represented — the derived child inside the dashed
+    // border is intentionally excluded (see RowConnectorOverlay docstring).
+    rowOffsets,
+    childYByAttrName,
+    connectorGeometry
+  } = data;
 
   // Phase 14d (fix): include self's React Flow id in the rowKey instancePath so
   // two visible occurrences of the same base container at the same depth produce
@@ -102,6 +212,11 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
   return (
     <div className="rune-graph-group rune-graph-group--base">
       <div className="rune-graph-group__header">
+        {/* Header reads name-left / kind-pill-right; matches the inner
+            DataNode/ChoiceNode/EnumNode header treatment (kind badge
+            pushed to the right via .rune-node-kind-badge { margin-left:
+            auto }). DOM order keeps the type name first so screen
+            readers announce the identity before the kind classifier. */}
         <span className="rune-graph-group__title">{baseTypeName}</span>
         <span className="rune-graph-group__meta">base</span>
       </div>
@@ -128,34 +243,43 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
               className={`rune-graph-group__base-row${expandable ? ' has-expansion' : ''}`}
               data-attr={row.attrName}
             >
+              <span className="rune-cell-name">{row.attrName}</span>
+              <span className="rune-cell-type-chip rune-cell-type-chip--basic">{row.typeName}</span>
+              <span className="rune-cell-card">{row.cardinality}</span>
+              {/* Codex P2 (PR #191): row-level expand/collapse for inherited rows.
+                  Moved to right edge with +/− icons per the post-polish iteration —
+                  matches DataNode/ChoiceNode and the form-preview Add/Remove
+                  treatment. nodrag/nopan keep React Flow from treating the click
+                  as a canvas gesture. */}
               {expandable ? (
-                // Codex P2 (PR #191): row-level expand/collapse for inherited rows.
-                // Real <button> for native keyboard semantics (Enter/Space).
-                // nodrag/nopan keep React Flow from treating the click as a canvas gesture.
                 <button
                   type="button"
-                  className="rune-row-expand nodrag nopan"
+                  className="rune-row-expand rune-row-expand--right nodrag nopan"
                   onClick={handleToggle}
                   aria-expanded={isExpanded}
                   aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.attrName}`}
                   data-testid={`base-expand-row-${row.attrName}`}
                 >
-                  {isExpanded ? (
-                    <ChevronDown size={12} aria-hidden="true" />
-                  ) : (
-                    <ChevronRight size={12} aria-hidden="true" />
-                  )}
+                  {isExpanded ? <Minus size={12} aria-hidden="true" /> : <Plus size={12} aria-hidden="true" />}
                 </button>
-              ) : (
-                <span className="rune-row-expand-spacer" aria-hidden="true" />
-              )}
-              <span className="rune-cell-name">{row.attrName}</span>
-              <span className="rune-cell-type-chip rune-cell-type-chip--basic">{row.typeName}</span>
-              <span className="rune-cell-card">{row.cardinality}</span>
+              ) : null}
             </div>
           );
         })}
       </div>
+      {/* Visual-polish #11 (PR #210): row→child SVG connector for the base
+          container's own inherited-row expansions. Same pattern as Data /
+          Choice; geometry differs because base inserts BASE_PADDING and
+          may have a wider gutter when the derived child is wider than the
+          inherited rows (see placeBaseChildren). */}
+      {connectorGeometry ? (
+        <RowConnectorOverlay
+          rowOffsets={rowOffsets}
+          childYByAttrName={childYByAttrName}
+          rowRightX={connectorGeometry.rowRightX}
+          childLeftX={connectorGeometry.childLeftX}
+        />
+      ) : null}
     </div>
   );
 }

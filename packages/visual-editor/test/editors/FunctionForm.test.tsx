@@ -95,14 +95,7 @@ describe('FunctionForm', () => {
 
   it('renders header with name input and Function badge', () => {
     const actions = makeActions();
-    render(
-      <FunctionForm
-        nodeId="fn1"
-        data={makeFuncData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const nameInput = screen.getByLabelText('Function type name');
     expect(nameInput).toHaveValue('CalculateNotional');
@@ -112,14 +105,7 @@ describe('FunctionForm', () => {
 
   it('renders input parameter rows', () => {
     const actions = makeActions();
-    render(
-      <FunctionForm
-        nodeId="fn1"
-        data={makeFuncData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     expect(screen.getByText('trade')).toBeInTheDocument();
     expect(screen.getByText('price')).toBeInTheDocument();
@@ -128,20 +114,13 @@ describe('FunctionForm', () => {
 
   it('renders expression textarea with current text', () => {
     const actions = makeActions();
-    render(
-      <FunctionForm
-        nodeId="fn1"
-        data={makeFuncData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const textarea = screen.getByLabelText('Function expression');
     expect(textarea).toHaveValue('trade -> price -> amount');
   });
 
-  it('calls addInputParam when "Add Input" is clicked with name filled', () => {
+  it('calls addInputParam when add-input button is clicked with name filled', () => {
     const actions = makeActions();
     render(
       <FunctionForm
@@ -155,7 +134,9 @@ describe('FunctionForm', () => {
     const nameInput = screen.getByLabelText('New input parameter name');
     fireEvent.change(nameInput, { target: { value: 'quantity' } });
 
-    const addBtn = screen.getByText('+ Add Input');
+    // Post-icon-button migration: "+ Add Input" is now an icon-only
+    // <Button> with aria-label="Add input".
+    const addBtn = screen.getByLabelText('Add input');
     fireEvent.click(addBtn);
 
     expect(actions.addInputParam).toHaveBeenCalledWith('fn1', 'quantity', 'string');
@@ -163,14 +144,7 @@ describe('FunctionForm', () => {
 
   it('calls removeInputParam when remove button is clicked', () => {
     const actions = makeActions();
-    render(
-      <FunctionForm
-        nodeId="fn1"
-        data={makeFuncData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const removeButtons = screen.getAllByLabelText(/Remove input/);
     fireEvent.click(removeButtons[0]!);
@@ -240,14 +214,7 @@ describe('FunctionForm', () => {
 
   it('renames function after debounced name change', () => {
     const actions = makeActions();
-    render(
-      <FunctionForm
-        nodeId="fn1"
-        data={makeFuncData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const nameInput = screen.getByLabelText('Function type name');
     fireEvent.change(nameInput, { target: { value: 'ComputePrice' } });
@@ -287,9 +254,7 @@ vi.mock('@zod-to-form/react', async (importOriginal) => {
     ...actual,
     useExternalSync: (...args: unknown[]) => {
       useExternalSyncSpy(...args);
-      return (actual as any).useExternalSync(
-        ...(args as Parameters<typeof actual.useExternalSync>)
-      );
+      return (actual as any).useExternalSync(...(args as Parameters<typeof actual.useExternalSync>));
     }
   };
 });
@@ -310,12 +275,7 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     (data as any).comments = 'Initial comments';
     (data as any).definition = 'Computes the notional';
     const { container } = render(
-      <FunctionForm
-        nodeId="fn1"
-        data={data}
-        availableTypes={AVAILABLE_TYPES}
-        actions={makeActions()}
-      />
+      <FunctionForm nodeId="fn1" data={data} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
     );
 
     // Name must be the first text input in the form-header slot.
@@ -347,12 +307,7 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
         'input[data-slot="type-name-input"], textarea[data-slot="expression-editor"], textarea[data-slot="metadata-description"], textarea[data-slot="metadata-comments"]'
       )
     ).map((el) => el.getAttribute('data-slot'));
-    expect(slotOrder).toEqual([
-      'type-name-input',
-      'expression-editor',
-      'metadata-description',
-      'metadata-comments'
-    ]);
+    expect(slotOrder).toEqual(['type-name-input', 'expression-editor', 'metadata-description', 'metadata-comments']);
   });
 
   // FT2 — debounced rename fires exactly once with the new name
@@ -360,14 +315,7 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     const renameType = vi.fn();
     const actions = { ...makeActions(), renameType };
 
-    render(
-      <FunctionForm
-        nodeId="fn1"
-        data={makeFuncData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
-    );
+    render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const nameInput = screen.getByLabelText(/function type name/i);
 
@@ -400,20 +348,14 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
       <FunctionForm nodeId="fn1" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
-    const initialName = container.querySelector(
-      '[data-slot="type-name-input"]'
-    ) as HTMLInputElement;
+    const initialName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
     expect(initialName.value).toBe('CalculateNotional');
 
     // Swap to nodeB (new reference identity)
-    rerender(
-      <FunctionForm nodeId="fn1" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />
-    );
+    rerender(<FunctionForm nodeId="fn1" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     // Pristine name field reflects nodeB after the swap.
-    const swappedName = container.querySelector(
-      '[data-slot="type-name-input"]'
-    ) as HTMLInputElement;
+    const swappedName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
     expect(swappedName.value).toBe('PriceTrade');
 
     // Migration contract: the upstream useExternalSync hook is the
@@ -434,18 +376,13 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     const actions = makeActions();
 
     const { rerender } = render(
-      <FunctionForm
-        nodeId="fn1"
-        data={makeFuncData()}
-        availableTypes={AVAILABLE_TYPES}
-        actions={actions}
-      />
+      <FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // ---- Edit an input row: add a parameter ------------------------------
     const newParamName = screen.getByLabelText(/new input parameter name/i);
     fireEvent.change(newParamName, { target: { value: 'quantity' } });
-    fireEvent.click(screen.getByText('+ Add Input'));
+    fireEvent.click(screen.getByLabelText('Add input'));
 
     expect(actions.addInputParam).toHaveBeenCalledTimes(1);
     expect(actions.addInputParam).toHaveBeenCalledWith('fn1', 'quantity', 'string');
@@ -471,10 +408,8 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     // `data.output.typeCall`. The contract under test is that this
     // sync path does NOT fire any input-side action as a side effect.
 
-    const addInputCallsBeforeOutput = (actions.addInputParam as ReturnType<typeof vi.fn>).mock.calls
-      .length;
-    const removeInputCallsBeforeOutput = (actions.removeInputParam as ReturnType<typeof vi.fn>).mock
-      .calls.length;
+    const addInputCallsBeforeOutput = (actions.addInputParam as ReturnType<typeof vi.fn>).mock.calls.length;
+    const removeInputCallsBeforeOutput = (actions.removeInputParam as ReturnType<typeof vi.fn>).mock.calls.length;
 
     rerender(
       <FunctionForm
@@ -489,11 +424,7 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
       />
     );
 
-    expect((actions.addInputParam as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
-      addInputCallsBeforeOutput
-    );
-    expect((actions.removeInputParam as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
-      removeInputCallsBeforeOutput
-    );
+    expect((actions.addInputParam as ReturnType<typeof vi.fn>).mock.calls.length).toBe(addInputCallsBeforeOutput);
+    expect((actions.removeInputParam as ReturnType<typeof vi.fn>).mock.calls.length).toBe(removeInputCallsBeforeOutput);
   });
 });

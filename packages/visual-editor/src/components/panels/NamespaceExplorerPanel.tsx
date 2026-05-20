@@ -11,11 +11,14 @@
  * and shadcn/ui primitives with lucide-react icons.
  */
 
-import { useState, useMemo, useCallback, useRef, memo } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import type { JSX, DragEvent, MouseEvent, KeyboardEvent } from 'react';
-import { ChevronRight, ChevronDown, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
+// KeyboardEvent stays imported — the nav button still needs handleNavKeyDown
+// to stop Enter/Space from bubbling. Only the row-level keydown was dropped.
+import { ArrowUpRight, ChevronRight, ChevronDown, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { IconButtonGroup } from '@rune-langium/design-system/ui/icon-button-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import type { TypeGraphNode, TypeKind } from '../../types.js';
 import { buildNamespaceTree, flattenNamespaceTree } from '../../utils/namespace-tree.js';
@@ -221,7 +224,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
               data-testid="namespace-search"
             />
           </div>
-          <div className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/35 p-0.5">
+          <IconButtonGroup>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -252,7 +255,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
               </TooltipTrigger>
               <TooltipContent>Hide all namespaces from graph</TooltipContent>
             </Tooltip>
-          </div>
+          </IconButtonGroup>
         </div>
 
         {/* Virtualized Tree */}
@@ -399,15 +402,19 @@ interface TypeItemRowProps {
 
 function TypeItemRow({
   row,
-  isGraphVisible,
+  // isGraphVisible / isDragSource / onSetDragSource intentionally
+  // unused: the dim "hidden in graph" treatment and click-to-mark-as-
+  // drag-source feature were removed by user iteration so the only
+  // operations in the explorer are drag (HTML5 native) or click the
+  // navigate arrow. The props stay on TypeItemRowProps so parent
+  // wiring (EditorPage / tests) doesn't have to change.
+  isGraphVisible: _isGraphVisible,
   isSelected,
   refCount,
   onSelectNode,
-  isDragSource,
-  onSetDragSource
+  isDragSource: _isDragSource,
+  onSetDragSource: _onSetDragSource
 }: TypeItemRowProps): JSX.Element {
-  const isVisible = isGraphVisible && !row.hidden;
-
   // Build the payload kind once; undefined means this kind is not a valid drag source.
   const payloadKind = toPayloadKind(row.typeKind);
 
@@ -436,45 +443,41 @@ function TypeItemRow({
     e.dataTransfer.effectAllowed = 'link';
   };
 
-  // Row body click: single-purpose — mark as drag source only.
-  // No double-click, no navigation from the row body.
-  const handleClick = useCallback(
-    (_e: MouseEvent<HTMLDivElement>) => {
-      if (!payload) return;
-      onSetDragSource?.(payload);
-    },
-    [payload, onSetDragSource]
-  );
+  // P2 a11y review (PR #210): the row body no longer advertises button
+  // semantics. The previous `role="button"` + `tabIndex={0}` + Enter/Space
+  // handler combination announced the row as an interactive control to AT,
+  // but the mouse-click path had been intentionally removed (drag-source-
+  // mark gone; navigation is now the nav-arrow button's sole responsibility).
+  // Keeping the keyboard activation alive while removing mouse activation
+  // produced inconsistent affordances across input modalities. The row is
+  // now a plain `<div>` — the embedded nav-arrow `<button>` is the only
+  // interactive element, and it is independently keyboard-focusable
+  // (tabIndex=0, descriptive aria-label).
 
-  // Row body keyboard: Enter/Space marks drag source (matches the click action).
-  // Navigation is bound to the dedicated nav button below, not the row body.
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        if (payload) {
-          onSetDragSource?.(payload);
-        }
-      }
-    },
-    [payload, onSetDragSource]
-  );
+  // Nav-click triggers selection AND flashes the row briefly so the user
+  // gets confirmation that the navigate fired — without it the explorer
+  // and other panes update silently and you can't tell if your click was
+  // registered. 500ms cleanup is enough for the eye to catch the pulse
+  // without lingering past the next intent.
+  const [justNavigated, setJustNavigated] = useState(false);
+  useEffect(() => {
+    if (!justNavigated) return;
+    const id = window.setTimeout(() => setJustNavigated(false), 500);
+    return () => window.clearTimeout(id);
+  }, [justNavigated]);
 
-  // Nav button handler: navigate without triggering drag-source on the row body.
   const handleNavClick = useCallback(
     (e: MouseEvent<HTMLButtonElement>) => {
-      e.stopPropagation(); // prevent the row body's drag-source-set from also firing
+      e.stopPropagation();
       onSelectNode();
+      setJustNavigated(true);
     },
     [onSelectNode]
   );
 
-  // Keyboard activation parity with handleNavClick: when the nav button has focus
-  // and the user presses Enter/Space, the browser fires keydown FIRST (which bubbles
-  // to the row's onKeyDown and marks drag source), THEN a synthetic click (handled
-  // by handleNavClick → navigates). Without stopPropagation here, one keystroke
-  // triggered BOTH actions. The button's default click activation still fires —
-  // we only stop the keydown from bubbling.
+  // Keep the row's keydown from also firing when the nav button has focus
+  // and Enter/Space is pressed — the button's own click activation already
+  // covers that path.
   const handleNavKeyDown = useCallback((e: KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.stopPropagation();
@@ -483,43 +486,23 @@ function TypeItemRow({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      className={`studio-type-row group relative ml-4 flex cursor-pointer items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50 ${
-        isSelected ? 'studio-type-row--selected' : isVisible ? 'text-foreground' : 'text-muted-foreground opacity-60'
-      }${isDragSource ? ' studio-type-row--drag-source' : ''}`}
+      className={`studio-type-row group relative ml-4 flex cursor-grab items-center gap-1.5 px-2 py-0.5 text-xs text-foreground hover:bg-accent/50${
+        isSelected ? ' studio-type-row--selected' : ''
+      }${justNavigated ? ' studio-type-row--just-navigated' : ''}`}
       data-testid={`ns-type-${row.nodeId}`}
-      data-drag-source={isDragSource ? 'true' : undefined}
-      // Copilot review (e2e-batch adversarial) caught two a11y gaps:
-      //  1. role="button" row acts as a toggle (idle ↔ active drag source)
-      //     but had no aria-pressed. Screen readers couldn't communicate
-      //     the toggle state from aria-label mutation alone (label changes
-      //     aren't reliably re-announced without a live region).
-      //  2. Label dropped "selected" state when also drag-source (early
-      //     ternary). Now both states concatenate so users hear both when
-      //     both apply. aria-pressed is only set on rows that CAN be drag
-      //     sources (payload defined) — for unsupported-kind rows, the
-      //     attribute is omitted entirely so SR users don't get a stuck
-      //     "not pressed" announcement on a non-toggle row.
-      aria-pressed={payload !== undefined ? isDragSource : undefined}
-      aria-label={`${row.name}${isDragSource ? ' — active drag source' : ''}${isSelected ? ' — selected' : ''}`}
+      // Row is a drag source only — click no longer marks anything; the
+      // only operation is dragging (visual cursor: grab signals it) or
+      // clicking the navigate arrow on the right edge. The dim "hidden
+      // in graph" treatment was removed per user feedback ("doesn't
+      // accomplish anything and is confusing") so every row looks the
+      // same regardless of graph visibility state.
+      //
+      // P2 a11y (PR #210): no role/tabIndex/keydown — the row is not a
+      // button semantically. The nav-arrow inside is the interactive element.
       draggable={payload !== undefined}
       onDragStart={handleDragStart}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
     >
       {isSelected && <span className="studio-type-pip" />}
-
-      {/* e2e-batch fix #5: replaced the `→` drag-source marker with a
-          left-edge color accent. The user reported "two arrows on the
-          namespace explorer rows... unclear which does what" — the previous
-          `→` glyph visually competed with the right-aligned ChevronRight
-          nav button (both are right-pointing arrows). The accent stripe
-          gives a clear "active drag source" state without using an arrow
-          glyph, so the only arrow icon on the row is the nav button.
-          aria-label preserved on the row body via `data-drag-source` —
-          screen readers learn the state from the row, not a separate
-          element. */}
 
       <span
         className="studio-type-glyph"
@@ -532,34 +515,16 @@ function TypeItemRow({
         {KIND_LETTER[row.typeKind]}
       </span>
 
-      {/* The name span doubles as the primary navigation affordance — its
-          hover-underline matches the visual contract of a link, and a single
-          click here navigates (matches the dedicated nav button below).
-          stopPropagation prevents the row body's drag-source-set from also
-          firing alongside the navigation. The row body click (anywhere else
-          on the row) still marks the row as the drag source. */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelectNode();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.stopPropagation();
-          }
-        }}
-        className="flex-1 truncate text-left hover:underline focus-visible:underline focus-visible:outline-none"
-        title={
-          !isVisible
-            ? `${row.name} [${KIND_LABELS[row.typeKind]}] — hidden in graph (toggle visibility in the graph filter menu)`
-            : `${row.name} [${KIND_LABELS[row.typeKind]}] — click to open`
-        }
-        data-testid={`ns-type-name-${row.nodeId}`}
-        aria-label={`Open ${row.name}`}
+      {/* Plain span — no click handler, no hover underline. The only
+          link-like affordance in the row is the nav arrow on the right.
+          Title text describes the only two operations: drag or click
+          the arrow. */}
+      <span
+        className="flex-1 truncate text-left"
+        title={`${row.name} [${KIND_LABELS[row.typeKind]}] — drag to add as a type ref, or click the arrow to open`}
       >
         {row.name}
-      </button>
+      </span>
 
       {refCount > 0 && (
         <Tooltip>
@@ -573,20 +538,21 @@ function TypeItemRow({
         </Tooltip>
       )}
 
-      {/* Navigation button — separate focusable surface for "open in graph".
-          Visible only on row hover/focus to keep the explorer visually quiet.
-          stopPropagation prevents the row body's drag-source click from firing
-          alongside navigation. Independently keyboard-focusable (Tab stop). */}
+      {/* Navigation button — the ONLY click-actionable element in the
+          row. Diagonal up-right arrow (ArrowUpRight) is the canonical
+          "open / navigate to" affordance; ChevronRight read as "expand
+          / next" which was misleading. Always visible at low opacity so
+          users see the affordance without hover-discovery. */}
       <button
         type="button"
         onClick={handleNavClick}
         onKeyDown={handleNavKeyDown}
         aria-label={`Navigate to ${row.name}`}
         data-testid={`ns-type-nav-${row.nodeId}`}
-        className="ml-auto shrink-0 opacity-30 group-hover:opacity-70 focus:opacity-100 hover:!opacity-100 focus-visible:ring-1 focus-visible:ring-ring rounded transition-opacity"
+        className="ml-auto shrink-0 opacity-40 group-hover:opacity-80 focus:opacity-100 hover:!opacity-100 focus-visible:ring-1 focus-visible:ring-ring rounded transition-opacity"
         tabIndex={0}
       >
-        <ChevronRight className="size-3" />
+        <ArrowUpRight className="size-3" />
       </button>
     </div>
   );

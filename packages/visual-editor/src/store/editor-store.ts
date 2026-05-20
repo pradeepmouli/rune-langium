@@ -616,11 +616,29 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const visibleEdges = shouldCollapse ? [] : edges;
           const laidOutNodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : mergedNodes;
 
+          // Preserve the current selection if the selected node still exists
+          // in the freshly-merged graph. EditorPage re-runs `loadModels` from
+          // a `useEffect` keyed on `[models, deferredExports]`; any time the
+          // server returns a new prop reference (debounced re-parse, async
+          // hydration completing, transient deferredExports churn), the
+          // effect re-fires. The previous unconditional `selectedNodeId:
+          // null` reset clobbered user selection on every re-parse — the
+          // explorer click would register, populate Inspector/Structure for
+          // a frame, then a subsequent re-parse would wipe it. The user's
+          // Form preview kept showing stale content because preview-store
+          // doesn't clear on selection drop, but Structure/Inspector/Graph
+          // (which read selectedNodeId directly) went empty. Only drop the
+          // selection when the previously-selected id no longer matches a
+          // node in the new graph (e.g. type was renamed or deleted).
+          const previousSelection = get().selectedNodeId;
+          const preservedSelection =
+            previousSelection && laidOutNodes.some((n) => n.id === previousSelection) ? previousSelection : null;
+
           set({
             nodes: laidOutNodes,
             edges,
             layoutOptions: opts,
-            selectedNodeId: null,
+            selectedNodeId: preservedSelection,
             searchQuery: '',
             searchResults: [],
             visibility: {

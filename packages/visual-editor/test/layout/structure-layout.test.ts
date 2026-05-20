@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, expect, it } from 'vitest';
-import { layoutStructureGraph } from '../../src/layout/structure-layout.js';
+import { STRUCTURE_LAYOUT_CONSTANTS, layoutStructureGraph } from '../../src/layout/structure-layout.js';
 import type { StructureGraphInput } from '@rune-langium/visual-editor';
 
 describe('layoutStructureGraph — single Data node', () => {
@@ -175,15 +175,15 @@ describe('layoutStructureGraph — expansion as child', () => {
     expect(economics.parentId).toBe('Trade');
     expect(economics.extent).toBe('parent');
     // Relative-placement check: Economics sits in the right-hand column of
-    // its parent, i.e. its right edge aligns with (or exceeds) the parent's
-    // right edge — equivalently, its left edge is at parent.width - child.width.
-    // Asserting the property, not the COL_WIDTH constant, keeps the test
-    // independent of layout tuning.
+    // its parent with NODE_PADDING uniform inset around all sides (the
+    // chrome's CSS padding). Child right edge = parent right edge -
+    // NODE_PADDING. Asserting the property (not COL_WIDTH) keeps the test
+    // independent of column-width tuning.
     // (Finding G: dimensions are now on style.width/height per RF12 contract.)
     const tradeWidth = (trade.style?.width as number | undefined) ?? 0;
     const economicsWidth = (economics.style?.width as number | undefined) ?? 0;
     const economicsX = (economics.position as { x: number; y: number }).x;
-    expect(economicsX).toBeGreaterThanOrEqual(tradeWidth - economicsWidth);
+    expect(economicsX + economicsWidth).toBe(tradeWidth - STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING);
   });
 });
 
@@ -989,7 +989,7 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     // with their base row, and the derived child clears the base rows + gap.
     //
     // Constants (must stay in sync with structure-layout.ts):
-    const BASE_PADDING = 16;
+    const BASE_PADDING = 4;
     const HEADER_HEIGHT = 28;
     const ROW_HEIGHT = 28;
     const ROW_GAP = 8;
@@ -1076,8 +1076,12 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     const expectedPartyY = row0Center - ROW_HEIGHT / 2; // = rowTop for row 0
     expect((party.position as { x: number; y: number }).y).toBe(expectedPartyY);
 
-    // BASE_PADDING must equal 16 — documents the CSS coupling in the test.
-    expect(BASE_PADDING).toBe(16);
+    // BASE_PADDING must equal 4 — documents the CSS coupling in the test.
+    // Stepped 16 → 8 → 4 across the structure-pane polish iterations to
+    // progressively tighten the container around its inherited rows.
+    // styles.css `--rune-base-padding` is the CSS mirror;
+    // structure-css-ssot.test.ts asserts they stay synced.
+    expect(BASE_PADDING).toBe(4);
   });
 });
 

@@ -74,18 +74,42 @@
 }
 
 .rune-graph-group {
+  /* Inheritance cluster chrome — graph view's `groupByInheritance` mode.
+   *
+   * Visual-grammar parity with `.rune-graph-group--base` (audit item #8,
+   * PR #210): the base-container idiom (dotted-at-55% colored border,
+   * tinted gradient, two-tier shadow) reads as "typed scope containing
+   * a child". An inheritance cluster is a SOFTER organizational unit —
+   * a layout grouping of related types, not a typed container — so it
+   * borrows the same idiom in a quieter register:
+   *
+   *   - Border: 1px dotted at ~32% of --muted-foreground (vs base's 55%
+   *     of --color-base-type). Same stroke style, lower contrast, no
+   *     identity color — signals "grouping" instead of "scope".
+   *   - Gradient: very faint neutral tint (5% → 2% of --muted-foreground)
+   *     instead of base's yellow tint. Quiet depth without claiming identity.
+   *   - Shadow: two-tier but lighter (.05 / .08 vs base's .08 / .12)
+   *     so the cluster floats below base containers in the visual
+   *     hierarchy when both appear in the same canvas.
+   *
+   * If the visual grammar drifts here again, re-read audit item #8:
+   * cluster ≠ container. The shared dotted-border idiom is the
+   * signal; the color/intensity carry the distinction. */
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
-  border-radius: 18px;
-  border: 1px solid color-mix(in oklch, var(--primary, #00d4aa) 14%, transparent);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px dotted color-mix(in oklch, var(--muted-foreground, #8a8a96) 32%, transparent);
   background:
-    linear-gradient(180deg, oklch(0.19 0.02 280 / 0.4), oklch(0.15 0.02 280 / 0.16)),
-    radial-gradient(circle at top left, oklch(0.78 0.17 168 / 0.04), transparent 46%);
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--muted-foreground, #8a8a96) 5%, transparent) 0%,
+      color-mix(in oklch, var(--muted-foreground, #8a8a96) 2%, transparent) 100%
+    );
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
-    0 8px 22px oklch(0 0 0 / 0.12);
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .rune-graph-group__header {
@@ -121,7 +145,9 @@
 /* ── Node base ────────────────────────────────────────────────── */
 
 .rune-node {
-  border-radius: var(--radius-md, 8px);
+  /* UX rec #2: 12px radius reads as the modern 2024+ canvas language
+     ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
+  border-radius: var(--radius-lg, 12px);
   border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
   position: relative;
   overflow: hidden;
@@ -130,8 +156,20 @@
   font-size: var(--text-sm, 0.875rem);
   min-width: 200px;
   color: var(--color-node-text, var(--foreground, #E8E6E1));
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  /* Two-tier soft shadow — close inner anchors the card to the canvas, wider
+   * outer gives quiet float. Reads as depth without being heavy. Matches the
+   * idiom used by `.rune-graph-group--base` so a base container and its
+   * nested derived child share the same depth language. */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 2px 6px rgba(0, 0, 0, 0.10);
+  /* UX rec #3: 240ms ease-out reads as motion (the 150ms previous value
+     was too fast to register). background-color added so the selection
+     ramp animates cleanly. */
+  transition:
+    border-color 240ms ease-out,
+    box-shadow 240ms ease-out,
+    background-color 240ms ease-out;
 }
 
 .rune-node::before {
@@ -165,6 +203,13 @@
   border-bottom: 1px solid color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 78%, transparent);
   display: flex;
   align-items: center;
+  /* justify-content + `order: 2` on the kind pill flips the visual order
+   * to [name ............ kind-pill] while keeping DOM order [pill, name]
+   * so screen readers still announce the kind classifier first. The
+   * earlier `margin-left: auto` rule didn't achieve this — it pushed the
+   * pill to the right but the name followed it on the right because of
+   * DOM order, producing [..........auto..........][pill][name]. */
+  justify-content: space-between;
   gap: var(--rune-header-padding-y);
   position: relative;
   background: transparent;
@@ -179,11 +224,44 @@
   align-items: center;
   flex-shrink: 0;
   font-size: var(--text-xs, 10px);
-  padding: var(--space-1, 1px) var(--space-3, 6px);
+  /* Tightened (post-polish): 1px×6px padding / 1px margin made the pill
+   * read as the dominant header element, especially in the structure-
+   * variant where the header is dense. 0×4px / 0 margin keeps the pill
+   * legible but stops it from competing with the type name. */
+  padding: 0 var(--rune-chip-padding-x);
+  margin: 0;
   border-radius: var(--radius-sm, 3px);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* Visual order swap for the kind pill: DOM is [pill, name] (screen-
+ * readers announce the kind classifier first), but the visual reading
+ * is [name, pill] with name flushed left and pill on the right edge.
+ * `order: 2` moves the pill after the name in the flex layout; the
+ * header's `justify-content: space-between` does the actual distribution. */
+.rune-node-header .rune-node-kind-badge {
+  order: 2;
+}
+
+/* Right-align the type chip + cardinality pill in structure-variant
+ * rows so the name reads on the left and the type metadata clusters on
+ * the right edge — same name-left / metadata-right rhythm as the
+ * headers (kind pill on right). Two markup variants:
+ *   - Inner Data/Choice rows wrap the chip in `.rune-cell-type-wrap`
+ *     (the wrap is the direct flex child; auto-margin lands here).
+ *   - Base container rows put `.rune-cell-type-chip` directly inside
+ *     `.rune-graph-group__base-row` (GroupContainerNode renders raw,
+ *     no wrap).
+ * Both selectors get auto-margin so the right-edge cluster works
+ * regardless of which renderer produced the row. The card pill follows
+ * on its right via the parent flex gap. Scoped so graph-variant rows
+ * (less dense, different reading) stay as-is. */
+.rune-node-data--structure .rune-node-row .rune-cell-type-wrap,
+.rune-node-choice--structure .rune-node-row .rune-cell-type-wrap,
+.rune-graph-group--base .rune-graph-group__base-row .rune-cell-type-chip {
+  margin-left: auto;
 }
 
 .rune-kind-badge--data {
@@ -755,12 +833,19 @@ button[data-navigable]:focus-visible {
 
 /* ── Selection / search highlight ─────────────────────────────── */
 
+/* UX rec #1: collapse selection from 4 visual channels (border tint +
+   background tint + outer glow + 2 shadows) to 2 (border + single
+   composite shadow). Agentok's selection reads instantly because exactly
+   ONE thing changes — ours competed with itself. The kind-accent rail
+   on the left edge (set by `.rune-node::before` above) carries the kind
+   color in the unselected state; selection just promotes the border to
+   that same kind accent at full opacity so the eye locks on the chosen
+   node without having to parse multiple competing channels. */
 .rune-node-selected {
-  border-color: oklch(0.78 0.17 168 / 0.5);
-  background: oklch(0.78 0.17 168 / 0.08);
+  border-color: var(--node-accent, oklch(0.78 0.17 168));
   box-shadow:
-    0 0 20px oklch(0.78 0.17 168 / 0.12),
-    0 2px 8px oklch(0 0 0 / 0.3);
+    inset 0 0 0 1px var(--node-accent, oklch(0.78 0.17 168 / 0.6)),
+    0 8px 24px oklch(0 0 0 / 0.35);
 }
 
 .rune-node-search-match {
@@ -792,7 +877,16 @@ button[data-navigable]:focus-visible {
   --rune-col-width: 320px;
   --rune-col-gap: 32px;
   --rune-row-gap: 8px;
-  --rune-base-padding: 16px;
+  --rune-base-padding: 4px;
+  /* Uniform inset between a Data/Choice node's chrome edges and its content
+   * (header, rows, right-column expansion children). Mirrors
+   * STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING. Applied as chrome padding on
+   * .rune-node-data--structure / .rune-node-choice--structure below. The
+   * layout shifts rowOffsets and child placements by the same amount so
+   * the CSS chrome padding stays coordinated with React Flow's
+   * wrapper-relative child positions. Replaced the earlier --rune-child-inset
+   * (right+bottom only) once we moved to uniform all-sides padding. */
+  --rune-node-padding: 4px;
   /* Phase 10.2 — ornament constants (chip/pill/row-indent).
    * Not layout-bearing in the structure-layout.ts sense (they don't
    * couple to row y-offsets), but declared here so the stylelint rule
@@ -834,7 +928,8 @@ button[data-navigable]:focus-visible {
 
 .rune-node-data--structure,
 .rune-node-choice--structure,
-.rune-node-enum--structure {
+.rune-node-enum--structure,
+.rune-graph-group--base {
   /* Inherits .rune-node-data card baseline; structure layout
    * stacks the header, then a two-column body below it. */
   display: flex;
@@ -851,13 +946,71 @@ button[data-navigable]:focus-visible {
   font-size: var(--text-xs, 0.75rem);
 }
 
+/* Drop a further notch on the member/attribute cell content inside
+ * structure-variant nodes and base containers — the row text was still
+ * reading a touch large against the tight 12px header. 11px keeps the
+ * type chip and cardinality pill legible while letting more of the
+ * schema fit per viewport. Header text (var(--text-sm) in .rune-node-
+ * header) is intentionally NOT touched — keeps the type identity
+ * readable at a glance. */
+.rune-node-data--structure .rune-cell-name,
+.rune-node-data--structure .rune-cell-card,
+.rune-node-data--structure .rune-cell-type-chip,
+.rune-node-choice--structure .rune-cell-name,
+.rune-node-choice--structure .rune-cell-card,
+.rune-node-choice--structure .rune-cell-type-chip,
+.rune-node-enum--structure .rune-cell-name,
+.rune-node-enum--structure .rune-cell-card,
+.rune-node-enum--structure .rune-cell-type-chip,
+.rune-graph-group--base .rune-cell-name,
+.rune-graph-group--base .rune-cell-card,
+.rune-graph-group--base .rune-cell-type-chip {
+  font-size: 11px;
+}
+
+/* Chrome wrapper for the structure variants of Data and Choice:
+ *
+ * - `height: 100%` fills the React Flow wrapper so the chrome visually
+ *   contains nested right-column children (positioned by RF as absolutely
+ *   placed siblings inside the wrapper — see structure-layout.ts).
+ * - `box-sizing: border-box` keeps borders/padding inside the wrapper's
+ *   RF-set bounds rather than expanding past them.
+ *
+ * Note: no `padding` here. NODE_PADDING (the chrome-content inset) is
+ * applied one level deeper on `.rune-node-body--two-col` so the HEADER
+ * stays flush with the chrome's top border (per user feedback — chrome-
+ * level padding inset the header by NODE_PADDING which read as a gap
+ * between the header and the top border). The body-level padding insets
+ * only the rows column + the right-column children. The layout's
+ * rowOffsets/child placement coordinates assume header at y=0 and rows at
+ * y=HEADER_HEIGHT, with NODE_PADDING bottom inset and 2*NODE_PADDING
+ * total width — mirroring this CSS exactly. */
+.rune-node-data--structure,
+.rune-node-choice--structure {
+  box-sizing: border-box;
+  height: 100%;
+}
+
 /* Wire HEADER_HEIGHT SSoT: the structure-variant header must render at
  * exactly HEADER_HEIGHT px so row offsets computed in structure-layout.ts
  * align with the rendered rows.  box-sizing: border-box absorbs the
  * horizontal padding without expanding the box beyond the SSoT value. */
+/* Header for structure-variant Data nodes. Two concerns:
+ *
+ * 1. `height: var(--rune-header-height)` (with box-sizing: border-box) locks
+ *    the header to HEADER_HEIGHT so row offsets computed in structure-layout.ts
+ *    stay aligned with the rendered rows.
+ * 2. `padding-left: var(--space-2, 8px)` tightens the title's left inset
+ *    (default --rune-header-padding-x = 16px reads as a noticeable indent).
+ *    8px = 3px accent-stripe (`.rune-node::before`) + 5px breathing room,
+ *    so the title reads as left-flush against the chrome without crowding
+ *    the colored stripe. Decoupled from --rune-node-padding (the body's
+ *    layout-coupled inset) — header inset is a purely visual concern with
+ *    no row-offset coupling, so they're free to move independently. */
 .rune-node-data--structure .rune-node-header {
   box-sizing: border-box;
   height: var(--rune-header-height);
+  padding-left: var(--space-2, 8px);
 }
 
 /* Mirror the data-structure rule for the choice-structure variant.
@@ -871,6 +1024,7 @@ button[data-navigable]:focus-visible {
   height: var(--rune-header-height);
   padding-top: 0;
   padding-bottom: 0;
+  padding-left: var(--space-2, 8px);
 }
 
 .rune-node-body--two-col {
@@ -881,11 +1035,19 @@ button[data-navigable]:focus-visible {
    * width here so the node shell remains the single source of truth. */
 }
 
-/* Reset the 8px/12px padding .rune-node-body applies — structure-layout.ts
- * positions the children column at exactly COL_WIDTH + COL_GAP from the
- * parent origin, so any inherited padding offsets that math. */
-.rune-node-data--structure .rune-node-body--two-col {
-  padding: 0;
+/* Apply NODE_PADDING on sides + bottom of the body so the rows column and
+ * the right-column children read with breathing room around them. Top
+ * stays 0 because the body's top edge sits flush against the header's
+ * bottom — no extra gap wanted there. Default .rune-node-body padding
+ * (8/12px) is intentionally reset and replaced with the SSoT-tracked
+ * inset; structure-layout.ts uses NODE_PADDING in matching positions so
+ * RF-placed children land in the padded zone, not over it.
+ *
+ * The choice variant gets the same treatment — same right-column-expansion
+ * geometry, same inset story. */
+.rune-node-data--structure .rune-node-body--two-col,
+.rune-node-choice--structure .rune-node-body--two-col {
+  padding: 0 var(--rune-node-padding) var(--rune-node-padding);
 }
 
 .rune-node-rows {
@@ -903,6 +1065,20 @@ button[data-navigable]:focus-visible {
   gap: var(--rune-row-gap);
   padding: 0 8px;
   position: relative; /* anchor per-row Handle */
+  /* UX rec #7: row hover + focus-within so the row reads as a target
+     even before the user clicks an interactive child (the chevron / name
+     cell). Without this rows flatline visually until interacted with. */
+  transition: background-color 140ms ease;
+}
+
+.rune-node-row:hover {
+  background-color: color-mix(in oklch, var(--accent, oklch(0.78 0.17 168)) 6%, transparent);
+}
+
+.rune-node-row:focus-within {
+  outline: 2px solid color-mix(in oklch, var(--ring, var(--accent, oklch(0.78 0.17 168))) 70%, transparent);
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 
 .rune-row-handle {
@@ -946,6 +1122,23 @@ button[data-navigable]:focus-visible {
   outline-offset: 1px;
 }
 
+/* Visual-polish #11 (PR #210): SVG connector path from each materialized
+ * row's right edge to its expansion child's header center. The SVG itself
+ * fills the parent node and is pointer-events:none / aria-hidden, so this
+ * rule only governs the path stroke. Colour mixes the per-node accent
+ * (`--node-accent`, falling back to the design-system primary) at 45%
+ * with transparent, so the line reads as a deliberate routing without
+ * competing with the row text or the child's left accent stripe (which
+ * remains the primary visual anchor for the child). 1px hairline — any
+ * heavier reads as a wire rather than a hint. Layout constants
+ * (HEADER_HEIGHT, COL_GAP) drive the path geometry in JS; the CSS only
+ * owns colour + stroke width. */
+.rune-row-connector {
+  fill: none;
+  stroke: color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 45%, transparent);
+  stroke-width: 1;
+}
+
 .rune-node-children-slot {
   /* React Flow positions child nodes absolutely via parentNode; this
    * slot only declares the column gap.  Width is implicit from the
@@ -982,9 +1175,91 @@ button[data-navigable]:focus-visible {
    * placeBaseChildren for the y-coord coupling — row offsets and child
    * positions all add BASE_PADDING so layout coords align with rendered rows. */
   padding: var(--rune-base-padding);
-  border: 2px dashed var(--color-base-type, #d4a017);
-  background: var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
-  border-radius: 8px;
+  /* Chrome borrowed from `.rune-node` (radius, drop-shadow, transition)
+   * so the container reads as a peer of its inherited child instead of
+   * an oversized different-language shape — per user feedback after the
+   * agentok.ai polish pass. Two things INTENTIONALLY override the node
+   * chrome and identify this as a base-type container:
+   *   1. dashed yellow border (instead of solid neutral)
+   *   2. translucent yellow fill (instead of opaque card)
+   * Everything else (radius, shadow, motion) tracks .rune-node. */
+  /* Dotted border 1px — 1px is the minimum stroke width; "thinner" reads
+   * are achieved by (a) dotted instead of dashed (smaller marks, more
+   * whitespace) and (b) ~55% color opacity so the scaffolding fades against
+   * the canvas instead of competing with the inner node's solid border. */
+  border: 1px dotted color-mix(in oklch, var(--color-base-type, #d4a017) 55%, transparent);
+  /* Subtle vertical gradient — slightly brighter yellow tint at the top
+   * fading to ~half intensity at the bottom. Gives the container quiet
+   * depth without competing with the inner DataNode's solid fill. The
+   * --color-base-type-bg fallback (a flat 6% tint) is kept as a guard for
+   * envs without theme tokens. */
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--color-base-type, #d4a017) 9%, transparent) 0%,
+      color-mix(in oklch, var(--color-base-type, #d4a017) 4%, transparent) 100%
+    ),
+    var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
+  border-radius: var(--radius-lg, 12px);
+  /* Two-tier soft shadow — close inner shadow grounds the container against
+   * the canvas, wider outer shadow gives it a quiet float. Reads as depth
+   * without competing with the inner node's own shadow (which is even
+   * lighter at 0 1px 2px / 0.04). */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.12);
+  transition:
+    border-color 240ms ease-out,
+    box-shadow 240ms ease-out,
+    background-color 240ms ease-out;
+}
+
+.rune-graph-group--base:hover {
+  /* Matches `.rune-node:hover` lift so a container hovers like its
+   * peer. The translucent yellow fill stays untouched. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 22px oklch(0 0 0 / 0.24);
+}
+
+/* Header typography in base-scope tracks .rune-node-header rather than
+ * the tiny uppercase title used for the Graph-view inheritance group.
+ * The 10px uppercase reading was correct for a faint cluster label, but
+ * here the container holds a real type — its name should read like one. */
+.rune-graph-group--base .rune-graph-group__header {
+  /* Drop the inherited 0 14px padding so the title aligns flush with
+   * the inherited rows below (which sit at the container's outer
+   * --rune-base-padding edge, no extra X padding). Without this the
+   * title was offset ~14px further inward than the rows. Keeps the
+   * parent's `justify-content: space-between` so the "base" pill flows
+   * to the right edge — same pattern as the inner DataNode header (kind
+   * badge gets margin-left: auto). */
+  padding: 1px;
+  border-bottom: 1px solid color-mix(in oklch, var(--border, rgba(255, 255, 255, 0.06)) 78%, transparent);
+}
+
+.rune-graph-group--base .rune-graph-group__title {
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-node-text, var(--foreground, #e8e6e1));
+}
+
+/* "base" meta becomes a kind-badge pill — same dimensions and typography
+ * as `.rune-node-kind-badge`, coloured with the base-type accent. */
+.rune-graph-group--base .rune-graph-group__meta {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: var(--text-xs, 10px);
+  padding: var(--rune-chip-padding-y) var(--rune-chip-padding-x);
+  border-radius: var(--radius-sm, 3px);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: color-mix(in oklch, var(--color-base-type, #d4a017) 22%, transparent);
+  color: color-mix(in oklch, var(--color-base-type, #d4a017) 72%, white 28%);
 }
 
 .rune-graph-group__base-rows {
@@ -992,7 +1267,13 @@ button[data-navigable]:focus-visible {
   flex-direction: column;
   /* No `gap` between rows — layout math (structure-layout.ts) packs rows at
    * exactly ROW_HEIGHT without inter-row spacing. */
-  margin-bottom: var(--rune-row-gap); /* gap before the nested child data node */
+  /* Gap before the nested child data node MUST equal BASE_PADDING in
+   * structure-layout.ts (sizeBase: leftColumnHeight = baseRowsHeight +
+   * childSize.height + BASE_PADDING; placeBaseChildren: y = HEADER_HEIGHT +
+   * baseRows.length*ROW_HEIGHT + BASE_PADDING). Using --rune-row-gap (8px)
+   * here made the rendered child sit 4px below the container's reserved
+   * bottom, so the inner DataNode overflowed the dashed base border. */
+  margin-bottom: var(--rune-base-padding);
 }
 
 .rune-graph-group__base-row {
@@ -1091,6 +1372,15 @@ button[data-navigable]:focus-visible {
 /* Drop-over highlight states — outline does not reflow, so bare px is OK */
 .rune-cell-type-wrap--over .rune-cell-type-chip,
 .rune-cell-extends--over {
+  outline: 2px solid var(--primary, #00D4AA);
+  outline-offset: 1px;
+}
+
+/* Inspector TypeSelector drop target — same outline language as the
+ * Structure-view TypePickerCell. The drop target is the wrapping span
+ * around the Select trigger; the visual focus ring lands on the
+ * trigger button so the user sees exactly where the drop will commit. */
+[data-type-selector-drop][data-drop-over='true'] [data-slot='type-selector'] {
   outline: 2px solid var(--primary, #00D4AA);
   outline-offset: 1px;
 }

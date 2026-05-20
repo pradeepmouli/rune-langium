@@ -24,6 +24,8 @@ import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Badge } from '@rune-langium/design-system/ui/badge';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { Plus } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { AttributeRow } from './AttributeRow.js';
 import { InheritedAttributeRow } from './AttributeRow.js';
@@ -367,7 +369,7 @@ function DataTypeForm({
         {/* Header: Name + Badge — always visible above tabs */}
         <div
           data-slot="form-header"
-          className="sticky top-0 z-10 flex items-center gap-2 px-4 py-3 shrink-0 border-b bg-muted"
+          className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 shrink-0 border-b bg-muted"
         >
           <Controller
             control={form.control}
@@ -430,16 +432,22 @@ function DataTypeForm({
             <FieldSet className="gap-1">
               <FieldLegend variant="label" className="mb-0 text-muted-foreground flex items-center justify-between">
                 <span>Attributes ({fields.length + inheritedCount})</span>
-                <button
+                {/* Icon-only add button to match FormPreviewPanel's
+                    +/- treatment for optional sections and array adds.
+                    The legend already names the section ("Attributes"),
+                    so the button only conveys the operation. aria-label
+                    preserves the full phrasing for screen readers. */}
+                <Button
                   data-slot="add-attribute-btn"
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={handleAddAttribute}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary
-                    border border-border rounded px-2 py-0.5
-                    hover:bg-card hover:border-input transition-colors"
+                  aria-label="Add attribute"
+                  title="Add attribute"
                 >
-                  + Add Attribute
-                </button>
+                  <Plus className="size-3" />
+                </Button>
               </FieldLegend>
 
               <FieldGroup className="gap-1">
@@ -481,7 +489,7 @@ function DataTypeForm({
 
                 {fields.length === 0 && ghostRowsBefore.length === 0 && (
                   <p className="text-xs text-muted-foreground italic py-2 text-center">
-                    No attributes defined. Click &quot;+ Add Attribute&quot; to create one.
+                    No attributes defined. Use the + button above to add one.
                   </p>
                 )}
               </FieldGroup>

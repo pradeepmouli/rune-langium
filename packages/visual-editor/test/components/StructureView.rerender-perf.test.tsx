@@ -80,7 +80,8 @@ vi.mock('@xyflow/react', async (importOriginal) => {
         ))}
       </div>
     ),
-    ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
+    ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    useReactFlow: () => ({ fitView: () => {} })
   };
 });
 

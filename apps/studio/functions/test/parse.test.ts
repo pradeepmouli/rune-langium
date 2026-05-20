@@ -179,4 +179,79 @@ describe('POST /api/parse — curatedBundles', () => {
       spy.mockRestore();
     }
   });
+
+  it('emits one deferredExports entry per file when a namespace spans multiple files', async () => {
+    // Regression for the "curated nodes show empty in Structure/Inspector" bug
+    // (real-corpus repro on CDM): multiple .rosetta files can declare elements
+    // in the same namespace (e.g. cdm.base.datetime is split across
+    // -type.rosetta / -enum.rosetta / -func.rosetta). The original
+    // mergeCuratedDocIntoDeferredExports collapsed per-namespace, so every
+    // exported name in that namespace mapped to whichever file was iterated
+    // first — and the studio's nodeIdToFilePath then called linkDocument with
+    // the wrong file's URI, never materializing the right deferred AST.
+    //
+    // Contract: ONE deferredExports entry per FILE (matches the in-browser
+    // parser-worker.handleParseWorkspace contract).
+    const curatedFetchModule = await import('../lib/curated-fetch.js');
+    const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
+      {
+        uri: 'cdm/base/datetime-type.rosetta',
+        content: '',
+        serializedModel: JSON.stringify({
+          $type: 'RosettaModel',
+          name: 'cdm.base.datetime',
+          elements: [{ $type: 'Data', name: 'AdjustableDate' }]
+        }),
+        exports: [{ type: 'Data', name: 'AdjustableDate', path: 'cdm.base.datetime.AdjustableDate' }]
+      },
+      {
+        uri: 'cdm/base/datetime-enum.rosetta',
+        content: '',
+        serializedModel: JSON.stringify({
+          $type: 'RosettaModel',
+          name: 'cdm.base.datetime',
+          elements: [{ $type: 'RosettaEnumeration', name: 'PeriodEnum' }]
+        }),
+        exports: [{ type: 'RosettaEnumeration', name: 'PeriodEnum', path: 'cdm.base.datetime.PeriodEnum' }]
+      },
+      {
+        uri: 'cdm/base/datetime-func.rosetta',
+        content: '',
+        serializedModel: JSON.stringify({
+          $type: 'RosettaModel',
+          name: 'cdm.base.datetime',
+          elements: [{ $type: 'RosettaFunction', name: 'AddDays' }]
+        }),
+        exports: [{ type: 'RosettaFunction', name: 'AddDays', path: 'cdm.base.datetime.AddDays' }]
+      }
+    ]);
+    try {
+      const res = await onRequestPost({
+        request: makeRequest({
+          files: [],
+          curatedBundles: [{ id: 'cdm', version: 'latest' }]
+        })
+      } as never);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        deferredExports: Array<{ filePath: string; namespace: string; exports: Array<{ name: string }> }>;
+      };
+
+      // All three files must surface — namespace collapse would only yield 1.
+      const datetimeEntries = body.deferredExports.filter((d) => d.namespace === 'cdm.base.datetime');
+      expect(datetimeEntries).toHaveLength(3);
+
+      // Each name must map to the file that DECLARES it. Critical: the
+      // studio's nodeIdToFilePath uses these to drive linkDocument.
+      const byName = new Map<string, string>();
+      for (const entry of datetimeEntries) {
+        for (const exp of entry.exports) byName.set(exp.name, entry.filePath);
+      }
+      expect(byName.get('AdjustableDate')).toBe('cdm/base/datetime-type.rosetta');
+      expect(byName.get('PeriodEnum')).toBe('cdm/base/datetime-enum.rosetta');
+      expect(byName.get('AddDays')).toBe('cdm/base/datetime-func.rosetta');
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

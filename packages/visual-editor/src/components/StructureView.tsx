@@ -17,8 +17,8 @@
  * @module
  */
 
-import React, { useLayoutEffect, useMemo, useRef } from 'react';
-import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import type { AdapterDocument } from '../adapters/structure-graph-adapter.js';
 import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
@@ -83,12 +83,14 @@ function shallowRecordEqual(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Compare two `ReadonlyMap<string, string>` instances by content. Used
- * for the `expansions` map on `StructureDataNode`/`StructureChoiceNode`/
- * `StructureBaseContainer` which is rebuilt each adapter pass even when
- * content is unchanged.
+ * Compare two `ReadonlyMap<string, V>` instances by content. Used for the
+ * `expansions` map on `StructureDataNode`/`StructureChoiceNode`/
+ * `StructureBaseContainer` (V=string) which is rebuilt each adapter pass
+ * even when content is unchanged, and (visual-polish #11) for layout-
+ * emitted `rowOffsets` / `childYByAttrName` maps (V=number) which the
+ * layout rebuilds on every pass to feed the SVG connector overlay.
  */
-function mapEqual(a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean {
+function mapEqual<V>(a: ReadonlyMap<string, V>, b: ReadonlyMap<string, V>): boolean {
   if (a === b) return true;
   if (a.size !== b.size) return false;
   for (const [k, v] of a) {
@@ -152,6 +154,27 @@ function shallowEqualData(a: unknown, b: unknown): boolean {
       // Array of React Flow instance ids (strings).
       if (!Array.isArray(av) || !Array.isArray(bv)) return false;
       if (!arraysEqual(av, bv, Object.is)) return false;
+      continue;
+    }
+    // Visual-polish #11 (PR #210): layout now threads `rowOffsets` and
+    // `childYByAttrName` as fresh Map instances on every layout pass (the
+    // SVG connector overlay reads them). Without an explicit content
+    // comparison they'd fail Object.is on every pass and break the Phase
+    // 14c perf invariant (≤1 DataNode re-render per content-equivalent
+    // edit). Both maps are `Map<string, number>` so a generic mapEqual
+    // walk suffices.
+    if (k === 'rowOffsets' || k === 'childYByAttrName') {
+      if (!(av instanceof Map) || !(bv instanceof Map)) return false;
+      if (!mapEqual(av as ReadonlyMap<string, number>, bv as ReadonlyMap<string, number>)) return false;
+      continue;
+    }
+    if (k === 'connectorGeometry') {
+      // Plain `{ rowRightX: number; childLeftX: number }` — fresh object
+      // per layout pass, so compare by value.
+      if (!av || !bv || typeof av !== 'object' || typeof bv !== 'object') return false;
+      const aco = av as { rowRightX: number; childLeftX: number };
+      const bco = bv as { rowRightX: number; childLeftX: number };
+      if (aco.rowRightX !== bco.rowRightX || aco.childLeftX !== bco.childLeftX) return false;
       continue;
     }
     return false;
@@ -399,6 +422,43 @@ function StructureFlowInner({
   useLayoutEffect(() => {
     prevNodesRef.current = nodes;
   }, [nodes]);
+
+  // Auto-fit on focus or expansion change. User feedback: when nodes are
+  // expanded the structure tree grows past the viewport edge. Re-fitting
+  // when the focused type changes OR the expansion content changes keeps
+  // the whole tree on screen. `padding: 0.1` leaves a 10% margin;
+  // `duration: 300` matches the node-chrome transition for visual
+  // coherence.
+  //
+  // P2 review (PR #210): the dependency must capture content identity, not
+  // just `expansionMap.size`. A "swap" change (collapse one branch and
+  // expand another in the same render, or a model refresh that keeps the
+  // entry count constant) leaves `.size` unchanged but moves the tree
+  // geometry, leaving the newly expanded content outside the viewport
+  // with no refit. The map's object reference is rebuilt every render
+  // upstream, so depending on the Map directly would refit on every
+  // render. A content hash of the sorted entries gives correct
+  // same-count-swap detection without firing spuriously.
+  //
+  // Copilot review: `focusedTypeId` and `expansionMap` are non-optional
+  // on StructureFlowInnerProps; the previous `if (!focusedTypeId) return`
+  // and `expansionMap?.size` guards were dead.
+  const rf = useReactFlow();
+  const expansionSignature = useMemo(() => {
+    const entries: string[] = [];
+    for (const [k, v] of expansionMap) entries.push(`${k}=${v ? '1' : '0'}`);
+    entries.sort();
+    return entries.join('|');
+  }, [expansionMap]);
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    // requestAnimationFrame so the new node positions have been
+    // committed before fitView reads them.
+    const id = requestAnimationFrame(() => {
+      rf.fitView({ padding: 0.1, duration: 300 });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [focusedTypeId, expansionSignature, nodes.length, rf]);
 
   return (
     <div data-testid="structure-view-flow" style={{ width: '100%', height: '100%', minHeight: 320 }}>

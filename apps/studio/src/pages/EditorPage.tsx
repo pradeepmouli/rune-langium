@@ -87,6 +87,7 @@ import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
 import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
+import { FontScaleButton } from '../components/FontScaleButton.js';
 import { pathToUri } from '../utils/uri.js';
 import type { ParsedWorkspaceModel } from '../services/workspace.js';
 import {
@@ -1881,6 +1882,7 @@ export function EditorPage({
             <Kbd>⌘K</Kbd>
           </button>
           <span className="studio-topbar__divider" />
+          <FontScaleButton />
           <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">
             <Check />
           </Button>

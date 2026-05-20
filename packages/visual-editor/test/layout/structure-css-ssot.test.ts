@@ -32,7 +32,8 @@ describe('Structure layout SSoT — CSS custom props match TS constants', () => 
     ['COL_WIDTH', '--rune-col-width'],
     ['COL_GAP', '--rune-col-gap'],
     ['ROW_GAP', '--rune-row-gap'],
-    ['BASE_PADDING', '--rune-base-padding']
+    ['BASE_PADDING', '--rune-base-padding'],
+    ['NODE_PADDING', '--rune-node-padding']
   ];
 
   for (const [tsKey, cssVar] of cases) {
@@ -44,6 +45,84 @@ describe('Structure layout SSoT — CSS custom props match TS constants', () => 
       expect(match, `expected to find "${cssVar}:" in styles.css`).not.toBeNull();
       const value = match![1].trim();
       expect(value).toBe(expectedPx);
+    });
+  }
+});
+
+// ── Part C: layout-coupled gaps reference the right SSoT variable ────────
+//
+// Part A catches *value* drift (e.g. someone changes --rune-base-padding to
+// 5px while BASE_PADDING stays 4). It does NOT catch *variable choice* drift:
+// a CSS rule whose declared property is layout-coupled but reads the WRONG
+// --rune-* var. That happened with .rune-graph-group__base-rows once already
+// — it used --rune-row-gap (8px) for the gap before the inner data child even
+// though structure-layout.ts's sizeBase reserves exactly BASE_PADDING (4px)
+// for that gap. Result: the inner DataNode rendered 4px below the dashed
+// base container border.
+//
+// Add one entry per layout-coupled gap. Each entry asserts that the property
+// on the listed selector resolves to the named --rune-* var (no literal).
+describe('Structure layout SSoT — layout-coupled gaps use the correct variable', () => {
+  const cases: Array<{ selector: string; property: string; expectedVar: string; rationale: string }> = [
+    {
+      selector: '.rune-graph-group__base-rows',
+      property: 'margin-bottom',
+      expectedVar: '--rune-base-padding',
+      rationale:
+        'sizeBase in structure-layout.ts adds BASE_PADDING (not ROW_GAP) between the last base row and the inner derived child. CSS must mirror that.'
+    },
+    // sizeData/sizeChoice reserve NODE_PADDING on the sides + bottom of the
+    // wrapper (width += 2*NODE_PADDING, height += NODE_PADDING). The CSS that
+    // mirrors this is `padding: 0 var(--rune-node-padding) var(--rune-node-padding)`
+    // on the body — top stays 0 so the header reads flush with the chrome's
+    // top border. If someone changes the var here (or drops the `padding`
+    // declaration entirely) the rows column shifts away from where the
+    // layout's rowOffsets expect it, and right-column children land in the
+    // wrong place.
+    {
+      selector: '.rune-node-data--structure .rune-node-body--two-col',
+      property: 'padding',
+      expectedVar: '--rune-node-padding',
+      rationale:
+        'sizeData reserves NODE_PADDING on body sides + bottom; the body padding shorthand must reference --rune-node-padding so visual and layout stay coordinated.'
+    },
+    {
+      selector: '.rune-node-choice--structure .rune-node-body--two-col',
+      property: 'padding',
+      expectedVar: '--rune-node-padding',
+      rationale: 'sizeChoice mirrors sizeData — same NODE_PADDING body inset, same coordination requirement.'
+    }
+    // Header left-padding (8px) is intentionally NOT tied to NODE_PADDING.
+    // It's a purely visual concern — needs to clear the 3px accent stripe
+    // (`.rune-node::before`) with breathing room — with no row-offset
+    // coupling. A first iteration linked it to --rune-node-padding (4px),
+    // which placed the title 1px past the stripe and read as crowded.
+    // Decoupling lets the body inset and header inset evolve independently
+    // for their distinct concerns.
+  ];
+
+  for (const { selector, property, expectedVar, rationale } of cases) {
+    it(`${selector} { ${property}: var(${expectedVar}) } — ${rationale}`, () => {
+      // Match the rule block for the selector. We accept the selector being
+      // part of a comma-separated list, but anchor on word boundaries to avoid
+      // matching e.g. `.rune-graph-group__base-rows-foo`.
+      const blockRe = new RegExp(
+        `(?:^|[\\s,])${selector.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}(?:[\\s,][^{]*)?\\{([^}]*)\\}`,
+        'm'
+      );
+      const blockMatch = css.match(blockRe);
+      expect(blockMatch, `expected to find a rule block for "${selector}"`).not.toBeNull();
+      // Strip /* ... */ comments (CSS comments can span multiple lines and
+      // contain '*' chars, which trips up a single-pass property regex).
+      const body = blockMatch![1].replace(/\/\*[\s\S]*?\*\//g, '');
+      // Find the property line: `property: value;` (last one wins in CSS, so use the last match).
+      const propRe = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+);`, 'g');
+      let last: RegExpExecArray | null = null;
+      let m: RegExpExecArray | null;
+      while ((m = propRe.exec(body)) !== null) last = m;
+      expect(last, `expected "${selector}" to declare "${property}"`).not.toBeNull();
+      const value = last![1].trim();
+      expect(value).toMatch(new RegExp(`var\\(${expectedVar}\\b`));
     });
   }
 });

@@ -404,6 +404,13 @@ export function DockShell({
                 next.delete(pane);
               } else {
                 next.add(pane);
+                // Graph ↔ Structure mutual exclusion: showing one always
+                // hides the other. They occupy the same conceptual slot
+                // (the structural visualisation of the focused type) and
+                // the user reported that having both visible at once is
+                // wasteful when nodes are expanded.
+                if (pane === 'structure' && next.has('graph')) next.delete('graph');
+                if (pane === 'graph' && next.has('structure')) next.delete('structure');
               }
               return next;
             });

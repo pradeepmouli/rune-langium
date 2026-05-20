@@ -9,6 +9,7 @@ import { Input } from '@rune-langium/design-system/ui/input';
 import { FieldSet, FieldLegend } from '@rune-langium/design-system/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
+import { Plus, Minus } from 'lucide-react';
 import {
   usePreviewStore,
   type FormPreviewTarget,
@@ -462,28 +463,35 @@ function PreviewFieldControl({
   if (field.kind === 'object') {
     const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
     const isPresent = value !== undefined;
+    const objectLabel = resolvedFieldLabel(field, arrayIndices);
     return (
       <FieldSet className="gap-1.5 p-2">
         <FieldLegend variant="label" className="text-muted-foreground">
-          {resolvedFieldLabel(field, arrayIndices)}
-        </FieldLegend>
-        {!field.required ? (
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={() => onObjectToggle(field, !isPresent, arrayIndices)}
-            >
-              {isPresent
-                ? `Remove ${resolvedFieldLabel(field, arrayIndices)}`
-                : `Add ${resolvedFieldLabel(field, arrayIndices)}`}
-            </Button>
-            {!isPresent ? (
-              <span className="text-[11px] text-muted-foreground">Section omitted from the sample.</span>
+          {/* Inline +/- icon button replaces the verbose
+              "Add <FieldLabel>" / "Remove <FieldLabel>" text — the
+              field label itself already names the section, so the
+              button only needs to convey the operation. Icon-only
+              buttons keep dense forms readable; aria-label preserves
+              the original phrasing for screen readers. The "Section
+              omitted from the sample" caption was removed too — the
+              empty section (no nested children rendered) is enough
+              affordance that the section isn't populated. */}
+          <span className="inline-flex items-center gap-1.5">
+            {objectLabel}
+            {!field.required ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => onObjectToggle(field, !isPresent, arrayIndices)}
+                aria-label={isPresent ? `Remove ${objectLabel}` : `Add ${objectLabel}`}
+                title={isPresent ? `Remove ${objectLabel}` : `Add ${objectLabel}`}
+              >
+                {isPresent ? <Minus className="size-3" /> : <Plus className="size-3" />}
+              </Button>
             ) : null}
-          </div>
-        ) : null}
+          </span>
+        </FieldLegend>
         {(field.required || isPresent) &&
           (field.children ?? []).map((child) => (
             <PreviewFieldControl
@@ -513,27 +521,46 @@ function PreviewFieldControl({
     return (
       <FieldSet className="gap-1.5 p-2">
         <FieldLegend variant="label" className="text-muted-foreground">
-          {field.label}
+          {/* Inline + icon button for "add another item to the array",
+              same pattern as the optional-object section. aria-label
+              preserves the original "Add <Field> item" phrasing for
+              screen readers. */}
+          <span className="inline-flex items-center gap-1.5">
+            {field.label}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => onArrayAdd(field, arrayIndices)}
+              aria-label={`Add ${field.label} item`}
+              title={`Add ${field.label} item`}
+            >
+              <Plus className="size-3" />
+            </Button>
+          </span>
         </FieldLegend>
-        <Button type="button" variant="ghost" size="xs" onClick={() => onArrayAdd(field, arrayIndices)}>
-          Add {field.label} item
-        </Button>
         {arrayError ? <FieldError message={arrayError} /> : null}
         {child
           ? items.map((_, index) => (
               <div key={`${field.path}-item-${index}`} className="space-y-1 p-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
                     {child.label} {index + 1}
+                    {/* − icon replaces the verbose "Remove <Field> N"
+                        text per the same +/- treatment as the section
+                        toggle and the array add. aria-label keeps the
+                        full phrasing for screen readers. */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => onArrayRemove(field, index, arrayIndices)}
+                      aria-label={`Remove ${child.label} ${index + 1}`}
+                      title={`Remove ${child.label} ${index + 1}`}
+                    >
+                      <Minus className="size-3" />
+                    </Button>
                   </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => onArrayRemove(field, index, arrayIndices)}
-                  >
-                    Remove {child.label} {index + 1}
-                  </Button>
                 </div>
                 <PreviewFieldControl
                   field={child}

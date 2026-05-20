@@ -12,6 +12,8 @@
 
 import { getKindBadgeClasses } from './TypeSelector.js';
 import { TypeLink } from './TypeLink.js';
+import { Button } from '@rune-langium/design-system/ui/button';
+import { X } from 'lucide-react';
 import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
 
 // ---------------------------------------------------------------------------
@@ -69,17 +71,22 @@ function ChoiceOptionRow({
         <span className="text-xs text-muted-foreground truncate">{matchedType.namespace}</span>
       )}
 
-      {/* Remove button */}
-      <button
+      {/* Remove button — icon-only `<X />` in a ghost icon-button so
+          the affordance matches FormPreviewPanel and AttributeRow.
+          Replaces the literal "✕" Unicode glyph (font-dependent
+          baseline jitter). */}
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-xs"
         onClick={handleRemove}
         disabled={disabled}
         aria-label={`Remove option ${typeName}`}
-        className="ml-auto shrink-0 p-1 text-muted-foreground hover:text-destructive
-          disabled:opacity-50 disabled:cursor-not-allowed"
+        title={`Remove option ${typeName}`}
+        className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"
       >
-        ✕
-      </button>
+        <X className="size-3" />
+      </Button>
     </div>
   );
 }

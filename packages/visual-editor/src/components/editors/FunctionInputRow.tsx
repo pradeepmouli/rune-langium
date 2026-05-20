@@ -12,6 +12,8 @@
  * @module
  */
 
+import { X } from 'lucide-react';
+import { Button } from '@rune-langium/design-system/ui/button';
 import { TypeLink } from './TypeLink.js';
 import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
 
@@ -70,17 +72,23 @@ function FunctionInputRow({
         className="text-xs text-muted-foreground"
       />
 
-      <button
+      {/* Icon-button replaces literal "✕" Unicode glyph. Mirrors the pattern
+       * applied to AttributeRow / ChoiceOptionRow in the same commit batch —
+       * lucide <X /> in a ghost icon-button, hover:text-destructive override
+       * preserves the prior visual affordance. */}
+      <Button
         data-slot="remove-param-btn"
         type="button"
+        variant="ghost"
+        size="icon-xs"
         onClick={() => onRemove(nodeId, member.name)}
         disabled={disabled}
-        className="ml-auto text-xs text-destructive hover:text-destructive/80
-          disabled:opacity-40 disabled:cursor-not-allowed"
+        className="ml-auto shrink-0 text-destructive hover:text-destructive/80"
         aria-label={`Remove input ${member.name}`}
+        title={`Remove input ${member.name}`}
       >
-        ✕
-      </button>
+        <X className="size-3" />
+      </Button>
     </div>
   );
 }
