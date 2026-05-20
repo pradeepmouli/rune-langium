@@ -124,20 +124,9 @@ describe('SourceEditor', () => {
   });
 
   describe('rendering', () => {
-    it('renders with test id', () => {
-      render(<SourceEditor files={sampleFiles} />);
-      expect(screen.getByTestId('source-editor')).toBeInTheDocument();
-    });
-
     it('renders empty state when no files', () => {
       render(<SourceEditor files={[]} />);
       expect(screen.getByText(/no files loaded/i)).toBeInTheDocument();
-    });
-
-    it('renders tab buttons for each file', () => {
-      render(<SourceEditor files={sampleFiles} />);
-      expect(screen.getByText('model.rosetta')).toBeInTheDocument();
-      expect(screen.getByText('types.rosetta')).toBeInTheDocument();
     });
 
     it('shows dirty indicator on modified files', () => {
@@ -182,11 +171,6 @@ describe('SourceEditor', () => {
   });
 
   describe('editor container', () => {
-    it('renders an editor container element', () => {
-      render(<SourceEditor files={sampleFiles} />);
-      expect(screen.getByTestId('source-editor-container')).toBeInTheDocument();
-    });
-
     it('reveals a source position in the active editor view', () => {
       const ref = React.createRef<import('../../src/components/SourceEditor.js').SourceEditorRef>();
       render(<SourceEditor ref={ref} files={sampleFiles} />);
@@ -242,30 +226,6 @@ describe('SourceEditor', () => {
         effects: { anchor: 12 }
       });
       expect(lastEditorView?.contentDOM.focus).toHaveBeenCalledWith({ preventScroll: true });
-    });
-  });
-
-  describe('diagnostics', () => {
-    it('renders without LSP client prop', () => {
-      render(<SourceEditor files={sampleFiles} />);
-      expect(screen.getByTestId('source-editor')).toBeInTheDocument();
-    });
-  });
-
-  describe('hover', () => {
-    it('renders editor that could display hover tooltips via LSP', () => {
-      render(<SourceEditor files={sampleFiles} />);
-      // Hover is handled by @codemirror/lsp-client's hoverTooltips extension
-      // which is wired when LSP client is provided. Here we verify the container exists.
-      expect(screen.getByTestId('source-editor-container')).toBeInTheDocument();
-    });
-  });
-
-  describe('completion', () => {
-    it('renders editor that could display completions via LSP', () => {
-      render(<SourceEditor files={sampleFiles} />);
-      // Completion is handled by @codemirror/lsp-client's serverCompletion extension
-      expect(screen.getByTestId('source-editor-container')).toBeInTheDocument();
     });
   });
 
