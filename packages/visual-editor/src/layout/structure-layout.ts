@@ -551,6 +551,32 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     // After mount, RF populates `node.measured` from the rendered DOM; if CSS
     // drifts from the layout's pre-computed sz, measured wins for parent-extent
     // clamping etc., but initial helpers still get the right answer pre-measure.
+    //
+    // Visual-polish #11 (PR #210): each parent that places expansion children
+    // also threads a `childYByAttrName` map into its `data` so the renderer
+    // can draw an SVG connector from the row's right edge to the child's
+    // header center. The map is populated below in the placement walks at
+    // the same moment childY is computed; here we initialize it lazily so
+    // parents with no expansions emit nothing extra.
+    // Visual-polish #11 (PR #210): connector overlay needs the y-coordinate
+    // of each materialized child keyed by the attrName (Data/base) or arm
+    // typeName (Choice) it expanded from. The map is created here and shared
+    // by reference with `data.childYByAttrName`; the placement walks below
+    // write into the same Map instance, so the renderer sees the populated
+    // entries once the synchronous placement pass completes.
+    //
+    // `connectorGeometry` is a mutable holder for cross-cutting values that
+    // need to be written by the placement walk and read by the renderer:
+    //   - rowRightX: wrapper-relative x of the row's right edge
+    //   - childLeftX: wrapper-relative x of every materialized child's left
+    //     edge (all row-level expansions in a parent share the same x)
+    // Wrapping in an object lets the synchronous placement pass mutate the
+    // values after the React Flow `data` payload has been pushed, and the
+    // renderer sees the final values because it reads them after layout
+    // returns.
+    const childYByAttrName = new Map<string, number>();
+    const connectorGeometry: { rowRightX: number; childLeftX: number } = { rowRightX: 0, childLeftX: 0 };
+
     nodes.push({
       id: instanceId,
       type: n.kind === 'base' ? 'structureBase' : n.kind,
@@ -559,7 +585,23 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       // ChoiceNode / EnumNode / GroupContainerNode renderers as inline
       // style on `.rune-node-rows`. Each node sets its own rows-column
       // width based on content estimate so CDM-scale type names don't clip.
-      data: { ...n, variant: 'structure', instancePath: instanceAncestorPath, rowsColWidth: sz.rowsColWidth },
+      data: {
+        ...n,
+        variant: 'structure',
+        instancePath: instanceAncestorPath,
+        rowsColWidth: sz.rowsColWidth,
+        // rowOffsets and childYByAttrName power the SVG row→child connector
+        // overlay rendered inside each parent node component. Both are keyed
+        // by attrName (DataNode / GroupContainerNode) or arm typeName
+        // (ChoiceNode) so the renderer can pair each expanded row with the
+        // child y it actually landed at. `connectorGeometry` is a shared
+        // mutable holder so the renderer reads the rowRightX / childLeftX
+        // values written by the placement pass — the object reference is
+        // stable, the placement pass mutates fields in place.
+        rowOffsets: sz.rowOffsets,
+        childYByAttrName,
+        connectorGeometry
+      },
       parentId: parentInstanceId,
       extent: parentInstanceId ? 'parent' : undefined,
       initialWidth: sz.width,
@@ -573,13 +615,13 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
 
     switch (n.kind) {
       case 'data':
-        placeDataChildren(n, sz, nextAncestors, childInstanceAncestorPath);
+        placeDataChildren(n, sz, nextAncestors, childInstanceAncestorPath, childYByAttrName, connectorGeometry);
         break;
       case 'base':
-        placeBaseChildren(n, sz, nextAncestors, childInstanceAncestorPath);
+        placeBaseChildren(n, sz, nextAncestors, childInstanceAncestorPath, childYByAttrName, connectorGeometry);
         break;
       case 'choice':
-        placeChoiceChildren(n, sz, nextAncestors, childInstanceAncestorPath);
+        placeChoiceChildren(n, sz, nextAncestors, childInstanceAncestorPath, childYByAttrName, connectorGeometry);
         break;
       case 'enum':
         // Phase 14e/A — Enum nodes are terminal; their value list renders
@@ -596,8 +638,18 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     n: StructureDataNode,
     sz: SizedNode,
     ancestors: ReadonlySet<string>,
-    instanceAncestorPath: readonly string[]
+    instanceAncestorPath: readonly string[],
+    childYByAttrName: Map<string, number>,
+    connectorGeometry: { rowRightX: number; childLeftX: number }
   ): void {
+    // Visual-polish #11: the Data body has `padding-left: NODE_PADDING`
+    // (see styles.css `.rune-node-data--structure .rune-node-body--two-col`),
+    // so the rows column sits at wrapper x = NODE_PADDING and ends at
+    // wrapper x = NODE_PADDING + rowsColWidth. Children are placed at
+    // wrapper x = NODE_PADDING + rowsColWidth + COL_GAP (below).
+    connectorGeometry.rowRightX = NODE_PADDING + sz.rowsColWidth;
+    connectorGeometry.childLeftX = NODE_PADDING + sz.rowsColWidth + COL_GAP;
+
     // yCursor floor: header sits flush with the wrapper top, so the first
     // expansion's minimum y is HEADER_HEIGHT (no top NODE_PADDING — see
     // sizeData/simulateColumnHeight for the symmetric init).
@@ -631,6 +683,11 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
           ancestors,
           instanceAncestorPath
         );
+        // Visual-polish #11 (PR #210): record this child's y so the parent's
+        // SVG connector overlay can draw row → child paths. Only record when
+        // we actually placed the child (the cycle-guard branch above skips
+        // both placement AND the connector entry — no orphan paths).
+        childYByAttrName.set(attrName, childY);
       }
 
       yCursor = childY + childSize.height + ROW_GAP;
@@ -647,8 +704,20 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     n: StructureChoiceNode,
     sz: SizedNode,
     ancestors: ReadonlySet<string>,
-    instanceAncestorPath: readonly string[]
+    instanceAncestorPath: readonly string[],
+    childYByAttrName: Map<string, number>,
+    connectorGeometry: { rowRightX: number; childLeftX: number }
   ): void {
+    // Visual-polish #11: Choice has NO `.rune-node-body--two-col` wrapper —
+    // `.rune-node-rows` sits flush at wrapper x = 0 (no left padding). The
+    // layout still places expansion children at wrapper x =
+    // NODE_PADDING + rowsColWidth + COL_GAP (below), so the visible gutter
+    // between row-right and child-left is wider than the Data variant by
+    // NODE_PADDING. The connector's buildConnectorPath derives its mid-x
+    // from the actual gap so the bend stays centered regardless.
+    connectorGeometry.rowRightX = sz.rowsColWidth;
+    connectorGeometry.childLeftX = NODE_PADDING + sz.rowsColWidth + COL_GAP;
+
     // Same defensive default as sizeChoice — legacy test fixtures may omit
     // the `expansions` map; treat as empty rather than crashing.
     const expansions = n.expansions ?? EMPTY_EXPANSIONS;
@@ -673,6 +742,11 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
           ancestors,
           instanceAncestorPath
         );
+        // Visual-polish #11 (PR #210): keyed by arm typeName because Choice
+        // arms have no attrName — sizeChoice's rowOffsets use the same key,
+        // so the renderer can pair connector start (row center) with end
+        // (child header center) by looking up the same string.
+        childYByAttrName.set(armTypeName, childY);
       }
 
       yCursor = childY + childSize.height + ROW_GAP;
@@ -683,13 +757,20 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     n: StructureBaseContainer,
     sz: SizedNode,
     ancestors: ReadonlySet<string>,
-    instanceAncestorPath: readonly string[]
+    instanceAncestorPath: readonly string[],
+    childYByAttrName: Map<string, number>,
+    connectorGeometry: { rowRightX: number; childLeftX: number }
   ): void {
     // 1. The derived child sits inside the yellow border below the base rows.
     //    `n.childNodeId` is the child's per-instance id (set by the adapter —
     //    `adapterDerivedInstanceId`). For test fixtures constructed without
     //    per-instance ids, this is the canonical id, which is also the key
     //    in `input.nodes` (since `nodeInstanceId` falls back to `id`).
+    //
+    // Visual-polish #11 (PR #210): the derived child intentionally does NOT
+    // get a `childYByAttrName` entry — it's not row-level expansion. The
+    // derived child has its own visual relationship via the dotted-border
+    // containment, so drawing a connector to it would duplicate that signal.
     if (!ancestors.has(n.childNodeId)) {
       placeNode(
         n.childNodeId,
@@ -716,6 +797,14 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     const derivedChildWidth = derivedChildSize?.width ?? COL_WIDTH;
     const rightColumnX = BASE_PADDING + Math.max(sz.rowsColWidth, derivedChildWidth) + COL_GAP;
 
+    // Visual-polish #11: base container rows sit at wrapper x = BASE_PADDING
+    // (from the container's `padding: BASE_PADDING`); the right column —
+    // where row-level expansions land — sits at `rightColumnX` (above).
+    // When the derived child is wider than the inherited rows, the gutter
+    // grows past COL_GAP; buildConnectorPath handles the wider gap.
+    connectorGeometry.rowRightX = BASE_PADDING + sz.rowsColWidth;
+    connectorGeometry.childLeftX = rightColumnX;
+
     let yCursor = BASE_PADDING + HEADER_HEIGHT;
     for (const [attrName, childInstanceId] of n.expansions) {
       const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
@@ -727,6 +816,13 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
 
       if (!ancestors.has(childInstanceId)) {
         placeNode(childInstanceId, nodeInstanceId(n), { x: rightColumnX, y: childY }, ancestors, instanceAncestorPath);
+        // Visual-polish #11 (PR #210): only row-level expansions get a
+        // connector entry. Note the right-column x origin differs from
+        // Data/Choice — see `rightColumnX` above. The renderer computes the
+        // child-left endpoint from rowsColWidth + COL_GAP relative to the
+        // parent's body, which lines up because the base container's row
+        // column starts at BASE_PADDING (mirroring rightColumnX).
+        childYByAttrName.set(attrName, childY);
       }
 
       yCursor = childY + childSize.height + ROW_GAP;

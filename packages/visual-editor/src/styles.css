@@ -1098,6 +1098,23 @@ button[data-navigable]:focus-visible {
   outline-offset: 1px;
 }
 
+/* Visual-polish #11 (PR #210): SVG connector path from each materialized
+ * row's right edge to its expansion child's header center. The SVG itself
+ * fills the parent node and is pointer-events:none / aria-hidden, so this
+ * rule only governs the path stroke. Colour mixes the per-node accent
+ * (`--node-accent`, falling back to the design-system primary) at 45%
+ * with transparent, so the line reads as a deliberate routing without
+ * competing with the row text or the child's left accent stripe (which
+ * remains the primary visual anchor for the child). 1px hairline — any
+ * heavier reads as a wire rather than a hint. Layout constants
+ * (HEADER_HEIGHT, COL_GAP) drive the path geometry in JS; the CSS only
+ * owns colour + stroke width. */
+.rune-row-connector {
+  fill: none;
+  stroke: color-mix(in oklch, var(--node-accent, var(--primary, #00d4aa)) 45%, transparent);
+  stroke-width: 1;
+}
+
 .rune-node-children-slot {
   /* React Flow positions child nodes absolutely via parentNode; this
    * slot only declares the column gap.  Width is implicit from the

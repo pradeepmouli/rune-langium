@@ -34,6 +34,7 @@ import { getTypeRefText } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
+import { STRUCTURE_LAYOUT_CONSTANTS } from '../../layout/structure-layout.js';
 
 // ---------------------------------------------------------------------------
 // Structure-variant helpers
@@ -57,6 +58,19 @@ interface StructureChoiceNodeData extends StructureChoiceNode {
   readonly onToggleExpansion?: (key: StructureExpansionKey) => void;
   /** Ancestor rfId chain (Phase 14d); same shape as DataNode. */
   readonly instancePath?: ReadonlyArray<string>;
+  /** Per-node rows-column width (e2e-batch fix #12); same shape as DataNode. */
+  readonly rowsColWidth?: number;
+  /**
+   * Visual-polish #11 (PR #210) — layout-emitted geometry for the SVG
+   * row→child connector overlay. For Choice, both maps are keyed by arm
+   * typeName (not attrName — arms have no attrName). `connectorGeometry`
+   * carries the row-right/child-left x coordinates. Entries exist only
+   * for arms whose expansion is currently materialized. See DataNode for
+   * full rationale.
+   */
+  readonly rowOffsets?: ReadonlyMap<string, number>;
+  readonly childYByAttrName?: ReadonlyMap<string, number>;
+  readonly connectorGeometry?: { readonly rowRightX: number; readonly childLeftX: number };
   /**
    * Spec §8 / §3.3 — navigate-to-enum callback (same contract as DataNode).
    * Arms with `typeKind === 'Enum'` render an ↗ button that fires this with
@@ -94,6 +108,90 @@ function isArmExpandable(typeKind: StructureChoiceArm['typeKind']): boolean {
  */
 function armKindToRowKind(armKind: StructureChoiceArm['typeKind']): StructureRow['typeKind'] {
   return armKind === 'Builtin' ? 'BasicType' : armKind;
+}
+
+// ---------------------------------------------------------------------------
+// Row → child SVG connector overlay (visual-polish #11, PR #210)
+// ---------------------------------------------------------------------------
+// Mirror of DataNode's RowConnectorOverlay — see that file for the design
+// rationale (self-contained per parent, no shared module, visual-only
+// CORNER_RADIUS stays here rather than in STRUCTURE_LAYOUT_CONSTANTS).
+
+const CONNECTOR_CORNER_RADIUS = 4;
+
+function buildConnectorPath(startX: number, startY: number, endX: number, endY: number): string {
+  if (startY === endY) {
+    return `M ${startX} ${startY} L ${endX} ${endY}`;
+  }
+  // Stepped path: horizontal half the gutter, vertical to child level, horizontal in.
+  // Mid-x is derived from the actual start/end distance so the bend stays
+  // centered in the visible gutter regardless of any per-variant padding
+  // offset (Data inserts NODE_PADDING in the gap; Choice does not).
+  const gap = endX - startX;
+  const midX = startX + gap / 2;
+  const goingDown = endY > startY;
+  const r = Math.min(CONNECTOR_CORNER_RADIUS, Math.abs(endY - startY) / 2, gap / 4);
+  const v1 = goingDown ? startY + r : startY - r;
+  const v2 = goingDown ? endY - r : endY + r;
+  const sweepIn = goingDown ? 1 : 0;
+  const sweepOut = goingDown ? 0 : 1;
+  return [
+    `M ${startX} ${startY}`,
+    `H ${midX - r}`,
+    `A ${r} ${r} 0 0 ${sweepIn} ${midX} ${v1}`,
+    `V ${v2}`,
+    `A ${r} ${r} 0 0 ${sweepOut} ${midX + r} ${endY}`,
+    `H ${endX}`
+  ].join(' ');
+}
+
+interface RowConnectorOverlayProps {
+  readonly rowOffsets?: ReadonlyMap<string, number>;
+  readonly childYByAttrName?: ReadonlyMap<string, number>;
+  /** Wrapper-relative x of the row's right edge — start point of every connector. */
+  readonly rowRightX: number;
+  /** Wrapper-relative x of the child's left edge — end point of every connector. */
+  readonly childLeftX: number;
+}
+
+function RowConnectorOverlay({
+  rowOffsets,
+  childYByAttrName,
+  rowRightX,
+  childLeftX
+}: RowConnectorOverlayProps): React.ReactElement | null {
+  if (!rowOffsets || !childYByAttrName || childYByAttrName.size === 0) return null;
+  const { HEADER_HEIGHT } = STRUCTURE_LAYOUT_CONSTANTS;
+  const paths: React.ReactElement[] = [];
+  for (const [armTypeName, childY] of childYByAttrName) {
+    const rowCenter = rowOffsets.get(armTypeName);
+    if (rowCenter === undefined) continue;
+    const endY = childY + HEADER_HEIGHT / 2;
+    paths.push(
+      <path
+        key={armTypeName}
+        className="rune-row-connector"
+        d={buildConnectorPath(rowRightX, rowCenter, childLeftX, endY)}
+      />
+    );
+  }
+  if (paths.length === 0) return null;
+  return (
+    <svg
+      className="rune-row-connector-overlay"
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        overflow: 'visible'
+      }}
+    >
+      {paths}
+    </svg>
+  );
 }
 
 /**
@@ -220,7 +318,18 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
   // -------------------------------------------------------------------------
   if (isStructureChoice(data)) {
     const options = data.options as ReadonlyArray<StructureChoiceArm>;
-    const { cellComponents, expansionMap, onToggleExpansion, instancePath, onNavigateToEnumType } = data;
+    const {
+      cellComponents,
+      expansionMap,
+      onToggleExpansion,
+      instancePath,
+      onNavigateToEnumType,
+      // Visual-polish #11 (PR #210): same connector overlay inputs as DataNode,
+      // keyed by arm typeName for Choice.
+      rowOffsets,
+      childYByAttrName,
+      connectorGeometry
+    } = data;
     const TypeCell = cellComponents?.type;
     // `structureDiagnostics` is intentionally NOT destructured here — arms have
     // no astRange today so we don't pass diagnostics through to the row (would
@@ -231,7 +340,7 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
     // Same self-inclusive instancePath convention as DataNode: ancestors + self.
     const ownerInstancePath: ReadonlyArray<string> = [...(instancePath ?? []), id];
     // e2e-batch fix #12: per-node rows-column width from the layout.
-    const rowsColWidth = (data as { rowsColWidth?: number }).rowsColWidth;
+    const rowsColWidth = data.rowsColWidth;
 
     return (
       <div className={`rune-node rune-node-choice rune-node-choice--structure${selected ? ' rune-node-selected' : ''}`}>
@@ -240,6 +349,15 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
           <span>{data.name}</span>
         </div>
         <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
+          {/* Visual-polish #11 (PR #210): row→child SVG connector. Choice has
+              no `.rune-node-body--two-col` wrapper, so the rows column sits
+              flush at wrapper x=0 (rowRightX = rowsColWidth). The layout
+              still places expansion children at x = NODE_PADDING +
+              rowsColWidth + COL_GAP (see placeChoiceChildren), so the
+              connector spans (NODE_PADDING + COL_GAP) horizontally — wider
+              than the Data variant. buildConnectorPath derives the bend
+              midpoint from the actual gap, so the path stays visually
+              centered in the wider gutter. */}
           {options.map((arm: StructureChoiceArm) => {
             const expandable = isArmExpandable(arm.typeKind);
             // Arm expansion key convention (Phase 14e/B): arm.typeName fills
@@ -275,6 +393,14 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
             );
           })}
         </div>
+        {connectorGeometry ? (
+          <RowConnectorOverlay
+            rowOffsets={rowOffsets}
+            childYByAttrName={childYByAttrName}
+            rowRightX={connectorGeometry.rowRightX}
+            childLeftX={connectorGeometry.childLeftX}
+          />
+        ) : null}
       </div>
     );
   }
