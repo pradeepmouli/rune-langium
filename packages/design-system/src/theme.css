@@ -315,4 +315,24 @@
     background: color-mix(in oklch, var(--primary, var(--accent, currentColor)) 38%, transparent);
     color: var(--foreground, inherit);
   }
+
+  /* ── Global :disabled / [aria-disabled='true'] state ────────────
+   * Per-component disabled rules drifted between opacity 0.3 / 0.35
+   * / 0.5 / 0.4 + cursor handling. Promote a single 0.4 + not-allowed
+   * baseline so every disabled control reads identically.
+   *
+   * `:where(...)` keeps specificity at 0 so per-component overrides
+   * (e.g. a heavier 0.5 fade for a destructive button, or a 0.35 for
+   * a sidebar pill where the surface is already tinted) can win
+   * without `!important`.
+   *
+   * `pointer-events: none` is deliberately NOT set here — some
+   * components (Radix tooltip wrappers, drag-and-drop sources) want
+   * to receive hover events even when their inner control is
+   * disabled. Per-component rules opt in to `pointer-events: none`
+   * when needed (see e.g. .studio-rail__btn:disabled below). */
+  :where(:disabled, [aria-disabled='true']) {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
 }

@@ -501,9 +501,11 @@ html {
     background: var(--accent);
   }
 
+  /* opacity (0.35 vs the 0.4 baseline) + pointer-events:none is the
+   * only divergence from the global :disabled rule. The 0.35 reads
+   * better against the sidebar's already-tinted surface. */
   .studio-app .studio-rail__btn:disabled {
     opacity: 0.35;
-    cursor: not-allowed;
     pointer-events: none;
   }
 
@@ -1314,6 +1316,10 @@ html {
   flex-shrink: 0;
 }
 
+/* Diverges from the global :disabled (0.4 + not-allowed): visibility
+ * toggles intentionally read as 0.3 / `default` cursor because they
+ * indicate a state-locked row (no parent visibility to inherit from)
+ * rather than a click-disabled control. */
 .ns-type__visibility:disabled {
   cursor: default;
   opacity: 0.3;
@@ -1875,10 +1881,12 @@ html {
   background: var(--primary);
 }
 
+/* Form submit buttons fade harder (0.5) than the global :disabled
+ * (0.4) so the heavier "this is not currently submittable" signal
+ * reads against the saturated primary background. */
 .rune-type-creator__submit:disabled,
 .rune-attribute-editor__submit:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .rune-type-creator__cancel,
@@ -1939,13 +1947,15 @@ html {
   border-color: var(--border);
 }
 
-/* Disabled form controls */
+/* Disabled form controls — opacity diverges (0.5 vs the 0.4
+ * baseline) so the input greys deeper than a button; the
+ * background-color swap (--card → --background) is the carrier
+ * signal that the field is locked. */
 [data-slot='enum-form'] input:disabled,
 [data-slot='function-form'] input:disabled,
 [data-slot='data-type-form'] input:disabled,
 [data-slot='expression-editor']:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
   background-color: var(--background);
 }
 
