@@ -32,7 +32,8 @@ describe('Structure layout SSoT — CSS custom props match TS constants', () => 
     ['COL_WIDTH', '--rune-col-width'],
     ['COL_GAP', '--rune-col-gap'],
     ['ROW_GAP', '--rune-row-gap'],
-    ['BASE_PADDING', '--rune-base-padding']
+    ['BASE_PADDING', '--rune-base-padding'],
+    ['NODE_PADDING', '--rune-node-padding']
   ];
 
   for (const [tsKey, cssVar] of cases) {

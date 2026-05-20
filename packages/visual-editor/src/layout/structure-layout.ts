@@ -61,11 +61,27 @@ export const STRUCTURE_LAYOUT_CONSTANTS = {
    * row content. CSS mirror lives in styles.css `--rune-base-padding`;
    * both must stay in sync (structure-css-ssot.test.ts asserts this).
    */
-  BASE_PADDING: 4
+  BASE_PADDING: 4,
+  /**
+   * Uniform inset between a Data/Choice node's chrome edges and its content
+   * (header, rows, and right-column expansion children). Equivalent in spirit
+   * to BASE_PADDING for base containers — provides visual breathing room on
+   * all four sides so content doesn't read as flush-clipped against the card
+   * border.
+   *
+   * Must be mirrored on both sides: (1) layout math (this constant) shifts
+   * rowOffsets and child placements by NODE_PADDING so the rendered chrome
+   * padding aligns with React Flow's wrapper-relative child positions, and
+   * (2) CSS `--rune-node-padding` applies the chrome padding visually. The
+   * SSoT test (structure-css-ssot.test.ts Part A) enforces that the two
+   * stay numerically in sync. Replaced the earlier CHILD_INSET-only fix
+   * (which only padded the right + bottom edges) once the user asked for
+   * uniform padding around all content. */
+  NODE_PADDING: 4
 } as const;
 
 // Internal aliases — keep call sites inside this module readable.
-const { ROW_HEIGHT, HEADER_HEIGHT, COL_WIDTH, COL_WIDTH_MAX, COL_GAP, ROW_GAP, BASE_PADDING } =
+const { ROW_HEIGHT, HEADER_HEIGHT, COL_WIDTH, COL_WIDTH_MAX, COL_GAP, ROW_GAP, BASE_PADDING, NODE_PADDING } =
   STRUCTURE_LAYOUT_CONSTANTS;
 
 interface SizedNode {
@@ -195,9 +211,14 @@ function sizeData(
   const rows = node.rows;
   const rowsHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT;
 
+  // rowOffsets shift down by NODE_PADDING so they match the rendered row
+  // y-coords once the CSS `padding: var(--rune-node-padding)` on
+  // .rune-node-data--structure pushes the header+rows inward from the
+  // wrapper origin. Child placements use rowOffsets directly, so this is
+  // the single point of coordination.
   const rowOffsets = new Map<string, number>();
   for (let i = 0; i < rows.length; i++) {
-    rowOffsets.set(rows[i].attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+    rowOffsets.set(rows[i].attrName, NODE_PADDING + HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
 
   let childrenWidth = 0;
@@ -211,10 +232,12 @@ function sizeData(
 
   // Height of the right-hand expansions column matches what the placement pass
   // will actually produce (row-aligned + non-overlapping), not the naive sum.
-  const childrenHeight =
+  // simulateColumnHeight starts at NODE_PADDING + HEADER_HEIGHT (mirroring the
+  // shifted rowOffsets) and returns an absolute y-bottom from the wrapper origin.
+  const rightColumnAbsBottom =
     node.expansions.size > 0
-      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT
-      : 0;
+      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, NODE_PADDING + HEADER_HEIGHT)
+      : NODE_PADDING + HEADER_HEIGHT;
 
   // e2e-batch fix #12: per-node rows-column width based on content +
   // header name (follow-up: visual verification on dev caught long headers
@@ -223,9 +246,19 @@ function sizeData(
     rows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality })),
     node.name
   );
-  const width = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
-  const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
-  return { width, height, rowsColWidth, rowOffsets };
+  // Wrapper dimensions = inner content + NODE_PADDING on every side. Inner
+  // content height is max(rowsHeight, right-column extent measured from
+  // wrapper origin minus the top NODE_PADDING). Right column bottom already
+  // includes top NODE_PADDING, so subtract it once to get a content-only
+  // height, then re-add 2*NODE_PADDING below.
+  const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
+  const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom - NODE_PADDING);
+  return {
+    width: innerWidth + 2 * NODE_PADDING,
+    height: innerHeight + 2 * NODE_PADDING,
+    rowsColWidth,
+    rowOffsets
+  };
 }
 
 function sizeChoice(
@@ -235,10 +268,12 @@ function sizeChoice(
   sizing: Set<string>
 ): SizedNode {
   // StructureChoiceArm uses typeName as the row key (arms have no attrName —
-  // their identity IS the referenced type).
+  // their identity IS the referenced type). Row centers include NODE_PADDING
+  // so they match the rendered y once the chrome's CSS padding pushes content
+  // inward — see sizeData for the matching rationale.
   const rowOffsets = new Map<string, number>();
   for (let i = 0; i < node.options.length; i++) {
-    rowOffsets.set(node.options[i].typeName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+    rowOffsets.set(node.options[i].typeName, NODE_PADDING + HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
   const rowsHeight = HEADER_HEIGHT + node.options.length * ROW_HEIGHT;
 
@@ -259,8 +294,10 @@ function sizeChoice(
     childrenWidth = Math.max(childrenWidth, childSize.width);
   }
 
-  const childrenHeight =
-    expansions.size > 0 ? simulateColumnHeight(expansions, rowOffsets, input, sizes, sizing) - HEADER_HEIGHT : 0;
+  const rightColumnAbsBottom =
+    expansions.size > 0
+      ? simulateColumnHeight(expansions, rowOffsets, input, sizes, sizing, NODE_PADDING + HEADER_HEIGHT)
+      : NODE_PADDING + HEADER_HEIGHT;
 
   // e2e-batch fix #12: per-node rows-column width based on arm content +
   // header name. Choice arms have no attrName / cardinality — pass empty
@@ -269,9 +306,14 @@ function sizeChoice(
     node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '' })),
     node.name
   );
-  const width = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
-  const height = Math.max(rowsHeight, childrenHeight + HEADER_HEIGHT);
-  return { width, height, rowsColWidth, rowOffsets };
+  const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
+  const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom - NODE_PADDING);
+  return {
+    width: innerWidth + 2 * NODE_PADDING,
+    height: innerHeight + 2 * NODE_PADDING,
+    rowsColWidth,
+    rowOffsets
+  };
 }
 
 const EMPTY_EXPANSIONS: ReadonlyMap<string, string> = new Map();
@@ -557,7 +599,10 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     ancestors: ReadonlySet<string>,
     instanceAncestorPath: readonly string[]
   ): void {
-    let yCursor = HEADER_HEIGHT;
+    // Starts at NODE_PADDING + HEADER_HEIGHT so the first expansion's floor y
+    // (used by `Math.max(rowTop, yCursor)`) matches the chrome's content-area
+    // top — see sizeData/simulateColumnHeight for the symmetric init.
+    let yCursor = NODE_PADDING + HEADER_HEIGHT;
     for (const [attrName, childInstanceId] of n.expansions) {
       const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
       if (!childSize) continue;
@@ -577,10 +622,13 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       // already widens the parent's `width` to `rowsColWidth + COL_GAP +
       // childrenWidth`, so placement must mirror that origin.
       if (!ancestors.has(childInstanceId)) {
+        // x: NODE_PADDING (left chrome inset) + rowsColWidth + COL_GAP.
+        // y is row-aligned via rowOffsets which already include NODE_PADDING
+        // — see sizeData rowOffsets construction.
         placeNode(
           childInstanceId,
           nodeInstanceId(n),
-          { x: sz.rowsColWidth + COL_GAP, y: childY },
+          { x: NODE_PADDING + sz.rowsColWidth + COL_GAP, y: childY },
           ancestors,
           instanceAncestorPath
         );
@@ -605,7 +653,7 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     // Same defensive default as sizeChoice — legacy test fixtures may omit
     // the `expansions` map; treat as empty rather than crashing.
     const expansions = n.expansions ?? EMPTY_EXPANSIONS;
-    let yCursor = HEADER_HEIGHT;
+    let yCursor = NODE_PADDING + HEADER_HEIGHT;
     for (const [armTypeName, childInstanceId] of expansions) {
       const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
       if (!childSize) continue;
@@ -620,7 +668,7 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
         placeNode(
           childInstanceId,
           nodeInstanceId(n),
-          { x: sz.rowsColWidth + COL_GAP, y: childY },
+          { x: NODE_PADDING + sz.rowsColWidth + COL_GAP, y: childY },
           ancestors,
           instanceAncestorPath
         );

@@ -132,7 +132,13 @@
   font-size: var(--text-sm, 0.875rem);
   min-width: 200px;
   color: var(--color-node-text, var(--foreground, #E8E6E1));
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  /* Two-tier soft shadow — close inner anchors the card to the canvas, wider
+   * outer gives quiet float. Reads as depth without being heavy. Matches the
+   * idiom used by `.rune-graph-group--base` so a base container and its
+   * nested derived child share the same depth language. */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 2px 6px rgba(0, 0, 0, 0.10);
   /* UX rec #3: 240ms ease-out reads as motion (the 150ms previous value
      was too fast to register). background-color added so the selection
      ramp animates cleanly. */
@@ -848,6 +854,15 @@ button[data-navigable]:focus-visible {
   --rune-col-gap: 32px;
   --rune-row-gap: 8px;
   --rune-base-padding: 4px;
+  /* Uniform inset between a Data/Choice node's chrome edges and its content
+   * (header, rows, right-column expansion children). Mirrors
+   * STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING. Applied as chrome padding on
+   * .rune-node-data--structure / .rune-node-choice--structure below. The
+   * layout shifts rowOffsets and child placements by the same amount so
+   * the CSS chrome padding stays coordinated with React Flow's
+   * wrapper-relative child positions. Replaced the earlier --rune-child-inset
+   * (right+bottom only) once we moved to uniform all-sides padding. */
+  --rune-node-padding: 4px;
   /* Phase 10.2 — ornament constants (chip/pill/row-indent).
    * Not layout-bearing in the structure-layout.ts sense (they don't
    * couple to row y-offsets), but declared here so the stylelint rule
@@ -927,6 +942,28 @@ button[data-navigable]:focus-visible {
 .rune-graph-group--base .rune-cell-card,
 .rune-graph-group--base .rune-cell-type-chip {
   font-size: 11px;
+}
+
+/* Two concerns combined for the structure variants of Data and Choice:
+ *
+ * 1. `height: 100%` — fill the React Flow wrapper so the chrome visually
+ *    contains nested right-column children. Without this the chrome
+ *    shrinks to `header + rows`; right-column expansions (positioned by
+ *    React Flow as siblings inside the wrapper, NOT DOM children of
+ *    `.rune-node`) end up visually orphaned below the parent card.
+ *
+ * 2. `padding: var(--rune-node-padding)` — uniform inset between chrome
+ *    edges and content (header, rows, child column). Mirrors
+ *    STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING; the layout shifts rowOffsets
+ *    and child placements by the same amount so RF child positions stay
+ *    coordinated with the visually-inset content. `box-sizing: border-box`
+ *    keeps the padding inside the wrapper's RF-set width/height instead of
+ *    expanding the chrome beyond the layout-computed bounds. */
+.rune-node-data--structure,
+.rune-node-choice--structure {
+  box-sizing: border-box;
+  height: 100%;
+  padding: var(--rune-node-padding);
 }
 
 /* Wire HEADER_HEIGHT SSoT: the structure-variant header must render at
@@ -1082,14 +1119,31 @@ button[data-navigable]:focus-visible {
    *   1. dashed yellow border (instead of solid neutral)
    *   2. translucent yellow fill (instead of opaque card)
    * Everything else (radius, shadow, motion) tracks .rune-node. */
-  /* Dashed border 1px (down from 2px) per user feedback — thinner reads
-   * as "subtle scaffolding around an inherited content block" instead
-   * of an outlined sibling competing with the inner node's solid 1px
-   * border. */
-  border: 1px dashed var(--color-base-type, #d4a017);
-  background: var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
+  /* Dotted border 1px — 1px is the minimum stroke width; "thinner" reads
+   * are achieved by (a) dotted instead of dashed (smaller marks, more
+   * whitespace) and (b) ~55% color opacity so the scaffolding fades against
+   * the canvas instead of competing with the inner node's solid border. */
+  border: 1px dotted color-mix(in oklch, var(--color-base-type, #d4a017) 55%, transparent);
+  /* Subtle vertical gradient — slightly brighter yellow tint at the top
+   * fading to ~half intensity at the bottom. Gives the container quiet
+   * depth without competing with the inner DataNode's solid fill. The
+   * --color-base-type-bg fallback (a flat 6% tint) is kept as a guard for
+   * envs without theme tokens. */
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--color-base-type, #d4a017) 9%, transparent) 0%,
+      color-mix(in oklch, var(--color-base-type, #d4a017) 4%, transparent) 100%
+    ),
+    var(--color-base-type-bg, rgba(212, 160, 23, 0.06));
   border-radius: var(--radius-lg, 12px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  /* Two-tier soft shadow — close inner shadow grounds the container against
+   * the canvas, wider outer shadow gives it a quiet float. Reads as depth
+   * without competing with the inner node's own shadow (which is even
+   * lighter at 0 1px 2px / 0.04). */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.12);
   transition:
     border-color 240ms ease-out,
     box-shadow 240ms ease-out,
