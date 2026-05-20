@@ -708,14 +708,14 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     childYByAttrName: Map<string, number>,
     connectorGeometry: { rowRightX: number; childLeftX: number }
   ): void {
-    // Visual-polish #11: Choice has NO `.rune-node-body--two-col` wrapper —
-    // `.rune-node-rows` sits flush at wrapper x = 0 (no left padding). The
-    // layout still places expansion children at wrapper x =
-    // NODE_PADDING + rowsColWidth + COL_GAP (below), so the visible gutter
-    // between row-right and child-left is wider than the Data variant by
-    // NODE_PADDING. The connector's buildConnectorPath derives its mid-x
-    // from the actual gap so the bend stays centered regardless.
-    connectorGeometry.rowRightX = sz.rowsColWidth;
+    // Visual-polish #11 + Codex review on 616f71e5: ChoiceNode now renders
+    // with the `.rune-node-body--two-col` wrapper (matching DataNode), so
+    // the rows column gets the same NODE_PADDING left inset from the
+    // wrapper's CSS padding. Row right edge therefore sits at wrapper x =
+    // NODE_PADDING + rowsColWidth — symmetric with Data. Child placement
+    // unchanged (still NODE_PADDING + rowsColWidth + COL_GAP). Visible
+    // gutter between row-right and child-left is now exactly COL_GAP.
+    connectorGeometry.rowRightX = NODE_PADDING + sz.rowsColWidth;
     connectorGeometry.childLeftX = NODE_PADDING + sz.rowsColWidth + COL_GAP;
 
     // Same defensive default as sizeChoice — legacy test fixtures may omit

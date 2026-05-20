@@ -348,50 +348,56 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
           <NodeKindBadge kind="choice" />
           <span>{data.name}</span>
         </div>
-        <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
-          {/* Visual-polish #11 (PR #210): row→child SVG connector. Choice has
-              no `.rune-node-body--two-col` wrapper, so the rows column sits
-              flush at wrapper x=0 (rowRightX = rowsColWidth). The layout
-              still places expansion children at x = NODE_PADDING +
-              rowsColWidth + COL_GAP (see placeChoiceChildren), so the
-              connector spans (NODE_PADDING + COL_GAP) horizontally — wider
-              than the Data variant. buildConnectorPath derives the bend
-              midpoint from the actual gap, so the path stays visually
-              centered in the wider gutter. */}
-          {options.map((arm: StructureChoiceArm) => {
-            const expandable = isArmExpandable(arm.typeKind);
-            // Arm expansion key convention (Phase 14e/B): arm.typeName fills
-            // the attrName slot since arms have no DSL-level attribute name.
-            // Matches the adapter's `expandChoiceArms` key construction so
-            // chevron writes round-trip through `shouldExpandArm`-equivalent
-            // checks symmetrically.
-            const rowKey: StructureExpansionKey | undefined = expandable
-              ? {
-                  namespaceUri: ownerNamespaceUri,
-                  typeId: ownerTypeName,
-                  attrName: arm.typeName,
-                  instancePath: ownerInstancePath
-                }
-              : undefined;
-            const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;
-            const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (rowKey) onToggleExpansion?.(rowKey);
-            };
-            return (
-              <StructureChoiceArmRow
-                key={arm.typeName}
-                arm={arm}
-                expandable={expandable}
-                isExpanded={isExpanded}
-                handleToggle={handleToggle}
-                TypeCell={TypeCell}
-                nodeId={data.id}
-                onNavigateToEnumType={onNavigateToEnumType}
-              />
-            );
-          })}
+        {/* Body wrapper mirrors DataNode's DOM (PR #210 follow-up to a Codex
+            review on PR #210's commit 616f71e5: the existing CSS rule
+            `.rune-node-choice--structure .rune-node-body--two-col` never
+            matched because Choice had no such wrapper, so the NODE_PADDING
+            sides+bottom inset was silently missing for Choice nodes).
+            With the wrapper in place, the rows column renders inset 4px
+            from the chrome left edge — matching Data — and the connector's
+            rowRightX is updated to NODE_PADDING + rowsColWidth (see
+            placeChoiceChildren). The empty children-slot is included for
+            DOM parity with Data so a future change that consumes the slot
+            (e.g. decorative border-left) doesn't have to branch on
+            variant. */}
+        <div className="rune-node-body rune-node-body--two-col">
+          <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
+            {options.map((arm: StructureChoiceArm) => {
+              const expandable = isArmExpandable(arm.typeKind);
+              // Arm expansion key convention (Phase 14e/B): arm.typeName fills
+              // the attrName slot since arms have no DSL-level attribute name.
+              // Matches the adapter's `expandChoiceArms` key construction so
+              // chevron writes round-trip through `shouldExpandArm`-equivalent
+              // checks symmetrically.
+              const rowKey: StructureExpansionKey | undefined = expandable
+                ? {
+                    namespaceUri: ownerNamespaceUri,
+                    typeId: ownerTypeName,
+                    attrName: arm.typeName,
+                    instancePath: ownerInstancePath
+                  }
+                : undefined;
+              const isExpanded = rowKey && expansionMap ? expansionMap.get(expansionKey(rowKey)) === true : false;
+              const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (rowKey) onToggleExpansion?.(rowKey);
+              };
+              return (
+                <StructureChoiceArmRow
+                  key={arm.typeName}
+                  arm={arm}
+                  expandable={expandable}
+                  isExpanded={isExpanded}
+                  handleToggle={handleToggle}
+                  TypeCell={TypeCell}
+                  nodeId={data.id}
+                  onNavigateToEnumType={onNavigateToEnumType}
+                />
+              );
+            })}
+          </div>
+          <div className="rune-node-children-slot" data-testid="choice-node-children" />
         </div>
         {connectorGeometry ? (
           <RowConnectorOverlay
