@@ -23,8 +23,10 @@
  * 2026-05-20 prod-smoke check; see PR #214).
  *
  * This guard checks `WorkerGlobalScope` (only defined inside a worker) and
- * falls back to `importScripts` (only defined on Dedicated/SharedWorkerGlobalScope)
- * — both stay safe in SSR / Node test environments where `self` is undefined.
+ * falls back to `importScripts` (defined on DedicatedWorkerGlobalScope,
+ * SharedWorkerGlobalScope, AND ServiceWorkerGlobalScope — i.e. every worker
+ * variant — but never on `window`). Both checks stay safe in SSR / Node test
+ * environments where `self` is undefined.
  */
 export function isWorkerGlobalScope(): boolean {
   if (typeof self === 'undefined') return false;
@@ -34,7 +36,8 @@ export function isWorkerGlobalScope(): boolean {
   if (typeof WorkerGlobalScopeCtor === 'function' && self instanceof (WorkerGlobalScopeCtor as new () => unknown)) {
     return true;
   }
-  // Fallback: `importScripts` is only defined on DedicatedWorkerGlobalScope and
-  // SharedWorkerGlobalScope; it's never on `window`.
+  // Fallback: `importScripts` is defined on every worker variant
+  // (Dedicated, Shared, and Service worker global scopes) but never on
+  // `window`, so it's a sound "is-this-a-worker" check.
   return typeof (self as { importScripts?: unknown }).importScripts === 'function';
 }
