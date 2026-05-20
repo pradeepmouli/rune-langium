@@ -28,6 +28,7 @@ import { createRuneDslServices } from '@rune-langium/core';
 import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen';
 import type { Target } from '@rune-langium/codegen';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
+import { isWorkerGlobalScope } from './runtime-guards.js';
 
 // ---------------------------------------------------------------------------
 // Message types (inbound)
@@ -435,38 +436,49 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
 // Message handler
 // ---------------------------------------------------------------------------
 
-(self as unknown as DedicatedWorkerGlobalScope).addEventListener('message', (e: MessageEvent<WorkerInboundMessage>) => {
-  const msg = e.data;
+// Gate the listener behind `isWorkerGlobalScope()` (shared with parser-worker
+// via ./runtime-guards.ts). Currently no main-bundle code statically imports
+// this module, but the moment something does — e.g. a re-export of a type
+// definition — the unguarded `self.addEventListener` would re-create the
+// same `TypeError: Cannot read properties of undefined (reading 'type')`
+// crash that PR #214 fixed for parser-worker.
+if (isWorkerGlobalScope()) {
+  (self as unknown as DedicatedWorkerGlobalScope).addEventListener(
+    'message',
+    (e: MessageEvent<WorkerInboundMessage>) => {
+      const msg = e.data;
 
-  if (msg.type === 'codegen:setFiles') {
-    currentCodegenFiles = msg.files;
-    if (msg.requestId) {
-      lastCodegenRequestId = msg.requestId;
+      if (msg.type === 'codegen:setFiles') {
+        currentCodegenFiles = msg.files;
+        if (msg.requestId) {
+          lastCodegenRequestId = msg.requestId;
+        }
+        runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
+      } else if (msg.type === 'codegen:generate') {
+        if (msg.target !== undefined) {
+          lastTarget = msg.target;
+        }
+        if (msg.requestId) {
+          lastCodegenRequestId = msg.requestId;
+        }
+        runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
+      } else if (msg.type === 'preview:setFiles') {
+        currentPreviewFiles = msg.files;
+        if (msg.requestId) {
+          lastPreviewRequestId = msg.requestId;
+        }
+        const requestId = msg.requestId ?? lastPreviewRequestId;
+        if (lastPreviewTargetId && requestId) {
+          runPreview(lastPreviewTargetId, requestId).catch(console.error);
+        }
+      } else if (msg.type === 'preview:generate') {
+        lastPreviewTargetId = msg.targetId;
+        lastPreviewRequestId = msg.requestId;
+        runPreview(msg.targetId, msg.requestId).catch(console.error);
+      } else if (msg.type === 'preview:execute') {
+        const { funcName, inputs, requestId } = msg;
+        executeFunction(funcName, inputs, requestId).catch(console.error);
+      }
     }
-    runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
-  } else if (msg.type === 'codegen:generate') {
-    if (msg.target !== undefined) {
-      lastTarget = msg.target;
-    }
-    if (msg.requestId) {
-      lastCodegenRequestId = msg.requestId;
-    }
-    runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
-  } else if (msg.type === 'preview:setFiles') {
-    currentPreviewFiles = msg.files;
-    if (msg.requestId) {
-      lastPreviewRequestId = msg.requestId;
-    }
-    const requestId = msg.requestId ?? lastPreviewRequestId;
-    if (lastPreviewTargetId && requestId) {
-      runPreview(lastPreviewTargetId, requestId).catch(console.error);
-    }
-  } else if (msg.type === 'preview:generate') {
-    lastPreviewTargetId = msg.targetId;
-    lastPreviewRequestId = msg.requestId;
-    runPreview(msg.targetId, msg.requestId).catch(console.error);
-  } else if (msg.type === 'preview:execute') {
-    const { funcName, inputs, requestId } = msg;
-    executeFunction(funcName, inputs, requestId).catch(console.error);
-  }
-});
+  );
+}

@@ -71,7 +71,16 @@ async function loadWorkerModule() {
         messageHandler = listener;
       }
     }),
-    postMessage: vi.fn()
+    postMessage: vi.fn(),
+    // Required by `isWorkerGlobalScope` in src/workers/runtime-guards.ts —
+    // its fallback branch checks `typeof self.importScripts === 'function'`
+    // when the env doesn't expose a `WorkerGlobalScope` constructor (as
+    // jsdom/node don't). Without this the listener registration is skipped
+    // and every dispatch below would throw "Worker message handler was not
+    // registered".
+    importScripts: () => {
+      /* no-op */
+    }
   };
 
   vi.stubGlobal('self', scope);
@@ -354,6 +363,30 @@ describe('codegen-worker execute messages', () => {
         })
       );
     });
+  });
+
+  // Regression mirror of parser-worker.test.ts (PR #214). If anything in the
+  // main bundle ever statically imports from `codegen-worker.ts` (e.g. for
+  // type re-exports), the bottom-of-module listener must NOT register on
+  // `window` / main-thread `self`. PR #214's body explicitly flagged this
+  // worker as carrying the same anti-pattern; the shared
+  // `isWorkerGlobalScope` helper from `src/workers/runtime-guards.ts`
+  // closes the gap.
+  it('does not register a message listener when imported in a non-worker context', async () => {
+    const addListener = vi.fn();
+    const postMessage = vi.fn();
+    // Simulate browser-main-thread `self`: has postMessage, NOT a WorkerGlobalScope
+    // and NO `importScripts`.
+    vi.stubGlobal('self', {
+      addEventListener: addListener,
+      postMessage
+    });
+
+    vi.resetModules();
+    await import('../../src/workers/codegen-worker.ts');
+
+    const messageListenerCalls = addListener.mock.calls.filter((args) => args[0] === 'message');
+    expect(messageListenerCalls).toEqual([]);
   });
 
   it('error message indicates function not found', async () => {
