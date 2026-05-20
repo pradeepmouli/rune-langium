@@ -109,7 +109,8 @@
       "codemirror": "6.0.2",
       "@radix-ui/react-compose-refs": "1.1.2",
       "@radix-ui/react-primitive": "2.1.4",
-      "@radix-ui/react-slot": "1.2.4"
+      "@radix-ui/react-slot": "1.2.4",
+      "ws": ">=8.20.1"
     },
     "patchedDependencies": {
       "@radix-ui/react-slot@1.2.4": "patches/@radix-ui__react-slot@1.2.4.patch",
