@@ -101,10 +101,10 @@ describe('parser-worker', () => {
     });
 
     expect(fromStringMock).toHaveBeenCalledWith('namespace demo', 'file:///demo.rosetta');
-    expect(buildMock).toHaveBeenCalledWith(
-      [expect.objectContaining({ uri: 'file:///demo.rosetta' })],
-      { validation: false, eagerLinking: false }
-    );
+    expect(buildMock).toHaveBeenCalledWith([expect.objectContaining({ uri: 'file:///demo.rosetta' })], {
+      validation: false,
+      eagerLinking: false
+    });
     expect(response).toMatchObject({
       type: 'parseResult',
       id: 'parse-1',
@@ -127,18 +127,12 @@ describe('parser-worker', () => {
     expect(fromStringMock).toHaveBeenNthCalledWith(1, 'namespace a', 'a.rosetta');
     expect(fromStringMock).toHaveBeenNthCalledWith(2, 'namespace b', 'b.rosetta');
     expect(buildMock).toHaveBeenCalledWith(
-      [
-        expect.objectContaining({ uri: 'a.rosetta' }),
-        expect.objectContaining({ uri: 'b.rosetta' })
-      ],
+      [expect.objectContaining({ uri: 'a.rosetta' }), expect.objectContaining({ uri: 'b.rosetta' })],
       { validation: false, eagerLinking: false }
     );
     expect(response.type).toBe('parseWorkspaceResult');
     expect(response.id).toBe('workspace-1');
-    expect(response.parsedModels.map((entry) => entry.filePath)).toEqual([
-      'a.rosetta',
-      'b.rosetta'
-    ]);
+    expect(response.parsedModels.map((entry) => entry.filePath)).toEqual(['a.rosetta', 'b.rosetta']);
   });
 
   it('returns per-file parser errors from the built documents', async () => {
@@ -360,5 +354,30 @@ describe('parser-worker', () => {
     expect(result.type).toBe('linkDocumentResult');
     expect(result.errors).toEqual([]);
     expect(result.newModels).toEqual([]);
+  });
+
+  // Regression: surfaced by 2026-05-20 prod-smoke check. When the parser
+  // worker module is imported by `services/workspace.ts` for its response
+  // type guards, its top-level code must NOT register a `message` listener
+  // on the main-thread `globalThis` / `window`. Previously the guard
+  // `typeof self !== 'undefined' && typeof self.postMessage === 'function'`
+  // was true in browsers because `self === window` and `window.postMessage`
+  // exists, so arbitrary messages reaching the page (extensions, embed
+  // beacons, cross-origin frames) crashed with `TypeError: Cannot read
+  // properties of undefined (reading 'type')`.
+  it('does not register a message listener when imported in a non-worker context', async () => {
+    const addListener = vi.fn();
+    const postMessage = vi.fn();
+    // Simulate browser-main-thread `self`: has postMessage, NOT a WorkerGlobalScope.
+    vi.stubGlobal('self', {
+      addEventListener: addListener,
+      postMessage
+      // intentionally no `importScripts` and no instanceof WorkerGlobalScope
+    });
+
+    await loadParserWorkerModule();
+
+    const messageListenerCalls = addListener.mock.calls.filter((args) => args[0] === 'message');
+    expect(messageListenerCalls).toEqual([]);
   });
 });
