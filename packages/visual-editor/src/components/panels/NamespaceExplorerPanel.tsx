@@ -18,6 +18,7 @@ import type { JSX, DragEvent, MouseEvent, KeyboardEvent } from 'react';
 import { ArrowUpRight, ChevronRight, ChevronDown, PlusSquare, MinusSquare, Link, Search } from 'lucide-react';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { IconButtonGroup } from '@rune-langium/design-system/ui/icon-button-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import type { TypeGraphNode, TypeKind } from '../../types.js';
 import { buildNamespaceTree, flattenNamespaceTree } from '../../utils/namespace-tree.js';
@@ -223,7 +224,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
               data-testid="namespace-search"
             />
           </div>
-          <div className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/35 p-0.5">
+          <IconButtonGroup>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -254,7 +255,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
               </TooltipTrigger>
               <TooltipContent>Hide all namespaces from graph</TooltipContent>
             </Tooltip>
-          </div>
+          </IconButtonGroup>
         </div>
 
         {/* Virtualized Tree */}
