@@ -102,6 +102,13 @@ export interface BuildOptions {
 const BUILTIN_SET = new Set<string>(BUILTIN_TYPES);
 
 function typeRefText(attr: AdapterAttribute): string {
+  // Defensive: during partial-parse (user mid-keystroke in source view) the
+  // Langium AST can carry an Attribute node whose `typeCall` hasn't been
+  // produced yet. The studio's `graphNodesToAdapterDocument` projection
+  // forwards attributes as-is, so an undefined `typeCall` reaches us here.
+  // Treat it as an empty/unresolved typeName instead of crashing the render
+  // (surfaced as a blank-screen by 2026-05-20 prod-smoke check).
+  if (attr.typeCall == null) return '';
   if (typeof attr.typeCall === 'string') return attr.typeCall;
   return attr.typeCall.type?.$refText ?? '';
 }
@@ -114,9 +121,13 @@ function typeRefText(attr: AdapterAttribute): string {
  * display. The structure-view spec calls for the bare form on
  * `StructureRow.cardinality`.
  */
-function formatCardinality(card: AdapterCardinality): string {
-  const sup = card.unbounded ? '*' : String(card.sup ?? card.inf);
-  return `${card.inf}..${sup}`;
+function formatCardinality(card: AdapterCardinality | undefined): string {
+  // Defensive: partial-parse attributes may arrive without a `card` block.
+  // Fall back to `0..1` (the DSL default) so the row still renders a chip.
+  if (!card) return '0..1';
+  const inf = typeof card.inf === 'number' ? card.inf : 0;
+  const sup = card.unbounded ? '*' : String(card.sup ?? inf);
+  return `${inf}..${sup}`;
 }
 
 function classifyType(typeName: string, doc: AdapterDocument, callerNamespace?: string): StructureRow['typeKind'] {
@@ -171,13 +182,14 @@ function buildRow(
     typeKind !== 'BasicType' && typeKind !== 'Unresolved' ? findNodeByName(typeName, doc, callerNamespace) : undefined;
   const cardinality = formatCardinality(attr.card);
   return {
-    attrName: attr.name,
+    attrName: attr.name ?? '',
     typeName,
     typeKind,
     targetNodeId: target?.id,
     targetNamespaceUri: target?.namespace,
     cardinality,
-    isOptional: attr.card.inf === 0,
+    // Treat a missing `card` block as the DSL default (0..1) → optional.
+    isOptional: (attr.card?.inf ?? 0) === 0,
     isInherited,
     astRange: attr.astRange
   };
@@ -217,6 +229,9 @@ function shouldExpand(
 }
 
 function choiceOptRefText(opt: AdapterChoiceOption): string {
+  // Mirrors `typeRefText`'s defensive handling — Choice arms can have a
+  // missing `typeCall` during partial-parse for the same reason.
+  if (opt?.typeCall == null) return '';
   if (typeof opt.typeCall === 'string') return opt.typeCall;
   return opt.typeCall.type?.$refText ?? '';
 }
@@ -256,7 +271,9 @@ function buildChoiceNode(
   instanceId: string,
   expansions: ReadonlyMap<string, string> = new Map()
 ): StructureChoiceNode {
-  const arms = (node.choiceOptions ?? []).map((opt) => buildChoiceArm(opt, doc, node.namespace));
+  const arms = (node.choiceOptions ?? [])
+    .filter((opt): opt is AdapterChoiceOption => opt != null)
+    .map((opt) => buildChoiceArm(opt, doc, node.namespace));
   return {
     id: node.id,
     instanceId,
@@ -377,7 +394,11 @@ function walkAndExpand(
   instancePath: ReadonlyArray<string>
 ): void {
   const expansions = new Map<string, string>();
-  const rows = (node.attributes ?? []).map((a) => buildRow(a, doc, node.namespace, false));
+  // Defensive: skip null/undefined entries — they appear in the attributes
+  // array briefly during partial-parse when the user is mid-keystroke.
+  const rows = (node.attributes ?? [])
+    .filter((a): a is AdapterAttribute => a != null)
+    .map((a) => buildRow(a, doc, node.namespace, false));
 
   const placeholder: StructureDataNode = {
     id: node.id,
@@ -555,7 +576,11 @@ function materializeDataWithInheritance(
   for (let ai = 0; ai < ancestors.length; ai++) {
     const baseNode = ancestors[ai];
     const baseCanonicalId = `${focused.id}::__base::${baseNode.id}`;
-    const baseRows = (baseNode.attributes ?? []).map((a) => buildRow(a, doc, baseNode.namespace, true));
+    // Same defensive filter as walkAndExpand — null entries can briefly appear
+    // in inherited-attribute arrays during partial-parse.
+    const baseRows = (baseNode.attributes ?? [])
+      .filter((a): a is AdapterAttribute => a != null)
+      .map((a) => buildRow(a, doc, baseNode.namespace, true));
 
     // Look up the rfId+path computed for this base container above. Loop
     // walks INNERMOST → OUTERMOST; arrays are OUTERMOST → INNERMOST.
@@ -693,6 +718,7 @@ function expandChoiceArms(
   nextPath.add(node.id);
 
   for (const opt of node.choiceOptions ?? []) {
+    if (opt == null) continue;
     const arm = buildChoiceArm(opt, doc, node.namespace);
     if (arm.typeKind !== 'Data' && arm.typeKind !== 'Choice') continue;
     if (!arm.targetNodeId) continue;
