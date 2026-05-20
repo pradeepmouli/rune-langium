@@ -60,6 +60,44 @@
  * resolves them, and so the per-theme variants can override the thumb
  * color if the surface tone changes.
  */
+/* Global scrollbar baseline. Applies the dark scrollbar chrome to EVERY
+ * scrollable element in the studio by default, so any surface (CodeMirror,
+ * Radix, native HTML elements, third-party widgets) picks it up without
+ * needing to opt in via .studio-scroll. This is a follow-up to user
+ * feedback after the first PR #217 pass — the per-element class additions
+ * caught most surfaces but missed CodeMirror (deliberately, then reverted)
+ * and the source-code panel + inspector forms still showed the browser's
+ * native white tracks.
+ *
+ * `.studio-scroll` (below) still exists for elements that ALSO want
+ * `scrollbar-gutter: stable` (prevents content-jump when the scrollbar
+ * mounts/unmounts) — a stronger contract than the baseline. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--studio-scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: var(--studio-scrollbar-width);
+  height: var(--studio-scrollbar-width);
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+  background-color: var(--studio-scrollbar-thumb);
+  transition: background-color 140ms ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--studio-scrollbar-thumb-hover);
+}
+
 .studio-scroll {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
