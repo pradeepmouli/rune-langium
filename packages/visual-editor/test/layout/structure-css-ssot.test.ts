@@ -70,7 +70,35 @@ describe('Structure layout SSoT — layout-coupled gaps use the correct variable
       expectedVar: '--rune-base-padding',
       rationale:
         'sizeBase in structure-layout.ts adds BASE_PADDING (not ROW_GAP) between the last base row and the inner derived child. CSS must mirror that.'
+    },
+    // sizeData/sizeChoice reserve NODE_PADDING on the sides + bottom of the
+    // wrapper (width += 2*NODE_PADDING, height += NODE_PADDING). The CSS that
+    // mirrors this is `padding: 0 var(--rune-node-padding) var(--rune-node-padding)`
+    // on the body — top stays 0 so the header reads flush with the chrome's
+    // top border. If someone changes the var here (or drops the `padding`
+    // declaration entirely) the rows column shifts away from where the
+    // layout's rowOffsets expect it, and right-column children land in the
+    // wrong place.
+    {
+      selector: '.rune-node-data--structure .rune-node-body--two-col',
+      property: 'padding',
+      expectedVar: '--rune-node-padding',
+      rationale:
+        'sizeData reserves NODE_PADDING on body sides + bottom; the body padding shorthand must reference --rune-node-padding so visual and layout stay coordinated.'
+    },
+    {
+      selector: '.rune-node-choice--structure .rune-node-body--two-col',
+      property: 'padding',
+      expectedVar: '--rune-node-padding',
+      rationale: 'sizeChoice mirrors sizeData — same NODE_PADDING body inset, same coordination requirement.'
     }
+    // Header left-padding (8px) is intentionally NOT tied to NODE_PADDING.
+    // It's a purely visual concern — needs to clear the 3px accent stripe
+    // (`.rune-node::before`) with breathing room — with no row-offset
+    // coupling. A first iteration linked it to --rune-node-padding (4px),
+    // which placed the title 1px past the stripe and read as crowded.
+    // Decoupling lets the body inset and header inset evolve independently
+    // for their distinct concerns.
   ];
 
   for (const { selector, property, expectedVar, rationale } of cases) {

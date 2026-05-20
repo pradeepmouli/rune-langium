@@ -944,35 +944,49 @@ button[data-navigable]:focus-visible {
   font-size: 11px;
 }
 
-/* Two concerns combined for the structure variants of Data and Choice:
+/* Chrome wrapper for the structure variants of Data and Choice:
  *
- * 1. `height: 100%` — fill the React Flow wrapper so the chrome visually
- *    contains nested right-column children. Without this the chrome
- *    shrinks to `header + rows`; right-column expansions (positioned by
- *    React Flow as siblings inside the wrapper, NOT DOM children of
- *    `.rune-node`) end up visually orphaned below the parent card.
+ * - `height: 100%` fills the React Flow wrapper so the chrome visually
+ *   contains nested right-column children (positioned by RF as absolutely
+ *   placed siblings inside the wrapper — see structure-layout.ts).
+ * - `box-sizing: border-box` keeps borders/padding inside the wrapper's
+ *   RF-set bounds rather than expanding past them.
  *
- * 2. `padding: var(--rune-node-padding)` — uniform inset between chrome
- *    edges and content (header, rows, child column). Mirrors
- *    STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING; the layout shifts rowOffsets
- *    and child placements by the same amount so RF child positions stay
- *    coordinated with the visually-inset content. `box-sizing: border-box`
- *    keeps the padding inside the wrapper's RF-set width/height instead of
- *    expanding the chrome beyond the layout-computed bounds. */
+ * Note: no `padding` here. NODE_PADDING (the chrome-content inset) is
+ * applied one level deeper on `.rune-node-body--two-col` so the HEADER
+ * stays flush with the chrome's top border (per user feedback — chrome-
+ * level padding inset the header by NODE_PADDING which read as a gap
+ * between the header and the top border). The body-level padding insets
+ * only the rows column + the right-column children. The layout's
+ * rowOffsets/child placement coordinates assume header at y=0 and rows at
+ * y=HEADER_HEIGHT, with NODE_PADDING bottom inset and 2*NODE_PADDING
+ * total width — mirroring this CSS exactly. */
 .rune-node-data--structure,
 .rune-node-choice--structure {
   box-sizing: border-box;
   height: 100%;
-  padding: var(--rune-node-padding);
 }
 
 /* Wire HEADER_HEIGHT SSoT: the structure-variant header must render at
  * exactly HEADER_HEIGHT px so row offsets computed in structure-layout.ts
  * align with the rendered rows.  box-sizing: border-box absorbs the
  * horizontal padding without expanding the box beyond the SSoT value. */
+/* Header for structure-variant Data nodes. Two concerns:
+ *
+ * 1. `height: var(--rune-header-height)` (with box-sizing: border-box) locks
+ *    the header to HEADER_HEIGHT so row offsets computed in structure-layout.ts
+ *    stay aligned with the rendered rows.
+ * 2. `padding-left: var(--space-2, 8px)` tightens the title's left inset
+ *    (default --rune-header-padding-x = 16px reads as a noticeable indent).
+ *    8px = 3px accent-stripe (`.rune-node::before`) + 5px breathing room,
+ *    so the title reads as left-flush against the chrome without crowding
+ *    the colored stripe. Decoupled from --rune-node-padding (the body's
+ *    layout-coupled inset) — header inset is a purely visual concern with
+ *    no row-offset coupling, so they're free to move independently. */
 .rune-node-data--structure .rune-node-header {
   box-sizing: border-box;
   height: var(--rune-header-height);
+  padding-left: var(--space-2, 8px);
 }
 
 /* Mirror the data-structure rule for the choice-structure variant.
@@ -986,6 +1000,7 @@ button[data-navigable]:focus-visible {
   height: var(--rune-header-height);
   padding-top: 0;
   padding-bottom: 0;
+  padding-left: var(--space-2, 8px);
 }
 
 .rune-node-body--two-col {
@@ -996,11 +1011,19 @@ button[data-navigable]:focus-visible {
    * width here so the node shell remains the single source of truth. */
 }
 
-/* Reset the 8px/12px padding .rune-node-body applies — structure-layout.ts
- * positions the children column at exactly COL_WIDTH + COL_GAP from the
- * parent origin, so any inherited padding offsets that math. */
-.rune-node-data--structure .rune-node-body--two-col {
-  padding: 0;
+/* Apply NODE_PADDING on sides + bottom of the body so the rows column and
+ * the right-column children read with breathing room around them. Top
+ * stays 0 because the body's top edge sits flush against the header's
+ * bottom — no extra gap wanted there. Default .rune-node-body padding
+ * (8/12px) is intentionally reset and replaced with the SSoT-tracked
+ * inset; structure-layout.ts uses NODE_PADDING in matching positions so
+ * RF-placed children land in the padded zone, not over it.
+ *
+ * The choice variant gets the same treatment — same right-column-expansion
+ * geometry, same inset story. */
+.rune-node-data--structure .rune-node-body--two-col,
+.rune-node-choice--structure .rune-node-body--two-col {
+  padding: 0 var(--rune-node-padding) var(--rune-node-padding);
 }
 
 .rune-node-rows {

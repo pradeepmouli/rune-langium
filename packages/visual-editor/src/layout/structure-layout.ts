@@ -211,14 +211,13 @@ function sizeData(
   const rows = node.rows;
   const rowsHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT;
 
-  // rowOffsets shift down by NODE_PADDING so they match the rendered row
-  // y-coords once the CSS `padding: var(--rune-node-padding)` on
-  // .rune-node-data--structure pushes the header+rows inward from the
-  // wrapper origin. Child placements use rowOffsets directly, so this is
-  // the single point of coordination.
+  // Header stays flush with the wrapper top (no top NODE_PADDING — the CSS
+  // applies the inset on the body, not the chrome). So row centers map to
+  // their natural y from the wrapper origin: HEADER_HEIGHT for row 0 top,
+  // plus i*ROW_HEIGHT, plus half-row to reach center.
   const rowOffsets = new Map<string, number>();
   for (let i = 0; i < rows.length; i++) {
-    rowOffsets.set(rows[i].attrName, NODE_PADDING + HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+    rowOffsets.set(rows[i].attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
 
   let childrenWidth = 0;
@@ -232,12 +231,13 @@ function sizeData(
 
   // Height of the right-hand expansions column matches what the placement pass
   // will actually produce (row-aligned + non-overlapping), not the naive sum.
-  // simulateColumnHeight starts at NODE_PADDING + HEADER_HEIGHT (mirroring the
-  // shifted rowOffsets) and returns an absolute y-bottom from the wrapper origin.
+  // simulateColumnHeight starts at HEADER_HEIGHT (header is flush with wrapper
+  // top — no top NODE_PADDING) and returns an absolute y-bottom from the
+  // wrapper origin.
   const rightColumnAbsBottom =
     node.expansions.size > 0
-      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, NODE_PADDING + HEADER_HEIGHT)
-      : NODE_PADDING + HEADER_HEIGHT;
+      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, HEADER_HEIGHT)
+      : HEADER_HEIGHT;
 
   // e2e-batch fix #12: per-node rows-column width based on content +
   // header name (follow-up: visual verification on dev caught long headers
@@ -246,16 +246,16 @@ function sizeData(
     rows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality })),
     node.name
   );
-  // Wrapper dimensions = inner content + NODE_PADDING on every side. Inner
-  // content height is max(rowsHeight, right-column extent measured from
-  // wrapper origin minus the top NODE_PADDING). Right column bottom already
-  // includes top NODE_PADDING, so subtract it once to get a content-only
-  // height, then re-add 2*NODE_PADDING below.
+  // Wrapper dimensions = inner content + NODE_PADDING on sides (×2 — left
+  // and right) and on the bottom only (×1 — header sits flush with the
+  // wrapper top, no top inset). rightColumnAbsBottom is already measured
+  // from the wrapper origin (no shift to subtract since rows no longer
+  // start at NODE_PADDING).
   const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
-  const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom - NODE_PADDING);
+  const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom);
   return {
     width: innerWidth + 2 * NODE_PADDING,
-    height: innerHeight + 2 * NODE_PADDING,
+    height: innerHeight + NODE_PADDING,
     rowsColWidth,
     rowOffsets
   };
@@ -268,12 +268,11 @@ function sizeChoice(
   sizing: Set<string>
 ): SizedNode {
   // StructureChoiceArm uses typeName as the row key (arms have no attrName —
-  // their identity IS the referenced type). Row centers include NODE_PADDING
-  // so they match the rendered y once the chrome's CSS padding pushes content
-  // inward — see sizeData for the matching rationale.
+  // their identity IS the referenced type). Header is flush with the wrapper
+  // top (no top NODE_PADDING — see sizeData for matching rationale).
   const rowOffsets = new Map<string, number>();
   for (let i = 0; i < node.options.length; i++) {
-    rowOffsets.set(node.options[i].typeName, NODE_PADDING + HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+    rowOffsets.set(node.options[i].typeName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
   const rowsHeight = HEADER_HEIGHT + node.options.length * ROW_HEIGHT;
 
@@ -296,8 +295,8 @@ function sizeChoice(
 
   const rightColumnAbsBottom =
     expansions.size > 0
-      ? simulateColumnHeight(expansions, rowOffsets, input, sizes, sizing, NODE_PADDING + HEADER_HEIGHT)
-      : NODE_PADDING + HEADER_HEIGHT;
+      ? simulateColumnHeight(expansions, rowOffsets, input, sizes, sizing, HEADER_HEIGHT)
+      : HEADER_HEIGHT;
 
   // e2e-batch fix #12: per-node rows-column width based on arm content +
   // header name. Choice arms have no attrName / cardinality — pass empty
@@ -307,10 +306,10 @@ function sizeChoice(
     node.name
   );
   const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
-  const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom - NODE_PADDING);
+  const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom);
   return {
     width: innerWidth + 2 * NODE_PADDING,
-    height: innerHeight + 2 * NODE_PADDING,
+    height: innerHeight + NODE_PADDING,
     rowsColWidth,
     rowOffsets
   };
@@ -599,10 +598,10 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     ancestors: ReadonlySet<string>,
     instanceAncestorPath: readonly string[]
   ): void {
-    // Starts at NODE_PADDING + HEADER_HEIGHT so the first expansion's floor y
-    // (used by `Math.max(rowTop, yCursor)`) matches the chrome's content-area
-    // top — see sizeData/simulateColumnHeight for the symmetric init.
-    let yCursor = NODE_PADDING + HEADER_HEIGHT;
+    // yCursor floor: header sits flush with the wrapper top, so the first
+    // expansion's minimum y is HEADER_HEIGHT (no top NODE_PADDING — see
+    // sizeData/simulateColumnHeight for the symmetric init).
+    let yCursor = HEADER_HEIGHT;
     for (const [attrName, childInstanceId] of n.expansions) {
       const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
       if (!childSize) continue;
@@ -653,7 +652,9 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     // Same defensive default as sizeChoice — legacy test fixtures may omit
     // the `expansions` map; treat as empty rather than crashing.
     const expansions = n.expansions ?? EMPTY_EXPANSIONS;
-    let yCursor = NODE_PADDING + HEADER_HEIGHT;
+    // yCursor floor: header is flush with wrapper top, so first expansion's
+    // minimum y is HEADER_HEIGHT (right under the header). Mirrors sizeChoice.
+    let yCursor = HEADER_HEIGHT;
     for (const [armTypeName, childInstanceId] of expansions) {
       const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
       if (!childSize) continue;
