@@ -285,9 +285,22 @@ function AppContent() {
 
   const createWorkspaceRecord = useCallback(async (name: string): Promise<WorkspaceRecord> => {
     const now = new Date().toISOString();
+    // Auto-suffix the name when an existing workspace already claims it
+    // (Defect D2 / prod-smoke 2026-05-20): the switcher / recents list
+    // surfaced two identical `untitled BROWSER` entries with no way to
+    // distinguish which was which. Disambiguate at creation time so every
+    // workspace record carries a unique label.
+    const recents = await persistence.listRecents().catch(() => [] as Awaited<ReturnType<typeof persistence.listRecents>>);
+    const takenNames = new Set(recents.map((r) => r.name));
+    let uniqueName = name;
+    if (takenNames.has(uniqueName)) {
+      let suffix = 2;
+      while (takenNames.has(`${name} (${suffix})`)) suffix += 1;
+      uniqueName = `${name} (${suffix})`;
+    }
     const workspace: WorkspaceRecord = {
       id: makeWorkspaceId(),
-      name,
+      name: uniqueName,
       kind: 'browser-only',
       createdAt: now,
       lastOpenedAt: now,
@@ -311,7 +324,18 @@ function AppContent() {
     async (workspace: WorkspaceRecord): Promise<boolean> => {
       const restoredFiles = await loadWorkspaceFiles(workspace.id);
       if (restoredFiles.length === 0) {
+        // Defect D3: switching to an OPFS-empty workspace left the previous
+        // workspace's `files`/`models` state in place. The App then matched
+        // `bootState === 'start' && userFiles.length > 0` and re-mounted
+        // EditorPage with the stale untitled.rosetta tab — a phantom file
+        // that didn't exist in OPFS for the workspace the user just opened.
+        // Clear the carry-over state so the start page renders cleanly.
         setRestoredWorkspace(null);
+        setFiles([]);
+        setModels([]);
+        setParsedModels([]);
+        setErrors(new Map());
+        setDeferredExports([]);
         return false;
       }
 
