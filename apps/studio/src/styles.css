@@ -2300,6 +2300,37 @@
   zoom: 1.125;
 }
 
+/* Firefox fallback (PR #210 Copilot review). Firefox does not support
+   the non-standard `zoom` property; without this block, FontScaleButton
+   does nothing in Firefox. `transform: scale()` produces an equivalent
+   visual effect:
+     - `transform-origin: top left` anchors the scale at the pane's
+       origin so content doesn't drift inward at scale < 1 or out at > 1.
+     - `width: calc(100% / N)` + `height: calc(100% / N)` enlarge the
+       LAYOUT box by 1/N so when the scale brings it back down by N,
+       the visual size matches the parent container exactly. Without
+       this compensation, scale < 1 would leave whitespace and scale > 1
+       would overflow.
+     - React Flow v12 correctly handles parent CSS transforms for
+       hit-testing, so canvas pan/zoom + node clicks still work.
+   The `@supports not (zoom: 1)` query is the canonical feature-detect
+   for Firefox-style absence of `zoom` (any browser supporting `zoom`
+   accepts `zoom: 1` as a valid declaration). */
+@supports not (zoom: 1) {
+  :root[data-font-scale='sm'] .studio-app .studio-center-stack__pane {
+    transform: scale(0.9);
+    transform-origin: top left;
+    width: calc(100% / 0.9);
+    height: calc(100% / 0.9);
+  }
+  :root[data-font-scale='lg'] .studio-app .studio-center-stack__pane {
+    transform: scale(1.125);
+    transform-origin: top left;
+    width: calc(100% / 1.125);
+    height: calc(100% / 1.125);
+  }
+}
+
 .studio-app .studio-center-stack__split {
   width: 5px;
   margin: 0 -2px;
