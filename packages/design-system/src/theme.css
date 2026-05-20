@@ -216,6 +216,19 @@
   --studio-scrollbar-width: 8px;
   --studio-scrollbar-thumb: color-mix(in oklch, var(--border) 82%, white 18%);
   --studio-scrollbar-thumb-hover: color-mix(in oklch, var(--border) 60%, white 40%);
+
+  /* Motion duration tokens — one knob per tier so per-component
+   * transitions don't drift between 140ms / 150ms / 240ms ease /
+   * ease-out variants.
+   *   --motion-fast (140ms ease) — hover, focus, color flips, scrollbar
+   *                                 thumb hover, small affordances
+   *   --motion-default (240ms ease-out) — node selection ramp, card
+   *                                 elevation, larger surface changes
+   * Intentionally NOT applied via `transition-property: all` on `*`;
+   * components opt in by referencing the token (e.g.
+   * `transition: background-color var(--motion-fast)`). */
+  --motion-fast: 140ms ease;
+  --motion-default: 240ms ease-out;
 }
 
 .dark {

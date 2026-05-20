@@ -48,8 +48,8 @@
 
 .rune-flow-node-shell {
   transition:
-    opacity 140ms ease,
-    filter 140ms ease;
+    opacity var(--motion-fast),
+    filter var(--motion-fast);
 }
 
 .rune-flow-node-shell--dimmed {
@@ -163,13 +163,13 @@
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 2px 6px rgba(0, 0, 0, 0.10);
-  /* UX rec #3: 240ms ease-out reads as motion (the 150ms previous value
-     was too fast to register). background-color added so the selection
-     ramp animates cleanly. */
+  /* UX rec #3: --motion-default (240ms ease-out) reads as motion (the
+     150ms previous value was too fast to register). background-color
+     added so the selection ramp animates cleanly. */
   transition:
-    border-color 240ms ease-out,
-    box-shadow 240ms ease-out,
-    background-color 240ms ease-out;
+    border-color var(--motion-default),
+    box-shadow var(--motion-default),
+    background-color var(--motion-default);
 }
 
 .rune-node::before {
@@ -508,9 +508,9 @@ button[data-navigable]:focus-visible {
   color: var(--color-node-text, #E8E6E1);
   pointer-events: all;
   transition:
-    border-color 140ms ease,
-    box-shadow 140ms ease,
-    background-color 140ms ease;
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    background-color var(--motion-fast);
 }
 
 .rune-edge-label__cardinality {
@@ -685,9 +685,9 @@ button[data-navigable]:focus-visible {
   border-radius: 10px;
   background: color-mix(in oklch, var(--muted, #2a2a33) 20%, transparent);
   transition:
-    border-color 140ms ease,
-    background-color 140ms ease,
-    box-shadow 140ms ease;
+    border-color var(--motion-fast),
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast);
   font-size: 12px;
   line-height: 10px;
 }
@@ -768,7 +768,7 @@ button[data-navigable]:focus-visible {
 
 .rune-type-reference__link--navigable {
   cursor: pointer;
-  transition: color 140ms ease;
+  transition: color var(--motion-fast);
 }
 
 .rune-type-reference__link--navigable:hover,
@@ -1073,7 +1073,7 @@ button[data-navigable]:focus-visible {
   /* UX rec #7: row hover + focus-within so the row reads as a target
      even before the user clicks an interactive child (the chevron / name
      cell). Without this rows flatline visually until interacted with. */
-  transition: background-color 140ms ease;
+  transition: background-color var(--motion-fast);
 }
 
 .rune-node-row:hover {
@@ -1214,9 +1214,9 @@ button[data-navigable]:focus-visible {
     0 1px 2px rgba(0, 0, 0, 0.08),
     0 4px 12px rgba(0, 0, 0, 0.12);
   transition:
-    border-color 240ms ease-out,
-    box-shadow 240ms ease-out,
-    background-color 240ms ease-out;
+    border-color var(--motion-default),
+    box-shadow var(--motion-default),
+    background-color var(--motion-default);
 }
 
 .rune-graph-group--base:hover {

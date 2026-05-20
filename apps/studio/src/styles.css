@@ -91,7 +91,7 @@ html {
   border-radius: 999px;
   background-clip: padding-box;
   background-color: var(--studio-scrollbar-thumb);
-  transition: background-color 140ms ease;
+  transition: background-color var(--motion-fast);
 }
 
 *::-webkit-scrollbar-thumb:hover {
@@ -118,7 +118,7 @@ html {
   border-radius: 999px;
   background-clip: padding-box;
   background-color: var(--studio-scrollbar-thumb);
-  transition: background-color 140ms ease;
+  transition: background-color var(--motion-fast);
 }
 
 .studio-scroll::-webkit-scrollbar-thumb:hover {
@@ -362,10 +362,10 @@ html {
     user-select: none;
     color: color-mix(in srgb, var(--foreground) 52%, transparent);
     transition:
-      color 140ms ease,
-      background-color 140ms ease,
-      box-shadow 140ms ease,
-      opacity 140ms ease;
+      color var(--motion-fast),
+      background-color var(--motion-fast),
+      box-shadow var(--motion-fast),
+      opacity var(--motion-fast);
   }
 
   .studio-app .dockview-theme-abyss .dv-tab .dv-default-tab {
@@ -1528,9 +1528,9 @@ html {
   border-radius: 8px;
   color: color-mix(in srgb, var(--foreground) 56%, transparent);
   transition:
-    background-color 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease;
+    background-color var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast);
 }
 
 .studio-source-editor__tab-shell:hover {
@@ -1562,7 +1562,7 @@ html {
   letter-spacing: -0.01em;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 140ms ease;
+  transition: color var(--motion-fast);
 }
 
 .studio-source-editor__tab--active {
@@ -1603,9 +1603,9 @@ html {
   color: color-mix(in srgb, var(--foreground) 42%, transparent);
   opacity: 0;
   transition:
-    opacity 140ms ease,
-    color 140ms ease,
-    background-color 140ms ease;
+    opacity var(--motion-fast),
+    color var(--motion-fast),
+    background-color var(--motion-fast);
 }
 
 .studio-source-editor__tab-shell:hover .studio-source-editor__tab-close,
