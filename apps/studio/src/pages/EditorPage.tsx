@@ -1969,9 +1969,13 @@ export function EditorPage({
         Curated Models dialog — reuses the same <ModelLoader /> the welcome
         screen mounts. ModelLoader pulls from useModelStore directly so no
         props need to be threaded through. We leave the dialog open after a
-        load click so the user can see progress/badges; closing on Esc/X is
-        the explicit dismiss path. A future task will replace this with a
-        bottom-bar multi-selector — see PR description.
+        load click so the user can see progress/badges. Dismiss paths
+        (Radix defaults): Esc, the X close button, AND click on the overlay
+        outside the dialog content — all close via `onOpenChange(false)`.
+        If "Esc only / outside-click does nothing" is ever wanted, attach
+        `onInteractOutside={(e) => e.preventDefault()}` to DialogContent
+        (Copilot review on PR #215). A future task will replace this with
+        a bottom-bar multi-selector — see PR description.
       */}
       <Dialog open={showCuratedModels} onOpenChange={setShowCuratedModels}>
         <DialogContent

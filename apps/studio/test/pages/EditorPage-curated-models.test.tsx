@@ -17,7 +17,8 @@
 
 import React, { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, cleanup, screen, fireEvent } from '@testing-library/react';
+import { render, cleanup, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 
 const { editorStoreState, useEditorStore } = vi.hoisted(() => {
@@ -188,7 +189,8 @@ describe('EditorPage — Curated Models button wiring', () => {
     expect(screen.getByRole('button', { name: /cdm \(common domain model\)/i })).toBeInTheDocument();
   });
 
-  it('closes the curated models dialog when the user presses Esc', () => {
+  it('closes the curated models dialog when the user presses Esc', async () => {
+    const user = userEvent.setup();
     render(
       <EditorPage
         models={[]}
@@ -199,8 +201,13 @@ describe('EditorPage — Curated Models button wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: /curated models/i }));
     expect(screen.getByTestId('curated-models-dialog')).toBeInTheDocument();
 
-    fireEvent.keyDown(screen.getByTestId('curated-models-dialog'), { key: 'Escape', code: 'Escape' });
-    // Radix Dialog handles Esc internally; the modal unmounts from the portal.
-    expect(screen.queryByTestId('curated-models-dialog')).not.toBeInTheDocument();
+    // userEvent.keyboard + waitFor instead of fireEvent.keyDown because Radix
+    // unmounts DialogContent asynchronously via Presence (animation cleanup +
+    // state batch) — the assertion needs to wait for the React render cycle
+    // that completes the unmount (Copilot review on PR #215).
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByTestId('curated-models-dialog')).not.toBeInTheDocument();
+    });
   });
 });
