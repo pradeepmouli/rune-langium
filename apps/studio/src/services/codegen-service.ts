@@ -294,8 +294,17 @@ function isLocalLanguagesEnvelope(value: unknown): value is { languages: Array<{
   );
 }
 
-/** Default codegen service URL. Override via VITE_CODEGEN_URL env var. */
-const DEFAULT_CODEGEN_URL = 'http://localhost:8377';
+/**
+ * Default codegen service URL. Override via VITE_CODEGEN_URL env var.
+ *
+ * In the browser we resolve to the same-origin Worker route (`/api/codegen`)
+ * so prod builds never leak a `localhost:8377` URL when the env var is unset
+ * (which is the default path under `pnpm build` + Cloudflare Pages deploys).
+ * The Node/SSR fallback keeps the wrangler-dev URL so CLI consumers and
+ * type-checks continue to point at `pnpm dev:codegen`'s default port.
+ */
+const DEFAULT_CODEGEN_URL =
+  typeof window === 'undefined' ? 'http://localhost:8377' : '/api/codegen';
 
 export interface GenerateOptions {
   /**

@@ -75,7 +75,14 @@ const isDev = env.MODE === 'development' || (env.DEV === true && env.MODE !== 'p
 const lspWsUrl = env.VITE_LSP_WS_URL ?? defaultLspWsUrl();
 const lspSessionUrl = env.VITE_LSP_SESSION_URL ?? defaultLspSessionUrl();
 
-const origin = typeof window === 'undefined' ? 'http://localhost:5173' : window.location.origin;
+// Hardcoded localhost defaults are a build-hygiene hazard: any browser-side
+// reference that hits the SSR/Node branch (a stale Vite optimisation, a test
+// double that nulls `window`, a server-render misroute) leaks a dev URL into
+// production HTML/network calls. Use the wrangler-dev origin so SSR/Node
+// fallbacks behave the same as `pnpm dev:pages`; in the browser we always
+// resolve to `window.location.origin` and never reach this branch.
+const origin =
+  typeof window === 'undefined' ? 'http://localhost:8788' : window.location.origin;
 const telemetryEndpoint = env.VITE_TELEMETRY_ENDPOINT ?? `${origin}/api/telemetry/v1/event`;
 const lspEnabled = boolFromEnv(env.VITE_ENABLE_LSP, true);
 const telemetryEnabled = boolFromEnv(env.VITE_ENABLE_TELEMETRY, false);
