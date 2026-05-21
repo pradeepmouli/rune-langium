@@ -612,12 +612,43 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
 });
 
 describe('buildStructureGraph — BasicType classification', () => {
-  // `pattern` is a grammar `basicType` but it is NOT in the canonical
-  // `BUILTIN_TYPES` list (packages/visual-editor/src/types.ts). The adapter
-  // uses BUILTIN_TYPES as the single source of truth for chip-only types, so
-  // `pattern` falls through to the node-lookup path and resolves as
-  // Unresolved when no matching node exists.
-  it('classifies a non-builtin "pattern" reference as Unresolved (not in BUILTIN_TYPES)', () => {
+  // A typeRef that is neither in the canonical `BUILTIN_TYPES` list
+  // (packages/visual-editor/src/types.ts) nor a resolvable node falls through
+  // to the node-lookup path and resolves as Unresolved. `BUILTIN_TYPES` is the
+  // adapter's single source of truth for chip-only types. (`pattern` used to be
+  // the example here, but it's a real com.rosetta.model basic type and is now
+  // in BUILTIN_TYPES — see the BasicType test below.)
+  it('classifies an unknown type reference as Unresolved (not in BUILTIN_TYPES, no matching node)', () => {
+    const fixture = {
+      namespaces: [{ uri: 'cdm.misc' }],
+      nodes: [
+        {
+          id: 'cdm.misc::Thing',
+          $type: 'Data' as const,
+          name: 'Thing',
+          namespace: 'cdm.misc',
+          attributes: [
+            {
+              name: 'mystery',
+              typeCall: { type: { $refText: 'NotARealType' } },
+              card: { inf: 0, sup: 1, unbounded: false }
+            }
+          ]
+        }
+      ]
+    };
+    const result = buildStructureGraph(fixture, {
+      focusedTypeId: 'cdm.misc::Thing',
+      expansionMap: new Map()
+    });
+    const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
+    expect(row.typeName).toBe('NotARealType');
+    expect(row.typeKind).toBe('Unresolved');
+  });
+
+  // `pattern` IS a com.rosetta.model basic type, now in the canonical
+  // BUILTIN_TYPES list (#276) — so it classifies as a BasicType chip.
+  it('classifies "pattern" as BasicType (member of canonical BUILTIN_TYPES)', () => {
     const fixture = {
       namespaces: [{ uri: 'cdm.misc' }],
       nodes: [
@@ -638,7 +669,7 @@ describe('buildStructureGraph — BasicType classification', () => {
     });
     const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
     expect(row.typeName).toBe('pattern');
-    expect(row.typeKind).toBe('Unresolved');
+    expect(row.typeKind).toBe('BasicType');
   });
 
   // `int` IS in `BUILTIN_TYPES` — pinning this because an earlier review-fix
