@@ -78,6 +78,17 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
     await git.fetch({ ...base, ...net, url, ref, singleBranch: true, tags: false });
   };
 
+  /**
+   * Counts commits the local ref is ahead/behind its remote tracking ref.
+   *
+   * Assumes a NON-shallow clone (full history). Under a `depth: 1` shallow
+   * clone the `git.log` walks are truncated, so the counts become best-effort.
+   * The git-backed clone is made full-depth in a later task, so this assumption
+   * holds.
+   *
+   * Returning `{ ahead: 0, behind: 0 }` when either SHA is null means "treat as
+   * in-sync / nothing to do".
+   */
   const computeAheadBehind = async (
     ref: string,
   ): Promise<{ ahead: number; behind: number }> => {
