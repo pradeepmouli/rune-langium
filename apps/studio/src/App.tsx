@@ -965,6 +965,7 @@ function AppContent() {
             transportState={transportState}
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
+            workspaceKind={restoredWorkspace?.kind}
             workspaceName={restoredWorkspace?.name}
             fileCount={userFiles.length}
             onClose={handleReset}
@@ -995,6 +996,7 @@ function AppContent() {
             transportState={transportState}
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
+            workspaceKind={restoredWorkspace?.kind}
             workspaceName={restoredWorkspace?.name}
             fileCount={userFiles.length}
             onClose={handleReset}
