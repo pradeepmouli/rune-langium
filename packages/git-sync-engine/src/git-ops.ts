@@ -33,6 +33,9 @@ export interface GitOps {
   remoteSha(ref: string): Promise<string | null>;
 }
 
+/** Maximum number of commits walked per side when bounding ahead/behind counts. */
+const MAX_DIVERGENCE = 500;
+
 export function createGitOps(cfg: GitOpsConfig): GitOps {
   const base = { fs: cfg.fs as never, dir: cfg.dir, gitdir: cfg.gitdir };
   const net = { http: cfg.http as never, corsProxy: cfg.corsProxy, onAuth: cfg.onAuth };
@@ -78,27 +81,45 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
   };
 
   /**
+   * Walks at most `MAX_DIVERGENCE` commits from `tip`, stopping at the first
+   * commit whose oid is in `baseSet` (the merge-base). Returns the count of
+   * commits walked before hitting the base.
+   *
+   * Cost: O(divergence) — reads at most MAX_DIVERGENCE commits, not the full
+   * history.
+   */
+  const countUntilBase = async (tip: string, baseSet: Set<string>): Promise<number> => {
+    const log = await git.log({ ...base, ref: tip, depth: MAX_DIVERGENCE });
+    let count = 0;
+    for (const c of log) {
+      if (baseSet.has(c.oid)) break;
+      count++;
+    }
+    return count;
+  };
+
+  /**
    * Counts commits the local ref is ahead/behind its remote tracking ref.
    *
-   * Assumes a NON-shallow clone (full history). Under a `depth: 1` shallow
-   * clone the `git.log` walks are truncated, so the counts become best-effort.
-   * The git-backed clone is made full-depth in a later task, so this assumption
-   * holds.
+   * Uses `git.findMergeBase` to locate the common ancestor, then walks at most
+   * `MAX_DIVERGENCE` commits per side — O(divergence), not O(total history).
+   * Counts are exact up to the cap and clamped at `MAX_DIVERGENCE` beyond it.
    *
-   * Returning `{ ahead: 0, behind: 0 }` when either SHA is null means "treat as
-   * in-sync / nothing to do".
+   * Returning `{ ahead: 0, behind: 0 }` when either SHA is null or both are equal
+   * means "treat as in-sync / nothing to do".
    */
   const computeAheadBehind = async (ref: string): Promise<{ ahead: number; behind: number }> => {
     const local = await currentSha(ref);
     const remote = await remoteSha(ref);
-    if (!local || !remote) return { ahead: 0, behind: 0 };
-    if (local === remote) return { ahead: 0, behind: 0 };
-    const localLog = await git.log({ ...base, ref: local });
-    const remoteLog = await git.log({ ...base, ref: remote });
-    const localShas = new Set(localLog.map((c) => c.oid));
-    const remoteShas = new Set(remoteLog.map((c) => c.oid));
-    const ahead = localLog.filter((c) => !remoteShas.has(c.oid)).length;
-    const behind = remoteLog.filter((c) => !localShas.has(c.oid)).length;
+    if (!local || !remote || local === remote) return { ahead: 0, behind: 0 };
+    let baseSet: Set<string>;
+    try {
+      baseSet = new Set(await git.findMergeBase({ ...base, oids: [local, remote] }));
+    } catch {
+      baseSet = new Set(); // no common ancestor → treat as fully diverged (capped below)
+    }
+    const ahead = await countUntilBase(local, baseSet);
+    const behind = await countUntilBase(remote, baseSet);
     return { ahead, behind };
   };
 
