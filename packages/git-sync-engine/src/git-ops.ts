@@ -94,6 +94,12 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
     return { ahead, behind };
   };
 
+  /**
+   * Precondition: caller must have verified the remote is strictly ahead (local
+   * has no un-pushed commits, i.e. ahead === 0). Performs an unconditional
+   * ref-move + force checkout and does NOT itself guard against losing local
+   * history. (`resetTo` is the intentional unconditional hard-reset-to-remote.)
+   */
   const fastForward = async (ref: string): Promise<void> => {
     const remote = await remoteSha(ref);
     if (!remote) return;
