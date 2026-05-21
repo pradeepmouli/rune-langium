@@ -41,6 +41,7 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
   const subs = new Set<(s: SyncStatus) => void>();
   let timer: unknown = null;
   let running: Promise<SyncStatus> | null = null;
+  let pendingSync = false;
 
   function emit(next: Partial<SyncStatus>) {
     state = { ...state, ...next };
@@ -85,7 +86,7 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
     try {
       await ops.push(opts.ref, opts.remoteUrl);
       const sha = await ops.currentSha(opts.ref);
-      emit({ phase: 'idle', ahead: 0, lastSyncedSha: sha });
+      emit({ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: sha });
       return state;
     } catch (err) {
       if (isNonFastForward(err)) {
@@ -102,7 +103,7 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
         emit({ phase: 'pushing' });
         await ops.push(opts.ref, opts.remoteUrl);
         const sha = await ops.currentSha(opts.ref);
-        emit({ phase: 'idle', ahead: 0, lastSyncedSha: sha });
+        emit({ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: sha });
         return state;
       }
       if (isAuthError(err)) {
@@ -130,13 +131,14 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
         emit({ phase: 'blocked', conflictPaths: paths });
         return state;
       case 'keepMine': {
+        await ops.restoreLocal(opts.ref);  // discard conflict markers, restore local HEAD
         const lease = await pushForceWithLease(ops, opts.ref, opts.remoteUrl, remoteSha);
         if (!lease.ok) {
           emit({ phase: 'blocked', lastError: { code: 'non_fast_forward', message: 'remote moved' } });
           return state;
         }
         const sha = await ops.currentSha(opts.ref);
-        emit({ phase: 'idle', ahead: 0, conflictPaths: undefined, lastSyncedSha: sha });
+        emit({ phase: 'idle', ahead: 0, behind: 0, conflictPaths: undefined, lastSyncedSha: sha });
         return state;
       }
       case 'takeRemote': {
@@ -146,6 +148,8 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
         return state;
       }
       case 'merged': {
+        // Contract: the ConflictPolicy must write a resolved working tree before
+        // returning `merged`; the engine then stages + commits + pushes it.
         const changed = await ops.stageAll();
         if (changed.length > 0) await ops.commit(genMessage(changed), opts.author);
         emit({ conflictPaths: undefined });
@@ -161,8 +165,11 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
 
   function syncNow(): Promise<SyncStatus> {
     if (timer) { clearT(timer); timer = null; }
-    if (running) return running;
-    running = runSync().finally(() => { running = null; });
+    if (running) { pendingSync = true; return running; }
+    running = runSync().finally(() => {
+      running = null;
+      if (pendingSync) { pendingSync = false; void syncNow(); }
+    });
     return running;
   }
 
@@ -179,6 +186,8 @@ function msg(e: unknown): string { return e instanceof Error ? e.message : Strin
 function codeOf(e: unknown): string {
   return (e as { code?: string; name?: string })?.code ?? (e as Error)?.name ?? '';
 }
+// These classifiers match isomorphic-git error shapes (`code` / `name`),
+// confirmed against ^1.37. If that internal shape changes, update them here.
 function isNonFastForward(e: unknown): boolean { return codeOf(e) === 'PushRejectedError' || /non-fast-forward|fetch first/i.test(msg(e)); }
 function isAuthError(e: unknown): boolean { return codeOf(e) === 'HttpError' && /401/.test(msg(e)); }
-function isNoPushAccess(e: unknown): boolean { return /403/.test(msg(e)); }
+function isNoPushAccess(e: unknown): boolean { return codeOf(e) === 'HttpError' && /403/.test(msg(e)); }

@@ -27,6 +27,8 @@ export interface GitOps {
   merge(ref: string, author: { name: string; email: string }): Promise<MergeResult>;
   push(ref: string, remoteUrl: string, opts?: { force?: boolean }): Promise<void>;
   resetTo(ref: string): Promise<void>;
+  /** Restores the working tree to local HEAD, discarding conflict markers / uncommitted changes. */
+  restoreLocal(ref: string): Promise<void>;
   currentSha(ref: string): Promise<string | null>;
   remoteSha(ref: string): Promise<string | null>;
 }
@@ -165,6 +167,11 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
     await git.checkout({ ...base, ref, force: true });
   };
 
+  /** Restores the working tree to local HEAD, discarding conflict markers / uncommitted changes. */
+  const restoreLocal = async (ref: string): Promise<void> => {
+    await git.checkout({ ...base, ref, force: true });
+  };
+
   return {
     stageAll,
     commit,
@@ -174,6 +181,7 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
     merge,
     push,
     resetTo,
+    restoreLocal,
     currentSha,
     remoteSha,
   };
