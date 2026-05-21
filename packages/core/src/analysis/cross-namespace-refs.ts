@@ -127,13 +127,17 @@ export function collectNamespaceDependencies(documents: readonly LangiumDocument
     // "we've seen this namespace, no deps" rather than "we haven't loaded it".
     if (!deps.has(sourceNs)) deps.set(sourceNs, new Set<string>());
 
-    for (const element of model.elements) {
+    // Element arrays are `?? []` so partial/skeletal models (e.g. minimal
+    // curated stubs without populated child arrays) don't throw inside the
+    // walker. Production Langium-serialized models always have these fields
+    // — this is defense in depth, not a load-bearing fallback.
+    for (const element of model.elements ?? []) {
       if (isData(element)) {
         // 1. superType
         const parentRef = element.superType?.ref;
         if (parentRef) trackRef(parentRef, sourceNs);
         // 2. attribute type refs
-        for (const attr of element.attributes) {
+        for (const attr of element.attributes ?? []) {
           const r = attr.typeCall?.type?.ref;
           if (r && (isData(r) || isRosettaEnumeration(r) || isRosettaTypeAlias(r))) {
             trackRef(r, sourceNs);
@@ -147,7 +151,7 @@ export function collectNamespaceDependencies(documents: readonly LangiumDocument
         }
       } else if (isChoice(element)) {
         // 4. Choice arm refs (`element.attributes[]` are ChoiceOptions)
-        for (const arm of element.attributes) {
+        for (const arm of element.attributes ?? []) {
           const r = arm.typeCall?.type?.ref;
           if (r && (isData(r) || isRosettaEnumeration(r) || isRosettaTypeAlias(r))) {
             trackRef(r, sourceNs);
@@ -155,7 +159,7 @@ export function collectNamespaceDependencies(documents: readonly LangiumDocument
         }
       } else if (isRosettaFunction(element)) {
         // 5. Function I/O
-        for (const input of element.inputs) {
+        for (const input of element.inputs ?? []) {
           const r = input.typeCall?.type?.ref;
           if (r && (isData(r) || isRosettaEnumeration(r) || isRosettaTypeAlias(r))) {
             trackRef(r, sourceNs);

@@ -255,3 +255,85 @@ describe('POST /api/parse — curatedBundles', () => {
     }
   });
 });
+
+describe('POST /api/parse — dependencyGraph (spec 2026-05-14 §5.2)', () => {
+  it('returns an empty object on empty-workspace requests', async () => {
+    const res = await onRequestPost({ request: makeRequest({ files: [] }) } as never);
+    const body = (await res.json()) as { dependencyGraph: Record<string, string[]> };
+    expect(body.dependencyGraph).toEqual({});
+  });
+
+  it('returns each namespace with at minimum itself in its closure', async () => {
+    // Two user files in distinct namespaces with NO cross-namespace refs.
+    // Each namespace's closure is just `[<self>]` — the walker still emits
+    // a key per namespace so the modal can render them.
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [
+          { name: 'a.rune', content: 'namespace a\ntype A:\n  x string (1..1)\n' },
+          { name: 'b.rune', content: 'namespace b\ntype B:\n  y int (1..1)\n' }
+        ]
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { dependencyGraph: Record<string, string[]> };
+    expect(body.dependencyGraph.a).toEqual(['a']);
+    expect(body.dependencyGraph.b).toEqual(['b']);
+  });
+
+  it('captures a cross-namespace attribute reference in the transitive closure', async () => {
+    // namespace `app` declares Trade whose `quantity` attribute references
+    // `cdm.Quantity` (cross-namespace). cdm has no further deps. Expected
+    // closure: app → [app, cdm]; cdm → [cdm].
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [
+          { name: 'cdm.rune', content: 'namespace cdm\ntype Quantity:\n  value number (1..1)\n' },
+          {
+            name: 'app.rune',
+            content: 'namespace app\nimport cdm.*\n\ntype Trade:\n  quantity Quantity (1..1)\n'
+          }
+        ]
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { dependencyGraph: Record<string, string[]> };
+    expect(body.dependencyGraph.app).toEqual(['app', 'cdm']);
+    expect(body.dependencyGraph.cdm).toEqual(['cdm']);
+  });
+
+  it('omits dependencyGraph entries gracefully when curated docs are unparseable stubs', async () => {
+    // Mocked curated artifacts with skeletal model JSON (no Langium metadata).
+    // populateDependencyGraph's per-doc try/catch skips them; the user-file
+    // closure is still emitted. Verifies fail-soft contract: a bad curated
+    // bundle never blocks the parse response or starves the modal of user
+    // namespaces.
+    const curatedFetchModule = await import('../lib/curated-fetch.js');
+    const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
+      {
+        uri: 'cdm/math.rosetta',
+        content: '',
+        serializedModel: JSON.stringify({
+          $type: 'RosettaModel',
+          name: 'cdm.math',
+          elements: [{ $type: 'Data', name: 'Quantity' }]
+        }),
+        exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.math.Quantity' }]
+      }
+    ]);
+    try {
+      const res = await onRequestPost({
+        request: makeRequest({
+          files: [{ name: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)\n' }],
+          curatedBundles: [{ id: 'cdm', version: 'latest' }]
+        })
+      } as never);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { dependencyGraph: Record<string, string[]> };
+      // User namespace still surfaces; bad curated entry is silently skipped.
+      expect(body.dependencyGraph.x).toEqual(['x']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
