@@ -548,18 +548,26 @@ function TypeItemRow({
           row. Diagonal up-right arrow (ArrowUpRight) is the canonical
           "open / navigate to" affordance; ChevronRight read as "expand
           / next" which was misleading. Always visible at low opacity so
-          users see the affordance without hover-discovery. */}
-      <button
+          users see the affordance without hover-discovery.
+
+          DS `Button variant="ghost"` (same primitive the Show-all/Hide-all
+          toolbar uses) for the focus ring + hover + disabled semantics.
+          Sized up to size-6 (24px) with a border: the default icon-xs (16px)
+          was too small a hit target to click reliably. The opacity-fade
+          affordance is layered on via className. */}
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-xs"
         onClick={handleNavClick}
         onKeyDown={handleNavKeyDown}
         aria-label={`Navigate to ${row.name}`}
         data-testid={`ns-type-nav-${row.nodeId}`}
-        className="ml-auto shrink-0 opacity-40 group-hover:opacity-80 focus:opacity-100 hover:!opacity-100 focus-visible:ring-1 focus-visible:ring-ring rounded transition-opacity"
+        className="ml-auto size-6 border border-border/60 opacity-40 transition-opacity hover:border-border hover:!opacity-100 focus:opacity-100 group-hover:opacity-80"
         tabIndex={0}
       >
-        <ArrowUpRight className="size-3" />
-      </button>
+        <ArrowUpRight className="size-3.5" />
+      </Button>
     </div>
   );
 }
