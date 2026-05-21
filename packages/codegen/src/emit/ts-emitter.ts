@@ -50,6 +50,7 @@ import { resolveImportPath } from './namespace-registry.js';
 import { getElementNamespace } from '@rune-langium/core';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
+import { typescriptProfile } from './typescript-profile.js';
 import {
   extractFuncs,
   buildFuncCallGraph,
@@ -81,45 +82,52 @@ interface EmissionContext {
   annotationsByName: ReadonlyMap<string, Annotation>;
   libraryFuncsByName: ReadonlyMap<string, RosettaExternalFunction>;
   registry: NamespaceRegistry;
+  /** Merged builtin type map from the TS profile (basicTypeMap ∪ recordTypeMap ∪ typeAliasMap). */
+  builtinTypeMap: Readonly<Record<string, string>>;
+  /** JS typeof strings for scalar builtin types (for type-guard generation). */
+  typeofMap: Readonly<Record<string, string>>;
 }
 
 // ---------------------------------------------------------------------------
-// Built-in type maps
+// Built-in type maps (derived from typescriptProfile at module load)
 // ---------------------------------------------------------------------------
 
 /**
- * Maps Rune built-in type names to TypeScript primitive type names.
- * T105.
+ * Merged builtin type map from the TypeScript profile.
+ * Combines basicTypeMap ∪ recordTypeMap ∪ typeAliasMap.
+ * Populated once at module load; used as a default for buildEmissionContext.
  */
-const TS_TYPE_MAP: Record<string, string> = {
-  string: 'string',
-  int: 'number',
-  number: 'number',
-  boolean: 'boolean',
-  date: 'string',
-  dateTime: 'string',
-  zonedDateTime: 'string',
-  time: 'string',
-  productType: 'string',
-  eventType: 'string'
-};
+function buildTsBuiltinTypeMap(): Record<string, string> {
+  return {
+    ...typescriptProfile.basicTypeMap,
+    ...typescriptProfile.recordTypeMap,
+    ...typescriptProfile.typeAliasMap
+  } as Record<string, string>;
+}
+
+const TS_BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = buildTsBuiltinTypeMap();
 
 /**
- * Maps Rune built-in type names to JS typeof strings.
+ * Derive a JS typeof string for each TS type expression.
+ * - 'boolean' → 'boolean'
+ * - 'number' → 'number'
+ * - 'string' and string aliases → 'string'
+ * - Temporal.* types → 'object'
+ *
  * Used for type-guard checks. T108.
  */
-const JS_TYPEOF_MAP: Record<string, string> = {
-  string: 'string',
-  int: 'number',
-  number: 'number',
-  boolean: 'boolean',
-  date: 'string',
-  dateTime: 'string',
-  zonedDateTime: 'string',
-  time: 'string',
-  productType: 'string',
-  eventType: 'string'
-};
+function buildTsTypeofMap(): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, tsType] of Object.entries(TS_BUILTIN_TYPE_MAP)) {
+    if (tsType === 'boolean') result[key] = 'boolean';
+    else if (tsType === 'number') result[key] = 'number';
+    else if (typeof tsType === 'string' && tsType.startsWith('Temporal.')) result[key] = 'object';
+    else result[key] = 'string';
+  }
+  return result;
+}
+
+const TS_TYPEOF_MAP: Readonly<Record<string, string>> = buildTsTypeofMap();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -205,13 +213,13 @@ function collectCrossNamespaceImports(ctx: EmissionContext): string[] {
  * Resolve the TypeScript type expression for an attribute.
  * T105.
  */
-function resolveTypeExprAsTs(attr: Attribute, _ctx: EmissionContext): string {
+function resolveTypeExprAsTs(attr: Attribute, ctx: EmissionContext): string {
   const typeRef = attr.typeCall?.type?.ref;
   const refText = attr.typeCall?.type?.$refText;
 
   if (!typeRef) {
     if (refText) {
-      const builtinTs = TS_TYPE_MAP[refText];
+      const builtinTs = ctx.builtinTypeMap[refText];
       if (builtinTs) return builtinTs;
       return refText; // data type / enum name
     }
@@ -219,13 +227,20 @@ function resolveTypeExprAsTs(attr: Attribute, _ctx: EmissionContext): string {
   }
 
   if (isRosettaBasicType(typeRef)) {
-    return TS_TYPE_MAP[typeRef.name] ?? 'unknown';
+    const mapped = ctx.builtinTypeMap[typeRef.name];
+    if (mapped) return mapped;
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'unmapped-builtin',
+      message: `Builtin type '${typeRef.name}' has no TypeScript mapping; emitting unknown`
+    });
+    return 'unknown';
   }
   if (isRosettaEnumeration(typeRef)) return typeRef.name;
   if (_isData(typeRef)) return typeRef.name;
 
   if (refText) {
-    const builtinTs = TS_TYPE_MAP[refText];
+    const builtinTs = ctx.builtinTypeMap[refText];
     if (builtinTs) return builtinTs;
   }
   return 'unknown';
@@ -236,16 +251,16 @@ function resolveTypeExprAsTs(attr: Attribute, _ctx: EmissionContext): string {
  * Returns undefined when the type is not a scalar (e.g., Data reference).
  * T108.
  */
-function resolveTypeofStr(attr: Attribute, _ctx: EmissionContext): string | undefined {
+function resolveTypeofStr(attr: Attribute, ctx: EmissionContext): string | undefined {
   const typeRef = attr.typeCall?.type?.ref;
   const refText = attr.typeCall?.type?.$refText;
 
   if (!typeRef) {
-    if (refText) return JS_TYPEOF_MAP[refText];
+    if (refText) return ctx.typeofMap[refText];
     return undefined;
   }
   if (isRosettaBasicType(typeRef)) {
-    return JS_TYPEOF_MAP[typeRef.name];
+    return ctx.typeofMap[typeRef.name];
   }
   // Data / Enum references → not a JS scalar typeof check
   return undefined;
@@ -999,9 +1014,9 @@ function emitLibraryFunc(func: RosettaExternalFunction, ctx: EmissionContext): s
 
     let typeName = 'unknown';
     if (typeRef && isRosettaBasicType(typeRef)) {
-      typeName = TS_TYPE_MAP[typeRef.name] ?? 'unknown';
+      typeName = ctx.builtinTypeMap[typeRef.name] ?? 'unknown';
     } else if (refText) {
-      typeName = TS_TYPE_MAP[refText] ?? refText;
+      typeName = ctx.builtinTypeMap[refText] ?? refText;
     }
 
     const arraySuffix = p.isArray ? '[]' : '';
@@ -1012,14 +1027,10 @@ function emitLibraryFunc(func: RosettaExternalFunction, ctx: EmissionContext): s
   const returnRefText = func.typeCall?.type?.$refText;
   let returnType = 'unknown';
   if (returnTypeRef && isRosettaBasicType(returnTypeRef)) {
-    returnType = TS_TYPE_MAP[returnTypeRef.name] ?? 'unknown';
+    returnType = ctx.builtinTypeMap[returnTypeRef.name] ?? 'unknown';
   } else if (returnRefText) {
-    returnType = TS_TYPE_MAP[returnRefText] ?? returnRefText;
+    returnType = ctx.builtinTypeMap[returnRefText] ?? returnRefText;
   }
-
-  // Suppress unused-variable warning: ctx is kept for future cross-namespace
-  // type resolution parity with other emitters.
-  void ctx;
 
   return `export type ${name} = (${params.join(', ')}) => ${returnType};`;
 }
@@ -1043,7 +1054,9 @@ function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceReg
     reportsByName: model.reportsByName,
     annotationsByName: model.annotationsByName,
     libraryFuncsByName: model.libraryFuncsByName,
-    registry
+    registry,
+    builtinTypeMap: TS_BUILTIN_TYPE_MAP,
+    typeofMap: TS_TYPEOF_MAP
   };
 }
 

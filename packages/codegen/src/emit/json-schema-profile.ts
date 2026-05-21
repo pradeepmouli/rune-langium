@@ -135,6 +135,28 @@ function makeBundledContent(perNs: ReadonlyArray<GeneratorOutput>): string {
 export const jsonSchemaProfile: LanguageProfile<'json-schema'> = {
   target: 'json-schema',
   extension: '.schema.json',
+
+  // Builtin type maps (§4a of the builtin-type-mapping design spec).
+  basicTypeMap: {
+    boolean: { type: 'boolean' },
+    number: { type: 'number' },
+    string: { type: 'string' },
+    time: { type: 'string', format: 'time' },
+    pattern: { type: 'string' }
+  },
+  recordTypeMap: {
+    date: { type: 'string', format: 'date' },
+    dateTime: { type: 'string', format: 'date-time' },
+    zonedDateTime: { type: 'string', format: 'date-time' }
+  },
+  typeAliasMap: {
+    int: { type: 'integer' },
+    productType: { type: 'string' },
+    eventType: { type: 'string' },
+    calculation: { type: 'string' }
+  },
+  // JSON Schema does not emit function bodies — map is empty.
+  libraryFuncMap: {},
   makeBarrel() {
     // JSON Schema has no module system. `single-file` is canonical bundling.
     return undefined;

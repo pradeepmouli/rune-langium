@@ -13,6 +13,8 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { resolveImportPath } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitter, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
+import { zodProfile } from './zod-profile.js';
+import { typescriptProfile } from './typescript-profile.js';
 import { getElementNamespace } from '@rune-langium/core';
 import {
   isData,
@@ -72,6 +74,8 @@ interface EmissionContext {
   libraryFuncsByName: ReadonlyMap<string, RosettaExternalFunction>;
   /** Namespace registry for cross-namespace lookups. */
   registry: NamespaceRegistry;
+  /** Merged builtin type map from the profile (basicTypeMap ∪ recordTypeMap ∪ typeAliasMap). */
+  builtinTypeMap: Readonly<Record<string, string>>;
 }
 
 /**
@@ -127,20 +131,19 @@ const _RESERVED_WORDS = new Set([
 ]);
 
 /**
- * Maps Rune built-in type names to their Zod primitives.
+ * Build the merged builtin type map for the Zod profile.
+ * Combines basicTypeMap ∪ recordTypeMap ∪ typeAliasMap.
+ * Used to populate EmissionContext.builtinTypeMap at build time.
  */
-const BUILTIN_TYPE_MAP: Record<string, string> = {
-  string: 'z.string()',
-  int: 'z.number().int()',
-  number: 'z.number()',
-  boolean: 'z.boolean()',
-  date: 'z.string()', // ISO date string
-  dateTime: 'z.string()', // ISO datetime string
-  zonedDateTime: 'z.string()',
-  time: 'z.string()',
-  productType: 'z.string()',
-  eventType: 'z.string()'
-};
+function buildZodBuiltinTypeMap(): Record<string, string> {
+  return {
+    ...zodProfile.basicTypeMap,
+    ...zodProfile.recordTypeMap,
+    ...zodProfile.typeAliasMap
+  } as Record<string, string>;
+}
+
+const ZOD_BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = buildZodBuiltinTypeMap();
 
 /**
  * Collect cross-namespace import statements needed for the schemas and type aliases
@@ -294,7 +297,7 @@ function resolveTypeExpr(attr: Attribute, ctx: EmissionContext): string {
     // Unresolved reference — try to recover using $refText
     if (refText) {
       // Check if it's a known built-in type name
-      const builtinZod = BUILTIN_TYPE_MAP[refText];
+      const builtinZod = ctx.builtinTypeMap[refText];
       if (builtinZod) {
         return builtinZod;
       }
@@ -325,7 +328,14 @@ function resolveTypeExpr(attr: Attribute, ctx: EmissionContext): string {
 
   if (isRosettaBasicType(typeRef)) {
     const typeName = typeRef.name;
-    return BUILTIN_TYPE_MAP[typeName] ?? 'z.unknown()';
+    const mapped = ctx.builtinTypeMap[typeName];
+    if (mapped) return mapped;
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'unmapped-builtin',
+      message: `Builtin type '${typeName}' has no Zod mapping; emitting z.unknown()`
+    });
+    return 'z.unknown()';
   }
 
   if (isRosettaEnumeration(typeRef)) {
@@ -340,7 +350,7 @@ function resolveTypeExpr(attr: Attribute, ctx: EmissionContext): string {
 
   // Unknown reference type — try $refText fallback
   if (refText) {
-    const builtinZod = BUILTIN_TYPE_MAP[refText];
+    const builtinZod = ctx.builtinTypeMap[refText];
     if (builtinZod) return builtinZod;
   }
 
@@ -506,15 +516,26 @@ function emitCyclicInterface(data: Data, ctx: EmissionContext): string {
 }
 
 /**
+ * Merged builtin type map from the TypeScript profile.
+ * Used for generating TypeScript interface declarations alongside Zod schemas.
+ * Combines basicTypeMap ∪ recordTypeMap ∪ typeAliasMap.
+ */
+const ZOD_TS_TYPE_MAP: Readonly<Record<string, string>> = {
+  ...typescriptProfile.basicTypeMap,
+  ...typescriptProfile.recordTypeMap,
+  ...typescriptProfile.typeAliasMap
+} as Record<string, string>;
+
+/**
  * Resolve the TypeScript type expression for an attribute (for interface declarations).
  */
-function resolveTypeExprAsTs(attr: Attribute, _ctx: EmissionContext): string {
+function resolveTypeExprAsTs(attr: Attribute, ctx: EmissionContext): string {
   const typeRef = attr.typeCall?.type?.ref;
   const refText = attr.typeCall?.type?.$refText;
 
   if (!typeRef) {
     if (refText) {
-      const builtinTs = TS_TYPE_MAP[refText];
+      const builtinTs = ZOD_TS_TYPE_MAP[refText];
       if (builtinTs) return builtinTs;
       return refText; // data type name
     }
@@ -522,34 +543,25 @@ function resolveTypeExprAsTs(attr: Attribute, _ctx: EmissionContext): string {
   }
 
   if (isRosettaBasicType(typeRef)) {
-    return TS_TYPE_MAP[typeRef.name] ?? 'unknown';
+    const mapped = ZOD_TS_TYPE_MAP[typeRef.name];
+    if (mapped) return mapped;
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'unmapped-builtin',
+      message: `Builtin type '${typeRef.name}' has no TypeScript mapping in interface for '${attr.name}'; emitting unknown`
+    });
+    return 'unknown';
   }
 
   if (isRosettaEnumeration(typeRef)) return typeRef.name;
   if (_isData(typeRef)) return typeRef.name;
 
   if (refText) {
-    const builtinTs = TS_TYPE_MAP[refText];
+    const builtinTs = ZOD_TS_TYPE_MAP[refText];
     if (builtinTs) return builtinTs;
   }
   return 'unknown';
 }
-
-/**
- * Maps Rune built-in type names to TypeScript type names (for interface declarations).
- */
-const TS_TYPE_MAP: Record<string, string> = {
-  string: 'string',
-  int: 'number',
-  number: 'number',
-  boolean: 'boolean',
-  date: 'string',
-  dateTime: 'string',
-  zonedDateTime: 'string',
-  time: 'string',
-  productType: 'string',
-  eventType: 'string'
-};
 
 /**
  * Apply cardinality to a TypeScript type expression for interface fields.
@@ -726,13 +738,22 @@ function emitTypeAliasSchema(alias: RosettaTypeAlias, ctx: EmissionContext): str
   let zodExpr = 'z.unknown()';
 
   if (typeRef && isRosettaBasicType(typeRef)) {
-    zodExpr = BUILTIN_TYPE_MAP[typeRef.name] ?? 'z.unknown()';
+    const mapped = ctx.builtinTypeMap[typeRef.name];
+    if (mapped) {
+      zodExpr = mapped;
+    } else {
+      ctx.diagnostics.push({
+        severity: 'warning',
+        code: 'unmapped-builtin',
+        message: `Builtin type '${typeRef.name}' has no Zod mapping in type alias '${alias.name}'; emitting z.unknown()`
+      });
+    }
   } else if (typeRef && isRosettaEnumeration(typeRef)) {
     zodExpr = `${typeRef.name}Schema`;
   } else if (typeRef && isData(typeRef)) {
     zodExpr = `${typeRef.name}Schema`;
   } else if (refText) {
-    const builtinZod = BUILTIN_TYPE_MAP[refText];
+    const builtinZod = ctx.builtinTypeMap[refText];
     if (builtinZod) zodExpr = builtinZod;
     else if (ctx.enumByName.has(refText)) zodExpr = `${refText}Schema`;
     else if (ctx.dataByName.has(refText)) zodExpr = `${refText}Schema`;
@@ -902,7 +923,8 @@ function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceReg
     reportsByName: model.reportsByName,
     annotationsByName: model.annotationsByName,
     libraryFuncsByName: model.libraryFuncsByName,
-    registry
+    registry,
+    builtinTypeMap: ZOD_BUILTIN_TYPE_MAP
   };
 }
 

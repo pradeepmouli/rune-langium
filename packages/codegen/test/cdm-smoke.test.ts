@@ -303,6 +303,8 @@ describe('cdm-smoke: typescript target', () => {
 
     // Build a tsconfig for TypeScript target output.
     // No zod import needed — pure TypeScript.
+    // lib includes 'esnext' so the Temporal namespace is available (record types
+    // emit Temporal.PlainDate / PlainTime / PlainDateTime / ZonedDateTime).
     const smokeTsconfig = {
       compilerOptions: {
         noEmit: true,
@@ -312,6 +314,7 @@ describe('cdm-smoke: typescript target', () => {
         module: 'NodeNext',
         moduleResolution: 'NodeNext',
         target: 'ES2020',
+        lib: ['ES2020', 'esnext'],
         skipLibCheck: true
       },
       include: outputs.map((o) => join(tmpDir, o.relativePath))

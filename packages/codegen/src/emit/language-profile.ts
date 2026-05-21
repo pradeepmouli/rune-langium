@@ -5,6 +5,24 @@ import type { GeneratorOutput, Target } from '../types.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 
 /**
+ * Target representation for a builtin type.
+ * - Zod/TypeScript profiles use `string` (e.g. `'z.string()'`, `'string'`).
+ * - JSON Schema profile uses an object (e.g. `{ type: 'string', format: 'date' }`).
+ *
+ * Keeping this loose avoids threading a mapping-type generic through
+ * GenericModelEmitter while still preserving type-safety within each profile.
+ */
+export type BuiltinMapping = string | Record<string, unknown>;
+
+/**
+ * Binding for a builtin library function.
+ * - `expr` — a host expression to substitute (e.g. `'Math.min'`).
+ * - `importFrom` — a sidecar module path to import the implementation from.
+ * - `null` — the function is intentionally not emitted (no binding known).
+ */
+export type LibraryFuncMapping = { importFrom?: string; expr?: string } | null;
+
+/**
  * Declarative target-level metadata for packaging (019 spec §3.2).
  *
  * A `LanguageProfile<T>` tells `GenericModelEmitter` how to assemble
@@ -25,6 +43,30 @@ import type { NamespaceRegistry } from './namespace-registry.js';
  */
 export interface LanguageProfile<T extends Target = Target> {
   readonly target: T;
+
+  /**
+   * Declarative mapping of builtin basic type names → target representation.
+   * Covers: boolean, number, string, time, pattern.
+   */
+  readonly basicTypeMap: Readonly<Record<string, BuiltinMapping>>;
+
+  /**
+   * Declarative mapping of builtin record type names → target representation.
+   * Covers: date, dateTime, zonedDateTime.
+   */
+  readonly recordTypeMap: Readonly<Record<string, BuiltinMapping>>;
+
+  /**
+   * Declarative mapping of builtin type alias names → target representation.
+   * Covers: int, productType, eventType, calculation.
+   */
+  readonly typeAliasMap: Readonly<Record<string, BuiltinMapping>>;
+
+  /**
+   * Declarative mapping of builtin library function names → host binding.
+   * null = intentionally not emitted.
+   */
+  readonly libraryFuncMap: Readonly<Record<string, LibraryFuncMapping>>;
 
   /**
    * Output extension for this target's primary files. Mirrors the
@@ -97,4 +139,15 @@ export interface LanguageProfile<T extends Target = Target> {
     maxNamespaces?: number;
     maxBytes?: number;
   };
+}
+
+/**
+ * Look up a builtin type name across all three maps of a profile.
+ * Returns the BuiltinMapping if found, or `undefined` if the name is not
+ * covered by this profile.
+ *
+ * Lookup order: basicTypeMap → recordTypeMap → typeAliasMap.
+ */
+export function resolveBuiltin(profile: LanguageProfile, name: string): BuiltinMapping | undefined {
+  return profile.basicTypeMap[name] ?? profile.recordTypeMap[name] ?? profile.typeAliasMap[name];
 }
