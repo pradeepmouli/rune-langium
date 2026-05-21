@@ -4,64 +4,57 @@
 /**
  * Tests for OperatorPalette — categorized operator picker.
  *
+ * NOTE: OperatorPalette now uses DS Popover (renders via Portal into
+ * document.body) + Command (cmdk). Queries target document.body.
+ *
  * @module
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/react';
+import { render, fireEvent, screen } from '@testing-library/react';
 import { OperatorPalette } from '../../src/components/editors/expression-builder/OperatorPalette.js';
 import { OPERATOR_CATALOG } from '../../src/components/editors/expression-builder/operator-catalog.js';
 
 describe('OperatorPalette', () => {
   it('does not render when closed', () => {
-    const { container } = render(
-      <OperatorPalette open={false} onSelect={vi.fn()} onClose={vi.fn()} />
-    );
-    expect(container.querySelector('[data-testid="operator-palette"]')).toBeNull();
+    render(<OperatorPalette open={false} onSelect={vi.fn()} onClose={vi.fn()} />);
+    // Popover portal content should not be in DOM when closed
+    expect(document.body.querySelector('[data-testid="operator-palette"]')).toBeNull();
   });
 
   it('renders when open', () => {
-    const { container } = render(
-      <OperatorPalette open={true} onSelect={vi.fn()} onClose={vi.fn()} />
-    );
-    expect(container.querySelector('[data-testid="operator-palette"]')).toBeTruthy();
+    render(<OperatorPalette open={true} onSelect={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.querySelector('[data-testid="operator-palette"]')).toBeTruthy();
   });
 
   it('displays all categories', () => {
-    const { container } = render(
-      <OperatorPalette open={true} onSelect={vi.fn()} onClose={vi.fn()} />
-    );
+    render(<OperatorPalette open={true} onSelect={vi.fn()} onClose={vi.fn()} />);
+    const palette = document.body.querySelector('[data-testid="operator-palette"]')!;
     for (const category of OPERATOR_CATALOG) {
-      expect(container.textContent).toContain(category.label);
+      expect(palette.textContent).toContain(category.label);
     }
   });
 
   it('filters operators by search text', () => {
-    const { container } = render(
-      <OperatorPalette open={true} onSelect={vi.fn()} onClose={vi.fn()} />
-    );
-    const input = container.querySelector('[data-testid="palette-search"]') as HTMLInputElement;
+    render(<OperatorPalette open={true} onSelect={vi.fn()} onClose={vi.fn()} />);
+    const input = document.body.querySelector('[data-testid="palette-search"]') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'filter' } });
 
-    // Should show filter operator
-    expect(container.textContent).toContain('filter');
-    // Should not show unrelated categories like Arithmetic if nothing matches
-    const buttons = container.querySelectorAll('button[role="option"]');
-    const labels = Array.from(buttons).map((b) => b.textContent);
-    expect(labels.some((l) => l?.includes('filter'))).toBe(true);
+    // Should show filter operator — cmdk items use data-slot="command-item"
+    const items = document.body.querySelectorAll('[data-slot="command-item"]');
+    const labels = Array.from(items).map((b) => b.textContent);
+    expect(labels.some((l) => l?.toLowerCase().includes('filter'))).toBe(true);
   });
 
   it('calls onSelect with created node when operator clicked', () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();
-    const { container } = render(
-      <OperatorPalette open={true} onSelect={onSelect} onClose={onClose} />
-    );
+    render(<OperatorPalette open={true} onSelect={onSelect} onClose={onClose} />);
 
-    // Click the first operator (+ Add)
-    const firstButton = container.querySelector('button[role="option"]');
-    expect(firstButton).toBeTruthy();
-    fireEvent.click(firstButton!);
+    // Click the first cmdk command-item (operator)
+    const firstItem = document.body.querySelector('[data-slot="command-item"]');
+    expect(firstItem).toBeTruthy();
+    fireEvent.click(firstItem!);
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     const node = onSelect.mock.calls[0][0];
@@ -69,11 +62,21 @@ describe('OperatorPalette', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes on Escape key', () => {
+  it('closes on Escape key via Popover handler', () => {
     const onClose = vi.fn();
     render(<OperatorPalette open={true} onSelect={vi.fn()} onClose={onClose} />);
 
+    // Radix Popover listens for Escape on the document level
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the reference picker button when onOpenReferencePicker provided', () => {
+    const onOpenRef = vi.fn();
+    render(<OperatorPalette open={true} onSelect={vi.fn()} onClose={vi.fn()} onOpenReferencePicker={onOpenRef} />);
+    const refBtn = document.body.querySelector('[data-testid="palette-open-reference"]');
+    expect(refBtn).toBeTruthy();
+    fireEvent.click(refBtn!);
+    expect(onOpenRef).toHaveBeenCalledTimes(1);
   });
 });

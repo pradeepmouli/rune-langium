@@ -3,6 +3,11 @@
 
 import '@testing-library/jest-dom/vitest';
 
+// jsdom does not implement scrollIntoView — required by cmdk (Command)
+if (typeof Element.prototype.scrollIntoView === 'undefined') {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 // jsdom does not implement ResizeObserver — required by ReactFlow
 class ResizeObserverMock {
   observe() {}
