@@ -550,20 +550,24 @@ function TypeItemRow({
           / next" which was misleading. Always visible at low opacity so
           users see the affordance without hover-discovery.
 
-          The icon alone is a 12px hit target — too small to click reliably.
-          Wrap it in a 24px (size-6) bordered square so the whole button is
-          clickable and reads as an actionable control. */}
-      <button
+          DS `Button variant="ghost"` (same primitive the Show-all/Hide-all
+          toolbar uses) for the focus ring + hover + disabled semantics.
+          Sized up to size-6 (24px) with a border: the default icon-xs (16px)
+          was too small a hit target to click reliably. The opacity-fade
+          affordance is layered on via className. */}
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-xs"
         onClick={handleNavClick}
         onKeyDown={handleNavKeyDown}
         aria-label={`Navigate to ${row.name}`}
         data-testid={`ns-type-nav-${row.nodeId}`}
-        className="ml-auto grid size-6 shrink-0 place-items-center rounded border border-border/60 opacity-40 transition-opacity hover:border-border hover:bg-background/60 hover:!opacity-100 focus:opacity-100 focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-80"
+        className="ml-auto size-6 border border-border/60 opacity-40 transition-opacity hover:border-border hover:!opacity-100 focus:opacity-100 group-hover:opacity-80"
         tabIndex={0}
       >
         <ArrowUpRight className="size-3.5" />
-      </button>
+      </Button>
     </div>
   );
 }
