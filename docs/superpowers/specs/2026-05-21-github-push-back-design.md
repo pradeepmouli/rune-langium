@@ -130,12 +130,18 @@ export interface GitSyncEngineOptions {
 
 export interface GitSyncEngine {
   notifyDirty(): void;          // coalesced; schedules a sync
-  syncNow(): Promise<SyncState>;// manual / retry
-  resolve(choice: 'keepMine' | 'takeRemote'): Promise<SyncState>;
+  syncNow(): Promise<SyncStatus>;// manual / retry
   getState(): SyncStatus;
   subscribe(cb: (s: SyncStatus) => void): () => void;
   dispose(): void;
 }
+```
+
+The engine has **no `resolve()` method**. All human-in-the-loop decisions
+flow through the injected `ConflictPolicy` (§5.3), keeping the engine purely
+mechanical.
+
+```
 
 export type SyncPhase =
   | 'idle' | 'committing' | 'fetching' | 'merging' | 'pushing'
@@ -159,11 +165,19 @@ idle ──notifyDirty/debounce──> committing ──> fetching ──> mergi
                                                   │              │           │
                                           (network err)   (conflict)  (non-ff: retry once → merging)
                                                   ▼              ▼
-                                               offline        blocked
-offline ──onLine / next notifyDirty──> committing
-blocked ──resolve('keepMine')──> pushing (force-with-lease)
-blocked ──resolve('takeRemote')──> (reset to remote) ──> idle
+                                               offline      [await policy.onConflict]
+offline ──onLine / next notifyDirty──> committing                 │
+                                                  ┌───────────────┼───────────────┐
+                                          'keepMine'         'takeRemote'      'block'
+                                       (force-with-lease)  (reset to remote)  (stay blocked)
+                                                  ▼               ▼               ▼
+                                               pushing          idle           blocked
 ```
+
+On conflict the engine **awaits `policy.onConflict(ctx)`** and applies
+whatever it returns — it does not decide resolution itself. While awaiting,
+it emits `phase: 'blocked'` with `conflictPaths` so the consumer's UI can
+render the choice; the consumer's policy returns the user's decision.
 
 - **committing:** stage all working-tree changes, commit with the generated
   message. Skipped if nothing is dirty (but a fetch may still run to update
@@ -176,19 +190,47 @@ blocked ──resolve('takeRemote')──> (reset to remote) ──> idle
 - **pushing:** `git.push`. On non-fast-forward rejection, loop back to
   `fetching` **once**; a second failure → `blocked`.
 
-### 5.3 Conflict policy (strategy object)
+### 5.3 Conflict policy (the resolution authority)
+
+The policy is the **single place** that decides what happens on a conflict.
+The engine calls it and applies the returned action; it owns no resolution
+logic of its own.
 
 ```ts
+export interface ConflictContext {
+  conflictPaths: string[];
+  localSha: string;
+  remoteSha: string;
+  // Enough handle to let an advanced policy inspect/rewrite the tree
+  // (e.g. write conflict markers) before returning a decision.
+  fs: IsoGitFs; dir: string; gitdir: string;
+}
+
+export type ConflictResolution =
+  | { action: 'block' }        // give up this cycle; surface blocked
+  | { action: 'keepMine' }     // engine: push --force-with-lease
+  | { action: 'takeRemote' }   // engine: reset tree + branch to remoteSha
+  | { action: 'merged' };      // policy already wrote a resolved tree; engine commits + pushes
+
 export interface ConflictPolicy {
-  onConflict(ctx): Promise<'block'>;            // default: block
+  onConflict(ctx: ConflictContext): Promise<ConflictResolution>;
 }
 ```
 
-Default `ffOrMergeThenBlock` simply blocks. `resolve('keepMine')` →
-`git.push({ force: false, forceWithLease: ... })`; `resolve('takeRemote')` →
-checkout/reset working tree + branch to the fetched remote SHA, discarding
-local commits. A future iteration can supply a policy that writes conflict
-markers and surfaces an editor merge UI — no engine change required.
+- **Default (headless) policy** returns `{ action: 'block' }` immediately —
+  used in tests and any non-interactive consumer.
+- **Studio's interactive policy** renders the badge's choice and returns a
+  promise that the user's click fulfils (`keepMine` / `takeRemote`). The
+  engine sits in `blocked` while awaiting; no `resolve()` round-trip needed.
+- **Future 3-way-merge policy** writes conflict markers via `ctx.fs`,
+  surfaces an editor merge UI, and returns `{ action: 'merged' }` once the
+  user resolves — **no engine change required.**
+
+Engine handling of each action: `keepMine` → `git.push` with
+force-with-lease against `remoteSha`; `takeRemote` → checkout/reset working
+tree + branch to `remoteSha`, discarding local commits; `merged` → stage +
+commit the resolved tree, then push; `block` → emit `blocked` and stop until
+the next `notifyDirty`/`syncNow`.
 
 ### 5.4 Invariant
 
@@ -212,7 +254,9 @@ Therefore no network outcome can lose edits; sync failure degrades to
 4. **Sync-status badge** (small DS component) subscribes to engine state:
    `idle`/clean (subtle or hidden), `committing|fetching|merging|pushing`
    (spinner), `blocked` (amber + "Resolve" → keepMine/takeRemote choice),
-   `offline` (queued).
+   `offline` (queued). The studio supplies an **interactive `ConflictPolicy`**
+   (§5.3) whose `onConflict` returns a promise; the badge's keepMine/takeRemote
+   buttons fulfil it. No engine `resolve()` call.
 5. **`WorkspaceRecord.gitBacking`** persists `syncState` + `lastSyncedSha`
    (fields already exist).
 
@@ -229,7 +273,7 @@ token**. `git-backing.ts`'s `CORS_PROXY` constant points here instead of
 
 | Situation | Detection | Behavior |
 |---|---|---|
-| Real merge conflict | `merge` aborts | `blocked` + `conflictPaths`; local commit intact; offer keepMine / takeRemote |
+| Real merge conflict | `merge` aborts | engine awaits `policy.onConflict`; emits `blocked` + `conflictPaths`; local commit intact; policy returns keepMine / takeRemote / merged |
 | Non-fast-forward push | push rejected | one auto fetch+merge retry; then `blocked` |
 | Offline / network error | fetch/push throws | `offline`; local commit kept; retry on `onLine` or next save |
 | No write access | push 403 | terminal `blocked`, distinct copy ("no push access"); fork-PR is future work |
@@ -240,8 +284,10 @@ token**. `git-backing.ts`'s `CORS_PROXY` constant points here instead of
 
 - **`git-sync-engine` (unit):** drive the state machine with a mocked
   isomorphic-git: debounce coalescing (N rapid `notifyDirty` → one commit),
-  ff happy path, clean auto-merge, conflict → `blocked`, non-ff retry-once,
-  offline → retry, `keepMine` force-with-lease, `takeRemote` reset.
+  ff happy path, clean auto-merge, non-ff retry-once, offline → retry, and a
+  stub `ConflictPolicy` returning each action — `block` → `blocked`,
+  `keepMine` → force-with-lease, `takeRemote` → reset, `merged` →
+  commit+push. Assert the engine awaits the policy and applies its return.
 - **`git-backing.ts` (unit, in-memory FS):** reuse `in-memory-fs.ts` + a
   local bare-repo fixture through a fake http. Assert `dir`/`gitdir` split
   lands files at `/<id>/files` and `.git` at `/<id>/.git`; full round-trip
@@ -264,7 +310,8 @@ token**. `git-backing.ts`'s `CORS_PROXY` constant points here instead of
    round-trip test.
 4. Wire engine into the studio: save → `notifyDirty`, status badge,
    `WorkspaceRecord` persistence.
-5. `blocked` resolve UX (keepMine / takeRemote).
+5. Studio interactive `ConflictPolicy` + badge resolve UX (keepMine /
+   takeRemote); engine remains untouched.
 6. Integration + optional Playwright smoke.
 
 ## 10. Open questions / deferred
