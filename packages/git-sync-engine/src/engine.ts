@@ -104,7 +104,22 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
           await ops.fastForward(opts.ref);
         }
         emit({ phase: 'pushing' });
-        await ops.push(opts.ref, opts.remoteUrl);
+        try {
+          await ops.push(opts.ref, opts.remoteUrl);
+        } catch (err2) {
+          // Remote moved again between our fetch and this retry push.
+          // Classify as blocked/non_fast_forward rather than falling through
+          // to the outer catch which would mis-report this as offline/network.
+          if (isNonFastForward(err2)) {
+            emit({
+              phase: 'blocked',
+              conflictPaths: undefined,
+              lastError: { code: 'non_fast_forward', message: msg(err2) }
+            });
+            return state;
+          }
+          throw err2; // other errors propagate to runSync's classifier
+        }
         const sha = await ops.currentSha(opts.ref);
         emit({ phase: 'idle', ahead: 0, behind: 0, conflictPaths: undefined, lastSyncedSha: sha });
         return state;

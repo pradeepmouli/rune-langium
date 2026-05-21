@@ -167,6 +167,32 @@ describe('GitSyncEngine conflict + offline', () => {
     expect(s.conflictPaths).toEqual([]);
   });
 
+  it('retry push non-ff: emits blocked/non_fast_forward instead of offline (P2)', async () => {
+    // Scenario: first push → non-ff; fetch/merge succeeds; retry push → non-ff again.
+    // Before the fix the retry throw escaped to runSync's catch which classified
+    // it as offline/network. After the fix it must land as blocked/non_fast_forward.
+    const nonFfErr = Object.assign(new Error('Push rejected: non-fast-forward'), {
+      code: 'PushRejectedError'
+    });
+    const o = ops({
+      computeAheadBehind: vi.fn()
+        .mockResolvedValueOnce({ ahead: 1, behind: 0 }) // after initial fetch
+        .mockResolvedValueOnce({ ahead: 1, behind: 1 }) // after retry fetch
+        .mockResolvedValue({ ahead: 1, behind: 0 }),
+      push: vi.fn()
+        .mockRejectedValueOnce(nonFfErr)   // first push → non-ff
+        .mockRejectedValueOnce(nonFfErr),  // retry push → non-ff again
+      merge: vi.fn().mockResolvedValue({ ok: true })
+    });
+    const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);
+    await e.syncNow();
+    const s = e.getState();
+    expect(s.phase).toBe('blocked');
+    expect(s.lastError?.code).toBe('non_fast_forward');
+    // Must not be offline — a second non-ff is not a network failure.
+    expect(s.phase).not.toBe('offline');
+  });
+
   it('unsubscribe method removes the subscriber from future emits', async () => {
     const o = ops({});
     const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);
