@@ -89,12 +89,37 @@ describe('GitSyncEngine conflict + offline', () => {
     expect(e.getState().phase).toBe('idle');
   });
 
-  it('goes offline (keeps local commit) when fetch throws', async () => {
+  it('goes offline (keeps local commit) when fetch throws a generic network error', async () => {
     const o = ops({ fetch: vi.fn().mockRejectedValue(new Error('network down')) });
     const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);
     await e.syncNow();
     expect(e.getState().phase).toBe('offline');
     expect(o.commit as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
+  });
+
+  it('classifies fetch 401 as blocked/auth — NOT offline (P1-B)', async () => {
+    // isAuthError checks code === 'HttpError' && message contains '401'
+    const authErr = Object.assign(new Error('HTTP Error: 401 Unauthorized'), { code: 'HttpError' });
+    const o = ops({ fetch: vi.fn().mockRejectedValue(authErr) });
+    const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);
+    await e.syncNow();
+    const s = e.getState();
+    expect(s.phase).toBe('blocked');
+    expect(s.lastError?.code).toBe('auth');
+    // Must not be offline — an auth error is terminal until re-auth
+    expect(s.phase).not.toBe('offline');
+  });
+
+  it('classifies fetch 403 as blocked/no_push_access — NOT offline (P1-B)', async () => {
+    // isNoPushAccess checks code === 'HttpError' && message contains '403'
+    const accessErr = Object.assign(new Error('HTTP Error: 403 Forbidden'), { code: 'HttpError' });
+    const o = ops({ fetch: vi.fn().mockRejectedValue(accessErr) });
+    const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);
+    await e.syncNow();
+    const s = e.getState();
+    expect(s.phase).toBe('blocked');
+    expect(s.lastError?.code).toBe('no_push_access');
+    expect(s.phase).not.toBe('offline');
   });
 
   it('does nothing online-wise when isOnline is false', async () => {

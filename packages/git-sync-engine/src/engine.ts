@@ -71,6 +71,14 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
 
       return await doPush();
     } catch (err) {
+      if (isAuthError(err)) {
+        emit({ phase: 'blocked', conflictPaths: undefined, lastError: { code: 'auth', message: msg(err) } });
+        return state;
+      }
+      if (isNoPushAccess(err)) {
+        emit({ phase: 'blocked', conflictPaths: undefined, lastError: { code: 'no_push_access', message: msg(err) } });
+        return state;
+      }
       emit({ phase: 'offline', lastError: { code: 'network', message: msg(err) } });
       return state;
     }

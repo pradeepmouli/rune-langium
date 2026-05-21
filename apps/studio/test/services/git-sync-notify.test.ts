@@ -22,7 +22,9 @@ describe('notifySyncOnSave', () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it('is a no-op for an unregistered workspace', () => {
+  it('queues without throwing for an unregistered workspace (pre-init dirty)', () => {
+    // Before any engine exists, notifySyncOnSave should enqueue the dirty
+    // signal rather than throw or silently drop it.
     expect(() => notifySyncOnSave('no-such-ws')).not.toThrow();
   });
 });

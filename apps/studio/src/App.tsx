@@ -796,17 +796,20 @@ function AppContent() {
     if (!ws || ws.kind !== 'git-backed') return;
     const workspaceId = ws.id;
     const gitBacking = ws.gitBacking;
+    let cancelled = false;
     void (async () => {
       try {
         const wm = await getWorkspaceManager();
+        if (cancelled) return; // workspace changed during async getWorkspaceManager
         const fs = wm.getFs();
         // Token is no longer pre-loaded here — the engine's onAuth loads it
         // lazily on each isomorphic-git call so rotated tokens are always used.
         getOrCreateSyncEngine({ fs, workspaceId, gitBacking });
       } catch (err) {
-        console.warn('[git-sync] Failed to instantiate sync engine:', err);
+        if (!cancelled) console.warn('[git-sync] Failed to instantiate sync engine:', err);
       }
     })();
+    return () => { cancelled = true; };
   }, [getWorkspaceManager, restoredWorkspace]);
 
   const handleCreateGitBackedWorkspace = useCallback(

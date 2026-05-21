@@ -169,11 +169,24 @@ function errMessage(err: unknown): string {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const allowed = env.ALLOWED_ORIGIN;
+    const url = new URL(req.url);
+
+    // Git smart-HTTP proxy: browsers omit the Origin header on same-origin
+    // GET/HEAD requests (e.g. /info/refs discovery), so we apply a relaxed
+    // rule here — absent Origin is allowed (same-origin), but a present
+    // Origin that differs from the allowed origin is blocked.
+    if (url.pathname.includes('/git/')) {
+      const o = req.headers.get('Origin');
+      if (o !== null && o !== allowed) return new Response('forbidden', { status: 403 });
+      return handleGitProxy(req, env, allowed);
+    }
+
+    // Device-flow endpoints: strict same-origin check (browsers always send
+    // Origin on cross-origin POST, and these are always cross-origin POSTs
+    // from the studio SPA to the auth worker).
     if (!originOk(req, allowed)) {
       return new Response('forbidden', { status: 403 });
     }
-    const url = new URL(req.url);
-    if (url.pathname.includes('/git/')) return handleGitProxy(req, env, allowed);
     if (req.method !== 'POST') {
       return json(405, { error: 'method_not_allowed' }, allowed);
     }

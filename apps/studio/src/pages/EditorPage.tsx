@@ -452,6 +452,9 @@ export function EditorPage({
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   useEffect(() => {
     if (workspaceKind !== 'git-backed') return;
+    // Reset to null immediately on workspace switch so the badge never shows
+    // the previous workspace's status while the new engine initialises.
+    setSyncStatus(null);
     return subscribeToEngine(workspaceId, setSyncStatus);
   }, [workspaceId, workspaceKind]);
 

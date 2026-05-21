@@ -51,6 +51,13 @@ const policies = new Map<string, InteractiveConflictPolicy>();
  */
 const pendingEngineSubscribers = new Map<string, Set<(s: SyncStatus) => void>>();
 
+/**
+ * Tracks workspace IDs for which notifySyncOnSave was called before the
+ * engine was created. Drained (single notifyDirty call) the moment
+ * getOrCreateSyncEngine creates the engine.
+ */
+const pendingDirty = new Set<string>();
+
 export interface SyncEngineInput {
   fs: OpfsFs;
   workspaceId: string;
@@ -119,6 +126,12 @@ export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
     pendingEngineSubscribers.delete(workspaceId);
   }
 
+  // Replay any saves that arrived before the engine was ready.
+  if (pendingDirty.has(workspaceId)) {
+    pendingDirty.delete(workspaceId);
+    engine.notifyDirty();
+  }
+
   return engine;
 }
 
@@ -169,6 +182,7 @@ export function disposeSyncEngine(workspaceId: string): void {
   engines.delete(workspaceId);
   policies.delete(workspaceId);
   pendingEngineSubscribers.delete(workspaceId);
+  pendingDirty.delete(workspaceId);
 }
 
 /**
@@ -184,7 +198,14 @@ export function getSyncEngine(workspaceId: string): GitSyncEngine | undefined {
   return engines.get(workspaceId);
 }
 
-/** Nudge the background sync engine after a save. No-op for non-git workspaces. */
+/** Nudge the background sync engine after a save. No-op for non-git workspaces.
+ *  If the engine is not yet created (async init still in progress), the dirty
+ *  signal is queued and replayed the moment the engine is instantiated. */
 export function notifySyncOnSave(workspaceId: string): void {
-  engines.get(workspaceId)?.notifyDirty();
+  const e = engines.get(workspaceId);
+  if (e) {
+    e.notifyDirty();
+  } else {
+    pendingDirty.add(workspaceId);
+  }
 }

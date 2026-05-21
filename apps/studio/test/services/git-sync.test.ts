@@ -50,6 +50,7 @@ import {
   subscribeToEngine,
   disposeSyncEngine,
   getSyncEngine,
+  notifySyncOnSave,
   defaultGitProxyUrl
 } from '../../src/services/git-sync.js';
 
@@ -195,5 +196,41 @@ describe('subscribeToEngine', () => {
     engine.__emit({ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: 'xyz' });
     // cb must NOT be called after unsubscribe.
     expect(calls.length).toBe(beforeEmit);
+  });
+});
+
+describe('notifySyncOnSave pending-dirty queue (P1-C)', () => {
+  it('queues dirty before engine creation and replays when engine is instantiated', () => {
+    const wsId = 'ws-pending-dirty';
+
+    // Call notifySyncOnSave BEFORE the engine is created.
+    notifySyncOnSave(wsId);
+
+    // Now create the engine — the pending dirty should be drained into notifyDirty.
+    getOrCreateSyncEngine({
+      fs: {} as never,
+      workspaceId: wsId,
+      gitBacking: { ...GIT_BACKING, tokenPath: `/${wsId}/.studio/token` }
+    });
+
+    const engine = getSyncEngine(wsId) as any;
+    expect(engine.notifyDirty).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispose clears the pending dirty so a later create does NOT replay it', () => {
+    const wsId = 'ws-pending-dirty-dispose';
+
+    notifySyncOnSave(wsId); // queue a dirty signal
+    disposeSyncEngine(wsId); // dispose should clear the pending queue
+
+    getOrCreateSyncEngine({
+      fs: {} as never,
+      workspaceId: wsId,
+      gitBacking: { ...GIT_BACKING, tokenPath: `/${wsId}/.studio/token` }
+    });
+
+    const engine = getSyncEngine(wsId) as any;
+    // pendingDirty was cleared by dispose, so notifyDirty must NOT be called.
+    expect(engine.notifyDirty).not.toHaveBeenCalled();
   });
 });

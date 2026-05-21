@@ -3,6 +3,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { handleGitProxy } from '../src/git-proxy.js';
+import worker from '../src/index.js';
 
 const env = { GITHUB_CLIENT_ID: 'x', ALLOWED_ORIGIN: 'https://www.daikonic.dev' };
 
@@ -68,5 +69,35 @@ describe('handleGitProxy', () => {
     );
     const res = await handleGitProxy(req, env, env.ALLOWED_ORIGIN);
     expect(res.status).toBe(200);
+  });
+});
+
+describe('worker.fetch origin handling for /git/ (P1-A)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('allows same-origin GET with NO Origin header (browser same-origin)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('refs', {
+        status: 200,
+        headers: { 'Content-Type': 'application/x-git-upload-pack-advertisement' }
+      })
+    );
+    // No Origin header — simulates a same-origin browser GET
+    const req = new Request(
+      'https://www.daikonic.dev/rune-studio/api/github-auth/git/github.com/owner/repo.git/info/refs?service=git-upload-pack',
+      { method: 'GET', headers: { Authorization: 'Basic dXNlcjp0b2tlbg==' } }
+    );
+    const res = await worker.fetch(req, env);
+    expect(res.status).not.toBe(403);
+    expect(res.status).toBe(200);
+  });
+
+  it('blocks a cross-origin GET on /git/ with a foreign Origin', async () => {
+    const req = new Request(
+      'https://www.daikonic.dev/rune-studio/api/github-auth/git/github.com/owner/repo.git/info/refs?service=git-upload-pack',
+      { method: 'GET', headers: { Origin: 'https://evil.com' } }
+    );
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(403);
   });
 });
