@@ -304,6 +304,9 @@ importers:
       '@rune-langium/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
+      '@rune-langium/git-sync-engine':
+        specifier: workspace:*
+        version: link:../../packages/git-sync-engine
       '@rune-langium/lsp-server':
         specifier: workspace:*
         version: link:../../packages/lsp-server
