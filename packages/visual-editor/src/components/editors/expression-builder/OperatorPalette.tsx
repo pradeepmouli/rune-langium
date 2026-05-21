@@ -76,9 +76,17 @@ export function OperatorPalette({
       <PopoverTrigger asChild>
         <span aria-hidden style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start" sideOffset={4} data-testid="operator-palette">
+      <PopoverContent
+        className="w-64 p-0"
+        align="start"
+        sideOffset={4}
+        data-testid="operator-palette"
+        // Trigger is a zero-size aria-hidden span; prevent Radix from returning
+        // focus to it on close (Copilot #227).
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
         <Command>
-          <CommandInput placeholder="Search operators..." data-testid="palette-search" />
+          <CommandInput placeholder="Search operators..." data-testid="palette-search" autoFocus />
           <CommandList className="studio-scroll max-h-60">
             <CommandEmpty>No operators found.</CommandEmpty>
             {categories.map((category, idx) => {

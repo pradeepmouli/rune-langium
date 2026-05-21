@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, screen } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import { OperatorPalette } from '../../src/components/editors/expression-builder/OperatorPalette.js';
 import { OPERATOR_CATALOG } from '../../src/components/editors/expression-builder/operator-catalog.js';
 

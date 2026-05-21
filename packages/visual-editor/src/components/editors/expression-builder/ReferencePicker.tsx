@@ -58,7 +58,15 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
       <PopoverTrigger asChild>
         <span aria-hidden style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-0" align="start" sideOffset={4} data-testid="reference-picker">
+      <PopoverContent
+        className="w-56 p-0"
+        align="start"
+        sideOffset={4}
+        data-testid="reference-picker"
+        // Trigger is a zero-size aria-hidden span; prevent Radix from returning
+        // focus to it on close (Copilot #227).
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
         <Command>
           <CommandList>
             <CommandEmpty>No variables in scope</CommandEmpty>

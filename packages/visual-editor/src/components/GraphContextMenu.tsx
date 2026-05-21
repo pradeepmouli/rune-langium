@@ -17,6 +17,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@rune-langium/design-system/ui/dropdown-menu';
@@ -85,6 +87,10 @@ export function GraphContextMenu({ state, layoutEngine, onLayoutEngineChange, on
   return (
     <DropdownMenu
       open={state !== null}
+      // Non-modal: this is a context menu floating over the graph canvas, so
+      // it must NOT lock pointer events / scroll on the rest of the page
+      // (Codex P2 #227).
+      modal={false}
       onOpenChange={(open: boolean) => {
         if (!open) onClose();
       }}
@@ -107,7 +113,16 @@ export function GraphContextMenu({ state, layoutEngine, onLayoutEngineChange, on
           }}
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={0} data-testid="graph-context-menu">
+      <DropdownMenuContent
+        align="start"
+        sideOffset={0}
+        data-testid="graph-context-menu"
+        // The trigger is a zero-size aria-hidden span (cursor anchor), so
+        // Radix's default focus-return-to-trigger would land on a
+        // non-focusable element. Prevent it; focus returns to the document
+        // naturally (Copilot #227).
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
         {state?.node && (
           <>
             <DropdownMenuLabel className="truncate">{nodeName}</DropdownMenuLabel>
@@ -132,14 +147,16 @@ export function GraphContextMenu({ state, layoutEngine, onLayoutEngineChange, on
           Show all nodes
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => handleUseEngine('elk')} aria-pressed={layoutEngine === 'elk'}>
-          <span className="w-4 text-center">{layoutEngine === 'elk' ? '●' : '○'}</span>
-          Use ELK layout
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleUseEngine('dagre')} aria-pressed={layoutEngine === 'dagre'}>
-          <span className="w-4 text-center">{layoutEngine === 'dagre' ? '●' : '○'}</span>
-          Use Dagre layout
-        </DropdownMenuItem>
+        {/* Layout engine is a mutually-exclusive choice → RadioGroup, not
+            menuitem+aria-pressed (invalid ARIA for role=menuitem). The radio
+            item renders its own selected indicator. (Copilot #227) */}
+        <DropdownMenuRadioGroup
+          value={layoutEngine}
+          onValueChange={(v) => handleUseEngine(v as 'elk' | 'dagre')}
+        >
+          <DropdownMenuRadioItem value="elk">Use ELK layout</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dagre">Use Dagre layout</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
