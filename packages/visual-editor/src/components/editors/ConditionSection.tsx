@@ -31,6 +31,7 @@ import { useFormContext } from 'react-hook-form';
 import { Plus, X, ChevronUp, ChevronDown } from 'lucide-react';
 import type { ExpressionEditorSlotProps } from '../../types.js';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
@@ -270,7 +271,7 @@ function AddConditionForm({ onAdd, onCancel, showPostConditionToggle }: AddCondi
         />
         {showPostConditionToggle && (
           <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
-            <input type="checkbox" checked={isPost} onChange={(e) => setIsPost(e.target.checked)} className="rounded" />
+            <Checkbox checked={isPost} onCheckedChange={(v) => setIsPost(v === true)} />
             post-condition
           </label>
         )}
