@@ -11,6 +11,7 @@
  *      UI behavior, and the [Generate] payload.
  */
 
+import type { ComponentProps } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import {
@@ -73,7 +74,7 @@ const NS = ['app', 'cdm', 'base'];
 // produces them: app → cdm → base, so app's closure includes base too.
 const GRAPH = { app: ['app', 'cdm', 'base'], cdm: ['cdm', 'base'], base: ['base'] };
 
-function renderModal(overrides: Partial<React.ComponentProps<typeof DownloadConfigModal>> = {}) {
+function renderModal(overrides: Partial<ComponentProps<typeof DownloadConfigModal>> = {}) {
   const onGenerate = vi.fn();
   const onClose = vi.fn();
   render(

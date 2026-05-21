@@ -15,11 +15,12 @@
  * then expose the original file name in the response.
  */
 
-// Langium services are imported LAZILY inside loadRuneDslServices below so an
-// empty-workspace request (files: [], curatedBundles: []) avoids the
-// ~1.8 MB langium runtime import + createRuneDslServices initialization
-// entirely. Any request that produces at least one hydration document
-// (user-parsed or curated-deserialized) pays the langium init cost once.
+// Langium services are imported LAZILY inside hydrateUserWorkspace /
+// populateDependencyGraph below so an empty-workspace request
+// (files: [], curatedBundles: []) avoids the ~1.8 MB langium runtime import
+// + createRuneDslServices initialization entirely. Any request that produces
+// at least one hydration document (user-parsed or curated-deserialized) pays
+// the langium init cost once.
 //
 // Cross-namespace dep-graph helpers (collectNamespaceDependencies +
 // closeNamespaceDependencies) are pure functions over LangiumDocument[]

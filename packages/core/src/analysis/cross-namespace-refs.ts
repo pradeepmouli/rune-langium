@@ -24,6 +24,7 @@ import {
   isRosettaEnumeration,
   isRosettaFunction,
   isRosettaModel,
+  isRosettaRule,
   isRosettaTypeAlias,
   type RosettaModel
 } from '../generated/ast.js';
@@ -171,6 +172,16 @@ export function collectNamespaceDependencies(documents: readonly LangiumDocument
         }
         const superRef = element.superFunction?.ref;
         if (superRef) trackRef(superRef, sourceNs);
+      } else if (isRosettaRule(element)) {
+        // 6. Rule input type (spec §5.2 #4 — "type reference inside a
+        //    function or rule body"). We walk the declared `input` TypeCall
+        //    at the same granularity as function I/O (signature types, not
+        //    a full expression-body walk). A rule whose input is a type in
+        //    another namespace creates a cross-namespace dependency.
+        const ruleInputRef = element.input?.type?.ref;
+        if (ruleInputRef && (isData(ruleInputRef) || isRosettaEnumeration(ruleInputRef) || isRosettaTypeAlias(ruleInputRef))) {
+          trackRef(ruleInputRef, sourceNs);
+        }
       }
     }
   }
@@ -196,10 +207,12 @@ export function closeNamespaceDependencies(
   deps: ReadonlyMap<string, ReadonlySet<string>>
 ): Set<string> {
   const visited = new Set<string>([source]);
+  // Index-based queue cursor instead of Array.shift() (which is O(N) per
+  // call → O(N²) overall). The cascade recomputes this per toggle, so keep
+  // it linear.
   const queue: string[] = [source];
-  while (queue.length > 0) {
-    const current = queue.shift() as string;
-    const targets = deps.get(current);
+  for (let head = 0; head < queue.length; head++) {
+    const targets = deps.get(queue[head]!);
     if (!targets) continue;
     for (const t of targets) {
       if (!visited.has(t)) {

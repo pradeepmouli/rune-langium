@@ -232,8 +232,9 @@ export async function runGenerate(docs: LangiumDocument[], options: GeneratorOpt
     // emitted set. The caller passes a dependency-closed allowlist (the
     // modal's §5.2 cascade guarantees this), so no kept namespace imports
     // a dropped one. An unknown name in the allowlist is simply ignored.
-    const byNamespace = options.namespaces
-      ? new Map(Array.from(allByNamespace).filter(([ns]) => options.namespaces!.includes(ns)))
+    const allowlist = options.namespaces ? new Set(options.namespaces) : undefined;
+    const byNamespace = allowlist
+      ? new Map(Array.from(allByNamespace).filter(([ns]) => allowlist.has(ns)))
       : allByNamespace;
     if (byNamespace.size === 0) {
       return [];

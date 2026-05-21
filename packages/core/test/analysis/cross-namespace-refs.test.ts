@@ -44,6 +44,16 @@ async function parseFixtureFiles(fixtureName: string) {
   return docs;
 }
 
+/** Parse inline `{ namespace: source }` pairs into a linked document set. */
+async function parseInline(sources: Record<string, string>) {
+  const { RuneDsl } = createRuneDslServices();
+  const docs = Object.entries(sources).map(([ns, content]) =>
+    RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(content, URI.parse(`inmemory:///${ns}.rosetta`))
+  );
+  await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
+  return docs;
+}
+
 describe('cross-namespace-refs — collectNamespaceDependencies', () => {
   it('inheritance fixture: derived namespace depends on base namespace', async () => {
     const docs = await parseFixtureFiles('inheritance');
@@ -70,6 +80,18 @@ describe('cross-namespace-refs — collectNamespaceDependencies', () => {
     // The funcs namespace defines functions whose inputs/output reference
     // types from the models namespace — exactly §5.2's bullet #5.
     expect(deps.get('test.funcs')).toContain('test.models');
+  });
+
+  it('rule input type produces a cross-namespace dep edge (§5.2 #4)', async () => {
+    // Regression for Codex P1 on PR #223: the walker missed RosettaRule
+    // input types, so a rule in namespace `app` reporting `from` a type in
+    // `models` did not pull `models` into the cascade.
+    const docs = await parseInline({
+      models: 'namespace models\n\ntype Trade:\n  tradeDate date (1..1)\n',
+      app: 'namespace app\n\nimport models.*\n\nreporting rule ExtractDate from Trade:\n  Trade -> tradeDate\n'
+    });
+    const deps = collectNamespaceDependencies(docs);
+    expect(deps.get('app')).toContain('models');
   });
 
   it('circular fixture: cycle does not crash; both namespaces present with at least one direction captured', async () => {
