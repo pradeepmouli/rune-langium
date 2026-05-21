@@ -6,8 +6,8 @@
  * so commits live alongside files in the same OPFS tree.
  *
  * Layout per workspace:
- *   /<workspaceId>/files/...   working tree
- *   /<workspaceId>/.git/...    git object store
+ *   /<workspaceId>/files/...   working tree  (isomorphic-git `dir`)
+ *   /<workspaceId>/.git/...    git object store (isomorphic-git `gitdir`)
  *
  * Network ops (clone / fetch / pull / push) are exposed by separate
  * functions that the UI layer wires once the user has authenticated via
@@ -61,8 +61,30 @@ function gitFs(fs: OpfsFs): GitFsAdapter {
   };
 }
 
-function repoDir(workspaceId: string): string {
-  return `/${workspaceId}`;
+/**
+ * Produce the `{ promises }` shape that isomorphic-git requires from any
+ * fs-like object. Accepts:
+ *  - `OpfsFs` — direct method surface (the primary production path).
+ *  - Any object already carrying a `.promises` property (e.g. `InMemoryFs`
+ *    in tests) — returned as-is, since it already satisfies the interface.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toGitFs(fs: OpfsFs): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (typeof (fs as any).promises === 'object' && (fs as any).promises !== null) {
+    return fs;
+  }
+  return gitFs(fs);
+}
+
+/** Working-tree root: `/<workspaceId>/files` (where the editor reads/writes). */
+function worktreeDir(workspaceId: string): string {
+  return `/${workspaceId}/files`;
+}
+
+/** Git object-store root: `/<workspaceId>/.git`. */
+function gitDir(workspaceId: string): string {
+  return `/${workspaceId}/.git`;
 }
 
 export interface InitOptions {
@@ -70,10 +92,10 @@ export interface InitOptions {
 }
 
 export async function initRepo(fs: OpfsFs, workspaceId: string, options: InitOptions = {}): Promise<void> {
-  const dir = repoDir(workspaceId);
   await git.init({
-    fs: gitFs(fs) as unknown as Parameters<typeof git.init>[0]['fs'],
-    dir,
+    fs: toGitFs(fs),
+    dir: worktreeDir(workspaceId),
+    gitdir: gitDir(workspaceId),
     defaultBranch: options.defaultBranch ?? 'main'
   });
 }
@@ -85,16 +107,18 @@ export interface CommitOptions {
 }
 
 export async function stageAndCommit(fs: OpfsFs, workspaceId: string, options: CommitOptions): Promise<string> {
-  const dir = repoDir(workspaceId);
-  const fsAdapter = gitFs(fs) as unknown as Parameters<typeof git.add>[0]['fs'];
+  const dir = worktreeDir(workspaceId);
+  const gdir = gitDir(workspaceId);
+  const fsAdapter = toGitFs(fs);
   // Walk the working tree and stage every file under files/.
   const files = await listWorkingTree(fs, workspaceId);
   for (const f of files) {
-    await git.add({ fs: fsAdapter, dir, filepath: f });
+    await git.add({ fs: fsAdapter, dir, gitdir: gdir, filepath: f });
   }
   const sha = await git.commit({
     fs: fsAdapter,
     dir,
+    gitdir: gdir,
     message: options.message,
     author: { name: options.authorName, email: options.authorEmail }
   });
@@ -102,9 +126,11 @@ export async function stageAndCommit(fs: OpfsFs, workspaceId: string, options: C
 }
 
 export async function detectSyncState(fs: OpfsFs, workspaceId: string): Promise<SyncState> {
-  const dir = repoDir(workspaceId);
-  const fsAdapter = gitFs(fs) as unknown as Parameters<typeof git.statusMatrix>[0]['fs'];
-  const matrix = await git.statusMatrix({ fs: fsAdapter, dir });
+  const matrix = await git.statusMatrix({
+    fs: toGitFs(fs),
+    dir: worktreeDir(workspaceId),
+    gitdir: gitDir(workspaceId)
+  });
   // Each row: [filepath, head, workdir, stage]. Anything where workdir != stage
   // or workdir != head is a local change → ahead.
   const dirty = matrix.some(([_path, head, workdir, stage]) => head !== workdir || workdir !== stage);
@@ -134,17 +160,19 @@ export interface CloneOptions {
  * Routes through the studio's CORS proxy (`cors.isomorphic-git.org`).
  * This is the GitHub-backed workspace path and runs unconditionally;
  * it is distinct from the curated-archive path in `model-loader.ts`.
+ *
+ * Clones at full depth (no `depth` limit) so that history-based
+ * ahead/behind computation and push-back work correctly.
  */
 export async function cloneRepository(fs: OpfsFs, workspaceId: string, options: CloneOptions): Promise<void> {
-  const dir = repoDir(workspaceId);
   await git.clone({
-    fs: gitFs(fs) as unknown as Parameters<typeof git.clone>[0]['fs'],
+    fs: toGitFs(fs),
     http,
-    dir,
+    dir: worktreeDir(workspaceId),
+    gitdir: gitDir(workspaceId),
     url: options.remoteUrl,
     ref: options.ref ?? 'main',
     singleBranch: true,
-    depth: 1,
     corsProxy: CORS_PROXY,
     onAuth: () => ({ username: options.user, password: options.token }),
     onProgress: options.onProgress
@@ -167,9 +195,10 @@ export interface PushOptions {
 
 export async function pushBranch(fs: OpfsFs, workspaceId: string, options: PushOptions): Promise<void> {
   await git.push({
-    fs: gitFs(fs) as unknown as Parameters<typeof git.push>[0]['fs'],
+    fs: toGitFs(fs),
     http,
-    dir: repoDir(workspaceId),
+    dir: worktreeDir(workspaceId),
+    gitdir: gitDir(workspaceId),
     url: options.remoteUrl,
     ref: options.ref,
     corsProxy: CORS_PROXY,
@@ -179,15 +208,18 @@ export async function pushBranch(fs: OpfsFs, workspaceId: string, options: PushO
 
 async function listWorkingTree(fs: OpfsFs, workspaceId: string): Promise<string[]> {
   const out: string[] = [];
-  await walk(fs, `/${workspaceId}/files`, '', out);
+  await walk(fs, worktreeDir(workspaceId), '', out);
   return out;
 }
 
 async function walk(fs: OpfsFs, base: string, rel: string, out: string[]): Promise<void> {
   const fullPath = rel ? `${base}/${rel}` : base;
+  // Resolve to the raw promise surface (supports both OpfsFs and InMemoryFs shapes).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw: { readdir(p: string): Promise<string[]>; stat(p: string): Promise<{ isFile(): boolean; isDirectory(): boolean }> } = (fs as any).promises ?? fs;
   let names: string[];
   try {
-    names = await fs.readdir(fullPath);
+    names = await raw.readdir(fullPath);
   } catch (err) {
     // A working-tree dir we can't read is a real failure — silently
     // dropping it would mean `git status` reports "all clean" and a
@@ -202,7 +234,7 @@ async function walk(fs: OpfsFs, base: string, rel: string, out: string[]): Promi
     const childRel = rel ? `${rel}/${name}` : name;
     let stat;
     try {
-      stat = await fs.stat(`${base}/${childRel}`);
+      stat = await raw.stat(`${base}/${childRel}`);
     } catch (err) {
       // Race with a concurrent delete — entry vanished between readdir
       // and stat. Skip but log so a real bug isn't masked.
@@ -211,7 +243,9 @@ async function walk(fs: OpfsFs, base: string, rel: string, out: string[]): Promi
       continue;
     }
     if (stat.isFile()) {
-      out.push(`files/${childRel}`);
+      // Plain relative path — the working-tree root is /<id>/files, so
+      // isomorphic-git sees the file at `childRel` directly.
+      out.push(childRel);
     } else if (stat.isDirectory()) {
       await walk(fs, base, childRel, out);
     }

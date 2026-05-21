@@ -40,10 +40,21 @@ const fileMode = 0o100644;
 const dirMode = 0o040755;
 
 function norm(p: string): string {
-  // Collapse repeated slashes; drop trailing slash; preserve leading slash.
-  const collapsed = p.replace(/\/{2,}/g, '/');
-  if (collapsed === '/') return '/';
-  return collapsed.replace(/\/$/, '');
+  // Resolve . segments and collapse repeated slashes, preserving leading slash.
+  // isomorphic-git emits paths like `<dir>/.` or `<dir>/./file` when walking.
+  const parts = p.split('/').filter((s) => s !== '');
+  const resolved: string[] = [];
+  for (const part of parts) {
+    if (part === '.') {
+      // stay in current dir — skip
+    } else if (part === '..') {
+      resolved.pop();
+    } else {
+      resolved.push(part);
+    }
+  }
+  if (resolved.length === 0) return '/';
+  return '/' + resolved.join('/');
 }
 
 function parentOf(p: string): string {
@@ -56,6 +67,12 @@ interface MemStatResult {
   type: 'file' | 'dir';
   size: number;
   mtimeMs: number;
+  ctimeMs: number;
+  dev: number;
+  ino: number;
+  uid: number;
+  gid: number;
+  nlink: number;
   mode: number;
   isFile(): boolean;
   isDirectory(): boolean;
@@ -171,6 +188,12 @@ export class InMemoryFs {
         type,
         size,
         mtimeMs: node.mtimeMs,
+        ctimeMs: node.mtimeMs,
+        dev: 1,
+        ino: 0,
+        uid: 0,
+        gid: 0,
+        nlink: 1,
         mode: node.mode,
         isFile: () => type === 'file',
         isDirectory: () => type === 'dir',

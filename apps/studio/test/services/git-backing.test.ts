@@ -9,8 +9,10 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import git from 'isomorphic-git';
 import { createOpfsRoot } from '../setup/opfs-mock.js';
 import { OpfsFs } from '../../src/opfs/opfs-fs.js';
+import { InMemoryFs } from '../../src/services/in-memory-fs.js';
 import { initRepo, stageAndCommit, detectSyncState } from '../../src/services/git-backing.js';
 
 let fs: OpfsFs;
@@ -68,5 +70,30 @@ describe('detectSyncState (T055)', () => {
     });
     await fs.writeFile(`/${WS}/files/a.rosetta`, 'edited\n');
     expect(await detectSyncState(fs, WS)).toBe('ahead');
+  });
+});
+
+describe('git-backing dir/gitdir layout', () => {
+  it('commits files under <id>/files with .git at <id>/.git, and detects ahead', async () => {
+    const memFs = new InMemoryFs() as never;
+    const wsId = 'ws1';
+    await (memFs as InMemoryFs).promises.mkdir('/ws1/files', { recursive: true });
+    await initRepo(memFs as unknown as OpfsFs, wsId);
+    await (memFs as InMemoryFs).promises.writeFile('/ws1/files/a.rosetta', 'namespace x');
+
+    expect(await detectSyncState(memFs as unknown as OpfsFs, wsId)).toBe('ahead');
+    const sha = await stageAndCommit(memFs as unknown as OpfsFs, wsId, {
+      message: 'init',
+      authorName: 'A',
+      authorEmail: 'a@x'
+    });
+    expect(typeof sha).toBe('string');
+    expect(await detectSyncState(memFs as unknown as OpfsFs, wsId)).toBe('clean');
+
+    const dotGit = await (memFs as InMemoryFs).promises.readdir('/ws1/.git');
+    expect(dotGit).toContain('HEAD');
+    const fsForGit = memFs as never;
+    const log = await git.log({ fs: fsForGit, dir: '/ws1/files', gitdir: '/ws1/.git' });
+    expect(log.length).toBe(1);
   });
 });
