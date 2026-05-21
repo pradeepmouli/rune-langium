@@ -5,8 +5,10 @@ import { useCallback, useEffect, useId, useMemo, useState, type ChangeEvent, typ
 import { z } from 'zod';
 import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { FieldSet, FieldLegend } from '@rune-langium/design-system/ui/field';
+import { RadioGroup, RadioGroupItem } from '@rune-langium/design-system/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { Plus, Minus } from 'lucide-react';
@@ -376,21 +378,20 @@ function ChoiceFieldGroup({
       <FieldLegend variant="label" className="text-muted-foreground">
         Choose one option
       </FieldLegend>
-      <div className="space-y-1">
+      <RadioGroup
+        value={activeField?.path ?? ''}
+        onValueChange={(path) => {
+          const field = fields.find((f) => f.path === path);
+          if (field) handleOptionChange(field);
+        }}
+      >
         {fields.map((field) => {
           const radioId = `${groupId}-${field.path}`;
           const isActive = activeField?.path === field.path;
           return (
             <div key={field.path} className="space-y-1">
-              <label className="flex items-center gap-2 text-xs font-medium">
-                <input
-                  type="radio"
-                  name={groupId}
-                  id={radioId}
-                  style={{ accentColor: 'var(--primary)' }}
-                  checked={isActive}
-                  onChange={() => handleOptionChange(field)}
-                />
+              <label htmlFor={radioId} className="flex items-center gap-2 text-xs font-medium">
+                <RadioGroupItem id={radioId} value={field.path} />
                 {field.label}
               </label>
               {isActive &&
@@ -429,7 +430,7 @@ function ChoiceFieldGroup({
             </div>
           );
         })}
-      </div>
+      </RadioGroup>
     </FieldSet>
   );
 }
@@ -628,18 +629,19 @@ function PreviewFieldControl({
   }
 
   const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
-  const inputType = field.kind === 'number' ? 'number' : field.kind === 'boolean' ? 'checkbox' : 'text';
+  const inputType = field.kind === 'number' ? 'number' : 'text';
 
   if (field.kind === 'boolean') {
     return (
       <label className="flex items-center gap-2 text-xs font-medium">
-        <input
+        <Checkbox
           aria-label={resolvedFieldLabel(field, arrayIndices)}
-          type="checkbox"
           checked={Boolean(value)}
-          style={{ accentColor: 'var(--primary)' }}
-          onChange={(event) => onFieldChange(field.path, event.target.checked, arrayIndices)}
-          onBlur={onFieldBlur}
+          // A checkbox toggle is a discrete commit — onFieldChange commits the
+          // new value and the controlled re-render re-validates. Don't also
+          // call onFieldBlur() here: it reads the pre-commit closure value
+          // (stale) and would validate the old state (Codex/Copilot PR #225).
+          onCheckedChange={(checked) => onFieldChange(field.path, checked === true, arrayIndices)}
         />
         <span>{resolvedFieldLabel(field, arrayIndices)}</span>
         {fieldError ? <FieldError message={fieldError} /> : null}
