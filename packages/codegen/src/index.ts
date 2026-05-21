@@ -72,6 +72,11 @@ export { GenericModelEmitter } from './emit/generic-model-emitter.js';
 // Per-target option blocks (019 spec §3.1).
 export type { ZodOptions, TypescriptOptions, JsonSchemaOptions, SqlOptions, MarkdownOptions } from './types.js';
 
+// Excel option block — Zod schema is the source of truth (the studio's
+// Download config modal renders it via @zod-to-form). 019 spec §5.1.
+export { ExcelOptionsSchema, resolveExcelSheets } from './options/excel-options.js';
+export type { ExcelOptions, ExcelSheetToggles } from './options/excel-options.js';
+
 export type { RuneTypeAlias, Condition, TypeParam } from './types/type-alias.js';
 export type { RuneRule } from './types/rule.js';
 export type { RuneReport } from './types/report.js';

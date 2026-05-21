@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+import type { ExcelOptions } from './options/excel-options.js';
+
 /**
  * Supported generator targets.
  * - `zod`         — FR-002–FR-014 (US1, per-namespace)
@@ -106,6 +108,10 @@ export interface GeneratorOptions {
   'json-schema'?: JsonSchemaOptions;
   sql?: SqlOptions;
   markdown?: MarkdownOptions;
+  // Excel is the first option block defined by a Zod schema (the modal
+  // renders it via @zod-to-form). `ExcelOptions` is inferred from
+  // `ExcelOptionsSchema` in ./options/excel-options.ts.
+  excel?: ExcelOptions;
 }
 
 /**

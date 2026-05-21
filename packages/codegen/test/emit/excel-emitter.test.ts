@@ -192,4 +192,50 @@ describe('ExcelWholeModelEmitter (019 Phase 1)', () => {
     expect(outputs[0]?.binary).toBeDefined();
     expect(outputs[0]?.relativePath).toBe('model.xlsx');
   });
+
+  describe('sheet toggles (§5.1 ExcelOptions)', () => {
+    it('omits a sheet when its toggle is false', async () => {
+      const docs = await parseTwoNamespaces();
+      const outputs = await generate(docs, {
+        target: 'excel',
+        excel: { sheets: { types: true, enums: false, typeAliases: false, conditions: true } }
+      });
+      const wb = await loadWorkbook(outputs[0]!.binary!);
+      const sheetNames = wb.worksheets.map((s) => s.name).sort();
+      expect(sheetNames).toEqual(['Conditions', 'Types']);
+    });
+
+    it('still emits the Conditions sheet when Types is off (conditions iterate data independently)', async () => {
+      const docs = await parseTwoNamespaces();
+      const outputs = await generate(docs, {
+        target: 'excel',
+        excel: { sheets: { types: false, enums: false, typeAliases: false, conditions: true } }
+      });
+      const wb = await loadWorkbook(outputs[0]!.binary!);
+      expect(wb.worksheets.map((s) => s.name)).toEqual(['Conditions']);
+      const conditions = wb.getWorksheet('Conditions')!;
+      // foo.Trade has one condition (NonNegativeQuantity).
+      expect(conditions.rowCount - 1).toBe(1);
+    });
+
+    it('produces a valid (placeholder) workbook when every sheet is toggled off', async () => {
+      const docs = await parseTwoNamespaces();
+      const outputs = await generate(docs, {
+        target: 'excel',
+        excel: { sheets: { types: false, enums: false, typeAliases: false, conditions: false } }
+      });
+      // ExcelJS can't write a sheetless workbook; the emitter floors to one
+      // placeholder sheet so the response is a valid-but-empty .xlsx.
+      const wb = await loadWorkbook(outputs[0]!.binary!);
+      expect(wb.worksheets.length).toBe(1);
+      expect((outputs[0]!.binary as Uint8Array).byteLength).toBeGreaterThan(0);
+    });
+
+    it('defaults to all sheets when no excel options are passed', async () => {
+      const docs = await parseTwoNamespaces();
+      const outputs = await generate(docs, { target: 'excel' });
+      const wb = await loadWorkbook(outputs[0]!.binary!);
+      expect(wb.worksheets.map((s) => s.name).sort()).toEqual(['Conditions', 'Enums', 'TypeAliases', 'Types']);
+    });
+  });
 });

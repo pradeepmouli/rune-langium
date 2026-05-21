@@ -28,6 +28,7 @@
 
 import ExcelJS from 'exceljs';
 import type { GeneratorOptions, GeneratorOutput } from '../types.js';
+import { resolveExcelSheets } from '../options/excel-options.js';
 import type { WholeModelEmitter } from './namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import type { NamespaceWalkResult } from './namespace-walker.js';
@@ -119,8 +120,13 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
   async emit(
     walks: ReadonlyMap<string, NamespaceWalkResult>,
     _registry: NamespaceRegistry,
-    _options: GeneratorOptions
+    options: GeneratorOptions
   ): Promise<GeneratorOutput[]> {
+    // §5.1 sheet toggles. Defaults are all-true (resolveExcelSheets applies
+    // the schema defaults), so a request without `options.excel` keeps
+    // producing the full workbook. The modal narrows the set per-download.
+    const sheets = resolveExcelSheets(options.excel);
+
     const workbook = new ExcelJS.Workbook();
     workbook.creator = '@rune-langium/codegen';
     // SC-007 determinism: ExcelJS serializes BOTH `created` and `modified`
@@ -130,30 +136,47 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
     workbook.created = epoch;
     workbook.modified = epoch;
 
-    const typesSheet = addSheet(workbook, 'Types', [
-      { header: 'Namespace', key: 'namespace', width: 28 },
-      { header: 'Name', key: 'name', width: 28 },
-      { header: 'Super Type', key: 'superType', width: 24 },
-      { header: 'Attributes', key: 'attrCount', width: 12 },
-      { header: 'Conditions', key: 'condCount', width: 12 }
-    ]);
-    const enumsSheet = addSheet(workbook, 'Enums', [
-      { header: 'Namespace', key: 'namespace', width: 28 },
-      { header: 'Name', key: 'name', width: 28 },
-      { header: 'Members', key: 'memberCount', width: 12 },
-      { header: 'Member Names', key: 'memberNames', width: 60 }
-    ]);
-    const aliasSheet = addSheet(workbook, 'TypeAliases', [
-      { header: 'Namespace', key: 'namespace', width: 28 },
-      { header: 'Name', key: 'name', width: 28 },
-      { header: 'Base Type', key: 'baseType', width: 28 }
-    ]);
-    const conditionsSheet = addSheet(workbook, 'Conditions', [
-      { header: 'Namespace', key: 'namespace', width: 28 },
-      { header: 'Owning Type', key: 'owningType', width: 28 },
-      { header: 'Condition', key: 'condition', width: 28 },
-      { header: 'Expression', key: 'expression', width: 80 }
-    ]);
+    const typesSheet = sheets.types
+      ? addSheet(workbook, 'Types', [
+          { header: 'Namespace', key: 'namespace', width: 28 },
+          { header: 'Name', key: 'name', width: 28 },
+          { header: 'Super Type', key: 'superType', width: 24 },
+          { header: 'Attributes', key: 'attrCount', width: 12 },
+          { header: 'Conditions', key: 'condCount', width: 12 }
+        ])
+      : undefined;
+    const enumsSheet = sheets.enums
+      ? addSheet(workbook, 'Enums', [
+          { header: 'Namespace', key: 'namespace', width: 28 },
+          { header: 'Name', key: 'name', width: 28 },
+          { header: 'Members', key: 'memberCount', width: 12 },
+          { header: 'Member Names', key: 'memberNames', width: 60 }
+        ])
+      : undefined;
+    const aliasSheet = sheets.typeAliases
+      ? addSheet(workbook, 'TypeAliases', [
+          { header: 'Namespace', key: 'namespace', width: 28 },
+          { header: 'Name', key: 'name', width: 28 },
+          { header: 'Base Type', key: 'baseType', width: 28 }
+        ])
+      : undefined;
+    const conditionsSheet = sheets.conditions
+      ? addSheet(workbook, 'Conditions', [
+          { header: 'Namespace', key: 'namespace', width: 28 },
+          { header: 'Owning Type', key: 'owningType', width: 28 },
+          { header: 'Condition', key: 'condition', width: 28 },
+          { header: 'Expression', key: 'expression', width: 80 }
+        ])
+      : undefined;
+
+    // ExcelJS requires at least one worksheet to write a valid workbook.
+    // If every sheet was toggled off, add a placeholder so writeBuffer()
+    // doesn't throw — an empty-but-valid .xlsx is a saner result than a
+    // 500. (The modal disables Generate when no sheet is selected, so this
+    // is a defensive floor, not a routine path.)
+    if (!typesSheet && !enumsSheet && !aliasSheet && !conditionsSheet) {
+      addSheet(workbook, 'Model', [{ header: 'Namespace', key: 'namespace', width: 28 }]);
+    }
 
     // Sort namespaces for deterministic output (SC-007). Within each
     // namespace, the walker's `emitOrder` is the authoritative topo-sort
@@ -165,65 +188,76 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
     for (const namespace of sortedNamespaces) {
       const walk = walks.get(namespace)!;
 
-      const dataIterationOrder: string[] = [];
-      const seen = new Set<string>();
-      for (const typeName of walk.emitOrder) {
-        if (walk.dataByName.has(typeName)) {
-          dataIterationOrder.push(typeName);
-          seen.add(typeName);
-        }
-      }
-      for (const typeName of walk.dataByName.keys()) {
-        if (!seen.has(typeName)) dataIterationOrder.push(typeName);
-      }
-
-      for (const name of dataIterationOrder) {
-        const data = walk.dataByName.get(name)!;
-        typesSheet.addRow({
-          namespace,
-          name,
-          superType: superTypeName(data as { superType?: { ref?: { name?: unknown } | null } | null }),
-          attrCount: attributeCount(data as { attributes?: { length?: number } }),
-          condCount: conditionCount(data as { conditions?: { length?: number } })
-        });
-        const conditions = (
-          data as {
-            conditions?: ReadonlyArray<{
-              name?: unknown;
-              expression?: { $cstNode?: { text?: string } } | null;
-            }>;
-          }
-        ).conditions;
-        if (conditions) {
-          for (const condition of conditions) {
-            conditionsSheet.addRow({
-              namespace,
-              owningType: name,
-              condition: typeof condition.name === 'string' ? condition.name : '',
-              expression: conditionExpressionText(condition)
-            });
+      // Walk data types when EITHER the Types or Conditions sheet is on —
+      // condition rows are derived from data-type bodies, so they share the
+      // same iteration even though they land on different sheets.
+      if (typesSheet || conditionsSheet) {
+        const dataIterationOrder: string[] = [];
+        const seen = new Set<string>();
+        for (const typeName of walk.emitOrder) {
+          if (walk.dataByName.has(typeName)) {
+            dataIterationOrder.push(typeName);
+            seen.add(typeName);
           }
         }
+        for (const typeName of walk.dataByName.keys()) {
+          if (!seen.has(typeName)) dataIterationOrder.push(typeName);
+        }
+
+        for (const name of dataIterationOrder) {
+          const data = walk.dataByName.get(name)!;
+          typesSheet?.addRow({
+            namespace,
+            name,
+            superType: superTypeName(data as { superType?: { ref?: { name?: unknown } | null } | null }),
+            attrCount: attributeCount(data as { attributes?: { length?: number } }),
+            condCount: conditionCount(data as { conditions?: { length?: number } })
+          });
+          if (conditionsSheet) {
+            const conditions = (
+              data as {
+                conditions?: ReadonlyArray<{
+                  name?: unknown;
+                  expression?: { $cstNode?: { text?: string } } | null;
+                }>;
+              }
+            ).conditions;
+            if (conditions) {
+              for (const condition of conditions) {
+                conditionsSheet.addRow({
+                  namespace,
+                  owningType: name,
+                  condition: typeof condition.name === 'string' ? condition.name : '',
+                  expression: conditionExpressionText(condition)
+                });
+              }
+            }
+          }
+        }
       }
 
-      for (const [name, enumNode] of walk.enumByName) {
-        const members = enumMemberNames(enumNode as { enumValues?: ReadonlyArray<{ name?: unknown }> });
-        enumsSheet.addRow({
-          namespace,
-          name,
-          memberCount: members.length,
-          memberNames: members.join(', ')
-        });
+      if (enumsSheet) {
+        for (const [name, enumNode] of walk.enumByName) {
+          const members = enumMemberNames(enumNode as { enumValues?: ReadonlyArray<{ name?: unknown }> });
+          enumsSheet.addRow({
+            namespace,
+            name,
+            memberCount: members.length,
+            memberNames: members.join(', ')
+          });
+        }
       }
 
-      for (const [name, alias] of walk.typeAliasByName) {
-        aliasSheet.addRow({
-          namespace,
-          name,
-          baseType: typeAliasBaseName(
-            alias as { typeCall?: { type?: { ref?: { name?: unknown } | null } | null } | null }
-          )
-        });
+      if (aliasSheet) {
+        for (const [name, alias] of walk.typeAliasByName) {
+          aliasSheet.addRow({
+            namespace,
+            name,
+            baseType: typeAliasBaseName(
+              alias as { typeCall?: { type?: { ref?: { name?: unknown } | null } | null } | null }
+            )
+          });
+        }
       }
     }
 
