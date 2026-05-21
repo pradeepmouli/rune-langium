@@ -4,6 +4,9 @@
 /**
  * Tests for ReferencePicker — scope-aware variable picker.
  *
+ * NOTE: ReferencePicker now uses DS Popover (renders via Portal into
+ * document.body) + Command (cmdk). Queries target document.body.
+ *
  * @module
  */
 
@@ -23,49 +26,43 @@ const testScope: FunctionScope = {
 
 describe('ReferencePicker', () => {
   it('does not render when closed', () => {
-    const { container } = render(
-      <ReferencePicker open={false} scope={testScope} onSelect={vi.fn()} onClose={vi.fn()} />
-    );
-    expect(container.querySelector('[data-testid="reference-picker"]')).toBeNull();
+    render(<ReferencePicker open={false} scope={testScope} onSelect={vi.fn()} onClose={vi.fn()} />);
+    // Popover portal content should not be in DOM when closed
+    expect(document.body.querySelector('[data-testid="reference-picker"]')).toBeNull();
   });
 
   it('shows all scope entries when open', () => {
-    const { container } = render(
-      <ReferencePicker open={true} scope={testScope} onSelect={vi.fn()} onClose={vi.fn()} />
-    );
-    expect(container.textContent).toContain('trade');
-    expect(container.textContent).toContain('parties');
-    expect(container.textContent).toContain('result');
-    expect(container.textContent).toContain('price');
+    render(<ReferencePicker open={true} scope={testScope} onSelect={vi.fn()} onClose={vi.fn()} />);
+    const picker = document.body.querySelector('[data-testid="reference-picker"]')!;
+    expect(picker.textContent).toContain('trade');
+    expect(picker.textContent).toContain('parties');
+    expect(picker.textContent).toContain('result');
+    expect(picker.textContent).toContain('price');
   });
 
   it('shows type and cardinality', () => {
-    const { container } = render(
-      <ReferencePicker open={true} scope={testScope} onSelect={vi.fn()} onClose={vi.fn()} />
-    );
-    expect(container.textContent).toContain('Trade');
-    expect(container.textContent).toContain('1..1');
+    render(<ReferencePicker open={true} scope={testScope} onSelect={vi.fn()} onClose={vi.fn()} />);
+    const picker = document.body.querySelector('[data-testid="reference-picker"]')!;
+    expect(picker.textContent).toContain('Trade');
+    expect(picker.textContent).toContain('1..1');
   });
 
   it('shows origin badges', () => {
-    const { container } = render(
-      <ReferencePicker open={true} scope={testScope} onSelect={vi.fn()} onClose={vi.fn()} />
-    );
-    expect(container.textContent).toContain('input');
-    expect(container.textContent).toContain('output');
-    expect(container.textContent).toContain('alias');
+    render(<ReferencePicker open={true} scope={testScope} onSelect={vi.fn()} onClose={vi.fn()} />);
+    const picker = document.body.querySelector('[data-testid="reference-picker"]')!;
+    expect(picker.textContent).toContain('input');
+    expect(picker.textContent).toContain('output');
+    expect(picker.textContent).toContain('alias');
   });
 
   it('creates RosettaSymbolReference on select', () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();
-    const { container } = render(
-      <ReferencePicker open={true} scope={testScope} onSelect={onSelect} onClose={onClose} />
-    );
+    render(<ReferencePicker open={true} scope={testScope} onSelect={onSelect} onClose={onClose} />);
 
-    const tradeButton = container.querySelector('[data-testid="ref-option-trade"]');
-    expect(tradeButton).toBeTruthy();
-    fireEvent.click(tradeButton!);
+    const tradeItem = document.body.querySelector('[data-testid="ref-option-trade"]');
+    expect(tradeItem).toBeTruthy();
+    fireEvent.click(tradeItem!);
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     const node = onSelect.mock.calls[0][0];
@@ -76,9 +73,8 @@ describe('ReferencePicker', () => {
 
   it('shows message for empty scope', () => {
     const emptyScope: FunctionScope = { inputs: [], output: null, aliases: [] };
-    const { container } = render(
-      <ReferencePicker open={true} scope={emptyScope} onSelect={vi.fn()} onClose={vi.fn()} />
-    );
-    expect(container.textContent).toContain('No variables in scope');
+    render(<ReferencePicker open={true} scope={emptyScope} onSelect={vi.fn()} onClose={vi.fn()} />);
+    const picker = document.body.querySelector('[data-testid="reference-picker"]')!;
+    expect(picker.textContent).toContain('No variables in scope');
   });
 });

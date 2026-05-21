@@ -6,9 +6,22 @@
  *
  * Provides actions like "Show only this & neighbors", "Hide node",
  * and "Show all nodes" to control graph visibility.
+ *
+ * Uses the DS DropdownMenu primitive (Radix) anchored at cursor coordinates
+ * via a fixed zero-size trigger span.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@rune-langium/design-system/ui/dropdown-menu';
 import { useEditorStore } from '../store/editor-store.js';
 import type { LayoutEngine, TypeGraphNode } from '../types.js';
 
@@ -28,31 +41,11 @@ export interface GraphContextMenuProps {
 }
 
 export function GraphContextMenu({ state, layoutEngine, onLayoutEngineChange, onClose }: GraphContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
   const isolateNode = useEditorStore((s) => s.isolateNode);
   const revealNeighbors = useEditorStore((s) => s.revealNeighbors);
   const showAllNodes = useEditorStore((s) => s.showAllNodes);
   const toggleNodeVisibility = useEditorStore((s) => s.toggleNodeVisibility);
   const selectNode = useEditorStore((s) => s.selectNode);
-
-  // Close on click outside or Escape
-  useEffect(() => {
-    if (!state) return;
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [state, onClose]);
 
   const handleIsolate = useCallback(() => {
     if (state?.node) {
@@ -89,76 +82,82 @@ export function GraphContextMenu({ state, layoutEngine, onLayoutEngineChange, on
     [onClose, onLayoutEngineChange]
   );
 
-  if (!state) return null;
-
-  const nodeName = state.node?.data?.name ?? 'Unknown';
+  const nodeName = state?.node?.data?.name ?? 'Unknown';
 
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-50 min-w-[200px] rounded-md border border-border bg-popover/95 backdrop-blur-sm shadow-lg py-1 text-sm"
-      style={{ left: state.x, top: state.y }}
-      role="menu"
+    <DropdownMenu
+      open={state !== null}
+      // Non-modal: this is a context menu floating over the graph canvas, so
+      // it must NOT lock pointer events / scroll on the rest of the page
+      // (Codex P2 #227).
+      modal={false}
+      onOpenChange={(open: boolean) => {
+        if (!open) onClose();
+      }}
     >
-      {state.node && (
-        <>
-          {/* Header */}
-          <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground truncate border-b border-border mb-1">
-            {nodeName}
-          </div>
-          <button
-            className="flex items-center w-full px-3 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
-            onClick={handleRevealNeighbors}
-            role="menuitem"
-          >
-            <span className="w-4 mr-2 text-center">◉</span>
-            Show related nodes
-          </button>
-          <button
-            className="flex items-center w-full px-3 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
-            onClick={handleIsolate}
-            role="menuitem"
-          >
-            <span className="w-4 mr-2 text-center">⊙</span>
-            Focus on this & neighbors
-          </button>
-          <button
-            className="flex items-center w-full px-3 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
-            onClick={handleHideNode}
-            role="menuitem"
-          >
-            <span className="w-4 mr-2 text-center">⊘</span>
-            Hide this node
-          </button>
-        </>
-      )}
-      <button
-        className="flex items-center w-full px-3 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
-        onClick={handleShowAll}
-        role="menuitem"
+      {/*
+       * Virtual trigger: a fixed zero-size element placed at cursor coordinates.
+       * Radix anchors the content to this element, achieving "position at cursor"
+       * without needing a real interactive button in the DOM flow.
+       */}
+      <DropdownMenuTrigger asChild>
+        <span
+          aria-hidden
+          style={{
+            position: 'fixed',
+            left: state?.x ?? 0,
+            top: state?.y ?? 0,
+            width: 0,
+            height: 0,
+            pointerEvents: 'none'
+          }}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        sideOffset={0}
+        data-testid="graph-context-menu"
+        // The trigger is a zero-size aria-hidden span (cursor anchor), so
+        // Radix's default focus-return-to-trigger would land on a
+        // non-focusable element. Prevent it; focus returns to the document
+        // naturally (Copilot #227).
+        onCloseAutoFocus={(e) => e.preventDefault()}
       >
-        <span className="w-4 mr-2 text-center">◎</span>
-        Show all nodes
-      </button>
-      <div className="mx-2 my-1 h-px bg-border" />
-      <button
-        className="flex items-center w-full px-3 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
-        onClick={() => handleUseEngine('elk')}
-        role="menuitem"
-        aria-pressed={layoutEngine === 'elk'}
-      >
-        <span className="w-4 mr-2 text-center">{layoutEngine === 'elk' ? '●' : '○'}</span>
-        Use ELK layout
-      </button>
-      <button
-        className="flex items-center w-full px-3 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
-        onClick={() => handleUseEngine('dagre')}
-        role="menuitem"
-        aria-pressed={layoutEngine === 'dagre'}
-      >
-        <span className="w-4 mr-2 text-center">{layoutEngine === 'dagre' ? '●' : '○'}</span>
-        Use Dagre layout
-      </button>
-    </div>
+        {state?.node && (
+          <>
+            <DropdownMenuLabel className="truncate">{nodeName}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleRevealNeighbors}>
+              <span className="w-4 text-center">◉</span>
+              Show related nodes
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleIsolate}>
+              <span className="w-4 text-center">⊙</span>
+              Focus on this &amp; neighbors
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleHideNode}>
+              <span className="w-4 text-center">⊘</span>
+              Hide this node
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuItem onClick={handleShowAll}>
+          <span className="w-4 text-center">◎</span>
+          Show all nodes
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {/* Layout engine is a mutually-exclusive choice → RadioGroup, not
+            menuitem+aria-pressed (invalid ARIA for role=menuitem). The radio
+            item renders its own selected indicator. (Copilot #227) */}
+        <DropdownMenuRadioGroup
+          value={layoutEngine}
+          onValueChange={(v) => handleUseEngine(v as 'elk' | 'dagre')}
+        >
+          <DropdownMenuRadioItem value="elk">Use ELK layout</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dagre">Use Dagre layout</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
