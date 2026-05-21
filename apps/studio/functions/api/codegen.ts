@@ -68,6 +68,13 @@ interface CodegenRequestBody {
    * 019 Task #88.
    */
   curatedBundles?: Array<{ id: string; version: string }>;
+  /**
+   * Optional namespace allowlist (019 spec §5.1/§5.3). The Download config
+   * modal sends the dependency-closed subset (selected ∪ transitively
+   * pulled). Passed straight through to `generate()` as `options.namespaces`.
+   * Absent for legacy/direct callers → all namespaces emitted.
+   */
+  namespaces?: string[];
 }
 
 /**
@@ -134,6 +141,13 @@ function isValidRequest(body: unknown): body is CodegenRequestBody {
           typeof (entry as { version?: unknown }).version === 'string'
       )
     ) {
+      return false;
+    }
+  }
+  // 019 §5.3 — `namespaces`, when present, must be an array of strings.
+  const ns = (body as { namespaces?: unknown }).namespaces;
+  if (ns !== undefined) {
+    if (!Array.isArray(ns) || !ns.every((n) => typeof n === 'string')) {
       return false;
     }
   }
@@ -346,6 +360,13 @@ async function zipResponse(outputs: readonly GeneratorOutput[], filename: string
  */
 function applyPagesFunctionDefaults(body: CodegenRequestBody): Record<string, unknown> {
   const result: Record<string, unknown> = { target: body.target, ...body.options };
+  // 019 §5.3 — forward the namespace allowlist to generate(). Empty array
+  // is treated as "no filter" (omit) so an accidental empty selection
+  // doesn't silently emit nothing; the modal disables Generate on an empty
+  // set, and direct callers that want everything just omit the field.
+  if (Array.isArray(body.namespaces) && body.namespaces.length > 0) {
+    result.namespaces = body.namespaces;
+  }
   const target = body.target;
   const serverDefault = PAGES_FUNCTION_DEFAULT_LAYOUT[target];
   if (!serverDefault) return result;

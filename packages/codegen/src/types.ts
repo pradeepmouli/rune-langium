@@ -99,6 +99,18 @@ export interface GeneratorOptions {
    * Do NOT set when requiring byte-identical output (SC-007).
    */
   headerComment?: string;
+  /**
+   * Optional namespace allowlist (019 spec §5.1/§5.3). When present, only
+   * these namespaces are emitted; everything else in the parsed workspace
+   * is dropped before registry-build + walk. When absent, all namespaces
+   * are emitted (existing behavior — CLI / direct callers see no change).
+   *
+   * The caller is responsible for passing a dependency-closed set — the
+   * studio's Download modal computes the transitive closure (§5.2) so
+   * emitted code never references a dropped namespace. A non-closed set
+   * passed directly may produce output with unresolved imports.
+   */
+  namespaces?: readonly string[];
 
   // 019 spec §3.1 — per-target option blocks. Each emitter reads its
   // own slot. TS structural typing narrows access via `options[target]`

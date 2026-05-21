@@ -121,3 +121,42 @@ describe('resolveImportPath unit tests', () => {
     expect(resolveImportPath('a.b', 'a', emptyRegistry)).toBe('..');
   });
 });
+
+describe('019 §5.3: namespace allowlist filter', () => {
+  it('emits only the allowlisted namespaces', async () => {
+    const docs = await parseFixtureFiles('inheritance');
+    const outputs = await generate(docs, {
+      target: 'typescript',
+      namespaces: ['test.base']
+    });
+    // Only test.base survives; test.derived is filtered out.
+    expect(outputs.every((o) => !o.relativePath.includes('derived'))).toBe(true);
+    expect(outputs.some((o) => o.relativePath.includes('base'))).toBe(true);
+  });
+
+  it('emits everything when no allowlist is passed', async () => {
+    const docs = await parseFixtureFiles('inheritance');
+    const outputs = await generate(docs, { target: 'typescript' });
+    expect(outputs.some((o) => o.relativePath.includes('base'))).toBe(true);
+    expect(outputs.some((o) => o.relativePath.includes('derived'))).toBe(true);
+  });
+
+  it('returns [] when the allowlist matches no loaded namespace', async () => {
+    const docs = await parseFixtureFiles('inheritance');
+    const outputs = await generate(docs, {
+      target: 'typescript',
+      namespaces: ['nonexistent.ns']
+    });
+    expect(outputs).toEqual([]);
+  });
+
+  it('keeps a dependency-closed pair together (base + derived)', async () => {
+    const docs = await parseFixtureFiles('inheritance');
+    const outputs = await generate(docs, {
+      target: 'typescript',
+      namespaces: ['test.base', 'test.derived']
+    });
+    expect(outputs.some((o) => o.relativePath.includes('base'))).toBe(true);
+    expect(outputs.some((o) => o.relativePath.includes('derived'))).toBe(true);
+  });
+});

@@ -221,7 +221,20 @@ export async function runGenerate(docs: LangiumDocument[], options: GeneratorOpt
     ];
   } else {
     // Group by namespace
-    const byNamespace = groupByNamespace(docs);
+    const allByNamespace = groupByNamespace(docs);
+    if (allByNamespace.size === 0) {
+      return [];
+    }
+
+    // 019 §5.1/§5.3 — apply the optional namespace allowlist. Filtering
+    // here (before registry-build + walk) means the registry only knows
+    // about the kept namespaces, so import resolution stays scoped to the
+    // emitted set. The caller passes a dependency-closed allowlist (the
+    // modal's §5.2 cascade guarantees this), so no kept namespace imports
+    // a dropped one. An unknown name in the allowlist is simply ignored.
+    const byNamespace = options.namespaces
+      ? new Map(Array.from(allByNamespace).filter(([ns]) => options.namespaces!.includes(ns)))
+      : allByNamespace;
     if (byNamespace.size === 0) {
       return [];
     }
