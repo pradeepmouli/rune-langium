@@ -516,14 +516,27 @@ function emitCyclicInterface(data: Data, ctx: EmissionContext): string {
 }
 
 /**
- * Merged builtin type map from the TypeScript profile.
- * Used for generating TypeScript interface declarations alongside Zod schemas.
- * Combines basicTypeMap ∪ recordTypeMap ∪ typeAliasMap.
+ * Builtin → TypeScript type map for the interface declarations the Zod
+ * emitter emits ALONGSIDE each schema. These must match what the companion
+ * Zod schema *infers*, not the pure-TS target's representation.
+ *
+ * Critical for the temporal builtins: the Zod schemas use `z.iso.date()` /
+ * `z.iso.time()` / `z.iso.datetime()`, all of which infer `string`. The
+ * pure-TS target (ts-emitter / typescriptProfile) maps those to `Temporal.*`
+ * because it has no schema to stay consistent with — but if the Zod emitter
+ * used `Temporal.*` here, the emitted `interface` would diverge from
+ * `z.infer<typeof Schema>` (and break cyclic `z.lazy()` interface types that
+ * annotate the schema). So override the four temporal builtins to `string`.
+ * Codex P1 on PR #224.
  */
 const ZOD_TS_TYPE_MAP: Readonly<Record<string, string>> = {
   ...typescriptProfile.basicTypeMap,
   ...typescriptProfile.recordTypeMap,
-  ...typescriptProfile.typeAliasMap
+  ...typescriptProfile.typeAliasMap,
+  time: 'string',
+  date: 'string',
+  dateTime: 'string',
+  zonedDateTime: 'string'
 } as Record<string, string>;
 
 /**

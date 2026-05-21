@@ -247,6 +247,30 @@ function resolveTypeExprAsTs(attr: Attribute, ctx: EmissionContext): string {
 }
 
 /**
+ * Build a positive type-guard expression for a scalar/object builtin field.
+ *
+ * Object-typed builtins (the `Temporal.*` record mappings — date/dateTime/
+ * zonedDateTime/time) can't use a bare `typeof x === 'object'` check: that's
+ * also true for `null` and arrays. Reject both explicitly so the guard is
+ * sound (Codex/Copilot review on PR #224). Scalar builtins keep the plain
+ * `typeof x === '<t>'` check.
+ */
+function posTypeofGuard(access: string, typeofStr: string): string {
+  if (typeofStr === 'object') {
+    return `(typeof ${access} === 'object' && ${access} !== null && !Array.isArray(${access}))`;
+  }
+  return `typeof ${access} === '${typeofStr}'`;
+}
+
+/** Negated form of {@link posTypeofGuard} (true when the field does NOT match). */
+function negTypeofGuard(access: string, typeofStr: string): string {
+  if (typeofStr === 'object') {
+    return `(typeof ${access} !== 'object' || ${access} === null || Array.isArray(${access}))`;
+  }
+  return `typeof ${access} !== '${typeofStr}'`;
+}
+
+/**
  * Resolve the JS typeof string for an attribute's base type.
  * Returns undefined when the type is not a scalar (e.g., Data reference).
  * T108.
@@ -481,13 +505,13 @@ function buildTypeGuardChecks(data: Data, ctx: EmissionContext): string[] {
       }
     } else if (isOpt) {
       if (typeofStr) {
-        lines.push(
-          `  if ((${obj} as Record<string, unknown>).${attr.name} !== undefined && typeof (${obj} as Record<string, unknown>).${attr.name} !== '${typeofStr}') return false;`
-        );
+        const access = `(${obj} as Record<string, unknown>).${attr.name}`;
+        lines.push(`  if (${access} !== undefined && ${negTypeofGuard(access, typeofStr)}) return false;`);
       }
     } else {
       if (typeofStr) {
-        lines.push(`  if (typeof (${obj} as Record<string, unknown>).${attr.name} !== '${typeofStr}') return false;`);
+        const access = `(${obj} as Record<string, unknown>).${attr.name}`;
+        lines.push(`  if (${negTypeofGuard(access, typeofStr)}) return false;`);
       } else {
         lines.push(`  if ((${obj} as Record<string, unknown>).${attr.name} === undefined) return false;`);
       }
@@ -574,11 +598,11 @@ function emitDiscriminatorPredicate(child: Data, parent: Data, ctx: EmissionCont
       checks.push(`Array.isArray(${obj}.${attr.name})`);
     } else if (isOpt) {
       if (typeofStr) {
-        checks.push(`(${obj}.${attr.name} === undefined || typeof ${obj}.${attr.name} === '${typeofStr}')`);
+        checks.push(`(${obj}.${attr.name} === undefined || ${posTypeofGuard(`${obj}.${attr.name}`, typeofStr)})`);
       }
     } else {
       if (typeofStr) {
-        checks.push(`typeof ${obj}.${attr.name} === '${typeofStr}'`);
+        checks.push(posTypeofGuard(`${obj}.${attr.name}`, typeofStr));
       } else {
         checks.push(`${obj}.${attr.name} !== undefined`);
       }
