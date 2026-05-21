@@ -79,13 +79,18 @@ export function SyncStatusBadge({ status, onResolve }: SyncStatusBadgeProps): Re
   }
 
   if (phase === 'blocked') {
-    // The engine emits `blocked` for several reasons. Only a TRUE merge
-    // conflict carries `conflictPaths` AND a pending ConflictPolicy.onConflict
-    // promise that the resolve buttons can fulfil. Other blocked reasons
-    // (auth, no_push_access, non_fast_forward) have no pending promise, so
-    // showing resolve buttons there would leave the engine stuck forever —
-    // surface an informative message instead.
-    if (status.conflictPaths?.length) {
+    // The engine emits `blocked` for several reasons. A merge conflict —
+    // including one where the conflicting file list is empty (unsupported-merge
+    // path) — carries `conflictPaths` (defined, possibly []) AND has a pending
+    // ConflictPolicy.onConflict promise that the resolve buttons must fulfil.
+    // Other blocked reasons (auth, no_push_access, non_fast_forward) have
+    // `conflictPaths === undefined`; showing resolve buttons there would leave
+    // the engine stuck forever — surface an informative message instead.
+    if (status.conflictPaths !== undefined) {
+      const conflictMsg =
+        status.conflictPaths.length > 0
+          ? 'Merge conflict — choose a resolution'
+          : "Couldn't auto-merge — choose a resolution";
       return (
         <span
           data-testid="sync-status"
@@ -93,7 +98,7 @@ export function SyncStatusBadge({ status, onResolve }: SyncStatusBadgeProps): Re
           className="inline-flex items-center gap-1.5 text-xs text-amber-500"
         >
           <AlertTriangle className="size-3 shrink-0" />
-          <span>Merge conflict — choose a resolution</span>
+          <span>{conflictMsg}</span>
           <Button
             type="button"
             variant="outline"

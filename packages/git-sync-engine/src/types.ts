@@ -82,5 +82,6 @@ export interface GitSyncEngine {
   syncNow(): Promise<SyncStatus>;
   getState(): SyncStatus;
   subscribe(cb: (s: SyncStatus) => void): () => void;
+  unsubscribe(cb: (s: SyncStatus) => void): void;
   dispose(): void;
 }

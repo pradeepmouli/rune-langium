@@ -14,12 +14,19 @@ describe('SyncStatusBadge', () => {
     render(<SyncStatusBadge status={{ phase: 'pushing', ahead: 1, behind: 0, lastSyncedSha: null }} onResolve={() => {}} />);
     expect(screen.getByTestId('sync-status').getAttribute('data-phase')).toBe('pushing');
   });
-  it('shows resolve actions when blocked', () => {
+  it('shows resolve actions when blocked with non-empty conflictPaths', () => {
     render(<SyncStatusBadge status={{ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: ['a'] }} onResolve={() => {}} />);
     expect(screen.getByTestId('sync-resolve-keep-mine')).toBeTruthy();
     expect(screen.getByTestId('sync-resolve-take-remote')).toBeTruthy();
+    expect(screen.getByText(/Merge conflict/i)).toBeTruthy();
   });
-  it('shows an error message (no resolve buttons) when blocked without a conflict', () => {
+  it('shows resolve actions when blocked with empty conflictPaths (unsupported-merge path)', () => {
+    render(<SyncStatusBadge status={{ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: [] }} onResolve={() => {}} />);
+    expect(screen.getByTestId('sync-resolve-keep-mine')).toBeTruthy();
+    expect(screen.getByTestId('sync-resolve-take-remote')).toBeTruthy();
+    expect(screen.getByText(/auto-merge/i)).toBeTruthy();
+  });
+  it('shows an error message (no resolve buttons) when blocked without conflictPaths + auth error', () => {
     render(<SyncStatusBadge status={{ phase: 'blocked', ahead: 1, behind: 0, lastSyncedSha: null, lastError: { code: 'auth', message: 'HTTP 401' } }} onResolve={() => {}} />);
     expect(screen.getByTestId('sync-status').getAttribute('data-phase')).toBe('blocked');
     expect(screen.queryByTestId('sync-resolve-keep-mine')).toBeNull();

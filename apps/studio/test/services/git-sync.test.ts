@@ -3,6 +3,14 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Prevent IndexedDB access in the test environment — the persistence layer is
+// not under test here and would throw "indexedDB is not defined" on any emit
+// that reaches the internal persist subscriber.
+vi.mock('../../src/workspace/persistence.js', () => ({
+  loadWorkspace: vi.fn().mockResolvedValue(null),
+  saveWorkspace: vi.fn().mockResolvedValue(undefined)
+}));
+
 // vi.mock is hoisted, so the factory must not reference top-level variables
 // declared later in the file. Use vi.hoisted() to share state across the
 // hoisted boundary.
@@ -18,16 +26,21 @@ vi.mock('@rune-langium/git-sync-engine', () => ({
   createGitSyncEngine: (opts: unknown) => {
     created.push(opts);
     const subs = new Set<(s: object) => void>();
+    let engineState: object = { phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: null };
     return {
       notifyDirty: vi.fn(),
       syncNow: vi.fn(),
-      getState,
+      getState: () => engineState,
       subscribe: (cb: (s: object) => void) => {
         subs.add(cb);
         subscribeCbs.push(cb);
         return () => subs.delete(cb);
       },
-      dispose: vi.fn()
+      unsubscribe: (cb: (s: object) => void) => { subs.delete(cb); },
+      dispose: vi.fn(),
+      // Test seams: emit a new state to all subscribers; query current sub count.
+      __emit: (s: object) => { engineState = s; subs.forEach(cb => cb(s)); },
+      __subCount: () => subs.size,
     };
   }
 }));
@@ -36,6 +49,7 @@ import {
   getOrCreateSyncEngine,
   subscribeToEngine,
   disposeSyncEngine,
+  getSyncEngine,
   defaultGitProxyUrl
 } from '../../src/services/git-sync.js';
 
@@ -130,5 +144,56 @@ describe('subscribeToEngine', () => {
     });
     // Pending was cleared by dispose, so no call.
     expect(calls).toHaveLength(0);
+  });
+
+  it('subscribe-before-create: each emit reaches cb EXACTLY once (no double-subscribe leak)', () => {
+    const wsId = 'ws-leak-check';
+    const calls: object[] = [];
+    subscribeToEngine(wsId, (s) => calls.push(s));
+
+    getOrCreateSyncEngine({
+      fs: {} as never,
+      workspaceId: wsId,
+      gitBacking: { ...GIT_BACKING, tokenPath: `/${wsId}/.studio/token` }
+    });
+
+    // Initial state call from drain + exactly one live subscriber.
+    expect(calls).toHaveLength(1);
+
+    const engine = getSyncEngine(wsId) as any;
+    expect(engine.__subCount()).toBe(
+      // The engine has: the internal persist subscriber + the drained cb.
+      // We only care that __subCount doesn't double-count our cb.
+      engine.__subCount()  // capture for emit test below
+    );
+    const beforeEmit = calls.length;
+    engine.__emit({ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: 'abc' });
+    // Our cb should have been called exactly once more (not twice).
+    expect(calls.length - beforeEmit).toBe(1);
+  });
+
+  it('unsubscribe (returned from pre-create call) stops all future deliveries and leaves no leak', () => {
+    const wsId = 'ws-leak-unsub';
+    const calls: object[] = [];
+    const unsub = subscribeToEngine(wsId, (s) => calls.push(s));
+
+    getOrCreateSyncEngine({
+      fs: {} as never,
+      workspaceId: wsId,
+      gitBacking: { ...GIT_BACKING, tokenPath: `/${wsId}/.studio/token` }
+    });
+
+    const engine = getSyncEngine(wsId) as any;
+    const subCountAfterCreate = engine.__subCount();
+
+    unsub(); // Should remove cb from the live engine.
+
+    // Sub count should have dropped by exactly 1.
+    expect(engine.__subCount()).toBe(subCountAfterCreate - 1);
+
+    const beforeEmit = calls.length;
+    engine.__emit({ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: 'xyz' });
+    // cb must NOT be called after unsubscribe.
+    expect(calls.length).toBe(beforeEmit);
   });
 });

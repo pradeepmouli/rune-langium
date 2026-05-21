@@ -18,7 +18,7 @@ import { loadWorkspaceToken } from './github-auth.js';
 export function phaseToSyncState(s: SyncStatus): GitBackingRecord['syncState'] {
   switch (s.phase) {
     case 'blocked':
-      return s.conflictPaths?.length ? 'conflict' : 'diverged';
+      return s.conflictPaths !== undefined ? 'conflict' : 'diverged';
     case 'offline':
       return s.ahead > 0 ? 'ahead' : 'clean';
     case 'idle':
@@ -131,6 +131,11 @@ export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
  *   (and called with initial state) the moment `getOrCreateSyncEngine` creates
  *   the engine. Returns an unsubscribe that removes `cb` from the queue — or,
  *   if it was already drained into a live engine, from the engine itself.
+ *
+ * Design: `cb` identity is used throughout (no wrapper). The drain path in
+ * `getOrCreateSyncEngine` calls `engine.subscribe(cb)` directly, so the same
+ * function pointer is registered. The returned unsubscribe checks whichever
+ * state is current at the time it is called.
  */
 export function subscribeToEngine(workspaceId: string, cb: (s: SyncStatus) => void): () => void {
   const engine = engines.get(workspaceId);
@@ -139,39 +144,23 @@ export function subscribeToEngine(workspaceId: string, cb: (s: SyncStatus) => vo
     return engine.subscribe(cb);
   }
 
-  // Engine not yet created. Track whether the pending cb was drained into a
-  // live engine subscription (so the returned unsubscribe can handle both
-  // states correctly).
-  let liveUnsub: (() => void) | null = null;
-  let removed = false;
-
-  if (!pendingEngineSubscribers.has(workspaceId)) {
-    pendingEngineSubscribers.set(workspaceId, new Set());
+  // Engine not yet created — enqueue cb by its own identity.
+  let set = pendingEngineSubscribers.get(workspaceId);
+  if (!set) {
+    set = new Set();
+    pendingEngineSubscribers.set(workspaceId, set);
   }
-
-  // Wrap the raw cb so we can intercept the moment it is called from the drain
-  // path and capture the live unsubscribe.
-  const wrappedCb = (s: SyncStatus) => {
-    // When the engine calls wrappedCb during the drain, the engine is now live.
-    // Replace the pending tracking with a real engine subscription so future
-    // unsubscribes reach the engine.
-    const e = engines.get(workspaceId);
-    if (e && !liveUnsub) {
-      liveUnsub = e.subscribe(cb);
-    }
-    cb(s);
-  };
-
-  pendingEngineSubscribers.get(workspaceId)!.add(wrappedCb);
+  set.add(cb);
 
   return () => {
-    if (removed) return;
-    removed = true;
-    if (liveUnsub) {
-      liveUnsub();
-    } else {
-      pendingEngineSubscribers.get(workspaceId)?.delete(wrappedCb);
+    const pending = pendingEngineSubscribers.get(workspaceId);
+    if (pending?.has(cb)) {
+      // Still in the queue — cb was never drained into the engine.
+      pending.delete(cb);
+      return;
     }
+    // Already drained into the live engine — remove via unsubscribe.
+    engines.get(workspaceId)?.unsubscribe(cb);
   };
 }
 

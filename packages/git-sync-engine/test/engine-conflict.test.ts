@@ -104,4 +104,54 @@ describe('GitSyncEngine conflict + offline', () => {
     expect(e.getState().phase).toBe('offline');
     expect(o.fetch as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
+
+  it('auth-blocked state has conflictPaths === undefined (non-conflict discriminator)', async () => {
+    const authErr = Object.assign(new Error('HTTP 401 Unauthorized'), { code: 'HttpError' });
+    const o = ops({ push: vi.fn().mockRejectedValue(authErr) });
+    const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);
+    await e.syncNow();
+    const s = e.getState();
+    expect(s.phase).toBe('blocked');
+    expect(s.lastError?.code).toBe('auth');
+    expect(s.conflictPaths).toBeUndefined();
+  });
+
+  it('no_push_access-blocked state has conflictPaths === undefined', async () => {
+    const accessErr = Object.assign(new Error('HTTP 403 Forbidden'), { code: 'HttpError' });
+    const o = ops({ push: vi.fn().mockRejectedValue(accessErr) });
+    const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);
+    await e.syncNow();
+    const s = e.getState();
+    expect(s.phase).toBe('blocked');
+    expect(s.lastError?.code).toBe('no_push_access');
+    expect(s.conflictPaths).toBeUndefined();
+  });
+
+  it('empty conflictPaths still routes through handleConflict (policy is awaited)', async () => {
+    let policyInvoked = false;
+    const policy: ConflictPolicy = {
+      onConflict: async () => { policyInvoked = true; return { action: 'block' }; }
+    };
+    const o = ops({ merge: vi.fn().mockResolvedValue({ ok: false, conflictPaths: [] }) });
+    const e = createGitSyncEngine({ ...base, conflictPolicy: policy, __opsForTest: o } as never);
+    await e.syncNow();
+    expect(policyInvoked).toBe(true);
+    const s = e.getState();
+    expect(s.phase).toBe('blocked');
+    // Empty array (not undefined) — the badge should show resolve buttons.
+    expect(s.conflictPaths).toEqual([]);
+  });
+
+  it('unsubscribe method removes the subscriber from future emits', async () => {
+    const o = ops({});
+    const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);
+    const received: string[] = [];
+    const cb = (s: { phase: string }) => received.push(s.phase);
+    e.subscribe(cb);
+    await e.syncNow(); // should call cb at least once
+    const countAfterSync = received.length;
+    e.unsubscribe(cb);
+    await e.syncNow(); // cb should NOT be called again
+    expect(received.length).toBe(countAfterSync);
+  });
 });

@@ -81,7 +81,7 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
     try {
       await ops.push(opts.ref, opts.remoteUrl);
       const sha = await ops.currentSha(opts.ref);
-      emit({ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: sha });
+      emit({ phase: 'idle', ahead: 0, behind: 0, conflictPaths: undefined, lastSyncedSha: sha });
       return state;
     } catch (err) {
       if (isNonFastForward(err)) {
@@ -98,15 +98,15 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
         emit({ phase: 'pushing' });
         await ops.push(opts.ref, opts.remoteUrl);
         const sha = await ops.currentSha(opts.ref);
-        emit({ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: sha });
+        emit({ phase: 'idle', ahead: 0, behind: 0, conflictPaths: undefined, lastSyncedSha: sha });
         return state;
       }
       if (isAuthError(err)) {
-        emit({ phase: 'blocked', lastError: { code: 'auth', message: msg(err) } });
+        emit({ phase: 'blocked', conflictPaths: undefined, lastError: { code: 'auth', message: msg(err) } });
         return state;
       }
       if (isNoPushAccess(err)) {
-        emit({ phase: 'blocked', lastError: { code: 'no_push_access', message: msg(err) } });
+        emit({ phase: 'blocked', conflictPaths: undefined, lastError: { code: 'no_push_access', message: msg(err) } });
         return state;
       }
       emit({ phase: 'offline', lastError: { code: 'network', message: msg(err) } });
@@ -201,6 +201,9 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
     subscribe(cb) {
       subs.add(cb);
       return () => subs.delete(cb);
+    },
+    unsubscribe(cb) {
+      subs.delete(cb);
     },
     dispose() {
       if (timer) clearT(timer);
