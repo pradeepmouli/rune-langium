@@ -17,7 +17,7 @@ import type { OpfsFs } from '../opfs/opfs-fs.js';
  * raw "HTTP 502" string.
  */
 export type GitHubAuthErrorCategory =
-  | 'misconfigured' // 502: GitHub App client_id is the placeholder, not deployed yet
+  | 'misconfigured' // 502: GitHub rejected the app config (e.g. bad client_id / device flow not enabled)
   | 'unavailable' // 503 / network: GitHub upstream unhealthy
   | 'origin_blocked' // 403: Origin not in the Worker's allowlist
   | 'unknown';

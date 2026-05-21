@@ -18,9 +18,8 @@ pattern = "www.daikonic.dev/rune-studio/api/github-auth/*"
 zone_name = "daikonic.dev"
 
 [vars]
-# TODO(012): replace with the production GitHub App client ID before first deploy.
-# Public, non-secret. The corresponding client secret (if needed) goes via
-# `wrangler secret put GITHUB_CLIENT_SECRET`.
+# Production GitHub App client ID. Public, non-secret. The corresponding
+# client secret (if needed) goes via `wrangler secret put GITHUB_CLIENT_SECRET`.
 GITHUB_CLIENT_ID = "Iv23liiDuYY41565zxut"
 ALLOWED_ORIGIN = "https://www.daikonic.dev"
 
