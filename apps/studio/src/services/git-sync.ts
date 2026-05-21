@@ -2,9 +2,32 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import http from 'isomorphic-git/http/web';
-import { createGitSyncEngine, type GitSyncEngine, type ConflictPolicy } from '@rune-langium/git-sync-engine';
+import { createGitSyncEngine, type GitSyncEngine, type ConflictPolicy, type SyncStatus } from '@rune-langium/git-sync-engine';
 import type { OpfsFs } from '../opfs/opfs-fs.js';
 import type { GitBackingRecord } from '../workspace/persistence.js';
+import { loadWorkspace, saveWorkspace } from '../workspace/persistence.js';
+
+/** Map the engine's live phase to the persisted GitBackingRecord.syncState. */
+export function phaseToSyncState(s: SyncStatus): GitBackingRecord['syncState'] {
+  switch (s.phase) {
+    case 'blocked':
+      return s.conflictPaths?.length ? 'conflict' : 'diverged';
+    case 'offline':
+      return s.ahead > 0 ? 'ahead' : 'clean';
+    case 'idle':
+      return s.ahead > 0 ? 'ahead' : s.behind > 0 ? 'behind' : 'clean';
+    default:
+      return 'ahead'; // mid-sync (committing/fetching/merging/pushing)
+  }
+}
+
+async function persistSyncState(workspaceId: string, s: SyncStatus): Promise<void> {
+  const ws = await loadWorkspace(workspaceId);
+  if (!ws || ws.kind !== 'git-backed') return;
+  ws.gitBacking.syncState = phaseToSyncState(s);
+  ws.gitBacking.lastSyncedSha = s.lastSyncedSha;
+  await saveWorkspace(ws);
+}
 
 /** The authenticated git proxy lives behind the github-auth worker route. */
 export function defaultGitProxyUrl(): string {
@@ -40,6 +63,13 @@ export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
     conflictPolicy: input.conflictPolicy
   });
   if (input.onState) engine.subscribe(input.onState);
+  // Always subscribe an internal handler that persists state only on terminal
+  // phases (idle, blocked, offline) — avoids thrashing IDB on mid-sync emits.
+  engine.subscribe((s) => {
+    if (s.phase === 'idle' || s.phase === 'blocked' || s.phase === 'offline') {
+      void persistSyncState(input.workspaceId, s);
+    }
+  });
   engines.set(input.workspaceId, engine);
   return engine;
 }
