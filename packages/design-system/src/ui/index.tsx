@@ -11,6 +11,7 @@ export * from './code-block.js';
 export * from './collapsible.js';
 export * from './command.js';
 export * from './dialog.js';
+export * from './dropdown-menu.js';
 export * from './field.js';
 export * from './form.js';
 export * from './heading.js';
