@@ -1947,15 +1947,12 @@ export function EditorPage({
             <Kbd>⌘K</Kbd>
           </button>
           {workspaceKind === 'git-backed' && syncStatus && (
-            <>
-              <SyncStatusBadge
-                status={syncStatus}
-                onResolve={(choice) => {
-                  resolveConflict(workspaceId, choice);
-                }}
-              />
-              <span className="studio-topbar__divider" />
-            </>
+            <SyncStatusBadge
+              status={syncStatus}
+              onResolve={(choice) => {
+                resolveConflict(workspaceId, choice);
+              }}
+            />
           )}
           <span className="studio-topbar__divider" />
           <FontScaleButton />

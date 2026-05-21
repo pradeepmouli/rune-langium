@@ -19,6 +19,13 @@ describe('SyncStatusBadge', () => {
     expect(screen.getByTestId('sync-resolve-keep-mine')).toBeTruthy();
     expect(screen.getByTestId('sync-resolve-take-remote')).toBeTruthy();
   });
+  it('shows an error message (no resolve buttons) when blocked without a conflict', () => {
+    render(<SyncStatusBadge status={{ phase: 'blocked', ahead: 1, behind: 0, lastSyncedSha: null, lastError: { code: 'auth', message: 'HTTP 401' } }} onResolve={() => {}} />);
+    expect(screen.getByTestId('sync-status').getAttribute('data-phase')).toBe('blocked');
+    expect(screen.queryByTestId('sync-resolve-keep-mine')).toBeNull();
+    expect(screen.queryByTestId('sync-resolve-take-remote')).toBeNull();
+    expect(screen.getByText(/reconnect to GitHub/i)).toBeTruthy();
+  });
   it('invokes onResolve with the chosen action', async () => {
     const calls: string[] = [];
     render(<SyncStatusBadge status={{ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: ['a'] }} onResolve={(c) => calls.push(c)} />);
