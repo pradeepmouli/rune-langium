@@ -23,6 +23,8 @@
  *   - any other oauth error               → 400 invalid_device_code
  */
 
+import { handleGitProxy } from './git-proxy.js';
+
 export interface Env {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET?: string;
@@ -170,10 +172,11 @@ export default {
     if (!originOk(req, allowed)) {
       return new Response('forbidden', { status: 403 });
     }
+    const url = new URL(req.url);
+    if (url.pathname.includes('/git/')) return handleGitProxy(req, env, allowed);
     if (req.method !== 'POST') {
       return json(405, { error: 'method_not_allowed' }, allowed);
     }
-    const url = new URL(req.url);
     if (url.pathname.endsWith('/device-init')) return handleInit(env, allowed);
     if (url.pathname.endsWith('/device-poll')) return handlePoll(req, env, allowed);
     return json(404, { error: 'not_found' }, allowed);
