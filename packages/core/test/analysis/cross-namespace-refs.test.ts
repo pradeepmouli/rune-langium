@@ -20,7 +20,7 @@ import {
   closeNamespaceDependencies,
   collectNamespaceDependencies,
   getElementNamespace
-} from '../src/emit/cross-namespace-refs.js';
+} from '../../src/analysis/cross-namespace-refs.js';
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures/cross-namespace');
 

@@ -66,3 +66,10 @@ export {
   getFunctionInputs,
   getFunctionOutput
 } from './utils/expression-utils.js';
+
+// Structural analysis (spec 2026-05-14 §5.2 — cross-namespace dep graph)
+export {
+  getElementNamespace,
+  collectNamespaceDependencies,
+  closeNamespaceDependencies
+} from './analysis/cross-namespace-refs.js';

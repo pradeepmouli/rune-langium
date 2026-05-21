@@ -47,7 +47,7 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitter, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { resolveImportPath } from './namespace-registry.js';
-import { getElementNamespace } from './cross-namespace-refs.js';
+import { getElementNamespace } from '@rune-langium/core';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
 import {

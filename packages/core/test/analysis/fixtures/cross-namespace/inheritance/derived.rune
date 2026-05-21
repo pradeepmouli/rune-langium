@@ -1,0 +1,7 @@
+namespace "test.derived"
+version "1"
+
+import test.base.*
+
+type DerivedEntity extends BaseEntity:
+    description string (1..1)

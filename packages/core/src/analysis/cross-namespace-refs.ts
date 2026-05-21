@@ -26,7 +26,7 @@ import {
   isRosettaModel,
   isRosettaTypeAlias,
   type RosettaModel
-} from '@rune-langium/core';
+} from '../generated/ast.js';
 import type { LangiumDocument } from 'langium';
 
 // ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { resolveImportPath } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitter, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
-import { getElementNamespace } from './cross-namespace-refs.js';
+import { getElementNamespace } from '@rune-langium/core';
 import {
   isData,
   isRosettaEnumeration,
