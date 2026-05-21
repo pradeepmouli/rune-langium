@@ -5,11 +5,15 @@
  * ReferencePicker — dropdown to select in-scope variables.
  *
  * Shows FunctionScope entries (inputs, aliases, output) with type/cardinality.
+ * Uses DS Popover + Command for keyboard navigation and accessible listbox
+ * semantics.
  *
  * @module
  */
 
 import { useCallback } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
+import { Command, CommandEmpty, CommandItem, CommandList } from '@rune-langium/design-system/ui/command';
 import type { ExpressionNode } from '../../../schemas/expression-node-schema.js';
 import type { FunctionScope, FunctionScopeEntry } from '../../../store/expression-store.js';
 
@@ -34,8 +38,6 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
     [onSelect, onClose]
   );
 
-  if (!open) return null;
-
   const allEntries = [
     ...scope.inputs.map((e) => ({ ...e, origin: 'input' as const })),
     ...(scope.output ? [{ ...scope.output, origin: 'output' as const }] : []),
@@ -43,30 +45,41 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
   ];
 
   return (
-    <div
-      className="absolute z-50 w-56 rounded-md border border-border bg-popover p-1 shadow-lg"
-      data-testid="reference-picker"
-      role="listbox"
-      aria-multiselectable="false"
+    <Popover
+      open={open}
+      onOpenChange={(isOpen: boolean) => {
+        if (!isOpen) onClose();
+      }}
     >
-      {allEntries.length === 0 && <div className="p-2 text-xs text-muted-foreground">No variables in scope</div>}
-      {allEntries.map((entry) => (
-        <button
-          key={`${entry.origin}-${entry.name}`}
-          className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent focus:bg-accent focus:outline-none"
-          onClick={() => handleSelect(entry)}
-          role="option"
-          aria-selected="false"
-          data-testid={`ref-option-${entry.name}`}
-        >
-          <span className="font-mono font-medium">{entry.name}</span>
-          {entry.typeName && <span className="text-[10px] text-muted-foreground">{entry.typeName}</span>}
-          {entry.cardinality && (
-            <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">{entry.cardinality}</span>
-          )}
-          <span className="ml-auto rounded bg-muted px-1 text-[9px] text-muted-foreground">{entry.origin}</span>
-        </button>
-      ))}
-    </div>
+      {/*
+       * Zero-size anchor — opened programmatically by ExpressionBuilder,
+       * not by direct user interaction on a visible button.
+       */}
+      <PopoverTrigger asChild>
+        <span aria-hidden style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-0" align="start" sideOffset={4} data-testid="reference-picker">
+        <Command>
+          <CommandList>
+            <CommandEmpty>No variables in scope</CommandEmpty>
+            {allEntries.map((entry) => (
+              <CommandItem
+                key={`${entry.origin}-${entry.name}`}
+                value={`${entry.name} ${entry.typeName ?? ''}`}
+                onSelect={() => handleSelect(entry)}
+                data-testid={`ref-option-${entry.name}`}
+              >
+                <span className="font-mono font-medium">{entry.name}</span>
+                {entry.typeName && <span className="text-[10px] text-muted-foreground">{entry.typeName}</span>}
+                {entry.cardinality && (
+                  <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">{entry.cardinality}</span>
+                )}
+                <span className="ml-auto rounded bg-muted px-1 text-[9px] text-muted-foreground">{entry.origin}</span>
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
