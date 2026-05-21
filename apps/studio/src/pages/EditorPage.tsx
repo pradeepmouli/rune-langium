@@ -99,7 +99,7 @@ import { FontScaleButton } from '../components/FontScaleButton.js';
 import { pathToUri } from '../utils/uri.js';
 import { mergeSerializedIntoSource } from '../utils/source-merge.js';
 import type { ParsedWorkspaceModel } from '../services/workspace.js';
-import { getSyncEngine } from '../services/git-sync.js';
+import { getSyncEngine, resolveConflict } from '../services/git-sync.js';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
 import type { WorkspaceKind } from '../workspace/persistence.js';
 import {
@@ -1950,10 +1950,8 @@ export function EditorPage({
             <>
               <SyncStatusBadge
                 status={syncStatus}
-                onResolve={(_choice) => {
-                  // TODO(5.1): wire to interactive ConflictPolicy once Task 5.1 lands.
-                  // For now this is a no-op stub; Task 5.1 will connect the conflict
-                  // resolution handler via getSyncEngine(workspaceId).
+                onResolve={(choice) => {
+                  resolveConflict(workspaceId, choice);
                 }}
               />
               <span className="studio-topbar__divider" />

@@ -6,6 +6,7 @@ import { createGitSyncEngine, type GitSyncEngine, type ConflictPolicy, type Sync
 import type { OpfsFs } from '../opfs/opfs-fs.js';
 import type { GitBackingRecord } from '../workspace/persistence.js';
 import { loadWorkspace, saveWorkspace } from '../workspace/persistence.js';
+import { createInteractiveConflictPolicy, type InteractiveConflictPolicy } from './interactive-conflict-policy.js';
 
 /** Map the engine's live phase to the persisted GitBackingRecord.syncState. */
 export function phaseToSyncState(s: SyncStatus): GitBackingRecord['syncState'] {
@@ -36,6 +37,7 @@ export function defaultGitProxyUrl(): string {
 }
 
 const engines = new Map<string, GitSyncEngine>();
+const policies = new Map<string, InteractiveConflictPolicy>();
 
 export interface SyncEngineInput {
   fs: OpfsFs;
@@ -50,6 +52,17 @@ export interface SyncEngineInput {
 export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
   const existing = engines.get(input.workspaceId);
   if (existing) return existing;
+
+  // If no conflictPolicy is provided, auto-create an interactive one so the
+  // badge's onResolve can route through resolveConflict(). If a policy IS
+  // provided (e.g. in tests), use it directly and don't overwrite the registry.
+  let effectivePolicy: ConflictPolicy | undefined = input.conflictPolicy;
+  if (!effectivePolicy) {
+    const interactive = createInteractiveConflictPolicy();
+    policies.set(input.workspaceId, interactive);
+    effectivePolicy = interactive;
+  }
+
   const engine = createGitSyncEngine({
     fs: input.fs as never,
     http,
@@ -60,7 +73,7 @@ export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
     corsProxy: input.proxyUrl ?? defaultGitProxyUrl(),
     onAuth: () => ({ username: input.gitBacking.user, password: input.token }),
     author: { name: input.gitBacking.user, email: `${input.gitBacking.user}@users.noreply.github.com` },
-    conflictPolicy: input.conflictPolicy
+    conflictPolicy: effectivePolicy
   });
   if (input.onState) engine.subscribe(input.onState);
   // Always subscribe an internal handler that persists state only on terminal
@@ -77,6 +90,16 @@ export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
 export function disposeSyncEngine(workspaceId: string): void {
   engines.get(workspaceId)?.dispose();
   engines.delete(workspaceId);
+  policies.delete(workspaceId);
+}
+
+/**
+ * Route a user conflict-resolution choice to the interactive ConflictPolicy
+ * that was auto-created for this workspace by getOrCreateSyncEngine.
+ * No-op if the workspace has no pending conflict or no interactive policy.
+ */
+export function resolveConflict(workspaceId: string, choice: 'keepMine' | 'takeRemote'): void {
+  policies.get(workspaceId)?.resolve(choice);
 }
 
 export function getSyncEngine(workspaceId: string): GitSyncEngine | undefined {

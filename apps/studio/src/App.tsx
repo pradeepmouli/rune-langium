@@ -32,6 +32,8 @@ import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
 import { deleteWorkspaceFiles, loadWorkspaceFiles, saveWorkspaceFiles } from './workspace/workspace-files.js';
 import { WorkspaceManager } from './workspace/workspace-manager.js';
 import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
+import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
+import { loadWorkspaceToken } from './services/github-auth.js';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
 
@@ -773,6 +775,41 @@ function AppContent() {
     });
     return workspaceManagerRef.current;
   }, []);
+
+  // Sync-engine lifecycle: instantiate the engine when a git-backed workspace
+  // becomes active and dispose it when the active workspace changes or is
+  // cleared. A single effect watching `restoredWorkspace` covers every
+  // transition — boot restore, workspace switch, reset, and delete.
+  const prevRestoredWorkspaceIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const ws = restoredWorkspace;
+    const prevId = prevRestoredWorkspaceIdRef.current;
+    prevRestoredWorkspaceIdRef.current = ws?.id ?? null;
+
+    // Dispose the engine for whichever workspace just became inactive.
+    if (prevId && prevId !== ws?.id) {
+      disposeSyncEngine(prevId);
+    }
+
+    // Instantiate the engine for the newly active git-backed workspace.
+    if (!ws || ws.kind !== 'git-backed') return;
+    const workspaceId = ws.id;
+    const gitBacking = ws.gitBacking;
+    void (async () => {
+      try {
+        const wm = await getWorkspaceManager();
+        const fs = wm.getFs();
+        const token = await loadWorkspaceToken(fs, workspaceId);
+        if (!token) {
+          console.warn(`[git-sync] No token found for workspace ${workspaceId}; skipping engine init`);
+          return;
+        }
+        getOrCreateSyncEngine({ fs, workspaceId, gitBacking, token });
+      } catch (err) {
+        console.warn('[git-sync] Failed to instantiate sync engine:', err);
+      }
+    })();
+  }, [getWorkspaceManager, restoredWorkspace]);
 
   const handleCreateGitBackedWorkspace = useCallback(
     async (input: { repoUrl: string; branch: string; user: string; token: string }) => {

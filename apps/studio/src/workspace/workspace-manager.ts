@@ -50,6 +50,11 @@ export class WorkspaceManager {
     this.ownership = new WorkspaceOwnership(opts.tabId);
   }
 
+  /** Expose the shared OpfsFs so callers (e.g. git-sync wiring) can reuse it. */
+  getFs(): OpfsFs {
+    return this.fs;
+  }
+
   /**
    * Clone a GitHub repository into a fresh git-backed workspace.
    * Closes T032d (014/Phase 6 deferred). Persists a `git-backed`
