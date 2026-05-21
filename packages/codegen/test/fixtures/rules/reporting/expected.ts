@@ -13,12 +13,12 @@ const runeAttrExists = (v: unknown): boolean =>
 // --- end runtime helpers ---
 
 export interface TradeShape {
-  tradeDate: string;
+  tradeDate: Temporal.PlainDate;
   counterparty: string;
 }
 
 export class Trade implements TradeShape {
-  tradeDate: string;
+  tradeDate: Temporal.PlainDate;
   counterparty: string;
 
   constructor(data: TradeShape) {
@@ -36,7 +36,7 @@ export class Trade implements TradeShape {
 
 export function isTrade(x: unknown): x is Trade {
   if (typeof x !== 'object' || x === null) return false;
-  if (typeof (x as Record<string, unknown>).tradeDate !== 'string') return false;
+  if (!((x as Record<string, unknown>).tradeDate instanceof Temporal.PlainDate)) return false;
   if (typeof (x as Record<string, unknown>).counterparty !== 'string') return false;
   return true;
 }

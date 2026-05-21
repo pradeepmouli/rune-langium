@@ -211,16 +211,26 @@ export interface ExpressionEditorSlotProps {
 // Editor Form Types
 // ---------------------------------------------------------------------------
 
-/** Built-in primitive types available in the Rune DSL. */
+/**
+ * Built-in type names available in com.rosetta.model.
+ * Covers all basic types, record types, and type aliases (spec §1.1):
+ *   - Basic types:   boolean, number, string, time, pattern
+ *   - Record types:  date, dateTime, zonedDateTime
+ *   - Type aliases:  int, productType, eventType, calculation
+ */
 export const BUILTIN_TYPES = [
-  'string',
-  'int',
-  'number',
   'boolean',
-  'date',
+  'number',
+  'string',
   'time',
+  'pattern',
+  'date',
   'dateTime',
-  'zonedDateTime'
+  'zonedDateTime',
+  'int',
+  'productType',
+  'eventType',
+  'calculation'
 ] as const;
 
 /** A type option for searchable type selectors. */

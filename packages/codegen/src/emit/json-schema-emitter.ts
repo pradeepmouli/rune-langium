@@ -51,6 +51,7 @@ import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagno
 import { emitNamespaceWithContract, type NamespaceEmitter } from './namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
+import { jsonSchemaProfile } from './json-schema-profile.js';
 
 /** JSON Schema 2020-12 meta-schema URI. */
 const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
@@ -142,6 +143,8 @@ interface EmissionContext {
   /** Generator-time diagnostics accumulated during emission. */
   diagnostics: GeneratorDiagnostic[];
   registry: NamespaceRegistry;
+  /** Merged builtin type map from the JSON Schema profile (basicTypeMap ∪ recordTypeMap ∪ typeAliasMap). */
+  builtinTypeMap: Readonly<Record<string, object>>;
 }
 
 interface PendingSourceMapEntry {
@@ -152,21 +155,19 @@ interface PendingSourceMapEntry {
 }
 
 /**
- * Maps Rune built-in type names to JSON Schema types.
- * FR-019.
+ * Merged builtin type map from the JSON Schema profile.
+ * Combines basicTypeMap ∪ recordTypeMap ∪ typeAliasMap.
+ * Populated once at module load; used as a default for buildEmissionContext.
  */
-const BUILTIN_JSON_TYPE_MAP: Record<string, object> = {
-  string: { type: 'string' },
-  int: { type: 'integer' },
-  number: { type: 'number' },
-  boolean: { type: 'boolean' },
-  date: { type: 'string', format: 'date' },
-  dateTime: { type: 'string', format: 'date-time' },
-  zonedDateTime: { type: 'string', format: 'date-time' },
-  time: { type: 'string', format: 'time' },
-  productType: { type: 'string' },
-  eventType: { type: 'string' }
-};
+function buildJsonBuiltinTypeMap(): Record<string, object> {
+  return {
+    ...jsonSchemaProfile.basicTypeMap,
+    ...jsonSchemaProfile.recordTypeMap,
+    ...jsonSchemaProfile.typeAliasMap
+  } as Record<string, object>;
+}
+
+const JSON_BUILTIN_TYPE_MAP: Readonly<Record<string, object>> = buildJsonBuiltinTypeMap();
 
 /**
  * Resolve the item schema for a scalar type reference.
@@ -178,7 +179,7 @@ function resolveItemSchema(attr: Attribute, ctx: EmissionContext): object {
 
   if (!typeRef) {
     if (refText) {
-      const builtinSchema = BUILTIN_JSON_TYPE_MAP[refText];
+      const builtinSchema = ctx.builtinTypeMap[refText];
       if (builtinSchema) return builtinSchema;
 
       // Check if it's an enum or data type in the current namespace
@@ -205,7 +206,14 @@ function resolveItemSchema(attr: Attribute, ctx: EmissionContext): object {
   }
 
   if (isRosettaBasicType(typeRef)) {
-    return BUILTIN_JSON_TYPE_MAP[typeRef.name] ?? {};
+    const mapped = ctx.builtinTypeMap[typeRef.name];
+    if (mapped) return mapped;
+    ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'unmapped-builtin',
+      message: `Builtin type '${typeRef.name}' has no JSON Schema mapping; emitting {}`
+    });
+    return {};
   }
 
   if (isRosettaEnumeration(typeRef)) {
@@ -218,7 +226,7 @@ function resolveItemSchema(attr: Attribute, ctx: EmissionContext): object {
 
   // Fallback with $refText
   if (refText) {
-    const builtinSchema = BUILTIN_JSON_TYPE_MAP[refText];
+    const builtinSchema = ctx.builtinTypeMap[refText];
     if (builtinSchema) return builtinSchema;
   }
 
@@ -437,7 +445,8 @@ function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceReg
     emitOrder: model.emitOrder,
     sourceMap: [],
     diagnostics: [],
-    registry
+    registry,
+    builtinTypeMap: JSON_BUILTIN_TYPE_MAP
   };
 }
 

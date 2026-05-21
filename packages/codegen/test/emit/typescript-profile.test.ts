@@ -61,6 +61,7 @@ describe('TypeScript LanguageProfile (019 Phase 0.5.3)', () => {
     });
 
     const paths = outputs.map((o) => o.relativePath).sort();
+    // Single runtime.ts: shared helpers + builtin lib funcs (isLeapYear).
     expect(paths).toEqual(['bar.ts', 'foo.ts', 'index.ts', 'runtime.ts']);
 
     const fooOutput = outputs.find((o) => o.relativePath === 'foo.ts');
@@ -75,6 +76,7 @@ describe('TypeScript LanguageProfile (019 Phase 0.5.3)', () => {
     expect(runtimeOutput?.content).toContain(`export const runeCheckOneOf`);
     expect(runtimeOutput?.content).toContain(`export const runeCount`);
     expect(runtimeOutput?.content).toContain(`export const runeAttrExists`);
+    expect(runtimeOutput?.content).toContain(`export function isLeapYear`);
   });
 
   it('single-file layout emits one model.ts plus the runtime sidecar', async () => {
@@ -85,6 +87,7 @@ describe('TypeScript LanguageProfile (019 Phase 0.5.3)', () => {
     });
 
     const paths = outputs.map((o) => o.relativePath).sort();
+    // Single runtime.ts: shared helpers + builtin lib funcs (isLeapYear).
     expect(paths).toEqual(['model.ts', 'runtime.ts']);
 
     const model = outputs.find((o) => o.relativePath === 'model.ts');

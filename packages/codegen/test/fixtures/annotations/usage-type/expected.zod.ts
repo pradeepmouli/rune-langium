@@ -15,7 +15,7 @@ const runeAttrExists = (v: unknown): boolean =>
 // --- end runtime helpers ---
 
 export const TradeSchema = z.object({
-  tradeDate: z.string(),
+  tradeDate: z.iso.date(),
   notional: z.number()
 }).meta({
     source: { attribute: 'system' }

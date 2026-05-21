@@ -124,6 +124,34 @@ function stripPerNamespaceHeader(content: string): string {
 export const zodProfile: LanguageProfile<'zod'> = {
   target: 'zod',
   extension: '.zod.ts',
+
+  // Builtin type maps (§4a of the builtin-type-mapping design spec).
+  basicTypeMap: {
+    boolean: 'z.boolean()',
+    number: 'z.number()',
+    string: 'z.string()',
+    time: 'z.iso.time()',
+    pattern: 'z.string()'
+  },
+  recordTypeMap: {
+    date: 'z.iso.date()',
+    dateTime: 'z.iso.datetime()',
+    zonedDateTime: 'z.iso.datetime({offset:true})'
+  },
+  typeAliasMap: {
+    int: 'z.number().int()',
+    productType: 'z.string()',
+    eventType: 'z.string()',
+    calculation: 'z.string()'
+  },
+  libraryFuncMap: {
+    Min: { expr: 'Math.min' },
+    Max: { expr: 'Math.max' },
+    IsLeapYear: null,
+    DateRanges: null,
+    Adjust: null,
+    Within: null
+  },
   makeBarrel(perNs) {
     return {
       relativePath: 'index.zod.ts',

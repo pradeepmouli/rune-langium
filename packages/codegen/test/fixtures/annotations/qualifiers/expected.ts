@@ -23,11 +23,11 @@ export function source(args: sourceArgs): ClassDecorator & PropertyDecorator {
 }
 
 export interface TradeShape {
-  tradeDate: string;
+  tradeDate: Temporal.PlainDate;
 }
 
 export class Trade implements TradeShape {
-  tradeDate: string;
+  tradeDate: Temporal.PlainDate;
 
   constructor(data: TradeShape) {
     this.tradeDate = data.tradeDate as typeof this.tradeDate;
@@ -43,7 +43,7 @@ export class Trade implements TradeShape {
 
 export function isTrade(x: unknown): x is Trade {
   if (typeof x !== 'object' || x === null) return false;
-  if (typeof (x as Record<string, unknown>).tradeDate !== 'string') return false;
+  if (!((x as Record<string, unknown>).tradeDate instanceof Temporal.PlainDate)) return false;
   return true;
 }
 

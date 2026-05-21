@@ -34,14 +34,14 @@ export interface PersonShape {
   name: string;
   age: number;
   active: boolean;
-  birthday: string;
+  birthday: Temporal.PlainDate;
 }
 
 export class Person implements PersonShape {
   name: string;
   age: number;
   active: boolean;
-  birthday: string;
+  birthday: Temporal.PlainDate;
 
   constructor(data: PersonShape) {
     this.name = data.name as typeof this.name;
@@ -63,7 +63,7 @@ export function isPerson(x: unknown): x is Person {
   if (typeof (x as Record<string, unknown>).name !== 'string') return false;
   if (typeof (x as Record<string, unknown>).age !== 'number') return false;
   if (typeof (x as Record<string, unknown>).active !== 'boolean') return false;
-  if (typeof (x as Record<string, unknown>).birthday !== 'string') return false;
+  if (!((x as Record<string, unknown>).birthday instanceof Temporal.PlainDate)) return false;
   return true;
 }
 
