@@ -228,8 +228,10 @@ export function DownloadConfigModal({
       namespaces: namespaces.length === 0 ? [] : Array.from(selection.emitted).sort(),
       // Only include options when an OptionsForm was provided and it
       // actually collected values (avoids sending `options: {}` for
-      // targets with no options form).
-      ...(hasOptions ? { options: opts } : {})
+      // targets with no options form). Keyed by target so it matches the
+      // documented `DownloadConfig.options` shape ({ excel: {...} }) that
+      // CodePreviewPanel reads via `config.options?.[target]` (Codex P1 #228).
+      ...(hasOptions ? { options: { [target]: opts } } : {})
     });
   }
 

@@ -243,7 +243,7 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
       // Merge layout + target-specific options (e.g. excel sheet toggles) into
       // the options bag. The order of spreading means explicit options from the
       // form can include a layout key, but the layout radio always wins here.
-      const targetOptions = config.options?.[newTarget] ?? {};
+      const targetOptions = (config.options?.[newTarget] ?? {}) as Record<string, unknown>;
       const layoutOption = config.layout ? { layout: config.layout } : {};
       const options = (config.layout || config.options)
         ? { [newTarget]: { ...targetOptions, ...layoutOption } }

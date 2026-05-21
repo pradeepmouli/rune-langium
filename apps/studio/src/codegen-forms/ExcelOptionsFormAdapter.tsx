@@ -28,10 +28,12 @@ export interface ExcelOptionsFormAdapterProps {
 /**
  * Controlled wrapper around the ?z2f-generated ExcelOptionsForm.
  *
- * `defaultValues` seeds the form from the parent's `value` on first render
- * (using a stable key so a target change forces a remount and resets to the
- * incoming value). `onSubmit` (called on every field change in auto-save mode)
- * forwards the data to `onChange` as a plain Record.
+ * `defaultValues` seeds the form from the parent's `value` on mount (RHF only
+ * reads defaultValues once). The modal mounts/unmounts this adapter as the
+ * Download modal opens/closes, and resets its options state per open, so the
+ * form re-seeds from a fresh `value` each time — no remount key needed here.
+ * `onSubmit` (called on every field change in auto-save mode) forwards the
+ * data to `onChange` as a plain Record.
  */
 export function ExcelOptionsFormAdapter({
   value,

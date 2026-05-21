@@ -178,4 +178,27 @@ describe('DownloadConfigModal', () => {
     const config = onGenerate.mock.calls[0][0] as DownloadConfig;
     expect(config.namespaces).toEqual([]);
   });
+
+  it('renders an injected optionsForm and emits its values keyed by target', () => {
+    // DI boundary: the modal renders the provided optionsForm and wraps the
+    // collected values under the target key (DownloadConfig.options shape).
+    function StubOptionsForm({
+      onChange
+    }: {
+      value: Record<string, unknown>;
+      onChange: (v: Record<string, unknown>) => void;
+    }) {
+      return (
+        <button type="button" data-testid="stub-set-opts" onClick={() => onChange({ sheets: { types: false } })}>
+          set
+        </button>
+      );
+    }
+    const { onGenerate } = renderModal({ target: 'excel', optionsForm: StubOptionsForm });
+    expect(screen.getByTestId('stub-set-opts')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('stub-set-opts'));
+    fireEvent.click(screen.getByTestId('download-config-modal__generate'));
+    const config = onGenerate.mock.calls[0][0] as DownloadConfig;
+    expect(config.options).toEqual({ excel: { sheets: { types: false } } });
+  });
 });

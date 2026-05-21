@@ -8,8 +8,9 @@
  * generated forms render with the studio's own Radix/Tailwind tokens rather
  * than z2f's bundled shadcn copies.
  *
- * Re-exported as the default export so `z2f.config.ts` can point
- * `components.source` at this module and the codegen emits a single import.
+ * Each DS primitive is a NAMED export keyed by its z2f component name
+ * (Checkbox, Input, Select, …); `z2f.config.ts` points `components.source`
+ * at this module and the codegen imports the components it needs by name.
  *
  * Shape mirrors the `shadcnComponentMap` from @zod-to-form/react — each key
  * is a z2f component name (e.g. "Checkbox", "Input") and each value is the
