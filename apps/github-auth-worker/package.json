@@ -7,6 +7,7 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
+    "build": "tsgo --noEmit",
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
