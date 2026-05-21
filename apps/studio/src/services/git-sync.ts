@@ -52,3 +52,8 @@ export function disposeSyncEngine(workspaceId: string): void {
 export function getSyncEngine(workspaceId: string): GitSyncEngine | undefined {
   return engines.get(workspaceId);
 }
+
+/** Nudge the background sync engine after a save. No-op for non-git workspaces. */
+export function notifySyncOnSave(workspaceId: string): void {
+  engines.get(workspaceId)?.notifyDirty();
+}

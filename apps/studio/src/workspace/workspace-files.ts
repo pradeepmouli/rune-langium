@@ -3,6 +3,7 @@
 
 import { OpfsFs } from '../opfs/opfs-fs.js';
 import type { WorkspaceFile } from '../services/workspace.js';
+import { notifySyncOnSave } from '../services/git-sync.js';
 
 interface WorkspaceFilesDeps {
   getOpfsRoot: () => Promise<FileSystemDirectoryHandle>;
@@ -51,6 +52,7 @@ export async function saveWorkspaceFiles(
   for (const file of toStoredWorkspaceFiles(files)) {
     await fs.writeFile(`/${workspaceId}/files/${file.path}`, file.content);
   }
+  notifySyncOnSave(workspaceId);
 }
 
 export async function loadWorkspaceFiles(workspaceId: string): Promise<WorkspaceFile[]> {
