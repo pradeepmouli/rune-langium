@@ -10,7 +10,7 @@ export interface GitOpsConfig {
   dir: string;
   gitdir: string;
   corsProxy?: string;
-  onAuth?: () => { username: string; password: string };
+  onAuth?: () => { username: string; password: string } | Promise<{ username: string; password: string }>;
 }
 
 export interface MergeResult {
@@ -69,10 +69,7 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
     return changed;
   };
 
-  const commit = async (
-    message: string,
-    author: { name: string; email: string },
-  ): Promise<string> => {
+  const commit = async (message: string, author: { name: string; email: string }): Promise<string> => {
     return git.commit({ ...base, message, author });
   };
 
@@ -91,9 +88,7 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
    * Returning `{ ahead: 0, behind: 0 }` when either SHA is null means "treat as
    * in-sync / nothing to do".
    */
-  const computeAheadBehind = async (
-    ref: string,
-  ): Promise<{ ahead: number; behind: number }> => {
+  const computeAheadBehind = async (ref: string): Promise<{ ahead: number; behind: number }> => {
     const local = await currentSha(ref);
     const remote = await remoteSha(ref);
     if (!local || !remote) return { ahead: 0, behind: 0 };
@@ -120,10 +115,7 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
     await git.checkout({ ...base, ref, force: true });
   };
 
-  const merge = async (
-    ref: string,
-    author: { name: string; email: string },
-  ): Promise<MergeResult> => {
+  const merge = async (ref: string, author: { name: string; email: string }): Promise<MergeResult> => {
     try {
       // abortOnConflict: false → throws MergeConflictError (with data.filepaths) on conflict.
       // abortOnConflict: true (default) → throws MergeNotSupportedError (no paths available).
@@ -132,7 +124,7 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
         ours: ref,
         theirs: `refs/remotes/origin/${ref}`,
         author,
-        abortOnConflict: false,
+        abortOnConflict: false
       });
       await git.checkout({ ...base, ref, force: true });
       return { ok: true };
@@ -140,8 +132,7 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
       const code = (err as { code?: string })?.code ?? '';
       if (code === 'MergeConflictError') {
         // err.data.filepaths lists all conflicting paths.
-        const paths =
-          (err as { data?: { filepaths?: string[] } })?.data?.filepaths ?? [];
+        const paths = (err as { data?: { filepaths?: string[] } })?.data?.filepaths ?? [];
         return { ok: false, conflictPaths: paths };
       }
       if (code === 'MergeNotSupportedError') {
@@ -152,11 +143,7 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
     }
   };
 
-  const push = async (
-    ref: string,
-    url: string,
-    opts?: { force?: boolean },
-  ): Promise<void> => {
+  const push = async (ref: string, url: string, opts?: { force?: boolean }): Promise<void> => {
     await git.push({ ...base, ...net, url, ref, force: opts?.force ?? false });
   };
 
@@ -183,6 +170,6 @@ export function createGitOps(cfg: GitOpsConfig): GitOps {
     resetTo,
     restoreLocal,
     currentSha,
-    remoteSha,
+    remoteSha
   };
 }

@@ -3,12 +3,7 @@
 
 import { createGitOps, type GitOps } from './git-ops.js';
 import { pushForceWithLease } from './force-with-lease.js';
-import type {
-  ConflictPolicy,
-  GitSyncEngine,
-  GitSyncEngineOptions,
-  SyncStatus
-} from './types.js';
+import type { ConflictPolicy, GitSyncEngine, GitSyncEngineOptions, SyncStatus } from './types.js';
 
 const blockPolicy: ConflictPolicy = { onConflict: async () => ({ action: 'block' }) };
 
@@ -124,17 +119,28 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
     const remoteSha = (await ops.remoteSha(opts.ref)) ?? '';
     emit({ phase: 'blocked', conflictPaths: paths });
     const res = await policy.onConflict({
-      conflictPaths: paths, localSha, remoteSha, fs: opts.fs, dir: opts.dir, gitdir: opts.gitdir
+      conflictPaths: paths,
+      localSha,
+      remoteSha,
+      fs: opts.fs,
+      dir: opts.dir,
+      gitdir: opts.gitdir
     });
     switch (res.action) {
       case 'block':
         emit({ phase: 'blocked', conflictPaths: paths });
         return state;
       case 'keepMine': {
-        await ops.restoreLocal(opts.ref);  // discard conflict markers, restore local HEAD
+        await ops.restoreLocal(opts.ref); // discard conflict markers, restore local HEAD
         const lease = await pushForceWithLease(ops, opts.ref, opts.remoteUrl, remoteSha);
         if (!lease.ok) {
-          emit({ phase: 'blocked', lastError: { code: 'non_fast_forward', message: 'remote moved' } });
+          // Clear stale conflictPaths so the badge shows the error message
+          // rather than the (no longer actionable) resolve buttons.
+          emit({
+            phase: 'blocked',
+            conflictPaths: undefined,
+            lastError: { code: 'non_fast_forward', message: 'remote moved' }
+          });
           return state;
         }
         const sha = await ops.currentSha(opts.ref);
@@ -160,34 +166,63 @@ export function createGitSyncEngine(options: GitSyncEngineOptions): GitSyncEngin
 
   function scheduleSync() {
     if (timer) clearT(timer);
-    timer = setT(() => { void syncNow(); }, debounceMs);
+    timer = setT(() => {
+      void syncNow();
+    }, debounceMs);
   }
 
   function syncNow(): Promise<SyncStatus> {
-    if (timer) { clearT(timer); timer = null; }
-    if (running) { pendingSync = true; return running; }
+    if (timer) {
+      clearT(timer);
+      timer = null;
+    }
+    if (running) {
+      pendingSync = true;
+      return running;
+    }
     running = runSync().finally(() => {
       running = null;
-      if (pendingSync) { pendingSync = false; void syncNow(); }
+      if (pendingSync) {
+        pendingSync = false;
+        void syncNow();
+      }
     });
     return running;
   }
 
   return {
-    notifyDirty() { scheduleSync(); },
+    notifyDirty() {
+      scheduleSync();
+    },
     syncNow,
-    getState() { return state; },
-    subscribe(cb) { subs.add(cb); return () => subs.delete(cb); },
-    dispose() { if (timer) clearT(timer); subs.clear(); }
+    getState() {
+      return state;
+    },
+    subscribe(cb) {
+      subs.add(cb);
+      return () => subs.delete(cb);
+    },
+    dispose() {
+      if (timer) clearT(timer);
+      subs.clear();
+    }
   };
 }
 
-function msg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
+function msg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
 function codeOf(e: unknown): string {
   return (e as { code?: string; name?: string })?.code ?? (e as Error)?.name ?? '';
 }
 // These classifiers match isomorphic-git error shapes (`code` / `name`),
 // confirmed against ^1.37. If that internal shape changes, update them here.
-function isNonFastForward(e: unknown): boolean { return codeOf(e) === 'PushRejectedError' || /non-fast-forward|fetch first/i.test(msg(e)); }
-function isAuthError(e: unknown): boolean { return codeOf(e) === 'HttpError' && /401/.test(msg(e)); }
-function isNoPushAccess(e: unknown): boolean { return codeOf(e) === 'HttpError' && /403/.test(msg(e)); }
+function isNonFastForward(e: unknown): boolean {
+  return codeOf(e) === 'PushRejectedError' || /non-fast-forward|fetch first/i.test(msg(e));
+}
+function isAuthError(e: unknown): boolean {
+  return codeOf(e) === 'HttpError' && /401/.test(msg(e));
+}
+function isNoPushAccess(e: unknown): boolean {
+  return codeOf(e) === 'HttpError' && /403/.test(msg(e));
+}

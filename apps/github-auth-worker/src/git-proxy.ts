@@ -24,6 +24,13 @@ export async function handleGitProxy(req: Request, _env: Env, allowedOrigin: str
   const path = rest.slice(slash + 1);
   if (host !== ALLOWED_GIT_HOST) return new Response('bad_request', { status: 400 });
 
+  // Restrict to git smart-HTTP endpoints only — reject arbitrary path traversal
+  // attempts that could reach e.g. /contents, /releases, or raw files.
+  const GIT_ENDPOINTS = ['/info/refs', '/git-upload-pack', '/git-receive-pack'];
+  if (!GIT_ENDPOINTS.some((e) => path.endsWith(e) || ('/' + path).endsWith(e))) {
+    return new Response('bad_request', { status: 400 });
+  }
+
   const target = `https://${host}/${path}${url.search}`;
   const headers = new Headers();
   const auth = req.headers.get('Authorization');

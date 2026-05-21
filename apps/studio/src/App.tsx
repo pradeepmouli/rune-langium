@@ -33,7 +33,6 @@ import { deleteWorkspaceFiles, loadWorkspaceFiles, saveWorkspaceFiles } from './
 import { WorkspaceManager } from './workspace/workspace-manager.js';
 import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
-import { loadWorkspaceToken } from './services/github-auth.js';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
 
@@ -304,7 +303,9 @@ function AppContent() {
     // surfaced two identical `untitled BROWSER` entries with no way to
     // distinguish which was which. Disambiguate at creation time so every
     // workspace record carries a unique label.
-    const recents = await persistence.listRecents().catch(() => [] as Awaited<ReturnType<typeof persistence.listRecents>>);
+    const recents = await persistence
+      .listRecents()
+      .catch(() => [] as Awaited<ReturnType<typeof persistence.listRecents>>);
     const takenNames = new Set(recents.map((r) => r.name));
     let uniqueName = name;
     if (takenNames.has(uniqueName)) {
@@ -799,12 +800,9 @@ function AppContent() {
       try {
         const wm = await getWorkspaceManager();
         const fs = wm.getFs();
-        const token = await loadWorkspaceToken(fs, workspaceId);
-        if (!token) {
-          console.warn(`[git-sync] No token found for workspace ${workspaceId}; skipping engine init`);
-          return;
-        }
-        getOrCreateSyncEngine({ fs, workspaceId, gitBacking, token });
+        // Token is no longer pre-loaded here — the engine's onAuth loads it
+        // lazily on each isomorphic-git call so rotated tokens are always used.
+        getOrCreateSyncEngine({ fs, workspaceId, gitBacking });
       } catch (err) {
         console.warn('[git-sync] Failed to instantiate sync engine:', err);
       }

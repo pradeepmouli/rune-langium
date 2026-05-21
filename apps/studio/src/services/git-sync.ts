@@ -2,11 +2,17 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import http from 'isomorphic-git/http/web';
-import { createGitSyncEngine, type GitSyncEngine, type ConflictPolicy, type SyncStatus } from '@rune-langium/git-sync-engine';
+import {
+  createGitSyncEngine,
+  type GitSyncEngine,
+  type ConflictPolicy,
+  type SyncStatus
+} from '@rune-langium/git-sync-engine';
 import type { OpfsFs } from '../opfs/opfs-fs.js';
 import type { GitBackingRecord } from '../workspace/persistence.js';
 import { loadWorkspace, saveWorkspace } from '../workspace/persistence.js';
 import { createInteractiveConflictPolicy, type InteractiveConflictPolicy } from './interactive-conflict-policy.js';
+import { loadWorkspaceToken } from './github-auth.js';
 
 /** Map the engine's live phase to the persisted GitBackingRecord.syncState. */
 export function phaseToSyncState(s: SyncStatus): GitBackingRecord['syncState'] {
@@ -39,11 +45,20 @@ export function defaultGitProxyUrl(): string {
 const engines = new Map<string, GitSyncEngine>();
 const policies = new Map<string, InteractiveConflictPolicy>();
 
+/**
+ * Pending subscribers that registered before the engine was created.
+ * Drained into the real engine the moment getOrCreateSyncEngine creates it.
+ */
+const pendingEngineSubscribers = new Map<string, Set<(s: SyncStatus) => void>>();
+
 export interface SyncEngineInput {
   fs: OpfsFs;
   workspaceId: string;
   gitBacking: GitBackingRecord;
-  token: string;
+  /** @deprecated Pass the fs instead; the engine loads the token lazily on each
+   *  isomorphic-git call via `onAuth`. Providing `token` here is still accepted
+   *  for backward-compat with existing tests but is ignored at runtime. */
+  token?: string;
   conflictPolicy?: ConflictPolicy;
   onState?: (s: ReturnType<GitSyncEngine['getState']>) => void;
   proxyUrl?: string;
@@ -63,15 +78,23 @@ export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
     effectivePolicy = interactive;
   }
 
+  const workspaceId = input.workspaceId;
+  const fs = input.fs;
+
   const engine = createGitSyncEngine({
-    fs: input.fs as never,
+    fs: fs as never,
     http,
-    dir: `/${input.workspaceId}/files`,
-    gitdir: `/${input.workspaceId}/.git`,
+    dir: `/${workspaceId}/files`,
+    gitdir: `/${workspaceId}/.git`,
     remoteUrl: input.gitBacking.repoUrl,
     ref: input.gitBacking.branch,
     corsProxy: input.proxyUrl ?? defaultGitProxyUrl(),
-    onAuth: () => ({ username: input.gitBacking.user, password: input.token }),
+    // Lazy token: load fresh from OPFS on every isomorphic-git auth call so a
+    // rotated token is always used without recreating the engine.
+    onAuth: async () => ({
+      username: input.gitBacking.user,
+      password: (await loadWorkspaceToken(fs, workspaceId)) ?? ''
+    }),
     author: { name: input.gitBacking.user, email: `${input.gitBacking.user}@users.noreply.github.com` },
     conflictPolicy: effectivePolicy
   });
@@ -80,17 +103,83 @@ export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
   // phases (idle, blocked, offline) — avoids thrashing IDB on mid-sync emits.
   engine.subscribe((s) => {
     if (s.phase === 'idle' || s.phase === 'blocked' || s.phase === 'offline') {
-      void persistSyncState(input.workspaceId, s);
+      void persistSyncState(workspaceId, s);
     }
   });
-  engines.set(input.workspaceId, engine);
+  engines.set(workspaceId, engine);
+
+  // Drain any subscribers that registered before the engine was created.
+  const pending = pendingEngineSubscribers.get(workspaceId);
+  if (pending) {
+    for (const cb of pending) {
+      engine.subscribe(cb);
+      cb(engine.getState());
+    }
+    pending.clear();
+    pendingEngineSubscribers.delete(workspaceId);
+  }
+
   return engine;
+}
+
+/**
+ * Subscribe to engine state updates that survive late engine creation.
+ *
+ * - If the engine already exists: immediately calls `cb` with current state,
+ *   then subscribes for future updates. Returns a live unsubscribe.
+ * - If the engine does not exist yet: enqueues `cb` so it is attached
+ *   (and called with initial state) the moment `getOrCreateSyncEngine` creates
+ *   the engine. Returns an unsubscribe that removes `cb` from the queue — or,
+ *   if it was already drained into a live engine, from the engine itself.
+ */
+export function subscribeToEngine(workspaceId: string, cb: (s: SyncStatus) => void): () => void {
+  const engine = engines.get(workspaceId);
+  if (engine) {
+    cb(engine.getState());
+    return engine.subscribe(cb);
+  }
+
+  // Engine not yet created. Track whether the pending cb was drained into a
+  // live engine subscription (so the returned unsubscribe can handle both
+  // states correctly).
+  let liveUnsub: (() => void) | null = null;
+  let removed = false;
+
+  if (!pendingEngineSubscribers.has(workspaceId)) {
+    pendingEngineSubscribers.set(workspaceId, new Set());
+  }
+
+  // Wrap the raw cb so we can intercept the moment it is called from the drain
+  // path and capture the live unsubscribe.
+  const wrappedCb = (s: SyncStatus) => {
+    // When the engine calls wrappedCb during the drain, the engine is now live.
+    // Replace the pending tracking with a real engine subscription so future
+    // unsubscribes reach the engine.
+    const e = engines.get(workspaceId);
+    if (e && !liveUnsub) {
+      liveUnsub = e.subscribe(cb);
+    }
+    cb(s);
+  };
+
+  pendingEngineSubscribers.get(workspaceId)!.add(wrappedCb);
+
+  return () => {
+    if (removed) return;
+    removed = true;
+    if (liveUnsub) {
+      liveUnsub();
+    } else {
+      pendingEngineSubscribers.get(workspaceId)?.delete(wrappedCb);
+    }
+  };
 }
 
 export function disposeSyncEngine(workspaceId: string): void {
   engines.get(workspaceId)?.dispose();
   engines.delete(workspaceId);
   policies.delete(workspaceId);
+  pendingEngineSubscribers.delete(workspaceId);
 }
 
 /**

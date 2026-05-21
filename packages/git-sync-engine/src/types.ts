@@ -25,21 +25,9 @@ export interface IsoGitFs {
 // isomorphic-git http client (e.g. `isomorphic-git/http/web`).
 export type IsoGitHttp = unknown;
 
-export type SyncPhase =
-  | 'idle'
-  | 'committing'
-  | 'fetching'
-  | 'merging'
-  | 'pushing'
-  | 'blocked'
-  | 'offline';
+export type SyncPhase = 'idle' | 'committing' | 'fetching' | 'merging' | 'pushing' | 'blocked' | 'offline';
 
-export type SyncErrorCode =
-  | 'network'
-  | 'no_push_access'
-  | 'auth'
-  | 'non_fast_forward'
-  | 'unknown';
+export type SyncErrorCode = 'network' | 'no_push_access' | 'auth' | 'non_fast_forward' | 'unknown';
 
 export interface SyncStatus {
   phase: SyncPhase;
@@ -77,7 +65,7 @@ export interface GitSyncEngineOptions {
   remoteUrl: string;
   ref: string;
   corsProxy?: string;
-  onAuth: () => { username: string; password: string };
+  onAuth: () => { username: string; password: string } | Promise<{ username: string; password: string }>;
   author: { name: string; email: string };
   debounceMs?: number;
   conflictPolicy?: ConflictPolicy;

@@ -24,9 +24,15 @@ function ops(over: Partial<GitOps>): GitOps {
 }
 
 const base = {
-  fs: {} as never, http: {}, dir: '/w/files', gitdir: '/w/.git',
-  remoteUrl: 'https://x', ref: 'main', onAuth: () => ({ username: 'x', password: 't' }),
-  author: { name: 'A', email: 'a@x' }, debounceMs: 0
+  fs: {} as never,
+  http: {},
+  dir: '/w/files',
+  gitdir: '/w/.git',
+  remoteUrl: 'https://x',
+  ref: 'main',
+  onAuth: () => ({ username: 'x', password: 't' }),
+  author: { name: 'A', email: 'a@x' },
+  debounceMs: 0
 };
 
 describe('GitSyncEngine conflict + offline', () => {
@@ -36,7 +42,24 @@ describe('GitSyncEngine conflict + offline', () => {
     await e.syncNow();
     expect(e.getState().phase).toBe('blocked');
     expect(e.getState().conflictPaths).toEqual(['a.rosetta']);
-    expect((o.push as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(o.push as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+  });
+
+  it('keepMine with failed lease clears conflictPaths from state', async () => {
+    const policy: ConflictPolicy = { onConflict: async () => ({ action: 'keepMine' }) };
+    const o = ops({
+      merge: vi.fn().mockResolvedValue({ ok: false, conflictPaths: ['a.rosetta'] }),
+      restoreLocal: vi.fn().mockResolvedValue(undefined),
+      // remoteSha returns different value → lease check fails
+      remoteSha: vi.fn().mockResolvedValueOnce('remote').mockResolvedValueOnce('remote-moved'),
+      push: vi.fn().mockResolvedValue(undefined)
+    });
+    const e = createGitSyncEngine({ ...base, conflictPolicy: policy, __opsForTest: o } as never);
+    await e.syncNow();
+    const s = e.getState();
+    expect(s.phase).toBe('blocked');
+    expect(s.conflictPaths).toBeUndefined();
+    expect(s.lastError?.code).toBe('non_fast_forward');
   });
 
   it('keepMine restores the working tree then force-pushes with lease, then idle', async () => {
@@ -45,7 +68,9 @@ describe('GitSyncEngine conflict + offline', () => {
     const policy: ConflictPolicy = { onConflict: async () => ({ action: 'keepMine' }) };
     const o = ops({
       merge: vi.fn().mockResolvedValue({ ok: false, conflictPaths: ['a'] }),
-      push, restoreLocal, remoteSha: vi.fn().mockResolvedValue('remote') // unchanged → lease ok
+      push,
+      restoreLocal,
+      remoteSha: vi.fn().mockResolvedValue('remote') // unchanged → lease ok
     });
     const e = createGitSyncEngine({ ...base, conflictPolicy: policy, __opsForTest: o } as never);
     await e.syncNow();
@@ -69,7 +94,7 @@ describe('GitSyncEngine conflict + offline', () => {
     const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);
     await e.syncNow();
     expect(e.getState().phase).toBe('offline');
-    expect((o.commit as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect(o.commit as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing online-wise when isOnline is false', async () => {
@@ -77,6 +102,6 @@ describe('GitSyncEngine conflict + offline', () => {
     const e = createGitSyncEngine({ ...base, isOnline: () => false, __opsForTest: o } as never);
     await e.syncNow();
     expect(e.getState().phase).toBe('offline');
-    expect((o.fetch as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(o.fetch as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 });

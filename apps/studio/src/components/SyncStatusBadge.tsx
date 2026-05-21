@@ -93,7 +93,7 @@ export function SyncStatusBadge({ status, onResolve }: SyncStatusBadgeProps): Re
           className="inline-flex items-center gap-1.5 text-xs text-amber-500"
         >
           <AlertTriangle className="size-3 shrink-0" />
-          <span>Couldn&apos;t sync — remote changed</span>
+          <span>Merge conflict — choose a resolution</span>
           <Button
             type="button"
             variant="outline"

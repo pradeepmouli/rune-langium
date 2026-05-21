@@ -99,7 +99,7 @@ import { FontScaleButton } from '../components/FontScaleButton.js';
 import { pathToUri } from '../utils/uri.js';
 import { mergeSerializedIntoSource } from '../utils/source-merge.js';
 import type { ParsedWorkspaceModel } from '../services/workspace.js';
-import { getSyncEngine, resolveConflict } from '../services/git-sync.js';
+import { subscribeToEngine, resolveConflict } from '../services/git-sync.js';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
 import type { WorkspaceKind } from '../workspace/persistence.js';
 import {
@@ -446,18 +446,13 @@ export function EditorPage({
   const displayFileTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   // Git sync status — only meaningful for git-backed workspaces.
-  // Seeded from the engine's current state on mount; updated via subscription.
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(() => {
-    if (workspaceKind !== 'git-backed') return null;
-    return getSyncEngine(workspaceId)?.getState() ?? null;
-  });
+  // Uses subscribeToEngine so the subscription survives async engine creation:
+  // the badge will receive state even if the engine is created after this effect
+  // runs (which is the common case on first boot).
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   useEffect(() => {
     if (workspaceKind !== 'git-backed') return;
-    const engine = getSyncEngine(workspaceId);
-    if (!engine) return;
-    // Seed with the current state in case the engine emitted before mount.
-    setSyncStatus(engine.getState());
-    return engine.subscribe(setSyncStatus);
+    return subscribeToEngine(workspaceId, setSyncStatus);
   }, [workspaceId, workspaceKind]);
 
   const storeNodes = useEditorStore((s) => s.nodes);
