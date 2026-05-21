@@ -174,8 +174,14 @@ describe('CodePreviewPanel table-as-landing flow', () => {
     ];
     render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} files={files as never} />);
 
+    // §5.1 — Download now opens the config modal first; Generate fires the
+    // request. With no dep graph populated (empty store), the modal has no
+    // namespaces to narrow and emits everything.
     await act(async () => {
       fireEvent.click(screen.getByTestId('codegen-targets-table__download-zod'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('download-config-modal__generate'));
     });
 
     // Spinner appears on the zod row while the fetch is pending.

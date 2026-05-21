@@ -1,0 +1,6 @@
+namespace "test.base"
+version "1"
+
+type BaseEntity:
+    id string (1..1)
+    name string (1..1)

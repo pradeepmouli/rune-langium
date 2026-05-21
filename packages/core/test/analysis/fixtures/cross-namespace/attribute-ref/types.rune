@@ -1,0 +1,6 @@
+namespace "test.types"
+version "1"
+
+type Address:
+    street string (1..1)
+    city string (1..1)

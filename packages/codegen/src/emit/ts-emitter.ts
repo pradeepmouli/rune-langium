@@ -47,6 +47,7 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitter, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { resolveImportPath } from './namespace-registry.js';
+import { getElementNamespace } from '@rune-langium/core';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
 import {
@@ -123,23 +124,6 @@ const JS_TYPEOF_MAP: Record<string, string> = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Get the namespace string for an AST element by inspecting its $container.
- * Returns undefined when the element is not directly inside a RosettaModel.
- */
-function getElementNamespace(element: { $container?: unknown }): string | undefined {
-  const container = element.$container;
-  if (!container || typeof container !== 'object') return undefined;
-  const model = container as { name?: unknown; $type?: string };
-  if (model.$type !== 'RosettaModel') return undefined;
-  const name = model.name;
-  if (typeof name === 'string') return name.replace(/^"|"$/g, '');
-  if (name && typeof name === 'object' && 'segments' in name) {
-    return (name as { segments: string[] }).segments.join('.');
-  }
-  return String(name ?? '');
-}
 
 /**
  * Collect cross-namespace import statements needed for the types and aliases

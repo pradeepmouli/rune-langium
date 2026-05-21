@@ -15,14 +15,33 @@
  * then expose the original file name in the response.
  */
 
-// Langium services are imported LAZILY inside parseUserFiles below so a
-// curated-only request (files: [], curatedBundles: [...]) avoids the
-// ~1.8 MB langium runtime import + createRuneDslServices initialization
-// entirely. The curated path consumes a pre-parsed JSON artifact and
-// does not need any langium pipeline at runtime.
+// Langium services are imported LAZILY inside hydrateUserWorkspace /
+// populateDependencyGraph below so an empty-workspace request
+// (files: [], curatedBundles: []) avoids the ~1.8 MB langium runtime import
+// + createRuneDslServices initialization entirely. Any request that produces
+// at least one hydration document (user-parsed or curated-deserialized) pays
+// the langium init cost once.
+//
+// Cross-namespace dep-graph helpers (collectNamespaceDependencies +
+// closeNamespaceDependencies) are pure functions over LangiumDocument[]
+// — importing them statically pulls in just the AST type guards from
+// core's generated/ast.js, not any service runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { URI } from 'langium';
+import { collectNamespaceDependencies, closeNamespaceDependencies } from '@rune-langium/core';
+import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
+
+/**
+ * The langium service pair plus the live LangiumDocument set, shared
+ * between hydrateUserWorkspace (which produces user docs) and the curated
+ * deserialization path (which adds curated docs to the same workspace
+ * before walking).
+ */
+interface WorkspaceContext {
+  shared: LangiumSharedCoreServices;
+  RuneDsl: LangiumCoreServices;
+  userDocs: LangiumDocument[];
+}
 
 type ParseRequestBody = {
   files: Array<{ name: string; content: string }>;
@@ -95,7 +114,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         models: [],
         deferredExports: [],
         errors: {},
-        hydrationState: { documents: [] }
+        hydrationState: { documents: [] },
+        dependencyGraph: {}
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
@@ -103,6 +123,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   try {
     const errors: Record<string, string[]> = {};
+    // Cross-namespace dep graph (spec 2026-05-14 §5.2). Keys are namespace
+    // names (e.g. "cdm.trade"); values are the transitive dep closure
+    // including the source itself, sorted for stable response bytes.
+    // Populated by the unified hydrate-and-walk pass below: user files come
+    // pre-built from parseUserFiles, curated docs are deserialized via
+    // JsonSerializer.deserialize using the same services, and the combined
+    // workspace is re-linked so cross-bundle $refs resolve before walking.
+    const dependencyGraph: Record<string, string[]> = {};
     const documentsForHydration: Array<{
       uri: string;
       content: string;
@@ -132,12 +160,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       entries: Array<{ type: string; name: string }>;
     }> = [];
 
-    // Only spin up Langium services when there are user files to parse.
-    // Curated-only requests (files: [], curatedBundles: [...]) skip the
-    // ~1.8 MB langium import + createRuneDslServices entirely — the
-    // curated path consumes pre-parsed JSON via curated-fetch.ts.
+    // User files run through Langium parse + serialize. The returned
+    // context (full service pair + LangiumDocument[]) is reused below for
+    // the unified dep-graph computation so we don't double-import langium.
+    let workspaceContext: WorkspaceContext | undefined;
     if (body.files.length > 0) {
-      await parseUserFiles(body.files, errors, documentsForHydration, deferredExportsList);
+      workspaceContext = await hydrateUserWorkspace(body.files, errors, documentsForHydration, deferredExportsList);
     }
 
     // Fetch curated bundles via the CURATED_MIRROR service binding so the
@@ -185,6 +213,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
+    // Cross-namespace dep-graph (spec 2026-05-14 §5.2). Runs over the full
+    // workspace — user-parsed docs (kept live in workspaceContext) plus
+    // curated docs (deserialized here from their serializedModel strings)
+    // — so the modal's auto-select cascade resolves cross-bundle refs
+    // (cdm.trade → cdm.base.datetime, etc.) without re-fetching anything.
+    // For empty-workspace requests (no user files, no curated bundles),
+    // nothing was loaded and the dep graph stays empty (early-returned above).
+    if (documentsForHydration.length > 0) {
+      await populateDependencyGraph(documentsForHydration, workspaceContext, dependencyGraph);
+    }
+
     // Raw Langium AST nodes have circular $container refs and cannot be
     // JSON-serialized. The HTTP response carries the serialized AST inside
     // `hydrationState.documents[].serializedModel` (Langium JSON serializer
@@ -205,7 +244,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           exports: entries
         })),
         errors,
-        hydrationState: { documents: documentsForHydration }
+        hydrationState: { documents: documentsForHydration },
+        dependencyGraph
       }),
       {
         status: 200,
@@ -224,14 +264,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 /**
- * Parse user-authored .rune files through Langium. Lazy-imports the
- * @rune-langium/core module so curated-only requests don't pay the
- * ~1.8 MB bundle init + service registration cost.
+ * Hydrate user-authored .rune files into a Langium workspace: parse via the
+ * grammar, build + link, then serialize each model into JSON for the
+ * response's `hydrationState`. Returns the live LangiumDocument[] + services
+ * so the caller can reuse them for the cross-namespace dep-graph pass
+ * (which deserializes curated docs into the same workspace before walking).
+ *
+ * Lazy-imports `@rune-langium/core` so requests with no work (no user
+ * files AND no curated bundles) don't pay the ~1.8 MB bundle init cost.
  *
  * Mutates the passed-in `errors`, `documentsForHydration`, and
- * `deferredExportsByNamespace` collections rather than returning them.
+ * `deferredExportsList` collections; returns the services + docs.
  */
-async function parseUserFiles(
+async function hydrateUserWorkspace(
   files: ReadonlyArray<{ name: string; content: string }>,
   errors: Record<string, string[]>,
   documentsForHydration: Array<{
@@ -241,14 +286,14 @@ async function parseUserFiles(
     exports: Array<{ type: string; name: string; path: string }>;
   }>,
   deferredExportsList: Array<{ filePath: string; namespace: string; entries: Array<{ type: string; name: string }> }>
-): Promise<void> {
+): Promise<WorkspaceContext> {
   const [{ createRuneDslServices }, { EmptyFileSystem }] = await Promise.all([
     import('@rune-langium/core'),
     import('langium')
   ]);
-  const { RuneDsl } = createRuneDslServices(EmptyFileSystem);
-  const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
-  const builder = RuneDsl.shared.workspace.DocumentBuilder;
+  const { RuneDsl, shared } = createRuneDslServices(EmptyFileSystem);
+  const factory = shared.workspace.LangiumDocumentFactory;
+  const builder = shared.workspace.DocumentBuilder;
 
   const docs = files.map((f) => factory.fromString(f.content, toRosettaUri(f.name)));
   await builder.build(docs, { validation: false });
@@ -321,6 +366,8 @@ async function parseUserFiles(
       });
     }
   }
+
+  return { shared, RuneDsl, userDocs: docs };
 }
 
 /**
@@ -416,4 +463,79 @@ function mergeCuratedDocIntoDeferredExports(
  */
 function stringifyWithBigInt(value: unknown): string {
   return JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v));
+}
+
+/**
+ * Compute the cross-namespace dep graph (spec 2026-05-14 §5.2) over the
+ * full hydration set — user-parsed docs (already live in workspaceContext)
+ * plus curated docs (deserialized here from `serializedModel` strings via
+ * the same pattern apps/studio/src/workers/codegen-worker.ts uses).
+ *
+ * The combined set is re-linked through DocumentBuilder.build so cross-
+ * bundle `$ref` targets resolve before the walker reads them. Each
+ * namespace gets its transitive closure (via closeNamespaceDependencies)
+ * sorted into a stable string[] in `dependencyGraph[ns]`.
+ *
+ * If `workspaceContext` is undefined (curated-only request), we lazy-import
+ * langium services here so empty-workspace requests still skip the cost.
+ */
+async function populateDependencyGraph(
+  documentsForHydration: ReadonlyArray<{
+    uri: string;
+    serializedModel: string;
+    bundleId?: string;
+  }>,
+  workspaceContext: WorkspaceContext | undefined,
+  dependencyGraph: Record<string, string[]>
+): Promise<void> {
+  // Fail-soft: a missing/partial dep graph degrades the modal's auto-cascade
+  // hints but never breaks /api/parse's primary hydration contract. Any
+  // exception here (malformed serializedModel, deserializer schema drift,
+  // builder.build chokepoint) leaves dependencyGraph empty and continues.
+  try {
+    let context = workspaceContext;
+    if (!context) {
+      const [{ createRuneDslServices }, { EmptyFileSystem }] = await Promise.all([
+        import('@rune-langium/core'),
+        import('langium')
+      ]);
+      const { RuneDsl, shared } = createRuneDslServices(EmptyFileSystem);
+      context = { shared, RuneDsl, userDocs: [] };
+    }
+    const factory = context.shared.workspace.LangiumDocumentFactory;
+    const builder = context.shared.workspace.DocumentBuilder;
+
+    // Hydrate curated docs into LangiumDocuments. User docs are already in
+    // the workspace from hydrateUserWorkspace; we identify curated entries by
+    // `bundleId` presence (set in the curated loop, omitted on user files).
+    const curatedDocs: LangiumDocument[] = [];
+    for (const entry of documentsForHydration) {
+      if (entry.bundleId === undefined) continue;
+      try {
+        const model = context.RuneDsl.serializer.JsonSerializer.deserialize(entry.serializedModel) as RosettaModel;
+        const doc = factory.fromModel(model, URI.parse(entry.uri));
+        curatedDocs.push(doc);
+      } catch {
+        // Skip individual malformed entries — the rest of the workspace
+        // still produces a useful (partial) dep graph.
+      }
+    }
+
+    if (curatedDocs.length > 0) {
+      // Re-link combined workspace so cross-bundle $refs resolve. Validation
+      // off: same flag hydrateUserWorkspace passed when it built user docs.
+      await builder.build([...context.userDocs, ...curatedDocs], { validation: false });
+    }
+
+    const allDocs: LangiumDocument[] = [...context.userDocs, ...curatedDocs];
+    if (allDocs.length === 0) return;
+
+    const directDeps = collectNamespaceDependencies(allDocs);
+    for (const namespace of directDeps.keys()) {
+      const closure = closeNamespaceDependencies(namespace, directDeps);
+      dependencyGraph[namespace] = Array.from(closure).sort();
+    }
+  } catch (err) {
+    console.warn('[api/parse] dep-graph computation failed; response will omit dependencyGraph entries.', err);
+  }
 }

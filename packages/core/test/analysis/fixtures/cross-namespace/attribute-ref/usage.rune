@@ -1,0 +1,8 @@
+namespace "test.usage"
+version "1"
+
+import test.types.*
+
+type Person:
+    name string (1..1)
+    home Address (1..1)

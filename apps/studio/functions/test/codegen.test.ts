@@ -143,6 +143,48 @@ describe('POST /api/codegen', () => {
     expect(names).toEqual(['x.zod.ts', 'y.zod.ts']);
   });
 
+  it('namespaces filter (§5.3) emits only the allowlisted namespace', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: TWO_NAMESPACES,
+        target: 'zod',
+        options: { zod: { layout: 'per-namespace' } },
+        namespaces: ['x']
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    // Only x survives → single artifact (not a zip).
+    expect(res.headers.get('Content-Disposition')).toMatch(/x\.zod\.ts/);
+    const text = await res.text();
+    expect(text).toContain('export const');
+  });
+
+  it('namespaces filter keeps both when both are allowlisted', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: TWO_NAMESPACES,
+        target: 'zod',
+        options: { zod: { layout: 'per-namespace' } },
+        namespaces: ['x', 'y']
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const zip = await JSZip.loadAsync(buf);
+    expect(Object.keys(zip.files).sort()).toEqual(['x.zod.ts', 'y.zod.ts']);
+  });
+
+  it('rejects a non-array namespaces field with 400', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: TWO_NAMESPACES,
+        target: 'zod',
+        namespaces: 'x' as unknown as string[]
+      })
+    } as never);
+    expect(res.status).toBe(400);
+  });
+
   it("JSON Schema default ('single-file') returns one bundled model.schema.json", async () => {
     const res = await onRequestPost({
       request: makeRequest({

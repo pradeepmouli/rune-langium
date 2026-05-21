@@ -16,6 +16,7 @@ import {
   type WorkspaceFile
 } from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
+import { DownloadConfigModal, type DownloadConfig } from './DownloadConfigModal.js';
 import { useCodegenStore, type CodePreviewFile, type CodePreviewSnapshot } from '../store/codegen-store.js';
 import { usePreviewStore } from '../store/preview-store.js';
 import { CODE_PREVIEW_PANEL_ID, TARGET_LABELS } from './codegen-ui.js';
@@ -199,28 +200,49 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
   // to /api/codegen is outstanding. Panel-local state because no other
   // component needs to observe it.
   const [downloadingTarget, setDownloadingTarget] = useState<Target | undefined>(undefined);
+  // 019 §5.1 — which target's Download config modal is open (undefined =
+  // closed). Clicking Download opens the modal; the modal's Generate fires
+  // the actual /api/codegen request with the chosen layout + namespace subset.
+  const [downloadModalTarget, setDownloadModalTarget] = useState<Target | undefined>(undefined);
+  const dependencyGraph = useCodegenStore((s) => s.dependencyGraph);
+  // The downloadable namespace set = every namespace /api/parse walked
+  // (user + curated). dependencyGraph keys are that set (§5.2).
+  const namespaceList = useMemo(() => Object.keys(dependencyGraph).sort(), [dependencyGraph]);
 
+  // §5.1 — Download click opens the config modal (was: immediate download).
+  // The empty-workspace guard stays here so we don't open a modal for a
+  // workspace with nothing to emit.
   const handleDownloadTarget = useCallback(
-    async (newTarget: Target) => {
+    (newTarget: Target) => {
       const fileList = files ?? [];
-      const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
-      // 019 Task #88 — curated bundles travel as `{ id, version }`
-      // tuples; the Pages Function fetches them server-to-server via
-      // the CURATED_MIRROR binding. A pure curated workspace (no
-      // user-authored files) is a legitimate download case, so we no
-      // longer bail when requestFiles is empty — only bail when the
-      // workspace has neither user files nor curated bundles.
-      const curatedBundles = collectCuratedBundlesFromWorkspace(fileList);
-      if (requestFiles.length === 0 && curatedBundles.length === 0) {
+      const hasUserFiles = fileList.some((f) => !f.readOnly);
+      const hasCurated = collectCuratedBundlesFromWorkspace(fileList).length > 0;
+      if (!hasUserFiles && !hasCurated) {
         console.warn(
           '[CodePreviewPanel] Download skipped — workspace has no user files and no curated bundles for target:',
           newTarget
         );
         return;
       }
+      setDownloadModalTarget(newTarget);
+    },
+    [files]
+  );
+
+  // §5.1/§5.3 — fire the configured download. Maps the modal's layout choice
+  // into `options.<target>.layout` and forwards the dependency-closed
+  // namespace subset to /api/codegen.
+  const handleModalGenerate = useCallback(
+    async (config: DownloadConfig) => {
+      const newTarget = config.target;
+      setDownloadModalTarget(undefined);
+      const fileList = files ?? [];
+      const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
+      const curatedBundles = collectCuratedBundlesFromWorkspace(fileList);
+      const options = config.layout ? { [newTarget]: { layout: config.layout } } : {};
       setDownloadingTarget(newTarget);
       try {
-        await downloadTargetViaRouter(requestFiles, newTarget, {}, curatedBundles);
+        await downloadTargetViaRouter(requestFiles, newTarget, options, curatedBundles, config.namespaces);
       } catch (err) {
         if (err instanceof CodegenDownloadError) {
           console.error(
@@ -390,6 +412,16 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
             className="preview-panel__editor studio-scroll min-w-0 flex-1 overflow-auto"
           />
         </>
+      ) : null}
+      {downloadModalTarget !== undefined ? (
+        <DownloadConfigModal
+          open
+          target={downloadModalTarget}
+          namespaces={namespaceList}
+          dependencyGraph={dependencyGraph}
+          onClose={() => setDownloadModalTarget(undefined)}
+          onGenerate={handleModalGenerate}
+        />
       ) : null}
     </section>
   );
