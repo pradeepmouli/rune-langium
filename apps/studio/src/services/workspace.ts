@@ -20,6 +20,7 @@ import type {
   HydrateResponse
 } from '../workers/parser-worker.js';
 import { isParseResponse, isParseWorkspaceResponse, isLinkDocumentResponse } from '../workers/parser-worker.js';
+import { useCodegenStore } from '../store/codegen-store.js';
 
 export interface WorkspaceFile {
   name: string;
@@ -466,6 +467,7 @@ export async function parseWorkspaceViaRouter(
     deferredExports: ParseWorkspaceResponse['deferredExports'];
     errors: ParseWorkspaceResponse['errors'];
     hydrationState: { documents: HydrateRequest['documents'] };
+    dependencyGraph?: Record<string, string[]>;
   };
 
   if (!data.ok) {
@@ -473,6 +475,11 @@ export async function parseWorkspaceViaRouter(
     // workspace inputs rather than reparsing only user files in-place.
     throw new Error('/api/parse returned ok:false');
   }
+
+  // Publish the cross-namespace dep graph (spec §5.2) into the codegen store
+  // so the Download config modal can drive its auto-select cascade. Absent /
+  // fail-soft responses leave it `{}` (modal shows no cascade hints).
+  useCodegenStore.getState().setDependencyGraph(data.dependencyGraph ?? {});
 
   // Deserialize ONLY the user-document hydration entries into RosettaModel
   // instances for the graph view. Curated corpus documents stay in
@@ -915,11 +922,17 @@ export async function downloadTargetViaRouter(
   files: Array<{ path: string; content: string }>,
   target: string,
   options: Record<string, unknown> = {},
-  curatedBundles: ReadonlyArray<{ id: string; version: string }> = []
+  curatedBundles: ReadonlyArray<{ id: string; version: string }> = [],
+  namespaces: ReadonlyArray<string> = []
 ): Promise<void> {
   const body: Record<string, unknown> = { files, target, options };
   if (curatedBundles.length > 0) {
     body.curatedBundles = curatedBundles;
+  }
+  // §5.3 — forward the modal's dependency-closed namespace subset. Empty =
+  // no filter (emit everything), matching the server's interpretation.
+  if (namespaces.length > 0) {
+    body.namespaces = namespaces;
   }
   const response = await fetch('/api/codegen', {
     method: 'POST',

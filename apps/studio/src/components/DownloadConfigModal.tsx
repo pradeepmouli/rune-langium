@@ -192,11 +192,18 @@ export function DownloadConfigModal({
     onGenerate({
       target,
       layout,
-      namespaces: Array.from(selection.emitted).sort()
+      // When there are no namespaces to choose from (dep graph not yet
+      // populated / fail-soft empty), emit an empty list = "no filter" so
+      // the server emits everything. Otherwise send the closed emit set.
+      namespaces: namespaces.length === 0 ? [] : Array.from(selection.emitted).sort()
     });
   }
 
   const hasLayouts = (panel?.layouts.length ?? 0) > 0;
+  const hasNamespaces = namespaces.length > 0;
+  // Disable Generate only when there ARE namespaces but the user deselected
+  // them all. An empty namespace list is a valid "emit everything" state.
+  const generateDisabled = hasNamespaces && selection.emitted.size === 0;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -240,7 +247,10 @@ export function DownloadConfigModal({
             </div>
           )}
 
-          {/* Namespaces with auto-select cascade */}
+          {/* Namespaces with auto-select cascade. Hidden when there's
+              nothing to narrow (dep graph not populated) — Generate then
+              emits everything. */}
+          {hasNamespaces && (
           <div className="flex flex-col gap-2" data-testid="download-config-modal__namespaces">
             <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               Namespaces ({selection.emitted.size} selected, {namespaces.length} total)
@@ -295,6 +305,7 @@ export function DownloadConfigModal({
               </div>
             </TooltipProvider>
           </div>
+          )}
         </div>
 
         <Separator />
@@ -305,7 +316,7 @@ export function DownloadConfigModal({
           <Button
             size="sm"
             onClick={handleGenerate}
-            disabled={selection.emitted.size === 0}
+            disabled={generateDisabled}
             data-testid="download-config-modal__generate"
           >
             Generate

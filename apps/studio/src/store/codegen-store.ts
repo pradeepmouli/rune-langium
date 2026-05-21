@@ -31,6 +31,15 @@ export type CodePreviewSnapshot =
     };
 
 interface CodegenState {
+  /**
+   * Cross-namespace dependency graph from the most recent /api/parse
+   * response (spec 2026-05-14 §5.2). Keys are namespace names; values are
+   * the transitive dep closure (incl. self). The Download config modal reads
+   * this for its auto-select cascade + the namespace checklist. Empty until
+   * the first parse completes (or if the server's fail-soft path returned no
+   * graph).
+   */
+  dependencyGraph: Record<string, string[]>;
   codePreviewTarget: Target;
   /**
    * Target the UI is currently viewing in the code-preview pane.
@@ -44,6 +53,7 @@ interface CodegenState {
   currentRequestId: string;
   snapshot: CodePreviewSnapshot;
   beginCodePreviewRequest: (target: Target) => string;
+  setDependencyGraph: (graph: Record<string, string[]>) => void;
   setCodePreviewTarget: (target: Target) => void;
   /** Switch the viewer to `target`, or pass `undefined` to return to the targets table. */
   setActiveTarget: (target: Target | undefined) => void;
@@ -75,10 +85,12 @@ function pickActiveRelativePath(files: CodePreviewFile[], previousRelativePath?:
 }
 
 export const useCodegenStore = create<CodegenState>((set) => ({
+  dependencyGraph: {},
   codePreviewTarget: DEFAULT_TARGET,
   activeTarget: undefined,
   currentRequestId: INITIAL_REQUEST_ID,
   snapshot: createInitialSnapshot(),
+  setDependencyGraph: (graph) => set({ dependencyGraph: graph }),
   beginCodePreviewRequest: (target) => {
     const requestId = `codegen:${target}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
     set({
@@ -167,6 +179,7 @@ export const useCodegenStore = create<CodegenState>((set) => ({
     })),
   resetCodegenState: () =>
     set({
+      dependencyGraph: {},
       codePreviewTarget: DEFAULT_TARGET,
       activeTarget: undefined,
       currentRequestId: INITIAL_REQUEST_ID,

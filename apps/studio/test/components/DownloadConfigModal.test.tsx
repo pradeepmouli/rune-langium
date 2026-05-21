@@ -165,4 +165,16 @@ describe('DownloadConfigModal', () => {
     renderModal({ target: 'graphql' });
     expect(screen.queryByTestId('download-config-modal__layout')).toBeNull();
   });
+
+  it('hides the namespace section + still allows Generate when the dep graph is empty', () => {
+    // No namespaces to narrow (dep graph not populated). The section is
+    // hidden and Generate emits an empty list = "no filter" (server emits all).
+    const { onGenerate } = renderModal({ namespaces: [], dependencyGraph: {} });
+    expect(screen.queryByTestId('download-config-modal__namespaces')).toBeNull();
+    const generate = screen.getByTestId('download-config-modal__generate') as HTMLButtonElement;
+    expect(generate.disabled).toBe(false);
+    fireEvent.click(generate);
+    const config = onGenerate.mock.calls[0][0] as DownloadConfig;
+    expect(config.namespaces).toEqual([]);
+  });
 });
