@@ -54,6 +54,7 @@ import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { LspConnectionBadge } from '../components/LspConnectionBadge.js';
+import { SyncStatusBadge } from '../components/SyncStatusBadge.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { ModelLoader } from '../components/ModelLoader.js';
@@ -98,6 +99,9 @@ import { FontScaleButton } from '../components/FontScaleButton.js';
 import { pathToUri } from '../utils/uri.js';
 import { mergeSerializedIntoSource } from '../utils/source-merge.js';
 import type { ParsedWorkspaceModel } from '../services/workspace.js';
+import { subscribeToEngine, resolveConflict } from '../services/git-sync.js';
+import type { SyncStatus } from '@rune-langium/git-sync-engine';
+import type { WorkspaceKind } from '../workspace/persistence.js';
 import {
   createPreviewGenerateMessage,
   createPreviewSetFilesMessage,
@@ -241,6 +245,8 @@ export interface EditorPageProps {
   onReconnect?: () => void;
   /** Workspace id used for layout persistence keying. */
   workspaceId?: string;
+  /** Workspace kind — controls git-sync badge visibility. */
+  workspaceKind?: WorkspaceKind;
   /** Studio build version threaded into layout migrations. */
   studioVersion?: string;
   /** Workspace display name shown in the toolbar. */
@@ -381,6 +387,7 @@ export function EditorPage({
   transportState,
   onReconnect,
   workspaceId = 'default',
+  workspaceKind,
   studioVersion = '0.1.0',
   workspaceName,
   fileCount,
@@ -437,6 +444,19 @@ export function EditorPage({
     new Map()
   );
   const displayFileTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  // Git sync status — only meaningful for git-backed workspaces.
+  // Uses subscribeToEngine so the subscription survives async engine creation:
+  // the badge will receive state even if the engine is created after this effect
+  // runs (which is the common case on first boot).
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  useEffect(() => {
+    if (workspaceKind !== 'git-backed') return;
+    // Reset to null immediately on workspace switch so the badge never shows
+    // the previous workspace's status while the new engine initialises.
+    setSyncStatus(null);
+    return subscribeToEngine(workspaceId, setSyncStatus);
+  }, [workspaceId, workspaceKind]);
 
   const storeNodes = useEditorStore((s) => s.nodes);
   const storeEdges = useEditorStore((s) => s.edges);
@@ -1924,6 +1944,14 @@ export function EditorPage({
             <span>Search types, files, commands…</span>
             <Kbd>⌘K</Kbd>
           </button>
+          {workspaceKind === 'git-backed' && syncStatus && (
+            <SyncStatusBadge
+              status={syncStatus}
+              onResolve={(choice) => {
+                resolveConflict(workspaceId, choice);
+              }}
+            />
+          )}
           <span className="studio-topbar__divider" />
           <FontScaleButton />
           <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">

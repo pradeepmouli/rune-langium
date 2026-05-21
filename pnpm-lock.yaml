@@ -304,6 +304,9 @@ importers:
       '@rune-langium/design-system':
         specifier: workspace:*
         version: link:../../packages/design-system
+      '@rune-langium/git-sync-engine':
+        specifier: workspace:*
+        version: link:../../packages/git-sync-engine
       '@rune-langium/lsp-server':
         specifier: workspace:*
         version: link:../../packages/lsp-server
@@ -662,6 +665,21 @@ importers:
       tsx:
         specifier: ^4.22.1
         version: 4.22.1
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.5(@types/node@25.8.0)(@vitest/coverage-v8@4.1.5)(@vitest/ui@4.1.5)(jsdom@29.1.1(@noble/hashes@1.8.0))(msw@2.14.5(@types/node@25.8.0)(typescript@6.0.3))(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.1)(yaml@2.8.4))
+
+  packages/git-sync-engine:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.8.0
+        version: 25.8.0
+      isomorphic-git:
+        specifier: ^1.37.6
+        version: 1.37.6
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
       vitest:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.8.0)(@vitest/coverage-v8@4.1.5)(@vitest/ui@4.1.5)(jsdom@29.1.1(@noble/hashes@1.8.0))(msw@2.14.5(@types/node@25.8.0)(typescript@6.0.3))(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.1)(yaml@2.8.4))

@@ -29,6 +29,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/design-system/tsconfig.json" },
+    { "path": "packages/git-sync-engine" },
     { "path": "packages/lsp-server" },
     { "path": "packages/visual-editor" },
     { "path": "apps/studio" }

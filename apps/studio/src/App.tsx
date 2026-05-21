@@ -32,6 +32,7 @@ import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
 import { deleteWorkspaceFiles, loadWorkspaceFiles, saveWorkspaceFiles } from './workspace/workspace-files.js';
 import { WorkspaceManager } from './workspace/workspace-manager.js';
 import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
+import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
 
@@ -302,7 +303,9 @@ function AppContent() {
     // surfaced two identical `untitled BROWSER` entries with no way to
     // distinguish which was which. Disambiguate at creation time so every
     // workspace record carries a unique label.
-    const recents = await persistence.listRecents().catch(() => [] as Awaited<ReturnType<typeof persistence.listRecents>>);
+    const recents = await persistence
+      .listRecents()
+      .catch(() => [] as Awaited<ReturnType<typeof persistence.listRecents>>);
     const takenNames = new Set(recents.map((r) => r.name));
     let uniqueName = name;
     if (takenNames.has(uniqueName)) {
@@ -774,6 +777,41 @@ function AppContent() {
     return workspaceManagerRef.current;
   }, []);
 
+  // Sync-engine lifecycle: instantiate the engine when a git-backed workspace
+  // becomes active and dispose it when the active workspace changes or is
+  // cleared. A single effect watching `restoredWorkspace` covers every
+  // transition — boot restore, workspace switch, reset, and delete.
+  const prevRestoredWorkspaceIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const ws = restoredWorkspace;
+    const prevId = prevRestoredWorkspaceIdRef.current;
+    prevRestoredWorkspaceIdRef.current = ws?.id ?? null;
+
+    // Dispose the engine for whichever workspace just became inactive.
+    if (prevId && prevId !== ws?.id) {
+      disposeSyncEngine(prevId);
+    }
+
+    // Instantiate the engine for the newly active git-backed workspace.
+    if (!ws || ws.kind !== 'git-backed') return;
+    const workspaceId = ws.id;
+    const gitBacking = ws.gitBacking;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const wm = await getWorkspaceManager();
+        if (cancelled) return; // workspace changed during async getWorkspaceManager
+        const fs = wm.getFs();
+        // Token is no longer pre-loaded here — the engine's onAuth loads it
+        // lazily on each isomorphic-git call so rotated tokens are always used.
+        getOrCreateSyncEngine({ fs, workspaceId, gitBacking });
+      } catch (err) {
+        if (!cancelled) console.warn('[git-sync] Failed to instantiate sync engine:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [getWorkspaceManager, restoredWorkspace]);
+
   const handleCreateGitBackedWorkspace = useCallback(
     async (input: { repoUrl: string; branch: string; user: string; token: string }) => {
       const wm = await getWorkspaceManager();
@@ -965,6 +1003,7 @@ function AppContent() {
             transportState={transportState}
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
+            workspaceKind={restoredWorkspace?.kind}
             workspaceName={restoredWorkspace?.name}
             fileCount={userFiles.length}
             onClose={handleReset}
@@ -995,6 +1034,7 @@ function AppContent() {
             transportState={transportState}
             onReconnect={handleReconnect}
             workspaceId={restoredWorkspace?.id ?? 'default'}
+            workspaceKind={restoredWorkspace?.kind}
             workspaceName={restoredWorkspace?.name}
             fileCount={userFiles.length}
             onClose={handleReset}

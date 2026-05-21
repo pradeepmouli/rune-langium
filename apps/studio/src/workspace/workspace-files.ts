@@ -3,9 +3,12 @@
 
 import { OpfsFs } from '../opfs/opfs-fs.js';
 import type { WorkspaceFile } from '../services/workspace.js';
+import { notifySyncOnSave } from '../services/git-sync.js';
+import { loadWorkspace } from './persistence.js';
 
 interface WorkspaceFilesDeps {
   getOpfsRoot: () => Promise<FileSystemDirectoryHandle>;
+  loadWorkspaceFn: (id: string) => Promise<{ kind: string } | undefined>;
 }
 
 let deps: WorkspaceFilesDeps = {
@@ -14,7 +17,8 @@ let deps: WorkspaceFilesDeps = {
       throw new Error('Origin Private File System is not available in this browser');
     }
     return navigator.storage.getDirectory();
-  }
+  },
+  loadWorkspaceFn: loadWorkspace
 };
 
 export function setWorkspaceFilesDeps(next: Partial<WorkspaceFilesDeps>): void {
@@ -34,13 +38,33 @@ export async function saveWorkspaceFiles(
   files: readonly WorkspaceFile[]
 ): Promise<void> {
   const root = await deps.getOpfsRoot();
+
+  // Determine the workspace kind before touching OPFS.
+  //
+  // For git-backed workspaces, the cloned repo contains files the editor
+  // does NOT track (README, CI configs, non-.rosetta files). Pruning the
+  // entire `files/` tree and rewriting only the editor's list would delete
+  // those untracked files; the subsequent notifySyncOnSave → stageAll would
+  // then stage those deletions and push them upstream — silent remote data
+  // loss. Instead, for git-backed workspaces we skip the prune and write
+  // listed files in place, leaving untracked repo files intact.
+  //
+  // Known limitation: editor-side file deletions and renames do not yet
+  // propagate to the working tree for git-backed workspaces. This errs on
+  // the side of keeping files; explicit delete/rename tracking is a
+  // follow-up task.
+  const ws = await deps.loadWorkspaceFn(workspaceId);
+  const isGitBacked = ws?.kind === 'git-backed';
+
   const workspaceDir = await root.getDirectoryHandle(workspaceId, { create: true });
 
-  try {
-    await workspaceDir.removeEntry('files', { recursive: true });
-  } catch (error) {
-    if (!isNotFoundError(error)) {
-      throw error;
+  if (!isGitBacked) {
+    try {
+      await workspaceDir.removeEntry('files', { recursive: true });
+    } catch (error) {
+      if (!isNotFoundError(error)) {
+        throw error;
+      }
     }
   }
 
@@ -51,6 +75,7 @@ export async function saveWorkspaceFiles(
   for (const file of toStoredWorkspaceFiles(files)) {
     await fs.writeFile(`/${workspaceId}/files/${file.path}`, file.content);
   }
+  notifySyncOnSave(workspaceId);
 }
 
 export async function loadWorkspaceFiles(workspaceId: string): Promise<WorkspaceFile[]> {
