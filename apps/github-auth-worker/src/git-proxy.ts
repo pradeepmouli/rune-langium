@@ -32,10 +32,15 @@ export async function handleGitProxy(req: Request, _env: Env, allowedOrigin: str
   if (ct) headers.set('Content-Type', ct);
   const accept = req.headers.get('Accept');
   if (accept) headers.set('Accept', accept);
+  const gp = req.headers.get('Git-Protocol');
+  if (gp) headers.set('Git-Protocol', gp);
   headers.set('User-Agent', 'rune-studio-git-proxy');
 
-  const init: RequestInit = { method: req.method, headers };
-  if (req.method !== 'GET' && req.method !== 'HEAD') init.body = await req.arrayBuffer();
+  const init: RequestInit & { duplex?: 'half' } = { method: req.method, headers };
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    init.body = req.body;
+    init.duplex = 'half'; // required when body is a ReadableStream
+  }
 
   let upstream: Response;
   try {
