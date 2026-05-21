@@ -384,7 +384,6 @@ function ChoiceFieldGroup({
           const field = fields.find((f) => f.path === path);
           if (field) handleOptionChange(field);
         }}
-        className="space-y-1"
       >
         {fields.map((field) => {
           const radioId = `${groupId}-${field.path}`;
@@ -638,10 +637,11 @@ function PreviewFieldControl({
         <Checkbox
           aria-label={resolvedFieldLabel(field, arrayIndices)}
           checked={Boolean(value)}
-          onCheckedChange={(checked) => {
-            onFieldChange(field.path, checked === true, arrayIndices);
-            onFieldBlur();
-          }}
+          // A checkbox toggle is a discrete commit — onFieldChange commits the
+          // new value and the controlled re-render re-validates. Don't also
+          // call onFieldBlur() here: it reads the pre-commit closure value
+          // (stale) and would validate the old state (Codex/Copilot PR #225).
+          onCheckedChange={(checked) => onFieldChange(field.path, checked === true, arrayIndices)}
         />
         <span>{resolvedFieldLabel(field, arrayIndices)}</span>
         {fieldError ? <FieldError message={fieldError} /> : null}
