@@ -6,12 +6,33 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import z2fVite from '@zod-to-form/vite';
 import { fileURLToPath } from 'url';
+import type { Z2FViteConfig } from '@zod-to-form/vite';
 
 export default defineConfig({
   base: process.env.VITE_BASE_URL || (process.env.CF_PAGES === '1' ? '/rune-studio/studio/' : '/'),
   // Plugin order: z2fVite BEFORE react() per upstream's quickstart, so the
   // generated TSX flows through React's JSX transform normally.
-  plugins: [z2fVite(), tailwindcss(), react()],
+  //
+  // configOverride: inline z2f config avoids ssrLoadModule resolution of
+  // @zod-to-form/core from the studio package, which isn't a direct dep.
+  // The shadcn preset wires Checkbox (checked/onCheckedChange) and Select
+  // (onValueChange) — matching the DS Radix primitives exactly.
+  plugins: [
+    z2fVite({
+      configOverride: {
+        components: {
+          source: './src/codegen-forms/z2f-components',
+          preset: 'shadcn'
+        },
+        defaults: {
+          mode: 'auto-save',
+          ui: 'shadcn'
+        }
+      } satisfies Z2FViteConfig
+    }),
+    tailwindcss(),
+    react()
+  ],
   optimizeDeps: {
     include: ['buffer']
   },

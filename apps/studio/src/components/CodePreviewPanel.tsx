@@ -17,6 +17,7 @@ import {
 } from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
 import { DownloadConfigModal, type DownloadConfig } from './DownloadConfigModal.js';
+import { ExcelOptionsFormAdapter } from '../codegen-forms/ExcelOptionsFormAdapter.js';
 import { useCodegenStore, type CodePreviewFile, type CodePreviewSnapshot } from '../store/codegen-store.js';
 import { usePreviewStore } from '../store/preview-store.js';
 import { CODE_PREVIEW_PANEL_ID, TARGET_LABELS } from './codegen-ui.js';
@@ -230,8 +231,8 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
   );
 
   // §5.1/§5.3 — fire the configured download. Maps the modal's layout choice
-  // into `options.<target>.layout` and forwards the dependency-closed
-  // namespace subset to /api/codegen.
+  // and target-specific options into `options.<target>` and forwards the
+  // dependency-closed namespace subset to /api/codegen.
   const handleModalGenerate = useCallback(
     async (config: DownloadConfig) => {
       const newTarget = config.target;
@@ -239,7 +240,14 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
       const fileList = files ?? [];
       const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
       const curatedBundles = collectCuratedBundlesFromWorkspace(fileList);
-      const options = config.layout ? { [newTarget]: { layout: config.layout } } : {};
+      // Merge layout + target-specific options (e.g. excel sheet toggles) into
+      // the options bag. The order of spreading means explicit options from the
+      // form can include a layout key, but the layout radio always wins here.
+      const targetOptions = config.options?.[newTarget] ?? {};
+      const layoutOption = config.layout ? { layout: config.layout } : {};
+      const options = (config.layout || config.options)
+        ? { [newTarget]: { ...targetOptions, ...layoutOption } }
+        : {};
       setDownloadingTarget(newTarget);
       try {
         await downloadTargetViaRouter(requestFiles, newTarget, options, curatedBundles, config.namespaces);
@@ -421,6 +429,7 @@ export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreview
           dependencyGraph={dependencyGraph}
           onClose={() => setDownloadModalTarget(undefined)}
           onGenerate={handleModalGenerate}
+          optionsForm={downloadModalTarget === 'excel' ? ExcelOptionsFormAdapter : undefined}
         />
       ) : null}
     </section>

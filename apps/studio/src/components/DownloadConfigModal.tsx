@@ -20,7 +20,7 @@
  * Wiring into the real Download handler is the caller's job (§5.3).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
@@ -81,6 +81,12 @@ export interface DownloadConfig {
   layout?: string;
   /** The full emitted set: user-selected ∪ transitively-pulled dependencies. */
   namespaces: string[];
+  /**
+   * Target-specific options collected from the per-target options form
+   * (Phase 2, spec §5.1). Keyed by target name, e.g. `{ excel: { sheets: { ... } } }`.
+   * Absent when no options form is provided (undefined = no overrides).
+   */
+  options?: Record<string, unknown>;
 }
 
 export interface DownloadConfigModalProps {
@@ -96,6 +102,19 @@ export interface DownloadConfigModalProps {
   dependencyGraph: Record<string, readonly string[]>;
   onClose: () => void;
   onGenerate: (config: DownloadConfig) => void;
+  /**
+   * Optional per-target options form (Phase 2, spec §5.1 task #275).
+   * When provided, rendered in an "Options" section between Layout and
+   * Namespaces. The form must call `onChange` on every field change
+   * (i.e. it wraps a ?z2f auto-save generated form).
+   *
+   * Dependency-injected at the wiring site (CodePreviewPanel) so this
+   * modal never imports ?z2f directly and its unit tests stay clean.
+   */
+  optionsForm?: React.ComponentType<{
+    value: Record<string, unknown>;
+    onChange: (v: Record<string, unknown>) => void;
+  }>;
 }
 
 export interface NamespaceSelection {
@@ -155,7 +174,8 @@ export function DownloadConfigModal({
   namespaces,
   dependencyGraph,
   onClose,
-  onGenerate
+  onGenerate,
+  optionsForm: OptionsForm
 }: DownloadConfigModalProps) {
   const descriptor = TARGET_DESCRIPTORS[target];
   const panel = TARGET_PANELS[target];
@@ -165,6 +185,13 @@ export function DownloadConfigModal({
   // target's opinionated download default.
   const [selected, setSelected] = useState<Set<string>>(() => new Set(namespaces));
   const [layout, setLayout] = useState<string | undefined>(panel?.defaultLayout);
+  // Target-specific options collected from the injected OptionsForm (§5.1 task
+  // #275). Stored as an opaque record; the caller decides what keys mean.
+  const [targetOptions, setTargetOptions] = useState<Record<string, unknown>>({});
+  // Use a ref so handleGenerate always reads the latest options without
+  // re-creating the callback on every options change.
+  const targetOptionsRef = useRef(targetOptions);
+  targetOptionsRef.current = targetOptions;
 
   // Reset draft state whenever the modal (re)opens or the target changes —
   // a fresh open should not inherit a stale narrowing from a prior session.
@@ -172,6 +199,7 @@ export function DownloadConfigModal({
     if (!open) return;
     setSelected(new Set(namespaces));
     setLayout(panel?.defaultLayout);
+    setTargetOptions({});
   }, [open, target, namespaces, panel?.defaultLayout]);
 
   const selection = useMemo(
@@ -189,13 +217,19 @@ export function DownloadConfigModal({
   }
 
   function handleGenerate(): void {
+    const opts = targetOptionsRef.current;
+    const hasOptions = OptionsForm !== undefined && Object.keys(opts).length > 0;
     onGenerate({
       target,
       layout,
       // When there are no namespaces to choose from (dep graph not yet
       // populated / fail-soft empty), emit an empty list = "no filter" so
       // the server emits everything. Otherwise send the closed emit set.
-      namespaces: namespaces.length === 0 ? [] : Array.from(selection.emitted).sort()
+      namespaces: namespaces.length === 0 ? [] : Array.from(selection.emitted).sort(),
+      // Only include options when an OptionsForm was provided and it
+      // actually collected values (avoids sending `options: {}` for
+      // targets with no options form).
+      ...(hasOptions ? { options: opts } : {})
     });
   }
 
@@ -244,6 +278,20 @@ export function DownloadConfigModal({
                   );
                 })}
               </RadioGroup>
+            </div>
+          )}
+
+          {/* Per-target options — rendered only when an OptionsForm is
+              injected by the wiring site (e.g. ExcelOptionsForm for excel).
+              The form calls onChange on every field change (auto-save mode)
+              and we store the result as opaque options for the Generate
+              payload. */}
+          {OptionsForm !== undefined && (
+            <div className="flex flex-col gap-2" data-testid="download-config-modal__options">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Options
+              </span>
+              <OptionsForm value={targetOptions} onChange={setTargetOptions} />
             </div>
           )}
 
