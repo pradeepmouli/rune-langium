@@ -36,7 +36,7 @@ export class Trade implements TradeShape {
 
 export function isTrade(x: unknown): x is Trade {
   if (typeof x !== 'object' || x === null) return false;
-  if ((typeof (x as Record<string, unknown>).tradeDate !== 'object' || (x as Record<string, unknown>).tradeDate === null || Array.isArray((x as Record<string, unknown>).tradeDate))) return false;
+  if (!((x as Record<string, unknown>).tradeDate instanceof Temporal.PlainDate)) return false;
   if (typeof (x as Record<string, unknown>).notional !== 'number') return false;
   return true;
 }
@@ -65,7 +65,7 @@ export class TradeReport implements TradeReportShape {
 
 export function isTradeReport(x: unknown): x is TradeReport {
   if (typeof x !== 'object' || x === null) return false;
-  if ((typeof (x as Record<string, unknown>).date !== 'object' || (x as Record<string, unknown>).date === null || Array.isArray((x as Record<string, unknown>).date))) return false;
+  if (!((x as Record<string, unknown>).date instanceof Temporal.PlainDate)) return false;
   if (typeof (x as Record<string, unknown>).amount !== 'number') return false;
   return true;
 }

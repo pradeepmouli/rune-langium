@@ -63,7 +63,7 @@ export function isPerson(x: unknown): x is Person {
   if (typeof (x as Record<string, unknown>).name !== 'string') return false;
   if (typeof (x as Record<string, unknown>).age !== 'number') return false;
   if (typeof (x as Record<string, unknown>).active !== 'boolean') return false;
-  if ((typeof (x as Record<string, unknown>).birthday !== 'object' || (x as Record<string, unknown>).birthday === null || Array.isArray((x as Record<string, unknown>).birthday))) return false;
+  if (!((x as Record<string, unknown>).birthday instanceof Temporal.PlainDate)) return false;
   return true;
 }
 

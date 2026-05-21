@@ -249,22 +249,26 @@ function resolveTypeExprAsTs(attr: Attribute, ctx: EmissionContext): string {
 /**
  * Build a positive type-guard expression for a scalar/object builtin field.
  *
- * Object-typed builtins (the `Temporal.*` record mappings — date/dateTime/
- * zonedDateTime/time) can't use a bare `typeof x === 'object'` check: that's
- * also true for `null` and arrays. Reject both explicitly so the guard is
- * sound (Codex/Copilot review on PR #224). Scalar builtins keep the plain
- * `typeof x === '<t>'` check.
+ * Object-typed builtins are the `Temporal.*` record mappings (date/dateTime/
+ * zonedDateTime/time). A bare `typeof x === 'object'` is unsound — `null`,
+ * arrays, and any plain object pass it. When the field's TS type is a
+ * `Temporal.*` class we have the class in hand, so guard with a precise
+ * `x instanceof Temporal.PlainDate` (Codex review on PR #224 — validate
+ * against the actual Temporal class). Scalar builtins keep `typeof x === '<t>'`.
  */
-function posTypeofGuard(access: string, typeofStr: string): string {
+function posTypeofGuard(access: string, typeofStr: string, tsType?: string): string {
   if (typeofStr === 'object') {
+    if (tsType && tsType.startsWith('Temporal.')) return `${access} instanceof ${tsType}`;
+    // Fallback for any other object-typed builtin: non-null, non-array object.
     return `(typeof ${access} === 'object' && ${access} !== null && !Array.isArray(${access}))`;
   }
   return `typeof ${access} === '${typeofStr}'`;
 }
 
 /** Negated form of {@link posTypeofGuard} (true when the field does NOT match). */
-function negTypeofGuard(access: string, typeofStr: string): string {
+function negTypeofGuard(access: string, typeofStr: string, tsType?: string): string {
   if (typeofStr === 'object') {
+    if (tsType && tsType.startsWith('Temporal.')) return `!(${access} instanceof ${tsType})`;
     return `(typeof ${access} !== 'object' || ${access} === null || Array.isArray(${access}))`;
   }
   return `typeof ${access} !== '${typeofStr}'`;
@@ -287,6 +291,19 @@ function resolveTypeofStr(attr: Attribute, ctx: EmissionContext): string | undef
     return ctx.typeofMap[typeRef.name];
   }
   // Data / Enum references → not a JS scalar typeof check
+  return undefined;
+}
+
+/**
+ * Resolve the emitted TS type for a builtin attribute (e.g. `Temporal.PlainDate`,
+ * `string`). Used to make `instanceof` guards precise for the Temporal record
+ * mappings. Returns undefined for non-builtin (Data/Enum) references.
+ */
+function resolveBuiltinTsType(attr: Attribute, ctx: EmissionContext): string | undefined {
+  const typeRef = attr.typeCall?.type?.ref;
+  const refText = attr.typeCall?.type?.$refText;
+  if (!typeRef) return refText ? ctx.builtinTypeMap[refText] : undefined;
+  if (isRosettaBasicType(typeRef)) return ctx.builtinTypeMap[typeRef.name];
   return undefined;
 }
 
@@ -506,12 +523,14 @@ function buildTypeGuardChecks(data: Data, ctx: EmissionContext): string[] {
     } else if (isOpt) {
       if (typeofStr) {
         const access = `(${obj} as Record<string, unknown>).${attr.name}`;
-        lines.push(`  if (${access} !== undefined && ${negTypeofGuard(access, typeofStr)}) return false;`);
+        const tsType = resolveBuiltinTsType(attr, ctx);
+        lines.push(`  if (${access} !== undefined && ${negTypeofGuard(access, typeofStr, tsType)}) return false;`);
       }
     } else {
       if (typeofStr) {
         const access = `(${obj} as Record<string, unknown>).${attr.name}`;
-        lines.push(`  if (${negTypeofGuard(access, typeofStr)}) return false;`);
+        const tsType = resolveBuiltinTsType(attr, ctx);
+        lines.push(`  if (${negTypeofGuard(access, typeofStr, tsType)}) return false;`);
       } else {
         lines.push(`  if ((${obj} as Record<string, unknown>).${attr.name} === undefined) return false;`);
       }
@@ -598,11 +617,13 @@ function emitDiscriminatorPredicate(child: Data, parent: Data, ctx: EmissionCont
       checks.push(`Array.isArray(${obj}.${attr.name})`);
     } else if (isOpt) {
       if (typeofStr) {
-        checks.push(`(${obj}.${attr.name} === undefined || ${posTypeofGuard(`${obj}.${attr.name}`, typeofStr)})`);
+        const tsType = resolveBuiltinTsType(attr, ctx);
+        checks.push(`(${obj}.${attr.name} === undefined || ${posTypeofGuard(`${obj}.${attr.name}`, typeofStr, tsType)})`);
       }
     } else {
       if (typeofStr) {
-        checks.push(posTypeofGuard(`${obj}.${attr.name}`, typeofStr));
+        const tsType = resolveBuiltinTsType(attr, ctx);
+        checks.push(posTypeofGuard(`${obj}.${attr.name}`, typeofStr, tsType));
       } else {
         checks.push(`${obj}.${attr.name} !== undefined`);
       }
