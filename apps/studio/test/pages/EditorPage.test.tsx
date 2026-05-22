@@ -5,6 +5,7 @@ import React, { useEffect, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, cleanup, waitFor, screen, act, fireEvent } from '@testing-library/react';
 import { usePreviewStore } from '../../src/store/preview-store.js';
+import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 
 const {
@@ -978,6 +979,9 @@ describe('EditorPage workspace chrome', () => {
     MockWorker.instances = [];
     setRuneStudioTestApi(() => undefined);
     usePreviewStore.getState().resetPreviewState();
+    // EditorPage represents a loaded workspace — Explore must be active so
+    // PerspectiveHost renders DockShell (not hidden by display:none).
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
     editorStoreState.nodes = [];
     editorStoreState.selectedNodeId = undefined;
     vi.clearAllMocks();

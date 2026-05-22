@@ -88,6 +88,7 @@ import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistenc
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
+import { PerspectiveHost } from '../shell/perspectives/PerspectiveHost.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import { linkDocument, BUNDLE_MARKER_SUFFIX } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
@@ -1993,15 +1994,18 @@ export function EditorPage({
       </header>
       <div className="flex flex-1 min-h-0">
         <ActivityBar hasWorkspace />
-        <div className="flex-1 min-h-0">
-          <DockShell
-            studioVersion={studioVersion}
-            workspaceId={workspaceId}
-            focusPanel={focusPanelRequest}
-            panelComponents={panelComponents}
-            panelTabMeta={panelTabMeta}
-          />
-        </div>
+        <PerspectiveHost
+          hasWorkspace
+          explore={
+            <DockShell
+              studioVersion={studioVersion}
+              workspaceId={workspaceId}
+              focusPanel={focusPanelRequest}
+              panelComponents={panelComponents}
+              panelTabMeta={panelTabMeta}
+            />
+          }
+        />
       </div>
 
       <footer className="glass-statusbar flex items-center gap-4 px-3 py-1 text-xs text-muted-foreground border-t border-border">
