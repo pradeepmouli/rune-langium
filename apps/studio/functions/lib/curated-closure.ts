@@ -141,11 +141,16 @@ export function computeCuratedClosure(
   seedNamespaces: Iterable<string>,
   curatedDocs: ReadonlyArray<ClosureDoc>
 ): Set<string> {
-  // Build uri→namespace map (used for $ref resolution) and
-  // namespace→imports map (used for import-edge BFS) in one pass.
+  // ── A. One cheap full pass: readSerializedModelMeta once per doc ───────────
+  // Populates allNs, nsImports, uriToNamespace, and nsToDocs.
+  // No deep $ref walk here — just the cheap meta read.
   const uriToNamespace = new Map<string, string>();
   const nsImports = new Map<string, string[]>();
   const allNs = new Set<string>();
+  // Maps namespace → serializedModel strings for all docs in that namespace.
+  // Multiple docs can share the same namespace (e.g. cdm.base.datetime spans
+  // -type/-enum/-func files); their $ref targets will be unioned lazily in BFS.
+  const nsToDocs = new Map<string, string[]>();
 
   for (const d of curatedDocs) {
     const meta = readSerializedModelMeta(d.serializedModel);
@@ -153,23 +158,12 @@ export function computeCuratedClosure(
     allNs.add(meta.namespace);
     nsImports.set(meta.namespace, meta.imports);
     uriToNamespace.set(d.uri, meta.namespace);
-  }
-
-  // Collect cross-doc $ref edges per namespace.
-  // Multiple docs can share the same namespace (e.g. cdm.base.datetime spans
-  // -type/-enum/-func files); their $ref targets are unioned.
-  const nsRefDeps = new Map<string, Set<string>>();
-  for (const d of curatedDocs) {
-    const meta = readSerializedModelMeta(d.serializedModel);
-    if (!meta) continue;
-    const refNs = extractCrossDocRefNamespaces(d.serializedModel, meta.namespace, uriToNamespace);
-    if (refNs.size === 0) continue;
-    let existing = nsRefDeps.get(meta.namespace);
-    if (!existing) {
-      existing = new Set<string>();
-      nsRefDeps.set(meta.namespace, existing);
+    let docList = nsToDocs.get(meta.namespace);
+    if (!docList) {
+      docList = [];
+      nsToDocs.set(meta.namespace, docList);
     }
-    for (const rns of refNs) existing.add(rns);
+    docList.push(d.serializedModel);
   }
 
   const expand = (raw: string): string[] => {
@@ -198,10 +192,13 @@ export function computeCuratedClosure(
       }
     }
 
-    // Cross-doc $ref edges (the completeness fix: Rosetta global-scope refs
-    // need not match any explicit import declaration)
-    for (const target of nsRefDeps.get(ns) ?? []) {
-      if (allNs.has(target) && !visited.has(target)) queue.push(target);
+    // ── B. Lazy cross-doc $ref walk — only for namespaces entering closure ───
+    // extractCrossDocRefNamespaces is invoked here, bounded to closure docs
+    // only. Docs whose namespace never enters the BFS are never deep-walked.
+    for (const serializedModel of nsToDocs.get(ns) ?? []) {
+      for (const target of extractCrossDocRefNamespaces(serializedModel, ns, uriToNamespace)) {
+        if (allNs.has(target) && !visited.has(target)) queue.push(target);
+      }
     }
   }
   return visited;
