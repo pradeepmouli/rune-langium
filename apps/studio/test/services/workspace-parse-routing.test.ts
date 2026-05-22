@@ -255,3 +255,4 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
     expect(result.fallbackMessage).toContain('fetch failed');
   });
 });
+
