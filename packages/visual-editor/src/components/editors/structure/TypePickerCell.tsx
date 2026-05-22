@@ -44,7 +44,7 @@ export function TypePickerCell({
   );
 
   const { dragOverHandlers, isOver } = useTypeRefDrop({
-    accept: disabled ? [] : ['Data', 'Choice', 'Enum', 'BasicType'],
+    accept: disabled ? [] : ['Data', 'Choice', 'Enum', 'BasicType', 'Record', 'TypeAlias'],
     onDrop: handleDrop
   });
 

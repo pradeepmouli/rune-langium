@@ -134,6 +134,20 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onSelectNode).toHaveBeenCalledOnce();
   });
 
+  it('positions virtual rows via top, not transform (WebKit drag fix #302)', () => {
+    // Regression guard: WebKit/Safari refuses to initiate native HTML5 drag on
+    // a `draggable` element whose ancestor has a CSS transform. The virtual-row
+    // wrapper must therefore position with `top`, NOT `transform: translateY()`
+    // (the @tanstack/react-virtual default), or every draggable type row goes
+    // dead in Safari while still working in Chrome. JSDOM can't exercise the
+    // real drag, so we assert the structural invariant instead.
+    renderPanel();
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const wrapper = typeRow.parentElement!;
+    expect(wrapper.style.transform).toBe('');
+    expect(wrapper.style.top).toMatch(/px$/);
+  });
+
   it('nav click triggers the just-navigated CSS pulse on the row', () => {
     // Navigation feedback: clicking the arrow flashes the row briefly so
     // the user knows their click registered before focus moves to the
@@ -318,10 +332,12 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Non-draggable kinds (Finding 4: Copilot)
+  // All kinds are draggable; validity is gated by each drop target's `accept`.
+  // Func/Annotation are draggable but accepted by NO target — they show the
+  // no-drop cursor instead of falling back to a WebKit text/region selection.
   // -------------------------------------------------------------------------
 
-  it('Function-kind row is not draggable', () => {
+  it('Function-kind row is draggable (rejected at drop, never text-selects)', () => {
     const funcNode = makeNode('cdm.func', 'MyFunc', 'RosettaFunction');
     render(
       <NamespaceExplorerPanel
@@ -335,10 +351,10 @@ describe('NamespaceExplorerPanel', () => {
       />
     );
     const funcRow = screen.getByTestId('ns-type-cdm.func::MyFunc');
-    expect((funcRow as HTMLElement).draggable).toBe(false);
+    expect((funcRow as HTMLElement).draggable).toBe(true);
   });
 
-  it('dragstart on non-draggable Function row does not call setData', () => {
+  it('dragstart on a Function row registers a Func type-ref payload', () => {
     const funcNode = makeNode('cdm.func', 'MyFunc', 'RosettaFunction');
     render(
       <NamespaceExplorerPanel
@@ -355,7 +371,11 @@ describe('NamespaceExplorerPanel', () => {
     const setData = vi.fn();
     const dataTransfer = { setData, effectAllowed: '' as DataTransfer['effectAllowed'] };
     fireEvent.dragStart(funcRow, { dataTransfer });
-    // Non-supported kind: dragstart should be suppressed, setData never called.
-    expect(setData).not.toHaveBeenCalled();
+    // Every kind is draggable, so the row carries a payload (no text-select fallback).
+    const canonical = setData.mock.calls.find((c: string[]) => c[0] === TYPE_REF_PAYLOAD_MIME);
+    expect(canonical).toBeDefined();
+    expect(JSON.parse(canonical![1]).kind).toBe('Func');
+    // Kind-marker MIME present so drop targets reject Func during dragover.
+    expect(setData.mock.calls.some((c: string[]) => c[0] === typeRefMimeForKind('Func'))).toBe(true);
   });
 });
