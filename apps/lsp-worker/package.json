@@ -13,17 +13,17 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
-    "@lspeasy/core": "^2.1.2",
+    "@lspeasy/core": "^2.1.3",
     "@rune-langium/curated-schema": "workspace:*",
     "@rune-langium/lsp-server": "workspace:*",
-    "langium": "^4.2.3",
+    "langium": "^4.2.4",
     "pino": "^10.3.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260511.1",
-    "vitest": "^4.1.5",
-    "wrangler": "^4.90.0"
+    "@cloudflare/workers-types": "^4.20260521.1",
+    "vitest": "^4.1.7",
+    "wrangler": "^4.93.1"
   },
   "engines": {
     "node": ">=20.0.0"
