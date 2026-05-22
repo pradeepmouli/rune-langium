@@ -31,7 +31,7 @@ export interface AdapterDocument {
 
 export interface AdapterNode {
   readonly id: string;
-  readonly $type: 'Data' | 'Choice' | 'Enum';
+  readonly $type: 'Data' | 'Choice' | 'Enum' | 'Record' | 'TypeAlias';
   readonly name: string;
   readonly namespace: string;
   readonly extends?: string;
@@ -160,7 +160,9 @@ function classifyType(typeName: string, doc: AdapterDocument, callerNamespace?: 
   if (!match) return 'Unresolved';
   if (match.$type === 'Data') return 'Data';
   if (match.$type === 'Choice') return 'Choice';
-  return 'Enum';
+  if (match.$type === 'Record') return 'Record';
+  if (match.$type === 'TypeAlias') return 'TypeAlias';
+  return 'Enum'; // remaining $type === 'Enum'
 }
 
 // callerNamespace is always provided by current callers (classifyType / buildRow / inheritance / root lookup); the undefined-namespace branch is defensive fallback.
@@ -203,7 +205,9 @@ function buildRow(
   const typeName = typeRefText(attr);
   const typeKind = classifyType(typeName, doc, callerNamespace);
   const target =
-    typeKind !== 'BasicType' && typeKind !== 'Unresolved' ? findNodeByName(typeName, doc, callerNamespace) : undefined;
+    typeKind !== 'BasicType' && typeKind !== 'Unresolved' && typeKind !== 'Record' && typeKind !== 'TypeAlias'
+      ? findNodeByName(typeName, doc, callerNamespace)
+      : undefined;
   const cardinality = formatCardinality(attr.card);
   return {
     attrName: attr.name ?? '',
@@ -277,8 +281,20 @@ function buildChoiceArm(opt: AdapterChoiceOption, doc: AdapterDocument, ownerNam
   if (!target) {
     return { typeName: refText, typeKind: 'Unresolved' };
   }
+  // Record/TypeAlias are now in the adapter doc (attribute type-refs), so a
+  // choice arm referencing one resolves here too — classify as its real kind
+  // instead of falling through to 'Enum'. Stays a leaf (isArmExpandable only
+  // expands Data/Choice; armKindToRowKind passes the kind through).
   const typeKind: StructureChoiceArm['typeKind'] =
-    target.$type === 'Data' ? 'Data' : target.$type === 'Choice' ? 'Choice' : 'Enum';
+    target.$type === 'Data'
+      ? 'Data'
+      : target.$type === 'Choice'
+        ? 'Choice'
+        : target.$type === 'Record'
+          ? 'Record'
+          : target.$type === 'TypeAlias'
+            ? 'TypeAlias'
+            : 'Enum';
   return { typeName: refText, typeKind, targetNodeId: target.id };
 }
 
