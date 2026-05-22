@@ -89,6 +89,7 @@ import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
 import { PerspectiveHost } from '../shell/perspectives/PerspectiveHost.js';
+import { usePerspectiveStore } from '../store/perspective-store.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import { linkDocument, BUNDLE_MARKER_SUFFIX } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
@@ -428,6 +429,9 @@ export function EditorPage({
   const groupedLayoutRef = useRef(groupedLayout);
   groupedLayoutRef.current = groupedLayout;
   const graphLayoutDirectionRef = useRef<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
+  // File tabs are an Explore-only affordance (perspective-registry.showsFileTabs).
+  // Hide them when the user switches to Git / Export / Settings / Workspaces.
+  const activePerspective = usePerspectiveStore((s) => s.activePerspective);
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
@@ -1946,7 +1950,9 @@ export function EditorPage({
             </PopoverContent>
           </Popover>
         </div>
-        <FileTabStrip files={files} activeFile={activeEditorFile} onSelectFile={openFileInSource} />
+        {activePerspective === 'explore' && (
+          <FileTabStrip files={files} activeFile={activeEditorFile} onSelectFile={openFileInSource} />
+        )}
         <div className="studio-topbar__right">
           <button type="button" className="studio-topbar__cmdk" aria-label="Search">
             <Search className="size-3.5" />

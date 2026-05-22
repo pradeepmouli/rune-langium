@@ -490,11 +490,15 @@ function AppContent() {
         setBootState('restoring');
         const restored = await restoreWorkspace(ws);
         if (!restored) {
+          // Restore yielded zero user files — show the no-workspace shell with
+          // the Workspaces launcher rather than an empty Explore surface.
           setBootState('start');
+          usePerspectiveStore.getState().setActivePerspective('workspaces');
           return;
         }
         setBootState('restored');
-        // Files were loaded — jump straight to the explore perspective.
+        // restoreWorkspace returns true only when user files were loaded, so
+        // userFiles.length > 0 here — jump straight to the explore perspective.
         usePerspectiveStore.getState().setActivePerspective('explore');
       } catch (err) {
         if (cancelled) return;
@@ -1038,17 +1042,6 @@ function AppContent() {
               onSwitchWorkspace={handleSwitchWorkspace}
               onCreateWorkspace={handleCreateWorkspace}
             />
-          )}
-
-          {bootState === 'restored' && userFiles.length === 0 && (
-            <div
-              className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md"
-              data-testid="workspace-restored"
-              aria-label={`Workspace ${restoredWorkspace?.name ?? ''} restored`}
-            >
-              <p className="text-2xl font-semibold text-foreground mb-1">{restoredWorkspace?.name ?? 'Workspace'}</p>
-              <p>Workspace ready.</p>
-            </div>
           )}
 
           {bootState === 'restored' && userFiles.length > 0 && (
