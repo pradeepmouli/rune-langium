@@ -120,11 +120,22 @@ let worker: Worker | null = null;
 let requestId = 0;
 let workerInitError: Error | null = null;
 const WORKER_FALLBACK_MESSAGE =
-  'Parser worker unavailable — using main-thread parsing, which may feel slower on large workspaces.';
+  'Parser worker unavailable — using in-browser parsing, which may feel slower on large workspaces.';
+
+/** Used when the /api/parse router fails (network error, 5xx, etc.).  The
+ *  parser worker is not involved in the workspace parse path; only the
+ *  server-side Pages Function is unavailable. */
+const ROUTER_FALLBACK_MESSAGE =
+  'Server-side parsing unavailable — using in-browser parsing, which may feel slower on large workspaces.';
 
 function formatWorkerFallbackMessage(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error);
   return `${WORKER_FALLBACK_MESSAGE} (${detail})`;
+}
+
+function formatRouterFallbackMessage(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  return `${ROUTER_FALLBACK_MESSAGE} (${detail})`;
 }
 
 async function parseWorkspaceFilesOnMainThread(
@@ -134,8 +145,18 @@ async function parseWorkspaceFilesOnMainThread(
     fallbackMessage?: string;
   }
 ): Promise<ParseWorkspaceFilesResult> {
+  // Defensive guard (layer 2): only pass files whose URI the in-browser Langium
+  // can actually parse. The service registry is keyed on extension, and only
+  // ".rosetta" is registered.  This single-condition filter is intentionally
+  // coarse: curated entries (serializedModelJson set) are already stripped by
+  // the router-failure catch before this function is called (layer 1), but
+  // bundle-marker files (path ends with /.bundle-marker, yielding an empty
+  // extension) are caught here.  The `.rosetta` suffix check is the safety net
+  // for any other extensionless or non-rosetta URI that reaches this layer.
+  const parseable = files.filter((f) => f.path.toLowerCase().endsWith('.rosetta'));
+
   const results = await parseWorkspace(
-    files.map((file) => ({
+    parseable.map((file) => ({
       uri: file.path,
       content: file.content
     }))
@@ -144,9 +165,10 @@ async function parseWorkspaceFilesOnMainThread(
   const parsedModels: ParsedWorkspaceModel[] = [];
   const errors = new Map<string, string[]>();
 
+  // Index results against `parseable` (NOT the original `files`) so indices align.
   for (let i = 0; i < results.length; i++) {
     const result = results[i]!;
-    const file = files[i]!;
+    const file = parseable[i]!;
     if (result.value) {
       models.push(result.value);
       parsedModels.push({ filePath: file.path, model: result.value });
@@ -415,9 +437,22 @@ export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<Parse
     // Router failed (network error, Pages Function unavailable, etc.) — fall back
     // to synchronous main-thread parsing so the editor stays functional.
     console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
-    return parseWorkspaceFilesOnMainThread(files, {
+    // Layer 1 filter: only hand user-authored .rosetta files to the in-browser
+    // Langium parser.  Two conditions are checked:
+    //   1. `!f.serializedModelJson` — excludes curated entries (which may have a
+    //      .rosetta path such as "[cdm]/types/Trade.rosetta" but are pre-parsed
+    //      server-side and must not be re-parsed in-browser).
+    //   2. `f.path.toLowerCase().endsWith('.rosetta')` — excludes bundle-marker
+    //      files (e.g. "[cdm]/.bundle-marker") whose extensionless URI causes
+    //      Langium's getServices() to throw "no services for the extension ''".
+    // Together these mirror the router path's `userFiles` filter so the fallback
+    // never dead-ends on mixed workspaces.
+    const parseableFiles = files.filter(
+      (f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta')
+    );
+    return parseWorkspaceFilesOnMainThread(parseableFiles, {
       parseMode: 'main-thread-fallback',
-      fallbackMessage: formatWorkerFallbackMessage(error)
+      fallbackMessage: formatRouterFallbackMessage(error)
     });
   }
 }
