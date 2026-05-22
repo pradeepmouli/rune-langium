@@ -824,15 +824,18 @@ function AppContent() {
   }, [getWorkspaceManager, restoredWorkspace]);
 
   const handleCreateGitBackedWorkspace = useCallback(
-    async (input: { repoUrl: string; branch: string; user: string; token: string }) => {
+    async (input: { name: string; repoUrl: string; branch: string; user: string; token: string }) => {
       const wm = await getWorkspaceManager();
-      const repoName =
+      // Prefer the caller-supplied name (FileLoader → GitHubWorkspaceFlow sends
+      // `${user}/${repo}`); fall back to a URL-derived repo name only if the
+      // caller omitted it.
+      const fallbackName =
         input.repoUrl
           .replace(/\.git$/, '')
           .split('/')
           .pop() ?? 'workspace';
       const ws = await wm.createGitBacked({
-        name: repoName,
+        name: input.name || fallbackName,
         repoUrl: input.repoUrl,
         branch: input.branch,
         user: input.user,
@@ -1011,7 +1014,7 @@ function AppContent() {
            * WorkspaceSwitcher / ModelLoader) is now INSIDE WorkspacesPerspective,
            * which PerspectiveHost renders when activePerspective === 'workspaces'. */}
           {bootState !== 'checking' && bootState !== 'restoring' && !loading && !showEditorPage && (
-            <div className="flex flex-1 h-full min-h-0">
+            <div className="flex h-full w-full min-h-0">
               <ActivityBar hasWorkspace={hasWorkspace} />
               <PerspectiveHost hasWorkspace={hasWorkspace} explore={null} />
             </div>
