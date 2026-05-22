@@ -11,8 +11,7 @@ import { useWorkspaceActions } from '../workspace-actions-context.js';
  *
  * Composes FileLoader + WorkspaceSwitcher + ModelLoader with the same layout
  * as the App start-page block (T057 / FR-028). Handlers are pulled from
- * WorkspaceActionsContext so PerspectiveHost passes NO props; App wires the
- * context value in Task 8.
+ * WorkspaceActionsContext (provided by App) so PerspectiveHost passes NO props.
  */
 export function WorkspacesPerspective(): React.ReactElement {
   const {

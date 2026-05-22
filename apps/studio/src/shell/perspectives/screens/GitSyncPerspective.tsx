@@ -9,15 +9,10 @@
  * renders `SyncStatusBadge` plus a contextual summary.
  *
  * When the workspace is NOT git-backed (or workspaceId / workspaceKind are
- * not yet wired by Task 8), shows an empty state explaining how to connect.
+ * absent), shows an empty state explaining how to connect.
  *
- * ## Seam for Task 8
- * `workspaceId` and `workspaceKind` come from EditorPage props — they are not
- * in any zustand store. PerspectiveHost must be extended to forward them here,
- * OR a thin GitSyncContext (analogous to WorkspaceActionsContext) should carry
- * them. The minimal seam: add `workspaceId?: string` + `workspaceKind?:
- * WorkspaceKind` to PerspectiveHost Props and thread them through from the
- * App/EditorPage layer.
+ * `workspaceId` and `workspaceKind` are forwarded by PerspectiveHost from
+ * EditorPage props (present-tense wiring — no zustand store needed).
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -32,13 +27,13 @@ export interface GitSyncPerspectiveProps {
   /**
    * The active workspace id — must be provided for a git-backed workspace so
    * `subscribeToEngine` can subscribe to the right engine instance.
-   * Wired by Task 8 (PerspectiveHost / App).
+   * Forwarded by PerspectiveHost from EditorPage.
    */
   workspaceId?: string;
   /**
    * The workspace kind — determines whether to show the sync UI or the
    * "not git-backed" empty state.
-   * Wired by Task 8 (PerspectiveHost / App).
+   * Forwarded by PerspectiveHost from EditorPage.
    */
   workspaceKind?: WorkspaceKind;
 }

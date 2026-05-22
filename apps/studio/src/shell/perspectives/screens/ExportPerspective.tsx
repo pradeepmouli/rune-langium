@@ -10,23 +10,21 @@
  *                            `Worker` instance and `files` that live in EditorPage.
  *   - `DownloadConfigModal`  — opened by CodePreviewPanel; no extra seam needed.
  *
- * ## Seam for Task 8
- * The `Worker` for code generation is created by EditorPage as local state
- * (`codegenWorker`) and is not exposed via any zustand store. `files` is
- * likewise an EditorPage prop. To render the full `CodePreviewPanel` here,
- * Task 8 must forward:
+ * PerspectiveHost forwards EditorPage's `codegenWorker` + `files` here:
  *   - `worker: Worker`                    — the EditorPage codegen worker
  *   - `files: ReadonlyArray<WorkspaceFile>` — the workspace files
  *
- * Until those props arrive, this screen shows the `CodegenTargetsTable`
- * (purely presentational, no store or worker dependency) with a muted
- * "preview available in the Code tab" notice so the pane is usable without
- * the Worker prop. This is intentional YAGNI — do not invent a second Worker
- * here; share the one EditorPage already manages.
+ * When `worker` is absent (degraded / transient state while EditorPage spins
+ * up), this screen shows the `CodegenTargetsTable` with a loading notice.
+ * Target selection still updates the store so the row highlights correctly.
+ * Download is a no-op with a console.warn until the worker is available.
  *
- * The `onView` / `onDownload` handlers also require the Worker / files seam
- * to function. Until Task 8 wires them, download clicks are no-ops with a
- * console.warn (rather than a crash) so the perspective is safe to render.
+ * Note on double-mount: the docked `workspace.codePreview` panel rendered by
+ * DockShell uses the SHELL STUB (`src/shell/panels/CodePreviewPanel.tsx`) which
+ * is display-only (reads store label, no worker listener). Only this file mounts
+ * the real `CodePreviewPanel` (from `src/components/CodePreviewPanel.tsx`) —
+ * and only when `worker` is non-null. There is therefore no double-subscription
+ * to the codegen worker at any point.
  */
 
 import type { ReactElement } from 'react';
@@ -40,15 +38,14 @@ import { useCodegenStore } from '../../../store/codegen-store.js';
 
 export interface ExportPerspectiveProps {
   /**
-   * The shared codegen Worker from EditorPage. When absent, the Code Preview
-   * section is not rendered (CodePreviewPanel requires a live Worker instance).
-   * Wired by Task 8 (PerspectiveHost / App → EditorPage).
+   * The shared codegen Worker forwarded from EditorPage via PerspectiveHost.
+   * When absent the perspective operates in degraded mode: the targets table
+   * is shown with a loading notice; target selection still updates the store.
    */
   worker?: Worker | null;
   /**
-   * User-authored workspace files forwarded from EditorPage, used by the
-   * Download flow inside CodePreviewPanel.
-   * Wired by Task 8 (PerspectiveHost / App → EditorPage).
+   * User-authored workspace files forwarded from EditorPage via PerspectiveHost,
+   * used by the Download flow inside CodePreviewPanel.
    */
   files?: ReadonlyArray<WorkspaceFile>;
   /**
@@ -66,10 +63,9 @@ export function ExportPerspective({ worker, files, sourceEditorRef = null }: Exp
 
   const handleView = useCallback(
     (target: Target) => {
-      if (!worker) {
-        console.warn('[ExportPerspective] worker not yet wired — view action is a no-op until Task 8.');
-        return;
-      }
+      // Always update the store so the row highlights correctly, regardless of
+      // whether the worker is present. The worker is only needed when CodePreview-
+      // Panel is mounted (full mode); store updates are safe in degraded mode.
       if (activeTarget === target) {
         setActiveTarget(undefined);
       } else {
@@ -79,7 +75,7 @@ export function ExportPerspective({ worker, files, sourceEditorRef = null }: Exp
         }
       }
     },
-    [activeTarget, setActiveTarget, setCodePreviewTarget, worker]
+    [activeTarget, setActiveTarget, setCodePreviewTarget]
   );
 
   const handleDownload = useCallback(
@@ -134,8 +130,7 @@ export function ExportPerspective({ worker, files, sourceEditorRef = null }: Exp
             className="flex-1 flex items-center justify-center px-6 py-8 text-center"
           >
             <p className="text-xs text-muted-foreground max-w-[22rem]">
-              Code preview is available in the <strong>Code</strong> tab of the editor. Open a workspace to generate and
-              download code from this panel.
+              Preparing the code generator… Code preview will appear here once the generator is ready.
             </p>
           </div>
         </div>

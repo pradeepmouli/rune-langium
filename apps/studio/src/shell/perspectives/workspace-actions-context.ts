@@ -6,7 +6,7 @@ import type { WorkspaceFile } from '../../services/workspace.js';
 /**
  * Actions + data the WorkspacesPerspective launcher needs, lifted from
  * App.tsx prop-drilling via context so PerspectiveHost doesn't need
- * knowledge of workspace state. App provides the value in Task 8.
+ * knowledge of workspace state. App provides this context value.
  */
 export interface WorkspaceActions {
   /** Current workspace files — forwarded to FileLoader as `existingFiles`. */
