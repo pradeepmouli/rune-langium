@@ -23,9 +23,11 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - master
+  # Auto-publish on push to master is DISABLED: it fails on every push because
+  # npm publishing isn't configured (no NPM_TOKEN / Trusted Publishers), which
+  # red-flags master. Run manually via the Actions tab once npm publishing is
+  # set up (see the setup notes above), or restore the `push` trigger then.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
