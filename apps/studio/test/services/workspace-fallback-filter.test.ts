@@ -37,7 +37,11 @@ vi.mock('@rune-langium/core', async (importOriginal) => {
       return docs.map((doc) => {
         if (!doc.uri.toLowerCase().endsWith('.rosetta')) {
           // Mirror what Langium's getServices() throws for unknown extensions.
-          const ext = doc.uri.includes('.') ? doc.uri.split('.').pop() ?? '' : '';
+          // Node path.extname('.bundle-marker') returns '' (dotfile, no extension)
+          // — that is exactly the empty-extension error seen in prod.
+          const base = doc.uri.split('/').pop() ?? doc.uri;
+          const dotIdx = base.lastIndexOf('.');
+          const ext = dotIdx > 0 ? base.slice(dotIdx + 1) : '';
           throw new Error(
             `The service registry contains no services for the extension '${ext}'`
           );
@@ -76,8 +80,8 @@ describe('parseWorkspaceFiles — fallback only parses user .rosetta files', () 
         content: 'namespace t\ntype Foo:',
         dirty: false
       },
-      // Curated entry — serializedModelJson is set; path does NOT end with .rosetta
-      // when the curated path prefix is stripped.  Excluded by both layers of the fix.
+      // Curated entry — serializedModelJson is set; path ends with .rosetta but
+      // is excluded by layer 1 (`!f.serializedModelJson`), not by extension.
       {
         name: 'Trade.rosetta',
         path: '[cdm]/types/Trade.rosetta',
