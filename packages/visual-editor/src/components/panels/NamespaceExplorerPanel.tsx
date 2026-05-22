@@ -138,9 +138,14 @@ function toPayloadKind(typeKind: TypeKind): TypeRefKind {
       return 'Func';
     case 'annotation':
       return 'Annotation';
-    default:
-      // Future kinds: draggable but accepted nowhere (rejected, never text-selects).
+    default: {
+      // TypeKind is a closed union, so this is unreachable today. The `never`
+      // assertion makes adding a new TypeKind a COMPILE error here (forcing an
+      // explicit mapping) rather than silently misclassifying it as Annotation.
+      const _exhaustive: never = typeKind;
+      void _exhaustive;
       return 'Annotation';
+    }
   }
 }
 

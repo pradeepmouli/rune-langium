@@ -10,19 +10,6 @@
 export const TYPE_REF_PAYLOAD_MIME = 'application/x-rune-type-ref';
 
 /**
- * Drag payload emitted by NamespaceExplorer items and consumed by drop targets.
- *
- * **Field semantics:**
- * - `typeId`   — canonical node id in `ns::Name` format (e.g. `cdm.trade::Trade`).
- *               Used by `setInheritance` and other operations that reference nodes
- *               by their fully-qualified id.
- * - `typeName` — bare display/AST name (e.g. `Trade`) used in `$refText` writes,
- *               e.g. `updateAttributeType`. This is what the grammar stores as the
- *               unqualified cross-reference text.
- *
- * Drag sources MUST set both fields.
- */
-/**
  * Every type kind a namespace-explorer row can carry. ALL kinds are draggable
  * (so no row falls back to text-selection on a drag attempt); drop targets gate
  * what they accept via their `accept` list. `Data`/`Choice`/`Enum`/`BasicType`/
@@ -42,6 +29,19 @@ export const TYPE_REF_KINDS = [
 
 export type TypeRefKind = (typeof TYPE_REF_KINDS)[number];
 
+/**
+ * Drag payload emitted by NamespaceExplorer items and consumed by drop targets.
+ *
+ * **Field semantics:**
+ * - `typeId`   — canonical node id in `ns::Name` format (e.g. `cdm.trade::Trade`).
+ *               Used by `setInheritance` and other operations that reference nodes
+ *               by their fully-qualified id.
+ * - `typeName` — bare display/AST name (e.g. `Trade`) used in `$refText` writes,
+ *               e.g. `updateAttributeType`. This is what the grammar stores as the
+ *               unqualified cross-reference text.
+ *
+ * Drag sources MUST set both fields.
+ */
 export interface TypeRefPayload {
   readonly rune: 'type-ref';
   readonly namespaceUri: string;
