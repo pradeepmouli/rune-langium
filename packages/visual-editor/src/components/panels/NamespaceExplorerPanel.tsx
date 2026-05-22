@@ -286,11 +286,16 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                     key={virtualRow.key}
                     style={{
                       position: 'absolute',
-                      top: 0,
+                      // Position via `top`, NOT `transform: translateY(...)`.
+                      // WebKit/Safari refuses to initiate native HTML5 drag on a
+                      // `draggable` element whose ancestor has a CSS transform, so
+                      // the @tanstack/react-virtual default transform broke drag of
+                      // every TypeItemRow in Safari (Chrome has no such bug). Using
+                      // `top` keeps the rows free of a transformed ancestor.
+                      top: `${virtualRow.start}px`,
                       left: 0,
                       width: '100%',
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`
+                      height: `${virtualRow.size}px`
                     }}
                   >
                     {row.kind === 'namespace' ? (

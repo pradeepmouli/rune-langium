@@ -134,6 +134,20 @@ describe('NamespaceExplorerPanel', () => {
     expect(props.onSelectNode).toHaveBeenCalledOnce();
   });
 
+  it('positions virtual rows via top, not transform (WebKit drag fix #302)', () => {
+    // Regression guard: WebKit/Safari refuses to initiate native HTML5 drag on
+    // a `draggable` element whose ancestor has a CSS transform. The virtual-row
+    // wrapper must therefore position with `top`, NOT `transform: translateY()`
+    // (the @tanstack/react-virtual default), or every draggable type row goes
+    // dead in Safari while still working in Chrome. JSDOM can't exercise the
+    // real drag, so we assert the structural invariant instead.
+    renderPanel();
+    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const wrapper = typeRow.parentElement!;
+    expect(wrapper.style.transform).toBe('');
+    expect(wrapper.style.top).toMatch(/px$/);
+  });
+
   it('nav click triggers the just-navigated CSS pulse on the row', () => {
     // Navigation feedback: clicking the arrow flashes the row briefly so
     // the user knows their click registered before focus moves to the
