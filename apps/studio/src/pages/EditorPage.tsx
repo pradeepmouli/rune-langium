@@ -177,6 +177,8 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
       if (k === 'data' || k === 'Data') return 'Data';
       if (k === 'choice' || k === 'Choice') return 'Choice';
       if (k === 'enum' || k === 'Enum' || k === 'RosettaEnumeration') return 'RosettaEnumeration';
+      if (k === 'record' || k === 'RosettaRecordType') return 'RosettaRecordType';
+      if (k === 'typeAlias' || k === 'TypeAlias' || k === 'RosettaTypeAlias') return 'TypeAlias';
       return undefined;
     })();
 
@@ -227,8 +229,14 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         namespace: de.namespace,
         values: (de.enumValues ?? []) as Array<{ name: string }>
       });
+    } else if (effectiveType === 'RosettaRecordType') {
+      const dr = d as { name: string; namespace: string };
+      adapterNodes.push({ id: rfNode.id, $type: 'Record', name: dr.name, namespace: dr.namespace });
+    } else if (effectiveType === 'TypeAlias' || effectiveType === 'RosettaTypeAlias') {
+      const ta = d as { name: string; namespace: string };
+      adapterNodes.push({ id: rfNode.id, $type: 'TypeAlias', name: ta.name, namespace: ta.namespace });
     }
-    // Other kinds (Function, RecordType, TypeAlias, etc.) are not relevant to Structure View
+    // Other kinds (Function, etc.) are not relevant to Structure View; Record and TypeAlias are now projected above.
   }
 
   const namespaces = Array.from(namespacesSet).map((uri) => ({ uri }));

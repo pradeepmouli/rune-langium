@@ -1347,6 +1347,18 @@ button[data-navigable]:focus-visible {
   color: var(--destructive, #FF6058);
 }
 
+/* User-defined record and typeAlias share the data-kind color (var(--color-data))
+ * per the explorer's KIND_COLOR_VAR mapping. They are leaf-only — no chevron. */
+.rune-cell-type-chip--record {
+  background: var(--color-data-badge, rgba(0, 212, 170, 0.20));
+  color: var(--color-data-text, #00D4AA);
+}
+
+.rune-cell-type-chip--typealias {
+  background: var(--color-data-badge, rgba(0, 212, 170, 0.20));
+  color: var(--color-data-text, #00D4AA);
+}
+
 .rune-cell-type-chip:hover {
   border-color: currentColor;
 }

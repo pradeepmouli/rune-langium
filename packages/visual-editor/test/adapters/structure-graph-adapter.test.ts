@@ -3498,3 +3498,105 @@ describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', 
     expect(result.nodes.size).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Record / TypeAlias attribute type-refs — display-completion of #303
+// ---------------------------------------------------------------------------
+
+describe('buildStructureGraph — Record / TypeAlias attribute classification (leaf, not expandable)', () => {
+  // A user-defined record or typeAlias dropped onto a Data attribute's type
+  // cell should display as the correct chip (Record / TypeAlias), NOT as
+  // Enum or Unresolved.  They must remain leaves — no child node is
+  // materialised even if the expansion key is set, because neither kind is
+  // expandable.
+
+  const fixtureRecordAlias = {
+    namespaces: [{ uri: 'cdm.types' }],
+    nodes: [
+      {
+        id: 'cdm.types::MyRec',
+        $type: 'Record' as const,
+        name: 'MyRec',
+        namespace: 'cdm.types'
+      },
+      {
+        id: 'cdm.types::MyAlias',
+        $type: 'TypeAlias' as const,
+        name: 'MyAlias',
+        namespace: 'cdm.types'
+      },
+      {
+        id: 'cdm.types::Foo',
+        $type: 'Data' as const,
+        name: 'Foo',
+        namespace: 'cdm.types',
+        attributes: [
+          {
+            name: 'd',
+            typeCall: { type: { $refText: 'MyRec' } },
+            card: { inf: 0, sup: 1, unbounded: false }
+          },
+          {
+            name: 'a',
+            typeCall: { type: { $refText: 'MyAlias' } },
+            card: { inf: 0, sup: 1, unbounded: false }
+          }
+        ]
+      }
+    ]
+  };
+
+  it('classifies a Record-typed attribute as typeKind="Record" (was "Enum" before fix)', () => {
+    const result = buildStructureGraph(fixtureRecordAlias, {
+      focusedTypeId: 'cdm.types::Foo',
+      expansionMap: new Map()
+    });
+    const foo = result.nodes.get('cdm.types::Foo') as StructureDataNode;
+    const row = foo.rows.find((r) => r.attrName === 'd')!;
+    expect(row.typeKind).toBe('Record');
+  });
+
+  it('classifies a TypeAlias-typed attribute as typeKind="TypeAlias" (was "Unresolved" or "Enum" before fix)', () => {
+    const result = buildStructureGraph(fixtureRecordAlias, {
+      focusedTypeId: 'cdm.types::Foo',
+      expansionMap: new Map()
+    });
+    const foo = result.nodes.get('cdm.types::Foo') as StructureDataNode;
+    const row = foo.rows.find((r) => r.attrName === 'a')!;
+    expect(row.typeKind).toBe('TypeAlias');
+  });
+
+  it('does NOT materialise a child node for a Record-typed attribute (leaf — non-expandable)', () => {
+    // Even if the expansion key is set, Record types must stay as leaves.
+    const key = expansionKey({
+      namespaceUri: 'cdm.types',
+      typeId: 'Foo',
+      attrName: 'd',
+      instancePath: ['cdm.types::Foo']
+    });
+    const result = buildStructureGraph(fixtureRecordAlias, {
+      focusedTypeId: 'cdm.types::Foo',
+      expansionMap: new Map([[key, true]])
+    });
+    // Only the Foo Data node itself — no child for MyRec.
+    expect(result.nodes.size).toBe(1);
+    const foo = result.nodes.get('cdm.types::Foo') as StructureDataNode;
+    expect(foo.expansions.size).toBe(0);
+  });
+
+  it('does NOT materialise a child node for a TypeAlias-typed attribute (leaf — non-expandable)', () => {
+    const key = expansionKey({
+      namespaceUri: 'cdm.types',
+      typeId: 'Foo',
+      attrName: 'a',
+      instancePath: ['cdm.types::Foo']
+    });
+    const result = buildStructureGraph(fixtureRecordAlias, {
+      focusedTypeId: 'cdm.types::Foo',
+      expansionMap: new Map([[key, true]])
+    });
+    expect(result.nodes.size).toBe(1);
+    const foo = result.nodes.get('cdm.types::Foo') as StructureDataNode;
+    expect(foo.expansions.size).toBe(0);
+  });
+});

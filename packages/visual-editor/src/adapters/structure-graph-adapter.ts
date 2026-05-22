@@ -31,7 +31,7 @@ export interface AdapterDocument {
 
 export interface AdapterNode {
   readonly id: string;
-  readonly $type: 'Data' | 'Choice' | 'Enum';
+  readonly $type: 'Data' | 'Choice' | 'Enum' | 'Record' | 'TypeAlias';
   readonly name: string;
   readonly namespace: string;
   readonly extends?: string;
@@ -160,7 +160,9 @@ function classifyType(typeName: string, doc: AdapterDocument, callerNamespace?: 
   if (!match) return 'Unresolved';
   if (match.$type === 'Data') return 'Data';
   if (match.$type === 'Choice') return 'Choice';
-  return 'Enum';
+  if (match.$type === 'Record') return 'Record';
+  if (match.$type === 'TypeAlias') return 'TypeAlias';
+  return 'Enum'; // remaining $type === 'Enum'
 }
 
 // callerNamespace is always provided by current callers (classifyType / buildRow / inheritance / root lookup); the undefined-namespace branch is defensive fallback.
@@ -203,7 +205,9 @@ function buildRow(
   const typeName = typeRefText(attr);
   const typeKind = classifyType(typeName, doc, callerNamespace);
   const target =
-    typeKind !== 'BasicType' && typeKind !== 'Unresolved' ? findNodeByName(typeName, doc, callerNamespace) : undefined;
+    typeKind !== 'BasicType' && typeKind !== 'Unresolved' && typeKind !== 'Record' && typeKind !== 'TypeAlias'
+      ? findNodeByName(typeName, doc, callerNamespace)
+      : undefined;
   const cardinality = formatCardinality(attr.card);
   return {
     attrName: attr.name ?? '',

@@ -132,7 +132,7 @@ export function expansionKey(k: StructureExpansionKey): string {
 export interface StructureRow {
   readonly attrName: string;
   readonly typeName: string;
-  readonly typeKind: 'Data' | 'Choice' | 'Enum' | 'BasicType' | 'Unresolved';
+  readonly typeKind: 'Data' | 'Choice' | 'Enum' | 'BasicType' | 'Record' | 'TypeAlias' | 'Unresolved';
   readonly targetNodeId?: string;
   readonly targetNamespaceUri?: string;
   readonly cardinality: string;

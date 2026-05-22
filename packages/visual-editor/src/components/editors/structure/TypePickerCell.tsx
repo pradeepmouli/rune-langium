@@ -8,7 +8,7 @@ import type { TypeRefPayload } from '../../../types/structure-view.js';
 
 export interface TypePickerCellProps {
   typeName: string;
-  typeKind: 'Data' | 'Choice' | 'Enum' | 'BasicType' | 'Unresolved';
+  typeKind: 'Data' | 'Choice' | 'Enum' | 'BasicType' | 'Record' | 'TypeAlias' | 'Unresolved';
   nodeId: string;
   attrName: string;
   disabled?: boolean;
@@ -19,6 +19,8 @@ const KIND_CLASS: Record<TypePickerCellProps['typeKind'], string> = {
   Choice: 'rune-cell-type-chip--choice',
   Enum: 'rune-cell-type-chip--enum',
   BasicType: 'rune-cell-type-chip--basic',
+  Record: 'rune-cell-type-chip--record',
+  TypeAlias: 'rune-cell-type-chip--typealias',
   Unresolved: 'rune-cell-type-chip--unresolved'
 };
 
