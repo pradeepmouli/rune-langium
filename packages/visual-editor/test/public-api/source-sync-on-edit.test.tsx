@@ -27,10 +27,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, act, waitFor, cleanup } from '@testing-library/react';
+import { render, renderHook, act, waitFor, cleanup } from '@testing-library/react';
 import { createRef } from 'react';
 import { parse } from '@rune-langium/core';
 import { RuneTypeGraph } from '../../src/components/RuneTypeGraph.js';
+import { useModelSourceSync } from '../../src/hooks/useModelSourceSync.js';
 import { useEditorStore } from '../../src/store/editor-store.js';
 import type { RuneTypeGraphRef } from '../../src/types.js';
 import { COMBINED_MODEL_SOURCE } from '../helpers/fixture-loader.js';
@@ -81,12 +82,21 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
   it('fires onModelChanged automatically when an attribute type is changed', async () => {
     const onModelChanged = vi.fn();
     await loadCombinedModel();
-    render(<RuneTypeGraph callbacks={{ onModelChanged }} />);
+
+    // Push-subscription now lives in useModelSourceSync (lifted out of
+    // RuneTypeGraph so the sync works regardless of which pane is mounted).
+    const { rerender } = renderHook(
+      ({ nodes, edges }: { nodes: ReturnType<typeof useEditorStore.getState>['nodes']; edges: ReturnType<typeof useEditorStore.getState>['edges'] }) =>
+        useModelSourceSync(nodes, edges, onModelChanged),
+      {
+        initialProps: {
+          nodes: useEditorStore.getState().nodes,
+          edges: useEditorStore.getState().edges
+        }
+      }
+    );
 
     // Allow the initial-skip effect to record the baseline serialisation.
-    // We can't deterministically `waitFor` the no-op skip, so settle a
-    // microtask + macrotask boundary instead — this matches what the
-    // following `mockClear()` is meant to start cleanly from.
     await act(async () => {
       await Promise.resolve();
       await new Promise((r) => setTimeout(r, 0));
@@ -104,6 +114,8 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
         .getState()
         .updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
     });
+
+    rerender({ nodes: useEditorStore.getState().nodes, edges: useEditorStore.getState().edges });
 
     await waitFor(() => {
       expect(onModelChanged).toHaveBeenCalled();
@@ -123,7 +135,25 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
   it('fires onModelChanged automatically when an attribute is renamed', async () => {
     const onModelChanged = vi.fn();
     await loadCombinedModel();
-    render(<RuneTypeGraph callbacks={{ onModelChanged }} />);
+
+    // Push-subscription now lives in useModelSourceSync (lifted out of
+    // RuneTypeGraph so the sync works regardless of which pane is mounted).
+    const { rerender } = renderHook(
+      ({ nodes, edges }: { nodes: ReturnType<typeof useEditorStore.getState>['nodes']; edges: ReturnType<typeof useEditorStore.getState>['edges'] }) =>
+        useModelSourceSync(nodes, edges, onModelChanged),
+      {
+        initialProps: {
+          nodes: useEditorStore.getState().nodes,
+          edges: useEditorStore.getState().edges
+        }
+      }
+    );
+
+    // Allow initial-skip to settle.
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
 
     onModelChanged.mockClear();
 
@@ -132,6 +162,8 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
     act(() => {
       useEditorStore.getState().renameAttribute(tradeNode.id, 'tradeDate', 'executionDate');
     });
+
+    rerender({ nodes: useEditorStore.getState().nodes, edges: useEditorStore.getState().edges });
 
     await waitFor(() => {
       expect(onModelChanged).toHaveBeenCalled();

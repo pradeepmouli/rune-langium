@@ -236,7 +236,8 @@ vi.mock('@rune-langium/visual-editor', () => ({
     const d = (obj.data ?? obj) as { $type?: string; typeKind?: string } | undefined;
     return d?.$type ?? d?.typeKind ?? obj?.type ?? 'data';
   },
-  useEditorStore
+  useEditorStore,
+  useModelSourceSync: () => {}
 }));
 
 vi.mock('../../src/components/SourceEditor.js', () => ({

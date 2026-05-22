@@ -149,6 +149,7 @@ export { useTypeRefDrop } from './hooks/useTypeRefDrop.js';
 export type { UseTypeRefDropOptions, UseTypeRefDropResult } from './hooks/useTypeRefDrop.js';
 export { useDiagnosticsForRange } from './hooks/useDiagnosticsForRange.js';
 export type { RangeDiagnostic } from './hooks/useDiagnosticsForRange.js';
+export { useModelSourceSync } from './hooks/useModelSourceSync.js';
 
 // Validation utilities
 export {
