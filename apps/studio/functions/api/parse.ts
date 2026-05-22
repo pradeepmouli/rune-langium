@@ -466,6 +466,27 @@ function stringifyWithBigInt(value: unknown): string {
 }
 
 /**
+ * Seed namespaces for the curated closure = the namespaces the user files
+ * import. Read from the already-parsed user models (no link needed).
+ * Exported for unit testing.
+ */
+export function collectUserSeedNamespaces(
+  userDocs: ReadonlyArray<{ parseResult?: { value?: unknown } }>
+): Set<string> {
+  const seeds = new Set<string>();
+  for (const doc of userDocs) {
+    const model = doc.parseResult?.value as { imports?: Array<{ importedNamespace?: unknown }> } | undefined;
+    if (!model || !Array.isArray(model.imports)) continue;
+    for (const imp of model.imports) {
+      if (typeof imp.importedNamespace === 'string' && imp.importedNamespace.length > 0) {
+        seeds.add(imp.importedNamespace);
+      }
+    }
+  }
+  return seeds;
+}
+
+/**
  * Compute the cross-namespace dep graph (spec 2026-05-14 §5.2) over the
  * full hydration set — user-parsed docs (already live in workspaceContext)
  * plus curated docs (deserialized here from `serializedModel` strings via
