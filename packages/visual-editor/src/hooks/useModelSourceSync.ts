@@ -38,7 +38,7 @@ import { serializeModel } from '@rune-langium/core';
  * `hasExternalRefs` so position-only mutations (drag, layout, fit-view) don't
  * trigger the serialization pipeline.
  *
- * Copied verbatim from RuneTypeGraph.tsx:146-173 and made the sole owner here.
+ * Extracted from RuneTypeGraph's former source-sync effect and made the sole owner here.
  */
 function computeContentFingerprint(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): string {
   const nodeParts: string[] = [];

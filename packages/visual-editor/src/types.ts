@@ -468,11 +468,15 @@ export interface RuneTypeGraphCallbacks {
   onTypeCreated?: (nodeId: string, kind: TypeKind, name: string) => void;
   onTypeDeleted?: (nodeId: string) => void;
   /**
-   * Fires after every committed edit. May return a Promise — the caller's
-   * source-sync effect does NOT await it (fire-and-forget); the optional
-   * Promise lets consumers do async work (e.g. parse-driven smart merges
-   * against original source) without TypeScript complaining at the call
-   * site.
+   * Fires when the graph serializes the model — i.e. on an explicit
+   * `exportRosetta()` call. For **automatic** source synchronization on
+   * every editor-store edit (regardless of whether the graph view is
+   * mounted), consumers should mount the exported `useModelSourceSync`
+   * hook in an always-mounted parent (as `EditorPage` does).
+   * `RuneTypeGraph` intentionally no longer holds that subscription
+   * internally, so source-sync is not coupled to the graph pane's mount
+   * lifecycle. May return a Promise — the hook does NOT await it
+   * (fire-and-forget).
    */
   onModelChanged?: (serialized: Map<string, string>) => void | Promise<void>;
   onValidationChange?: (errors: ValidationError[]) => void;

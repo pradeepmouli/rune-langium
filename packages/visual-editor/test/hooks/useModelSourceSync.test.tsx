@@ -69,7 +69,7 @@ describe('useModelSourceSync', () => {
     const onModelChanged = vi.fn();
 
     const { rerender } = renderHook(
-      ({ nodes, edges }: { nodes: typeof useEditorStore.getState.prototype['nodes']; edges: typeof useEditorStore.getState.prototype['edges'] }) =>
+      ({ nodes, edges }: { nodes: ReturnType<typeof useEditorStore.getState>['nodes']; edges: ReturnType<typeof useEditorStore.getState>['edges'] }) =>
         useModelSourceSync(nodes, edges, onModelChanged),
       {
         initialProps: {
@@ -123,7 +123,7 @@ describe('useModelSourceSync', () => {
     const onModelChanged = vi.fn();
 
     const { rerender } = renderHook(
-      ({ nodes, edges }: { nodes: typeof useEditorStore.getState.prototype['nodes']; edges: typeof useEditorStore.getState.prototype['edges'] }) =>
+      ({ nodes, edges }: { nodes: ReturnType<typeof useEditorStore.getState>['nodes']; edges: ReturnType<typeof useEditorStore.getState>['edges'] }) =>
         useModelSourceSync(nodes, edges, onModelChanged),
       {
         initialProps: {
