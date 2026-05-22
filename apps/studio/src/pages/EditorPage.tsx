@@ -33,7 +33,8 @@ import {
   TypePickerCell,
   BUILTIN_TYPES,
   resolveNodeKind,
-  useEditorStore
+  useEditorStore,
+  useModelSourceSync
 } from '@rune-langium/visual-editor';
 import type {
   RuneTypeGraphRef,
@@ -1163,6 +1164,13 @@ export function EditorPage({
     },
     [namespaceToFile, onFilesChange]
   );
+
+  // Source-text sync — fires onModelChanged whenever inspector/structure edits
+  // change the editor-store, regardless of which center pane is mounted.
+  // Previously this subscription lived inside RuneTypeGraph, which is only
+  // mounted when the Graph pane is active; Structure-pane edits never reached
+  // the source pane (2026-05-21, fix/inspector-source-sync).
+  useModelSourceSync(storeNodes, storeEdges, handleModelChanged);
 
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics, totalErrors, totalWarnings } = useDiagnosticsStore();

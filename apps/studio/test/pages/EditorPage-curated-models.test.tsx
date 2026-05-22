@@ -78,7 +78,8 @@ vi.mock('@rune-langium/visual-editor', () => ({
   BUILTIN_TYPES: [],
   AST_TYPE_TO_NODE_TYPE: {},
   resolveNodeKind: () => 'data',
-  useEditorStore
+  useEditorStore,
+  useModelSourceSync: () => {}
 }));
 
 vi.mock('../../src/components/SourceEditor.js', () => ({
