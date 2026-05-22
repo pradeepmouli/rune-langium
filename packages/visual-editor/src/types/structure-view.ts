@@ -187,7 +187,7 @@ export interface StructureChoiceArm {
   /** The arm's type name as written in source (e.g., "CashPayment"). */
   readonly typeName: string;
   /** Classification of the referenced type, mirroring StructureRow.typeKind. */
-  readonly typeKind: 'Data' | 'Choice' | 'Enum' | 'Builtin' | 'Unresolved';
+  readonly typeKind: 'Data' | 'Choice' | 'Enum' | 'Builtin' | 'Record' | 'TypeAlias' | 'Unresolved';
   /** Canonical id of the referenced node, when resolvable. */
   readonly targetNodeId?: string;
 }

@@ -3600,3 +3600,104 @@ describe('buildStructureGraph — Record / TypeAlias attribute classification (l
     expect(foo.expansions.size).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Choice arm classification for Record / TypeAlias targets (PR #237 review)
+// ---------------------------------------------------------------------------
+
+describe('buildStructureGraph — choice arms referencing Record / TypeAlias (PR #237)', () => {
+  // Before this fix, buildChoiceArm's ternary fell through to 'Enum' for any
+  // $type not explicitly handled ('Data' | 'Choice'). Now that Record/TypeAlias
+  // nodes appear in the adapter doc (attribute type-ref path added in #303),
+  // a choice arm pointing to one would be mis-labelled. This suite pins the
+  // correct classification and confirms both kinds remain leaves (isArmExpandable
+  // only expands Data/Choice; no child node is materialised).
+
+  const fixtureChoiceWithRecordAndAlias = {
+    namespaces: [{ uri: 'cdm.types' }],
+    nodes: [
+      {
+        id: 'cdm.types::MyRec',
+        $type: 'Record' as const,
+        name: 'MyRec',
+        namespace: 'cdm.types'
+      },
+      {
+        id: 'cdm.types::MyAlias',
+        $type: 'TypeAlias' as const,
+        name: 'MyAlias',
+        namespace: 'cdm.types'
+      },
+      {
+        id: 'cdm.types::Pick',
+        $type: 'Choice' as const,
+        name: 'Pick',
+        namespace: 'cdm.types',
+        choiceOptions: [
+          { typeCall: { type: { $refText: 'MyRec' } } },
+          { typeCall: { type: { $refText: 'MyAlias' } } }
+        ]
+      }
+    ]
+  };
+
+  it('classifies a Record arm as typeKind="Record" (not "Enum")', () => {
+    const result = buildStructureGraph(fixtureChoiceWithRecordAndAlias, {
+      focusedTypeId: 'cdm.types::Pick',
+      expansionMap: new Map()
+    });
+    const pick = result.nodes.get('cdm.types::Pick') as StructureChoiceNode;
+    expect(pick).toBeDefined();
+    expect(pick.kind).toBe('choice');
+    const arm = pick.options.find((o) => o.typeName === 'MyRec');
+    expect(arm).toBeDefined();
+    expect(arm!.typeKind).toBe('Record');
+    expect(arm!.targetNodeId).toBe('cdm.types::MyRec');
+  });
+
+  it('classifies a TypeAlias arm as typeKind="TypeAlias" (not "Enum")', () => {
+    const result = buildStructureGraph(fixtureChoiceWithRecordAndAlias, {
+      focusedTypeId: 'cdm.types::Pick',
+      expansionMap: new Map()
+    });
+    const pick = result.nodes.get('cdm.types::Pick') as StructureChoiceNode;
+    const arm = pick.options.find((o) => o.typeName === 'MyAlias');
+    expect(arm).toBeDefined();
+    expect(arm!.typeKind).toBe('TypeAlias');
+    expect(arm!.targetNodeId).toBe('cdm.types::MyAlias');
+  });
+
+  it('does NOT materialise a child node for a Record arm (leaf — isArmExpandable only expands Data/Choice)', () => {
+    // Set the expansion key for the Record arm — the adapter must ignore it.
+    const key = expansionKey({
+      namespaceUri: 'cdm.types',
+      typeId: 'Pick',
+      attrName: 'MyRec',
+      instancePath: ['cdm.types::Pick']
+    });
+    const result = buildStructureGraph(fixtureChoiceWithRecordAndAlias, {
+      focusedTypeId: 'cdm.types::Pick',
+      expansionMap: new Map([[key, true]])
+    });
+    // Only the Choice root itself — no child node for MyRec.
+    expect(result.nodes.size).toBe(1);
+    const pick = result.nodes.get('cdm.types::Pick') as StructureChoiceNode;
+    expect(pick.expansions.size).toBe(0);
+  });
+
+  it('does NOT materialise a child node for a TypeAlias arm (leaf — isArmExpandable only expands Data/Choice)', () => {
+    const key = expansionKey({
+      namespaceUri: 'cdm.types',
+      typeId: 'Pick',
+      attrName: 'MyAlias',
+      instancePath: ['cdm.types::Pick']
+    });
+    const result = buildStructureGraph(fixtureChoiceWithRecordAndAlias, {
+      focusedTypeId: 'cdm.types::Pick',
+      expansionMap: new Map([[key, true]])
+    });
+    expect(result.nodes.size).toBe(1);
+    const pick = result.nodes.get('cdm.types::Pick') as StructureChoiceNode;
+    expect(pick.expansions.size).toBe(0);
+  });
+});

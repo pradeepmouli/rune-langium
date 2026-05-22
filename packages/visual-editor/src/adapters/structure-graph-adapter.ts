@@ -281,8 +281,20 @@ function buildChoiceArm(opt: AdapterChoiceOption, doc: AdapterDocument, ownerNam
   if (!target) {
     return { typeName: refText, typeKind: 'Unresolved' };
   }
+  // Record/TypeAlias are now in the adapter doc (attribute type-refs), so a
+  // choice arm referencing one resolves here too — classify as its real kind
+  // instead of falling through to 'Enum'. Stays a leaf (isArmExpandable only
+  // expands Data/Choice; armKindToRowKind passes the kind through).
   const typeKind: StructureChoiceArm['typeKind'] =
-    target.$type === 'Data' ? 'Data' : target.$type === 'Choice' ? 'Choice' : 'Enum';
+    target.$type === 'Data'
+      ? 'Data'
+      : target.$type === 'Choice'
+        ? 'Choice'
+        : target.$type === 'Record'
+          ? 'Record'
+          : target.$type === 'TypeAlias'
+            ? 'TypeAlias'
+            : 'Enum';
   return { typeName: refText, typeKind, targetNodeId: target.id };
 }
 
