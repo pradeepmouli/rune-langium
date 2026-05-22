@@ -1457,6 +1457,10 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
     vi.clearAllMocks();
     structureViewMockState.latestProps = undefined;
     resizeObserverMockState.instances = [];
+    // EditorPage embeds PerspectiveHost; store defaults to 'workspaces' which
+    // renders WorkspacesPerspective (requires context). These tests render a
+    // loaded workspace — reset to 'explore' so DockShell is shown.
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
   });
 
   afterEach(() => {
