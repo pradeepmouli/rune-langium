@@ -18,7 +18,7 @@ export interface SerializedModelMeta {
 }
 
 function nameToNamespace(name: unknown): string | undefined {
-  if (typeof name === 'string') return name.replace(/^"|"$/g, '');
+  if (typeof name === 'string') return name;
   if (name && typeof name === 'object' && 'segments' in (name as object)) {
     const segs = (name as { segments?: unknown }).segments;
     if (Array.isArray(segs)) return segs.join('.');

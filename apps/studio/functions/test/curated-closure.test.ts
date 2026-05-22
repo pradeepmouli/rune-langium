@@ -50,6 +50,16 @@ describe('computeCuratedClosure', () => {
     expect(closure.has('cdm.base.math')).toBe(true);
     expect(closure.has('other')).toBe(false);
   });
+  it('expands a wildcard SEED (user `import cdm.base.*`) to matching curated namespaces', () => {
+    // Regression: a wildcard seed must be expanded, not dropped. Seeds go
+    // through the same expand() as imports, so the user's wildcard import
+    // pulls cdm.base.datetime + cdm.base.math (which transitively closes too).
+    const closure = computeCuratedClosure(['cdm.base.*'], docs);
+    expect(closure.has('cdm.base.datetime')).toBe(true);
+    expect(closure.has('cdm.base.math')).toBe(true);
+    expect(closure.has('cdm.trade')).toBe(false);
+    expect(closure.has('cdm.unrelated')).toBe(false);
+  });
   it('is cycle-safe', () => {
     const cyc = [doc('a', ['b']), doc('b', ['a'])];
     expect([...computeCuratedClosure(['a'], cyc)].sort()).toEqual(['a', 'b']);

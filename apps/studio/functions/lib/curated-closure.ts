@@ -10,9 +10,11 @@ export interface ClosureDoc {
 
 /**
  * Transitive closure of `seedNamespaces` over the curated docs' import graph,
- * read from serialized JSON (no Langium link). Wildcard imports (`a.b.*`)
- * expand to every curated namespace `== a.b` or starting `a.b.`. Cycle-safe.
- * Returns ONLY curated namespaces (seeds absent from `curatedDocs` are excluded).
+ * read from serialized JSON (no Langium link). Wildcard forms (`a.b.*`) expand
+ * to every curated namespace `== a.b` or starting `a.b.` — for BOTH curated
+ * imports AND user seeds (a user `import cdm.base.*` must pull the matching
+ * curated namespaces). Cycle-safe. Returns ONLY curated namespaces (seeds
+ * absent from `curatedDocs` are excluded).
  */
 export function computeCuratedClosure(
   seedNamespaces: Iterable<string>,
@@ -36,7 +38,11 @@ export function computeCuratedClosure(
   };
 
   const visited = new Set<string>();
-  const queue: string[] = [...seedNamespaces];
+  // Expand seeds through the same wildcard/membership filter as imports, so a
+  // user `import cdm.base.*` (or an exact `import cdm.trade`) resolves to the
+  // matching curated namespaces. A seed that matches no curated namespace
+  // contributes nothing.
+  const queue: string[] = [...seedNamespaces].flatMap(expand);
   while (queue.length > 0) {
     const ns = queue.shift()!;
     if (!allNs.has(ns) || visited.has(ns)) continue;
