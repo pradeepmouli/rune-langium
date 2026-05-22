@@ -129,49 +129,6 @@ function isTypeGraphNode(node: DisplayGraphNode): node is TypeGraphNode {
   return !isGroupContainerNode(node);
 }
 
-/**
- * Cheap content fingerprint used by the source-sync effect to skip
- * position-only re-renders before paying for `modelsToAst` +
- * `serializeModel`. ReactFlow's `applyReactFlowNodeChanges` updates node
- * `position` (and writes the same value into `node.data.position`) on
- * every drag tick / fit-view; if we don't bail here, every viewport pan
- * runs the full serialize pipeline.
- *
- * We include node id, $type, name, namespace, and a JSON of all AST
- * fields EXCEPT `position`. Edge ids and `data.kind` capture
- * inheritance / reference structure cheaply. We intentionally exclude
- * `errors`, `hasExternalRefs`, etc. — they are derived display state,
- * not authored content.
- */
-function computeContentFingerprint(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): string {
-  const nodeParts: string[] = [];
-  // Sort by id so reordering (e.g. drag-reorder) doesn't churn the
-  // fingerprint — graph-content equivalence is what we care about.
-  const sortedNodes = [...nodes].sort((a, b) => a.id.localeCompare(b.id));
-  for (const n of sortedNodes) {
-    const d = n.data as Record<string, unknown>;
-    // Project to the AST-relevant subset: skip GraphMetadata that
-    // changes on view-only operations.
-    const projection: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(d)) {
-      if (k === 'position' || k === 'errors' || k === 'hasExternalRefs') continue;
-      projection[k] = v;
-    }
-    try {
-      nodeParts.push(`${n.id}:${JSON.stringify(projection)}`);
-    } catch {
-      // Cyclic structures (shouldn't happen post-strip but be safe).
-      nodeParts.push(`${n.id}:?`);
-    }
-  }
-  const edgeParts: string[] = [];
-  const sortedEdges = [...edges].sort((a, b) => a.id.localeCompare(b.id));
-  for (const e of sortedEdges) {
-    edgeParts.push(`${e.id}:${e.data?.kind ?? ''}`);
-  }
-  return `n=${nodeParts.join('|')}#e=${edgeParts.join('|')}`;
-}
-
 function createViewportSignature(
   nodes: Array<{ id: string }>,
   edges: Array<{ id: string }>,
