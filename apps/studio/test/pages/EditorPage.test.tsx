@@ -340,7 +340,11 @@ vi.mock('lucide-react', () => ({
   // Dialog primitive's close button uses `X` from lucide-react. The curated
   // models modal in EditorPage pulls Dialog in transitively even when it
   // isn't open, so the lucide-react mock has to cover X too.
-  X: () => React.createElement('span')
+  X: () => React.createElement('span'),
+  // perspective-registry icons (ActivityBar now imports from perspective-registry)
+  FolderOpen: () => React.createElement('span'),
+  GitBranch: () => React.createElement('span'),
+  Package: () => React.createElement('span')
 }));
 
 vi.mock('../../src/components/GraphFilterMenu.js', () => ({

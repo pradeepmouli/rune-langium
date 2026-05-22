@@ -1992,11 +1992,7 @@ export function EditorPage({
         </div>
       </header>
       <div className="flex flex-1 min-h-0">
-        <ActivityBar
-          onWorkspaceClick={() => onClose?.()}
-          onModelsClick={() => setShowCuratedModels(true)}
-          onSettingsClick={() => {}}
-        />
+        <ActivityBar hasWorkspace />
         <div className="flex-1 min-h-0">
           <DockShell
             studioVersion={studioVersion}
