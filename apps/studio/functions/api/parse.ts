@@ -226,7 +226,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       const seeds = collectUserSeedNamespaces(workspaceContext?.userDocs ?? []);
       const curatedForClosure = documentsForHydration
         .filter((d) => d.bundleId !== undefined)
-        .map((d) => ({ serializedModel: d.serializedModel }));
+        .map((d) => ({ uri: d.uri, serializedModel: d.serializedModel }));
       const closure = computeCuratedClosure(seeds, curatedForClosure);
       await populateDependencyGraph(documentsForHydration, workspaceContext, dependencyGraph, closure);
     }
