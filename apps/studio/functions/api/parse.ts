@@ -30,6 +30,8 @@ import type { RosettaModel } from '@rune-langium/core';
 import { collectNamespaceDependencies, closeNamespaceDependencies } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
+import { computeCuratedClosure } from '../lib/curated-closure.js';
+import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
 
 /**
  * The langium service pair plus the live LangiumDocument set, shared
@@ -221,7 +223,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // For empty-workspace requests (no user files, no curated bundles),
     // nothing was loaded and the dep graph stays empty (early-returned above).
     if (documentsForHydration.length > 0) {
-      await populateDependencyGraph(documentsForHydration, workspaceContext, dependencyGraph);
+      const seeds = collectUserSeedNamespaces(workspaceContext?.userDocs ?? []);
+      const curatedForClosure = documentsForHydration
+        .filter((d) => d.bundleId !== undefined)
+        .map((d) => ({ uri: d.uri, serializedModel: d.serializedModel }));
+      const closure = computeCuratedClosure(seeds, curatedForClosure);
+      await populateDependencyGraph(documentsForHydration, workspaceContext, dependencyGraph, closure);
     }
 
     // Raw Langium AST nodes have circular $container refs and cannot be
@@ -466,6 +473,27 @@ function stringifyWithBigInt(value: unknown): string {
 }
 
 /**
+ * Seed namespaces for the curated closure = the namespaces the user files
+ * import. Read from the already-parsed user models (no link needed).
+ * Exported for unit testing.
+ */
+export function collectUserSeedNamespaces(
+  userDocs: ReadonlyArray<{ parseResult?: { value?: unknown } }>
+): Set<string> {
+  const seeds = new Set<string>();
+  for (const doc of userDocs) {
+    const model = doc.parseResult?.value as { imports?: Array<{ importedNamespace?: unknown }> } | undefined;
+    if (!model || !Array.isArray(model.imports)) continue;
+    for (const imp of model.imports) {
+      if (typeof imp.importedNamespace === 'string' && imp.importedNamespace.length > 0) {
+        seeds.add(imp.importedNamespace);
+      }
+    }
+  }
+  return seeds;
+}
+
+/**
  * Compute the cross-namespace dep graph (spec 2026-05-14 §5.2) over the
  * full hydration set — user-parsed docs (already live in workspaceContext)
  * plus curated docs (deserialized here from `serializedModel` strings via
@@ -486,7 +514,8 @@ async function populateDependencyGraph(
     bundleId?: string;
   }>,
   workspaceContext: WorkspaceContext | undefined,
-  dependencyGraph: Record<string, string[]>
+  dependencyGraph: Record<string, string[]>,
+  closureNamespaces: ReadonlySet<string>
 ): Promise<void> {
   // Fail-soft: a missing/partial dep graph degrades the modal's auto-cascade
   // hints but never breaks /api/parse's primary hydration contract. Any
@@ -508,9 +537,17 @@ async function populateDependencyGraph(
     // Hydrate curated docs into LangiumDocuments. User docs are already in
     // the workspace from hydrateUserWorkspace; we identify curated entries by
     // `bundleId` presence (set in the curated loop, omitted on user files).
+    //
+    // Lazy-link: only deserialize+link curated docs whose namespace is in the
+    // user's reference closure. Reading the namespace from serialized JSON is
+    // cheap (no Langium deserialize) — skipping out-of-closure docs before
+    // paying the deserialize+link cost is what brings curated-bundle requests
+    // back under CF's CPU limit (error 1102).
     const curatedDocs: LangiumDocument[] = [];
     for (const entry of documentsForHydration) {
       if (entry.bundleId === undefined) continue;
+      const meta = readSerializedModelMeta(entry.serializedModel);
+      if (!meta || !closureNamespaces.has(meta.namespace)) continue;
       try {
         const model = context.RuneDsl.serializer.JsonSerializer.deserialize(entry.serializedModel) as RosettaModel;
         const doc = factory.fromModel(model, URI.parse(entry.uri));
