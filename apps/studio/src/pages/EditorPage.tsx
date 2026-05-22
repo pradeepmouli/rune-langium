@@ -1996,6 +1996,10 @@ export function EditorPage({
         <ActivityBar hasWorkspace />
         <PerspectiveHost
           hasWorkspace
+          workspaceId={workspaceId}
+          workspaceKind={workspaceKind}
+          codegenWorker={codegenWorker}
+          files={files}
           explore={
             <DockShell
               studioVersion={studioVersion}

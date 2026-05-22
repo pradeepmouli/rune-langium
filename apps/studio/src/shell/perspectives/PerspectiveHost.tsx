@@ -13,13 +13,30 @@ import { SettingsPerspective } from './screens/SettingsPerspective.js';
 import { WorkspacesPerspective } from './screens/WorkspacesPerspective.js';
 import { GitSyncPerspective } from './screens/GitSyncPerspective.js';
 import { ExportPerspective } from './screens/ExportPerspective.js';
+import type { WorkspaceKind } from '../../workspace/persistence.js';
+import type { WorkspaceFile } from '../../services/workspace.js';
 
 interface Props {
   explore: React.ReactNode;
   hasWorkspace: boolean;
+  /** Forwarded to GitSyncPerspective — wired by Task 8. */
+  workspaceId?: string;
+  /** Forwarded to GitSyncPerspective — wired by Task 8. */
+  workspaceKind?: WorkspaceKind;
+  /** Shared codegen Worker from EditorPage — forwarded to ExportPerspective (Task 8). */
+  codegenWorker?: Worker | null;
+  /** Workspace files forwarded to ExportPerspective (Task 8). */
+  files?: ReadonlyArray<WorkspaceFile>;
 }
 
-export function PerspectiveHost({ explore, hasWorkspace }: Props): React.ReactElement {
+export function PerspectiveHost({
+  explore,
+  hasWorkspace,
+  workspaceId,
+  workspaceKind,
+  codegenWorker,
+  files
+}: Props): React.ReactElement {
   const active = usePerspectiveStore((s) => s.activePerspective);
   return (
     <div className="flex-1 min-h-0">
@@ -32,8 +49,10 @@ export function PerspectiveHost({ explore, hasWorkspace }: Props): React.ReactEl
         {explore}
       </div>
       {active === 'workspaces' && <WorkspacesPerspective />}
-      {active === 'git' && hasWorkspace && <GitSyncPerspective />}
-      {active === 'export' && hasWorkspace && <ExportPerspective />}
+      {active === 'git' && hasWorkspace && (
+        <GitSyncPerspective workspaceId={workspaceId} workspaceKind={workspaceKind} />
+      )}
+      {active === 'export' && hasWorkspace && <ExportPerspective worker={codegenWorker} files={files} />}
       {active === 'settings' && <SettingsPerspective />}
     </div>
   );

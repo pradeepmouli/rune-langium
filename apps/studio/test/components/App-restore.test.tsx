@@ -24,6 +24,7 @@ import { App } from '../../src/App.js';
 import { saveWorkspace, _resetForTests, type WorkspaceRecord } from '../../src/workspace/persistence.js';
 import { createOpfsRoot, type OpfsRoot } from '../setup/opfs-mock.js';
 import { saveWorkspaceFiles, setWorkspaceFilesDeps } from '../../src/workspace/workspace-files.js';
+import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 
 const { showToastSpy } = vi.hoisted(() => ({
   showToastSpy: vi.fn()
@@ -96,6 +97,9 @@ beforeEach(async () => {
   // Body attribute is set by App on successful restore; clear between cases
   // so a passing case can't leak its `data-workspace-active` into the next.
   document.body.removeAttribute('data-workspace-active');
+  // Reset perspective store so tests that set activePerspective to 'explore'
+  // (e.g. PerspectiveHost tests) don't leak state into these App tests.
+  usePerspectiveStore.setState({ activePerspective: 'workspaces' });
 });
 
 afterEach(() => {
