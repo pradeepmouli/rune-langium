@@ -2,17 +2,15 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Regression guard: ActivityBar "Curated Models" button must open a modal
- * containing <ModelLoader /> when clicked from inside EditorPage. Prod-smoke
- * (https://www.daikonic.dev/rune-studio/studio/) caught the button stubbed
- * to () => {} after a workspace was open. Same "shipped but unreachable"
- * pattern as the Phase 7 integration miss in PR #185 — assert that the
- * click actually mounts ModelLoader.
+ * Regression guard: "Curated Models" modal wiring inside EditorPage.
  *
- * This test keeps the real Dialog primitive and the real ModelLoader so
- * the wiring is exercised end-to-end. Heavy editor internals (DockShell,
- * SourceEditor, the visual-editor package, codegen worker boot) are mocked
- * to keep the suite fast and focused on the click-to-open path.
+ * History: originally the trigger was the ActivityBar Database icon. Task 3
+ * (feat/sidebar-perspectives) detached that button from the rail; the modal
+ * state (`showCuratedModels`) remains in EditorPage and will be re-homed into
+ * the WorkspacesPerspective panel in Task 6. The click-to-open tests are
+ * skipped until the new trigger is wired up.
+ *
+ * The "does not render on mount" guard stays active throughout.
  */
 
 import React, { useImperativeHandle } from 'react';
@@ -20,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, cleanup, screen, fireEvent } from '@testing-library/react';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 import { closeDialogViaEscape } from '../helpers/radix-dialog.js';
+import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 
 const { editorStoreState, useEditorStore } = vi.hoisted(() => {
   const editorStoreState = {
@@ -145,6 +144,10 @@ describe('EditorPage — Curated Models button wiring', () => {
     editorStoreState.nodes = [];
     editorStoreState.selectedNodeId = undefined;
     vi.clearAllMocks();
+    // EditorPage embeds PerspectiveHost; store defaults to 'workspaces' which
+    // renders WorkspacesPerspective (requires context). These tests render a
+    // loaded workspace — reset to 'explore' so DockShell is shown.
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
   });
 
   afterEach(() => {
@@ -164,7 +167,10 @@ describe('EditorPage — Curated Models button wiring', () => {
     expect(screen.queryByTestId('model-loader')).not.toBeInTheDocument();
   });
 
-  it('opens a dialog containing ModelLoader when the ActivityBar Curated Models button is clicked', () => {
+  // TODO(T6/WorkspacesPerspective): restore when the curated-models trigger is
+  // re-homed into the WorkspacesPerspective panel. The ActivityBar Database
+  // button was removed in Task 3; `showCuratedModels` state stays in EditorPage.
+  it.skip('opens a dialog containing ModelLoader when the ActivityBar Curated Models button is clicked', () => {
     render(
       <EditorPage
         models={[]}
@@ -190,7 +196,8 @@ describe('EditorPage — Curated Models button wiring', () => {
     expect(screen.getByRole('button', { name: /cdm \(common domain model\)/i })).toBeInTheDocument();
   });
 
-  it('closes the curated models dialog when the user presses Esc', async () => {
+  // TODO(T6/WorkspacesPerspective): restore alongside the open test above.
+  it.skip('closes the curated models dialog when the user presses Esc', async () => {
     render(
       <EditorPage
         models={[]}

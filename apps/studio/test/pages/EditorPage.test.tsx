@@ -482,6 +482,10 @@ describe('EditorPage preview target identity', () => {
     runeTypeGraphMockState.relayout = vi.fn();
     resizeObserverMockState.instances = [];
     namespaceExplorerMockState.latestProps = undefined;
+    // EditorPage embeds PerspectiveHost; store defaults to 'workspaces' which
+    // renders WorkspacesPerspective (requires context). These tests render a
+    // loaded workspace — reset to 'explore' so DockShell is visible.
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
   });
 
   afterEach(() => {
