@@ -134,8 +134,15 @@ async function parseWorkspaceFilesOnMainThread(
     fallbackMessage?: string;
   }
 ): Promise<ParseWorkspaceFilesResult> {
+  // Defensive guard (layer 2): only pass files whose URI the in-browser Langium
+  // can actually parse. The service registry is keyed on extension, and only
+  // ".rosetta" is registered — curated entries (serializedModelJson set) and
+  // bundle-marker files (path ends with /.bundle-marker) have no extension or
+  // a non-rosetta extension and cause getServices() to throw.
+  const parseable = files.filter((f) => f.path.toLowerCase().endsWith('.rosetta'));
+
   const results = await parseWorkspace(
-    files.map((file) => ({
+    parseable.map((file) => ({
       uri: file.path,
       content: file.content
     }))
@@ -144,9 +151,10 @@ async function parseWorkspaceFilesOnMainThread(
   const parsedModels: ParsedWorkspaceModel[] = [];
   const errors = new Map<string, string[]>();
 
+  // Index results against `parseable` (NOT the original `files`) so indices align.
   for (let i = 0; i < results.length; i++) {
     const result = results[i]!;
-    const file = files[i]!;
+    const file = parseable[i]!;
     if (result.value) {
       models.push(result.value);
       parsedModels.push({ filePath: file.path, model: result.value });
@@ -415,7 +423,16 @@ export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<Parse
     // Router failed (network error, Pages Function unavailable, etc.) — fall back
     // to synchronous main-thread parsing so the editor stays functional.
     console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
-    return parseWorkspaceFilesOnMainThread(files, {
+    // Layer 1 filter: only hand user-authored .rosetta files to the in-browser
+    // Langium parser.  Curated entries (serializedModelJson set) and bundle-marker
+    // files (path ends with /.bundle-marker) have non-.rosetta extensions that
+    // Langium's service registry doesn't know about, causing it to throw
+    // "no services for the extension ''".  Mirroring the router path's
+    // `userFiles` filter here means the fallback never dead-ends on mixed workspaces.
+    const parseableFiles = files.filter(
+      (f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta')
+    );
+    return parseWorkspaceFilesOnMainThread(parseableFiles, {
       parseMode: 'main-thread-fallback',
       fallbackMessage: formatWorkerFallbackMessage(error)
     });
