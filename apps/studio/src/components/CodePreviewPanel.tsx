@@ -1,5 +1,16 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+
+/**
+ * CodePreviewPanel — pure-display code generation preview.
+ *
+ * Worker ownership and the codegen:generate request/response cycle live
+ * entirely in EditorPage (single owner). This component reads the
+ * generated output from `useCodegenStore` (snapshot, activeTarget, etc.)
+ * and renders it — it does NOT subscribe to the worker and does NOT post
+ * messages. This prevents double-subscription when both the dock panel
+ * and ExportPerspective display the same output.
+ */
 import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
@@ -32,28 +43,30 @@ export interface SourceEditorHandle {
   revealPosition(position: SourcePosition, filePath?: string): void;
 }
 
-interface CodegenResultMessage {
+// Codegen worker message types — still used by EditorPage's owner effect.
+// Re-exported so EditorPage can import them from a single location.
+export interface CodegenResultMessage {
   type: 'codegen:result';
   target: Target;
   requestId: string;
   files: CodePreviewFile[];
 }
 
-interface CodegenOutdatedMessage {
+export interface CodegenOutdatedMessage {
   type: 'codegen:outdated';
   target: Target;
   requestId: string;
   message: string;
 }
 
-interface CodegenErrorMessage {
+export interface CodegenErrorMessage {
   type: 'codegen:error';
   target: Target;
   requestId: string;
   message: string;
 }
 
-type CodegenWorkerMessage = CodegenResultMessage | CodegenOutdatedMessage | CodegenErrorMessage;
+export type CodegenWorkerMessage = CodegenResultMessage | CodegenOutdatedMessage | CodegenErrorMessage;
 
 function statusLabel(snapshot: CodePreviewSnapshot, target: Target): string {
   switch (snapshot.status) {
@@ -73,7 +86,6 @@ function statusLabel(snapshot: CodePreviewSnapshot, target: Target): string {
 }
 
 export interface CodePreviewPanelProps {
-  worker: Worker;
   sourceEditorRef: SourceEditorHandle | null;
   /**
    * Workspace files (user-authored only — curated bundles are
@@ -91,94 +103,21 @@ function activeFileFromSnapshot(snapshot: CodePreviewSnapshot): CodePreviewFile 
   return snapshot.files.find((file) => file.relativePath === snapshot.activeRelativePath) ?? snapshot.files[0];
 }
 
-export function CodePreviewPanel({ worker, sourceEditorRef, files }: CodePreviewPanelProps): React.ReactElement {
+export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelProps): React.ReactElement {
   const target = useCodegenStore((s) => s.codePreviewTarget);
   const activeTarget = useCodegenStore((s) => s.activeTarget);
   const setActiveTarget = useCodegenStore((s) => s.setActiveTarget);
-  const currentRequestId = useCodegenStore((s) => s.currentRequestId);
-  const beginCodePreviewRequest = useCodegenStore((s) => s.beginCodePreviewRequest);
   const snapshot = useCodegenStore((s) => s.snapshot);
   const setCodePreviewTarget = useCodegenStore((s) => s.setCodePreviewTarget);
   const setActiveCodePreviewFile = useCodegenStore((s) => s.setActiveCodePreviewFile);
-  const receiveCodePreviewResult = useCodegenStore((s) => s.receiveCodePreviewResult);
-  const markCodePreviewStale = useCodegenStore((s) => s.markCodePreviewStale);
-  const markCodePreviewUnavailable = useCodegenStore((s) => s.markCodePreviewUnavailable);
   const activeFile = useMemo(() => activeFileFromSnapshot(snapshot), [snapshot]);
 
-  const currentTargetRef = useRef<Target>(target);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const sourceEditorRefRef = useRef(sourceEditorRef);
   const activeFileRef = useRef<CodePreviewFile | undefined>(undefined);
   sourceEditorRefRef.current = sourceEditorRef;
   activeFileRef.current = activeFile;
-
-  currentTargetRef.current = target;
-  const currentRequestIdRef = useRef(currentRequestId);
-  currentRequestIdRef.current = currentRequestId;
-
-  const requestGeneration = useCallback(
-    (requestedTarget: Target) => {
-      const requestId = beginCodePreviewRequest(requestedTarget);
-      try {
-        worker.postMessage({ type: 'codegen:generate', target: requestedTarget, requestId });
-      } catch (err) {
-        console.error('[CodePreviewPanel] Failed to request code generation:', err);
-        markCodePreviewUnavailable({
-          target: requestedTarget,
-          message: 'Code preview worker is unavailable.'
-        });
-      }
-    },
-    [beginCodePreviewRequest, markCodePreviewUnavailable, worker]
-  );
-
-  useEffect(() => {
-    function handleMessage(e: MessageEvent<CodegenWorkerMessage>) {
-      const msg = e.data;
-      if (msg.target !== currentTargetRef.current || msg.requestId !== currentRequestIdRef.current) {
-        return;
-      }
-      switch (msg.type) {
-        case 'codegen:result':
-          receiveCodePreviewResult({ target: msg.target, files: msg.files });
-          break;
-        case 'codegen:outdated':
-          markCodePreviewStale({ target: msg.target, message: msg.message });
-          break;
-        case 'codegen:error':
-          markCodePreviewUnavailable({ target: msg.target, message: msg.message });
-          break;
-      }
-    }
-
-    function handleWorkerError(event: ErrorEvent) {
-      console.error('[CodePreviewPanel] Worker error:', event.message, event.error);
-      markCodePreviewUnavailable({
-        target: currentTargetRef.current,
-        message: 'Code preview worker crashed — reload Studio.'
-      });
-    }
-
-    const messageListener = handleMessage as EventListener;
-    const errorListener = handleWorkerError as EventListener;
-    worker.addEventListener('message', messageListener);
-    worker.addEventListener('error', errorListener);
-
-    return () => {
-      worker.removeEventListener('message', messageListener);
-      worker.removeEventListener('error', errorListener);
-    };
-  }, [markCodePreviewStale, markCodePreviewUnavailable, receiveCodePreviewResult, worker]);
-
-  // 018 Task 0.8 — only kick off codegen once the user has entered the
-  // viewer for a target. When `activeTarget` is undefined the targets
-  // table is shown and there is nothing to generate yet, so skipping the
-  // request avoids a wasted "default zod" generation on every mount.
-  useEffect(() => {
-    if (activeTarget === undefined) return;
-    requestGeneration(target);
-  }, [activeTarget, requestGeneration, target]);
 
   // 019 polish — View toggles. Click the eye on the already-active row
   // collapses the preview area; click on a different row swaps it.

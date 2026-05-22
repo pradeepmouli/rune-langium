@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+
+/**
+ * CodePreviewPanel — source-map click-to-navigate tests (post-Codex-P2 edition).
+ *
+ * CodePreviewPanel is now a PURE-DISPLAY component. Worker ownership lives in
+ * EditorPage. These tests seed `useCodegenStore` directly (via
+ * `receiveCodePreviewResult`) — the same way EditorPage's owner effect does —
+ * then invoke the CodeMirror click handler to assert source-map navigation.
+ */
+
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, act, cleanup } from '@testing-library/react';
 
@@ -55,21 +65,6 @@ beforeEach(() => {
   capturedHandlers.click = undefined;
 });
 
-function makeWorker() {
-  return {
-    postMessage: vi.fn(),
-    onmessage: null as ((e: MessageEvent) => void) | null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  };
-}
-
-function getMessageHandler(worker: ReturnType<typeof makeWorker>) {
-  return (worker.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-    | ((e: MessageEvent) => void)
-    | undefined;
-}
-
 /** Returns a fake CodeMirror view whose posAtCoords maps to a given outputLine. */
 function makeFakeView(outputLine: number) {
   return {
@@ -79,21 +74,18 @@ function makeFakeView(outputLine: number) {
 }
 
 describe('CodePreviewPanel — source-map click-to-navigate', () => {
-  it('calls revealLineInCenter and setSelection on mapped line click', async () => {
-    const w = makeWorker();
+  it('calls revealPosition on mapped line click', async () => {
     const sourceEditorRef = { revealPosition: vi.fn() };
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={sourceEditorRef as never} />);
-    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+    render(<CodePreviewPanel sourceEditorRef={sourceEditorRef as never} />);
     const sourceMap = [{ outputLine: 2, sourceUri: 'file:///workspace/trade.rune', sourceLine: 5, sourceChar: 3 }];
+
+    // Seed the store — simulates what EditorPage's owner effect does after
+    // the worker posts a codegen:result message.
     await act(async () => {
-      getMessageHandler(w)?.({
-        data: {
-          type: 'codegen:result',
-          target: 'zod',
-          requestId,
-          files: [{ relativePath: 'ns.zod.ts', content: 'line0\nline1\nline2\n', sourceMap }]
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().receiveCodePreviewResult({
+        target: 'zod',
+        files: [{ relativePath: 'ns.zod.ts', content: 'line0\nline1\nline2\n', sourceMap }]
+      });
     });
 
     // Invoke the CodeMirror click handler — posAtCoords returns 2, lineAt(2)
@@ -106,19 +98,13 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
   });
 
   it('does nothing when clicking with empty source map', async () => {
-    const w = makeWorker();
     const sourceEditorRef = { revealPosition: vi.fn() };
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={sourceEditorRef as never} />);
-    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+    render(<CodePreviewPanel sourceEditorRef={sourceEditorRef as never} />);
     await act(async () => {
-      getMessageHandler(w)?.({
-        data: {
-          type: 'codegen:result',
-          target: 'zod',
-          requestId,
-          files: [{ relativePath: 'ns.zod.ts', content: 'line0\nline1\n', sourceMap: [] }]
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().receiveCodePreviewResult({
+        target: 'zod',
+        files: [{ relativePath: 'ns.zod.ts', content: 'line0\nline1\n', sourceMap: [] }]
+      });
     });
     await act(async () => {
       capturedHandlers.click?.(new MouseEvent('click', { clientX: 0, clientY: 0 }), makeFakeView(0));
@@ -127,31 +113,25 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
   });
 
   it('does nothing when sourceEditorRef is null', async () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
-    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     await act(async () => {
-      getMessageHandler(w)?.({
-        data: {
-          type: 'codegen:result',
-          target: 'zod',
-          requestId,
-          files: [
-            {
-              relativePath: 'ns.zod.ts',
-              content: 'line0\n',
-              sourceMap: [
-                {
-                  outputLine: 0,
-                  sourceUri: 'file:///workspace/trade.rune',
-                  sourceLine: 5,
-                  sourceChar: 3
-                }
-              ]
-            }
-          ]
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().receiveCodePreviewResult({
+        target: 'zod',
+        files: [
+          {
+            relativePath: 'ns.zod.ts',
+            content: 'line0\n',
+            sourceMap: [
+              {
+                outputLine: 0,
+                sourceUri: 'file:///workspace/trade.rune',
+                sourceLine: 5,
+                sourceChar: 3
+              }
+            ]
+          }
+        ]
+      });
     });
     // Invoking the click handler with a null ref must not throw.
     await act(async () => {
@@ -160,32 +140,26 @@ describe('CodePreviewPanel — source-map click-to-navigate', () => {
   });
 
   it('opens the mapped source file when the source map points at a different file', async () => {
-    const w = makeWorker();
     const sourceEditorRef = { revealPosition: vi.fn() };
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={sourceEditorRef as never} />);
-    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+    render(<CodePreviewPanel sourceEditorRef={sourceEditorRef as never} />);
     await act(async () => {
-      getMessageHandler(w)?.({
-        data: {
-          type: 'codegen:result',
-          target: 'zod',
-          requestId,
-          files: [
-            {
-              relativePath: 'ns.zod.ts',
-              content: 'line0\n',
-              sourceMap: [
-                {
-                  outputLine: 0,
-                  sourceUri: 'file:///workspace/other-file.rosetta',
-                  sourceLine: 9,
-                  sourceChar: 2
-                }
-              ]
-            }
-          ]
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().receiveCodePreviewResult({
+        target: 'zod',
+        files: [
+          {
+            relativePath: 'ns.zod.ts',
+            content: 'line0\n',
+            sourceMap: [
+              {
+                outputLine: 0,
+                sourceUri: 'file:///workspace/other-file.rosetta',
+                sourceLine: 9,
+                sourceChar: 2
+              }
+            ]
+          }
+        ]
+      });
     });
 
     await act(async () => {

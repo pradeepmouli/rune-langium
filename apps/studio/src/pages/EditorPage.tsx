@@ -97,7 +97,7 @@ import type { TransportState } from '../services/transport-provider.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
-import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
+import type { SourceEditorHandle, CodegenWorkerMessage } from '../components/CodePreviewPanel.js';
 import { FontScaleButton } from '../components/FontScaleButton.js';
 import { pathToUri } from '../utils/uri.js';
 import { mergeSerializedIntoSource } from '../utils/source-merge.js';
@@ -113,6 +113,7 @@ import {
   isPreviewExecuteErrorMessage
 } from '../services/codegen-service.js';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
+import { useCodegenStore } from '../store/codegen-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
 import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
 import '../test-api.js';
@@ -993,6 +994,85 @@ export function EditorPage({
     setWorkerRef
   ]);
 
+  // ---------------------------------------------------------------------------
+  // Codegen preview — single worker owner (Codex P2 fix).
+  //
+  // EditorPage is the sole owner of the codegen:generate request/response cycle.
+  // CodePreviewPanel and ExportPerspective are pure-display consumers of
+  // useCodegenStore. This prevents double-subscription when both surfaces are
+  // simultaneously mounted (Explore dock keep-alive + Export perspective).
+  // ---------------------------------------------------------------------------
+
+  // Ref to track the currently-pending codegen request so the message handler
+  // can discard stale responses without an extra store selector call.
+  const codegenCurrentRequestIdRef = useRef<string>('');
+
+  // Effect 1: listen for codegen worker responses and dispatch into the store.
+  useEffect(() => {
+    if (!codegenWorker) return;
+
+    function handleCodegenMessage(e: MessageEvent<CodegenWorkerMessage>) {
+      const msg = e.data;
+      if (
+        msg.type !== 'codegen:result' &&
+        msg.type !== 'codegen:outdated' &&
+        msg.type !== 'codegen:error'
+      ) {
+        return; // not a codegen response — handled by preview listener above
+      }
+      if (msg.requestId !== codegenCurrentRequestIdRef.current) {
+        return; // stale response
+      }
+      const store = useCodegenStore.getState();
+      switch (msg.type) {
+        case 'codegen:result':
+          store.receiveCodePreviewResult({ target: msg.target, files: msg.files });
+          break;
+        case 'codegen:outdated':
+          store.markCodePreviewStale({ target: msg.target, message: msg.message });
+          break;
+        case 'codegen:error':
+          store.markCodePreviewUnavailable({ target: msg.target, message: msg.message });
+          break;
+      }
+    }
+
+    function handleCodegenWorkerError(event: ErrorEvent) {
+      console.error('[EditorPage] Codegen worker error (codegen:generate):', event.message, event.error);
+      const store = useCodegenStore.getState();
+      store.markCodePreviewUnavailable({
+        target: store.codePreviewTarget,
+        message: 'Code preview worker crashed — reload Studio.'
+      });
+    }
+
+    codegenWorker.addEventListener('message', handleCodegenMessage as EventListener);
+    codegenWorker.addEventListener('error', handleCodegenWorkerError as EventListener);
+    return () => {
+      codegenWorker.removeEventListener('message', handleCodegenMessage as EventListener);
+      codegenWorker.removeEventListener('error', handleCodegenWorkerError as EventListener);
+    };
+  }, [codegenWorker]);
+
+  // Effect 2: kick off code generation when the active target changes.
+  // Mirrors the removed CodePreviewPanel effect (018 Task 0.8).
+  const codegenActiveTarget = useCodegenStore((s) => s.activeTarget);
+  const codegenPreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
+  useEffect(() => {
+    if (!codegenWorker || codegenActiveTarget === undefined) return;
+    const requestId = useCodegenStore.getState().beginCodePreviewRequest(codegenPreviewTarget);
+    codegenCurrentRequestIdRef.current = requestId;
+    try {
+      codegenWorker.postMessage({ type: 'codegen:generate', target: codegenPreviewTarget, requestId });
+    } catch (err) {
+      console.error('[EditorPage] Failed to request code generation:', err);
+      useCodegenStore.getState().markCodePreviewUnavailable({
+        target: codegenPreviewTarget,
+        message: 'Code preview worker is unavailable.'
+      });
+    }
+  }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget]);
+
   const handleSourceChange = useCallback(
     (path: string, content: string) => {
       const updatedFiles = filesRef.current.map((f) => (f.path === path ? { ...f, content, dirty: true } : f));
@@ -1431,9 +1511,12 @@ export function EditorPage({
     []
   );
 
+  // CodePreviewPanel is now a pure-display consumer of useCodegenStore.
+  // EditorPage owns the codegen worker-driving (see "Codegen preview" effects
+  // above). The panel is always mountable once the worker is ready.
   const CodePreviewPanelMounted = useCallback(() => {
     if (!codegenWorker) return null;
-    return <CodePreviewPanel worker={codegenWorker} sourceEditorRef={sourceEditorHandle} files={files} />;
+    return <CodePreviewPanel sourceEditorRef={sourceEditorHandle} files={files} />;
   }, [codegenWorker, files, sourceEditorHandle]);
 
   const FormPreviewPanelMounted = useCallback(() => <FormPreviewPanelShell />, []);
@@ -2004,7 +2087,6 @@ export function EditorPage({
           hasWorkspace
           workspaceId={workspaceId}
           workspaceKind={workspaceKind}
-          codegenWorker={codegenWorker}
           files={files}
           explore={
             <DockShell

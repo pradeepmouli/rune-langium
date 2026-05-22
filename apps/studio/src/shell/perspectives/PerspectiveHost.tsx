@@ -23,9 +23,7 @@ interface Props {
   workspaceId?: string;
   /** Forwarded to GitSyncPerspective — wired by Task 8. */
   workspaceKind?: WorkspaceKind;
-  /** Shared codegen Worker from EditorPage — forwarded to ExportPerspective (Task 8). */
-  codegenWorker?: Worker | null;
-  /** Workspace files forwarded to ExportPerspective (Task 8). */
+  /** Workspace files forwarded to ExportPerspective for the Download flow. */
   files?: ReadonlyArray<WorkspaceFile>;
 }
 
@@ -34,7 +32,6 @@ export function PerspectiveHost({
   hasWorkspace,
   workspaceId,
   workspaceKind,
-  codegenWorker,
   files
 }: Props): React.ReactElement {
   const active = usePerspectiveStore((s) => s.activePerspective);
@@ -52,7 +49,7 @@ export function PerspectiveHost({
       {active === 'git' && hasWorkspace && (
         <GitSyncPerspective workspaceId={workspaceId} workspaceKind={workspaceKind} />
       )}
-      {active === 'export' && hasWorkspace && <ExportPerspective worker={codegenWorker} files={files} />}
+      {active === 'export' && hasWorkspace && <ExportPerspective files={files} />}
       {active === 'settings' && <SettingsPerspective />}
     </div>
   );
