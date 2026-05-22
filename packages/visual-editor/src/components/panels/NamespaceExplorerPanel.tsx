@@ -25,7 +25,7 @@ import { buildNamespaceTree, flattenNamespaceTree } from '../../utils/namespace-
 import type { FlatTreeRow } from '../../utils/namespace-tree.js';
 import { useVirtualTree } from '../../hooks/useVirtualTree.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../types/structure-view.js';
-import type { TypeRefPayload } from '../../types/structure-view.js';
+import type { TypeRefPayload, TypeRefKind } from '../../types/structure-view.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -111,14 +111,16 @@ const KIND_LABELS: Record<TypeKind, string> = {
 // ---------------------------------------------------------------------------
 // typeKind → TypeRefPayload.kind mapping
 //
-// FlatTreeRow.typeKind uses lowercase TypeKind values ('data', 'choice', 'enum',
-// 'basicType', …) while TypeRefPayload.kind requires PascalCase literals.
-// Only the four kinds recognised by the payload spec are mappable; all others
-// (func, record, typeAlias, annotation) return undefined so TypeItemRow can
-// opt out of registering the drag payload for unsupported kinds.
+// FlatTreeRow.typeKind uses lowercase TypeKind values ('data', 'choice', …)
+// while TypeRefPayload.kind requires PascalCase literals. EVERY kind maps to a
+// payload kind so every row is draggable — that avoids the WebKit/Safari
+// behaviour where a non-draggable row falls back to a text/region selection on
+// a drag attempt. Validity is enforced by each drop target's `accept` list, not
+// here: Data/Choice/Enum/BasicType/Record/TypeAlias are valid attribute
+// type-refs; Func/Annotation are draggable but accepted by no target (no-drop).
 // ---------------------------------------------------------------------------
 
-function toPayloadKind(typeKind: TypeKind): TypeRefPayload['kind'] | undefined {
+function toPayloadKind(typeKind: TypeKind): TypeRefKind {
   switch (typeKind) {
     case 'data':
       return 'Data';
@@ -128,9 +130,17 @@ function toPayloadKind(typeKind: TypeKind): TypeRefPayload['kind'] | undefined {
       return 'Enum';
     case 'basicType':
       return 'BasicType';
+    case 'record':
+      return 'Record';
+    case 'typeAlias':
+      return 'TypeAlias';
+    case 'func':
+      return 'Func';
+    case 'annotation':
+      return 'Annotation';
     default:
-      // func, record, typeAlias, annotation are not valid drag-source payload kinds.
-      return undefined;
+      // Future kinds: draggable but accepted nowhere (rejected, never text-selects).
+      return 'Annotation';
   }
 }
 
@@ -426,26 +436,21 @@ function TypeItemRow({
   isDragSource: _isDragSource,
   onSetDragSource: _onSetDragSource
 }: TypeItemRowProps): JSX.Element {
-  // Build the payload kind once; undefined means this kind is not a valid drag source.
-  const payloadKind = toPayloadKind(row.typeKind);
-
-  const payload: TypeRefPayload | undefined = payloadKind
-    ? {
-        rune: 'type-ref',
-        // FlatTreeRow uses 'namespace' (the namespace string); TypeRefPayload
-        // calls this field 'namespaceUri'. They represent the same value.
-        namespaceUri: row.namespace,
-        typeId: row.nodeId,
-        typeName: row.name,
-        kind: payloadKind
-      }
-    : undefined;
+  // Every kind maps to a payload kind, so every row is a drag source. That
+  // avoids the WebKit fallback where a non-draggable row text/region-selects on
+  // a drag attempt. Whether a drop is valid is decided by each target's
+  // `accept` list (Func/Annotation are draggable but accepted nowhere).
+  const payload: TypeRefPayload = {
+    rune: 'type-ref',
+    // FlatTreeRow uses 'namespace' (the namespace string); TypeRefPayload
+    // calls this field 'namespaceUri'. They represent the same value.
+    namespaceUri: row.namespace,
+    typeId: row.nodeId,
+    typeName: row.name,
+    kind: toPayloadKind(row.typeKind)
+  };
 
   const handleDragStart = (e: DragEvent<HTMLDivElement>) => {
-    if (!payload) {
-      e.preventDefault();
-      return;
-    }
     // Dual-MIME contract per Phase 4: canonical MIME carries the JSON payload;
     // kind-specific marker MIME is registered with an empty value so that drop
     // targets can filter by kind during dragover (when getData is unavailable).
@@ -510,7 +515,7 @@ function TypeItemRow({
       //
       // P2 a11y (PR #210): no role/tabIndex/keydown — the row is not a
       // button semantically. The nav-arrow inside is the interactive element.
-      draggable={payload !== undefined}
+      draggable
       onDragStart={handleDragStart}
     >
       {isSelected && <span className="studio-type-pip" />}

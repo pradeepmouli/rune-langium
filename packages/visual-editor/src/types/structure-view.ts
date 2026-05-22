@@ -22,6 +22,26 @@ export const TYPE_REF_PAYLOAD_MIME = 'application/x-rune-type-ref';
  *
  * Drag sources MUST set both fields.
  */
+/**
+ * Every type kind a namespace-explorer row can carry. ALL kinds are draggable
+ * (so no row falls back to text-selection on a drag attempt); drop targets gate
+ * what they accept via their `accept` list. `Data`/`Choice`/`Enum`/`BasicType`/
+ * `Record`/`TypeAlias` are valid attribute type-refs; `Func`/`Annotation` are
+ * draggable but accepted by no target (they show the no-drop cursor).
+ */
+export const TYPE_REF_KINDS = [
+  'Data',
+  'Choice',
+  'Enum',
+  'BasicType',
+  'Record',
+  'TypeAlias',
+  'Func',
+  'Annotation'
+] as const;
+
+export type TypeRefKind = (typeof TYPE_REF_KINDS)[number];
+
 export interface TypeRefPayload {
   readonly rune: 'type-ref';
   readonly namespaceUri: string;
@@ -29,7 +49,7 @@ export interface TypeRefPayload {
   readonly typeId: string;
   /** Bare AST/display name used in $refText writes. Used by updateAttributeType. */
   readonly typeName: string;
-  readonly kind: 'Data' | 'Choice' | 'Enum' | 'BasicType';
+  readonly kind: TypeRefKind;
 }
 
 /**
@@ -59,7 +79,8 @@ export function isTypeRefPayload(value: unknown): value is TypeRefPayload {
     typeof v.namespaceUri === 'string' &&
     typeof v.typeId === 'string' &&
     typeof v.typeName === 'string' &&
-    (v.kind === 'Data' || v.kind === 'Choice' || v.kind === 'Enum' || v.kind === 'BasicType')
+    typeof v.kind === 'string' &&
+    (TYPE_REF_KINDS as ReadonlyArray<string>).includes(v.kind)
   );
 }
 

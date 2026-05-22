@@ -255,14 +255,25 @@ export function TypeSelector({
   // onto a typeAlias-only selector).
   const acceptKinds: ReadonlyArray<TypeRefPayload['kind']> = useMemo(() => {
     if (disabled) return [];
-    const all: ReadonlyArray<TypeRefPayload['kind']> = ['Data', 'Choice', 'Enum', 'BasicType'];
+    // Valid attribute type-refs. Func/Annotation are intentionally absent —
+    // they're draggable from the explorer but never a valid attribute type.
+    const all: ReadonlyArray<TypeRefPayload['kind']> = [
+      'Data',
+      'Choice',
+      'Enum',
+      'BasicType',
+      'Record',
+      'TypeAlias'
+    ];
     // "No filter specified" (undefined or empty array) means the selector
     // accepts every draggable kind — that's the caller's signal of "I have
     // no opinion about kinds; let any type-ref drop through".
     if (!filterKinds || filterKinds.length === 0) return all;
-    const mapped = all.filter((k) =>
-      filterKinds.includes(k === 'BasicType' ? 'basicType' : (k.toLowerCase() as TypeKind))
-    );
+    // Map PascalCase payload kinds back to lowercase TypeKind. BasicType and
+    // TypeAlias are camelCase in TypeKind, so they can't use a plain toLowerCase().
+    const toTypeKind = (k: TypeRefPayload['kind']): TypeKind =>
+      k === 'BasicType' ? 'basicType' : k === 'TypeAlias' ? 'typeAlias' : (k.toLowerCase() as TypeKind);
+    const mapped = all.filter((k) => filterKinds.includes(toTypeKind(k)));
     // P2 review (PR #210): when filterKinds is NON-empty but maps to zero
     // draggable kinds (e.g. caller passed `['builtin', 'func', 'typeAlias']`,
     // none of which have draggable analogs in TypeRefPayload), reject all

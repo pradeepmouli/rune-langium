@@ -332,10 +332,12 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Non-draggable kinds (Finding 4: Copilot)
+  // All kinds are draggable; validity is gated by each drop target's `accept`.
+  // Func/Annotation are draggable but accepted by NO target — they show the
+  // no-drop cursor instead of falling back to a WebKit text/region selection.
   // -------------------------------------------------------------------------
 
-  it('Function-kind row is not draggable', () => {
+  it('Function-kind row is draggable (rejected at drop, never text-selects)', () => {
     const funcNode = makeNode('cdm.func', 'MyFunc', 'RosettaFunction');
     render(
       <NamespaceExplorerPanel
@@ -349,10 +351,10 @@ describe('NamespaceExplorerPanel', () => {
       />
     );
     const funcRow = screen.getByTestId('ns-type-cdm.func::MyFunc');
-    expect((funcRow as HTMLElement).draggable).toBe(false);
+    expect((funcRow as HTMLElement).draggable).toBe(true);
   });
 
-  it('dragstart on non-draggable Function row does not call setData', () => {
+  it('dragstart on a Function row registers a Func type-ref payload', () => {
     const funcNode = makeNode('cdm.func', 'MyFunc', 'RosettaFunction');
     render(
       <NamespaceExplorerPanel
@@ -369,7 +371,11 @@ describe('NamespaceExplorerPanel', () => {
     const setData = vi.fn();
     const dataTransfer = { setData, effectAllowed: '' as DataTransfer['effectAllowed'] };
     fireEvent.dragStart(funcRow, { dataTransfer });
-    // Non-supported kind: dragstart should be suppressed, setData never called.
-    expect(setData).not.toHaveBeenCalled();
+    // Every kind is draggable, so the row carries a payload (no text-select fallback).
+    const canonical = setData.mock.calls.find((c: string[]) => c[0] === TYPE_REF_PAYLOAD_MIME);
+    expect(canonical).toBeDefined();
+    expect(JSON.parse(canonical![1]).kind).toBe('Func');
+    // Kind-marker MIME present so drop targets reject Func during dragover.
+    expect(setData.mock.calls.some((c: string[]) => c[0] === typeRefMimeForKind('Func'))).toBe(true);
   });
 });
