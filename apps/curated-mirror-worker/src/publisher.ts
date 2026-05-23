@@ -102,6 +102,9 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
       const toPrune = sorted.slice(0, Math.max(0, sorted.length - (retention - 1)));
       const kept = sorted.slice(Math.max(0, sorted.length - (retention - 1)));
       const historyVersions = [...kept, version].sort();
+      // Versions whose archive + artifacts survive this run (used to decide
+      // whether a preserved namespaces map still points at live per-ns artifacts).
+      const retainedVersions = new Set<string>([...kept, version]);
 
       for (const v of toPrune) {
         await bucket.delete(`curated/${source.id}/archives/${v}.tar.gz`);
@@ -131,7 +134,28 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
         const existing = await bucket.get(manifestKey);
         if (existing) {
           const prev = JSON.parse(await existing.text()) as CuratedManifest;
-          preservedNamespaces = prev.namespaces;
+          // Carry the namespaces map forward ONLY if the per-namespace artifacts
+          // it points at still exist. Their keys are `artifacts/<version>/ns/…`;
+          // if CI has been stale long enough that <version> just fell into
+          // toPrune (its ns blobs were deleted above), advertising those keys
+          // would make /api/parse's fast-path 404 on namespace fetches. Dropping
+          // them lets the manifest fall to v1 so /api/parse uses the whole-bundle
+          // fallback instead (Codex P2).
+          const candidateNs = prev.namespaces;
+          if (candidateNs) {
+            const sampleArtifact = Object.values(candidateNs)[0]?.artifact;
+            const nsVersion = sampleArtifact?.match(/artifacts\/([^/]+)\/ns\//)?.[1];
+            if (nsVersion && retainedVersions.has(nsVersion)) {
+              preservedNamespaces = candidateNs;
+            } else {
+              logger.warn(
+                { model_id: source.id, ns_version: nsVersion },
+                'curated-mirror.publish.preserved_namespaces_dropped_pruned_version'
+              );
+            }
+          }
+          // serializedWorkspace.url points at the stable latest.serialized.json.gz
+          // (not a versioned key), so it survives pruning — keep unconditionally.
           preservedSerializedWorkspace = prev.artifacts?.serializedWorkspace;
         }
       } catch (err) {

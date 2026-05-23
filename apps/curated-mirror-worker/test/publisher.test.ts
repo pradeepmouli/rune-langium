@@ -212,6 +212,9 @@ describe('publishCuratedMirrors (T025)', () => {
         namespaces: priorNamespaces
       })
     );
+    // The preserved namespaces point at artifacts/2026-05-01/ns/… — seed that
+    // version's archive so it stays within retention (else the guard drops it).
+    await bucket.put('curated/cdm/archives/2026-05-01.tar.gz', new Uint8Array([1]));
 
     await publishCuratedMirrors({ sources: [SOURCES[0]!], bucket, retention: 14 });
 
@@ -223,5 +226,54 @@ describe('publishCuratedMirrors (T025)', () => {
     // …while the tarball-derived fields refresh for the new mirror run.
     expect(manifest.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(manifest.generatedAt).not.toBe('old');
+  });
+
+  it('drops preserved namespaces when their artifact version has been pruned', async () => {
+    // Prior manifest's namespaces reference artifacts/2026-04-01/ns/… but CI has
+    // been stale: 16 daily archives have since accumulated, pushing 2026-04-01
+    // out of retention. Its per-ns artifacts are pruned this run, so carrying the
+    // namespaces forward would advertise dead keys — the guard must drop them
+    // (manifest falls to v1 → /api/parse uses the whole-bundle fallback).
+    for (let i = 0; i < 16; i++) {
+      const day = `2026-04-${String(i + 1).padStart(2, '0')}`;
+      await bucket.put(`curated/cdm/archives/${day}.tar.gz`, new Uint8Array([i]));
+    }
+    const priorSerializedWorkspace = {
+      schemaVersion: 1 as const,
+      kind: 'langium-json-serializer' as const,
+      url: 'https://www.daikonic.dev/curated/cdm/latest.serialized.json.gz',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 10,
+      documentCount: 1,
+      langiumVersion: '4.2.2'
+    };
+    await bucket.put(
+      'curated/cdm/manifest.json',
+      JSON.stringify({
+        schemaVersion: 2,
+        modelId: 'cdm',
+        version: '2026-04-01',
+        sha256: 'b'.repeat(64),
+        sizeBytes: 1,
+        generatedAt: 'old',
+        upstreamCommit: '',
+        upstreamRef: 'master',
+        archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+        history: [],
+        artifacts: { serializedWorkspace: priorSerializedWorkspace },
+        namespaces: {
+          'cdm.base': { deps: [], exports: [], artifact: 'artifacts/2026-04-01/ns/cdm.base.json.gz' }
+        }
+      })
+    );
+
+    await publishCuratedMirrors({ sources: [SOURCES[0]!], bucket, retention: 14 });
+
+    const manifest = JSON.parse(await bucket.getText('curated/cdm/manifest.json'));
+    // Stale-version namespaces dropped → manifest is v1, no namespaces…
+    expect(manifest.namespaces).toBeUndefined();
+    expect(manifest.schemaVersion).toBe(1);
+    // …but the stable (non-versioned) serializedWorkspace ref still carries forward.
+    expect(manifest.artifacts.serializedWorkspace).toEqual(priorSerializedWorkspace);
   });
 });
