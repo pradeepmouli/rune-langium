@@ -192,7 +192,7 @@ function AppContent() {
     setErrors(result.errors);
     setWorkspaceNotice(result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null);
     // Store deferred corpus types — they'll be registered in the editor
-    // store by the EditorPage effect that watches models + deferredExports.
+    // store by the ExplorePerspective effect that watches models + deferredExports.
     setDeferredExports(result.deferredExports ?? []);
     // Surface curated bundle contents into the model-store so ModelLoader's
     // "(N files)" badge + the curated file picker reflect what /api/parse
@@ -875,7 +875,7 @@ function AppContent() {
   );
 
   // WorkspaceState published to WorkspaceProvider — the current-model data
-  // EditorPage and the Lsp/Codegen providers read via useWorkspace().
+  // ExplorePerspective and the Lsp/Codegen providers read via useWorkspace().
   const workspaceStateValue = useMemo(
     () => ({
       workspaceId: restoredWorkspace?.id,
@@ -894,7 +894,7 @@ function AppContent() {
     <StudioProviders state={workspaceStateValue} actions={workspaceActionsValue}>
       <div className="studio-app flex flex-col h-full text-foreground bg-background">
         {/* Screen-reader + test accessible file count — always in DOM so the
-         * App-restore test can confirm file loading without EditorPage mounted. */}
+         * App-restore test can confirm file loading without ExplorePerspective mounted. */}
         {userFiles.length > 0 && (
           <span className="sr-only" role="status" aria-live="polite">
             {userFiles.length} file(s)
