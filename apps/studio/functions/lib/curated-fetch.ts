@@ -30,9 +30,13 @@
  */
 
 import { inflate } from 'pako';
+import { z } from 'zod';
 import {
   CuratedSerializedWorkspaceArtifactSchema,
-  type CuratedSerializedWorkspaceArtifact
+  CuratedSerializedDocumentSchema,
+  type CuratedSerializedWorkspaceArtifact,
+  type CuratedManifest,
+  parseManifest
 } from '@rune-langium/curated-schema';
 
 const CURATED_MIRROR_BASE = 'https://www.daikonic.dev/curated';
@@ -206,7 +210,10 @@ async function fetchSerializedArtifact(
   return toDocuments(id, parsed.data);
 }
 
-function toDocuments(bundleId: string, artifact: CuratedSerializedWorkspaceArtifact): CuratedDocument[] {
+function toDocuments(
+  bundleId: string,
+  artifact: { documents: Array<{ path: string; modelJson: string; exports?: Array<{ type: string; name: string; path: string }> }> }
+): CuratedDocument[] {
   // The /api/parse response shape uses { uri, content, serializedModel,
   // exports } per document. The artifact carries `path`, `modelJson`,
   // and `exports?`. `content` (raw source text) is not part of the
@@ -219,4 +226,207 @@ function toDocuments(bundleId: string, artifact: CuratedSerializedWorkspaceArtif
     serializedModel: doc.modelJson,
     exports: doc.exports ?? []
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Per-namespace artifact schema — the per-ns file is `{ documents: [...] }`
+// without the workspace-level wrapper fields (schemaVersion, kind, modelId…).
+// ---------------------------------------------------------------------------
+const NamespaceArtifactSchema = z.object({ documents: z.array(CuratedSerializedDocumentSchema) });
+
+/**
+ * Per-isolate cache for per-namespace artifacts, keyed by `${id}/${artifactKey}`.
+ * Per-namespace artifact paths are versioned (e.g. `artifacts/2026-05-22/ns/cdm.base.json.gz`)
+ * and therefore immutable — safe to cache for the isolate lifetime.
+ * We cache the Promise (not the resolved value) so concurrent requests dedupe.
+ * On failure we evict so the next request retries.
+ */
+const namespaceCache = new Map<string, Promise<CuratedDocument[]>>();
+
+/**
+ * Fetch the per-namespace artifact manifest published at
+ * `${CURATED_MIRROR_BASE}/${id}/manifest.json`.
+ *
+ * The manifest is plain JSON (not gzip). It is NOT cached — it is small,
+ * short-lived, and republish changes it; callers should not assume staleness.
+ */
+export async function fetchCuratedManifest(
+  id: string,
+  version: string,
+  fetcher?: CuratedFetcher
+): Promise<CuratedManifest> {
+  // Default to globalThis.fetch — same rationale as fetchCuratedBundle (CF
+  // same-zone loop prevention; production callers pass env.CURATED_MIRROR.fetch).
+  const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
+  const url = `${CURATED_MIRROR_BASE}/${id}/manifest.json`;
+
+  let res: Response;
+  try {
+    res = await fetchFn(url, undefined);
+  } catch (err) {
+    console.error('curated-fetch manifest_fetch_failed', {
+      bundleId: id,
+      version,
+      url,
+      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    });
+    throw new CuratedBundleUnavailableError(id, version, undefined, err);
+  }
+  if (!res.ok) {
+    console.error('curated-fetch manifest_non_ok', {
+      bundleId: id,
+      version,
+      url,
+      status: res.status,
+      contentType: res.headers.get('content-type')
+    });
+    throw new CuratedBundleUnavailableError(id, version, res.status);
+  }
+
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch (err) {
+    console.error('curated-fetch manifest_json_parse_failed', {
+      bundleId: id,
+      version,
+      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    });
+    throw new CuratedBundleUnavailableError(id, version, undefined, err);
+  }
+  const result = parseManifest(data);
+  if (!result.ok) {
+    console.error('curated-fetch manifest_schema_mismatch', {
+      bundleId: id,
+      version,
+      reason: result.reason
+    });
+    throw new CuratedBundleUnavailableError(id, version, undefined, new Error(result.reason));
+  }
+  return result.manifest;
+}
+
+/**
+ * Fetch a single per-namespace artifact from
+ * `${CURATED_MIRROR_BASE}/${id}/${artifactKey}`, inflate, validate, and map
+ * to CuratedDocument[].
+ *
+ * `artifactKey` is the `namespaces[ns].artifact` value from the manifest,
+ * e.g. `artifacts/2026-05-22/ns/cdm.base.json.gz`.
+ *
+ * Results are cached per `${id}/${artifactKey}` (versioned keys are immutable).
+ * If `artifactKey` contains `latest` caching is skipped as a defensive measure.
+ */
+export async function fetchCuratedNamespace(
+  id: string,
+  version: string,
+  artifactKey: string,
+  fetcher?: CuratedFetcher
+): Promise<CuratedDocument[]> {
+  const cacheable = !artifactKey.includes('latest');
+  const cacheKey = `${id}/${artifactKey}`;
+  if (cacheable) {
+    const hit = namespaceCache.get(cacheKey);
+    if (hit) return hit;
+  }
+
+  // Default to globalThis.fetch — same rationale as fetchCuratedBundle.
+  const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
+
+  const work = fetchNamespaceArtifact(id, version, artifactKey, fetchFn);
+  if (cacheable) {
+    namespaceCache.set(cacheKey, work);
+    work.catch(() => {
+      if (namespaceCache.get(cacheKey) === work) namespaceCache.delete(cacheKey);
+    });
+  }
+  return work;
+}
+
+async function fetchNamespaceArtifact(
+  id: string,
+  version: string,
+  artifactKey: string,
+  fetchFn: CuratedFetcher
+): Promise<CuratedDocument[]> {
+  const url = `${CURATED_MIRROR_BASE}/${id}/${artifactKey}`;
+
+  let res: Response;
+  try {
+    // Accept-Encoding: identity disables HTTP-level transport compression on
+    // the subrequest. The artifact body is a gzip FILE (Content-Type:
+    // application/gzip) that we inflate ourselves; if CF / the upstream
+    // applied Content-Encoding: gzip on top of it, fetch() would
+    // auto-decompress and our subsequent inflate() would fail on what
+    // looks like JSON bytes. Pinning identity keeps the wire bytes raw.
+    res = await fetchFn(url, { headers: { 'Accept-Encoding': 'identity' } });
+  } catch (err) {
+    console.error('curated-fetch fetch_failed', {
+      bundleId: id,
+      version,
+      url,
+      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    });
+    throw new CuratedBundleUnavailableError(id, version, undefined, err);
+  }
+  if (!res.ok) {
+    console.error('curated-fetch non_ok_status', {
+      bundleId: id,
+      version,
+      url,
+      status: res.status,
+      contentType: res.headers.get('content-type')
+    });
+    throw new CuratedBundleUnavailableError(id, version, res.status);
+  }
+
+  const gzBuffer = new Uint8Array(await res.arrayBuffer());
+  let jsonText: string;
+  try {
+    jsonText = new TextDecoder('utf-8').decode(inflate(gzBuffer));
+  } catch (err) {
+    console.error('curated-fetch inflate_failed', {
+      bundleId: id,
+      version,
+      contentType: res.headers.get('content-type'),
+      contentEncoding: res.headers.get('content-encoding'),
+      bytesLength: gzBuffer.byteLength,
+      firstBytes: Array.from(gzBuffer.slice(0, 8))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join(' '),
+      err: err instanceof Error ? err.message : String(err)
+    });
+    throw new CuratedBundleUnavailableError(id, version, undefined, err);
+  }
+
+  let rawJson: unknown;
+  try {
+    rawJson = JSON.parse(jsonText);
+  } catch (err) {
+    console.error('curated-fetch json_parse_failed', {
+      bundleId: id,
+      version,
+      jsonLength: jsonText.length,
+      preview: jsonText.slice(0, 100),
+      err: err instanceof Error ? err.message : String(err)
+    });
+    throw new CuratedBundleUnavailableError(id, version, undefined, err);
+  }
+
+  const parsed = NamespaceArtifactSchema.safeParse(rawJson);
+  if (!parsed.success) {
+    console.error('curated-fetch ns_schema_mismatch', {
+      bundleId: id,
+      version,
+      error: parsed.error.message
+    });
+    throw new CuratedBundleUnavailableError(
+      id,
+      version,
+      undefined,
+      new Error(`namespace artifact schema mismatch: ${parsed.error.message}`)
+    );
+  }
+
+  return toDocuments(id, parsed.data);
 }

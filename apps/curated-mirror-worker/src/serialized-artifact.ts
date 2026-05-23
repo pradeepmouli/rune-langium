@@ -6,6 +6,7 @@ import type { CuratedModelId, CuratedSerializedWorkspaceArtifact } from '@rune-l
 import { URI } from 'langium';
 import { gzip, inflate } from 'pako';
 import { sha256Hex } from './manifest.js';
+import { computeNamespaceGraph, type NamespaceGraphEntry } from './namespace-graph.js';
 
 const BLOCK = 512;
 const LANGIUM_VERSION = '4.2.2';
@@ -27,6 +28,7 @@ export interface SerializedArtifactBuildResult {
   sha256: string;
   sizeBytes: number;
   documentCount: number;
+  namespaces: Record<string, NamespaceGraphEntry>;
 }
 
 export async function buildSerializedWorkspaceArtifact(
@@ -44,65 +46,70 @@ export async function buildSerializedWorkspaceArtifact(
   );
   await builder.build(documents, { validation: false });
 
+  const perDocArray = documents.map((document, index) => {
+    const model = document.parseResult.value;
+    const exports: Array<{ type: string; name: string; path: string }> = [];
+    const elements = (model as { elements?: unknown[] }).elements;
+    for (let j = 0; j < (elements?.length ?? 0); j++) {
+      const elem = elements![j] as
+        | {
+            name?: string;
+            $type?: string;
+            enumValues?: Array<{ name?: string; $type?: string }>;
+          }
+        | undefined;
+      if (elem?.name && elem?.$type) {
+        exports.push({
+          type: elem.$type,
+          name: elem.name,
+          path: `/elements@${j}`
+        });
+        // Include enum values — Langium's ScopeComputation adds these
+        // to the global index so cross-file enum literal references resolve.
+        if (elem.enumValues) {
+          for (let k = 0; k < elem.enumValues.length; k++) {
+            const val = elem.enumValues[k];
+            if (val?.name) {
+              exports.push({
+                type: val.$type ?? 'RosettaEnumValue',
+                name: val.name,
+                path: `/elements@${j}/enumValues@${k}`
+              });
+            }
+          }
+        }
+      }
+    }
+    return {
+      path: rosettaFiles[index]!.path,
+      modelJson: serializer.serialize(document.parseResult.value, {
+        refText: true,
+        textRegions: true,
+        replacer: (key, value, defaultReplacer) =>
+          typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value)
+      }),
+      exports
+    };
+  });
+
   const artifact: CuratedSerializedWorkspaceArtifact = {
     schemaVersion: 1,
     kind: 'langium-json-serializer',
     modelId,
     version,
     langiumVersion: LANGIUM_VERSION,
-    documents: documents.map((document, index) => {
-      const model = document.parseResult.value;
-      const exports: Array<{ type: string; name: string; path: string }> = [];
-      const elements = (model as { elements?: unknown[] }).elements;
-      for (let j = 0; j < (elements?.length ?? 0); j++) {
-        const elem = elements![j] as
-          | {
-              name?: string;
-              $type?: string;
-              enumValues?: Array<{ name?: string; $type?: string }>;
-            }
-          | undefined;
-        if (elem?.name && elem?.$type) {
-          exports.push({
-            type: elem.$type,
-            name: elem.name,
-            path: `/elements@${j}`
-          });
-          // Include enum values — Langium's ScopeComputation adds these
-          // to the global index so cross-file enum literal references resolve.
-          if (elem.enumValues) {
-            for (let k = 0; k < elem.enumValues.length; k++) {
-              const val = elem.enumValues[k];
-              if (val?.name) {
-                exports.push({
-                  type: val.$type ?? 'RosettaEnumValue',
-                  name: val.name,
-                  path: `/elements@${j}/enumValues@${k}`
-                });
-              }
-            }
-          }
-        }
-      }
-      return {
-        path: rosettaFiles[index]!.path,
-        modelJson: serializer.serialize(document.parseResult.value, {
-          refText: true,
-          textRegions: true,
-          replacer: (key, value, defaultReplacer) =>
-            typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value)
-        }),
-        exports
-      };
-    })
+    documents: perDocArray
   };
+
+  const namespaces = computeNamespaceGraph(perDocArray, modelId);
 
   const bytes = gzip(new TextEncoder().encode(JSON.stringify(artifact)));
   return {
     bytes,
     sha256: await sha256Hex(bytes),
     sizeBytes: bytes.byteLength,
-    documentCount: artifact.documents.length
+    documentCount: artifact.documents.length,
+    namespaces
   };
 }
 

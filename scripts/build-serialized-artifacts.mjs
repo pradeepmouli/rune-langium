@@ -16,6 +16,7 @@
 import { createHash } from 'node:crypto';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { gunzipSync, gzipSync } from 'node:zlib';
+import { computeNamespaceGraph } from './lib/namespace-graph.mjs';
 
 const corePkgDir = new URL('../packages/core/', import.meta.url);
 const langiumIndex = new URL('node_modules/langium/lib/index.js', corePkgDir);
@@ -163,6 +164,8 @@ async function buildArtifact(source, archiveBytes) {
     sha256: sha256Hex(gzipped),
     sizeBytes: gzipped.byteLength,
     documentCount: rosettaFiles.length,
+    documents: artifact.documents,
+    version,
   };
 }
 
@@ -184,17 +187,64 @@ async function main() {
       console.log(`  Artifact: ${result.sizeBytes} bytes, ${result.documentCount} documents`);
 
       await writeFile(`${outDir}/latest.serialized.json.gz`, result.bytes);
+
+      // ── Per-namespace artifacts ────────────────────────────────────────────
+      const graph = computeNamespaceGraph(result.documents, source.id);
+
+      // Build a path→ns lookup so we group by the graph's assignments
+      const pathToNs = new Map();
+      for (const [ns, entry] of Object.entries(graph)) {
+        for (const d of entry.docs) pathToNs.set(d.path, ns);
+      }
+
+      // Group FULL docs (with original {type,name,path} exports) by namespace
+      const nsDocs = {};
+      for (const doc of result.documents) {
+        const ns = pathToNs.get(doc.path);
+        if (!ns) continue;
+        (nsDocs[ns] ??= []).push(doc);
+      }
+
+      const nsDir = `${outDir}/ns`;
+      await mkdir(nsDir, { recursive: true });
+
+      const bigintReplacer = (_key, value) => (typeof value === 'bigint' ? Number(value) : value);
+      let totalNsBytes = 0;
+      const nsCount = Object.keys(graph).length;
+
+      for (const ns of Object.keys(graph)) {
+        const nsDocList = nsDocs[ns] ?? [];
+        const nsJson = JSON.stringify({ documents: nsDocList }, bigintReplacer);
+        const nsGzipped = gzipSync(Buffer.from(nsJson));
+        await writeFile(`${nsDir}/${ns}.json.gz`, nsGzipped);
+        totalNsBytes += nsGzipped.byteLength;
+      }
+
+      console.log(`  Per-ns: ${nsCount} namespaces, ${totalNsBytes} total bytes`);
+
+      // Build namespaces map for the meta (artifact path uses versioned key)
+      const version = result.version;
+      const namespacesMap = {};
+      for (const [ns, entry] of Object.entries(graph)) {
+        namespacesMap[ns] = {
+          deps: entry.deps,
+          exports: entry.exports,
+          artifact: `artifacts/${version}/ns/${ns}.json.gz`,
+        };
+      }
+
       await writeFile(
         `${outDir}/artifact-meta.json`,
         JSON.stringify(
           {
             modelId: source.id,
-            version: new Date().toISOString().slice(0, 10),
+            version,
             sha256: result.sha256,
             sizeBytes: result.sizeBytes,
             documentCount: result.documentCount,
             archiveSha256: archiveSha,
             archiveSizeBytes: archiveBytes.byteLength,
+            namespaces: namespacesMap,
           },
           null,
           2

@@ -3,7 +3,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
-import { computeCuratedClosure, refUriToCuratedKey } from '../lib/curated-closure.js';
+import {
+  computeCuratedClosure,
+  refUriToCuratedKey,
+  closeNamespacesFromManifest
+} from '../lib/curated-closure.js';
 
 /**
  * Build a ClosureDoc fixture.
@@ -209,5 +213,56 @@ describe('computeCuratedClosure — cross-doc $ref completeness (the new fix)', 
 
     const closure = computeCuratedClosure(['cdm.a'], [aDoc, bDoc]);
     expect([...closure].sort()).toEqual(['cdm.a', 'cdm.b']);
+  });
+});
+
+describe('closeNamespacesFromManifest', () => {
+  const G = (
+    m: Record<string, string[]>
+  ): Record<string, { deps: string[] }> =>
+    Object.fromEntries(Object.entries(m).map(([ns, deps]) => [ns, { deps }]));
+
+  it('walks transitive deps from the seed (BFS over the manifest graph)', () => {
+    const ns = G({
+      'cdm.trade': ['cdm.base.datetime'],
+      'cdm.base.datetime': ['cdm.base.math'],
+      'cdm.base.math': [],
+      'cdm.other': []
+    });
+    const closure = closeNamespacesFromManifest(['cdm.trade'], ns);
+    expect([...closure].sort()).toEqual(['cdm.base.datetime', 'cdm.base.math', 'cdm.trade']);
+    expect(closure.has('cdm.other')).toBe(false);
+  });
+
+  it('is cycle-safe', () => {
+    const ns = G({ 'cdm.a': ['cdm.b'], 'cdm.b': ['cdm.a'] });
+    const closure = closeNamespacesFromManifest(['cdm.a'], ns);
+    expect([...closure].sort()).toEqual(['cdm.a', 'cdm.b']);
+  });
+
+  it('expands wildcard seeds against the manifest namespaces', () => {
+    const ns = G({
+      'cdm.base.datetime': [],
+      'cdm.base.math': [],
+      'cdm.trade': []
+    });
+    const closure = closeNamespacesFromManifest(['cdm.base.*'], ns);
+    expect([...closure].sort()).toEqual(['cdm.base.datetime', 'cdm.base.math']);
+  });
+
+  it('expands wildcard deps recorded in a namespace entry', () => {
+    const ns = G({
+      'cdm.trade': ['cdm.base.*'],
+      'cdm.base.datetime': [],
+      'cdm.base.math': []
+    });
+    const closure = closeNamespacesFromManifest(['cdm.trade'], ns);
+    expect([...closure].sort()).toEqual(['cdm.base.datetime', 'cdm.base.math', 'cdm.trade']);
+  });
+
+  it('drops seeds and deps that are not manifest namespaces', () => {
+    const ns = G({ 'cdm.trade': ['cdm.missing'] });
+    const closure = closeNamespacesFromManifest(['cdm.trade', 'cdm.absent'], ns);
+    expect([...closure].sort()).toEqual(['cdm.trade']);
   });
 });

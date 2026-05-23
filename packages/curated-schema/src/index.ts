@@ -54,6 +54,26 @@ export const CuratedSerializedDocumentExportSchema = z.object({
 });
 export type CuratedSerializedDocumentExport = z.infer<typeof CuratedSerializedDocumentExportSchema>;
 
+/**
+ * A single export entry scoped to a namespace (no `path` — that is a
+ * document-level concept; namespace exports are identified by type + name only).
+ */
+export const CuratedNamespaceExportSchema = z.object({
+  type: z.string().min(1),
+  name: z.string().min(1)
+});
+export type CuratedNamespaceExport = z.infer<typeof CuratedNamespaceExportSchema>;
+
+/** One entry in the per-namespace dependency graph embedded in the manifest. */
+export const CuratedNamespaceEntrySchema = z.object({
+  /** Direct cross-namespace dependency edges; consumers walk the transitive closure. */
+  deps: z.array(z.string()),
+  exports: z.array(CuratedNamespaceExportSchema),
+  /** Key into the per-namespace artifact map (relative URL or object-store key). */
+  artifact: z.string().min(1)
+});
+export type CuratedNamespaceEntry = z.infer<typeof CuratedNamespaceEntrySchema>;
+
 export const CuratedSerializedDocumentSchema = z.object({
   path: z.string().min(1),
   modelJson: z.string().min(1),
@@ -80,7 +100,7 @@ export type CuratedSerializedWorkspaceArtifact = z.infer<
  * publisher and loader.
  */
 export const CuratedManifestSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]),
   modelId: CuratedModelIdSchema,
   /** Date stamp `yyyy-mm-dd`, monotonic per modelId. */
   version: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -106,7 +126,9 @@ export const CuratedManifestSchema = z.object({
     .object({
       serializedWorkspace: LangiumJsonArtifactRefSchema.optional()
     })
-    .optional()
+    .optional(),
+  /** Per-namespace dependency graph + export list + artifact key. deps are DIRECT cross-namespace edges; consumers walk the transitive closure. */
+  namespaces: z.record(z.string(), CuratedNamespaceEntrySchema).optional()
 });
 export type CuratedManifest = z.infer<typeof CuratedManifestSchema>;
 

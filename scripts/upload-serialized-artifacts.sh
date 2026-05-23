@@ -46,7 +46,21 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
   $WRANGLER r2 object put "$BUCKET/curated/$model_id/latest.serialized.json.gz" \
     --file "$artifact_file" --content-type "application/gzip" --remote 2>&1 | tail -1
 
-  # Fetch current manifest, patch in the artifact reference, re-upload
+  # Upload per-namespace artifacts (if the ns/ dir was built)
+  ns_dir="$model_dir/ns"
+  if [[ -d "$ns_dir" ]]; then
+    ns_count=0
+    for ns_file in "$ns_dir"/*.json.gz; do
+      [[ -e "$ns_file" ]] || continue  # guard: skip if glob matched nothing
+      ns_name=$(basename "$ns_file")
+      $WRANGLER r2 object put "$BUCKET/curated/$model_id/artifacts/$version/ns/$ns_name" \
+        --file "$ns_file" --content-type "application/gzip" --remote 2>&1 | tail -1
+      ns_count=$((ns_count + 1))
+    done
+    echo "  Uploaded $ns_count per-namespace artifact(s)"
+  fi
+
+  # Fetch current manifest, patch in the artifact reference + namespaces, re-upload
   echo "  Patching manifest.json..."
   manifest_url="$MIRROR_BASE/$model_id/manifest.json"
   current_manifest=$(curl -sf "$manifest_url" || echo '{}')
@@ -56,20 +70,43 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
     continue
   fi
 
-  patched_manifest=$(echo "$current_manifest" | jq \
-    --arg sha "$sha256" \
-    --arg url "$MIRROR_BASE/$model_id/latest.serialized.json.gz" \
-    --argjson size "$size_bytes" \
-    --argjson docs "$doc_count" \
-    '.artifacts.serializedWorkspace = {
-      schemaVersion: 1,
-      kind: "langium-json-serializer",
-      url: $url,
-      sha256: $sha,
-      sizeBytes: $size,
-      documentCount: $docs,
-      langiumVersion: "4.2.2"
-    }')
+  ns_count=$(jq -r '(.namespaces // {}) | length' "$meta_file")
+
+  if [[ "$ns_count" -gt 0 ]]; then
+    namespaces=$(jq -c '.namespaces' "$meta_file")
+    patched_manifest=$(echo "$current_manifest" | jq \
+      --arg sha "$sha256" \
+      --arg url "$MIRROR_BASE/$model_id/latest.serialized.json.gz" \
+      --argjson size "$size_bytes" \
+      --argjson docs "$doc_count" \
+      --argjson ns "$namespaces" \
+      '.schemaVersion = 2 |
+      .artifacts.serializedWorkspace = {
+        schemaVersion: 1,
+        kind: "langium-json-serializer",
+        url: $url,
+        sha256: $sha,
+        sizeBytes: $size,
+        documentCount: $docs,
+        langiumVersion: "4.2.2"
+      } |
+      .namespaces = $ns')
+  else
+    patched_manifest=$(echo "$current_manifest" | jq \
+      --arg sha "$sha256" \
+      --arg url "$MIRROR_BASE/$model_id/latest.serialized.json.gz" \
+      --argjson size "$size_bytes" \
+      --argjson docs "$doc_count" \
+      '.artifacts.serializedWorkspace = {
+        schemaVersion: 1,
+        kind: "langium-json-serializer",
+        url: $url,
+        sha256: $sha,
+        sizeBytes: $size,
+        documentCount: $docs,
+        langiumVersion: "4.2.2"
+      }')
+  fi
 
   echo "$patched_manifest" > /tmp/patched-manifest-$model_id.json
   $WRANGLER r2 object put "$BUCKET/curated/$model_id/manifest.json" \

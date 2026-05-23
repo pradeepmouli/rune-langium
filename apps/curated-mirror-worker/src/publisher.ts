@@ -102,10 +102,69 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
       const toPrune = sorted.slice(0, Math.max(0, sorted.length - (retention - 1)));
       const kept = sorted.slice(Math.max(0, sorted.length - (retention - 1)));
       const historyVersions = [...kept, version].sort();
+      // Versions whose archive + artifacts survive this run (used to decide
+      // whether a preserved namespaces map still points at live per-ns artifacts).
+      const retainedVersions = new Set<string>([...kept, version]);
 
       for (const v of toPrune) {
         await bucket.delete(`curated/${source.id}/archives/${v}.tar.gz`);
         await bucket.delete(`curated/${source.id}/artifacts/${v}.serialized.json.gz`);
+        // Per-namespace artifacts (artifacts/<v>/ns/*.json.gz, uploaded by the
+        // CI artifact build) must be pruned too, else every republish leaves an
+        // unbounded set of stale ns/ objects in R2 (Codex P2). R2 has no
+        // prefix-delete, so list the version's ns/ keys and batch-delete them.
+        const nsPrefix = `curated/${source.id}/artifacts/${v}/ns/`;
+        const staleNs = await bucket.list({ prefix: nsPrefix });
+        if (staleNs.objects.length > 0) {
+          await bucket.delete(staleNs.objects.map((o) => o.key));
+        }
+      }
+
+      // Preserve the v2 artifact fields the CI artifact build (curated-
+      // artifacts.yml, ~04:00 UTC) patches into the manifest. The cron
+      // rewrites manifest.json from scratch each run, so without this
+      // read-merge the `namespaces` map (and the serializedWorkspace ref)
+      // would vanish from ~03:00 until the next CI run — dropping /api/parse
+      // back to the whole-bundle (1102) fallback nightly. Carrying them
+      // forward keeps the fast-path serving the prior corpus' per-namespace
+      // artifacts (still in R2) until CI refreshes them for the new version.
+      let preservedNamespaces: CuratedManifest['namespaces'];
+      let preservedSerializedWorkspace: NonNullable<CuratedManifest['artifacts']>['serializedWorkspace'];
+      try {
+        const existing = await bucket.get(manifestKey);
+        if (existing) {
+          const prev = JSON.parse(await existing.text()) as CuratedManifest;
+          // Carry the namespaces map forward ONLY if the per-namespace artifacts
+          // it points at still exist. Their keys are `artifacts/<version>/ns/…`;
+          // if CI has been stale long enough that <version> just fell into
+          // toPrune (its ns blobs were deleted above), advertising those keys
+          // would make /api/parse's fast-path 404 on namespace fetches. Dropping
+          // them lets the manifest fall to v1 so /api/parse uses the whole-bundle
+          // fallback instead (Codex P2).
+          const candidateNs = prev.namespaces;
+          if (candidateNs) {
+            const sampleArtifact = Object.values(candidateNs)[0]?.artifact;
+            const nsVersion = sampleArtifact?.match(/artifacts\/([^/]+)\/ns\//)?.[1];
+            if (nsVersion && retainedVersions.has(nsVersion)) {
+              preservedNamespaces = candidateNs;
+            } else {
+              logger.warn(
+                { model_id: source.id, ns_version: nsVersion },
+                'curated-mirror.publish.preserved_namespaces_dropped_pruned_version'
+              );
+            }
+          }
+          // serializedWorkspace.url points at the stable latest.serialized.json.gz
+          // (not a versioned key), so it survives pruning — keep unconditionally.
+          preservedSerializedWorkspace = prev.artifacts?.serializedWorkspace;
+        }
+      } catch (err) {
+        // First publish, missing object, or unreadable prior manifest —
+        // nothing to preserve; fall through to a fresh v1 manifest.
+        logger.warn(
+          { model_id: source.id, err: err instanceof Error ? err.message : String(err) },
+          'curated-mirror.publish.manifest_preserve_skipped'
+        );
       }
 
       // Write the manifest BEFORE the serialized artifact build.
@@ -121,7 +180,9 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
         generatedAt: now.toISOString(),
         upstreamCommit: '',
         upstreamRef: source.ref,
-        historyVersions
+        historyVersions,
+        namespaces: preservedNamespaces,
+        serializedWorkspace: preservedSerializedWorkspace
       });
       await bucket.put(manifestKey, JSON.stringify(manifest, null, 2), {
         httpMetadata: { contentType: 'application/json; charset=utf-8' }
