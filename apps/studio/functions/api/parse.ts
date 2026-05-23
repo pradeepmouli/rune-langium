@@ -221,14 +221,29 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             const nsGraph = manifest.namespaces;
             const closure = closeNamespacesFromManifest(seeds, nsGraph);
             for (const ns of closure) manifestClosureNamespaces.add(ns);
-            for (const ns of closure) {
-              const entry = nsGraph[ns];
-              if (!entry) continue;
-              const nsDocs = await fetchCuratedNamespace(bundle.id, bundle.version, entry.artifact, curatedFetcher);
-              for (const doc of nsDocs) {
-                documentsForHydration.push({ ...doc, bundleId: bundle.id });
-                // Per-FILE entry so node-id → filePath → hydrationState linking stays correct.
-                mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
+            // Fetch the closure's per-namespace artifacts with BOUNDED concurrency.
+            // Serial was ~12s for a ~40-namespace closure (fpml.consolidated.*);
+            // fetching all at once (unbounded Promise.all) would materialize every
+            // namespace's inflate buffer + parsed payload simultaneously, risking the
+            // 128 MiB Pages-Function OOM this whole fast-path exists to avoid (Codex
+            // P1). A small fixed window keeps most of the parallel speedup while
+            // capping peak transient memory + simultaneous subrequests. Results are
+            // consumed in stable order so deferredExports/hydration are deterministic.
+            const closureNs = [...closure].filter((ns) => nsGraph[ns]);
+            const FETCH_CONCURRENCY = 8;
+            for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
+              const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
+              const fetchedPerNs = await Promise.all(
+                window.map((ns) =>
+                  fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher)
+                )
+              );
+              for (const nsDocs of fetchedPerNs) {
+                for (const doc of nsDocs) {
+                  documentsForHydration.push({ ...doc, bundleId: bundle.id });
+                  // Per-FILE entry so node-id → filePath → hydrationState linking stays correct.
+                  mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
+                }
               }
             }
             // List every OTHER curated namespace so the explorer shows the full corpus.

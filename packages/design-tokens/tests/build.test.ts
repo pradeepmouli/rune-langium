@@ -23,7 +23,11 @@ const BRAND_OUT = resolve(ROOT, 'dist/brand.css');
 describe('@rune-langium/design-tokens build (T024)', () => {
   beforeAll(() => {
     execSync('npx --no-install tsx src/build.ts', { cwd: ROOT, stdio: 'inherit' });
-  });
+    // The hook above spawns `npx tsx` to run the real token build, which
+    // occasionally exceeds vitest's default 10s hook timeout on cold CI runners
+    // (cold tsx/esbuild startup + fs writes) — a recurring flake that reddens
+    // unrelated PRs. Give it a generous ceiling; a genuine hang still fails.
+  }, 60000);
 
   it('emits dist/tokens.css containing each locked variable family', () => {
     const css = readFileSync(CSS_OUT, 'utf8');

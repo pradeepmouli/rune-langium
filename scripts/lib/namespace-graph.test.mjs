@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeNamespaceGraph } from './namespace-graph.mjs';
+import { computeNamespaceGraph, nsArtifactSlug } from './namespace-graph.mjs';
 
 /**
  * Helper: create a minimal serialized RosettaModel JSON string with the given
@@ -146,4 +146,34 @@ test('exports union: unions exports from two docs in same namespace, dropping pa
   assert.deepEqual(barExport, { type: 'Enum', name: 'Bar' }, 'Bar export should have no path');
   assert.ok(!('path' in fooExport), 'Foo export should not have path property');
   assert.ok(!('path' in barExport), 'Bar export should not have path property');
+});
+
+test('nsArtifactSlug: leaves a clean dotted namespace unchanged (readable)', () => {
+  assert.equal(nsArtifactSlug('cdm.base.datetime'), 'cdm.base.datetime');
+});
+
+test('nsArtifactSlug: trailing-dot namespace gets a cleaned base + hash suffix, no ".."', () => {
+  const slug = nsArtifactSlug('fpml.consolidated.');
+  assert.match(slug, /^fpml\.consolidated\.[0-9a-f]{8}$/);
+  assert.ok(!slug.includes('..'), 'slug must not contain ".."');
+});
+
+test('nsArtifactSlug: stays injective for X vs X. (the real fpml case)', () => {
+  // rune-fpml has BOTH 'fpml.consolidated' and 'fpml.consolidated.' — distinct blobs.
+  assert.notEqual(nsArtifactSlug('fpml.consolidated'), nsArtifactSlug('fpml.consolidated.'));
+  assert.equal(nsArtifactSlug('fpml.consolidated'), 'fpml.consolidated');
+});
+
+test('nsArtifactSlug: all-dots namespace produces a safe slug with no leading dot', () => {
+  for (const ns of ['.', '..', '...']) {
+    const slug = nsArtifactSlug(ns);
+    assert.ok(!slug.startsWith('.'), `slug for ${JSON.stringify(ns)} must not start with a dot (got ${slug})`);
+    assert.ok(!slug.includes('..'), 'slug must not contain ".."');
+    assert.match(slug, /^[0-9a-f]{8}$/);
+  }
+});
+
+test('nsArtifactSlug: is deterministic for the same input', () => {
+  assert.equal(nsArtifactSlug('a..b'), nsArtifactSlug('a..b'));
+  assert.ok(!nsArtifactSlug('a..b').includes('..'));
 });
