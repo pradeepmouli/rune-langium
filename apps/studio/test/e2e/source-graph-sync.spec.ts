@@ -41,7 +41,7 @@ async function loadModel(page: Page) {
     mimeType: 'text/plain',
     buffer: Buffer.from(SYNC_MODEL)
   });
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
   await page.locator('.react-flow__node').first().waitFor({ timeout: 10000 });
   // Wait for layout animation to fully settle
   await page.waitForTimeout(2500);

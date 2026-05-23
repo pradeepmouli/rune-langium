@@ -2,10 +2,10 @@
 // Copyright (c) 2026 Pradeep Mouli
 /**
  * PerspectiveHost — renders the active perspective in the shell content slot.
- * Explore (the DockShell workbench, passed in as `explore`) is ALWAYS mounted
- * and hidden via `display:none` when inactive — keep-alive preserves the
- * dockview layout, open files, unsaved edits, and the LSP worker. The other
- * four screens mount on demand.
+ * Explore (the `ExplorePerspective` DockShell workbench) is ALWAYS mounted and
+ * hidden via `display:none` when inactive — keep-alive preserves the dockview
+ * layout, open files, unsaved edits, and the LSP worker. The other four screens
+ * mount on demand.
  */
 import type React from 'react';
 import { usePerspectiveStore } from '../../store/perspective-store.js';
@@ -14,11 +14,11 @@ import { SettingsPerspective } from './screens/SettingsPerspective.js';
 import { WorkspacesPerspective } from './screens/WorkspacesPerspective.js';
 import { GitSyncPerspective } from './screens/GitSyncPerspective.js';
 import { ExportPerspective } from './screens/ExportPerspective.js';
+import { ExplorePerspective } from '../ExplorePerspective.js';
 import type { WorkspaceKind } from '../../workspace/persistence.js';
 import type { WorkspaceFile } from '../../services/workspace.js';
 
 interface Props {
-  explore: React.ReactNode;
   hasWorkspace: boolean;
   /** Forwarded to GitSyncPerspective for the sync-engine subscription. */
   workspaceId?: string;
@@ -29,7 +29,6 @@ interface Props {
 }
 
 export function PerspectiveHost({
-  explore,
   hasWorkspace,
   workspaceId,
   workspaceKind,
@@ -53,7 +52,7 @@ export function PerspectiveHost({
         className="h-full"
         style={{ display: effective === 'explore' ? undefined : 'none' }}
       >
-        {explore}
+        <ExplorePerspective />
       </div>
       {effective === 'workspaces' && <WorkspacesPerspective />}
       {effective === 'git' && <GitSyncPerspective workspaceId={workspaceId} workspaceKind={workspaceKind} />}

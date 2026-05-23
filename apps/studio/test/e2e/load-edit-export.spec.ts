@@ -52,8 +52,8 @@ type Employee extends Person:
     });
 
     // Wait for graph to render (editor page should appear)
-    await page.waitForSelector('[data-testid="editor-page"]', { timeout: 10000 });
-    const editorPage = page.getByTestId('editor-page');
+    await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 10000 });
+    const editorPage = page.getByTestId('explore-workbench');
     await expect(editorPage).toBeVisible();
   });
 
@@ -72,7 +72,7 @@ type Foo:
     });
 
     // Wait for parsing and rendering
-    await page.waitForSelector('[data-testid="editor-page"]', { timeout: 10000 });
+    await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 10000 });
 
     // Header should show file count
     await expect(page.getByText('1 file(s)')).toBeVisible();
@@ -92,7 +92,7 @@ type Bar:
       buffer: Buffer.from(content)
     });
 
-    await page.waitForSelector('[data-testid="editor-page"]', { timeout: 10000 });
+    await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 10000 });
 
     // Click close button
     const closeButton = page.getByTitle('Close all files');

@@ -361,7 +361,7 @@ async function loadFiles(page: Page, files: Array<{ name: string; content: strin
       buffer: Buffer.from(file.content)
     }))
   );
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15_000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15_000 });
   await page.locator('[data-testid^="ns-type-"]').first().waitFor({ timeout: 10_000 });
   await page.waitForTimeout(1500);
 }

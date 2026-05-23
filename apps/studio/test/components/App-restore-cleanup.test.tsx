@@ -33,12 +33,14 @@ vi.mock('../../src/components/ModelLoader.js', () => ({
   ModelLoader: () => null
 }));
 
-// EditorPage now reads workspace data from context (useWorkspace), not props.
-// The mock mirrors that so the editor-mounted assertion keeps working.
-vi.mock('../../src/pages/EditorPage.js', async () => {
+// ExplorePerspective (formerly EditorPage) reads workspace data from context
+// (useWorkspace), not props, and is now kept alive by PerspectiveHost. The mock
+// mirrors that so the editor-mounted assertion keeps working — it stays mounted
+// across a workspace switch and re-renders with the new file count.
+vi.mock('../../src/shell/ExplorePerspective.js', async () => {
   const { useWorkspace } = await import('../../src/shell/providers/workspace-context.js');
   return {
-    EditorPage: () => {
+    ExplorePerspective: () => {
       const { fileCount } = useWorkspace();
       return fileCount != null ? <span data-testid="editor-mounted">{fileCount} file(s)</span> : null;
     }

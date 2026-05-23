@@ -2,7 +2,10 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * EditorPage — top-level studio surface, hosted by `DockShell` (T077).
+ * ExplorePerspective — the Explore-perspective workbench content, rendered by
+ * PerspectiveHost in its keep-alive `explore` slot. Formerly `EditorPage`; the
+ * outer app shell (ActivityBar + PerspectiveHost) now lives in App, so this
+ * component renders only the studio topbar + the `DockShell` workbench.
  *
  * Owns editor state (selected node, opened files, navigation history,
  * store wiring) and provides custom dockview panels that render the
@@ -86,9 +89,7 @@ import {
 } from 'lucide-react';
 import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistence.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
-import { DockShell } from '../shell/DockShell.js';
-import { ActivityBar } from '../shell/ActivityBar.js';
-import { PerspectiveHost } from '../shell/perspectives/PerspectiveHost.js';
+import { DockShell } from './DockShell.js';
 import { usePerspectiveStore } from '../store/perspective-store.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import { linkDocument } from '../services/workspace.js';
@@ -102,18 +103,13 @@ import { mergeSerializedIntoSource } from '../utils/source-merge.js';
 import { subscribeToEngine, resolveConflict } from '../services/git-sync.js';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
-import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
-import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
+import { FormPreviewPanel as FormPreviewPanelShell } from './panels/FormPreviewPanel.js';
+import { CenterStackPanel } from './panels/CenterStackPanel.js';
 import '../test-api.js';
-import { useWorkspace } from '../shell/providers/workspace-context.js';
-import { useLsp } from '../shell/providers/lsp-context.js';
-import { useWorkspaceActions } from '../shell/perspectives/workspace-actions-context.js';
-
-type DeferredExportEntry = {
-  filePath: string;
-  namespace: string;
-  exports: Array<{ type: string; name: string }>;
-};
+import { useWorkspace } from './providers/workspace-context.js';
+import { useLsp } from './providers/lsp-context.js';
+import { useWorkspaceActions } from './perspectives/workspace-actions-context.js';
+import type { DeferredExportEntry } from '../workers/parser-worker.js';
 
 /**
  * Stable identity used as the default for the optional `deferredExports`
@@ -123,7 +119,7 @@ type DeferredExportEntry = {
  * (Codex P2 review on PR #164). A module-level constant keeps the
  * reference stable so `useEffect`'s shallow-equality dep check works.
  */
-const EMPTY_DEFERRED_EXPORTS: ReadonlyArray<DeferredExportEntry> = Object.freeze([]);
+const EMPTY_DEFERRED_EXPORTS: DeferredExportEntry[] = Object.freeze([] as DeferredExportEntry[]) as DeferredExportEntry[];
 
 /**
  * Stable empty diagnostics array — stable module-level reference so that
@@ -352,11 +348,11 @@ function FileTabStrip({
   );
 }
 
-export function EditorPage() {
+export function ExplorePerspective() {
   // Workspace model data — formerly props, now from WorkspaceProvider.
   const workspace = useWorkspace();
   const { models, parsedModels, files } = workspace;
-  const deferredExports = (workspace.deferredExports ?? EMPTY_DEFERRED_EXPORTS) as DeferredExportEntry[];
+  const deferredExports: DeferredExportEntry[] = workspace.deferredExports ?? EMPTY_DEFERRED_EXPORTS;
   const workspaceId = workspace.workspaceId ?? 'default';
   const workspaceKind = workspace.workspaceKind;
   const workspaceName = workspace.workspaceName;
@@ -1672,7 +1668,7 @@ export function EditorPage() {
     ]
   );
 
-  const workspaceFileCount = fileCount ?? files.length;
+  const workspaceFileCount = fileCount;
   const totalProblemCount = useMemo(
     () => Array.from(fileDiagnostics.values()).reduce((sum, diagnostics) => sum + diagnostics.length, 0),
     [fileDiagnostics]
@@ -1688,10 +1684,24 @@ export function EditorPage() {
     [inspectorFocusNonce]
   );
 
+  // Empty-workspace guard (keep-alive hazard): ExplorePerspective is ALWAYS
+  // mounted by PerspectiveHost (display:none when inactive), including before a
+  // workspace exists. With zero editable files the dockview/graph/structure
+  // workbench has nothing meaningful to render, and mounting DockShell with
+  // empty models risks running its layout/effects against an empty corpus. The
+  // host-level `requiresWorkspace` fallback already keeps Explore from being
+  // VISIBLE without a workspace, so this render is never user-facing in that
+  // state — return a lightweight placeholder so the heavy workbench (and its
+  // dockview layout) mounts exactly once a workspace is loaded, which is also
+  // what makes keep-alive meaningful.
+  if (fileCount === 0) {
+    return <div data-testid="explore-workbench" className="flex flex-col h-full overflow-hidden" />;
+  }
+
   return (
     <div
       className="flex flex-col h-full overflow-hidden"
-      data-testid="editor-page"
+      data-testid="explore-workbench"
       onKeyDown={handleEditorPageKeyDown}
       tabIndex={-1}
     >
@@ -1825,21 +1835,12 @@ export function EditorPage() {
         </div>
       </header>
       <div className="flex flex-1 min-h-0">
-        <ActivityBar hasWorkspace />
-        <PerspectiveHost
-          hasWorkspace
+        <DockShell
+          studioVersion={studioVersion}
           workspaceId={workspaceId}
-          workspaceKind={workspaceKind}
-          files={files}
-          explore={
-            <DockShell
-              studioVersion={studioVersion}
-              workspaceId={workspaceId}
-              focusPanel={focusPanelRequest}
-              panelComponents={panelComponents}
-              panelTabMeta={panelTabMeta}
-            />
-          }
+          focusPanel={focusPanelRequest}
+          panelComponents={panelComponents}
+          panelTabMeta={panelTabMeta}
         />
       </div>
 

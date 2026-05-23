@@ -67,7 +67,7 @@ async function loadFiles(page: Page, files: { name: string; content: string }[])
       buffer: Buffer.from(f.content)
     }))
   );
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
   await page.locator('.react-flow__node:not(.react-flow__node-groupContainer)').first().waitFor({
     timeout: 10000
   });

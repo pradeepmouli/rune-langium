@@ -32,7 +32,7 @@ import type { LspClientService } from '../../src/services/lsp-client.js';
 import type { TransportState } from '../../src/services/transport-provider.js';
 import type { WorkspaceKind } from '../../src/workspace/persistence.js';
 import type { DeferredExportEntry } from '../../src/workers/parser-worker.js';
-import { EditorPage } from '../../src/pages/EditorPage.js';
+import { ExplorePerspective } from '../../src/shell/ExplorePerspective.js';
 
 export interface EditorPageHarnessProps {
   models?: RosettaModel[];
@@ -95,7 +95,7 @@ export function EditorPageHarness(props: EditorPageHarnessProps): React.ReactEle
       <WorkspaceStateContext.Provider value={workspaceState}>
         <LspContext.Provider value={lspValue}>
           <CodegenProvider>
-            <EditorPage />
+            <ExplorePerspective />
           </CodegenProvider>
         </LspContext.Provider>
       </WorkspaceStateContext.Provider>

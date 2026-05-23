@@ -40,7 +40,7 @@ async function enterEditorViaNew(page: import('@playwright/test').Page) {
   // Click the primary CTA on the empty start page.
   await page.getByRole('button', { name: /new blank workspace/i }).click();
   // Wait for the editor shell to mount (visible-UI convention from CLAUDE.md).
-  await expect(page.getByTestId('editor-page')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 15000 });
 }
 
 // ---------------------------------------------------------------------------

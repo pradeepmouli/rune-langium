@@ -40,7 +40,7 @@ async function loadModel(page: Page) {
     mimeType: 'text/plain',
     buffer: Buffer.from(UNDO_MODEL)
   });
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
   await page.locator('.react-flow__node').first().waitFor({ timeout: 10000 });
 }
 
@@ -127,7 +127,7 @@ test.describe('Undo / Redo', () => {
     await page.waitForTimeout(500);
 
     // App should still be functional
-    await expect(page.getByTestId('editor-page')).toBeVisible();
+    await expect(page.getByTestId('explore-workbench')).toBeVisible();
   });
 
   test('multiple sequential undos should work', async ({ page }) => {

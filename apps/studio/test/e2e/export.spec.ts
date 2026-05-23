@@ -42,7 +42,7 @@ async function loadModel(page: Page) {
     mimeType: 'text/plain',
     buffer: Buffer.from(EXPORT_MODEL)
   });
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
   await page.locator('.react-flow__node').first().waitFor({ timeout: 10000 });
 }
 

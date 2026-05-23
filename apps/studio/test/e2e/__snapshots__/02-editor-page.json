@@ -71,7 +71,7 @@
       "visible": true
     },
     {
-      "selector": "[data-testid=\"editor-page\"]",
+      "selector": "[data-testid=\"explore-workbench\"]",
       "tagName": "div",
       "textContent": "ExplorerFit ViewRe-layoutSourceProblemsExport .rosettaExport SVGExport PNG[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}[data-radix-s",
       "className": "flex flex-col h-full overflow-hidden",
@@ -103,7 +103,7 @@
       "visible": true
     },
     {
-      "selector": "[data-testid=\"editor-page\"] > nav",
+      "selector": "[data-testid=\"explore-workbench\"] > nav",
       "tagName": "nav",
       "textContent": "ExplorerFit ViewRe-layoutSourceProblemsExport .rosettaExport SVGExport PNG",
       "className": "flex items-center justify-between px-3 py-1.5 bg-surface-raised gap-2",
@@ -135,7 +135,7 @@
       "visible": true
     },
     {
-      "selector": "[data-testid=\"editor-page\"] [data-slot=\"separator\"]",
+      "selector": "[data-testid=\"explore-workbench\"] [data-slot=\"separator\"]",
       "tagName": "div",
       "textContent": "",
       "className": "bg-border-default shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
@@ -167,7 +167,7 @@
       "visible": true
     },
     {
-      "selector": "[data-testid=\"editor-page\"] [data-slot=\"resizable-panel-group\"]",
+      "selector": "[data-testid=\"explore-workbench\"] [data-slot=\"resizable-panel-group\"]",
       "tagName": "div",
       "textContent": "PersonRoleEnumTypePersonnamestring(1..1)ageint(0..1)TypeEmployeeemployeeIdstring(1..1)departmentstring(0..1)EnumRoleEnumManagerDeveloperDesignerChoicePersonOrRolePersonRoleEnumMini MapPress enter or s",
       "className": "flex h-full w-full aria-[orientation=vertical]:flex-col flex-1 min-w-0",
@@ -199,7 +199,7 @@
       "visible": true
     },
     {
-      "selector": "[data-testid=\"editor-page\"] > footer",
+      "selector": "[data-testid=\"explore-workbench\"] > footer",
       "tagName": "footer",
       "textContent": "1 model(s) loaded0 modifiedConnecting…",
       "className": "flex items-center gap-4 px-3 py-1 text-sm text-text-muted bg-surface-raised",
@@ -231,7 +231,7 @@
       "visible": true
     },
     {
-      "selector": "[data-testid=\"editor-page\"] [data-slot=\"button\"]",
+      "selector": "[data-testid=\"explore-workbench\"] [data-slot=\"button\"]",
       "tagName": "button",
       "textContent": "Explorer",
       "className": "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface-base disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-accent border border-accent text-white hover:bg-accent-hover hover:border-accent-hover h-auto px-2.5 py-1 text-sm",

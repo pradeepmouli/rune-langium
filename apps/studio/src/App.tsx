@@ -12,7 +12,6 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
 import '@rune-langium/visual-editor/styles.css';
 import type { RosettaModel } from '@rune-langium/core';
-import { EditorPage } from './pages/EditorPage.js';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
 import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
@@ -838,11 +837,11 @@ function AppContent() {
 
   const userFiles = files.filter((f) => !f.readOnly);
   const hasWorkspace = userFiles.length > 0;
-  const showEditorPage = useMemo(
-    () =>
-      (bootState === 'start' && !loading && userFiles.length > 0) || (bootState === 'restored' && userFiles.length > 0),
-    [bootState, loading, userFiles.length]
-  );
+  // Reactive perspective read — the global brand header is shown for every
+  // perspective EXCEPT Explore (which renders its own studio-topbar inside
+  // ExplorePerspective). Other call sites in this file use `.getState()` for
+  // imperative transitions; here we need to re-render on change.
+  const activePerspective = usePerspectiveStore((s) => s.activePerspective);
 
   // Build the WorkspaceActionsContext value from App's handlers so
   // WorkspacesPerspective (and any future perspective) can call them
@@ -901,10 +900,11 @@ function AppContent() {
             {userFiles.length} file(s)
           </span>
         )}
-        {/* Global header — hidden when EditorPage is active to avoid a
-         * duplicate toolbar. The EditorPage toolbar hosts Close + workspace
-         * name in that mode. */}
-        {!showEditorPage && (
+        {/* Global header — hidden when the Explore perspective is active to
+         * avoid a duplicate toolbar. ExplorePerspective renders its own
+         * studio-topbar (Close + workspace name) in that mode; every other
+         * perspective gets the brand header. */}
+        {activePerspective !== 'explore' && (
           <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
             <div className="studio-brand">
               <div className="studio-brand__mark">R</div>
@@ -938,25 +938,27 @@ function AppContent() {
             </div>
           )}
 
-          {/* No-workspace shell — visible when past boot/restoring but no
-           * workspace is loaded yet. ActivityBar + PerspectiveHost are always
-           * reachable so the Workspaces launcher (WorkspacesPerspective) is
-           * available from the rail. The start-page JSX (FileLoader /
-           * WorkspaceSwitcher / ModelLoader) is now INSIDE WorkspacesPerspective,
-           * which PerspectiveHost renders when activePerspective === 'workspaces'. */}
-          {bootState !== 'checking' && bootState !== 'restoring' && !loading && !showEditorPage && (
+          {/* Single app shell — rendered whenever past boot/restoring,
+           * regardless of whether a workspace is loaded. ActivityBar +
+           * PerspectiveHost are always reachable so the Workspaces launcher
+           * (WorkspacesPerspective) is available from the rail. PerspectiveHost
+           * owns the Explore workbench (ExplorePerspective), which it keeps
+           * mounted (display:none when inactive) and falls back away from when
+           * no workspace exists. The start-page JSX lives INSIDE
+           * WorkspacesPerspective. Workspace data flows to ExplorePerspective
+           * and the perspectives via context (useWorkspace / useLsp /
+           * useWorkspaceActions) — all provided by StudioProviders. */}
+          {bootState !== 'checking' && bootState !== 'restoring' && !loading && (
             <div className="flex h-full w-full min-h-0">
               <ActivityBar hasWorkspace={hasWorkspace} />
-              <PerspectiveHost hasWorkspace={hasWorkspace} explore={null} />
+              <PerspectiveHost
+                hasWorkspace={hasWorkspace}
+                workspaceId={restoredWorkspace?.id}
+                workspaceKind={restoredWorkspace?.kind}
+                files={files}
+              />
             </div>
           )}
-
-          {/* EditorPage sources its workspace data from useWorkspace(), its
-           * LSP handles from useLsp(), and its workspace actions from
-           * useWorkspaceActions() — all provided by StudioProviders. */}
-          {bootState === 'start' && !loading && userFiles.length > 0 && <EditorPage />}
-
-          {bootState === 'restored' && userFiles.length > 0 && <EditorPage />}
         </main>
       </div>
     </StudioProviders>

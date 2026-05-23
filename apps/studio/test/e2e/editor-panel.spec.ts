@@ -45,7 +45,7 @@ async function loadModel(page: Page) {
     mimeType: 'text/plain',
     buffer: Buffer.from(MODEL_WITH_ALL_KINDS)
   });
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
   await page.getByTestId('namespace-explorer').waitFor({ timeout: 10000 });
   await page.getByTestId('ns-type-editor.panel::Customer').waitFor({ timeout: 10000 });
 }

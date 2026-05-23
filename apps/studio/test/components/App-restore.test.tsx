@@ -33,8 +33,12 @@ vi.mock('../../src/components/ModelLoader.js', () => ({
   ModelLoader: () => null
 }));
 
-vi.mock('../../src/pages/EditorPage.js', () => ({
-  EditorPage: ({ fileCount }: { fileCount?: number }) => (fileCount != null ? <span>{fileCount} file(s)</span> : null)
+// App no longer renders EditorPage directly; PerspectiveHost owns the Explore
+// workbench (ExplorePerspective). Stub it to a light marker so App tests don't
+// pull in the DockShell/ReactFlow workbench. The file-count text the restore
+// assertions look for is supplied by App's own sr-only span.
+vi.mock('../../src/shell/ExplorePerspective.js', () => ({
+  ExplorePerspective: () => <div data-testid="explore-workbench" />
 }));
 
 vi.mock('../../src/store/model-store.js', () => ({

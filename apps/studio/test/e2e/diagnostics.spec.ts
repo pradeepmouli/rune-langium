@@ -42,7 +42,7 @@ async function loadModel(page: Page, content: string, filename = 'diag.rosetta')
     mimeType: 'text/plain',
     buffer: Buffer.from(content)
   });
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
 }
 
 async function openDiagnostics(page: Page) {

@@ -38,9 +38,15 @@ vi.mock('../../src/components/ModelLoader.js', () => ({
   ModelLoader: () => null
 }));
 
-vi.mock('../../src/pages/EditorPage.js', () => ({
-  EditorPage: ({ fileCount }: { fileCount?: number }) => (fileCount != null ? <span>{fileCount} file(s)</span> : null)
-}));
+vi.mock('../../src/shell/ExplorePerspective.js', async () => {
+  const { useWorkspace } = await import('../../src/shell/providers/workspace-context.js');
+  return {
+    ExplorePerspective: () => {
+      const { fileCount } = useWorkspace();
+      return fileCount > 0 ? <span data-testid="explore-workbench">{fileCount} file(s)</span> : null;
+    }
+  };
+});
 
 vi.mock('../../src/store/model-store.js', () => {
   const useStore = ((selector: (s: { models: Map<string, unknown> }) => unknown) => {

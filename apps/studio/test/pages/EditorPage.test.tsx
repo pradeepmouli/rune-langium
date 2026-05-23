@@ -1161,7 +1161,7 @@ describe('EditorPage workspace chrome', () => {
 
     runeTypeGraphMockState.focusNode.mockClear();
 
-    fireEvent.keyDown(screen.getByTestId('editor-page'), { key: 'ArrowLeft', altKey: true });
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
 
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
   });
@@ -1213,7 +1213,7 @@ describe('EditorPage workspace chrome', () => {
         ]
     });
 
-    fireEvent.keyDown(screen.getByTestId('editor-page'), { key: 'ArrowLeft', altKey: true });
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
 
     expect(showToastSpy).toHaveBeenCalledWith({
       description: 'Previous node "cdm.base.datetime::AdjustableDate" is no longer in the graph',
