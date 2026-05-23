@@ -181,6 +181,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const curatedFetcher = env?.CURATED_MIRROR
       ? (url: string, init?: RequestInit) => env.CURATED_MIRROR!.fetch(url, init)
       : undefined;
+    // Accumulators bridging the bundle loop and the dep-graph block below.
+    // manifestClosureNamespaces collects the closure the manifest fast-path
+    // already computed (from the precomputed graph, no doc parsing) so the
+    // dep-graph block can reuse it instead of re-deriving it. anyV1Fallback
+    // flags that at least one bundle took the whole-bundle path, in which case
+    // the closure must be derived from the loaded docs.
+    const manifestClosureNamespaces = new Set<string>();
+    let anyV1Fallback = false;
     if (Array.isArray(body.curatedBundles) && body.curatedBundles.length > 0) {
       for (const bundle of body.curatedBundles) {
         try {
@@ -189,6 +197,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             // Manifest fast-path: fetch ONLY the user's closure, never the whole bundle.
             const nsGraph = manifest.namespaces;
             const closure = closeNamespacesFromManifest(seeds, nsGraph);
+            for (const ns of closure) manifestClosureNamespaces.add(ns);
             for (const ns of closure) {
               const entry = nsGraph[ns];
               if (!entry) continue;
@@ -212,6 +221,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             }
           } else {
             // v1 fallback: no per-namespace graph — fetch the whole bundle (existing path).
+            anyV1Fallback = true;
             const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version, curatedFetcher);
             for (const doc of curatedDocs) {
               // Stamp the bundle id onto the hydration document explicitly so
@@ -257,10 +267,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // For empty-workspace requests (no user files, no curated bundles),
     // nothing was loaded and the dep graph stays empty (early-returned above).
     if (documentsForHydration.length > 0) {
-      const curatedForClosure = documentsForHydration
-        .filter((d) => d.bundleId !== undefined)
-        .map((d) => ({ uri: d.uri, serializedModel: d.serializedModel }));
-      const closure = computeCuratedClosure(seeds, curatedForClosure);
+      // Manifest fast-path already produced the authoritative curated closure from
+      // the precomputed graph (no doc parsing). Only fall back to the serialized-
+      // import walk when a v1 (whole-bundle) bundle was loaded — then we must derive
+      // the closure from the docs. computeCuratedClosure over closure-only docs would
+      // otherwise just re-parse what we already know.
+      const closure = anyV1Fallback
+        ? computeCuratedClosure(
+            seeds,
+            documentsForHydration
+              .filter((d) => d.bundleId !== undefined)
+              .map((d) => ({ uri: d.uri, serializedModel: d.serializedModel }))
+          )
+        : manifestClosureNamespaces;
       await populateDependencyGraph(documentsForHydration, workspaceContext, dependencyGraph, closure);
     }
 
