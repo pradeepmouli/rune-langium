@@ -29,8 +29,8 @@
 import type { RosettaModel } from '@rune-langium/core';
 import { collectNamespaceDependencies, closeNamespaceDependencies } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
-import { fetchCuratedBundle, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
-import { computeCuratedClosure } from '../lib/curated-closure.js';
+import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
+import { computeCuratedClosure, closeNamespacesFromManifest } from '../lib/curated-closure.js';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
 
 /**
@@ -170,6 +170,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       workspaceContext = await hydrateUserWorkspace(body.files, errors, documentsForHydration, deferredExportsList);
     }
 
+    // Seed namespaces for the curated closure: the namespaces the user files
+    // import. Hoisted here (before the bundle loop) so the manifest fast-path
+    // can use them when computing which per-namespace artifacts to fetch.
+    const seeds = collectUserSeedNamespaces(workspaceContext?.userDocs ?? []);
+
     // Fetch curated bundles via the CURATED_MIRROR service binding so the
     // subrequest bypasses CF same-zone routing. Falls back to global fetch
     // when the binding isn't present (local dev, tests, smoke probes).
@@ -179,23 +184,52 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (Array.isArray(body.curatedBundles) && body.curatedBundles.length > 0) {
       for (const bundle of body.curatedBundles) {
         try {
-          const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version, curatedFetcher);
-          for (const doc of curatedDocs) {
-            // Stamp the bundle id onto the hydration document explicitly so
-            // the studio doesn't have to infer bundle membership from the
-            // URI prefix (Copilot review: that inference was silently
-            // coupled to curated-fetch's URI convention and false-positive'd
-            // for user files saved under `${bundleId}/...` paths). The
-            // field is optional on the hydration shape so user-file
-            // entries omit it.
-            documentsForHydration.push({ ...doc, bundleId: bundle.id });
-            // Surface curated namespaces in the deferredExports response so
-            // the studio's namespace explorer / graph view (which reads from
-            // deferredExports) lists CDM/FpML/rune-dsl entries alongside
-            // user-file namespaces (Codex P2 review). Without this the corpus
-            // hydrates correctly but its read-only nodes are invisible until
-            // an editor link triggers linkDocument and pulls them on-demand.
-            mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
+          const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
+          if (manifest.namespaces) {
+            // Manifest fast-path: fetch ONLY the user's closure, never the whole bundle.
+            const nsGraph = manifest.namespaces;
+            const closure = closeNamespacesFromManifest(seeds, nsGraph);
+            for (const ns of closure) {
+              const entry = nsGraph[ns];
+              if (!entry) continue;
+              const nsDocs = await fetchCuratedNamespace(bundle.id, bundle.version, entry.artifact, curatedFetcher);
+              for (const doc of nsDocs) {
+                documentsForHydration.push({ ...doc, bundleId: bundle.id });
+                // Per-FILE entry so node-id → filePath → hydrationState linking stays correct.
+                mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
+              }
+            }
+            // List every OTHER curated namespace so the explorer shows the full corpus.
+            // These are list-only (not hydrated): filePath is the artifact key, a stable
+            // id; expanding one would re-parse with that namespace pulled into closure.
+            for (const [ns, entry] of Object.entries(nsGraph)) {
+              if (closure.has(ns)) continue; // closure namespaces already have per-file entries
+              deferredExportsList.push({
+                filePath: entry.artifact,
+                namespace: ns,
+                entries: entry.exports.map((e) => ({ type: e.type, name: e.name }))
+              });
+            }
+          } else {
+            // v1 fallback: no per-namespace graph — fetch the whole bundle (existing path).
+            const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version, curatedFetcher);
+            for (const doc of curatedDocs) {
+              // Stamp the bundle id onto the hydration document explicitly so
+              // the studio doesn't have to infer bundle membership from the
+              // URI prefix (Copilot review: that inference was silently
+              // coupled to curated-fetch's URI convention and false-positive'd
+              // for user files saved under `${bundleId}/...` paths). The
+              // field is optional on the hydration shape so user-file
+              // entries omit it.
+              documentsForHydration.push({ ...doc, bundleId: bundle.id });
+              // Surface curated namespaces in the deferredExports response so
+              // the studio's namespace explorer / graph view (which reads from
+              // deferredExports) lists CDM/FpML/rune-dsl entries alongside
+              // user-file namespaces (Codex P2 review). Without this the corpus
+              // hydrates correctly but its read-only nodes are invisible until
+              // an editor link triggers linkDocument and pulls them on-demand.
+              mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
+            }
           }
         } catch (err) {
           if (err instanceof CuratedBundleUnavailableError) {
@@ -223,7 +257,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // For empty-workspace requests (no user files, no curated bundles),
     // nothing was loaded and the dep graph stays empty (early-returned above).
     if (documentsForHydration.length > 0) {
-      const seeds = collectUserSeedNamespaces(workspaceContext?.userDocs ?? []);
       const curatedForClosure = documentsForHydration
         .filter((d) => d.bundleId !== undefined)
         .map((d) => ({ uri: d.uri, serializedModel: d.serializedModel }));
