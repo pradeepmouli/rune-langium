@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import { CuratedModelIdSchema, CURATED_MODEL_IDS, ErrorCategorySchema, parseManifest } from '../src/index.js';
+import { CuratedModelIdSchema, CURATED_MODEL_IDS, ErrorCategorySchema, CuratedManifestSchema, parseManifest } from '../src/index.js';
 
 const VALID_MANIFEST = {
   schemaVersion: 1,
@@ -23,9 +23,48 @@ describe('CuratedManifestSchema', () => {
     expect(r.ok).toBe(true);
   });
 
-  it('rejects a stale schemaVersion', () => {
-    const r = parseManifest({ ...VALID_MANIFEST, schemaVersion: 2 });
+  it('rejects an unsupported schemaVersion', () => {
+    const r = parseManifest({ ...VALID_MANIFEST, schemaVersion: 99 });
     expect(r.ok).toBe(false);
+  });
+
+  it('accepts schemaVersion 2 with a namespaces map', () => {
+    const m = {
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: '2026-05-22',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        'cdm.base': {
+          deps: ['cdm.base.math'],
+          exports: [{ type: 'Data', name: 'Foo' }],
+          artifact: 'artifacts/2026-05-22/ns/cdm.base.json.gz'
+        }
+      }
+    };
+    expect(CuratedManifestSchema.safeParse(m).success).toBe(true);
+  });
+
+  it('still accepts a v1 manifest without namespaces', () => {
+    const m = {
+      schemaVersion: 1,
+      modelId: 'cdm',
+      version: '2026-05-22',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: []
+    };
+    expect(CuratedManifestSchema.safeParse(m).success).toBe(true);
   });
 
   it('rejects a malformed sha256', () => {
