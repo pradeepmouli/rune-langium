@@ -16,7 +16,7 @@
 import { createHash } from 'node:crypto';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { gunzipSync, gzipSync } from 'node:zlib';
-import { computeNamespaceGraph } from './lib/namespace-graph.mjs';
+import { computeNamespaceGraph, nsArtifactSlug } from './lib/namespace-graph.mjs';
 
 const corePkgDir = new URL('../packages/core/', import.meta.url);
 const langiumIndex = new URL('node_modules/langium/lib/index.js', corePkgDir);
@@ -212,24 +212,48 @@ async function main() {
       let totalNsBytes = 0;
       const nsCount = Object.keys(graph).length;
 
+      // Map each namespace to an R2-safe artifact slug. R2/wrangler reject keys
+      // containing `..` (path-traversal guard), and leading/trailing dots are
+      // unsafe as path segments. Rosetta namespaces are dot-separated
+      // identifiers, but the upstream corpus is not always clean — e.g. rune-fpml
+      // declares `namespace fpml.consolidated.` (trailing dot), which would
+      // produce `fpml.consolidated..json.gz`. Collapse repeated dots and strip
+      // edge dots for the FILENAME/KEY only; the namespace identity (the map key
+      // below, used for closure + display) is preserved verbatim. Fail loudly on
+      // a slug collision rather than silently overwriting one namespace's blob.
+      const nsToSlug = new Map();
+      const slugToNs = new Map();
+      for (const ns of Object.keys(graph)) {
+        const slug = nsArtifactSlug(ns);
+        if (slugToNs.has(slug)) {
+          throw new Error(
+            `${source.id}: namespace artifact slug collision — "${ns}" and "${slugToNs.get(slug)}" both map to "${slug}"`
+          );
+        }
+        slugToNs.set(slug, ns);
+        nsToSlug.set(ns, slug);
+      }
+
       for (const ns of Object.keys(graph)) {
         const nsDocList = nsDocs[ns] ?? [];
         const nsJson = JSON.stringify({ documents: nsDocList }, bigintReplacer);
         const nsGzipped = gzipSync(Buffer.from(nsJson));
-        await writeFile(`${nsDir}/${ns}.json.gz`, nsGzipped);
+        await writeFile(`${nsDir}/${nsToSlug.get(ns)}.json.gz`, nsGzipped);
         totalNsBytes += nsGzipped.byteLength;
       }
 
       console.log(`  Per-ns: ${nsCount} namespaces, ${totalNsBytes} total bytes`);
 
-      // Build namespaces map for the meta (artifact path uses versioned key)
+      // Build namespaces map for the meta. The map KEY is the real namespace
+      // (used by /api/parse for closure + the explorer); the `artifact` value
+      // uses the R2-safe slug so the key matches the uploaded blob filename.
       const version = result.version;
       const namespacesMap = {};
       for (const [ns, entry] of Object.entries(graph)) {
         namespacesMap[ns] = {
           deps: entry.deps,
           exports: entry.exports,
-          artifact: `artifacts/${version}/ns/${ns}.json.gz`,
+          artifact: `artifacts/${version}/ns/${nsToSlug.get(ns)}.json.gz`,
         };
       }
 
