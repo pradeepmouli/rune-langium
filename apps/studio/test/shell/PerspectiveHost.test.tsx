@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useEffect } from 'react';
 import { render, screen, act } from '@testing-library/react';
 import { PerspectiveHost } from '../../src/shell/perspectives/PerspectiveHost.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
+
+// Mock only the Workspaces launcher — the host-level fallback renders it for
+// workspace-requiring perspectives with no workspace, and the real one pulls
+// in WorkspaceActionsContext + FileLoader/ModelLoader. SettingsPerspective is
+// left real (test 1 asserts its rendered output).
+vi.mock('../../src/shell/perspectives/screens/WorkspacesPerspective.js', () => ({
+  WorkspacesPerspective: () => <div data-testid="workspaces-perspective" />
+}));
 
 let exploreMountCount = 0;
 function ExploreProbe() {
@@ -38,9 +46,12 @@ describe('PerspectiveHost', () => {
     expect(slot().style.display).not.toBe('none');
   });
 
-  it('git/export require a workspace (not rendered without one)', () => {
+  it('git/export fall back to the Workspaces launcher without a workspace (no blank pane, Codex P2 #238)', () => {
     usePerspectiveStore.setState({ activePerspective: 'git' });
     render(<PerspectiveHost explore={<ExploreProbe />} hasWorkspace={false} />);
+    // git is workspace-requiring, so with no workspace it must NOT render…
     expect(screen.queryByTestId('git-perspective')).toBeNull();
+    // …and the host falls back to the always-available Workspaces launcher.
+    expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
   });
 });
