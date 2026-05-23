@@ -70,25 +70,43 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
     continue
   fi
 
-  namespaces=$(jq -c '.namespaces // {}' "$meta_file")
+  ns_count=$(jq -r '(.namespaces // {}) | length' "$meta_file")
 
-  patched_manifest=$(echo "$current_manifest" | jq \
-    --arg sha "$sha256" \
-    --arg url "$MIRROR_BASE/$model_id/latest.serialized.json.gz" \
-    --argjson size "$size_bytes" \
-    --argjson docs "$doc_count" \
-    --argjson ns "$namespaces" \
-    '.schemaVersion = 2 |
-    .artifacts.serializedWorkspace = {
-      schemaVersion: 1,
-      kind: "langium-json-serializer",
-      url: $url,
-      sha256: $sha,
-      sizeBytes: $size,
-      documentCount: $docs,
-      langiumVersion: "4.2.2"
-    } |
-    .namespaces = $ns')
+  if [[ "$ns_count" -gt 0 ]]; then
+    namespaces=$(jq -c '.namespaces' "$meta_file")
+    patched_manifest=$(echo "$current_manifest" | jq \
+      --arg sha "$sha256" \
+      --arg url "$MIRROR_BASE/$model_id/latest.serialized.json.gz" \
+      --argjson size "$size_bytes" \
+      --argjson docs "$doc_count" \
+      --argjson ns "$namespaces" \
+      '.schemaVersion = 2 |
+      .artifacts.serializedWorkspace = {
+        schemaVersion: 1,
+        kind: "langium-json-serializer",
+        url: $url,
+        sha256: $sha,
+        sizeBytes: $size,
+        documentCount: $docs,
+        langiumVersion: "4.2.2"
+      } |
+      .namespaces = $ns')
+  else
+    patched_manifest=$(echo "$current_manifest" | jq \
+      --arg sha "$sha256" \
+      --arg url "$MIRROR_BASE/$model_id/latest.serialized.json.gz" \
+      --argjson size "$size_bytes" \
+      --argjson docs "$doc_count" \
+      '.artifacts.serializedWorkspace = {
+        schemaVersion: 1,
+        kind: "langium-json-serializer",
+        url: $url,
+        sha256: $sha,
+        sizeBytes: $size,
+        documentCount: $docs,
+        langiumVersion: "4.2.2"
+      }')
+  fi
 
   echo "$patched_manifest" > /tmp/patched-manifest-$model_id.json
   $WRANGLER r2 object put "$BUCKET/curated/$model_id/manifest.json" \

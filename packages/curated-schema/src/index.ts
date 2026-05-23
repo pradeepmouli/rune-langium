@@ -70,7 +70,7 @@ export const CuratedNamespaceEntrySchema = z.object({
   deps: z.array(z.string()),
   exports: z.array(CuratedNamespaceExportSchema),
   /** Key into the per-namespace artifact map (relative URL or object-store key). */
-  artifact: z.string()
+  artifact: z.string().min(1)
 });
 export type CuratedNamespaceEntry = z.infer<typeof CuratedNamespaceEntrySchema>;
 

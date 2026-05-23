@@ -260,7 +260,18 @@ export async function fetchCuratedManifest(
   const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
   const url = `${CURATED_MIRROR_BASE}/${id}/manifest.json`;
 
-  const res = await fetchFn(url, undefined);
+  let res: Response;
+  try {
+    res = await fetchFn(url, undefined);
+  } catch (err) {
+    console.error('curated-fetch manifest_fetch_failed', {
+      bundleId: id,
+      version,
+      url,
+      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    });
+    throw new CuratedBundleUnavailableError(id, version, undefined, err);
+  }
   if (!res.ok) {
     console.error('curated-fetch manifest_non_ok', {
       bundleId: id,
@@ -272,7 +283,17 @@ export async function fetchCuratedManifest(
     throw new CuratedBundleUnavailableError(id, version, res.status);
   }
 
-  const data: unknown = await res.json();
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch (err) {
+    console.error('curated-fetch manifest_json_parse_failed', {
+      bundleId: id,
+      version,
+      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    });
+    throw new CuratedBundleUnavailableError(id, version, undefined, err);
+  }
   const result = parseManifest(data);
   if (!result.ok) {
     console.error('curated-fetch manifest_schema_mismatch', {

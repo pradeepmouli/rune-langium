@@ -193,7 +193,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       for (const bundle of body.curatedBundles) {
         try {
           const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
-          if (manifest.namespaces) {
+          if (manifest.namespaces && Object.keys(manifest.namespaces).length > 0) {
             // Manifest fast-path: fetch ONLY the user's closure, never the whole bundle.
             const nsGraph = manifest.namespaces;
             const closure = closeNamespacesFromManifest(seeds, nsGraph);
@@ -209,12 +209,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
               }
             }
             // List every OTHER curated namespace so the explorer shows the full corpus.
-            // These are list-only (not hydrated): filePath is the artifact key, a stable
-            // id; expanding one would re-parse with that namespace pulled into closure.
+            // These are list-only (not hydrated): filePath uses the bundle-prefixed synthetic
+            // path so split('/')[0] === bundle.id, consistent with closure entries.
+            // Expanding one would re-parse with that namespace pulled into closure.
             for (const [ns, entry] of Object.entries(nsGraph)) {
               if (closure.has(ns)) continue; // closure namespaces already have per-file entries
               deferredExportsList.push({
-                filePath: entry.artifact,
+                filePath: `${bundle.id}/${ns}`, // bundle-prefixed synthetic path: split('/')[0] === bundle.id;
+                                                 // not a hydrated doc (list-only) — expanding such a node is a
+                                                 // soft no-op until the namespace is imported (pulled into closure).
                 namespace: ns,
                 entries: entry.exports.map((e) => ({ type: e.type, name: e.name }))
               });

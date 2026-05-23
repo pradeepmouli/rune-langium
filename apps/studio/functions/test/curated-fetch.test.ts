@@ -79,6 +79,24 @@ describe('fetchCuratedManifest', () => {
       CuratedBundleUnavailableError
     );
   });
+
+  it('network error: fetch throw wrapped as CuratedBundleUnavailableError', async () => {
+    const stub: CuratedFetcher = vi.fn().mockRejectedValue(new Error('boom'));
+
+    const err = await fetchCuratedManifest('cdm', '2026-05-22', stub).catch((e) => e);
+    expect(err).toBeInstanceOf(CuratedBundleUnavailableError);
+    expect(err.bundleId).toBe('cdm');
+  });
+
+  it('malformed JSON body: rejects with CuratedBundleUnavailableError', async () => {
+    const stub: CuratedFetcher = vi.fn().mockResolvedValue(
+      new Response('not json{', { status: 200 })
+    );
+
+    const err = await fetchCuratedManifest('cdm', '2026-05-22', stub).catch((e) => e);
+    expect(err).toBeInstanceOf(CuratedBundleUnavailableError);
+    expect(err.bundleId).toBe('cdm');
+  });
 });
 
 // ---------------------------------------------------------------------------

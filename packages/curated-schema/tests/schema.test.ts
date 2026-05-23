@@ -86,6 +86,29 @@ describe('CuratedManifestSchema', () => {
     const r = parseManifest({ ...VALID_MANIFEST, archiveUrl: 'not a url' });
     expect(r.ok).toBe(false);
   });
+
+  it('rejects a manifest whose namespaces entry has an empty artifact string', () => {
+    const m = {
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: '2026-05-22',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        'cdm.base': {
+          deps: [],
+          exports: [{ type: 'Data', name: 'Foo' }],
+          artifact: '' // empty string — must fail
+        }
+      }
+    };
+    expect(CuratedManifestSchema.safeParse(m).success).toBe(false);
+  });
 });
 
 describe('CuratedModelIdSchema + CURATED_MODEL_IDS', () => {

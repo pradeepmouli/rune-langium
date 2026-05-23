@@ -220,6 +220,69 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
     expect(body.dependencyGraph).not.toHaveProperty('cdm.other');
   });
 
+  it('Test 1b — non-closure deferredExports filePath starts with bundle id, not "artifacts/"', async () => {
+    const mod = await import('../lib/curated-fetch.js');
+
+    vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
+
+    vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(
+      async (_id, _v, artifactKey) => {
+        const ns = Object.keys(NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
+        return ns ? NS_DOCS[ns] : [];
+      }
+    );
+    vi.spyOn(mod, 'fetchCuratedBundle');
+
+    const userContent = 'namespace app\nimport cdm.trade\n';
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ name: 'app.rune', content: userContent }],
+        curatedBundles: [{ id: 'cdm', version: 'latest' }]
+      })
+    } as never);
+
+    const body = (await res.json()) as ParseResponse;
+    expect(body.ok).toBe(true);
+
+    // cdm.other is the list-only (non-closure) namespace
+    const otherEntry = body.deferredExports.find((d) => d.namespace === 'cdm.other');
+    expect(otherEntry).toBeDefined();
+    // Must start with bundle id "cdm/", NOT with "artifacts/"
+    expect(otherEntry!.filePath.startsWith('cdm/')).toBe(true);
+    expect(otherEntry!.filePath).toBe('cdm/cdm.other');
+    expect(otherEntry!.filePath.startsWith('artifacts/')).toBe(false);
+  });
+
+  it('Test 3 — empty namespaces map falls through to v1 whole-bundle path', async () => {
+    const mod = await import('../lib/curated-fetch.js');
+
+    // Manifest with an empty namespaces map — should NOT take the fast-path
+    vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
+      ...MANIFEST,
+      namespaces: {}
+    } as never);
+
+    const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle').mockResolvedValue(CURATED_DOCS);
+    const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
+
+    const userContent = 'namespace app\nimport cdm.trade\n';
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ name: 'app.rune', content: userContent }],
+        curatedBundles: [{ id: 'cdm', version: 'latest' }]
+      })
+    } as never);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ParseResponse;
+    expect(body.ok).toBe(true);
+
+    // Must fall back to whole-bundle path
+    expect(bundleSpy).toHaveBeenCalledTimes(1);
+    // Namespace fetch path must never be called
+    expect(nsSpy).not.toHaveBeenCalled();
+  });
+
   it('Test 2 — v1 fallback: whole-bundle fetched; fetchCuratedNamespace never called', async () => {
     const mod = await import('../lib/curated-fetch.js');
 
