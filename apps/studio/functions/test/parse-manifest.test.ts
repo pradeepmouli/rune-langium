@@ -283,6 +283,32 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
     expect(nsSpy).not.toHaveBeenCalled();
   });
 
+  it('Test 3b — manifest fetch failure falls back to whole-bundle (not a 502)', async () => {
+    const mod = await import('../lib/curated-fetch.js');
+
+    // manifest.json transiently unavailable, but latest.serialized.json.gz is healthy.
+    vi.spyOn(mod, 'fetchCuratedManifest').mockRejectedValue(
+      new mod.CuratedBundleUnavailableError('cdm', 'latest', 503)
+    );
+    const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle').mockResolvedValue(CURATED_DOCS);
+    const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
+
+    const userContent = 'namespace app\nimport cdm.trade\n';
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ name: 'app.rune', content: userContent }],
+        curatedBundles: [{ id: 'cdm', version: 'latest' }]
+      })
+    } as never);
+
+    // A manifest outage must NOT 502 the whole request when the bundle is healthy.
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ParseResponse;
+    expect(body.ok).toBe(true);
+    expect(bundleSpy).toHaveBeenCalledTimes(1);
+    expect(nsSpy).not.toHaveBeenCalled();
+  });
+
   it('Test 2 — v1 fallback: whole-bundle fetched; fetchCuratedNamespace never called', async () => {
     const mod = await import('../lib/curated-fetch.js');
 

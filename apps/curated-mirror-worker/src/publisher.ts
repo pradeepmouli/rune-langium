@@ -106,6 +106,15 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
       for (const v of toPrune) {
         await bucket.delete(`curated/${source.id}/archives/${v}.tar.gz`);
         await bucket.delete(`curated/${source.id}/artifacts/${v}.serialized.json.gz`);
+        // Per-namespace artifacts (artifacts/<v>/ns/*.json.gz, uploaded by the
+        // CI artifact build) must be pruned too, else every republish leaves an
+        // unbounded set of stale ns/ objects in R2 (Codex P2). R2 has no
+        // prefix-delete, so list the version's ns/ keys and batch-delete them.
+        const nsPrefix = `curated/${source.id}/artifacts/${v}/ns/`;
+        const staleNs = await bucket.list({ prefix: nsPrefix });
+        if (staleNs.objects.length > 0) {
+          await bucket.delete(staleNs.objects.map((o) => o.key));
+        }
       }
 
       // Preserve the v2 artifact fields the CI artifact build (curated-

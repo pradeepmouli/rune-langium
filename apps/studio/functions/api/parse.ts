@@ -30,6 +30,7 @@ import type { RosettaModel } from '@rune-langium/core';
 import { collectNamespaceDependencies, closeNamespaceDependencies } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
+import type { CuratedManifest } from '@rune-langium/curated-schema';
 import { computeCuratedClosure, closeNamespacesFromManifest } from '../lib/curated-closure.js';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
 
@@ -192,8 +193,30 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (Array.isArray(body.curatedBundles) && body.curatedBundles.length > 0) {
       for (const bundle of body.curatedBundles) {
         try {
-          const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
-          if (manifest.namespaces && Object.keys(manifest.namespaces).length > 0) {
+          // The manifest fetch is the entry point for the fast-path, but it must
+          // NOT become a new single point of failure: if manifest.json is
+          // transiently unavailable/malformed while latest.serialized.json.gz is
+          // still healthy, fall back to the whole-bundle path rather than 502ing
+          // every curated request (Codex P1). Only a manifest-fetch failure is
+          // swallowed here; a per-namespace artifact failure inside the fast-path
+          // still surfaces as 502 (the manifest referenced an artifact that
+          // doesn't exist — a genuinely broken publish).
+          let manifest: CuratedManifest | null = null;
+          try {
+            manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
+          } catch (manifestErr) {
+            if (manifestErr instanceof CuratedBundleUnavailableError) {
+              console.error('curated-fetch manifest_unavailable_falling_back', {
+                bundleId: bundle.id,
+                version: bundle.version,
+                status: manifestErr.status
+              });
+              manifest = null; // → whole-bundle fallback below
+            } else {
+              throw manifestErr;
+            }
+          }
+          if (manifest && manifest.namespaces && Object.keys(manifest.namespaces).length > 0) {
             // Manifest fast-path: fetch ONLY the user's closure, never the whole bundle.
             const nsGraph = manifest.namespaces;
             const closure = closeNamespacesFromManifest(seeds, nsGraph);

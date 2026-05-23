@@ -132,6 +132,27 @@ describe('publishCuratedMirrors (T025)', () => {
     expect(kept).toContain(new Date().toISOString().slice(0, 10));
   });
 
+  it('prunes per-namespace artifacts for pruned versions', async () => {
+    // Pre-seed 16 historical archives + a pruned-version's per-namespace artifacts.
+    for (let i = 0; i < 16; i++) {
+      const day = `2026-04-${String(i + 1).padStart(2, '0')}`;
+      await bucket.put(`curated/cdm/archives/${day}.tar.gz`, new Uint8Array([i]));
+    }
+    // 2026-04-01 will be pruned (only the 13 most-recent + today are kept at retention 14).
+    await bucket.put('curated/cdm/artifacts/2026-04-01/ns/cdm.base.json.gz', new Uint8Array([1]));
+    await bucket.put('curated/cdm/artifacts/2026-04-01/ns/cdm.trade.json.gz', new Uint8Array([2]));
+    // A kept version's ns artifacts must survive.
+    await bucket.put('curated/cdm/artifacts/2026-04-16/ns/cdm.base.json.gz', new Uint8Array([3]));
+
+    await publishCuratedMirrors({ sources: [SOURCES[0]!], bucket, retention: 14 });
+
+    // Pruned version's per-ns artifacts are gone…
+    expect(bucket.has('curated/cdm/artifacts/2026-04-01/ns/cdm.base.json.gz')).toBe(false);
+    expect(bucket.has('curated/cdm/artifacts/2026-04-01/ns/cdm.trade.json.gz')).toBe(false);
+    // …while a retained version's per-ns artifact remains.
+    expect(bucket.has('curated/cdm/artifacts/2026-04-16/ns/cdm.base.json.gz')).toBe(true);
+  });
+
   it('continues when one source fails — publishes the others', async () => {
     fetchSpy.mockImplementation(async (url: unknown) => {
       const u = String(url);
