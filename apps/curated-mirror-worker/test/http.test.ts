@@ -108,6 +108,14 @@ describe('handleCuratedRead — serialized workspace artifacts', () => {
     expect(res.headers.get('Cache-Control')).toMatch(/immutable/);
     expect(res.headers.get('Content-Type')).toMatch(/application\/gzip/);
   });
+
+  it('serves a per-namespace artifact with immutable cache + gzip content-type', async () => {
+    await bucket.put('curated/cdm/artifacts/2026-04-30/ns/cdm.base.json.gz', new Uint8Array([2]));
+    const res = await get('/curated/cdm/artifacts/2026-04-30/ns/cdm.base.json.gz');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toMatch(/immutable/);
+    expect(res.headers.get('Content-Type')).toMatch(/application\/gzip/);
+  });
 });
 
 describe('handleCuratedRead — historical archives + method enforcement', () => {
