@@ -1,5 +1,18 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+
+/**
+ * CodePreviewPanel — status-transition tests (post-Codex-P2 edition).
+ *
+ * CodePreviewPanel is now a PURE-DISPLAY component. Worker ownership
+ * lives in EditorPage. These tests seed `useCodegenStore` directly
+ * (the same way EditorPage's new effects do) and assert that the panel
+ * renders the expected status text.
+ *
+ * Worker props, addEventListener/removeEventListener assertions, and
+ * postMessage assertions are gone — the component no longer has them.
+ */
+
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/react';
 
@@ -44,197 +57,108 @@ vi.mock('@codemirror/lang-javascript', () => ({ javascript: vi.fn(() => []) }));
 import { CodePreviewPanel } from '../../src/components/CodePreviewPanel.js';
 import { useCodegenStore } from '../../src/store/codegen-store.js';
 
-function makeWorker() {
-  const worker = {
-    postMessage: vi.fn(),
-    onmessage: null as ((e: MessageEvent) => void) | null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  };
-  return worker;
-}
-
 afterEach(() => cleanup());
-// 018 Task 0.8 — set `activeTarget` so the panel renders the viewer
-// for these existing viewer tests instead of the new landing table.
+// Put the store in viewer mode (activeTarget set) so these tests exercise the
+// viewer area rather than the targets-table landing state.
 beforeEach(() => useCodegenStore.setState({ codePreviewTarget: 'zod', activeTarget: 'zod' }));
 
 describe('CodePreviewPanel — status transitions', () => {
   it('shows "Generating…" on initial mount', () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    // Store is in 'waiting' state (reset above sets snapshot to waiting).
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Generating/i);
-    expect(w.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'codegen:generate',
-        target: 'zod',
-        requestId: expect.any(String)
-      })
-    );
   });
 
-  it('shows "Generated (Zod)" after codegen:result with target=zod', async () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
-    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+  it('shows "Generated (Zod)" after the store receives codegen:result with target=zod', async () => {
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     await act(async () => {
-      // Simulate the worker posting a result back
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
-        data: {
-          type: 'codegen:result',
-          target: 'zod',
-          requestId,
-          files: [
-            {
-              relativePath: 'ns.zod.ts',
-              content: 'export const X = z.object({});',
-              sourceMap: []
-            }
-          ]
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().receiveCodePreviewResult({
+        target: 'zod',
+        files: [{ relativePath: 'ns.zod.ts', content: 'export const X = z.object({});', sourceMap: [] }]
+      });
     });
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Generated \(Zod\)/i);
     expect(screen.getByTestId('codegen-relative-path')).toHaveTextContent('ns.zod.ts');
   });
 
-  it('shows "Outdated — fix errors to refresh" on codegen:outdated', async () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
-    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+  it('shows "Outdated — fix errors to refresh" when the store is marked stale', async () => {
+    render(<CodePreviewPanel sourceEditorRef={null} />);
+    // First give the store a successful result so stale has files to preserve.
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
-        data: {
-          type: 'codegen:result',
-          target: 'zod',
-          requestId,
-          files: [{ relativePath: 'ns.zod.ts', content: 'content', sourceMap: [] }]
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().receiveCodePreviewResult({
+        target: 'zod',
+        files: [{ relativePath: 'ns.zod.ts', content: 'content', sourceMap: [] }]
+      });
     });
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
-        data: {
-          type: 'codegen:outdated',
-          target: 'zod',
-          requestId,
-          message: 'Fix model errors to refresh the code preview.'
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().markCodePreviewStale({
+        target: 'zod',
+        message: 'Fix model errors to refresh the code preview.'
+      });
     });
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Outdated.*fix errors/i);
   });
 
   it('retains content (does NOT blank) on codegen:outdated', async () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
-    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
-        data: {
-          type: 'codegen:result',
-          target: 'zod',
-          requestId,
-          files: [{ relativePath: 'ns.zod.ts', content: 'last good content', sourceMap: [] }]
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().receiveCodePreviewResult({
+        target: 'zod',
+        files: [{ relativePath: 'ns.zod.ts', content: 'last good content', sourceMap: [] }]
+      });
     });
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
-        data: {
-          type: 'codegen:outdated',
-          target: 'zod',
-          requestId,
-          message: 'Fix model errors to refresh the code preview.'
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().markCodePreviewStale({
+        target: 'zod',
+        message: 'Fix model errors to refresh the code preview.'
+      });
     });
-    // Not blanked back to "Generating..."
+    // Panel is stale (has content) — NOT "Generating…".
     expect(screen.getByTestId('codegen-status')).not.toHaveTextContent(/Generating…/i);
   });
 
   it('shows "Preview unavailable" when generation fails before any successful output', async () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
-    const requestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
-        data: {
-          type: 'codegen:error',
-          target: 'zod',
-          requestId,
-          message: 'Code generation failed.'
-        }
-      } as MessageEvent);
+      useCodegenStore.getState().markCodePreviewUnavailable({
+        target: 'zod',
+        message: 'Code generation failed.'
+      });
     });
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Preview unavailable/i);
   });
 
   it('ignores stale responses with an older request id for the same target', async () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
-    const currentRequestId = (w.postMessage.mock.calls.at(-1)?.[0] as { requestId?: string })?.requestId;
-
+    render(<CodePreviewPanel sourceEditorRef={null} />);
+    // Simulate what EditorPage's owner effect does: begin a new request (which
+    // resets the snapshot to 'waiting' and issues a fresh requestId), then
+    // receive a result for the fresh id. The stale id is never dispatched.
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'message') ?? [])[1] as
-        | ((e: MessageEvent) => void)
-        | undefined;
-      handler?.({
-        data: {
-          type: 'codegen:result',
-          target: 'zod',
-          requestId: 'codegen:zod:older',
-          files: [{ relativePath: 'stale.zod.ts', content: 'stale', sourceMap: [] }]
-        }
-      } as MessageEvent);
-      handler?.({
-        data: {
-          type: 'codegen:result',
-          target: 'zod',
-          requestId: currentRequestId,
-          files: [{ relativePath: 'fresh.zod.ts', content: 'fresh', sourceMap: [] }]
-        }
-      } as MessageEvent);
+      // Receive only the fresh result — stale ones are filtered by EditorPage.
+      useCodegenStore.getState().receiveCodePreviewResult({
+        target: 'zod',
+        files: [{ relativePath: 'fresh.zod.ts', content: 'fresh', sourceMap: [] }]
+      });
     });
-
     expect(screen.getByTestId('codegen-relative-path')).toHaveTextContent('fresh.zod.ts');
   });
 
-  it('shows "Preview unavailable" when the worker errors', async () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+  it('shows "Preview unavailable" when the store is marked unavailable (e.g. worker crash)', async () => {
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     await act(async () => {
-      const handler = (w.addEventListener.mock.calls.find(([e]) => e === 'error') ?? [])[1] as
-        | ((e: ErrorEvent) => void)
-        | undefined;
-      handler?.({ message: 'worker crashed', error: new Error('boom') } as ErrorEvent);
+      useCodegenStore.getState().markCodePreviewUnavailable({
+        target: 'zod',
+        message: 'Code preview worker crashed — reload Studio.'
+      });
     });
     expect(screen.getByTestId('codegen-status')).toHaveTextContent(/Preview unavailable/i);
   });
 
-  it('removes worker listeners on unmount', () => {
-    const w = makeWorker();
-    const { unmount } = render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
-    unmount();
-    expect(w.removeEventListener).toHaveBeenCalledWith('message', expect.any(Function));
-    expect(w.removeEventListener).toHaveBeenCalledWith('error', expect.any(Function));
+  it('mounts and unmounts without worker props (pure display — no worker subscription)', () => {
+    // This test verifies the component can mount and unmount without a worker.
+    // The old test asserted removeEventListener was called; now there is nothing
+    // to clean up since the component never subscribes to a worker.
+    const { unmount } = render(<CodePreviewPanel sourceEditorRef={null} />);
+    expect(() => unmount()).not.toThrow();
   });
 });

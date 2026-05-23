@@ -12,9 +12,6 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
 import '@rune-langium/visual-editor/styles.css';
 import type { RosettaModel } from '@rune-langium/core';
-import { FileLoader } from './components/FileLoader.js';
-import { ModelLoader } from './components/ModelLoader.js';
-import { WorkspaceSwitcher } from './components/WorkspaceSwitcher.js';
 import { EditorPage } from './pages/EditorPage.js';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
@@ -33,6 +30,10 @@ import { deleteWorkspaceFiles, loadWorkspaceFiles, saveWorkspaceFiles } from './
 import { WorkspaceManager } from './workspace/workspace-manager.js';
 import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
+import { ActivityBar } from './shell/ActivityBar.js';
+import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
+import { WorkspaceActionsContext } from './shell/perspectives/workspace-actions-context.js';
+import { usePerspectiveStore } from './store/perspective-store.js';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
 
@@ -489,10 +490,16 @@ function AppContent() {
         setBootState('restoring');
         const restored = await restoreWorkspace(ws);
         if (!restored) {
+          // Restore yielded zero user files — show the no-workspace shell with
+          // the Workspaces launcher rather than an empty Explore surface.
           setBootState('start');
+          usePerspectiveStore.getState().setActivePerspective('workspaces');
           return;
         }
         setBootState('restored');
+        // restoreWorkspace returns true only when user files were loaded, so
+        // userFiles.length > 0 here — jump straight to the explore perspective.
+        usePerspectiveStore.getState().setActivePerspective('explore');
       } catch (err) {
         if (cancelled) return;
         reportWorkspaceError('Workspace restore failed; showing the start page instead', err);
@@ -628,11 +635,18 @@ function AppContent() {
   }, []);
 
   const handleFilesLoaded = useCallback(
-    async (loadedFiles: WorkspaceFile[]) => {
-      let workspace = restoredWorkspace;
+    async (loadedFiles: WorkspaceFile[], targetWorkspaceId?: string) => {
+      // Resolve the workspace these files belong to. An explicit target (e.g.
+      // the git-clone path passes the freshly created git-backed workspace)
+      // loads INTO that workspace. With no target this is a launcher load:
+      // ALWAYS create a new workspace — never reuse whichever workspace is
+      // currently open. The Workspaces perspective is reachable while a project
+      // is active (#238), so reusing `restoredWorkspace` here would silently
+      // overwrite (or, for "New blank workspace", wipe) the open project's
+      // files (Codex P1).
+      let workspace = targetWorkspaceId ? await persistence.loadWorkspace(targetWorkspaceId) : null;
       if (!workspace) {
         workspace = await createWorkspaceRecord(deriveWorkspaceName(loadedFiles));
-        setRestoredWorkspace(workspace);
         // Fresh workspace has no declared curated bindings, so curated
         // sync is trivially "settled" — opening the persist gate so any
         // bundles the user loads next get persisted. Without this the
@@ -641,11 +655,14 @@ function AppContent() {
         // stay closed (no restoreWorkspace call ever flipped it).
         setCuratedSyncedWorkspaceId(workspace.id);
       }
+      setRestoredWorkspace(workspace);
 
       await saveWorkspaceFiles(workspace.id, loadedFiles);
       await syncWorkspaceToEditor(loadedFiles);
+      // Switch to the explore perspective now that a workspace is loaded.
+      usePerspectiveStore.getState().setActivePerspective('explore');
     },
-    [createWorkspaceRecord, restoredWorkspace, syncWorkspaceToEditor]
+    [createWorkspaceRecord, syncWorkspaceToEditor]
   );
 
   /**
@@ -705,6 +722,8 @@ function AppContent() {
     setCuratedSyncedWorkspaceId(null);
     setWorkspaceError(null);
     setWorkspaceNotice(null);
+    // Return to the launcher perspective.
+    usePerspectiveStore.getState().setActivePerspective('workspaces');
   }, [reportWorkspaceError, restoredWorkspace]);
 
   /** Switch to a recent workspace from the start page list (T029). */
@@ -722,11 +741,15 @@ function AppContent() {
           setBootState('start');
           setWorkspaceError(null);
           setWorkspaceNotice(null);
+          // No files in this workspace — stay on the launcher.
+          usePerspectiveStore.getState().setActivePerspective('workspaces');
           return;
         }
         setBootState('restored');
         setWorkspaceError(null);
         setWorkspaceNotice(null);
+        // Workspace has files — move to the explore perspective.
+        usePerspectiveStore.getState().setActivePerspective('explore');
       } catch (err) {
         reportWorkspaceError('Failed to switch workspaces', err);
       }
@@ -743,7 +766,8 @@ function AppContent() {
         }
         await syncWorkspaceToEditor(workspaceFiles);
       },
-      switchWorkspace: handleSwitchWorkspace
+      switchWorkspace: handleSwitchWorkspace,
+      loadFiles: handleFilesLoaded
     }));
     return () => {
       setRuneStudioTestApi((current) => {
@@ -756,7 +780,7 @@ function AppContent() {
         return next;
       });
     };
-  }, [handleSwitchWorkspace, restoredWorkspace, syncWorkspaceToEditor]);
+  }, [handleFilesLoaded, handleSwitchWorkspace, restoredWorkspace, syncWorkspaceToEditor]);
 
   /** New-workspace affordance from the recents list — same path as FileLoader. */
   const handleCreateWorkspace = useCallback(() => {
@@ -813,15 +837,18 @@ function AppContent() {
   }, [getWorkspaceManager, restoredWorkspace]);
 
   const handleCreateGitBackedWorkspace = useCallback(
-    async (input: { repoUrl: string; branch: string; user: string; token: string }) => {
+    async (input: { name: string; repoUrl: string; branch: string; user: string; token: string }) => {
       const wm = await getWorkspaceManager();
-      const repoName =
+      // Prefer the caller-supplied name (FileLoader → GitHubWorkspaceFlow sends
+      // `${user}/${repo}`); fall back to a URL-derived repo name only if the
+      // caller omitted it.
+      const fallbackName =
         input.repoUrl
           .replace(/\.git$/, '')
           .split('/')
           .pop() ?? 'workspace';
       const ws = await wm.createGitBacked({
-        name: repoName,
+        name: input.name || fallbackName,
         repoUrl: input.repoUrl,
         branch: input.branch,
         user: input.user,
@@ -844,7 +871,11 @@ function AppContent() {
             dirty: false,
             readOnly: false
           }));
-          handleFilesLoaded(wsFiles);
+          // Load INTO the freshly created git-backed workspace — pass it
+          // explicitly so the launcher's "always create new" default does not
+          // spawn a duplicate non-git workspace, and `restoredWorkspace` points
+          // at the git workspace (activating its sync engine).
+          handleFilesLoaded(wsFiles, workspaceId);
         }
       } catch (err) {
         reportWorkspaceError('Failed to load cloned workspace', err);
@@ -867,6 +898,8 @@ function AppContent() {
           setParsedModels([]);
           setErrors(new Map());
           setBootState('start');
+          // Return to the launcher perspective when the active workspace is deleted.
+          usePerspectiveStore.getState().setActivePerspective('workspaces');
         }
         setWorkspaceError(null);
         setWorkspaceNotice(null);
@@ -913,137 +946,139 @@ function AppContent() {
   }, [applyParseResult, loadedModels, reportWorkspaceError]);
 
   const userFiles = files.filter((f) => !f.readOnly);
+  const hasWorkspace = userFiles.length > 0;
   const showEditorPage = useMemo(
     () =>
       (bootState === 'start' && !loading && userFiles.length > 0) || (bootState === 'restored' && userFiles.length > 0),
     [bootState, loading, userFiles.length]
   );
 
+  // Build the WorkspaceActionsContext value from App's handlers so
+  // WorkspacesPerspective (and any future perspective) can call them
+  // without prop-drilling through PerspectiveHost.
+  const workspaceActionsValue = useMemo(
+    () => ({
+      files,
+      onFilesLoaded: handleFilesLoaded,
+      createGitBackedWorkspace: handleCreateGitBackedWorkspace,
+      onGitHubWorkspaceCreated: handleGitHubWorkspaceCreated,
+      onOpenWorkspace: handleSwitchWorkspace,
+      onCreateWorkspace: handleCreateWorkspace,
+      onDeleteWorkspace: handleDeleteWorkspace
+    }),
+    [
+      files,
+      handleFilesLoaded,
+      handleCreateGitBackedWorkspace,
+      handleGitHubWorkspaceCreated,
+      handleSwitchWorkspace,
+      handleCreateWorkspace,
+      handleDeleteWorkspace
+    ]
+  );
+
   return (
-    <div className="studio-app flex flex-col h-full text-foreground bg-background">
-      {/* Screen-reader + test accessible file count — always in DOM so the
-       * App-restore test can confirm file loading without EditorPage mounted. */}
-      {userFiles.length > 0 && (
-        <span className="sr-only" role="status" aria-live="polite">
-          {userFiles.length} file(s)
-        </span>
-      )}
-      {/* Global header — hidden when EditorPage is active to avoid a
-       * duplicate toolbar. The EditorPage toolbar hosts Close + workspace
-       * name in that mode. */}
-      {!showEditorPage && (
-        <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
-          <div className="studio-brand">
-            <div className="studio-brand__mark">R</div>
-            <span className="studio-brand__name">Rune Studio</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <nav className="studio-links" aria-label="Studio links">
-              <a href={studioConfig.homeUrl}>Home</a>
-              <a href={studioConfig.docsUrl}>Docs</a>
-              <a href={studioConfig.githubUrl}>GitHub</a>
-            </nav>
-          </div>
-        </header>
-      )}
-
-      <main className="flex-1 overflow-hidden relative">
-        {(bootState === 'checking' || bootState === 'restoring') && (
-          <div
-            className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md"
-            data-testid="boot-spinner"
-          >
-            <Spinner className="size-8 text-primary" />
-            <p>{bootState === 'restoring' ? 'Restoring workspace…' : 'Loading…'}</p>
-          </div>
+    <WorkspaceActionsContext.Provider value={workspaceActionsValue}>
+      <div className="studio-app flex flex-col h-full text-foreground bg-background">
+        {/* Screen-reader + test accessible file count — always in DOM so the
+         * App-restore test can confirm file loading without EditorPage mounted. */}
+        {userFiles.length > 0 && (
+          <span className="sr-only" role="status" aria-live="polite">
+            {userFiles.length} file(s)
+          </span>
+        )}
+        {/* Global header — hidden when EditorPage is active to avoid a
+         * duplicate toolbar. The EditorPage toolbar hosts Close + workspace
+         * name in that mode. */}
+        {!showEditorPage && (
+          <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
+            <div className="studio-brand">
+              <div className="studio-brand__mark">R</div>
+              <span className="studio-brand__name">Rune Studio</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <nav className="studio-links" aria-label="Studio links">
+                <a href={studioConfig.homeUrl}>Home</a>
+                <a href={studioConfig.docsUrl}>Docs</a>
+                <a href={studioConfig.githubUrl}>GitHub</a>
+              </nav>
+            </div>
+          </header>
         )}
 
-        {bootState !== 'checking' && bootState !== 'restoring' && loading && (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md">
-            <Spinner className="size-8 text-primary" />
-            <p>Parsing files…</p>
-          </div>
-        )}
+        <main className="flex-1 overflow-hidden relative">
+          {(bootState === 'checking' || bootState === 'restoring') && (
+            <div
+              className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md"
+              data-testid="boot-spinner"
+            >
+              <Spinner className="size-8 text-primary" />
+              <p>{bootState === 'restoring' ? 'Restoring workspace…' : 'Loading…'}</p>
+            </div>
+          )}
 
-        {bootState === 'start' && !loading && userFiles.length === 0 && (
-          // T057 (014/FR-028) — vertically centred at viewports ≥1280×800.
-          // FileLoader handles its own centering inside; WorkspaceSwitcher
-          // (recents) sits above the curated row per FR-011 / T029 with
-          // `mt-8` spacing and no `border-t` divider, so the column reads
-          // as one visually-balanced empty state rather than fenced-off
-          // sections.
-          <div className="flex flex-col items-center justify-center h-full px-8 py-12 gap-8">
-            <FileLoader
-              onFilesLoaded={handleFilesLoaded}
-              existingFiles={files}
-              createGitBackedWorkspace={handleCreateGitBackedWorkspace}
-              onGitHubWorkspaceCreated={handleGitHubWorkspaceCreated}
+          {bootState !== 'checking' && bootState !== 'restoring' && loading && (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md">
+              <Spinner className="size-8 text-primary" />
+              <p>Parsing files…</p>
+            </div>
+          )}
+
+          {/* No-workspace shell — visible when past boot/restoring but no
+           * workspace is loaded yet. ActivityBar + PerspectiveHost are always
+           * reachable so the Workspaces launcher (WorkspacesPerspective) is
+           * available from the rail. The start-page JSX (FileLoader /
+           * WorkspaceSwitcher / ModelLoader) is now INSIDE WorkspacesPerspective,
+           * which PerspectiveHost renders when activePerspective === 'workspaces'. */}
+          {bootState !== 'checking' && bootState !== 'restoring' && !loading && !showEditorPage && (
+            <div className="flex h-full w-full min-h-0">
+              <ActivityBar hasWorkspace={hasWorkspace} />
+              <PerspectiveHost hasWorkspace={hasWorkspace} explore={null} />
+            </div>
+          )}
+
+          {bootState === 'start' && !loading && userFiles.length > 0 && (
+            <EditorPage
+              models={models}
+              parsedModels={parsedModels}
+              deferredExports={deferredExports}
+              files={files}
+              onFilesChange={handleFilesChange}
+              lspClient={lspClientRef.current ?? undefined}
+              transportState={transportState}
+              onReconnect={handleReconnect}
+              workspaceId={restoredWorkspace?.id ?? 'default'}
+              workspaceKind={restoredWorkspace?.kind}
+              workspaceName={restoredWorkspace?.name}
+              fileCount={userFiles.length}
+              onClose={handleReset}
+              onSwitchWorkspace={handleSwitchWorkspace}
+              onCreateWorkspace={handleCreateWorkspace}
             />
-            <div className="w-full max-w-[560px] mt-8">
-              <WorkspaceSwitcher
-                onOpen={handleSwitchWorkspace}
-                onCreate={handleCreateWorkspace}
-                onDelete={handleDeleteWorkspace}
-              />
-            </div>
-            <div className="w-full max-w-[560px]">
-              <ModelLoader />
-            </div>
-          </div>
-        )}
+          )}
 
-        {bootState === 'start' && !loading && userFiles.length > 0 && (
-          <EditorPage
-            models={models}
-            parsedModels={parsedModels}
-            deferredExports={deferredExports}
-            files={files}
-            onFilesChange={handleFilesChange}
-            lspClient={lspClientRef.current ?? undefined}
-            transportState={transportState}
-            onReconnect={handleReconnect}
-            workspaceId={restoredWorkspace?.id ?? 'default'}
-            workspaceKind={restoredWorkspace?.kind}
-            workspaceName={restoredWorkspace?.name}
-            fileCount={userFiles.length}
-            onClose={handleReset}
-            onSwitchWorkspace={handleSwitchWorkspace}
-            onCreateWorkspace={handleCreateWorkspace}
-          />
-        )}
-
-        {bootState === 'restored' && userFiles.length === 0 && (
-          <div
-            className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground text-md"
-            data-testid="workspace-restored"
-            aria-label={`Workspace ${restoredWorkspace?.name ?? ''} restored`}
-          >
-            <p className="text-2xl font-semibold text-foreground mb-1">{restoredWorkspace?.name ?? 'Workspace'}</p>
-            <p>Workspace ready.</p>
-          </div>
-        )}
-
-        {bootState === 'restored' && userFiles.length > 0 && (
-          <EditorPage
-            models={models}
-            parsedModels={parsedModels}
-            deferredExports={deferredExports}
-            files={files}
-            onFilesChange={handleFilesChange}
-            lspClient={lspClientRef.current ?? undefined}
-            transportState={transportState}
-            onReconnect={handleReconnect}
-            workspaceId={restoredWorkspace?.id ?? 'default'}
-            workspaceKind={restoredWorkspace?.kind}
-            workspaceName={restoredWorkspace?.name}
-            fileCount={userFiles.length}
-            onClose={handleReset}
-            onSwitchWorkspace={handleSwitchWorkspace}
-            onCreateWorkspace={handleCreateWorkspace}
-          />
-        )}
-      </main>
-    </div>
+          {bootState === 'restored' && userFiles.length > 0 && (
+            <EditorPage
+              models={models}
+              parsedModels={parsedModels}
+              deferredExports={deferredExports}
+              files={files}
+              onFilesChange={handleFilesChange}
+              lspClient={lspClientRef.current ?? undefined}
+              transportState={transportState}
+              onReconnect={handleReconnect}
+              workspaceId={restoredWorkspace?.id ?? 'default'}
+              workspaceKind={restoredWorkspace?.kind}
+              workspaceName={restoredWorkspace?.name}
+              fileCount={userFiles.length}
+              onClose={handleReset}
+              onSwitchWorkspace={handleSwitchWorkspace}
+              onCreateWorkspace={handleCreateWorkspace}
+            />
+          )}
+        </main>
+      </div>
+    </WorkspaceActionsContext.Provider>
   );
 }
 

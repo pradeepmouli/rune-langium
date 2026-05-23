@@ -88,6 +88,8 @@ import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistenc
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from '../shell/DockShell.js';
 import { ActivityBar } from '../shell/ActivityBar.js';
+import { PerspectiveHost } from '../shell/perspectives/PerspectiveHost.js';
+import { usePerspectiveStore } from '../store/perspective-store.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import { linkDocument, BUNDLE_MARKER_SUFFIX } from '../services/workspace.js';
 import type { LspClientService } from '../services/lsp-client.js';
@@ -95,7 +97,7 @@ import type { TransportState } from '../services/transport-provider.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
-import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
+import type { SourceEditorHandle, CodegenWorkerMessage } from '../components/CodePreviewPanel.js';
 import { FontScaleButton } from '../components/FontScaleButton.js';
 import { pathToUri } from '../utils/uri.js';
 import { mergeSerializedIntoSource } from '../utils/source-merge.js';
@@ -111,6 +113,7 @@ import {
   isPreviewExecuteErrorMessage
 } from '../services/codegen-service.js';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
+import { useCodegenStore } from '../store/codegen-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
 import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
 import '../test-api.js';
@@ -435,6 +438,9 @@ export function EditorPage({
   const groupedLayoutRef = useRef(groupedLayout);
   groupedLayoutRef.current = groupedLayout;
   const graphLayoutDirectionRef = useRef<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
+  // File tabs are an Explore-only affordance (perspective-registry.showsFileTabs).
+  // Hide them when the user switches to Git / Export / Settings / Workspaces.
+  const activePerspective = usePerspectiveStore((s) => s.activePerspective);
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
   const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
@@ -996,6 +1002,85 @@ export function EditorPage({
     setWorkerRef
   ]);
 
+  // ---------------------------------------------------------------------------
+  // Codegen preview — single worker owner (Codex P2 fix).
+  //
+  // EditorPage is the sole owner of the codegen:generate request/response cycle.
+  // CodePreviewPanel and ExportPerspective are pure-display consumers of
+  // useCodegenStore. This prevents double-subscription when both surfaces are
+  // simultaneously mounted (Explore dock keep-alive + Export perspective).
+  // ---------------------------------------------------------------------------
+
+  // Ref to track the currently-pending codegen request so the message handler
+  // can discard stale responses without an extra store selector call.
+  const codegenCurrentRequestIdRef = useRef<string>('');
+
+  // Effect 1: listen for codegen worker responses and dispatch into the store.
+  useEffect(() => {
+    if (!codegenWorker) return;
+
+    function handleCodegenMessage(e: MessageEvent<CodegenWorkerMessage>) {
+      const msg = e.data;
+      if (
+        msg.type !== 'codegen:result' &&
+        msg.type !== 'codegen:outdated' &&
+        msg.type !== 'codegen:error'
+      ) {
+        return; // not a codegen response — handled by preview listener above
+      }
+      if (msg.requestId !== codegenCurrentRequestIdRef.current) {
+        return; // stale response
+      }
+      const store = useCodegenStore.getState();
+      switch (msg.type) {
+        case 'codegen:result':
+          store.receiveCodePreviewResult({ target: msg.target, files: msg.files });
+          break;
+        case 'codegen:outdated':
+          store.markCodePreviewStale({ target: msg.target, message: msg.message });
+          break;
+        case 'codegen:error':
+          store.markCodePreviewUnavailable({ target: msg.target, message: msg.message });
+          break;
+      }
+    }
+
+    function handleCodegenWorkerError(event: ErrorEvent) {
+      console.error('[EditorPage] Codegen worker error (codegen:generate):', event.message, event.error);
+      const store = useCodegenStore.getState();
+      store.markCodePreviewUnavailable({
+        target: store.codePreviewTarget,
+        message: 'Code preview worker crashed — reload Studio.'
+      });
+    }
+
+    codegenWorker.addEventListener('message', handleCodegenMessage as EventListener);
+    codegenWorker.addEventListener('error', handleCodegenWorkerError as EventListener);
+    return () => {
+      codegenWorker.removeEventListener('message', handleCodegenMessage as EventListener);
+      codegenWorker.removeEventListener('error', handleCodegenWorkerError as EventListener);
+    };
+  }, [codegenWorker]);
+
+  // Effect 2: kick off code generation when the active target changes.
+  // Mirrors the removed CodePreviewPanel effect (018 Task 0.8).
+  const codegenActiveTarget = useCodegenStore((s) => s.activeTarget);
+  const codegenPreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
+  useEffect(() => {
+    if (!codegenWorker || codegenActiveTarget === undefined) return;
+    const requestId = useCodegenStore.getState().beginCodePreviewRequest(codegenPreviewTarget);
+    codegenCurrentRequestIdRef.current = requestId;
+    try {
+      codegenWorker.postMessage({ type: 'codegen:generate', target: codegenPreviewTarget, requestId });
+    } catch (err) {
+      console.error('[EditorPage] Failed to request code generation:', err);
+      useCodegenStore.getState().markCodePreviewUnavailable({
+        target: codegenPreviewTarget,
+        message: 'Code preview worker is unavailable.'
+      });
+    }
+  }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget]);
+
   const handleSourceChange = useCallback(
     (path: string, content: string) => {
       const updatedFiles = filesRef.current.map((f) => (f.path === path ? { ...f, content, dirty: true } : f));
@@ -1434,9 +1519,12 @@ export function EditorPage({
     []
   );
 
+  // CodePreviewPanel is now a pure-display consumer of useCodegenStore.
+  // EditorPage owns the codegen worker-driving (see "Codegen preview" effects
+  // above). The panel is always mountable once the worker is ready.
   const CodePreviewPanelMounted = useCallback(() => {
     if (!codegenWorker) return null;
-    return <CodePreviewPanel worker={codegenWorker} sourceEditorRef={sourceEditorHandle} files={files} />;
+    return <CodePreviewPanel sourceEditorRef={sourceEditorHandle} files={files} />;
   }, [codegenWorker, files, sourceEditorHandle]);
 
   const FormPreviewPanelMounted = useCallback(() => <FormPreviewPanelShell />, []);
@@ -1953,7 +2041,9 @@ export function EditorPage({
             </PopoverContent>
           </Popover>
         </div>
-        <FileTabStrip files={files} activeFile={activeEditorFile} onSelectFile={openFileInSource} />
+        {activePerspective === 'explore' && (
+          <FileTabStrip files={files} activeFile={activeEditorFile} onSelectFile={openFileInSource} />
+        )}
         <div className="studio-topbar__right">
           <button type="button" className="studio-topbar__cmdk" aria-label="Search">
             <Search className="size-3.5" />
@@ -2000,20 +2090,22 @@ export function EditorPage({
         </div>
       </header>
       <div className="flex flex-1 min-h-0">
-        <ActivityBar
-          onWorkspaceClick={() => onClose?.()}
-          onModelsClick={() => setShowCuratedModels(true)}
-          onSettingsClick={() => {}}
+        <ActivityBar hasWorkspace />
+        <PerspectiveHost
+          hasWorkspace
+          workspaceId={workspaceId}
+          workspaceKind={workspaceKind}
+          files={files}
+          explore={
+            <DockShell
+              studioVersion={studioVersion}
+              workspaceId={workspaceId}
+              focusPanel={focusPanelRequest}
+              panelComponents={panelComponents}
+              panelTabMeta={panelTabMeta}
+            />
+          }
         />
-        <div className="flex-1 min-h-0">
-          <DockShell
-            studioVersion={studioVersion}
-            workspaceId={workspaceId}
-            focusPanel={focusPanelRequest}
-            panelComponents={panelComponents}
-            panelTabMeta={panelTabMeta}
-          />
-        </div>
       </div>
 
       <footer className="glass-statusbar flex items-center gap-4 px-3 py-1 text-xs text-muted-foreground border-t border-border">

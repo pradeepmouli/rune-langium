@@ -34,6 +34,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, cleanup, waitFor, act } from '@testing-library/react';
 import { parse } from '@rune-langium/core';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
+import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 
 // ---------------------------------------------------------------------------
 // Hoisted shared state
@@ -73,9 +74,7 @@ class MockWorker {
 // ---------------------------------------------------------------------------
 
 vi.mock('@rune-langium/visual-editor', async () => {
-  const actual = await vi.importActual<typeof import('@rune-langium/visual-editor')>(
-    '@rune-langium/visual-editor'
-  );
+  const actual = await vi.importActual<typeof import('@rune-langium/visual-editor')>('@rune-langium/visual-editor');
   return {
     ...actual,
     // Render stubs — keep the test fast; none of these affect the sync path.
@@ -94,7 +93,7 @@ vi.mock('@rune-langium/visual-editor', async () => {
     ExpressionBuilder: () => React.createElement('div'),
     NameCell: () => null,
     CardinalityCell: () => null,
-    TypePickerCell: () => null,
+    TypePickerCell: () => null
     // useModelSourceSync and useEditorStore come from `actual` (the spread above).
     // All other non-component exports also come from actual, so BUILTIN_TYPES,
     // AST_TYPE_TO_NODE_TYPE, resolveNodeKind, etc. work correctly too.
@@ -137,11 +136,7 @@ vi.mock('../../src/components/GraphFilterMenu.js', () => ({
 }));
 
 vi.mock('../../src/shell/DockShell.js', () => ({
-  DockShell: ({
-    panelComponents
-  }: {
-    panelComponents?: Record<string, React.ComponentType>;
-  }) =>
+  DockShell: ({ panelComponents }: { panelComponents?: Record<string, React.ComponentType> }) =>
     React.createElement('div', { 'data-testid': 'dock-shell' }, [
       panelComponents?.['workspace.visualPreview']
         ? React.createElement(panelComponents['workspace.visualPreview'], { key: 'visual' })
@@ -234,6 +229,10 @@ describe('EditorPage — Structure-mode source sync (regression fix/inspector-so
     act(() => {
       useEditorStore.getState().loadModels([]);
     });
+    // EditorPage embeds PerspectiveHost; store defaults to 'workspaces' which
+    // renders WorkspacesPerspective (requires context). This test renders a
+    // loaded workspace — reset to 'explore' so DockShell is shown.
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
   });
 
   afterEach(() => {

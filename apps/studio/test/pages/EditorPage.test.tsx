@@ -5,6 +5,7 @@ import React, { useEffect, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, cleanup, waitFor, screen, act, fireEvent } from '@testing-library/react';
 import { usePreviewStore } from '../../src/store/preview-store.js';
+import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 
 const {
@@ -340,7 +341,11 @@ vi.mock('lucide-react', () => ({
   // Dialog primitive's close button uses `X` from lucide-react. The curated
   // models modal in EditorPage pulls Dialog in transitively even when it
   // isn't open, so the lucide-react mock has to cover X too.
-  X: () => React.createElement('span')
+  X: () => React.createElement('span'),
+  // perspective-registry icons (ActivityBar now imports from perspective-registry)
+  FolderOpen: () => React.createElement('span'),
+  GitBranch: () => React.createElement('span'),
+  Package: () => React.createElement('span')
 }));
 
 vi.mock('../../src/components/GraphFilterMenu.js', () => ({
@@ -477,6 +482,10 @@ describe('EditorPage preview target identity', () => {
     runeTypeGraphMockState.relayout = vi.fn();
     resizeObserverMockState.instances = [];
     namespaceExplorerMockState.latestProps = undefined;
+    // EditorPage embeds PerspectiveHost; store defaults to 'workspaces' which
+    // renders WorkspacesPerspective (requires context). These tests render a
+    // loaded workspace — reset to 'explore' so DockShell is visible.
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
   });
 
   afterEach(() => {
@@ -974,6 +983,9 @@ describe('EditorPage workspace chrome', () => {
     MockWorker.instances = [];
     setRuneStudioTestApi(() => undefined);
     usePreviewStore.getState().resetPreviewState();
+    // EditorPage represents a loaded workspace — Explore must be active so
+    // PerspectiveHost renders DockShell (not hidden by display:none).
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
     editorStoreState.nodes = [];
     editorStoreState.selectedNodeId = undefined;
     vi.clearAllMocks();
@@ -1445,6 +1457,10 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
     vi.clearAllMocks();
     structureViewMockState.latestProps = undefined;
     resizeObserverMockState.instances = [];
+    // EditorPage embeds PerspectiveHost; store defaults to 'workspaces' which
+    // renders WorkspacesPerspective (requires context). These tests render a
+    // loaded workspace — reset to 'explore' so DockShell is shown.
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
   });
 
   afterEach(() => {

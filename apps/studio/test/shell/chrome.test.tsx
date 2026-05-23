@@ -3,39 +3,12 @@
 
 /**
  * T072 / T073 — ActivityBar + StatusBar.
+ * T072 ActivityBar tests migrated to ActivityBar.test.tsx (Task 3 rewrite).
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ActivityBar } from '../../src/shell/ActivityBar.js';
 import { StatusBar } from '../../src/shell/StatusBar.js';
-
-describe('ActivityBar (T072)', () => {
-  it('renders six nav buttons and routes clicks to the right callback', () => {
-    const ws = vi.fn();
-    const m = vi.fn();
-    const s = vi.fn();
-    render(<ActivityBar onWorkspaceClick={ws} onModelsClick={m} onSettingsClick={s} />);
-    expect(screen.getAllByRole('button').length).toBe(6);
-    fireEvent.click(screen.getByRole('button', { name: /explorer/i }));
-    fireEvent.click(screen.getByRole('button', { name: /curated models/i }));
-    fireEvent.click(screen.getByRole('button', { name: /settings/i }));
-    expect(ws).toHaveBeenCalled();
-    expect(m).toHaveBeenCalled();
-    expect(s).toHaveBeenCalled();
-  });
-
-  it('exposes role=navigation with an accessible name', () => {
-    render(
-      <ActivityBar
-        onWorkspaceClick={() => {}}
-        onModelsClick={() => {}}
-        onSettingsClick={() => {}}
-      />
-    );
-    expect(screen.getByRole('navigation', { name: /studio activity bar/i })).toBeInTheDocument();
-  });
-});
 
 describe('StatusBar (T073)', () => {
   it('renders workspace name + LSP state', () => {

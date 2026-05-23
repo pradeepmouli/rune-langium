@@ -3,14 +3,21 @@
 
 /**
  * 018 Phase 0 Task 0.8 — integration coverage for the table-as-landing
- * flow on CodePreviewPanel.
+ * flow on CodePreviewPanel (post-Codex-P2 edition).
  *
- * Verifies:
- *   - panel mounts to the targets table (activeTarget=undefined initial)
- *   - no codegen request is dispatched while the table is showing
- *   - clicking [View] enters the viewer for that target AND triggers codegen
- *   - clicking the ← Targets button returns to the table
- *   - the obsolete TargetSwitcher tabs are no longer rendered
+ * CodePreviewPanel is now a PURE-DISPLAY component. Worker ownership
+ * (codegen:generate postMessage + response listener) lives in EditorPage.
+ * This file tests only what the component is responsible for:
+ *
+ *   - Panel mounts to the targets table when activeTarget=undefined.
+ *   - No worker postMessage is called from the panel (worker is EditorPage's).
+ *   - Clicking [View] updates the store (activeTarget, codePreviewTarget)
+ *     and expands the viewer — EditorPage's effect would then trigger codegen.
+ *   - Clicking the eye again toggles the preview off.
+ *   - Clicking [Download] opens the modal and POSTs to /api/codegen.
+ *
+ * Assertions that the panel calls worker.postMessage are removed — the panel
+ * no longer owns the worker.
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
@@ -55,32 +62,20 @@ import { useCodegenStore } from '../../src/store/codegen-store.js';
 afterEach(() => cleanup());
 beforeEach(() => useCodegenStore.getState().resetCodegenState());
 
-function makeWorker() {
-  return {
-    postMessage: vi.fn(),
-    onmessage: null as ((e: MessageEvent) => void) | null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  };
-}
-
 describe('CodePreviewPanel table-as-landing flow', () => {
   it('renders the targets table on initial mount (activeTarget undefined)', () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     expect(screen.getByTestId('codegen-targets-table')).toBeTruthy();
     expect(screen.queryByTestId('code-preview-editor')).toBeNull();
   });
 
-  it('does not request codegen while the table is showing', () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
-    expect(w.postMessage).not.toHaveBeenCalled();
+  it('does not require a worker prop to mount', () => {
+    // Verifies the component is a pure display component.
+    expect(() => render(<CodePreviewPanel sourceEditorRef={null} />)).not.toThrow();
   });
 
   it('clicking the eye on a row opens the preview below the table (table stays visible)', () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-typescript'));
     // store transitions to viewer mode
     expect(useCodegenStore.getState().activeTarget).toBe('typescript');
@@ -88,15 +83,12 @@ describe('CodePreviewPanel table-as-landing flow', () => {
     // 019 polish — table stays mounted; viewer expands below it.
     expect(screen.getByTestId('codegen-targets-table')).toBeTruthy();
     expect(screen.getByTestId('code-preview-editor')).toBeTruthy();
-    // codegen dispatched for the chosen target
-    expect(w.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'codegen:generate', target: 'typescript' })
-    );
+    // Note: EditorPage (not the panel) sends the codegen:generate postMessage.
+    // We do not assert postMessage here.
   });
 
   it('clicking the eye a second time on the active row toggles the preview off', () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
     expect(useCodegenStore.getState().activeTarget).toBe('zod');
     // Toggle off — second click on the same row's eye icon.
@@ -108,38 +100,33 @@ describe('CodePreviewPanel table-as-landing flow', () => {
   });
 
   it('clicking the eye on a different row swaps the preview without closing it', () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
     expect(useCodegenStore.getState().activeTarget).toBe('zod');
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-typescript'));
     expect(useCodegenStore.getState().activeTarget).toBe('typescript');
+    expect(useCodegenStore.getState().codePreviewTarget).toBe('typescript');
     expect(screen.getByTestId('code-preview-editor')).toBeTruthy();
-    // codegen ran for both targets.
-    expect(
-      w.postMessage.mock.calls.filter((c) => (c[0] as { target?: string })?.target === 'typescript')
-    ).not.toHaveLength(0);
   });
 
-  it('toggling the eye off then back on re-triggers codegen for the same target', async () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+  it('toggling the eye off then back on resets the activeTarget in the store', async () => {
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
-    const callsAfterFirstView = w.postMessage.mock.calls.length;
+    expect(useCodegenStore.getState().activeTarget).toBe('zod');
     // toggle off
     await act(async () => {
       fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
     });
+    expect(useCodegenStore.getState().activeTarget).toBeUndefined();
     // toggle back on
     await act(async () => {
       fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
     });
-    expect(w.postMessage.mock.calls.length).toBeGreaterThan(callsAfterFirstView);
+    expect(useCodegenStore.getState().activeTarget).toBe('zod');
   });
 
   it('does not render the old TargetSwitcher tabs in either mode', () => {
-    const w = makeWorker();
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} />);
+    render(<CodePreviewPanel sourceEditorRef={null} />);
     expect(screen.queryByTestId('target-switcher')).toBeNull();
     fireEvent.click(screen.getByTestId('codegen-targets-table__view-zod'));
     expect(screen.queryByTestId('target-switcher')).toBeNull();
@@ -160,19 +147,13 @@ describe('CodePreviewPanel table-as-landing flow', () => {
         })
     );
     vi.stubGlobal('fetch', fetchMock);
-    // Only stub URL.createObjectURL / revokeObjectURL — these aren't
-    // present in jsdom and would throw on the real download path. The
-    // actual anchor click is a no-op in jsdom, so leaving createElement
-    // / appendChild / removeChild alone keeps testing-library's own
-    // DOM mounts working.
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
     vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
 
-    const w = makeWorker();
     const files = [
       { name: 'x.rune', path: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)\n', dirty: false }
     ];
-    render(<CodePreviewPanel worker={w as unknown as Worker} sourceEditorRef={null} files={files as never} />);
+    render(<CodePreviewPanel sourceEditorRef={null} files={files as never} />);
 
     // §5.1 — Download now opens the config modal first; Generate fires the
     // request. With no dep graph populated (empty store), the modal has no
