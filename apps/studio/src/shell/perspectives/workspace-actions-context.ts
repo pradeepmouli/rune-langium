@@ -32,6 +32,19 @@ export interface WorkspaceActions {
   onCreateWorkspace: () => void;
   /** Delete a workspace by id (WorkspaceSwitcher onDelete). */
   onDeleteWorkspace: (workspaceId: string) => void;
+  /**
+   * Persist + reparse workspace file content changes (e.g. source-editor
+   * edits). Sourced by EditorPage in place of its former `onFilesChange` prop.
+   */
+  onFilesChange: (files: WorkspaceFile[]) => void;
+  /** Close the active workspace and return to the launcher (EditorPage topbar). */
+  onClose: () => void;
+  /**
+   * Switch to a different workspace from the EditorPage topbar dropdown.
+   * Same handler as {@link onOpenWorkspace}; kept under its EditorPage-facing
+   * name so the topbar reads it directly from context.
+   */
+  onSwitchWorkspace: (workspaceId: string) => void;
 }
 
 export const WorkspaceActionsContext = createContext<WorkspaceActions | null>(null);

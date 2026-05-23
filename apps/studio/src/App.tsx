@@ -15,15 +15,12 @@ import type { RosettaModel } from '@rune-langium/core';
 import { EditorPage } from './pages/EditorPage.js';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
-import { parseWorkspaceFiles, mergeModelFiles, BUNDLE_MARKER_SUFFIX } from './services/workspace.js';
+import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
 import { getModelSource } from './services/model-registry.js';
 import type { LoadedModel } from './types/model-types.js';
-import { createLspClientService, type LspClientService } from './services/lsp-client.js';
-import { createTransportProvider, type TransportState } from './services/transport-provider.js';
-import { getLspSessionId } from './services/lsp-session.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
-import { config, studioConfig } from './config.js';
+import { studioConfig } from './config.js';
 import * as persistence from './workspace/persistence.js';
 import type { CuratedModelBinding, WorkspaceRecord } from './workspace/persistence.js';
 import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
@@ -33,7 +30,7 @@ import { StudioToastProvider, useStudioToast } from './components/StudioToastPro
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
 import { ActivityBar } from './shell/ActivityBar.js';
 import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
-import { WorkspaceActionsContext } from './shell/perspectives/workspace-actions-context.js';
+import { StudioProviders } from './shell/providers/StudioProviders.js';
 import { usePerspectiveStore } from './store/perspective-store.js';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
@@ -132,10 +129,6 @@ function AppContent() {
   const [loading, setLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
-  const [transportState, setTransportState] = useState<TransportState>({
-    mode: 'disconnected',
-    status: 'disconnected'
-  });
   const [bootState, setBootState] = useState<BootState>('checking');
   const [restoredWorkspace, setRestoredWorkspace] = useState<WorkspaceRecord | null>(null);
   // Tracks the workspace.id for which the in-memory model-store has settled
@@ -151,8 +144,6 @@ function AppContent() {
   // see stale values.
   const [curatedSyncedWorkspaceId, setCuratedSyncedWorkspaceId] = useState<string | null>(null);
 
-  const lspClientRef = useRef<LspClientService | null>(null);
-  const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspaceManagerRef = useRef<WorkspaceManager | null>(null);
   // Incremented before each model-merge parse; only the matching result is
@@ -229,11 +220,9 @@ function AppContent() {
           mergedFiles = mergeModelFiles(mergedFiles, model);
         }
         setFiles(mergedFiles);
-        // 019: filter synthetic bundle-marker files so the LSP doesn't receive
-        // placeholder entries with empty content (bundle content arrives via /api/parse).
-        lspClientRef.current?.syncWorkspaceFiles(
-          mergedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly)
-        );
+        // LSP doc-set sync is owned by LspProvider, which re-syncs on the
+        // `files` state it reads from useWorkspace() (filtering bundle-marker
+        // and ref-only files). App only sets the files here.
 
         const result = await parseWorkspaceFiles(mergedFiles);
         applyParseResult(result);
@@ -546,41 +535,9 @@ function AppContent() {
     };
   }, []);
 
-  // Initialise LSP on mount
-  useEffect(() => {
-    if (!config.lspEnabled) {
-      setTransportState({
-        mode: 'disconnected',
-        status: 'disconnected'
-      });
-      providerRef.current = null;
-      lspClientRef.current = null;
-      return undefined;
-    }
-
-    // Tag the LSP Durable Object with a per-tab session id so multi-tenancy
-    // works (without this, every studio tab/user routed to the same DO and
-    // shared its docs:<uri> state).
-    const provider = createTransportProvider({ workspaceId: getLspSessionId() });
-    providerRef.current = provider;
-
-    const unsub = provider.onStateChange((state) => {
-      setTransportState(state);
-    });
-
-    const client = createLspClientService({ transportProvider: provider });
-    lspClientRef.current = client;
-
-    client.connect().catch((err) => {
-      console.error('[App] LSP connect failed:', err);
-    });
-
-    return () => {
-      unsub();
-      client.dispose();
-      provider.dispose();
-    };
-  }, []);
+  // LSP transport/client lifecycle is owned by LspProvider (mounted by
+  // StudioProviders). It connects once on mount, re-syncs the doc-set on
+  // useWorkspace().files changes, and exposes reconnect via useLsp().
 
   const handleFilesLoaded = useCallback(
     async (loadedFiles: WorkspaceFile[], targetWorkspaceId?: string) => {
@@ -620,9 +577,7 @@ function AppContent() {
   const handleFilesChange = useCallback(
     (updatedFiles: WorkspaceFile[]) => {
       setFiles(updatedFiles);
-      lspClientRef.current?.syncWorkspaceFiles(
-        updatedFiles.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly)
-      );
+      // LSP doc-set sync runs in LspProvider on the `files` change it observes.
 
       if (restoredWorkspace) {
         void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles).catch((err) => {
@@ -643,14 +598,6 @@ function AppContent() {
     },
     [applyParseResult, reportWorkspaceError, restoredWorkspace]
   );
-
-  const handleReconnect = useCallback(async () => {
-    try {
-      await lspClientRef.current?.reconnect();
-    } catch (err) {
-      console.error('[App] LSP reconnect failed:', err);
-    }
-  }, []);
 
   const handleReset = useCallback(() => {
     if (restoredWorkspace) {
@@ -873,11 +820,7 @@ function AppContent() {
       merged = mergeModelFiles(merged, model);
     }
     setFiles(merged);
-    // 019: filter synthetic bundle-marker files so the LSP doesn't receive
-    // placeholder entries with empty content (bundle content arrives via /api/parse).
-    lspClientRef.current?.syncWorkspaceFiles(
-      merged.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly)
-    );
+    // LSP doc-set sync runs in LspProvider on the `files` change it observes.
     modelParseTokenRef.current += 1;
     const token = modelParseTokenRef.current;
     parseWorkspaceFiles(merged)
@@ -912,7 +855,12 @@ function AppContent() {
       onGitHubWorkspaceCreated: handleGitHubWorkspaceCreated,
       onOpenWorkspace: handleSwitchWorkspace,
       onCreateWorkspace: handleCreateWorkspace,
-      onDeleteWorkspace: handleDeleteWorkspace
+      onDeleteWorkspace: handleDeleteWorkspace,
+      // EditorPage-facing actions (formerly EditorPage props), now sourced
+      // from context so App no longer threads them through <EditorPage>.
+      onFilesChange: handleFilesChange,
+      onClose: handleReset,
+      onSwitchWorkspace: handleSwitchWorkspace
     }),
     [
       files,
@@ -921,12 +869,30 @@ function AppContent() {
       handleGitHubWorkspaceCreated,
       handleSwitchWorkspace,
       handleCreateWorkspace,
-      handleDeleteWorkspace
+      handleDeleteWorkspace,
+      handleFilesChange,
+      handleReset
     ]
   );
 
+  // WorkspaceState published to WorkspaceProvider — the current-model data
+  // EditorPage and the Lsp/Codegen providers read via useWorkspace().
+  const workspaceStateValue = useMemo(
+    () => ({
+      workspaceId: restoredWorkspace?.id,
+      workspaceKind: restoredWorkspace?.kind,
+      workspaceName: restoredWorkspace?.name,
+      fileCount: files.filter((f) => !f.readOnly).length,
+      files,
+      models,
+      parsedModels,
+      deferredExports
+    }),
+    [restoredWorkspace, files, models, parsedModels, deferredExports]
+  );
+
   return (
-    <WorkspaceActionsContext.Provider value={workspaceActionsValue}>
+    <StudioProviders state={workspaceStateValue} actions={workspaceActionsValue}>
       <div className="studio-app flex flex-col h-full text-foreground bg-background">
         {/* Screen-reader + test accessible file count — always in DOM so the
          * App-restore test can confirm file loading without EditorPage mounted. */}
@@ -985,48 +951,15 @@ function AppContent() {
             </div>
           )}
 
-          {bootState === 'start' && !loading && userFiles.length > 0 && (
-            <EditorPage
-              models={models}
-              parsedModels={parsedModels}
-              deferredExports={deferredExports}
-              files={files}
-              onFilesChange={handleFilesChange}
-              lspClient={lspClientRef.current ?? undefined}
-              transportState={transportState}
-              onReconnect={handleReconnect}
-              workspaceId={restoredWorkspace?.id ?? 'default'}
-              workspaceKind={restoredWorkspace?.kind}
-              workspaceName={restoredWorkspace?.name}
-              fileCount={userFiles.length}
-              onClose={handleReset}
-              onSwitchWorkspace={handleSwitchWorkspace}
-              onCreateWorkspace={handleCreateWorkspace}
-            />
-          )}
+          {/* EditorPage sources its workspace data from useWorkspace(), its
+           * LSP handles from useLsp(), and its workspace actions from
+           * useWorkspaceActions() — all provided by StudioProviders. */}
+          {bootState === 'start' && !loading && userFiles.length > 0 && <EditorPage />}
 
-          {bootState === 'restored' && userFiles.length > 0 && (
-            <EditorPage
-              models={models}
-              parsedModels={parsedModels}
-              deferredExports={deferredExports}
-              files={files}
-              onFilesChange={handleFilesChange}
-              lspClient={lspClientRef.current ?? undefined}
-              transportState={transportState}
-              onReconnect={handleReconnect}
-              workspaceId={restoredWorkspace?.id ?? 'default'}
-              workspaceKind={restoredWorkspace?.kind}
-              workspaceName={restoredWorkspace?.name}
-              fileCount={userFiles.length}
-              onClose={handleReset}
-              onSwitchWorkspace={handleSwitchWorkspace}
-              onCreateWorkspace={handleCreateWorkspace}
-            />
-          )}
+          {bootState === 'restored' && userFiles.length > 0 && <EditorPage />}
         </main>
       </div>
-    </WorkspaceActionsContext.Provider>
+    </StudioProviders>
   );
 }
 

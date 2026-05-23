@@ -57,7 +57,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         reason: 'generation-error',
         message: `${baseMessage} ${detail}`.trim()
       });
-      console.error(`[EditorPage] ${baseMessage}`, error);
+      console.error(`[CodegenProvider] ${baseMessage}`, error);
     },
     [receivePreviewStale]
   );
@@ -186,7 +186,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
   // ---------------------------------------------------------------------------
   // Codegen preview — single worker owner (Codex P2 fix).
   //
-  // EditorPage is the sole owner of the codegen:generate request/response cycle.
+  // CodegenProvider is the sole owner of the codegen:generate request/response cycle.
   // CodePreviewPanel and ExportPerspective are pure-display consumers of
   // useCodegenStore. This prevents double-subscription when both surfaces are
   // simultaneously mounted (Explore dock keep-alive + Export perspective).
@@ -223,7 +223,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
     }
 
     function handleCodegenWorkerError(event: ErrorEvent) {
-      console.error('[EditorPage] Codegen worker error (codegen:generate):', event.message, event.error);
+      console.error('[CodegenProvider] Codegen worker error (codegen:generate):', event.message, event.error);
       const store = useCodegenStore.getState();
       store.markCodePreviewUnavailable({
         target: store.codePreviewTarget,
@@ -250,7 +250,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
     try {
       codegenWorker.postMessage({ type: 'codegen:generate', target: codegenPreviewTarget, requestId });
     } catch (err) {
-      console.error('[EditorPage] Failed to request code generation:', err);
+      console.error('[CodegenProvider] Failed to request code generation:', err);
       useCodegenStore.getState().markCodePreviewUnavailable({
         target: codegenPreviewTarget,
         message: 'Code preview worker is unavailable.'

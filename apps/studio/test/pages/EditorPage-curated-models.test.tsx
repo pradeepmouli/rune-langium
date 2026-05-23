@@ -15,7 +15,7 @@
 
 import React, { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, cleanup, screen, fireEvent } from '@testing-library/react';
+import { cleanup, screen, fireEvent } from '@testing-library/react';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 import { closeDialogViaEscape } from '../helpers/radix-dialog.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
@@ -134,7 +134,7 @@ vi.mock('../../src/components/StudioToastProvider.js', () => ({
   useStudioToast: () => ({ showToast: vi.fn() })
 }));
 
-import { EditorPage } from '../../src/pages/EditorPage.js';
+import { renderEditorPage } from './editor-page-harness.js';
 
 describe('EditorPage — Curated Models button wiring', () => {
   beforeEach(() => {
@@ -157,12 +157,10 @@ describe('EditorPage — Curated Models button wiring', () => {
   });
 
   it('does not render the curated models dialog on mount', () => {
-    render(
-      <EditorPage
-        models={[]}
-        files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}
-      />
-    );
+    renderEditorPage({
+      models: [],
+      files: [{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]
+    });
     expect(screen.queryByTestId('curated-models-dialog')).not.toBeInTheDocument();
     expect(screen.queryByTestId('model-loader')).not.toBeInTheDocument();
   });
@@ -171,12 +169,10 @@ describe('EditorPage — Curated Models button wiring', () => {
   // re-homed into the WorkspacesPerspective panel. The ActivityBar Database
   // button was removed in Task 3; `showCuratedModels` state stays in EditorPage.
   it.skip('opens a dialog containing ModelLoader when the ActivityBar Curated Models button is clicked', () => {
-    render(
-      <EditorPage
-        models={[]}
-        files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}
-      />
-    );
+    renderEditorPage({
+      models: [],
+      files: [{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]
+    });
 
     fireEvent.click(screen.getByRole('button', { name: /curated models/i }));
 
@@ -198,12 +194,10 @@ describe('EditorPage — Curated Models button wiring', () => {
 
   // TODO(T6/WorkspacesPerspective): restore alongside the open test above.
   it.skip('closes the curated models dialog when the user presses Esc', async () => {
-    render(
-      <EditorPage
-        models={[]}
-        files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}
-      />
-    );
+    renderEditorPage({
+      models: [],
+      files: [{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]
+    });
 
     fireEvent.click(screen.getByRole('button', { name: /curated models/i }));
     expect(screen.getByTestId('curated-models-dialog')).toBeInTheDocument();

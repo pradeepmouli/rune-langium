@@ -33,10 +33,17 @@ vi.mock('../../src/components/ModelLoader.js', () => ({
   ModelLoader: () => null
 }));
 
-vi.mock('../../src/pages/EditorPage.js', () => ({
-  EditorPage: ({ fileCount }: { fileCount?: number }) =>
-    fileCount != null ? <span data-testid="editor-mounted">{fileCount} file(s)</span> : null
-}));
+// EditorPage now reads workspace data from context (useWorkspace), not props.
+// The mock mirrors that so the editor-mounted assertion keeps working.
+vi.mock('../../src/pages/EditorPage.js', async () => {
+  const { useWorkspace } = await import('../../src/shell/providers/workspace-context.js');
+  return {
+    EditorPage: () => {
+      const { fileCount } = useWorkspace();
+      return fileCount != null ? <span data-testid="editor-mounted">{fileCount} file(s)</span> : null;
+    }
+  };
+});
 
 vi.mock('../../src/store/model-store.js', () => ({
   useModelStore: Object.assign(() => new Map(), {

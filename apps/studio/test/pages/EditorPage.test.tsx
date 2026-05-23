@@ -3,7 +3,7 @@
 
 import React, { useEffect, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, cleanup, waitFor, screen, act, fireEvent } from '@testing-library/react';
+import { cleanup, waitFor, screen, act, fireEvent } from '@testing-library/react';
 import { usePreviewStore } from '../../src/store/preview-store.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
@@ -424,7 +424,7 @@ vi.mock('../../src/utils/uri.js', () => ({
   pathToUri: (path: string) => `file://${path}`
 }));
 
-import { EditorPage } from '../../src/pages/EditorPage.js';
+import { renderEditorPage } from './editor-page-harness.js';
 
 function modelWithType(typeName: string) {
   return {
@@ -501,12 +501,10 @@ describe('EditorPage preview target identity', () => {
     ];
     editorStoreState.selectedNodeId = 'beta-trade';
 
-    const _view = render(
-      <EditorPage
-        models={[]}
-        files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace beta', dirty: false }]}
-      />
-    );
+    const _view = renderEditorPage({
+      models: [],
+      files: [{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace beta', dirty: false }]
+    });
 
     await waitFor(() => {
       expect(MockWorker.instances).toHaveLength(1);
@@ -531,19 +529,17 @@ describe('EditorPage preview target identity', () => {
     ];
     editorStoreState.selectedNodeId = 'preview.alpha::Trade';
 
-    const { rerender } = render(
-      <EditorPage
-        models={[modelWithType('Trade') as never]}
-        files={[
+    const { rerenderEditorPage } = renderEditorPage({
+      models: [modelWithType('Trade') as never],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       expect(MockWorker.instances).toHaveLength(1);
@@ -557,19 +553,17 @@ describe('EditorPage preview target identity', () => {
     });
 
     editorStoreState.nodes = [];
-    rerender(
-      <EditorPage
-        models={[]}
-        files={[
+    rerenderEditorPage({
+      models: [],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha',
             dirty: true
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     editorStoreState.nodes = [
       {
@@ -577,19 +571,17 @@ describe('EditorPage preview target identity', () => {
         data: { namespace: 'preview.alpha', name: 'RenamedTrade', $type: 'data' }
       }
     ];
-    rerender(
-      <EditorPage
-        models={[modelWithType('RenamedTrade') as never]}
-        files={[
+    rerenderEditorPage({
+      models: [modelWithType('RenamedTrade') as never],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha',
             dirty: true
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       expect(usePreviewStore.getState().selectedTargetId).toBe('preview.alpha.RenamedTrade');
@@ -612,19 +604,17 @@ describe('EditorPage preview target identity', () => {
     ];
     editorStoreState.selectedNodeId = 'preview.alpha::Trade';
 
-    const { rerender } = render(
-      <EditorPage
-        models={[modelWithType('Trade') as never]}
-        files={[
+    const { rerenderEditorPage } = renderEditorPage({
+      models: [modelWithType('Trade') as never],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       expect(MockWorker.instances).toHaveLength(1);
@@ -640,19 +630,17 @@ describe('EditorPage preview target identity', () => {
       ([message]) => (message as { type?: string }).type === 'preview:setFiles'
     ).length;
 
-    rerender(
-      <EditorPage
-        models={[modelWithType('Trade') as never]}
-        files={[
+    rerenderEditorPage({
+      models: [modelWithType('Trade') as never],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha\n\ntype Trade:\n  settlementDate string (0..1)',
             dirty: true
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       const refreshedSetFilesCount = worker.postMessage.mock.calls.filter(
@@ -688,19 +676,17 @@ describe('EditorPage preview target identity', () => {
     ];
     editorStoreState.selectedNodeId = 'preview.alpha::Trade';
 
-    const { rerender } = render(
-      <EditorPage
-        models={[modelWithType('Trade') as never]}
-        files={[
+    const { rerenderEditorPage } = renderEditorPage({
+      models: [modelWithType('Trade') as never],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       expect(MockWorker.instances).toHaveLength(1);
@@ -711,19 +697,17 @@ describe('EditorPage preview target identity', () => {
       .map(([message]) => message as { type?: string; requestId?: string })
       .find((message) => message.type === 'preview:generate')?.requestId;
 
-    rerender(
-      <EditorPage
-        models={[modelWithType('Trade') as never]}
-        files={[
+    rerenderEditorPage({
+      models: [modelWithType('Trade') as never],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha\n\ntype Trade:\n  settlementDate string (0..1)',
             dirty: true
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     const latestRequestId = worker.postMessage.mock.calls
       .map(([message]) => message as { type?: string; requestId?: string })
@@ -783,20 +767,18 @@ describe('EditorPage preview target identity', () => {
       elements: [{ name: 'Trade' }]
     };
 
-    render(
-      <EditorPage
-        models={[parsedModel as never]}
-        parsedModels={[{ filePath: '/preview-alpha.rosetta', model: parsedModel as never }]}
-        files={[
+    renderEditorPage({
+      models: [parsedModel as never],
+      parsedModels: [{ filePath: '/preview-alpha.rosetta', model: parsedModel as never }],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: '/preview-alpha.rosetta',
             content: 'namespace preview.alpha',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       expect(usePreviewStore.getState().selectedTarget).toMatchObject({
@@ -816,19 +798,17 @@ describe('EditorPage preview target identity', () => {
     ];
     editorStoreState.selectedNodeId = 'preview.alpha::Trade';
 
-    render(
-      <EditorPage
-        models={[modelWithType('Trade') as never]}
-        files={[
+    renderEditorPage({
+      models: [modelWithType('Trade') as never],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       expect(MockWorker.instances).toHaveLength(1);
@@ -877,19 +857,17 @@ describe('EditorPage preview target identity', () => {
     ];
     editorStoreState.selectedNodeId = 'preview.alpha::Trade';
 
-    render(
-      <EditorPage
-        models={[modelWithType('Trade') as never]}
-        files={[
+    renderEditorPage({
+      models: [modelWithType('Trade') as never],
+      files: [
           {
             name: 'preview-alpha.rosetta',
             path: 'preview-alpha.rosetta',
             content: 'namespace preview.alpha',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       expect(MockWorker.instances).toHaveLength(1);
@@ -914,7 +892,10 @@ describe('EditorPage preview target identity', () => {
       }
     }));
 
-    render(<EditorPage models={[]} files={[]} />);
+    renderEditorPage({
+      models: [],
+      files: []
+    });
 
     await waitFor(() => {
       expect(usePreviewStore.getState().status).toEqual({
@@ -934,10 +915,9 @@ describe('EditorPage preview target identity', () => {
       })
     };
 
-    const _view = render(
-      <EditorPage
-        models={[]}
-        files={[
+    const _view = renderEditorPage({
+      models: [],
+      files: [
           {
             path: '/workspace/alpha.rosetta',
             name: 'alpha.rosetta',
@@ -950,10 +930,9 @@ describe('EditorPage preview target identity', () => {
             content: 'namespace beta',
             dirty: false
           }
-        ]}
-        lspClient={lspClient as never}
-      />
-    );
+        ],
+      lspClient: lspClient as never
+    });
 
     await waitFor(() => {
       expect(displayFileHandler).toBeDefined();
@@ -1002,14 +981,12 @@ describe('EditorPage workspace chrome', () => {
   });
 
   it('renders a workspace header and keeps graph controls inside the graph panel', () => {
-    const _view = render(
-      <EditorPage
-        models={[]}
-        files={[{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]}
-        workspaceName="CDM Workspace"
-        onClose={vi.fn()}
-      />
-    );
+    const _view = renderEditorPage({
+      models: [],
+      files: [{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }],
+      workspaceName: "CDM Workspace",
+      onClose: vi.fn()
+    });
 
     expect(screen.getByLabelText('Studio workspace header')).toBeInTheDocument();
     expect(screen.getByText('Rune Studio')).toBeInTheDocument();
@@ -1033,19 +1010,17 @@ describe('EditorPage workspace chrome', () => {
     ];
     editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
 
-    render(
-      <EditorPage
-        models={[]}
-        files={[
+    renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       expect(dockShellMockState.latestProps?.focusPanel).toEqual({
@@ -1063,19 +1038,17 @@ describe('EditorPage workspace chrome', () => {
       }
     ];
 
-    render(
-      <EditorPage
-        models={[]}
-        files={[
+    renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     act(() => {
       runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::GhostType');
@@ -1097,19 +1070,17 @@ describe('EditorPage workspace chrome', () => {
       }
     ];
 
-    render(
-      <EditorPage
-        models={[]}
-        files={[
+    renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     act(() => {
       namespaceExplorerMockState.latestProps?.onSelectNode?.('cdm.base.datetime::AdjustableDate');
@@ -1132,19 +1103,17 @@ describe('EditorPage workspace chrome', () => {
       }
     ];
 
-    render(
-      <EditorPage
-        models={[]}
-        files={[
+    renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     act(() => {
       runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::Standalone');
@@ -1172,19 +1141,17 @@ describe('EditorPage workspace chrome', () => {
     ];
     editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
 
-    render(
-      <EditorPage
-        models={[]}
-        files={[
+    renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     act(() => {
       runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::BusinessCenter');
@@ -1212,19 +1179,17 @@ describe('EditorPage workspace chrome', () => {
     ];
     editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
 
-    const view = render(
-      <EditorPage
-        models={[]}
-        files={[
+    const view = renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     act(() => {
       runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::BusinessCenter');
@@ -1236,19 +1201,17 @@ describe('EditorPage workspace chrome', () => {
         data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }
       }
     ];
-    view.rerender(
-      <EditorPage
-        models={[]}
-        files={[
+    view.rerenderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     fireEvent.keyDown(screen.getByTestId('editor-page'), { key: 'ArrowLeft', altKey: true });
 
@@ -1260,19 +1223,17 @@ describe('EditorPage workspace chrome', () => {
   });
 
   it('updates graph config direction when responsive relayout flips orientation', async () => {
-    render(
-      <EditorPage
-        models={[]}
-        files={[
+    renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     expect(runeTypeGraphMockState.latestConfig?.layout?.direction).toBe('LR');
 
@@ -1291,19 +1252,17 @@ describe('EditorPage workspace chrome', () => {
   });
 
   it('updates graph config direction when the window resize makes the graph pane tall', async () => {
-    render(
-      <EditorPage
-        models={[]}
-        files={[
+    renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     expect(runeTypeGraphMockState.latestConfig?.layout?.direction).toBe('LR');
 
@@ -1324,19 +1283,17 @@ describe('EditorPage workspace chrome', () => {
   });
 
   it('fits the graph view when the graph pane resizes without changing orientation', async () => {
-    render(
-      <EditorPage
-        models={[]}
-        files={[
+    renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     const graphCanvas = document.querySelector('.studio-graph-canvas') as HTMLDivElement | null;
     expect(graphCanvas).not.toBeNull();
@@ -1356,19 +1313,17 @@ describe('EditorPage workspace chrome', () => {
   });
 
   it('re-runs responsive relayout when a node becomes selected', async () => {
-    const { rerender } = render(
-      <EditorPage
-        models={[]}
-        files={[
+    const { rerenderEditorPage } = renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     const graphCanvas = document.querySelector('.studio-graph-canvas') as HTMLDivElement | null;
     expect(graphCanvas).not.toBeNull();
@@ -1394,19 +1349,17 @@ describe('EditorPage workspace chrome', () => {
     ];
     editorStoreState.selectedNodeId = 'cdm.base.datetime::BusinessCenter';
 
-    rerender(
-      <EditorPage
-        models={[]}
-        files={[
+    rerenderEditorPage({
+      models: [],
+      files: [
           {
             name: 'base-datetime-type.rosetta',
             path: 'base-datetime-type.rosetta',
             content: 'namespace cdm.base.datetime',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     await waitFor(() => {
       expect(runeTypeGraphMockState.relayout).toHaveBeenCalledWith({
@@ -1472,19 +1425,17 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
   it('passes cellComponents with NameCell, TypePickerCell, and CardinalityCell to StructureView', () => {
     // The CenterStackPanel mock (above) renders the structure pane unconditionally,
     // so StructureView renders immediately without needing to activate the pane.
-    render(
-      <EditorPage
-        models={[]}
-        files={[
+    renderEditorPage({
+      models: [],
+      files: [
           {
             name: 'trade.rosetta',
             path: 'trade.rosetta',
             content: 'namespace alpha',
             dirty: false
           }
-        ]}
-      />
-    );
+        ]
+    });
 
     expect(screen.getByTestId('structure-view-mock')).toBeInTheDocument();
 

@@ -91,33 +91,23 @@ import { ActivityBar } from '../shell/ActivityBar.js';
 import { PerspectiveHost } from '../shell/perspectives/PerspectiveHost.js';
 import { usePerspectiveStore } from '../store/perspective-store.js';
 import type { WorkspaceFile } from '../services/workspace.js';
-import { linkDocument, BUNDLE_MARKER_SUFFIX } from '../services/workspace.js';
-import type { LspClientService } from '../services/lsp-client.js';
-import type { TransportState } from '../services/transport-provider.js';
+import { linkDocument } from '../services/workspace.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
-import type { SourceEditorHandle, CodegenWorkerMessage } from '../components/CodePreviewPanel.js';
+import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
 import { FontScaleButton } from '../components/FontScaleButton.js';
 import { pathToUri } from '../utils/uri.js';
 import { mergeSerializedIntoSource } from '../utils/source-merge.js';
-import type { ParsedWorkspaceModel } from '../services/workspace.js';
 import { subscribeToEngine, resolveConflict } from '../services/git-sync.js';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
-import type { WorkspaceKind } from '../workspace/persistence.js';
-import {
-  createPreviewGenerateMessage,
-  createPreviewSetFilesMessage,
-  isPreviewWorkerMessage,
-  isPreviewExecuteResultMessage,
-  isPreviewExecuteErrorMessage
-} from '../services/codegen-service.js';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
-import { useCodegenStore } from '../store/codegen-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from '../shell/panels/FormPreviewPanel.js';
 import { CenterStackPanel } from '../shell/panels/CenterStackPanel.js';
 import '../test-api.js';
-import { getRuneStudioTestApi } from '../test-api.js';
+import { useWorkspace } from '../shell/providers/workspace-context.js';
+import { useLsp } from '../shell/providers/lsp-context.js';
+import { useWorkspaceActions } from '../shell/perspectives/workspace-actions-context.js';
 
 type DeferredExportEntry = {
   filePath: string;
@@ -246,40 +236,13 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
   return { namespaces, nodes: adapterNodes };
 }
 
-export interface EditorPageProps {
-  models: RosettaModel[];
-  parsedModels?: ParsedWorkspaceModel[];
-  deferredExports?: DeferredExportEntry[];
-  files: WorkspaceFile[];
-  onFilesChange?: (files: WorkspaceFile[]) => void;
-  lspClient?: LspClientService;
-  transportState?: TransportState;
-  onReconnect?: () => void;
-  /** Workspace id used for layout persistence keying. */
-  workspaceId?: string;
-  /** Workspace kind — controls git-sync badge visibility. */
-  workspaceKind?: WorkspaceKind;
-  /** Studio build version threaded into layout migrations. */
-  studioVersion?: string;
-  /** Workspace display name shown in the toolbar. */
-  workspaceName?: string;
-  /** Number of user files open in this workspace — displayed in the toolbar. */
-  fileCount?: number;
-  /** Called when the user wants to close the current workspace. */
-  onClose?: () => void;
-  /**
-   * Called when the user picks a different workspace from the topbar
-   * dropdown (replaces "close + go to loader + click recent" with one
-   * click). When omitted, the dropdown's "Switch to…" section is hidden
-   * and only the close action remains.
-   */
-  onSwitchWorkspace?: (workspaceId: string) => void;
-  /**
-   * Called when the user picks "New workspace" from the topbar dropdown.
-   * When omitted, the menu item is hidden.
-   */
-  onCreateWorkspace?: () => void;
-}
+/**
+ * EditorPage now sources every former prop from context — workspace data from
+ * {@link useWorkspace}, LSP handles from {@link useLsp}, and workspace actions
+ * from {@link useWorkspaceActions} (all supplied by StudioProviders). It takes
+ * no props; the studio build version stays a module constant.
+ */
+const STUDIO_VERSION = '0.1.0';
 
 const DECL_KEYWORDS = /^(type|enum|func|choice|annotation|metaType|typeAlias|library\s+function|reporting\s+rule)\s+/;
 
@@ -361,7 +324,7 @@ function FileTabStrip({
   activeFile,
   onSelectFile
 }: {
-  files: WorkspaceFile[];
+  files: readonly WorkspaceFile[];
   activeFile: string | undefined;
   onSelectFile: (path: string) => void;
 }) {
@@ -389,28 +352,28 @@ function FileTabStrip({
   );
 }
 
-export function EditorPage({
-  models,
-  parsedModels,
-  deferredExports = EMPTY_DEFERRED_EXPORTS as DeferredExportEntry[],
-  files,
-  onFilesChange,
-  lspClient,
-  transportState,
-  onReconnect,
-  workspaceId = 'default',
-  workspaceKind,
-  studioVersion = '0.1.0',
-  workspaceName,
-  fileCount,
-  onClose,
-  onSwitchWorkspace,
-  onCreateWorkspace
-}: EditorPageProps) {
+export function EditorPage() {
+  // Workspace model data — formerly props, now from WorkspaceProvider.
+  const workspace = useWorkspace();
+  const { models, parsedModels, files } = workspace;
+  const deferredExports = (workspace.deferredExports ?? EMPTY_DEFERRED_EXPORTS) as DeferredExportEntry[];
+  const workspaceId = workspace.workspaceId ?? 'default';
+  const workspaceKind = workspace.workspaceKind;
+  const workspaceName = workspace.workspaceName;
+  const fileCount = workspace.fileCount;
+  const studioVersion = STUDIO_VERSION;
+
+  // LSP handles — formerly props, now from LspProvider.
+  const { lspClient: lspClientValue, transportState, reconnect } = useLsp();
+  const lspClient = lspClientValue ?? undefined;
+  const onReconnect = reconnect;
+
+  // Workspace actions — formerly props, now from the actions context.
+  const { onFilesChange, onClose, onSwitchWorkspace, onCreateWorkspace } = useWorkspaceActions();
+
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
-  const [codegenWorker, setCodegenWorker] = useState<Worker | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   // Curated Models modal — wired from the ActivityBar's Database button.
   // The Welcome screen renders <ModelLoader /> inline; inside EditorPage we
@@ -450,9 +413,6 @@ export function EditorPage({
   // Accumulates corpus models returned by linkDocument so they can be merged into
   // the graph. Reset when a new workspace is loaded (models prop changes).
   const corpusModelsRef = useRef<RosettaModel[]>([]);
-  const previewRequestSequenceRef = useRef(0);
-  const codegenRequestSequenceRef = useRef(0);
-  const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const navigationHistoryRef = useRef<string[]>([]);
   const { showToast } = useStudioToast();
   const pendingDisplayFileRef = useRef<Map<string, (view: import('@codemirror/view').EditorView | null) => void>>(
@@ -563,11 +523,6 @@ export function EditorPage({
   const dragSource = useStructureViewStore((s) => s.dragSource);
   const setDragSource = useStructureViewStore((s) => s.setDragSource);
   const clearDragSource = useStructureViewStore((s) => s.clearDragSource);
-  const receivePreviewResult = usePreviewStore((s) => s.receivePreviewResult);
-  const receivePreviewStale = usePreviewStore((s) => s.receivePreviewStale);
-  const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
-  const receiveExecutionError = usePreviewStore((s) => s.receiveExecutionError);
-  const setWorkerRef = usePreviewStore((s) => s.setWorkerRef);
   const updateGraphLayoutDirection = useCallback((nextDirection: Extract<LayoutDirection, 'LR' | 'TB'>) => {
     graphLayoutDirectionRef.current = nextDirection;
     setGraphLayoutDirection((prev) => (prev === nextDirection ? prev : nextDirection));
@@ -860,226 +815,6 @@ export function EditorPage({
       return preferredFile.path;
     });
   }, [files]);
-
-  const handlePreviewWorkerFailure = useCallback(
-    (baseMessage: string, error: unknown, targetId?: string) => {
-      const detail =
-        error instanceof Error
-          ? error.message
-          : typeof error === 'object' && error && 'type' in error && error.type === 'messageerror'
-            ? 'A preview worker message could not be deserialized.'
-            : typeof error === 'object' && error && 'message' in error && typeof error.message === 'string'
-              ? error.message
-              : 'Reload Studio to restore form preview.';
-      receivePreviewStale({
-        targetId,
-        reason: 'generation-error',
-        message: `${baseMessage} ${detail}`.trim()
-      });
-      console.error(`[EditorPage] ${baseMessage}`, error);
-    },
-    [receivePreviewStale]
-  );
-
-  // Initialise dedicated codegen worker once on mount.
-  useEffect(() => {
-    let worker: Worker | null = null;
-    try {
-      worker =
-        getRuneStudioTestApi()?.createCodegenWorker?.() ??
-        new Worker(new URL('../workers/codegen-worker.ts', import.meta.url), {
-          type: 'module'
-        });
-      setCodegenWorker(worker);
-    } catch (error) {
-      setCodegenWorker(null);
-      handlePreviewWorkerFailure('Preview worker could not start.', error);
-      return;
-    }
-    return () => {
-      worker?.terminate();
-      setCodegenWorker(null);
-    };
-  }, [handlePreviewWorkerFailure]);
-
-  // Sync worker file state whenever the workspace changes.
-  // codegen:setFiles uses only user-authored files (readOnly corpus files are
-  // not the target of local code generation).
-  // preview:setFiles includes ALL files so that corpus types (readOnly) can
-  // be form-previewed — the worker only parses with eagerLinking:false so the
-  // 186-file corpus costs one parse pass, not cross-reference resolution.
-  useEffect(() => {
-    if (!codegenWorker) return;
-    const codegenFiles = files.filter((f) => !f.readOnly).map((f) => ({ uri: pathToUri(f.path), content: f.content }));
-    // 019 Task #88 follow-up: thread `serializedModelJson` through to
-    // the preview worker so curated bundle files (which ship pre-parsed
-    // ASTs and an empty `content`) can be hydrated and previewed.
-    const allFiles = files
-      .filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX))
-      .map((f) => ({
-        uri: pathToUri(f.path),
-        content: f.content,
-        ...(f.serializedModelJson ? { serializedModelJson: f.serializedModelJson } : {})
-      }));
-    const previewRequestId = `preview:files:${++previewRequestSequenceRef.current}`;
-    const codegenRequestId = `codegen:files:${++codegenRequestSequenceRef.current}`;
-    currentPreviewRequestIdRef.current = previewRequestId;
-    try {
-      codegenWorker.postMessage({
-        type: 'codegen:setFiles',
-        files: codegenFiles,
-        requestId: codegenRequestId
-      });
-      codegenWorker.postMessage(createPreviewSetFilesMessage(allFiles, previewRequestId));
-    } catch (error) {
-      handlePreviewWorkerFailure('Preview worker could not process updated files.', error);
-    }
-  }, [codegenWorker, files, handlePreviewWorkerFailure]);
-
-  // Trigger form preview whenever the selected target changes. Files are
-  // already current from the effect above; this effect only updates the target.
-  useEffect(() => {
-    if (!codegenWorker || !previewSelectedTargetId) return;
-    const requestId = `preview:${previewSelectedTargetId}:${++previewRequestSequenceRef.current}`;
-    currentPreviewRequestIdRef.current = requestId;
-    try {
-      codegenWorker.postMessage(createPreviewGenerateMessage(previewSelectedTargetId, requestId));
-    } catch (error) {
-      handlePreviewWorkerFailure(
-        'Preview worker could not start generation for the selected type.',
-        error,
-        previewSelectedTargetId
-      );
-    }
-  }, [codegenWorker, handlePreviewWorkerFailure, previewSelectedTargetId]);
-
-  useEffect(() => {
-    if (!codegenWorker) return;
-    setWorkerRef(codegenWorker);
-    function handleMessage(e: MessageEvent<unknown>) {
-      const msg = e.data;
-      if (isPreviewExecuteResultMessage(msg)) {
-        receiveExecutionResult(msg.funcName, msg.output);
-        return;
-      }
-      if (isPreviewExecuteErrorMessage(msg)) {
-        receiveExecutionError(msg.funcName, msg.error);
-        return;
-      }
-      // Preview messages below — execution messages above bypass stale-check
-      // since they carry their own funcName-based keying
-      if (!isPreviewWorkerMessage(e.data)) return;
-      if (e.data.requestId !== currentPreviewRequestIdRef.current) {
-        return;
-      }
-      if (e.data.type === 'preview:result') {
-        receivePreviewResult(e.data.schema);
-      } else {
-        receivePreviewStale(e.data);
-      }
-    }
-    function handleWorkerFailure(event: ErrorEvent | MessageEvent<unknown>) {
-      const baseMessage =
-        event.type === 'messageerror' ? 'Preview worker rejected a message.' : 'Preview worker crashed.';
-      handlePreviewWorkerFailure(baseMessage, event, previewSelectedTargetId);
-    }
-    codegenWorker.addEventListener('message', handleMessage as EventListener);
-    codegenWorker.addEventListener('error', handleWorkerFailure as EventListener);
-    codegenWorker.addEventListener('messageerror', handleWorkerFailure as EventListener);
-    return () => {
-      codegenWorker.removeEventListener('message', handleMessage as EventListener);
-      codegenWorker.removeEventListener('error', handleWorkerFailure as EventListener);
-      codegenWorker.removeEventListener('messageerror', handleWorkerFailure as EventListener);
-    };
-  }, [
-    codegenWorker,
-    handlePreviewWorkerFailure,
-    previewSelectedTargetId,
-    receivePreviewResult,
-    receivePreviewStale,
-    receiveExecutionResult,
-    receiveExecutionError,
-    setWorkerRef
-  ]);
-
-  // ---------------------------------------------------------------------------
-  // Codegen preview — single worker owner (Codex P2 fix).
-  //
-  // EditorPage is the sole owner of the codegen:generate request/response cycle.
-  // CodePreviewPanel and ExportPerspective are pure-display consumers of
-  // useCodegenStore. This prevents double-subscription when both surfaces are
-  // simultaneously mounted (Explore dock keep-alive + Export perspective).
-  // ---------------------------------------------------------------------------
-
-  // Ref to track the currently-pending codegen request so the message handler
-  // can discard stale responses without an extra store selector call.
-  const codegenCurrentRequestIdRef = useRef<string>('');
-
-  // Effect 1: listen for codegen worker responses and dispatch into the store.
-  useEffect(() => {
-    if (!codegenWorker) return;
-
-    function handleCodegenMessage(e: MessageEvent<CodegenWorkerMessage>) {
-      const msg = e.data;
-      if (
-        msg.type !== 'codegen:result' &&
-        msg.type !== 'codegen:outdated' &&
-        msg.type !== 'codegen:error'
-      ) {
-        return; // not a codegen response — handled by preview listener above
-      }
-      if (msg.requestId !== codegenCurrentRequestIdRef.current) {
-        return; // stale response
-      }
-      const store = useCodegenStore.getState();
-      switch (msg.type) {
-        case 'codegen:result':
-          store.receiveCodePreviewResult({ target: msg.target, files: msg.files });
-          break;
-        case 'codegen:outdated':
-          store.markCodePreviewStale({ target: msg.target, message: msg.message });
-          break;
-        case 'codegen:error':
-          store.markCodePreviewUnavailable({ target: msg.target, message: msg.message });
-          break;
-      }
-    }
-
-    function handleCodegenWorkerError(event: ErrorEvent) {
-      console.error('[EditorPage] Codegen worker error (codegen:generate):', event.message, event.error);
-      const store = useCodegenStore.getState();
-      store.markCodePreviewUnavailable({
-        target: store.codePreviewTarget,
-        message: 'Code preview worker crashed — reload Studio.'
-      });
-    }
-
-    codegenWorker.addEventListener('message', handleCodegenMessage as EventListener);
-    codegenWorker.addEventListener('error', handleCodegenWorkerError as EventListener);
-    return () => {
-      codegenWorker.removeEventListener('message', handleCodegenMessage as EventListener);
-      codegenWorker.removeEventListener('error', handleCodegenWorkerError as EventListener);
-    };
-  }, [codegenWorker]);
-
-  // Effect 2: kick off code generation when the active target changes.
-  // Mirrors the removed CodePreviewPanel effect (018 Task 0.8).
-  const codegenActiveTarget = useCodegenStore((s) => s.activeTarget);
-  const codegenPreviewTarget = useCodegenStore((s) => s.codePreviewTarget);
-  useEffect(() => {
-    if (!codegenWorker || codegenActiveTarget === undefined) return;
-    const requestId = useCodegenStore.getState().beginCodePreviewRequest(codegenPreviewTarget);
-    codegenCurrentRequestIdRef.current = requestId;
-    try {
-      codegenWorker.postMessage({ type: 'codegen:generate', target: codegenPreviewTarget, requestId });
-    } catch (err) {
-      console.error('[EditorPage] Failed to request code generation:', err);
-      useCodegenStore.getState().markCodePreviewUnavailable({
-        target: codegenPreviewTarget,
-        message: 'Code preview worker is unavailable.'
-      });
-    }
-  }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget]);
 
   const handleSourceChange = useCallback(
     (path: string, content: string) => {
@@ -1519,13 +1254,13 @@ export function EditorPage({
     []
   );
 
-  // CodePreviewPanel is now a pure-display consumer of useCodegenStore.
-  // EditorPage owns the codegen worker-driving (see "Codegen preview" effects
-  // above). The panel is always mountable once the worker is ready.
-  const CodePreviewPanelMounted = useCallback(() => {
-    if (!codegenWorker) return null;
-    return <CodePreviewPanel sourceEditorRef={sourceEditorHandle} files={files} />;
-  }, [codegenWorker, files, sourceEditorHandle]);
+  // CodePreviewPanel is a pure-display consumer of useCodegenStore. The codegen
+  // worker is owned by CodegenProvider (mounted by StudioProviders), which feeds
+  // results into the store; the panel renders from that store unconditionally.
+  const CodePreviewPanelMounted = useCallback(
+    () => <CodePreviewPanel sourceEditorRef={sourceEditorHandle} files={files} />,
+    [files, sourceEditorHandle]
+  );
 
   const FormPreviewPanelMounted = useCallback(() => <FormPreviewPanelShell />, []);
 
