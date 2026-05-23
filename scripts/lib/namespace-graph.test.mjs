@@ -164,6 +164,15 @@ test('nsArtifactSlug: stays injective for X vs X. (the real fpml case)', () => {
   assert.equal(nsArtifactSlug('fpml.consolidated'), 'fpml.consolidated');
 });
 
+test('nsArtifactSlug: all-dots namespace produces a safe slug with no leading dot', () => {
+  for (const ns of ['.', '..', '...']) {
+    const slug = nsArtifactSlug(ns);
+    assert.ok(!slug.startsWith('.'), `slug for ${JSON.stringify(ns)} must not start with a dot (got ${slug})`);
+    assert.ok(!slug.includes('..'), 'slug must not contain ".."');
+    assert.match(slug, /^[0-9a-f]{8}$/);
+  }
+});
+
 test('nsArtifactSlug: is deterministic for the same input', () => {
   assert.equal(nsArtifactSlug('a..b'), nsArtifactSlug('a..b'));
   assert.ok(!nsArtifactSlug('a..b').includes('..'));

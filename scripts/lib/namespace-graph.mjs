@@ -261,5 +261,7 @@ export function nsArtifactSlug(ns) {
   const cleaned = ns.replace(/\.+/g, '.').replace(/^\.+|\.+$/g, '');
   if (cleaned === ns) return cleaned;
   const hash = createHash('sha256').update(ns).digest('hex').slice(0, 8);
-  return `${cleaned}.${hash}`;
+  // If the namespace cleaned down to nothing (e.g. ns is "." / ".."), prefixing
+  // with `${cleaned}.` would yield a leading dot — use the bare hash instead.
+  return cleaned ? `${cleaned}.${hash}` : hash;
 }

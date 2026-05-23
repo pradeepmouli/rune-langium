@@ -22,7 +22,7 @@
  *      empty dependencyGraph for curated namespaces, but passthrough still works.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { onRequestPost } from '../api/parse.js';
 
 // ---------------------------------------------------------------------------
@@ -113,6 +113,12 @@ type ParseResponse = {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+// Restore ALL spies after each test (the per-test try/finally only restores the
+// fetchCuratedBundle spy; the fetchCuratedManifest spy would otherwise leak).
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('POST /api/parse — closure-scoped linking + passthrough (T4 regression lock)', () => {
   it('A: closure-scoped linking + full passthrough — curated repro no longer 503s', async () => {

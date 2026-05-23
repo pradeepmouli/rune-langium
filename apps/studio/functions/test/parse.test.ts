@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { onRequestPost } from '../api/parse.js';
 
 function makeRequest(body: unknown): Request {
@@ -13,6 +13,12 @@ function makeRequest(body: unknown): Request {
 }
 
 const SIMPLE_RUNE = 'namespace x\ntype T:\n  a string (1..1)\n';
+
+// Restore ALL spies after each test so the fetchCuratedManifest / fetchCuratedBundle
+// spies (and any globalThis.fetch overrides) don't leak across tests.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('POST /api/parse', () => {
   it('returns 400 for malformed JSON', async () => {
