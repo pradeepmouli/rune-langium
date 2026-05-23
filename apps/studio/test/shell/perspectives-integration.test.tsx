@@ -70,4 +70,36 @@ describe('perspectives rail↔host integration', () => {
     expect((screen.getByTestId('rail-explore') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
   });
+
+  // Codex P2 (#238): hasWorkspace can drop to false while the store is still on
+  // a workspace-requiring perspective (e.g. last editable file deleted in
+  // Explore). Without a host-level fallback the content pane goes blank and the
+  // rail button is disabled — a dead-end.
+  it('falls back to Workspaces when Explore is active without a workspace (no blank pane)', () => {
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
+    render(<PerspectiveHost hasWorkspace={false} explore={null} />);
+    expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
+    const exploreSlot = document.querySelector('[data-perspective-slot="explore"]') as HTMLElement;
+    expect(exploreSlot.style.display).toBe('none');
+  });
+
+  it('falls back to Workspaces from git/export without a workspace', () => {
+    usePerspectiveStore.setState({ activePerspective: 'git' });
+    const { rerender } = render(<PerspectiveHost hasWorkspace={false} explore={null} />);
+    expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
+    expect(screen.queryByTestId('git-perspective')).toBeNull();
+
+    usePerspectiveStore.setState({ activePerspective: 'export' });
+    rerender(<PerspectiveHost hasWorkspace={false} explore={null} />);
+    expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
+    expect(screen.queryByTestId('export-perspective')).toBeNull();
+  });
+
+  it('does NOT fall back when the workspace is present (Explore renders)', () => {
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
+    render(<PerspectiveHost hasWorkspace explore={<ExploreProbe />} />);
+    const exploreSlot = document.querySelector('[data-perspective-slot="explore"]') as HTMLElement;
+    expect(exploreSlot.style.display).toBe('');
+    expect(screen.queryByTestId('workspaces-perspective')).toBeNull();
+  });
 });

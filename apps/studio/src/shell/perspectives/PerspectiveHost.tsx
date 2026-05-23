@@ -9,6 +9,7 @@
  */
 import type React from 'react';
 import { usePerspectiveStore } from '../../store/perspective-store.js';
+import { PERSPECTIVES } from './perspective-registry.js';
 import { SettingsPerspective } from './screens/SettingsPerspective.js';
 import { WorkspacesPerspective } from './screens/WorkspacesPerspective.js';
 import { GitSyncPerspective } from './screens/GitSyncPerspective.js';
@@ -19,9 +20,9 @@ import type { WorkspaceFile } from '../../services/workspace.js';
 interface Props {
   explore: React.ReactNode;
   hasWorkspace: boolean;
-  /** Forwarded to GitSyncPerspective — wired by Task 8. */
+  /** Forwarded to GitSyncPerspective for the sync-engine subscription. */
   workspaceId?: string;
-  /** Forwarded to GitSyncPerspective — wired by Task 8. */
+  /** Forwarded to GitSyncPerspective for the sync-engine subscription. */
   workspaceKind?: WorkspaceKind;
   /** Workspace files forwarded to ExportPerspective for the Download flow. */
   files?: ReadonlyArray<WorkspaceFile>;
@@ -35,22 +36,29 @@ export function PerspectiveHost({
   files
 }: Props): React.ReactElement {
   const active = usePerspectiveStore((s) => s.activePerspective);
+  // Host-level fallback: a workspace-requiring perspective (explore/git/export)
+  // with no workspace would render a blank pane — and its rail button is
+  // disabled, stranding the user. This happens when `hasWorkspace` drops to
+  // false while the store is still on such a perspective (e.g. the last
+  // editable file is deleted while in Explore; the store isn't normalized on
+  // every such transition). Fall back to the always-available Workspaces
+  // launcher rather than relying on every caller to reset the store.
+  const requiresWorkspace = PERSPECTIVES.find((p) => p.id === active)?.requiresWorkspace ?? false;
+  const effective = requiresWorkspace && !hasWorkspace ? 'workspaces' : active;
   return (
     <div className="flex-1 min-h-0">
       {/* Explore: kept alive — hidden via display:none, NEVER unmounted. */}
       <div
         data-perspective-slot="explore"
         className="h-full"
-        style={{ display: active === 'explore' ? undefined : 'none' }}
+        style={{ display: effective === 'explore' ? undefined : 'none' }}
       >
         {explore}
       </div>
-      {active === 'workspaces' && <WorkspacesPerspective />}
-      {active === 'git' && hasWorkspace && (
-        <GitSyncPerspective workspaceId={workspaceId} workspaceKind={workspaceKind} />
-      )}
-      {active === 'export' && hasWorkspace && <ExportPerspective files={files} />}
-      {active === 'settings' && <SettingsPerspective />}
+      {effective === 'workspaces' && <WorkspacesPerspective />}
+      {effective === 'git' && <GitSyncPerspective workspaceId={workspaceId} workspaceKind={workspaceKind} />}
+      {effective === 'export' && <ExportPerspective files={files} />}
+      {effective === 'settings' && <SettingsPerspective />}
     </div>
   );
 }
