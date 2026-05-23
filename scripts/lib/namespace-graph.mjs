@@ -1,35 +1,18 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
+// Keep in sync with apps/curated-mirror-worker/src/namespace-graph.ts (worker/seed copy).
+
 /**
  * Pure, Langium-free computation of the per-namespace dependency graph from a
- * set of already-serialized RosettaModel JSON strings. Ported from the
- * proven studio logic in:
- *   apps/studio/functions/lib/curated-closure.ts
- *   apps/studio/functions/lib/serialized-model-meta.ts
+ * set of already-serialized RosettaModel JSON strings. Plain-ESM copy of the
+ * worker/seed TypeScript in:
+ *   apps/curated-mirror-worker/src/namespace-graph.ts
  *
- * Cross-app import is deliberately avoided; this copy is the publish-pipeline
- * source of truth.
- *
- * Keep in sync with scripts/lib/namespace-graph.mjs (plain-ESM copy for CI build scripts).
+ * No TypeScript types — identical algorithm.
  */
 
-export interface SerializedDoc {
-  path: string;
-  modelJson: string;
-  exports: Array<{ type: string; name: string }>;
-}
-
-export interface NamespaceGraphEntry {
-  /** DIRECT cross-namespace deps (imports ∪ resolved $ref target namespaces), excluding self, sorted, deduped. */
-  deps: string[];
-  /** Union of the namespace's docs' exports (type+name only, no path), deduped. */
-  exports: Array<{ type: string; name: string }>;
-  /** The docs belonging to this namespace. */
-  docs: SerializedDoc[];
-}
-
-// ── Internal helpers (ported verbatim from curated-closure.ts) ───────────────
+// ── Internal helpers (ported verbatim from namespace-graph.ts) ───────────────
 
 /**
  * Convert a cross-document Langium `$ref` URI to the curated-doc key form
@@ -39,12 +22,12 @@ export interface NamespaceGraphEntry {
  *   `file:///%5Bcdm%5D/<doc.path>#/elements@0`
  * (URL-encoded form of `file:///[cdm]/<doc.path>#/elements@0`)
  */
-function refUriToCuratedKey(ref: string): string | null {
+function refUriToCuratedKey(ref) {
   // Only process cross-document refs (local refs start with '#')
   if (ref.startsWith('#')) return null;
 
   // URL-decode (guard against malformed percent-encoding)
-  let decoded: string;
+  let decoded;
   try {
     decoded = decodeURIComponent(ref);
   } catch {
@@ -72,11 +55,11 @@ function refUriToCuratedKey(ref: string): string | null {
 /**
  * Parse `name` field (string OR `{segments: string[]}`) → namespace string.
  */
-function nameToNamespace(name: unknown): string | undefined {
+function nameToNamespace(name) {
   if (typeof name === 'string') return name;
-  if (name !== null && typeof name === 'object' && 'segments' in (name as object)) {
-    const segs = (name as { segments?: unknown }).segments;
-    if (Array.isArray(segs)) return (segs as unknown[]).join('.');
+  if (name !== null && typeof name === 'object' && 'segments' in name) {
+    const segs = name.segments;
+    if (Array.isArray(segs)) return segs.join('.');
   }
   return undefined;
 }
@@ -86,21 +69,20 @@ function nameToNamespace(name: unknown): string | undefined {
  * string (JSON-only, no Langium). Returns null if the JSON is unparseable or
  * has no resolvable namespace.
  */
-function readModelMeta(modelJson: string): { namespace: string; imports: string[] } | null {
-  let parsed: unknown;
+function readModelMeta(modelJson) {
+  let parsed;
   try {
     parsed = JSON.parse(modelJson);
   } catch {
     return null;
   }
   if (!parsed || typeof parsed !== 'object') return null;
-  const m = parsed as { name?: unknown; imports?: unknown };
-  const namespace = nameToNamespace(m.name);
+  const namespace = nameToNamespace(parsed.name);
   if (!namespace) return null;
-  const imports: string[] = [];
-  if (Array.isArray(m.imports)) {
-    for (const imp of m.imports as unknown[]) {
-      const ns = (imp as { importedNamespace?: unknown })?.importedNamespace;
+  const imports = [];
+  if (Array.isArray(parsed.imports)) {
+    for (const imp of parsed.imports) {
+      const ns = imp?.importedNamespace;
       if (typeof ns === 'string' && ns.length > 0) imports.push(ns);
     }
   }
@@ -112,32 +94,27 @@ function readModelMeta(modelJson: string): { namespace: string; imports: string[
  * excluding `ownNamespace`. Fast-path: skips the walk entirely when the raw
  * modelJson string contains no `"$ref"` substring.
  */
-function extractCrossDocRefNamespaces(
-  modelJson: string,
-  ownNamespace: string,
-  uriToNamespace: ReadonlyMap<string, string>
-): Set<string> {
-  const result = new Set<string>();
+function extractCrossDocRefNamespaces(modelJson, ownNamespace, uriToNamespace) {
+  const result = new Set();
 
   // Fast-path: bail early if no $ref present
   if (!modelJson.includes('"$ref"')) return result;
 
-  let parsed: unknown;
+  let parsed;
   try {
     parsed = JSON.parse(modelJson);
   } catch {
     return result;
   }
 
-  function walk(obj: unknown): void {
+  function walk(obj) {
     if (obj === null || typeof obj !== 'object') return;
     if (Array.isArray(obj)) {
       for (const item of obj) walk(item);
       return;
     }
-    const record = obj as Record<string, unknown>;
-    if (typeof record['$ref'] === 'string') {
-      const key = refUriToCuratedKey(record['$ref']);
+    if (typeof obj['$ref'] === 'string') {
+      const key = refUriToCuratedKey(obj['$ref']);
       if (key !== null) {
         const targetNs = uriToNamespace.get(key);
         if (targetNs && targetNs !== ownNamespace) {
@@ -145,7 +122,7 @@ function extractCrossDocRefNamespaces(
         }
       }
     }
-    for (const value of Object.values(record)) {
+    for (const value of Object.values(obj)) {
       walk(value);
     }
   }
@@ -160,6 +137,8 @@ function extractCrossDocRefNamespaces(
  * Compute the per-namespace dependency graph from a flat array of
  * serialized-artifact docs.
  *
+ * Returns Record<ns, { deps: string[], exports: Array<{type,name}>, docs: Array<{path,modelJson,exports}> }>
+ *
  * `deps` per namespace = union of:
  *   - import strings (kept as-is, including wildcards like `cdm.base.*`)
  *   - cross-doc $ref target namespaces (resolved via modelId + path)
@@ -168,26 +147,20 @@ function extractCrossDocRefNamespaces(
  * `exports` per namespace = union of each doc's exports mapped to {type,name}
  * (path dropped), deduped by `type+' '+name`.
  *
- * `docs` per namespace = the matching docs as {path, modelJson, exports}.
+ * `docs` per namespace = the matching docs as {path, modelJson, exports} with
+ * exports having path dropped (type+name only).
  *
- * @param docs    Per-doc data from the serialized artifact build
- * @param modelId Bundle ID used when Langium URIs were created
- *                (e.g. `'cdm'` for `URI.parse('[cdm]/...')`)
+ * @param {Array<{path: string, modelJson: string, exports: Array<{type: string, name: string, path?: string}>}>} docs
+ * @param {string} modelId  Bundle ID used when Langium URIs were created (e.g. 'cdm')
+ * @returns {Record<string, {deps: string[], exports: Array<{type: string, name: string}>, docs: Array<{path: string, modelJson: string, exports: Array<{type: string, name: string}>}>}>}
  */
-export function computeNamespaceGraph(
-  docs: ReadonlyArray<{
-    path: string;
-    modelJson: string;
-    exports: ReadonlyArray<{ type: string; name: string; path?: string }>;
-  }>,
-  modelId: string
-): Record<string, NamespaceGraphEntry> {
+export function computeNamespaceGraph(docs, modelId) {
   // ── Pass 1: cheap meta read + uri→namespace map ───────────────────────────
   // Key: `${modelId}/${doc.path}`, same as what Langium assigns via
   //   URI.parse(`[${modelId}]/${file.path}`) and what refUriToCuratedKey emits.
-  const uriToNamespace = new Map<string, string>();
-  const nsMeta = new Map<string, { imports: string[] }>();
-  const nsDocs = new Map<string, Array<typeof docs[0]>>();
+  const uriToNamespace = new Map();
+  const nsMeta = new Map();
+  const nsDocs = new Map();
 
   for (const doc of docs) {
     const meta = readModelMeta(doc.modelJson);
@@ -200,7 +173,7 @@ export function computeNamespaceGraph(
       nsMeta.set(namespace, { imports: [] });
     }
     // Accumulate imports across all docs in this namespace
-    const existing = nsMeta.get(namespace)!;
+    const existing = nsMeta.get(namespace);
     for (const imp of imports) {
       if (!existing.imports.includes(imp)) {
         existing.imports.push(imp);
@@ -210,14 +183,14 @@ export function computeNamespaceGraph(
     if (!nsDocs.has(namespace)) {
       nsDocs.set(namespace, []);
     }
-    nsDocs.get(namespace)!.push(doc);
+    nsDocs.get(namespace).push(doc);
   }
 
   // ── Pass 2: per-namespace deps via imports ∪ $ref targets ─────────────────
-  const result: Record<string, NamespaceGraphEntry> = {};
+  const result = {};
 
   for (const [namespace, { imports }] of nsMeta) {
-    const rawDepsSet = new Set<string>();
+    const rawDepsSet = new Set();
 
     // Import strings: kept as-is (wildcards included), self excluded (exact only)
     for (const imp of imports) {
@@ -235,7 +208,7 @@ export function computeNamespaceGraph(
     }
 
     // Build exports: union of all docs' exports, drop path, dedup by type+name
-    const exportsMap = new Map<string, { type: string; name: string }>();
+    const exportsMap = new Map();
     for (const doc of docsInNs) {
       for (const exp of doc.exports) {
         const key = `${exp.type} ${exp.name}`;
@@ -246,7 +219,7 @@ export function computeNamespaceGraph(
     }
 
     // Build docs list: path + modelJson + exports (type+name only)
-    const serializedDocs: SerializedDoc[] = docsInNs.map((doc) => ({
+    const serializedDocs = docsInNs.map((doc) => ({
       path: doc.path,
       modelJson: doc.modelJson,
       exports: doc.exports.map(({ type, name }) => ({ type, name }))
