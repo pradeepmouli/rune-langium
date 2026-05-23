@@ -10,6 +10,7 @@
 import type {
   CuratedManifest,
   CuratedModelId,
+  CuratedNamespaceEntry,
   LangiumJsonArtifactRef
 } from '@rune-langium/curated-schema';
 
@@ -26,13 +27,21 @@ export interface BuildManifestInput {
   /** Existing archive versions in R2 for this modelId, oldest-first. */
   historyVersions: string[];
   serializedWorkspace?: LangiumJsonArtifactRef;
+  /**
+   * Per-namespace dependency graph (manifest v2). The cron publisher can't
+   * build this (it OOMs on CDM — the CI artifact workflow does), so on a
+   * normal cron run this is the value PRESERVED from the prior manifest so
+   * the v2 fast-path keys (`namespaces`) survive the rewrite. When present,
+   * the manifest is emitted as schemaVersion 2.
+   */
+  namespaces?: Record<string, CuratedNamespaceEntry>;
 }
 
 const PUBLIC_ROOT = 'https://www.daikonic.dev/curated';
 
 export function buildManifest(input: BuildManifestInput): CuratedManifest {
   return {
-    schemaVersion: 1,
+    schemaVersion: input.namespaces ? 2 : 1,
     modelId: input.modelId,
     version: input.version,
     sha256: input.sha256,
@@ -51,7 +60,8 @@ export function buildManifest(input: BuildManifestInput): CuratedManifest {
             serializedWorkspace: input.serializedWorkspace
           }
         }
-      : {})
+      : {}),
+    ...(input.namespaces ? { namespaces: input.namespaces } : {})
   };
 }
 

@@ -152,4 +152,55 @@ describe('publishCuratedMirrors (T025)', () => {
     const manifest = JSON.parse(await bucket.getText('curated/cdm/manifest.json'));
     expect(manifest.artifacts).toBeUndefined();
   });
+
+  it('preserves namespaces + serializedWorkspace from the prior manifest across a cron rewrite', async () => {
+    // The CI artifact build (curated-artifacts.yml) leaves the manifest at v2
+    // with a namespaces map + serializedWorkspace ref. The cron must NOT drop
+    // those when it rewrites manifest.json, else /api/parse's fast-path blinks
+    // back to the whole-bundle (1102) fallback until the next CI run.
+    const priorNamespaces = {
+      'cdm.base': {
+        deps: ['cdm.base.math'],
+        exports: [{ type: 'Data', name: 'Foo' }],
+        artifact: 'artifacts/2026-05-01/ns/cdm.base.json.gz'
+      }
+    };
+    const priorSerializedWorkspace = {
+      schemaVersion: 1 as const,
+      kind: 'langium-json-serializer' as const,
+      url: 'https://www.daikonic.dev/curated/cdm/latest.serialized.json.gz',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 10,
+      documentCount: 1,
+      langiumVersion: '4.2.2'
+    };
+    await bucket.put(
+      'curated/cdm/manifest.json',
+      JSON.stringify({
+        schemaVersion: 2,
+        modelId: 'cdm',
+        version: '2026-05-01',
+        sha256: 'b'.repeat(64),
+        sizeBytes: 1,
+        generatedAt: 'old',
+        upstreamCommit: '',
+        upstreamRef: 'master',
+        archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+        history: [],
+        artifacts: { serializedWorkspace: priorSerializedWorkspace },
+        namespaces: priorNamespaces
+      })
+    );
+
+    await publishCuratedMirrors({ sources: [SOURCES[0]!], bucket, retention: 14 });
+
+    const manifest = JSON.parse(await bucket.getText('curated/cdm/manifest.json'));
+    // v2 fast-path fields carried forward verbatim…
+    expect(manifest.schemaVersion).toBe(2);
+    expect(manifest.namespaces).toEqual(priorNamespaces);
+    expect(manifest.artifacts.serializedWorkspace).toEqual(priorSerializedWorkspace);
+    // …while the tarball-derived fields refresh for the new mirror run.
+    expect(manifest.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(manifest.generatedAt).not.toBe('old');
+  });
 });

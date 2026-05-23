@@ -108,6 +108,32 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
         await bucket.delete(`curated/${source.id}/artifacts/${v}.serialized.json.gz`);
       }
 
+      // Preserve the v2 artifact fields the CI artifact build (curated-
+      // artifacts.yml, ~04:00 UTC) patches into the manifest. The cron
+      // rewrites manifest.json from scratch each run, so without this
+      // read-merge the `namespaces` map (and the serializedWorkspace ref)
+      // would vanish from ~03:00 until the next CI run — dropping /api/parse
+      // back to the whole-bundle (1102) fallback nightly. Carrying them
+      // forward keeps the fast-path serving the prior corpus' per-namespace
+      // artifacts (still in R2) until CI refreshes them for the new version.
+      let preservedNamespaces: CuratedManifest['namespaces'];
+      let preservedSerializedWorkspace: NonNullable<CuratedManifest['artifacts']>['serializedWorkspace'];
+      try {
+        const existing = await bucket.get(manifestKey);
+        if (existing) {
+          const prev = JSON.parse(await existing.text()) as CuratedManifest;
+          preservedNamespaces = prev.namespaces;
+          preservedSerializedWorkspace = prev.artifacts?.serializedWorkspace;
+        }
+      } catch (err) {
+        // First publish, missing object, or unreadable prior manifest —
+        // nothing to preserve; fall through to a fresh v1 manifest.
+        logger.warn(
+          { model_id: source.id, err: err instanceof Error ? err.message : String(err) },
+          'curated-mirror.publish.manifest_preserve_skipped'
+        );
+      }
+
       // Write the manifest BEFORE the serialized artifact build.
       // The artifact build parses the full corpus through Langium and
       // can OOM on large models (CDM). Writing the manifest first
@@ -121,7 +147,9 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
         generatedAt: now.toISOString(),
         upstreamCommit: '',
         upstreamRef: source.ref,
-        historyVersions
+        historyVersions,
+        namespaces: preservedNamespaces,
+        serializedWorkspace: preservedSerializedWorkspace
       });
       await bucket.put(manifestKey, JSON.stringify(manifest, null, 2), {
         httpMetadata: { contentType: 'application/json; charset=utf-8' }
