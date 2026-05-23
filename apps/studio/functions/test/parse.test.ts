@@ -136,6 +136,22 @@ describe('POST /api/parse — curatedBundles', () => {
     // returns bare-path URIs (matching the real curated-fetch contract); the
     // browser worker keys deferredModelJson off these via URI.parse().
     const curatedFetchModule = await import('../lib/curated-fetch.js');
+    // Pin a v1 manifest (no namespaces) so these whole-bundle (fetchCuratedBundle)
+    // tests are hermetic: otherwise the unmocked fetchCuratedManifest hits the live
+    // mirror, which now serves v2 manifests, routing the request onto the
+    // per-namespace fast-path instead.
+    vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 1,
+      modelId: 'cdm',
+      version: '2026-05-01',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'x',
+      upstreamCommit: '',
+      upstreamRef: 'master',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: []
+    } as never);
     const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
       {
         uri: 'cdm/base/math.rosetta',
@@ -193,6 +209,22 @@ describe('POST /api/parse — curatedBundles', () => {
     // Contract: ONE deferredExports entry per FILE (matches the in-browser
     // parser-worker.handleParseWorkspace contract).
     const curatedFetchModule = await import('../lib/curated-fetch.js');
+    // Pin a v1 manifest (no namespaces) so these whole-bundle (fetchCuratedBundle)
+    // tests are hermetic: otherwise the unmocked fetchCuratedManifest hits the live
+    // mirror, which now serves v2 manifests, routing the request onto the
+    // per-namespace fast-path instead.
+    vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 1,
+      modelId: 'cdm',
+      version: '2026-05-01',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'x',
+      upstreamCommit: '',
+      upstreamRef: 'master',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: []
+    } as never);
     const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
       {
         uri: 'cdm/base/datetime-type.rosetta',
@@ -309,6 +341,22 @@ describe('POST /api/parse — dependencyGraph (spec 2026-05-14 §5.2)', () => {
     // bundle never blocks the parse response or starves the modal of user
     // namespaces.
     const curatedFetchModule = await import('../lib/curated-fetch.js');
+    // Pin a v1 manifest (no namespaces) so these whole-bundle (fetchCuratedBundle)
+    // tests are hermetic: otherwise the unmocked fetchCuratedManifest hits the live
+    // mirror, which now serves v2 manifests, routing the request onto the
+    // per-namespace fast-path instead.
+    vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 1,
+      modelId: 'cdm',
+      version: '2026-05-01',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'x',
+      upstreamCommit: '',
+      upstreamRef: 'master',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: []
+    } as never);
     const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
       {
         uri: 'cdm/math.rosetta',

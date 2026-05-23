@@ -121,6 +121,22 @@ describe('POST /api/parse — closure-scoped linking + passthrough (T4 regressio
     // Before the fix, ALL curated docs were deserialized+linked (O(n) CPU).
     // After the fix only the closure (3/4 docs) is linked; cdm.other is skipped.
     const curatedFetchModule = await import('../lib/curated-fetch.js');
+    // Pin a v1 manifest (no namespaces) so the whole-bundle path under test is
+    // taken deterministically. Without this, the unmocked fetchCuratedManifest
+    // hits the live mirror — which now serves v2 manifests — and the request
+    // would take the per-namespace fast-path instead (and make a real network call).
+    vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 1,
+      modelId: 'cdm',
+      version: '2026-05-01',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'x',
+      upstreamCommit: '',
+      upstreamRef: 'master',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: []
+    } as never);
     const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue(CURATED_DOCS);
     try {
       // User file imports cdm.trade → closure = {cdm.trade, cdm.base.datetime, cdm.base.math}
@@ -176,6 +192,22 @@ describe('POST /api/parse — closure-scoped linking + passthrough (T4 regressio
     // closure — no curated namespaces appear in dependencyGraph — but all
     // four curated docs are still forwarded via hydrationState + deferredExports.
     const curatedFetchModule = await import('../lib/curated-fetch.js');
+    // Pin a v1 manifest (no namespaces) so the whole-bundle path under test is
+    // taken deterministically. Without this, the unmocked fetchCuratedManifest
+    // hits the live mirror — which now serves v2 manifests — and the request
+    // would take the per-namespace fast-path instead (and make a real network call).
+    vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 1,
+      modelId: 'cdm',
+      version: '2026-05-01',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'x',
+      upstreamCommit: '',
+      upstreamRef: 'master',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: []
+    } as never);
     const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue(CURATED_DOCS);
     try {
       // User file has NO curated imports → closure = {}

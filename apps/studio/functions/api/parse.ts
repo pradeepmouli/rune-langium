@@ -221,10 +221,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             const nsGraph = manifest.namespaces;
             const closure = closeNamespacesFromManifest(seeds, nsGraph);
             for (const ns of closure) manifestClosureNamespaces.add(ns);
-            for (const ns of closure) {
-              const entry = nsGraph[ns];
-              if (!entry) continue;
-              const nsDocs = await fetchCuratedNamespace(bundle.id, bundle.version, entry.artifact, curatedFetcher);
+            // Fetch the closure's per-namespace artifacts CONCURRENTLY. A large
+            // closure (e.g. fpml.consolidated.* pulls ~40 namespaces) was ~12s
+            // serial; the fetches are independent network I/O, so Promise.all
+            // collapses that to roughly the slowest single fetch. Results are
+            // consumed in a stable order so deferredExports/hydration ordering
+            // is deterministic across requests.
+            const closureNs = [...closure].filter((ns) => nsGraph[ns]);
+            const fetchedPerNs = await Promise.all(
+              closureNs.map((ns) =>
+                fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher)
+              )
+            );
+            for (const nsDocs of fetchedPerNs) {
               for (const doc of nsDocs) {
                 documentsForHydration.push({ ...doc, bundleId: bundle.id });
                 // Per-FILE entry so node-id → filePath → hydrationState linking stays correct.
