@@ -209,3 +209,47 @@ export function computeCuratedClosure(
  * Returns null for local refs (`#...`) or unrecognised URI schemes.
  */
 export { refUriToCuratedKey };
+
+/**
+ * Transitive closure of `seedNamespaces` over a PRECOMPUTED manifest
+ * dependency graph (the v2 manifest `namespaces` map), without fetching or
+ * parsing any document. This is the fast path: the publish pipeline already
+ * walked the fully-linked corpus (imports ∪ resolved `$ref` targets) and
+ * recorded the direct `deps` per namespace, so `/api/parse` only walks the
+ * graph instead of fetching+parsing the whole serialized corpus.
+ *
+ * Mirrors `computeCuratedClosure`'s wildcard + cycle semantics exactly, so the
+ * manifest path and the v1 serialized-import fallback agree:
+ * - Wildcard forms (`a.b.*`) — in seeds OR in a namespace's `deps` — expand to
+ *   every manifest namespace equal to `a.b` or starting with `a.b.`.
+ * - Exact names that aren't manifest namespaces contribute nothing.
+ * - Cycle-safe (visited set). Returns ONLY namespaces present in the manifest.
+ */
+export function closeNamespacesFromManifest(
+  seedNamespaces: Iterable<string>,
+  namespaces: Readonly<Record<string, { deps: readonly string[] }>>
+): Set<string> {
+  const allNs = new Set(Object.keys(namespaces));
+
+  const expand = (raw: string): string[] => {
+    if (raw.endsWith('.*')) {
+      const prefix = raw.slice(0, -2);
+      return [...allNs].filter((ns) => ns === prefix || ns.startsWith(prefix + '.'));
+    }
+    return allNs.has(raw) ? [raw] : [];
+  };
+
+  const visited = new Set<string>();
+  const queue: string[] = [...seedNamespaces].flatMap(expand);
+  while (queue.length > 0) {
+    const ns = queue.shift()!;
+    if (!allNs.has(ns) || visited.has(ns)) continue;
+    visited.add(ns);
+    for (const raw of namespaces[ns]!.deps) {
+      for (const target of expand(raw)) {
+        if (!visited.has(target)) queue.push(target);
+      }
+    }
+  }
+  return visited;
+}
