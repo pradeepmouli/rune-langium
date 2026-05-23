@@ -635,11 +635,18 @@ function AppContent() {
   }, []);
 
   const handleFilesLoaded = useCallback(
-    async (loadedFiles: WorkspaceFile[]) => {
-      let workspace = restoredWorkspace;
+    async (loadedFiles: WorkspaceFile[], targetWorkspaceId?: string) => {
+      // Resolve the workspace these files belong to. An explicit target (e.g.
+      // the git-clone path passes the freshly created git-backed workspace)
+      // loads INTO that workspace. With no target this is a launcher load:
+      // ALWAYS create a new workspace — never reuse whichever workspace is
+      // currently open. The Workspaces perspective is reachable while a project
+      // is active (#238), so reusing `restoredWorkspace` here would silently
+      // overwrite (or, for "New blank workspace", wipe) the open project's
+      // files (Codex P1).
+      let workspace = targetWorkspaceId ? await persistence.loadWorkspace(targetWorkspaceId) : null;
       if (!workspace) {
         workspace = await createWorkspaceRecord(deriveWorkspaceName(loadedFiles));
-        setRestoredWorkspace(workspace);
         // Fresh workspace has no declared curated bindings, so curated
         // sync is trivially "settled" — opening the persist gate so any
         // bundles the user loads next get persisted. Without this the
@@ -648,13 +655,14 @@ function AppContent() {
         // stay closed (no restoreWorkspace call ever flipped it).
         setCuratedSyncedWorkspaceId(workspace.id);
       }
+      setRestoredWorkspace(workspace);
 
       await saveWorkspaceFiles(workspace.id, loadedFiles);
       await syncWorkspaceToEditor(loadedFiles);
       // Switch to the explore perspective now that a workspace is loaded.
       usePerspectiveStore.getState().setActivePerspective('explore');
     },
-    [createWorkspaceRecord, restoredWorkspace, syncWorkspaceToEditor]
+    [createWorkspaceRecord, syncWorkspaceToEditor]
   );
 
   /**
@@ -758,7 +766,8 @@ function AppContent() {
         }
         await syncWorkspaceToEditor(workspaceFiles);
       },
-      switchWorkspace: handleSwitchWorkspace
+      switchWorkspace: handleSwitchWorkspace,
+      loadFiles: handleFilesLoaded
     }));
     return () => {
       setRuneStudioTestApi((current) => {
@@ -771,7 +780,7 @@ function AppContent() {
         return next;
       });
     };
-  }, [handleSwitchWorkspace, restoredWorkspace, syncWorkspaceToEditor]);
+  }, [handleFilesLoaded, handleSwitchWorkspace, restoredWorkspace, syncWorkspaceToEditor]);
 
   /** New-workspace affordance from the recents list — same path as FileLoader. */
   const handleCreateWorkspace = useCallback(() => {
@@ -862,7 +871,11 @@ function AppContent() {
             dirty: false,
             readOnly: false
           }));
-          handleFilesLoaded(wsFiles);
+          // Load INTO the freshly created git-backed workspace — pass it
+          // explicitly so the launcher's "always create new" default does not
+          // spawn a duplicate non-git workspace, and `restoredWorkspace` points
+          // at the git workspace (activating its sync engine).
+          handleFilesLoaded(wsFiles, workspaceId);
         }
       } catch (err) {
         reportWorkspaceError('Failed to load cloned workspace', err);
