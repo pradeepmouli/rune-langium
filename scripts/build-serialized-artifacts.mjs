@@ -30,6 +30,11 @@ const SOURCES = [
 
 const LANGIUM_VERSION = '4.2.2';
 const OUT_DIR = 'dist/curated-artifacts';
+// Public base for absolute artifact URLs in the manifest (matches archiveUrl +
+// artifacts.serializedWorkspace.url). Per-namespace `artifact` values MUST be
+// absolute so any consumer can fetch them directly without prefixing — relative
+// paths resolve against the consumer's page URL and 404.
+const MIRROR_BASE = 'https://www.daikonic.dev/curated';
 
 function sha256Hex(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -253,7 +258,9 @@ async function main() {
         namespacesMap[ns] = {
           deps: entry.deps,
           exports: entry.exports,
-          artifact: `artifacts/${version}/ns/${nsToSlug.get(ns)}.json.gz`,
+          // Absolute URL (consistent with archiveUrl + serializedWorkspace.url) so
+          // any consumer fetches it directly; relative paths 404 against a page URL.
+          artifact: `${MIRROR_BASE}/${source.id}/artifacts/${version}/ns/${nsToSlug.get(ns)}.json.gz`,
         };
       }
 
