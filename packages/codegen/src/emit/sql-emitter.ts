@@ -32,6 +32,8 @@ function bounds(card: RosettaCardinality): { lower: number; upper: number | null
 export class SqlNamespaceEmitter implements NamespaceEmitter {
   private readonly dialect: Dialect;
   private readonly inheritance: 'single-table' | 'table-per-type';
+  private readonly enumStrategy: 'check' | 'table';
+  private enumTableFallbackFlagged = false;
   private readonly enumNames: ReadonlySet<string>;
   private readonly statements: string[] = [];
   private readonly joinTables: string[] = [];
@@ -46,6 +48,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
     const sql: SqlOptions = options.sql ?? {};
     this.dialect = dialectFor(sql.dialect ?? 'postgres');
     this.inheritance = sql.inheritance ?? 'table-per-type';
+    this.enumStrategy = sql.enumStrategy ?? 'check';
     this.enumNames = new Set(model.enumByName.keys());
     this.relativePath = getTargetRelativePath(model.namespace, 'sql');
   }
@@ -84,7 +87,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
       const { lower, upper } = bounds(attr.card);
       const ref = attr.typeCall?.type?.ref;
       const refText = attr.typeCall?.type?.$refText ?? '';
-      const notNull = lower === 1 ? ' NOT NULL' : '';
+      const notNull = lower >= 1 ? ' NOT NULL' : '';
       const refData = ref && isData(ref) ? ref : undefined;
       const enumNode =
         ref && isRosettaEnumeration(ref)
@@ -105,6 +108,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
         cols.push(`${q(fkCol)} ${fkType}${notNull}`);
         constraints.push(`FOREIGN KEY (${q(fkCol)}) REFERENCES ${q(refData.name)} (${q('id')})`);
       } else if (enumNode) {
+        this.flagEnumTableFallback();
         cols.push(`${q(attr.name)} ${this.dialect.columnType('string')}${notNull}`);
         const values = enumNode.enumValues.map((v) => `'${v.name.replace(/'/g, "''")}'`).join(', ');
         constraints.push(`CHECK (${q(attr.name)} IN (${values}))`);
@@ -150,6 +154,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
       cols.push(`${q(targetFk)} ${fkType} NOT NULL`);
       constraints.push(`FOREIGN KEY (${q(targetFk)}) REFERENCES ${q(refData.name)} (${q('id')})`);
     } else if (enumNode) {
+      this.flagEnumTableFallback();
       cols.push(`${q('value')} ${this.dialect.columnType('string')}`);
       const values = enumNode.enumValues.map((v) => `'${v.name.replace(/'/g, "''")}'`).join(', ');
       constraints.push(`CHECK (${q('value')} IN (${values}))`);
@@ -160,6 +165,22 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
 
     const body = [...cols, ...constraints].map((line) => `  ${line}`).join(',\n');
     return `CREATE TABLE ${q(tableName)} (\n${body}\n);`;
+  }
+
+  /**
+   * The `'table'` enum strategy (a lookup table + FK per enum) is not yet
+   * implemented; we fall back to the `'check'` strategy. Surface that once
+   * (not per enum column) as an info diagnostic so the option isn't silently
+   * ignored — mirrors the `single-table` inheritance fallback.
+   */
+  private flagEnumTableFallback(): void {
+    if (this.enumStrategy !== 'table' || this.enumTableFallbackFlagged) return;
+    this.enumTableFallbackFlagged = true;
+    this.diagnostics.push({
+      severity: 'info',
+      code: 'sql-enum-table-unsupported',
+      message: `enumStrategy 'table' is not yet supported in namespace '${this.model.namespace}'; emitting CHECK constraints.`
+    });
   }
 
   finalize(): GeneratorOutput {

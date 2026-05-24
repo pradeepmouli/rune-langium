@@ -22,6 +22,12 @@ export const sqlProfile: LanguageProfile<'sql'> = {
     return undefined; // SQL has no module system.
   },
   concatenate(perNs): GeneratorOutput {
+    // Alphabetical ordering is deterministic but NOT FK-safe across namespaces:
+    // if namespace A references types in namespace B and 'A' < 'B' lexically, the
+    // emitted FK precedes B's CREATE TABLE. Single-namespace models are always
+    // safe; multi-namespace consumers should apply with deferred FK enforcement or
+    // use the per-namespace layout and apply in dependency order. (Known
+    // limitation — cross-namespace FK ordering is out of scope for this phase.)
     const sorted = [...perNs].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
     const content = sorted.map((o) => o.content.trimEnd()).join('\n\n') + '\n';
     return {

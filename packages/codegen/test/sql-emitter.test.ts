@@ -170,3 +170,21 @@ describe('SQL single-file layout', () => {
     expect(ddl).toContain('CREATE TABLE "Y"');
   });
 });
+
+describe('SqlNamespaceEmitter — enumStrategy', () => {
+  it("enumStrategy 'table' falls back to CHECK with an info diagnostic (not silently)", async () => {
+    const out = await gen(`namespace test.enumstrat
+
+enum Color:
+  Red
+  Green
+
+type Paint:
+  color Color (1..1)
+`, { enumStrategy: 'table' });
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toMatch(/CHECK\s*\(\s*"color" IN \('Red', 'Green'\)\s*\)/);
+    expect(out[0]!.diagnostics.some((d) => d.code === 'sql-enum-table-unsupported')).toBe(true);
+  });
+});
