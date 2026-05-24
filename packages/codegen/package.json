@@ -36,6 +36,7 @@
     "@types/node": "^25.9.1",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
+    "node-sql-parser": "^5.4.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7",
     "zod": "^4.4.3"
