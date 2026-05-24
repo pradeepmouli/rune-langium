@@ -52,6 +52,36 @@ function resolveAliasBuiltin(ref: unknown, depth = 0): string | undefined {
   return undefined;
 }
 
+/**
+ * Collect an enum's value names INCLUDING inherited members. Rune enums can
+ * `extend` a parent enum (`enumNode.parent`), and a field typed as the child
+ * accepts parent literals too — so the SQL CHECK list must include them.
+ * Walks the resolved parent chain (cycle-safe), preserving order (own first),
+ * deduped.
+ */
+function allEnumValueNames(enumNode: RosettaEnumeration): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  let current: RosettaEnumeration | undefined = enumNode;
+  const visited = new Set<RosettaEnumeration>();
+  while (current && !visited.has(current)) {
+    visited.add(current);
+    for (const v of current.enumValues ?? []) {
+      if (v?.name && !seen.has(v.name)) {
+        seen.add(v.name);
+        names.push(v.name);
+      }
+    }
+    current = (current as { parent?: { ref?: RosettaEnumeration } }).parent?.ref;
+  }
+  return names;
+}
+
+/** SQL-escape + quote a list of enum value literals for a CHECK (...) clause. */
+function sqlEnumLiterals(names: readonly string[]): string {
+  return names.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ');
+}
+
 export class SqlNamespaceEmitter implements NamespaceEmitter {
   private readonly dialect: Dialect;
   private readonly inheritance: 'single-table' | 'table-per-type';
@@ -133,8 +163,14 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
       } else if (enumNode) {
         this.flagEnumTableFallback();
         cols.push(`${q(attr.name)} ${this.dialect.columnType('string')}${notNull}`);
-        const values = enumNode.enumValues.map((v) => `'${v.name.replace(/'/g, "''")}'`).join(', ');
-        constraints.push(`CHECK (${q(attr.name)} IN (${values}))`);
+        // Include inherited enum members; skip the CHECK entirely for a valueless
+        // enum (CHECK (... IN ()) is invalid SQL in both dialects).
+        const names = allEnumValueNames(enumNode);
+        if (names.length > 0) {
+          constraints.push(`CHECK (${q(attr.name)} IN (${sqlEnumLiterals(names)}))`);
+        } else {
+          this.flagEmptyEnum(enumNode.name);
+        }
       } else {
         const aliasBuiltin = resolveAliasBuiltin(ref);
         const builtin = isRosettaBasicType(ref) ? ref.name : (aliasBuiltin ?? refText);
@@ -179,15 +215,25 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
     const constraints: string[] = [`FOREIGN KEY (${q(ownerFk)}) REFERENCES ${q(ownerName)} (${q('id')})`];
 
     if (refData) {
-      const targetFk = `${refData.name.toLowerCase()}_id`;
-      const safeTargetFk = targetFk === ownerFk ? `${attrName.toLowerCase()}_id` : targetFk;
-      cols.push(`${q(safeTargetFk)} ${fkType} NOT NULL`);
-      constraints.push(`FOREIGN KEY (${q(safeTargetFk)}) REFERENCES ${q(refData.name)} (${q('id')})`);
+      // Disambiguate the target FK from the owner FK. The first fallback (attr
+      // name) still collides when the attr name equals the owner type name
+      // (e.g. `type Node: node Node (0..*)`), so add a guaranteed-distinct
+      // second fallback.
+      let targetFk = `${refData.name.toLowerCase()}_id`;
+      if (targetFk === ownerFk) targetFk = `${attrName.toLowerCase()}_id`;
+      if (targetFk === ownerFk) targetFk = `${attrName.toLowerCase()}_target_id`;
+      cols.push(`${q(targetFk)} ${fkType} NOT NULL`);
+      constraints.push(`FOREIGN KEY (${q(targetFk)}) REFERENCES ${q(refData.name)} (${q('id')})`);
     } else if (enumNode) {
       this.flagEnumTableFallback();
       cols.push(`${q('value')} ${this.dialect.columnType('string')} NOT NULL`);
-      const values = enumNode.enumValues.map((v) => `'${v.name.replace(/'/g, "''")}'`).join(', ');
-      constraints.push(`CHECK (${q('value')} IN (${values}))`);
+      // Inherited members included; skip CHECK for a valueless enum (IN () is invalid).
+      const names = allEnumValueNames(enumNode);
+      if (names.length > 0) {
+        constraints.push(`CHECK (${q('value')} IN (${sqlEnumLiterals(names)}))`);
+      } else {
+        this.flagEmptyEnum(enumNode.name);
+      }
     } else {
       const builtin = isRosettaBasicType(ref as never)
         ? (ref as { name: string }).name
@@ -212,6 +258,19 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
       severity: 'info',
       code: 'sql-enum-table-unsupported',
       message: `enumStrategy 'table' is not yet supported in namespace '${this.model.namespace}'; emitting CHECK constraints.`
+    });
+  }
+
+  /**
+   * A valueless enum (the grammar permits `enum Foo:` with no members) can't
+   * produce a `CHECK (... IN (...))` clause — `IN ()` is invalid SQL — so we emit
+   * the column without the CHECK and surface a warning rather than invalid DDL.
+   */
+  private flagEmptyEnum(enumName: string): void {
+    this.diagnostics.push({
+      severity: 'warning',
+      code: 'sql-empty-enum',
+      message: `Enum '${enumName}' has no values; emitting the column without a CHECK constraint.`
     });
   }
 

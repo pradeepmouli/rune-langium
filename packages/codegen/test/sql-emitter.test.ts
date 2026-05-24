@@ -255,3 +255,56 @@ type T:
     expect(out[0]!.diagnostics.some((d) => d.code === 'unresolved-ref')).toBe(false);
   });
 });
+
+describe('SqlNamespaceEmitter — enum edge cases + self-ref', () => {
+  it('includes inherited enum members in the CHECK constraint', async () => {
+    const out = await gen(`namespace test.enuminh
+
+enum Base:
+  A
+  B
+
+enum Child extends Base:
+  C
+
+type T:
+  v Child (1..1)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    // CHECK must accept inherited A, B AND own C (order-independent).
+    const check = ddl.match(/CHECK \("v" IN \(([^)]*)\)\)/)?.[1] ?? '';
+    expect(check).toContain("'A'");
+    expect(check).toContain("'B'");
+    expect(check).toContain("'C'");
+  });
+
+  it('emits no CHECK (and warns) for a valueless enum', async () => {
+    const out = await gen(`namespace test.emptyenum
+
+enum Empty:
+
+type T:
+  v Empty (1..1)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toMatch(/"v" TEXT NOT NULL/);
+    expect(ddl).not.toContain('IN ()');
+    expect(out[0]!.diagnostics.some((d) => d.code === 'sql-empty-enum')).toBe(true);
+  });
+
+  it('self-ref join FK stays distinct even when attr name equals the owner type name', async () => {
+    const out = await gen(`namespace test.selfref2
+
+type Node:
+  node Node (0..*)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toContain('CREATE TABLE "Node_node"');
+    // ownerFk node_id + a DISTINCT target fk (node_target_id), not two node_id.
+    expect(ddl).toMatch(/"node_id" BIGINT NOT NULL/);
+    expect(ddl).toMatch(/"node_target_id" BIGINT NOT NULL/);
+  });
+});
