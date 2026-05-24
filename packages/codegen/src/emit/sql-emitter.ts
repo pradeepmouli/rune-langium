@@ -31,6 +31,7 @@ function bounds(card: RosettaCardinality): { lower: number; upper: number | null
 
 export class SqlNamespaceEmitter implements NamespaceEmitter {
   private readonly dialect: Dialect;
+  private readonly inheritance: 'single-table' | 'table-per-type';
   private readonly enumNames: ReadonlySet<string>;
   private readonly statements: string[] = [];
   private readonly joinTables: string[] = [];
@@ -44,6 +45,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
   ) {
     const sql: SqlOptions = options.sql ?? {};
     this.dialect = dialectFor(sql.dialect ?? 'postgres');
+    this.inheritance = sql.inheritance ?? 'table-per-type';
     this.enumNames = new Set(model.enumByName.keys());
     this.relativePath = getTargetRelativePath(model.namespace, 'sql');
   }
@@ -59,8 +61,24 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
   emitData(data: Data): void {
     const q = (id: string) => this.dialect.quote(id);
     const fkType = this.dialect.fkColumnType();
-    const cols: string[] = [this.dialect.pkColumn('id')];
+    const cols: string[] = [];
     const constraints: string[] = [];
+
+    const superRef = data.superType?.ref;
+    if (superRef) {
+      if (this.inheritance === 'single-table') {
+        this.diagnostics.push({
+          severity: 'info',
+          code: 'sql-single-table-unsupported',
+          message: `Inheritance 'single-table' is not yet supported for '${data.name}'; emitting table-per-type.`
+        });
+      }
+      // table-per-type: the child's PK IS a foreign key to the parent (shared identity).
+      cols.push(`${q('id')} ${fkType} PRIMARY KEY`);
+      constraints.push(`FOREIGN KEY (${q('id')}) REFERENCES ${q(superRef.name)} (${q('id')})`);
+    } else {
+      cols.push(this.dialect.pkColumn('id'));
+    }
 
     for (const attr of data.attributes) {
       const { lower, upper } = bounds(attr.card);
