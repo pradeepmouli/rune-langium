@@ -900,11 +900,12 @@ function AppContent() {
             {userFiles.length} file(s)
           </span>
         )}
-        {/* Global header — hidden when the Explore perspective is active to
-         * avoid a duplicate toolbar. ExplorePerspective renders its own
-         * studio-topbar (Close + workspace name) in that mode; every other
-         * perspective gets the brand header. */}
-        {activePerspective !== 'explore' && (
+        {/* Global header — hidden only when the Explore workbench is actually
+         * showing (it renders its own studio-topbar). Gate on `hasWorkspace`
+         * too: PerspectiveHost's requiresWorkspace fallback renders the
+         * Workspaces launcher when the store still says 'explore' but no
+         * workspace is loaded, and that launcher needs the brand header. */}
+        {!(hasWorkspace && activePerspective === 'explore') && (
           <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
             <div className="studio-brand">
               <div className="studio-brand__mark">R</div>

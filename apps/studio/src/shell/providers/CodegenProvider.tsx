@@ -78,8 +78,10 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
       return;
     }
     return () => {
+      // Cleanup runs only on unmount (handlePreviewWorkerFailure is stable),
+      // so no setCodegenWorker(null) here — the component is going away and a
+      // state update on unmount is pointless.
       worker?.terminate();
-      setCodegenWorker(null);
     };
   }, [handlePreviewWorkerFailure]);
 

@@ -29,15 +29,17 @@ export function getLspSessionId(): string {
   if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
     return makeLspSessionUlid();
   }
-  const existing = window.sessionStorage.getItem(LSP_SESSION_ID_KEY);
-  if (existing && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(existing)) return existing;
-  const fresh = makeLspSessionUlid();
   try {
+    const existing = window.sessionStorage.getItem(LSP_SESSION_ID_KEY);
+    if (existing && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(existing)) return existing;
+    const fresh = makeLspSessionUlid();
     window.sessionStorage.setItem(LSP_SESSION_ID_KEY, fresh);
+    return fresh;
   } catch {
-    // sessionStorage may throw under privacy modes; non-fatal — the caller
-    // still gets a unique-for-this-call id, it just won't persist across
-    // reloads. The DO will be isolated per-mount instead of per-tab.
+    // sessionStorage may throw under privacy / access-restricted modes — even
+    // on read (getItem), not just setItem. Non-fatal: the caller still gets a
+    // unique-for-this-call id, it just won't persist across reloads (the DO is
+    // isolated per-mount instead of per-tab).
+    return makeLspSessionUlid();
   }
-  return fresh;
 }
