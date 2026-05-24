@@ -307,12 +307,15 @@ export async function fetchCuratedManifest(
 }
 
 /**
- * Fetch a single per-namespace artifact from
- * `${CURATED_MIRROR_BASE}/${id}/${artifactKey}`, inflate, validate, and map
- * to CuratedDocument[].
+ * Fetch a single per-namespace artifact, inflate, validate, and map to
+ * CuratedDocument[].
  *
- * `artifactKey` is the `namespaces[ns].artifact` value from the manifest,
- * e.g. `artifacts/2026-05-22/ns/cdm.base.json.gz`.
+ * `artifactKey` is the `namespaces[ns].artifact` value from the manifest. It is
+ * normally an ABSOLUTE URL (e.g. `https://www.daikonic.dev/curated/cdm/artifacts/
+ * 2026-05-22/ns/cdm.base.json.gz`), which is fetched as-is — but only if it points
+ * at the trusted curated mirror (`CURATED_MIRROR_BASE`); off-mirror URLs are
+ * rejected. A RELATIVE path (older v2 manifests, e.g. `artifacts/.../ns/x.json.gz`)
+ * is prefixed with `${CURATED_MIRROR_BASE}/${id}/`.
  *
  * Results are cached per `${id}/${artifactKey}` (versioned keys are immutable).
  * If `artifactKey` contains `latest` caching is skipped as a defensive measure.
@@ -352,9 +355,25 @@ async function fetchNamespaceArtifact(
   // The manifest's `namespaces[ns].artifact` is an absolute URL (consistent with
   // archiveUrl + serializedWorkspace.url). Use it as-is; fall back to prefixing the
   // mirror base for older v2 manifests that still carry a relative artifact path.
-  const url = /^https?:\/\//.test(artifactKey)
-    ? artifactKey
-    : `${CURATED_MIRROR_BASE}/${id}/${artifactKey}`;
+  //
+  // SECURITY: an absolute URL must point at the trusted curated mirror. Without this
+  // guard, a malformed/compromised manifest could make us fetch arbitrary hosts via
+  // globalThis.fetch (local dev/tests). Reject any off-mirror absolute URL.
+  let url: string;
+  if (/^https?:\/\//.test(artifactKey)) {
+    if (!artifactKey.startsWith(`${CURATED_MIRROR_BASE}/`)) {
+      console.error('curated-fetch ns_artifact_off_mirror', { bundleId: id, version, artifactKey });
+      throw new CuratedBundleUnavailableError(
+        id,
+        version,
+        undefined,
+        new Error(`artifact URL is not on the curated mirror: ${artifactKey}`)
+      );
+    }
+    url = artifactKey;
+  } else {
+    url = `${CURATED_MIRROR_BASE}/${id}/${artifactKey}`;
+  }
 
   let res: Response;
   try {
