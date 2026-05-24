@@ -136,6 +136,28 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
       cols.push(this.dialect.pkColumn('id'));
     }
 
+    // Generated identifiers (the surrogate `id` PK, `<attr>_id` FK columns) can
+    // collide with user attribute names (e.g. `type Trade: id string`). Track used
+    // column names per table and rename-on-collision (append `_`) with a warning,
+    // rather than emitting a table with duplicate columns (invalid DDL).
+    const usedCols = new Set<string>(['id']);
+    const uniqueCol = (name: string): string => {
+      if (!usedCols.has(name)) {
+        usedCols.add(name);
+        return name;
+      }
+      let candidate = `${name}_`;
+      let n = 2;
+      while (usedCols.has(candidate)) candidate = `${name}_${n++}`;
+      usedCols.add(candidate);
+      this.diagnostics.push({
+        severity: 'warning',
+        code: 'sql-column-collision',
+        message: `Column '${name}' in '${data.name}' collides with an existing column (e.g. the surrogate 'id' PK); renamed to '${candidate}'.`
+      });
+      return candidate;
+    };
+
     for (const attr of data.attributes) {
       const { lower, upper } = bounds(attr.card);
       const ref = attr.typeCall?.type?.ref;
@@ -157,28 +179,29 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
 
       if (refData) {
         // Scalar reference to another type → FK column + table-level constraint.
-        const fkCol = `${attr.name}_id`;
+        const fkCol = uniqueCol(`${attr.name}_id`);
         cols.push(`${q(fkCol)} ${fkType}${notNull}`);
         constraints.push(`FOREIGN KEY (${q(fkCol)}) REFERENCES ${q(refData.name)} (${q('id')})`);
       } else if (enumNode) {
         this.flagEnumTableFallback();
-        cols.push(`${q(attr.name)} ${this.dialect.columnType('string')}${notNull}`);
+        const col = uniqueCol(attr.name);
+        cols.push(`${q(col)} ${this.dialect.columnType('string')}${notNull}`);
         // Include inherited enum members; skip the CHECK entirely for a valueless
         // enum (CHECK (... IN ()) is invalid SQL in both dialects).
         const names = allEnumValueNames(enumNode);
         if (names.length > 0) {
-          constraints.push(`CHECK (${q(attr.name)} IN (${sqlEnumLiterals(names)}))`);
+          constraints.push(`CHECK (${q(col)} IN (${sqlEnumLiterals(names)}))`);
         } else {
           this.flagEmptyEnum(enumNode.name);
         }
       } else {
         const aliasBuiltin = resolveAliasBuiltin(ref);
         const builtin = isRosettaBasicType(ref) ? ref.name : (aliasBuiltin ?? refText);
-        // Warn when the type didn't resolve to anything we recognize: not a basic
-        // type, not an alias→builtin, and not even a known builtin NAME (an
-        // unresolved ref like `MissingType` has a truthy refText but maps to TEXT
-        // only by fallback — surface that rather than silently emitting TEXT).
-        const resolved = isRosettaBasicType(ref) || aliasBuiltin !== undefined || this.dialect.isKnownBuiltin(builtin);
+        // Resolved = a real basic type OR a name the dialect actually knows. Do NOT
+        // trust aliasBuiltin alone: resolveAliasBuiltin returns the inner $refText
+        // even for an UNRESOLVED alias target (e.g. `typeAlias Amount: MissingType`),
+        // so an unknown name must still warn rather than silently mapping to TEXT.
+        const resolved = isRosettaBasicType(ref) || this.dialect.isKnownBuiltin(builtin);
         if (!resolved) {
           this.diagnostics.push({
             severity: 'warning',
@@ -186,7 +209,8 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
             message: `Attribute '${data.name}.${attr.name}': type '${refText || '<unknown>'}' did not resolve; emitting ${this.dialect.columnType('string')}.`
           });
         }
-        cols.push(`${q(attr.name)} ${this.dialect.columnType(builtin || 'string')}${notNull}`);
+        const col = uniqueCol(attr.name);
+        cols.push(`${q(col)} ${this.dialect.columnType(builtin || 'string')}${notNull}`);
       }
     }
 
