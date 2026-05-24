@@ -33,6 +33,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
   private readonly dialect: Dialect;
   private readonly enumNames: ReadonlySet<string>;
   private readonly statements: string[] = [];
+  private readonly joinTables: string[] = [];
   private readonly diagnostics: GeneratorDiagnostic[] = [];
   private readonly relativePath: string;
 
@@ -57,37 +58,44 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
 
   emitData(data: Data): void {
     const q = (id: string) => this.dialect.quote(id);
+    const fkType = this.dialect.fkColumnType();
     const cols: string[] = [this.dialect.pkColumn('id')];
     const constraints: string[] = [];
 
     for (const attr of data.attributes) {
       const { lower, upper } = bounds(attr.card);
-      if (upper === null || upper > 1) {
-        this.diagnostics.push({
-          severity: 'info', code: 'sql-multivalued-deferred',
-          message: `Attribute '${data.name}.${attr.name}' is multi-valued; join-table emission lands in a later task.`
-        });
-        continue;
-      }
       const ref = attr.typeCall?.type?.ref;
       const refText = attr.typeCall?.type?.$refText ?? '';
       const notNull = lower === 1 ? ' NOT NULL' : '';
+      const refData = ref && isData(ref) ? ref : undefined;
+      const enumNode =
+        ref && isRosettaEnumeration(ref)
+          ? ref
+          : this.enumNames.has(refText)
+            ? this.model.enumByName.get(refText)
+            : undefined;
 
-      if ((ref && isRosettaEnumeration(ref)) || this.enumNames.has(refText)) {
-        const enumNode = (ref && isRosettaEnumeration(ref) ? ref : this.model.enumByName.get(refText))!;
+      // Multi-valued → a separate join/child table (emitted after the owner tables).
+      if (upper === null || upper > 1) {
+        this.joinTables.push(this.buildJoinTable(data.name, attr.name, refData, enumNode, ref, refText));
+        continue;
+      }
+
+      if (refData) {
+        // Scalar reference to another type → FK column + table-level constraint.
+        const fkCol = `${attr.name}_id`;
+        cols.push(`${q(fkCol)} ${fkType}${notNull}`);
+        constraints.push(`FOREIGN KEY (${q(fkCol)}) REFERENCES ${q(refData.name)} (${q('id')})`);
+      } else if (enumNode) {
         cols.push(`${q(attr.name)} ${this.dialect.columnType('string')}${notNull}`);
         const values = enumNode.enumValues.map((v) => `'${v.name.replace(/'/g, "''")}'`).join(', ');
         constraints.push(`CHECK (${q(attr.name)} IN (${values}))`);
-      } else if (ref && isData(ref)) {
-        this.diagnostics.push({
-          severity: 'info', code: 'sql-fk-deferred',
-          message: `Attribute '${data.name}.${attr.name}' references type '${ref.name}'; FK emission lands in a later task.`
-        });
       } else {
         const builtin = ref && isRosettaBasicType(ref) ? ref.name : refText;
         if (!builtin) {
           this.diagnostics.push({
-            severity: 'warning', code: 'unresolved-ref',
+            severity: 'warning',
+            code: 'unresolved-ref',
             message: `Attribute '${data.name}.${attr.name}' has an unresolved type; emitting TEXT.`
           });
         }
@@ -99,9 +107,47 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
     this.statements.push(`CREATE TABLE ${q(data.name)} (\n${body}\n);`);
   }
 
+  /**
+   * A multi-valued attribute becomes its own table: an FK back to the owner
+   * plus either an FK to the element type (Data) or a `value` column
+   * (enum → CHECK; builtin → typed column).
+   */
+  private buildJoinTable(
+    ownerName: string,
+    attrName: string,
+    refData: Data | undefined,
+    enumNode: RosettaEnumeration | undefined,
+    ref: unknown,
+    refText: string
+  ): string {
+    const q = (id: string) => this.dialect.quote(id);
+    const fkType = this.dialect.fkColumnType();
+    const tableName = `${ownerName}_${attrName}`;
+    const ownerFk = `${ownerName.toLowerCase()}_id`;
+    const cols: string[] = [`${q(ownerFk)} ${fkType} NOT NULL`];
+    const constraints: string[] = [`FOREIGN KEY (${q(ownerFk)}) REFERENCES ${q(ownerName)} (${q('id')})`];
+
+    if (refData) {
+      const targetFk = `${refData.name.toLowerCase()}_id`;
+      cols.push(`${q(targetFk)} ${fkType} NOT NULL`);
+      constraints.push(`FOREIGN KEY (${q(targetFk)}) REFERENCES ${q(refData.name)} (${q('id')})`);
+    } else if (enumNode) {
+      cols.push(`${q('value')} ${this.dialect.columnType('string')}`);
+      const values = enumNode.enumValues.map((v) => `'${v.name.replace(/'/g, "''")}'`).join(', ');
+      constraints.push(`CHECK (${q('value')} IN (${values}))`);
+    } else {
+      const builtin = ref && isRosettaBasicType(ref as never) ? (ref as { name: string }).name : refText;
+      cols.push(`${q('value')} ${this.dialect.columnType(builtin || 'string')}`);
+    }
+
+    const body = [...cols, ...constraints].map((line) => `  ${line}`).join(',\n');
+    return `CREATE TABLE ${q(tableName)} (\n${body}\n);`;
+  }
+
   finalize(): GeneratorOutput {
     const header = `-- SQL DDL generated from namespace ${this.model.namespace} (${this.dialect.name})\n`;
-    const content = header + this.statements.join('\n\n') + (this.statements.length ? '\n' : '');
+    const all = [...this.statements, ...this.joinTables];
+    const content = header + all.join('\n\n') + (all.length ? '\n' : '');
     return { relativePath: this.relativePath, content, sourceMap: [], diagnostics: this.diagnostics, funcs: [] };
   }
 }

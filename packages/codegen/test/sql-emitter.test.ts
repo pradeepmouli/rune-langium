@@ -67,3 +67,51 @@ type Flag:
     expect(ddl).toMatch(/\[description\] NVARCHAR\(MAX\) NOT NULL/);
   });
 });
+
+describe('SqlNamespaceEmitter — references + cardinality', () => {
+  it('scalar reference to another type emits an FK column + REFERENCES', async () => {
+    const out = await gen(`namespace test.ref
+
+type Party:
+  name string (1..1)
+
+type Trade:
+  buyer Party (1..1)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toMatch(/"buyer_id" BIGINT NOT NULL/);
+    expect(ddl).toMatch(/FOREIGN KEY \("buyer_id"\) REFERENCES "Party" ?\("id"\)/);
+  });
+
+  it('multi-valued attribute of a type emits a join table with two FKs', async () => {
+    const out = await gen(`namespace test.multi
+
+type Leg:
+  rate number (1..1)
+
+type Swap:
+  legs Leg (1..*)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toContain('CREATE TABLE "Swap_legs"');
+    expect(ddl).toMatch(/"swap_id" BIGINT NOT NULL/);
+    expect(ddl).toMatch(/"leg_id" BIGINT NOT NULL/);
+    expect(ddl).toMatch(/REFERENCES "Swap" ?\("id"\)/);
+    expect(ddl).toMatch(/REFERENCES "Leg" ?\("id"\)/);
+  });
+
+  it('multi-valued scalar emits a child value table', async () => {
+    const out = await gen(`namespace test.multiscalar
+
+type Basket:
+  tags string (0..*)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toContain('CREATE TABLE "Basket_tags"');
+    expect(ddl).toMatch(/"basket_id" BIGINT NOT NULL/);
+    expect(ddl).toMatch(/"value" TEXT/);
+  });
+});
