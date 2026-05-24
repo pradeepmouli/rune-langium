@@ -173,6 +173,11 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
       codegenWorker.removeEventListener('message', handleMessage as EventListener);
       codegenWorker.removeEventListener('error', handleWorkerFailure as EventListener);
       codegenWorker.removeEventListener('messageerror', handleWorkerFailure as EventListener);
+      // Clear the preview store's worker ref so a terminated worker is not left
+      // dangling after unmount (else a later dispatchExecute would post to a
+      // dead worker and be silently dropped). Symmetric with setWorkerRef above;
+      // CodegenProvider is a singleton so there is no remount race. (Codex P2)
+      setWorkerRef(null);
     };
   }, [
     codegenWorker,
