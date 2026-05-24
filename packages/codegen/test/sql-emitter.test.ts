@@ -153,3 +153,20 @@ type Sub extends Base:
     expect(out[0]!.diagnostics.some((d) => d.code === 'sql-single-table-unsupported')).toBe(true);
   });
 });
+
+describe('SQL single-file layout', () => {
+  it("layout 'single-file' concatenates all namespaces into one model.sql", async () => {
+    const { RuneDsl } = createRuneDslServices();
+    const f = RuneDsl.shared.workspace.LangiumDocumentFactory;
+    const a = f.fromString('namespace a\n\ntype X:\n  v string (1..1)\n', URI.parse('inmemory:///a.rosetta'));
+    const b = f.fromString('namespace b\n\ntype Y:\n  v string (1..1)\n', URI.parse('inmemory:///b.rosetta'));
+    await RuneDsl.shared.workspace.DocumentBuilder.build([a, b], { validation: false });
+    const out = await generate([a, b], { target: 'sql', sql: { layout: 'single-file' } });
+    const paths = out.map((o) => o.relativePath).sort();
+    expect(paths).toEqual(['model.sql']);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toContain('CREATE TABLE "X"');
+    expect(ddl).toContain('CREATE TABLE "Y"');
+  });
+});

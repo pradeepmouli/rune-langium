@@ -22,6 +22,7 @@ import { GenericModelEmitter } from './emit/generic-model-emitter.js';
 import { zodProfile } from './emit/zod-profile.js';
 import { typescriptProfile } from './emit/typescript-profile.js';
 import { jsonSchemaProfile } from './emit/json-schema-profile.js';
+import { sqlProfile } from './emit/sql-profile.js';
 import { ExcelWholeModelEmitter } from './emit/excel-emitter.js';
 
 // 019 spec §3.2 — two-registry dispatch.
@@ -56,7 +57,8 @@ const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>
 const PROFILES: Partial<Record<Target, LanguageProfile<Target>>> = {
   zod: zodProfile,
   typescript: typescriptProfile,
-  'json-schema': jsonSchemaProfile
+  'json-schema': jsonSchemaProfile,
+  sql: sqlProfile
 };
 
 /**
