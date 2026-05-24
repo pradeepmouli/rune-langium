@@ -136,12 +136,18 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
         const values = enumNode.enumValues.map((v) => `'${v.name.replace(/'/g, "''")}'`).join(', ');
         constraints.push(`CHECK (${q(attr.name)} IN (${values}))`);
       } else {
-        const builtin = isRosettaBasicType(ref) ? ref.name : (resolveAliasBuiltin(ref) ?? refText);
-        if (!builtin) {
+        const aliasBuiltin = resolveAliasBuiltin(ref);
+        const builtin = isRosettaBasicType(ref) ? ref.name : (aliasBuiltin ?? refText);
+        // Warn when the type didn't resolve to anything we recognize: not a basic
+        // type, not an alias→builtin, and not even a known builtin NAME (an
+        // unresolved ref like `MissingType` has a truthy refText but maps to TEXT
+        // only by fallback — surface that rather than silently emitting TEXT).
+        const resolved = isRosettaBasicType(ref) || aliasBuiltin !== undefined || this.dialect.isKnownBuiltin(builtin);
+        if (!resolved) {
           this.diagnostics.push({
             severity: 'warning',
             code: 'unresolved-ref',
-            message: `Attribute '${data.name}.${attr.name}' has an unresolved type; emitting TEXT.`
+            message: `Attribute '${data.name}.${attr.name}': type '${refText || '<unknown>'}' did not resolve; emitting ${this.dialect.columnType('string')}.`
           });
         }
         cols.push(`${q(attr.name)} ${this.dialect.columnType(builtin || 'string')}${notNull}`);

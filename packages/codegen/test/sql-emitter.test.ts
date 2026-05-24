@@ -230,3 +230,28 @@ type Paint:
     expect(out[0]!.diagnostics.some((d) => d.code === 'sql-enum-table-unsupported')).toBe(true);
   });
 });
+
+describe('SqlNamespaceEmitter — unresolved types', () => {
+  it('warns (does not silently TEXT) when an attribute type does not resolve', async () => {
+    const out = await gen(`namespace test.unresolved
+
+type Trade:
+  bar MissingType (1..1)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    // Still emits a column (graceful TEXT fallback)…
+    expect(ddl).toMatch(/"bar" TEXT NOT NULL/);
+    // …but surfaces the unresolved type rather than silently mapping to TEXT.
+    expect(out[0]!.diagnostics.some((d) => d.code === 'unresolved-ref')).toBe(true);
+  });
+
+  it('does NOT warn for a real builtin', async () => {
+    const out = await gen(`namespace test.ok
+
+type T:
+  s string (1..1)
+`);
+    expect(out[0]!.diagnostics.some((d) => d.code === 'unresolved-ref')).toBe(false);
+  });
+});
