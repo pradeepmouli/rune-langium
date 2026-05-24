@@ -135,6 +135,24 @@ describe('fetchCuratedNamespace', () => {
     expect(docs[0].exports).toEqual([]);
   });
 
+  it('absolute artifact URL is fetched as-is (not prefixed with the mirror base)', async () => {
+    const modelJson = '{"$type":"RosettaModel","name":"cdm.abs"}';
+    const gzBytes = makeNsArtifact([{ path: 'a/abs.rosetta', modelJson, exports: [] }]);
+    // The manifest now carries absolute artifact URLs; the fetcher must use them
+    // verbatim, NOT `${MIRROR}/cdm/${absoluteUrl}` (which would double-prefix → 404).
+    const artifactKey = `${MIRROR}/cdm/artifacts/2026-05-23/ns/cdm.abs.json.gz`;
+    const stub: CuratedFetcher = vi.fn().mockResolvedValue(new Response(gzBytes, { status: 200 }));
+
+    const docs = await fetchCuratedNamespace('cdm', '2026-05-23', artifactKey, stub);
+
+    expect(stub).toHaveBeenCalledWith(
+      artifactKey,
+      expect.objectContaining({ headers: expect.objectContaining({ 'Accept-Encoding': 'identity' }) })
+    );
+    expect(docs).toHaveLength(1);
+    expect(docs[0].uri).toBe('cdm/a/abs.rosetta');
+  });
+
   it('non-200 status: rejects with CuratedBundleUnavailableError', async () => {
     // Use a distinct key so the namespace cache from the happy path test doesn't interfere.
     const artifactKey = 'artifacts/2026-05-22/ns/cdm.error-case.json.gz';

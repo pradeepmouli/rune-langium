@@ -349,7 +349,12 @@ async function fetchNamespaceArtifact(
   artifactKey: string,
   fetchFn: CuratedFetcher
 ): Promise<CuratedDocument[]> {
-  const url = `${CURATED_MIRROR_BASE}/${id}/${artifactKey}`;
+  // The manifest's `namespaces[ns].artifact` is an absolute URL (consistent with
+  // archiveUrl + serializedWorkspace.url). Use it as-is; fall back to prefixing the
+  // mirror base for older v2 manifests that still carry a relative artifact path.
+  const url = /^https?:\/\//.test(artifactKey)
+    ? artifactKey
+    : `${CURATED_MIRROR_BASE}/${id}/${artifactKey}`;
 
   let res: Response;
   try {
