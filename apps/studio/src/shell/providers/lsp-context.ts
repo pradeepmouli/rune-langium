@@ -6,7 +6,12 @@ import type { TransportState } from '../../services/transport-provider.js';
 
 export interface LspContextValue {
   lspClient: LspClientService | null;
-  transportState: TransportState;
+  /**
+   * Connection FSM. Optional so consumers can guard on its presence (the
+   * connection badge renders only once a transport state exists); LspProvider
+   * always supplies one in production.
+   */
+  transportState?: TransportState;
   reconnect: () => void;
 }
 

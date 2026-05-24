@@ -6,13 +6,13 @@
  * flow on CodePreviewPanel (post-Codex-P2 edition).
  *
  * CodePreviewPanel is now a PURE-DISPLAY component. Worker ownership
- * (codegen:generate postMessage + response listener) lives in EditorPage.
+ * (codegen:generate postMessage + response listener) lives in CodegenProvider.
  * This file tests only what the component is responsible for:
  *
  *   - Panel mounts to the targets table when activeTarget=undefined.
- *   - No worker postMessage is called from the panel (worker is EditorPage's).
+ *   - No worker postMessage is called from the panel (worker is CodegenProvider's).
  *   - Clicking [View] updates the store (activeTarget, codePreviewTarget)
- *     and expands the viewer — EditorPage's effect would then trigger codegen.
+ *     and expands the viewer — CodegenProvider's effect would then trigger codegen.
  *   - Clicking the eye again toggles the preview off.
  *   - Clicking [Download] opens the modal and POSTs to /api/codegen.
  *
@@ -83,7 +83,7 @@ describe('CodePreviewPanel table-as-landing flow', () => {
     // 019 polish — table stays mounted; viewer expands below it.
     expect(screen.getByTestId('codegen-targets-table')).toBeTruthy();
     expect(screen.getByTestId('code-preview-editor')).toBeTruthy();
-    // Note: EditorPage (not the panel) sends the codegen:generate postMessage.
+    // Note: CodegenProvider (not the panel) sends the codegen:generate postMessage.
     // We do not assert postMessage here.
   });
 
