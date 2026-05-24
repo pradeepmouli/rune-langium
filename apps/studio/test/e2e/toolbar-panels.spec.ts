@@ -43,7 +43,7 @@ async function loadModel(page: Page) {
     mimeType: 'text/plain',
     buffer: Buffer.from(TOOLBAR_MODEL)
   });
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
   await page.locator('[aria-label="Graph toolbar"]').waitFor({ timeout: 10000 });
 }
 

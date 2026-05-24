@@ -31,7 +31,7 @@
 
 import React, { useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, cleanup, waitFor, act } from '@testing-library/react';
+import { cleanup, waitFor, act } from '@testing-library/react';
 import { parse } from '@rune-langium/core';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
@@ -196,7 +196,7 @@ vi.mock('../../src/utils/uri.js', () => ({
 // Import after mocks are set up
 // ---------------------------------------------------------------------------
 
-import { EditorPage } from '../../src/pages/EditorPage.js';
+import { renderEditorPage } from './editor-page-harness.js';
 import { useEditorStore } from '@rune-langium/visual-editor';
 
 // ---------------------------------------------------------------------------
@@ -254,14 +254,12 @@ describe('EditorPage — Structure-mode source sync (regression fix/inspector-so
     //    - `parsedModels` provides the filePath→namespace mapping for
     //      namespaceToFile so handleModelChanged can map namespace → file.
     //    - `files` has the actual content that will be smart-merged.
-    render(
-      <EditorPage
-        models={[model]}
-        parsedModels={[{ filePath: FILE_PATH, model }]}
-        files={[{ name: FILE_PATH, path: FILE_PATH, content: ROSETTA_SOURCE, dirty: false }]}
-        onFilesChange={onFilesChange}
-      />
-    );
+    renderEditorPage({
+      models: [model],
+      parsedModels: [{ filePath: FILE_PATH, model }],
+      files: [{ name: FILE_PATH, path: FILE_PATH, content: ROSETTA_SOURCE, dirty: false }],
+      onFilesChange
+    });
 
     // 3. Wait for the initial loadModels effect to settle and the
     //    useModelSourceSync initial-skip to record its baseline.

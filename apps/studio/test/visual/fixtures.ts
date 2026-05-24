@@ -78,7 +78,7 @@ export async function loadFormsBaseline(page: Page): Promise<void> {
     mimeType: 'text/plain',
     buffer: Buffer.from(FORMS_BASELINE_ROSETTA)
   });
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
   // Allow the namespace tree + graph nodes to settle.
   await page.waitForTimeout(1500);
 }

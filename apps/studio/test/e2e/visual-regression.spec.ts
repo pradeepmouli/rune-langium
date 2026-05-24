@@ -203,7 +203,7 @@ async function loadModel(page: Page, files: Array<{ name: string; content: strin
       buffer: Buffer.from(f.content)
     }))
   );
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
   await page.waitForTimeout(1500);
 }
 
@@ -224,12 +224,12 @@ const FILE_LOADER_SELECTORS = [
 const EDITOR_PAGE_SELECTORS = [
   '.studio-app', // Root container
   '.studio-app > header', // App header
-  '[data-testid="editor-page"]', // Editor page root
-  '[data-testid="editor-page"] > nav', // Toolbar
-  '[data-testid="editor-page"] [data-slot="separator"]', // Separator
-  '[data-testid="editor-page"] [data-slot="resizable-panel-group"]', // Panel group
-  '[data-testid="editor-page"] > footer', // Status bar
-  '[data-testid="editor-page"] [data-slot="button"]', // Toolbar buttons
+  '[data-testid="explore-workbench"]', // Editor page root
+  '[data-testid="explore-workbench"] > nav', // Toolbar
+  '[data-testid="explore-workbench"] [data-slot="separator"]', // Separator
+  '[data-testid="explore-workbench"] [data-slot="resizable-panel-group"]', // Panel group
+  '[data-testid="explore-workbench"] > footer', // Status bar
+  '[data-testid="explore-workbench"] [data-slot="button"]', // Toolbar buttons
   '[data-testid="export-menu"]', // Export menu
   '[role="status"]' // Connection status
 ];

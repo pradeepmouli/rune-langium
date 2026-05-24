@@ -70,7 +70,7 @@ async function loadFiles(page: import('@playwright/test').Page, files: { name: s
       buffer: Buffer.from(f.content)
     }))
   );
-  await page.waitForSelector('[data-testid="editor-page"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
 }
 
 // ---------------------------------------------------------------------------
