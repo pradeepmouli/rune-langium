@@ -14,6 +14,7 @@ import {
 import { ZodNamespaceEmitter } from './emit/zod-emitter.js';
 import { JsonSchemaNamespaceEmitter } from './emit/json-schema-emitter.js';
 import { TsNamespaceEmitter } from './emit/ts-emitter.js';
+import { SqlNamespaceEmitter } from './emit/sql-emitter.js';
 import { buildNamespaceRegistry, type NamespaceRegistry } from './emit/namespace-registry.js';
 import { walkNamespace, type NamespaceWalkResult } from './emit/namespace-walker.js';
 import type { LanguageProfile } from './emit/language-profile.js';
@@ -43,7 +44,8 @@ import { ExcelWholeModelEmitter } from './emit/excel-emitter.js';
 const NAMESPACE_EMITTERS: Partial<Record<Target, NamespaceEmitterConstructor>> = {
   zod: ZodNamespaceEmitter,
   'json-schema': JsonSchemaNamespaceEmitter,
-  typescript: TsNamespaceEmitter
+  typescript: TsNamespaceEmitter,
+  sql: SqlNamespaceEmitter
 };
 
 const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>> = {
