@@ -30,11 +30,30 @@ export const sqlProfile: LanguageProfile<'sql'> = {
     // limitation — cross-namespace FK ordering is out of scope for this phase.)
     const sorted = [...perNs].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
     const content = sorted.map((o) => o.content.trimEnd()).join('\n\n') + '\n';
+    const tableNames = [...content.matchAll(/CREATE TABLE ["[]([^"\]]+)["\]]/g)]
+      .map((m) => m[1])
+      .filter((t): t is string => t !== undefined);
+    const seen = new Set<string>();
+    const dupes = new Set<string>();
+    for (const t of tableNames) {
+      if (seen.has(t)) dupes.add(t);
+      else seen.add(t);
+    }
+    const dupeDiagnostics =
+      dupes.size > 0
+        ? [
+            {
+              severity: 'warning' as const,
+              code: 'sql-duplicate-table',
+              message: `Duplicate table name(s) across namespaces in the single-file bundle: ${[...dupes].sort().join(', ')}. Apply per-namespace, or namespace-qualify (future).`
+            }
+          ]
+        : [];
     return {
       relativePath: 'model.sql',
       content,
       sourceMap: [],
-      diagnostics: sorted.flatMap((o) => o.diagnostics),
+      diagnostics: [...sorted.flatMap((o) => o.diagnostics), ...dupeDiagnostics],
       funcs: []
     };
   },

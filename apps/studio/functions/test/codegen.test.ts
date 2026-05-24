@@ -64,11 +64,11 @@ describe('POST /api/codegen', () => {
 
   it('returns 400 when target is not implemented in this build', async () => {
     const res = await onRequestPost({
-      request: makeRequest({ files: [{ path: 'x.rune', content: ONE_NAMESPACE }], target: 'sql' })
+      request: makeRequest({ files: [{ path: 'x.rune', content: ONE_NAMESPACE }], target: 'markdown' })
     } as never);
     expect(res.status).toBe(400);
     const body = await asJson(res);
-    expect(body.error).toMatch(/'sql' is not implemented/);
+    expect(body.error).toMatch(/'markdown' is not implemented/);
   });
 
   it('returns 400 when files array is empty', async () => {

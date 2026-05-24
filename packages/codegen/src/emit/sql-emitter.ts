@@ -13,6 +13,7 @@ import {
   isData,
   isRosettaEnumeration,
   isRosettaBasicType,
+  isRosettaTypeAlias,
   type Data,
   type RosettaEnumeration,
   type RosettaCardinality,
@@ -27,6 +28,28 @@ import { dialectFor, type Dialect } from './sql-dialect.js';
 /** Read (lower, upper) from a cardinality; upper === null means unbounded. */
 function bounds(card: RosettaCardinality): { lower: number; upper: number | null } {
   return { lower: card.inf, upper: card.unbounded ? null : (card.sup ?? card.inf) };
+}
+
+/**
+ * Walk a user-defined type-alias chain to its underlying basic-type name
+ * (e.g. `Amount: number` → 'number'). Handles the case where the Langium
+ * cross-reference to a RosettaBasicType is unresolved (ref===undefined) by
+ * falling back to `$refText`. Returns undefined for non-alias / non-builtin.
+ */
+function resolveAliasBuiltin(ref: unknown, depth = 0): string | undefined {
+  if (!ref || depth > 16) return undefined;
+  if (isRosettaBasicType(ref as never)) return (ref as { name: string }).name;
+  if (isRosettaTypeAlias(ref as never)) {
+    const typeCallType = (ref as { typeCall?: { type?: { ref?: unknown; $refText?: string } } }).typeCall?.type;
+    // ref may be undefined for built-in types (e.g. `number`) that are not
+    // normal AST nodes in the Langium index — fall back to $refText.
+    const innerRef = typeCallType?.ref;
+    if (innerRef) return resolveAliasBuiltin(innerRef, depth + 1);
+    const innerRefText = typeCallType?.$refText;
+    if (innerRefText) return innerRefText; // e.g. 'number' → caller passes to columnType()
+    return undefined;
+  }
+  return undefined;
 }
 
 export class SqlNamespaceEmitter implements NamespaceEmitter {
@@ -113,7 +136,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
         const values = enumNode.enumValues.map((v) => `'${v.name.replace(/'/g, "''")}'`).join(', ');
         constraints.push(`CHECK (${q(attr.name)} IN (${values}))`);
       } else {
-        const builtin = ref && isRosettaBasicType(ref) ? ref.name : refText;
+        const builtin = isRosettaBasicType(ref) ? ref.name : (resolveAliasBuiltin(ref) ?? refText);
         if (!builtin) {
           this.diagnostics.push({
             severity: 'warning',
@@ -151,16 +174,19 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
 
     if (refData) {
       const targetFk = `${refData.name.toLowerCase()}_id`;
-      cols.push(`${q(targetFk)} ${fkType} NOT NULL`);
-      constraints.push(`FOREIGN KEY (${q(targetFk)}) REFERENCES ${q(refData.name)} (${q('id')})`);
+      const safeTargetFk = targetFk === ownerFk ? `${attrName.toLowerCase()}_id` : targetFk;
+      cols.push(`${q(safeTargetFk)} ${fkType} NOT NULL`);
+      constraints.push(`FOREIGN KEY (${q(safeTargetFk)}) REFERENCES ${q(refData.name)} (${q('id')})`);
     } else if (enumNode) {
       this.flagEnumTableFallback();
-      cols.push(`${q('value')} ${this.dialect.columnType('string')}`);
+      cols.push(`${q('value')} ${this.dialect.columnType('string')} NOT NULL`);
       const values = enumNode.enumValues.map((v) => `'${v.name.replace(/'/g, "''")}'`).join(', ');
       constraints.push(`CHECK (${q('value')} IN (${values}))`);
     } else {
-      const builtin = ref && isRosettaBasicType(ref as never) ? (ref as { name: string }).name : refText;
-      cols.push(`${q('value')} ${this.dialect.columnType(builtin || 'string')}`);
+      const builtin = isRosettaBasicType(ref as never)
+        ? (ref as { name: string }).name
+        : (resolveAliasBuiltin(ref) ?? refText);
+      cols.push(`${q('value')} ${this.dialect.columnType(builtin || 'string')} NOT NULL`);
     }
 
     const body = [...cols, ...constraints].map((line) => `  ${line}`).join(',\n');

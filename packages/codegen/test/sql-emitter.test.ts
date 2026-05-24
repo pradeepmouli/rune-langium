@@ -52,6 +52,19 @@ type Paint:
     expect(ddl).toMatch(/CHECK\s*\(\s*"color" IN \('Red', 'Green'\)\s*\)/);
   });
 
+  it('resolves a user-defined type alias to its underlying SQL column type', async () => {
+    const out = await gen(`namespace test.alias
+
+typeAlias Amount: number
+
+type Trade:
+  notional Amount (1..1)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toMatch(/"notional" NUMERIC NOT NULL/); // NOT TEXT
+  });
+
   it('renders SQL Server dialect with [brackets] + BIT/NVARCHAR + IDENTITY', async () => {
     const out = await gen(`namespace test.basic
 
@@ -112,7 +125,22 @@ type Basket:
     assertParses(ddl);
     expect(ddl).toContain('CREATE TABLE "Basket_tags"');
     expect(ddl).toMatch(/"basket_id" BIGINT NOT NULL/);
-    expect(ddl).toMatch(/"value" TEXT/);
+    expect(ddl).toMatch(/"value" TEXT NOT NULL/);
+  });
+
+  it('self-referential multi-valued attribute emits distinct FK columns', async () => {
+    const out = await gen(`namespace test.selfref
+
+type Node:
+  children Node (0..*)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toContain('CREATE TABLE "Node_children"');
+    // two DISTINCT fk columns, both BIGINT NOT NULL, both REFERENCES "Node"
+    expect(ddl).toMatch(/"node_id" BIGINT NOT NULL/);
+    expect(ddl).toMatch(/"children_id" BIGINT NOT NULL/);
+    expect((ddl.match(/REFERENCES "Node" ?\("id"\)/g) || []).length).toBe(2);
   });
 });
 
@@ -168,6 +196,20 @@ describe('SQL single-file layout', () => {
     assertParses(ddl);
     expect(ddl).toContain('CREATE TABLE "X"');
     expect(ddl).toContain('CREATE TABLE "Y"');
+  });
+
+  it('emits a sql-duplicate-table warning diagnostic when two namespaces define a type with the same name', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    const f = RuneDsl.shared.workspace.LangiumDocumentFactory;
+    const a = f.fromString('namespace ns.a\n\ntype X:\n  v string (1..1)\n', URI.parse('inmemory:///nsa.rosetta'));
+    const b = f.fromString('namespace ns.b\n\ntype X:\n  v number (1..1)\n', URI.parse('inmemory:///nsb.rosetta'));
+    await RuneDsl.shared.workspace.DocumentBuilder.build([a, b], { validation: false });
+    const out = await generate([a, b], { target: 'sql', sql: { layout: 'single-file' } });
+    expect(out).toHaveLength(1);
+    const diag = out[0]!.diagnostics.find((d) => d.code === 'sql-duplicate-table');
+    expect(diag).toBeDefined();
+    expect(diag!.severity).toBe('warning');
+    expect(diag!.message).toMatch(/X/);
   });
 });
 
