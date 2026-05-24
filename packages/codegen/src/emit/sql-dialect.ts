@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
+/**
+ * Pure, AST-free dialect rendering for the SQL DDL emitter. One `Dialect`
+ * object knows how a given database renders the small set of primitives the
+ * emitter needs: identifier quoting, builtin → column type, the surrogate
+ * primary-key clause, and the foreign-key column type (must match the PK type).
+ */
+export type SqlDialectName = 'postgres' | 'sqlserver';
+
+export interface Dialect {
+  readonly name: SqlDialectName;
+  /** node-sql-parser database key for test validation. */
+  readonly parserDatabase: 'postgresql' | 'transactsql';
+  quote(identifier: string): string;
+  columnType(builtinName: string): string;
+  /** The surrogate PK column definition, e.g. `"id" BIGINT ... PRIMARY KEY`. */
+  pkColumn(name: string): string;
+  /** The column type used for FK columns — must equal the referenced PK's type. */
+  fkColumnType(): string;
+}
+
+// Rune builtin basic/record/typeAlias names → dialect column type.
+const POSTGRES_TYPES: Record<string, string> = {
+  string: 'TEXT', pattern: 'TEXT', boolean: 'BOOLEAN', number: 'NUMERIC', int: 'INTEGER',
+  date: 'DATE', dateTime: 'TIMESTAMP', zonedDateTime: 'TIMESTAMPTZ', time: 'TIME',
+  productType: 'TEXT', eventType: 'TEXT', calculation: 'TEXT'
+};
+const SQLSERVER_TYPES: Record<string, string> = {
+  string: 'NVARCHAR(MAX)', pattern: 'NVARCHAR(MAX)', boolean: 'BIT', number: 'DECIMAL(38,10)', int: 'INT',
+  date: 'DATE', dateTime: 'DATETIME2', zonedDateTime: 'DATETIMEOFFSET', time: 'TIME',
+  productType: 'NVARCHAR(MAX)', eventType: 'NVARCHAR(MAX)', calculation: 'NVARCHAR(MAX)'
+};
+
+export function dialectFor(name: SqlDialectName): Dialect {
+  if (name === 'sqlserver') {
+    return {
+      name, parserDatabase: 'transactsql',
+      quote: (id) => `[${id}]`,
+      columnType: (b) => SQLSERVER_TYPES[b] ?? 'NVARCHAR(MAX)',
+      pkColumn: (n) => `[${n}] BIGINT IDENTITY(1,1) PRIMARY KEY`,
+      fkColumnType: () => 'BIGINT'
+    };
+  }
+  return {
+    name: 'postgres', parserDatabase: 'postgresql',
+    quote: (id) => `"${id}"`,
+    columnType: (b) => POSTGRES_TYPES[b] ?? 'TEXT',
+    pkColumn: (n) => `"${n}" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY`,
+    fkColumnType: () => 'BIGINT'
+  };
+}
