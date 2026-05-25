@@ -3,8 +3,10 @@
 
 # Curated On-Demand Namespace Hydration — Design
 
-**Status:** Approved (design); pending implementation plan.
+**Status:** Approved (design); implementation plan at `docs/superpowers/plans/2026-05-25-curated-on-demand-hydration.md`.
 **Scope:** `apps/studio` (FSL-1.1-ALv2) — Pages Function `/api/parse`, parser worker, workspace service, namespace explorer.
+
+> **Scope decision (2026-05-25):** The implementation takes the **lean** path — loaded-status fix + server `hydrateNamespaces` + browse-on-select. The worker-side re-link **fixpoint loop ("trigger A")** described below is **deferred**: because `closeNamespacesFromManifest` already walks a namespace's transitive deps server-side, requesting the browsed namespace hydrates everything it needs, making the browser re-link loop and the list-only export-symbol registration largely redundant. Trigger A can be added later as a safety net if a real unresolved-after-closure case appears. The sections below document the full design for that future reference.
 
 ## Goal
 
