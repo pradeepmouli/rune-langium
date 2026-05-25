@@ -183,7 +183,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // import closure (curated browsing). Union them into the seeds; each bundle's
     // closure walk picks up the ones present in its own manifest and pulls their
     // transitive deps (closeNamespacesFromManifest ignores unknown seeds).
-    for (const ns of body.hydrateNamespaces ?? []) seeds.add(ns);
+    const requestedHydration = Array.isArray(body.hydrateNamespaces) ? body.hydrateNamespaces : [];
+    for (const ns of requestedHydration) {
+      if (typeof ns === 'string') seeds.add(ns);
+    }
 
     // Fetch curated bundles via the CURATED_MIRROR service binding so the
     // subrequest bypasses CF same-zone routing. Falls back to global fetch

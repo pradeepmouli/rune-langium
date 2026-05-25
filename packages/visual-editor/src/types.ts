@@ -117,6 +117,9 @@ export interface GraphMetadata {
   hasExternalRefs: boolean;
   /** UI-only annotation (not from AST). */
   comments?: string;
+  /** True only on deferred-export placeholder nodes (list-only curated types
+   *  not yet hydrated). Drives on-demand hydration gating in the explorer. */
+  deferred?: boolean;
   /** Required for ReactFlow compatibility: Node<T> requires T extends Record<string, unknown> */
   [key: string]: unknown;
 }

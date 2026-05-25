@@ -888,13 +888,14 @@ export function ExplorePerspective() {
   const handleExplorerSelectNode = useCallback(
     (nodeId: string) => {
       storeSelectNode(nodeId, { reapplyFocusMode: true });
-      // On-demand curated hydration: selecting a node in a not-yet-hydrated
-      // namespace asks the server for that namespace (server pulls its
-      // transitive deps) so the structure view can render. No-op for
-      // already-hydrated namespaces (store dedupes).
+      // On-demand curated hydration: only deferred (list-only, un-hydrated
+      // curated) nodes need a server round-trip; user types and already-
+      // hydrated curated types resolve locally.
       const selectedNode = useEditorStore.getState().nodes.find((n) => n.id === nodeId);
-      const ns = (selectedNode?.data as { namespace?: string } | undefined)?.namespace;
-      if (ns) useEditorStore.getState().requestNamespaceHydration(ns);
+      const data = selectedNode?.data as { namespace?: string; deferred?: boolean } | undefined;
+      if (data?.deferred && data.namespace) {
+        useEditorStore.getState().requestNamespaceHydration(data.namespace);
+      }
     },
     [storeSelectNode]
   );
@@ -904,7 +905,11 @@ export function ExplorePerspective() {
   // queue the namespace for on-demand hydration before toggling visibility.
   const handleToggleNamespace = useCallback(
     (namespace: string) => {
-      useEditorStore.getState().requestNamespaceHydration(namespace);
+      const needsHydration = useEditorStore.getState().nodes.some((n) => {
+        const d = n.data as { namespace?: string; deferred?: boolean };
+        return d.namespace === namespace && d.deferred === true;
+      });
+      if (needsHydration) useEditorStore.getState().requestNamespaceHydration(namespace);
       storeToggleNamespace(namespace);
     },
     [storeToggleNamespace]

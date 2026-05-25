@@ -352,6 +352,30 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
     expect(deferredNs).toContain('cdm.other');
   });
 
+  it('Test 4a — non-array hydrateNamespaces (e.g. a string) does NOT 500 and is ignored', async () => {
+    const mod = await import('../lib/curated-fetch.js');
+
+    vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
+    vi.spyOn(mod, 'fetchCuratedNamespace').mockResolvedValue([]);
+    vi.spyOn(mod, 'fetchCuratedBundle');
+
+    // Send hydrateNamespaces as a plain string instead of an array — the server
+    // must not 500 and must not hydrate any extra namespaces.
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [],
+        curatedBundles: [{ id: 'cdm', version: VERSION }],
+        hydrateNamespaces: 'cdm.base.math' as unknown as string[]
+      })
+    } as never);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ParseResponse;
+    expect(body.ok).toBe(true);
+    // No namespaces should have been hydrated — the non-array value is ignored
+    expect(body.hydrationState.documents).toHaveLength(0);
+  });
+
   it('Test 4 — hydrateNamespaces unions on-demand namespaces into closure seeds', async () => {
     // cdm.other has no transitive deps and would NOT enter the closure via user
     // imports (there are none). Sending hydrateNamespaces: ['cdm.other'] is the

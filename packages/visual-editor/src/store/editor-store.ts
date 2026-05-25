@@ -302,6 +302,9 @@ export interface EditorActions {
    * App.tsx effect after `applyParseResult` returns.
    */
   markNamespacesHydrated(names: string[]): void;
+  /** Remove namespaces from the pending queue WITHOUT marking them hydrated —
+   *  used when an on-demand hydration parse fails, so re-selecting re-queues. */
+  dequeuePendingHydration(names: string[]): void;
   /**
    * Clear all hydration state. Called on workspace switch so stale browsed-
    * namespace names from the previous workspace don't carry over into the new
@@ -358,7 +361,8 @@ function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingI
           position: { x: 0, y: 0 },
           errors: [],
           isReadOnly: true,
-          hasExternalRefs: false
+          hasExternalRefs: false,
+          deferred: true
         } as unknown as AnyGraphNode
       });
     }
@@ -1747,6 +1751,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n))
           }));
         },
+
+        dequeuePendingHydration: (names) =>
+          set((s) => ({
+            pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n))
+          })),
 
         resetHydration() {
           set({ pendingHydrationNamespaces: [], hydratedNamespaces: [] });

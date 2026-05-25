@@ -219,6 +219,8 @@ function AppContent() {
   // After the parse completes, `markNamespacesHydrated` moves the names from
   // pending → hydrated, which empties `pendingHydration` and the effect's
   // guard (`length === 0`) short-circuits on the next run — no infinite loop.
+  // On failure, `dequeuePendingHydration` removes the failed names (without
+  // marking hydrated) so re-selecting/re-expanding them re-queues and retries.
   const pendingHydration = useEditorStore((s) => s.pendingHydrationNamespaces);
   useEffect(() => {
     if (pendingHydration.length === 0) return;
@@ -235,8 +237,9 @@ function AppContent() {
       })
       .catch((err) => {
         if (cancelled) return;
-        // Leave the namespace(s) pending (do NOT markNamespacesHydrated) so the
-        // next requestNamespaceHydration retries them as part of the union.
+        // Dequeue the failed namespaces (without marking hydrated) so the user
+        // can retry by re-selecting/re-expanding them; keep the last valid graph.
+        useEditorStore.getState().dequeuePendingHydration(pendingHydration);
         reportWorkspaceError(
           'Failed to hydrate the selected namespace; keeping the last valid graph',
           err
@@ -248,7 +251,7 @@ function AppContent() {
   // `files` in deps: an edit during an in-flight hydration re-fires this and
   // issues a second round-trip; the `cancelled` flag discards the stale result,
   // so it's a wasted request but correctness-safe.
-  }, [pendingHydration, files, applyParseResult]);
+  }, [pendingHydration, files, applyParseResult, reportWorkspaceError]);
 
   const syncWorkspaceToEditor = useCallback(
     async (workspaceFiles: WorkspaceFile[]) => {

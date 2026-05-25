@@ -610,6 +610,11 @@ export async function parseWorkspaceViaRouter(
     const bundleId = d.filePath.slice(0, slash);
     if (!CURATED_BUNDLE_IDS.has(bundleId)) continue;
     const pathInBundle = d.filePath.slice(slash + 1);
+    // Only list-only manifest namespaces belong here — their filePath is the
+    // synthetic `${bundleId}/${namespace}`. Closure docs (already added above)
+    // and user files under a `${bundleId}/...` path have a different shape and
+    // must be skipped, avoiding the `${bundleId}/...` false-positive class.
+    if (d.filePath !== `${bundleId}/${d.namespace}`) continue;
     const seen = seenPathByBundle.get(bundleId) ?? new Set<string>();
     if (seen.has(pathInBundle)) continue; // already added from the closure
     seen.add(pathInBundle);
