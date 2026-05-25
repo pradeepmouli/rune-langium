@@ -415,8 +415,12 @@ export function collectCuratedBundlesFromWorkspace(
  * is invoked through `parseWorkspaceFilesOnMainThread` and remains the
  * fallback-only code path.
  */
-export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<ParseWorkspaceFilesResult> {
-  if (files.length === 0) {
+export async function parseWorkspaceFiles(
+  files: WorkspaceFile[],
+  options: { hydrateNamespaces?: string[] } = {}
+): Promise<ParseWorkspaceFilesResult> {
+  const wantsHydration = (options.hydrateNamespaces?.length ?? 0) > 0;
+  if (files.length === 0 && !wantsHydration) {
     return { models: [], parsedModels: [], errors: new Map(), parseMode: 'router' };
   }
 
@@ -425,7 +429,7 @@ export async function parseWorkspaceFiles(files: WorkspaceFile[]): Promise<Parse
   const curatedBundles = collectCuratedBundlesFromWorkspace(files);
 
   try {
-    const response = await parseWorkspaceViaRouter(userFiles, { curatedBundles });
+    const response = await parseWorkspaceViaRouter(userFiles, { curatedBundles, hydrateNamespaces: options.hydrateNamespaces });
     const errMap = new Map<string, string[]>();
     for (const [k, v] of Object.entries(response.errors)) {
       errMap.set(k, v);
@@ -491,12 +495,16 @@ export function _resetParserWorkerForTests(): void {
  */
 export async function parseWorkspaceViaRouter(
   files: Array<{ name: string; content: string }>,
-  options: { curatedBundles?: Array<{ id: string; version: string }> } = {}
+  options: { curatedBundles?: Array<{ id: string; version: string }>; hydrateNamespaces?: string[] } = {}
 ): Promise<ParseWorkspaceResponse> {
   const response = await fetch('/api/parse', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files, curatedBundles: options.curatedBundles ?? [] })
+    body: JSON.stringify({
+      files,
+      curatedBundles: options.curatedBundles ?? [],
+      hydrateNamespaces: options.hydrateNamespaces ?? []
+    })
   });
   if (!response.ok) {
     throw new Error(`/api/parse HTTP ${response.status}`);

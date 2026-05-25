@@ -137,6 +137,8 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
     global.fetch = originalFetch;
   });
 
+  afterEach(() => vi.restoreAllMocks());
+
   it('sends curatedBundles derived from bundleId/bundleVersion on WorkspaceFile', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -234,6 +236,23 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
       curatedBundles: Array<{ id: string; version: string }>;
     };
     expect(body.curatedBundles).toEqual([]);
+  });
+
+  it('forwards hydrateNamespaces to /api/parse', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ ok: true, models: [], errors: {}, hydrationState: { documents: [] }, deferredExports: [] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      ) as Response
+    );
+    await parseWorkspaceFiles(
+      [{ name: 'app.rosetta', path: 'app.rosetta', content: 'namespace demo\ntype Foo:\n  bar string (1..1)', dirty: false }] as Parameters<typeof parseWorkspaceFiles>[0],
+      { hydrateNamespaces: ['cdm.base.math'] }
+    );
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string) as {
+      hydrateNamespaces: string[];
+    };
+    expect(body.hydrateNamespaces).toEqual(['cdm.base.math']);
   });
 
   it('falls back to main-thread when the router fetch fails', async () => {
