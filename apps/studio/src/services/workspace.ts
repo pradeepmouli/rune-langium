@@ -9,6 +9,7 @@
 import { parse, parseWorkspace, createRuneDslServices, type RosettaModel } from '@rune-langium/core';
 import { EmptyFileSystem } from 'langium';
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
+import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
 import type { CachedFile } from '../types/model-types.js';
 import type {
   WorkerRequest,
@@ -21,6 +22,10 @@ import type {
 } from '../workers/parser-worker.js';
 import { isParseResponse, isParseWorkspaceResponse, isLinkDocumentResponse } from '../workers/parser-worker.js';
 import { useCodegenStore } from '../store/codegen-store.js';
+
+/** Known curated bundle ids — guards deferredExports filePath prefixes so user
+ *  files that happen to live under `${bundleId}/...` aren't mis-grouped. */
+const CURATED_BUNDLE_IDS = new Set<string>(CURATED_MODEL_IDS);
 
 export interface WorkspaceFile {
   name: string;
@@ -576,6 +581,40 @@ export async function parseWorkspaceViaRouter(
       refOnly: true
     };
     (curatedRefOnlyFiles[bundleId] ??= []).push(entry);
+  }
+
+  // ── Restore "loaded" status for bundles outside the import closure ──────────
+  // The manifest fast-path hydrates ONLY the user's import closure into
+  // hydrationState, so a curated bundle that no user file imports yields zero
+  // hydrationState docs → zero curatedRefOnlyFiles → LoadedModel.files stays []
+  // → ModelLoader's 30s hydration timeout fires → "load failed". deferredExports
+  // lists EVERY namespace in each loaded bundle; register the list-only ones
+  // (those not already added from the closure above) as refOnly entries so the
+  // bundle reads as loaded. They carry no serializedModelJson — their ASTs
+  // hydrate on demand when the namespace is browsed.
+  const seenPathByBundle = new Map<string, Set<string>>();
+  for (const [bid, entries] of Object.entries(curatedRefOnlyFiles)) {
+    seenPathByBundle.set(bid, new Set(entries.map((e) => e.path)));
+  }
+  for (const d of data.deferredExports ?? []) {
+    const slash = d.filePath.indexOf('/');
+    if (slash < 0) continue; // user-file entry: no bundle prefix
+    const bundleId = d.filePath.slice(0, slash);
+    if (!CURATED_BUNDLE_IDS.has(bundleId)) continue;
+    const pathInBundle = d.filePath.slice(slash + 1);
+    const seen = seenPathByBundle.get(bundleId) ?? new Set<string>();
+    if (seen.has(pathInBundle)) continue; // already added from the closure
+    seen.add(pathInBundle);
+    seenPathByBundle.set(bundleId, seen);
+    (curatedRefOnlyFiles[bundleId] ??= []).push({
+      path: pathInBundle,
+      content: '',
+      namespace: d.namespace,
+      // CachedFile.exports needs {type,name,path}; deferredExports omits path
+      // (no AST yet). Path is only used to locate a node once hydrated.
+      exports: (d.exports ?? []).map((e) => ({ ...e, path: '' })),
+      refOnly: true
+    });
   }
 
   // Hydrate the browser worker with ALL server-parsed documents + exports
