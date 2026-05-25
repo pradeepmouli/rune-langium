@@ -31,6 +31,7 @@ import { ActivityBar } from './shell/ActivityBar.js';
 import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
 import { StudioProviders } from './shell/providers/StudioProviders.js';
 import { usePerspectiveStore } from './store/perspective-store.js';
+import { useEditorStore } from '@rune-langium/visual-editor';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
 
@@ -206,6 +207,48 @@ function AppContent() {
       }
     }
   }, []);
+
+  // On-demand curated namespace hydration.
+  //
+  // When the explorer selects a node in a namespace that hasn't been
+  // hydrated yet, ExplorePerspective calls `requestNamespaceHydration(ns)`.
+  // That appends to `pendingHydrationNamespaces`, which triggers this effect.
+  // We re-parse with the cumulative union of already-hydrated + pending
+  // namespaces — the worker uses replacement semantics, so the full set must
+  // be sent every time to keep previously-hydrated namespaces alive.
+  // After the parse completes, `markNamespacesHydrated` moves the names from
+  // pending → hydrated, which empties `pendingHydration` and the effect's
+  // guard (`length === 0`) short-circuits on the next run — no infinite loop.
+  const pendingHydration = useEditorStore((s) => s.pendingHydrationNamespaces);
+  useEffect(() => {
+    if (pendingHydration.length === 0) return;
+    let cancelled = false;
+    const hydratedSoFar = useEditorStore.getState().hydratedNamespaces;
+    const requested = [...new Set([...hydratedSoFar, ...pendingHydration])];
+    void parseWorkspaceFiles(files, { hydrateNamespaces: requested })
+      .then((result) => {
+        if (cancelled) return;
+        applyParseResult(result);
+        // Mark exactly the set sent in THIS parse (not whatever is pending when
+        // the promise resolves) so a request arriving mid-flight isn't lost.
+        useEditorStore.getState().markNamespacesHydrated(pendingHydration);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // Leave the namespace(s) pending (do NOT markNamespacesHydrated) so the
+        // next requestNamespaceHydration retries them as part of the union.
+        reportWorkspaceError(
+          'Failed to hydrate the selected namespace; keeping the last valid graph',
+          err
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  // `files` in deps: an edit during an in-flight hydration re-fires this and
+  // issues a second round-trip; the `cancelled` flag discards the stale result,
+  // so it's a wasted request but correctness-safe.
+  }, [pendingHydration, files, applyParseResult]);
 
   const syncWorkspaceToEditor = useCallback(
     async (workspaceFiles: WorkspaceFile[]) => {

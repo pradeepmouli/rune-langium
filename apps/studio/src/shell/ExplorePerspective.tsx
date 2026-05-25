@@ -888,8 +888,26 @@ export function ExplorePerspective() {
   const handleExplorerSelectNode = useCallback(
     (nodeId: string) => {
       storeSelectNode(nodeId, { reapplyFocusMode: true });
+      // On-demand curated hydration: selecting a node in a not-yet-hydrated
+      // namespace asks the server for that namespace (server pulls its
+      // transitive deps) so the structure view can render. No-op for
+      // already-hydrated namespaces (store dedupes).
+      const selectedNode = useEditorStore.getState().nodes.find((n) => n.id === nodeId);
+      const ns = (selectedNode?.data as { namespace?: string } | undefined)?.namespace;
+      if (ns) useEditorStore.getState().requestNamespaceHydration(ns);
     },
     [storeSelectNode]
+  );
+
+  // Expanding a namespace header is an equally natural browse gesture that
+  // should trigger hydration. Wrap the bare toggle action so we can also
+  // queue the namespace for on-demand hydration before toggling visibility.
+  const handleToggleNamespace = useCallback(
+    (namespace: string) => {
+      useEditorStore.getState().requestNamespaceHydration(namespace);
+      storeToggleNamespace(namespace);
+    },
+    [storeToggleNamespace]
   );
 
   const shouldCenterNavigationTarget = useCallback(
@@ -1193,7 +1211,7 @@ export function ExplorePerspective() {
           expandedNamespaces={expandedNamespaces}
           hiddenNodeIds={hiddenNodeIds}
           selectedNodeId={selectedNodeId}
-          onToggleNamespace={storeToggleNamespace}
+          onToggleNamespace={handleToggleNamespace}
           onExpandAll={storeExpandAllNamespaces}
           onCollapseAll={storeCollapseAllNamespaces}
           onSelectNode={handleExplorerSelectNode}
@@ -1208,7 +1226,7 @@ export function ExplorePerspective() {
       expandedNamespaces,
       hiddenNodeIds,
       selectedNodeId,
-      storeToggleNamespace,
+      handleToggleNamespace,
       storeExpandAllNamespaces,
       storeCollapseAllNamespaces,
       handleExplorerSelectNode,

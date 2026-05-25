@@ -368,3 +368,37 @@ describe('editor-store undo for Structure View Phase 0 actions', () => {
     ).toBe('economics');
   });
 });
+
+// ---------------------------------------------------------------------------
+// On-demand curated namespace hydration actions
+// ---------------------------------------------------------------------------
+
+describe('editor-store on-demand curated hydration', () => {
+  it('requestNamespaceHydration queues a namespace; markNamespacesHydrated dequeues + records it', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: [], hydratedNamespaces: [] });
+    store.getState().requestNamespaceHydration('cdm.base.math');
+    expect(store.getState().pendingHydrationNamespaces).toContain('cdm.base.math');
+    // idempotent — a second call for the same namespace is a no-op
+    store.getState().requestNamespaceHydration('cdm.base.math');
+    expect(store.getState().pendingHydrationNamespaces).toEqual(['cdm.base.math']);
+    store.getState().markNamespacesHydrated(['cdm.base.math']);
+    expect(store.getState().pendingHydrationNamespaces).not.toContain('cdm.base.math');
+    expect(store.getState().hydratedNamespaces).toContain('cdm.base.math');
+  });
+
+  it('requestNamespaceHydration is a no-op for already-hydrated namespaces', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: [], hydratedNamespaces: ['cdm.base.math'] });
+    store.getState().requestNamespaceHydration('cdm.base.math');
+    expect(store.getState().pendingHydrationNamespaces).toEqual([]);
+  });
+
+  it('markNamespacesHydrated deduplicates entries in hydratedNamespaces', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['ns.a', 'ns.b'], hydratedNamespaces: ['ns.a'] });
+    store.getState().markNamespacesHydrated(['ns.a', 'ns.b']);
+    expect(store.getState().hydratedNamespaces).toEqual(['ns.a', 'ns.b']);
+    expect(store.getState().pendingHydrationNamespaces).toEqual([]);
+  });
+});
