@@ -302,6 +302,13 @@ export interface EditorActions {
    * App.tsx effect after `applyParseResult` returns.
    */
   markNamespacesHydrated(names: string[]): void;
+  /**
+   * Clear all hydration state. Called on workspace switch so stale browsed-
+   * namespace names from the previous workspace don't carry over into the new
+   * one (the on-demand effect won't re-fire for names already in
+   * `hydratedNamespaces`, so they must be cleared on workspace load).
+   */
+  resetHydration(): void;
 }
 
 const INHERITANCE_EDGE_KINDS = new Set<EdgeKind>(['extends', 'enum-extends']);
@@ -1739,6 +1746,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             hydratedNamespaces: [...new Set([...s.hydratedNamespaces, ...names])],
             pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n))
           }));
+        },
+
+        resetHydration() {
+          set({ pendingHydrationNamespaces: [], hydratedNamespaces: [] });
         },
 
         // -----------------------------------------------------------------------

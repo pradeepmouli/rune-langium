@@ -253,6 +253,11 @@ function AppContent() {
   const syncWorkspaceToEditor = useCallback(
     async (workspaceFiles: WorkspaceFile[]) => {
       setLoading(true);
+      // Reset hydration state so a new workspace doesn't inherit the previous
+      // workspace's browsed-namespace set. Without this, switching workspaces
+      // leaves stale hydratedNamespaces entries that the on-demand effect won't
+      // re-fire for (they're already in hydratedNamespaces, not pending).
+      useEditorStore.getState().resetHydration();
       try {
         // Start with the built-in base types and the user's workspace files.
         let mergedFiles: WorkspaceFile[] = [...BASE_TYPE_FILES.map((file) => ({ ...file })), ...workspaceFiles];
@@ -266,7 +271,7 @@ function AppContent() {
         // `files` state it reads from useWorkspace() (filtering bundle-marker
         // and ref-only files). App only sets the files here.
 
-        const result = await parseWorkspaceFiles(mergedFiles);
+        const result = await parseWorkspaceFiles(mergedFiles, { hydrateNamespaces: useEditorStore.getState().hydratedNamespaces });
         applyParseResult(result);
         setWorkspaceError(null);
       } finally {
@@ -631,7 +636,7 @@ function AppContent() {
       if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
       reparseTimerRef.current = setTimeout(async () => {
         try {
-          const result = await parseWorkspaceFiles(updatedFiles);
+          const result = await parseWorkspaceFiles(updatedFiles, { hydrateNamespaces: useEditorStore.getState().hydratedNamespaces });
           applyParseResult(result);
         } catch (error) {
           reportWorkspaceError('Failed to re-parse updated files; keeping the last valid graph', error);
@@ -865,7 +870,7 @@ function AppContent() {
     // LSP doc-set sync runs in LspProvider on the `files` change it observes.
     modelParseTokenRef.current += 1;
     const token = modelParseTokenRef.current;
-    parseWorkspaceFiles(merged)
+    parseWorkspaceFiles(merged, { hydrateNamespaces: useEditorStore.getState().hydratedNamespaces })
       .then((result) => {
         if (token !== modelParseTokenRef.current) return;
         applyParseResult(result);
