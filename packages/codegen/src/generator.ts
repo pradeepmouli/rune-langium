@@ -14,6 +14,7 @@ import {
 import { ZodNamespaceEmitter } from './emit/zod-emitter.js';
 import { JsonSchemaNamespaceEmitter } from './emit/json-schema-emitter.js';
 import { TsNamespaceEmitter } from './emit/ts-emitter.js';
+import { SqlNamespaceEmitter } from './emit/sql-emitter.js';
 import { buildNamespaceRegistry, type NamespaceRegistry } from './emit/namespace-registry.js';
 import { walkNamespace, type NamespaceWalkResult } from './emit/namespace-walker.js';
 import type { LanguageProfile } from './emit/language-profile.js';
@@ -21,6 +22,7 @@ import { GenericModelEmitter } from './emit/generic-model-emitter.js';
 import { zodProfile } from './emit/zod-profile.js';
 import { typescriptProfile } from './emit/typescript-profile.js';
 import { jsonSchemaProfile } from './emit/json-schema-profile.js';
+import { sqlProfile } from './emit/sql-profile.js';
 import { ExcelWholeModelEmitter } from './emit/excel-emitter.js';
 
 // 019 spec §3.2 — two-registry dispatch.
@@ -43,7 +45,8 @@ import { ExcelWholeModelEmitter } from './emit/excel-emitter.js';
 const NAMESPACE_EMITTERS: Partial<Record<Target, NamespaceEmitterConstructor>> = {
   zod: ZodNamespaceEmitter,
   'json-schema': JsonSchemaNamespaceEmitter,
-  typescript: TsNamespaceEmitter
+  typescript: TsNamespaceEmitter,
+  sql: SqlNamespaceEmitter
 };
 
 const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>> = {
@@ -54,7 +57,8 @@ const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>
 const PROFILES: Partial<Record<Target, LanguageProfile<Target>>> = {
   zod: zodProfile,
   typescript: typescriptProfile,
-  'json-schema': jsonSchemaProfile
+  'json-schema': jsonSchemaProfile,
+  sql: sqlProfile
 };
 
 /**

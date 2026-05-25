@@ -37,11 +37,11 @@ async function parseInput() {
 describe('runGenerate dispatch (018 Task 0.4)', () => {
   it('rejects targets without a registered emitter with a not-implemented diagnostic', async () => {
     const doc = await parseInput();
-    const outputs = await generate(doc, { target: 'sql' });
-    // Phase 0 doesn't ship the SQL emitter — registered in Phase 2.
+    const outputs = await generate(doc, { target: 'markdown' });
+    // Phase 2 shipped the SQL emitter; markdown (also P2) + graphql (P3) remain unregistered.
     expect(outputs).toHaveLength(1);
     expect(outputs[0]?.diagnostics.some((d) => d.code === 'not-implemented')).toBe(true);
-    expect(outputs[0]?.diagnostics[0]?.message).toContain("'sql'");
+    expect(outputs[0]?.diagnostics[0]?.message).toContain("'markdown'");
   });
 
   it('produces one output per namespace for registered NamespaceEmitter targets', async () => {
@@ -49,6 +49,15 @@ describe('runGenerate dispatch (018 Task 0.4)', () => {
     const outputs = await generate(doc, { target: 'zod' });
     expect(outputs).toHaveLength(1);
     expect(outputs[0]?.relativePath).toMatch(/cdm\/base\/math\.zod\.ts$/);
+    expect(outputs[0]?.diagnostics.filter((d) => d.severity === 'error')).toHaveLength(0);
+  });
+
+  it('produces one .sql output per namespace for the sql target (Phase 2)', async () => {
+    const doc = await parseInput();
+    const outputs = await generate(doc, { target: 'sql' });
+    expect(outputs).toHaveLength(1);
+    expect(outputs[0]?.relativePath).toBe('cdm/base/math.sql');
+    expect(outputs[0]?.content).toContain('CREATE TABLE "Quantity"');
     expect(outputs[0]?.diagnostics.filter((d) => d.severity === 'error')).toHaveLength(0);
   });
 
@@ -68,8 +77,8 @@ describe('runGenerate dispatch (018 Task 0.4)', () => {
   // target whose emitter is registered, and only those. Phase 1/2/3
   // commits will add to this list as emitters land.
   it('IMPLEMENTED_TARGETS lists exactly the targets with a registered emitter', () => {
-    // 019 Phase 1 added 'excel'. Phase 2/3 will add sql, markdown, graphql.
-    expect([...IMPLEMENTED_TARGETS].sort()).toEqual(['excel', 'json-schema', 'typescript', 'zod']);
+    // 019 Phase 1 added 'excel'; Phase 2 added 'sql'. markdown (P2) + graphql (P3) pending.
+    expect([...IMPLEMENTED_TARGETS].sort()).toEqual(['excel', 'json-schema', 'sql', 'typescript', 'zod']);
   });
 
   it('IMPLEMENTED_TARGETS is frozen so callers cannot mutate it', () => {
@@ -82,7 +91,7 @@ describe('runGenerate dispatch (018 Task 0.4)', () => {
   // targets so callers like the CLI can fail fast.
   it('throws GeneratorError when strict: true and the target is not implemented', async () => {
     const doc = await parseInput();
-    await expect(generate(doc, { target: 'sql', strict: true })).rejects.toBeInstanceOf(GeneratorError);
+    await expect(generate(doc, { target: 'markdown', strict: true })).rejects.toBeInstanceOf(GeneratorError);
   });
 
   // 019 Phase 0.5.1 + Copilot review on PR #166 — dispatch on
