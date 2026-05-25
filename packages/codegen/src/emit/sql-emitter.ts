@@ -132,6 +132,16 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
       // table-per-type: the child's PK IS a foreign key to the parent (shared identity).
       cols.push(`${q('id')} ${fkType} PRIMARY KEY`);
       constraints.push(`FOREIGN KEY (${q('id')}) REFERENCES ${q(superRef.name)} (${q('id')})`);
+      // A parent in ANOTHER namespace isn't declared in this per-namespace file, so
+      // the FK dangles until the per-ns scripts are applied together (or via the
+      // single-file bundle). Surface that rather than emitting a silently-broken FK.
+      if (!this.model.dataByName.has(superRef.name)) {
+        this.diagnostics.push({
+          severity: 'warning',
+          code: 'sql-cross-namespace-extends',
+          message: `'${data.name}' extends '${superRef.name}', which is not defined in namespace '${this.model.namespace}'; the parent-table FK resolves only when both namespaces' DDL is applied together.`
+        });
+      }
     } else {
       cols.push(this.dialect.pkColumn('id'));
     }
@@ -214,6 +224,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
       }
     }
 
+    this.checkIdentLength(data.name);
     const body = [...cols, ...constraints].map((line) => `  ${line}`).join(',\n');
     this.statements.push(`CREATE TABLE ${q(data.name)} (\n${body}\n);`);
   }
@@ -234,6 +245,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
     const q = (id: string) => this.dialect.quote(id);
     const fkType = this.dialect.fkColumnType();
     const tableName = `${ownerName}_${attrName}`;
+    this.checkIdentLength(tableName);
     const ownerFk = `${ownerName.toLowerCase()}_id`;
     const cols: string[] = [`${q(ownerFk)} ${fkType} NOT NULL`];
     const constraints: string[] = [`FOREIGN KEY (${q(ownerFk)}) REFERENCES ${q(ownerName)} (${q('id')})`];
@@ -296,6 +308,21 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
       code: 'sql-empty-enum',
       message: `Enum '${enumName}' has no values; emitting the column without a CHECK constraint.`
     });
+  }
+
+  /**
+   * Flag table/join-table identifiers that exceed the dialect's limit (Postgres
+   * silently truncates at 63 — which can cause collisions — and SQL Server
+   * rejects past 128). We don't truncate (that risks collisions); we surface it.
+   */
+  private checkIdentLength(id: string): void {
+    if (id.length > this.dialect.maxIdentifierLength) {
+      this.diagnostics.push({
+        severity: 'warning',
+        code: 'sql-identifier-too-long',
+        message: `Identifier '${id}' (${id.length} chars) exceeds the ${this.dialect.name} limit of ${this.dialect.maxIdentifierLength}; the engine may truncate or reject it.`
+      });
+    }
   }
 
   finalize(): GeneratorOutput {

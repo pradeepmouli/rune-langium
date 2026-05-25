@@ -13,6 +13,8 @@ export interface Dialect {
   readonly name: SqlDialectName;
   /** node-sql-parser database key for test validation. */
   readonly parserDatabase: 'postgresql' | 'transactsql';
+  /** Max identifier length the engine allows (Postgres truncates at 63; SQL Server errors past 128). */
+  readonly maxIdentifierLength: number;
   quote(identifier: string): string;
   columnType(builtinName: string): string;
   /** True if `name` is a known Rune builtin (vs. an unresolved type that columnType maps to TEXT by fallback). */
@@ -38,7 +40,7 @@ const SQLSERVER_TYPES: Record<string, string> = {
 export function dialectFor(name: SqlDialectName): Dialect {
   if (name === 'sqlserver') {
     return {
-      name, parserDatabase: 'transactsql',
+      name, parserDatabase: 'transactsql', maxIdentifierLength: 128,
       quote: (id) => `[${id}]`,
       columnType: (b) => SQLSERVER_TYPES[b] ?? 'NVARCHAR(MAX)',
       isKnownBuiltin: (b) => b in SQLSERVER_TYPES,
@@ -47,7 +49,7 @@ export function dialectFor(name: SqlDialectName): Dialect {
     };
   }
   return {
-    name: 'postgres', parserDatabase: 'postgresql',
+    name: 'postgres', parserDatabase: 'postgresql', maxIdentifierLength: 63,
     quote: (id) => `"${id}"`,
     columnType: (b) => POSTGRES_TYPES[b] ?? 'TEXT',
     isKnownBuiltin: (b) => b in POSTGRES_TYPES,

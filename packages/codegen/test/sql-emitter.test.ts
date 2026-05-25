@@ -338,3 +338,22 @@ type Trade:
     expect(out[0]!.diagnostics.some((d) => d.code === 'unresolved-ref')).toBe(true);
   });
 });
+
+describe('SqlNamespaceEmitter — cross-namespace + identifier length (proactive hardening)', () => {
+  it('warns when a type extends a parent defined in another namespace', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    const f = RuneDsl.shared.workspace.LangiumDocumentFactory;
+    const base = f.fromString('namespace base\n\ntype Animal:\n  name string (1..1)\n', URI.parse('inmemory:///base.rosetta'));
+    const child = f.fromString('namespace zoo\nimport base.*\n\ntype Dog extends Animal:\n  breed string (1..1)\n', URI.parse('inmemory:///zoo.rosetta'));
+    await RuneDsl.shared.workspace.DocumentBuilder.build([base, child], { validation: false });
+    const out = await generate([base, child], { target: 'sql' });
+    const zoo = out.find((o) => o.relativePath === 'zoo.sql')!;
+    expect(zoo.diagnostics.some((d) => d.code === 'sql-cross-namespace-extends')).toBe(true);
+  });
+
+  it('warns when an identifier exceeds the dialect length limit (postgres 63)', async () => {
+    const longName = 'A'.repeat(70); // type name > 63
+    const out = await gen(`namespace test.long\n\ntype ${longName}:\n  v string (1..1)\n`);
+    expect(out[0]!.diagnostics.some((d) => d.code === 'sql-identifier-too-long')).toBe(true);
+  });
+});
