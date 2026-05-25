@@ -49,7 +49,7 @@
     "@xyflow/react": "^12.10.2",
     "buffer": "^6.0.3",
     "codemirror": "6.0.2",
-    "dockview-react": "^6.4.0",
+    "dockview-react": "^6.5.0",
     "idb": "^8.0.3",
     "isomorphic-git": "^1.38.1",
     "jszip": "^3.10.1",
