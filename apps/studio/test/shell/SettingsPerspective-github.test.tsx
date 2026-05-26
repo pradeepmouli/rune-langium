@@ -2,20 +2,20 @@
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { GithubContext, type GithubContextValue } from '../../src/shell/providers/github-context.js';
+import { GitHubContext, type GitHubContextValue } from '../../src/shell/providers/github-context.js';
 import { SettingsPerspective } from '../../src/shell/perspectives/screens/SettingsPerspective.js';
 
-function renderWith(value: Partial<GithubContextValue>) {
-  const full: GithubContextValue = {
+function renderWith(value: Partial<GitHubContextValue>) {
+  const full: GitHubContextValue = {
     status: 'disconnected',
     connect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     disconnect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     ...value,
-  } as GithubContextValue;
+  } as GitHubContextValue;
   render(
-    <GithubContext.Provider value={full}>
+    <GitHubContext.Provider value={full}>
       <SettingsPerspective />
-    </GithubContext.Provider>
+    </GitHubContext.Provider>
   );
   return full;
 }

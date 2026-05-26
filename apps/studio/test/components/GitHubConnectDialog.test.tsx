@@ -3,27 +3,27 @@
 
 /**
  * T057 — GitHubConnectDialog component tests.
- * Drives the device-flow client through the GithubProvider state, asserting:
+ * Drives the device-flow client through the GitHubProvider state, asserting:
  *   - the user code + verification URI render
  *   - on success it calls onConnected with the token
  *   - onCancel fires when Cancel is clicked
  *
- * The dialog is now a thin view of GithubProvider state; tests mock the
- * github-auth service module (same pattern as GithubProvider.test.tsx)
- * and wrap the dialog in a real <GithubProvider>.
+ * The dialog is now a thin view of GitHubProvider state; tests mock the
+ * github-auth service module (same pattern as GitHubProvider.test.tsx)
+ * and wrap the dialog in a real <GitHubProvider>.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 
-// Mock github-store: a shared in-memory store so saveGlobalGithub → loadGlobalGithubToken
+// Mock github-store: a shared in-memory store so saveGlobalGitHub → loadGlobalGitHubToken
 // round-trips the token the way the real IDB would.
 const store = { token: null as string | null };
 vi.mock('../../src/services/github-store.js', () => ({
-  loadGlobalGithub: vi.fn(async () => (store.token ? { token: store.token } : null)),
-  loadGlobalGithubToken: vi.fn(async () => store.token),
-  saveGlobalGithub: vi.fn(async (t: string) => { store.token = t; }),
-  clearGlobalGithub: vi.fn(async () => { store.token = null; })
+  loadGlobalGitHub: vi.fn(async () => (store.token ? { token: store.token } : null)),
+  loadGlobalGitHubToken: vi.fn(async () => store.token),
+  saveGlobalGitHub: vi.fn(async (t: string) => { store.token = t; }),
+  clearGlobalGitHub: vi.fn(async () => { store.token = null; })
 }));
 
 const mockInit = vi.fn();
@@ -36,7 +36,7 @@ vi.mock('../../src/services/github-auth.js', () => ({
   fetchGitHubUser: (...args: unknown[]) => mockUser(...args)
 }));
 
-import { GithubProvider } from '../../src/shell/providers/GithubProvider.js';
+import { GitHubProvider } from '../../src/shell/providers/GitHubProvider.js';
 import { GitHubConnectDialog } from '../../src/components/GitHubConnectDialog.js';
 
 const AUTH_BASE = 'https://www.daikonic.dev/rune-studio/api/github-auth';
@@ -44,7 +44,7 @@ const AUTH_BASE = 'https://www.daikonic.dev/rune-studio/api/github-auth';
 beforeEach(() => {
   store.token = null;
   vi.clearAllMocks();
-  // Fix 3: GithubProvider now clamps poll interval to >= 5000ms; use fake timers.
+  // Fix 3: GitHubProvider now clamps poll interval to >= 5000ms; use fake timers.
   // shouldAdvanceTime: true so @testing-library/react's waitFor polling also works.
   vi.useFakeTimers({ shouldAdvanceTime: true });
   mockUser.mockResolvedValue({ kind: 'ok' as const, login: 'octocat', avatarUrl: 'https://x/a.png' });
@@ -68,9 +68,9 @@ describe('GitHubConnectDialog (T057)', () => {
     mockPoll.mockResolvedValue({ kind: 'pending' });
 
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={() => {}} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     await waitFor(() => expect(screen.getByText(/WXYZ-1234/)).toBeInTheDocument());
     expect(screen.getByRole('link', { name: /github\.com\/login\/device/i })).toBeInTheDocument();
@@ -92,9 +92,9 @@ describe('GitHubConnectDialog (T057)', () => {
 
     const onConnected = vi.fn();
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubConnectDialog authBase={AUTH_BASE} onConnected={onConnected} onCancel={() => {}} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     // Fix 3: advance past the clamped 5 s poll interval so the timer fires.
     await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
@@ -114,9 +114,9 @@ describe('GitHubConnectDialog (T057)', () => {
 
     const onCancel = vi.fn();
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={onCancel} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     await waitFor(() => screen.getByText(/^C$/));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
@@ -125,7 +125,7 @@ describe('GitHubConnectDialog (T057)', () => {
 
   it('Fix 6: shows explicit error + Reconnect when connected but token is null', async () => {
     // Provider hydrates to 'connected' from IDB, but IDB token read returns null.
-    // Simulate: IDB has a record but loadGlobalGithubToken returns null (store corrupt).
+    // Simulate: IDB has a record but loadGlobalGitHubToken returns null (store corrupt).
     mockInit.mockResolvedValueOnce({
       kind: 'ok',
       deviceCode: 'devcode',
@@ -136,20 +136,20 @@ describe('GitHubConnectDialog (T057)', () => {
     });
     mockPoll.mockResolvedValueOnce({ kind: 'ok', accessToken: 'gho_tok', scope: 'repo' });
 
-    // After connect() runs, the store has a token; but override loadGlobalGithubToken
+    // After connect() runs, the store has a token; but override loadGlobalGitHubToken
     // to return null for this test to simulate the "connected but null token" case.
-    const { loadGlobalGithubToken } = await import('../../src/services/github-store.js');
-    const mockedLoadToken = vi.mocked(loadGlobalGithubToken);
-    // First call (from GithubProvider hydration mount) returns null → disconnected start.
+    const { loadGlobalGitHubToken } = await import('../../src/services/github-store.js');
+    const mockedLoadToken = vi.mocked(loadGlobalGitHubToken);
+    // First call (from GitHubProvider hydration mount) returns null → disconnected start.
     // connect() runs the device flow, polls → ok, saves token to store.
-    // onConnected effect then calls loadGlobalGithubToken → return null to trigger Fix 6.
+    // onConnected effect then calls loadGlobalGitHubToken → return null to trigger Fix 6.
     mockedLoadToken.mockResolvedValue(null);
 
     const onConnected = vi.fn();
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubConnectDialog authBase={AUTH_BASE} onConnected={onConnected} onCancel={() => {}} />
-      </GithubProvider>
+      </GitHubProvider>
     );
 
     // Advance past the clamped poll interval.

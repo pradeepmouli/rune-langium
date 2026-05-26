@@ -4,16 +4,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { PerspectiveHost } from '../../src/shell/perspectives/PerspectiveHost.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
-import { GithubContext, type GithubContextValue } from '../../src/shell/providers/github-context.js';
+import { GitHubContext, type GitHubContextValue } from '../../src/shell/providers/github-context.js';
 
-const stubGithub: GithubContextValue = {
+const stubGitHub: GitHubContextValue = {
   status: 'disconnected',
   connect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   disconnect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 };
 
-function withGithub(ui: JSX.Element) {
-  return <GithubContext.Provider value={stubGithub}>{ui}</GithubContext.Provider>;
+function withGitHub(ui: JSX.Element) {
+  return <GitHubContext.Provider value={stubGitHub}>{ui}</GitHubContext.Provider>;
 }
 
 // Mock only the Workspaces launcher — the host-level fallback renders it for
@@ -47,7 +47,7 @@ describe('PerspectiveHost', () => {
   });
 
   it('keeps Explore mounted (never remounts) across a switch away and back', () => {
-    render(withGithub(<PerspectiveHost hasWorkspace />));
+    render(withGitHub(<PerspectiveHost hasWorkspace />));
     const slot = () => screen.getByTestId('explore-probe').closest('[data-perspective-slot="explore"]') as HTMLElement;
     expect(exploreMounts.count).toBe(1);
     expect(slot().style.display).not.toBe('none'); // visible when active
@@ -66,7 +66,7 @@ describe('PerspectiveHost', () => {
 
   it('git/export fall back to the Workspaces launcher without a workspace (no blank pane, Codex P2 #238)', () => {
     usePerspectiveStore.setState({ activePerspective: 'git' });
-    render(withGithub(<PerspectiveHost hasWorkspace={false} />));
+    render(withGitHub(<PerspectiveHost hasWorkspace={false} />));
     // git is workspace-requiring, so with no workspace it must NOT render…
     expect(screen.queryByTestId('git-perspective')).toBeNull();
     // …and the host falls back to the always-available Workspaces launcher.

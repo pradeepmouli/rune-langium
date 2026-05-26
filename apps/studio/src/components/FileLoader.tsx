@@ -21,8 +21,8 @@ import {
 import { cn } from '@rune-langium/design-system/utils';
 import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
 import { config } from '../config.js';
-import { getGithubAuthBase } from '../services/github-authbase.js';
-import { useGithub } from '../shell/providers/github-context.js';
+import { getGitHubAuthBase } from '../services/github-authbase.js';
+import { useGitHub } from '../shell/providers/github-context.js';
 
 const EMPTY_FILES: ReadonlyArray<WorkspaceFile> = [];
 
@@ -71,8 +71,8 @@ export function FileLoader({
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
-  const authBase = githubAuthBase ?? getGithubAuthBase();
-  const { status: githubStatus } = useGithub();
+  const authBase = githubAuthBase ?? getGitHubAuthBase();
+  const { status: githubStatus } = useGitHub();
 
   const handleFiles = useCallback(
     async (fileList: FileList) => {

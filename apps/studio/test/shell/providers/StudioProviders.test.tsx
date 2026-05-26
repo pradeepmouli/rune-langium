@@ -5,9 +5,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 // github-store: make hydration inert (no IDB, no network)
 vi.mock('../../../src/services/github-store.js', () => ({
-  loadGlobalGithub: vi.fn(async () => null),
-  saveGlobalGithub: vi.fn(async () => undefined),
-  clearGlobalGithub: vi.fn(async () => undefined)
+  loadGlobalGitHub: vi.fn(async () => null),
+  saveGlobalGitHub: vi.fn(async () => undefined),
+  clearGlobalGitHub: vi.fn(async () => undefined)
 }));
 
 // LSP dependencies
@@ -25,7 +25,7 @@ vi.mock('../../../src/services/transport-provider.js', () => ({
 vi.mock('../../../src/config.js', () => ({ config: { lspEnabled: true }, studioConfig: {} }));
 
 import { StudioProviders } from '../../../src/shell/providers/StudioProviders.js';
-import { useGithub } from '../../../src/shell/providers/github-context.js';
+import { useGitHub } from '../../../src/shell/providers/github-context.js';
 import type { WorkspaceState } from '../../../src/shell/providers/workspace-context.js';
 import type { WorkspaceActions } from '../../../src/shell/perspectives/workspace-actions-context.js';
 
@@ -52,13 +52,13 @@ function stateFor(id: string): WorkspaceState {
   };
 }
 
-function GithubStatusProbe() {
-  const g = useGithub();
+function GitHubStatusProbe() {
+  const g = useGitHub();
   return <span data-testid="github-status">{g.status}</span>;
 }
 
 describe('StudioProviders', () => {
-  it('mounts GithubProvider: useGithub() is reachable and starts disconnected', async () => {
+  it('mounts GitHubProvider: useGitHub() is reachable and starts disconnected', async () => {
     // Codegen worker seam
     window.__runeStudioTestApi = {
       createCodegenWorker: () => {
@@ -74,11 +74,11 @@ describe('StudioProviders', () => {
 
     render(
       <StudioProviders state={stateFor('ws-test')} actions={noopActions}>
-        <GithubStatusProbe />
+        <GitHubStatusProbe />
       </StudioProviders>
     );
 
-    // GithubProvider hydrates: loadGlobalGithub() returns null → disconnected
+    // GitHubProvider hydrates: loadGlobalGitHub() returns null → disconnected
     await waitFor(() => {
       expect(screen.getByTestId('github-status').textContent).toBe('disconnected');
     });

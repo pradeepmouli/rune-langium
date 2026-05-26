@@ -4,7 +4,7 @@
 import type React from 'react';
 import { FontScaleButton } from '../../../components/FontScaleButton.js';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { useGithub } from '../../providers/github-context.js';
+import { useGitHub } from '../../providers/github-context.js';
 import { categoryCopy } from '../../../services/github-error-copy.js';
 
 /**
@@ -21,7 +21,7 @@ import { categoryCopy } from '../../../services/github-error-copy.js';
  */
 
 function GitHubAccountSection(): React.ReactElement {
-  const { status, user, deviceFlow, error, errorCategory, connect, disconnect } = useGithub();
+  const { status, user, deviceFlow, error, errorCategory, connect, disconnect } = useGitHub();
 
   return (
     <section data-testid="settings-github-section" className="space-y-4">

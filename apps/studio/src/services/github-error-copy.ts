@@ -5,7 +5,7 @@ import type { GitHubAuthErrorCategory } from './github-auth.js';
 /**
  * User-facing copy per error category (FR-006 / EC-6). Surfaces the
  * github-auth Worker's structured failures as plain English instead of a raw
- * `HTTP 5xx` string. Shared by every consumer of `useGithub().error`
+ * `HTTP 5xx` string. Shared by every consumer of `useGitHub().error`
  * (GitHubConnectDialog, SettingsPerspective) so error presentation is uniform.
  *
  * Kept in its own module (not github-auth.ts) so tests that mock the

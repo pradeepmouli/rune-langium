@@ -2,10 +2,10 @@
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { GithubContext, type GithubContextValue } from '../../src/shell/providers/github-context.js';
+import { GitHubContext, type GitHubContextValue } from '../../src/shell/providers/github-context.js';
 import { SettingsPerspective } from '../../src/shell/perspectives/screens/SettingsPerspective.js';
 
-const disconnectedCtx: GithubContextValue = {
+const disconnectedCtx: GitHubContextValue = {
   status: 'disconnected',
   connect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   disconnect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -13,9 +13,9 @@ const disconnectedCtx: GithubContextValue = {
 
 function renderSettings() {
   return render(
-    <GithubContext.Provider value={disconnectedCtx}>
+    <GitHubContext.Provider value={disconnectedCtx}>
       <SettingsPerspective />
-    </GithubContext.Provider>
+    </GitHubContext.Provider>
   );
 }
 

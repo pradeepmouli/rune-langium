@@ -11,12 +11,12 @@
  * wired that yet (T032 deferred); these tests pin both halves of that
  * contract: hidden-by-default, visible-when-wired.
  *
- * The auth dialog is now a thin view of GithubProvider state; tests
- * wrap FileLoader in a <GithubProvider> with github-auth mocked.
+ * The auth dialog is now a thin view of GitHubProvider state; tests
+ * wrap FileLoader in a <GitHubProvider> with github-auth mocked.
  *
  * Task 8 (seed per-workspace token): a second describe block covers the
  * "already connected" path where FileLoader reads the global token from
- * the IDB store (via loadGlobalGithubToken) instead of showing the
+ * the IDB store (via loadGlobalGitHubToken) instead of showing the
  * device-flow dialog.
  */
 
@@ -28,13 +28,13 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 const githubStore = { token: null as string | null, identity: undefined as { login: string; avatarUrl: string } | undefined };
 
 vi.mock('../../src/services/github-store.js', () => ({
-  loadGlobalGithub: vi.fn(async () => (githubStore.token ? { token: githubStore.token, identity: githubStore.identity } : null)),
-  loadGlobalGithubToken: vi.fn(async () => githubStore.token),
-  saveGlobalGithub: vi.fn(async (t: string, identity?: { login: string; avatarUrl: string }) => {
+  loadGlobalGitHub: vi.fn(async () => (githubStore.token ? { token: githubStore.token, identity: githubStore.identity } : null)),
+  loadGlobalGitHubToken: vi.fn(async () => githubStore.token),
+  saveGlobalGitHub: vi.fn(async (t: string, identity?: { login: string; avatarUrl: string }) => {
     githubStore.token = t;
     githubStore.identity = identity;
   }),
-  clearGlobalGithub: vi.fn(async () => { githubStore.token = null; githubStore.identity = undefined; })
+  clearGlobalGitHub: vi.fn(async () => { githubStore.token = null; githubStore.identity = undefined; })
 }));
 
 const mockInit = vi.fn();
@@ -47,7 +47,7 @@ vi.mock('../../src/services/github-auth.js', () => ({
   fetchGitHubUser: (...args: unknown[]) => mockUser(...args)
 }));
 
-import { GithubProvider } from '../../src/shell/providers/GithubProvider.js';
+import { GitHubProvider } from '../../src/shell/providers/GitHubProvider.js';
 import { FileLoader } from '../../src/components/FileLoader.js';
 
 const stubCreateGitBacked = async () => ({ id: 'STUB' });
@@ -58,7 +58,7 @@ describe('FileLoader — Open from GitHub affordance (T031 / FR-012)', () => {
     githubStore.token = null;
     githubStore.identity = undefined;
     vi.clearAllMocks();
-    // Fix 3: GithubProvider now clamps poll interval to >= 5000ms; use fake timers.
+    // Fix 3: GitHubProvider now clamps poll interval to >= 5000ms; use fake timers.
     // shouldAdvanceTime: true so @testing-library/react's waitFor polling also works.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     // initDeviceFlow returns a pending-style device flow by default;
@@ -80,18 +80,18 @@ describe('FileLoader — Open from GitHub affordance (T031 / FR-012)', () => {
 
   it('hides the GitHub CTA when createGitBackedWorkspace is not provided', () => {
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <FileLoader onFilesLoaded={() => {}} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     expect(screen.queryByRole('button', { name: /Open from GitHub/i })).toBeNull();
   });
 
   it('renders an Open from GitHub button when createGitBackedWorkspace is provided', () => {
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     const btn = screen.getByRole('button', { name: /Open from GitHub/i });
     expect(btn).toBeInTheDocument();
@@ -99,9 +99,9 @@ describe('FileLoader — Open from GitHub affordance (T031 / FR-012)', () => {
 
   it('opens the GitHubConnectDialog when the button is clicked', () => {
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     expect(screen.queryByTestId('github-connect-dialog')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Open from GitHub/i }));
@@ -110,9 +110,9 @@ describe('FileLoader — Open from GitHub affordance (T031 / FR-012)', () => {
 
   it('hides the dialog when Cancel is clicked', async () => {
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     fireEvent.click(screen.getByRole('button', { name: /Open from GitHub/i }));
     // Wait until the dialog moved past the synchronous 'init' phase to
@@ -132,7 +132,7 @@ describe('FileLoader — lazy IDB token at clone time (Fix 1 / Task 8 / §4)', (
     vi.clearAllMocks();
     // Fix 3: use fake timers (consistent with top-level describe).
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    // Pre-seed IDB so GithubProvider's mount effect hydrates to 'connected'.
+    // Pre-seed IDB so GitHubProvider's mount effect hydrates to 'connected'.
     githubStore.token = 'global-tok';
     githubStore.identity = { login: 'octocat', avatarUrl: 'https://x/a.png' };
     // Device-flow mocks should NOT be called in the connected path.
@@ -152,15 +152,15 @@ describe('FileLoader — lazy IDB token at clone time (Fix 1 / Task 8 / §4)', (
     >().mockResolvedValue({ id: 'GIT_WS_ID' });
 
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <FileLoader
           onFilesLoaded={() => {}}
           createGitBackedWorkspace={createWorkspace}
         />
-      </GithubProvider>
+      </GitHubProvider>
     );
 
-    // Wait for GithubProvider to hydrate to 'connected' (it reads IDB on mount).
+    // Wait for GitHubProvider to hydrate to 'connected' (it reads IDB on mount).
     // Fix 1: clicking the button now passes skipAuth={true} to GitHubWorkspaceFlow
     // (a boolean, not the token) — the flow opens directly to the repo-URL form.
     const btn = await screen.findByRole('button', { name: /Open from GitHub/i });
@@ -175,7 +175,7 @@ describe('FileLoader — lazy IDB token at clone time (Fix 1 / Task 8 / §4)', (
     expect(mockInit).not.toHaveBeenCalled();
 
     // Enter a repo URL and clone; GitHubWorkspaceFlow reads the token lazily from
-    // IDB at clone time (loadGlobalGithubToken()) — never from FileLoader state.
+    // IDB at clone time (loadGlobalGitHubToken()) — never from FileLoader state.
     fireEvent.change(screen.getByTestId('repo-url-input'), {
       target: { value: 'https://github.com/octocat/Hello-World' }
     });

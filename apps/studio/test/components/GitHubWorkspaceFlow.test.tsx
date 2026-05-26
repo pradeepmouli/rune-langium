@@ -8,22 +8,22 @@
  * The `createWorkspace` prop is injected so the test doesn't need a
  * real OPFS root or a real git clone.
  *
- * The auth dialog is now a thin view of GithubProvider state; tests
- * wrap in a real <GithubProvider> with github-store and github-auth
- * mocked (same pattern as GithubProvider.test.tsx).
+ * The auth dialog is now a thin view of GitHubProvider state; tests
+ * wrap in a real <GitHubProvider> with github-store and github-auth
+ * mocked (same pattern as GitHubProvider.test.tsx).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
-// Mock github-store: a shared in-memory store so saveGlobalGithub → loadGlobalGithubToken
+// Mock github-store: a shared in-memory store so saveGlobalGitHub → loadGlobalGitHubToken
 // round-trips the token the way the real IDB would.
 const store = { token: null as string | null };
 vi.mock('../../src/services/github-store.js', () => ({
-  loadGlobalGithub: vi.fn(async () => (store.token ? { token: store.token } : null)),
-  loadGlobalGithubToken: vi.fn(async () => store.token),
-  saveGlobalGithub: vi.fn(async (t: string) => { store.token = t; }),
-  clearGlobalGithub: vi.fn(async () => { store.token = null; })
+  loadGlobalGitHub: vi.fn(async () => (store.token ? { token: store.token } : null)),
+  loadGlobalGitHubToken: vi.fn(async () => store.token),
+  saveGlobalGitHub: vi.fn(async (t: string) => { store.token = t; }),
+  clearGlobalGitHub: vi.fn(async () => { store.token = null; })
 }));
 
 const mockInit = vi.fn();
@@ -36,7 +36,7 @@ vi.mock('../../src/services/github-auth.js', () => ({
   fetchGitHubUser: (...args: unknown[]) => mockUser(...args)
 }));
 
-import { GithubProvider } from '../../src/shell/providers/GithubProvider.js';
+import { GitHubProvider } from '../../src/shell/providers/GitHubProvider.js';
 import { GitHubWorkspaceFlow } from '../../src/components/GitHubWorkspaceFlow.js';
 
 const AUTH_BASE = 'https://www.daikonic.dev/rune-studio/api/github-auth';
@@ -44,7 +44,7 @@ const AUTH_BASE = 'https://www.daikonic.dev/rune-studio/api/github-auth';
 beforeEach(() => {
   store.token = null;
   vi.clearAllMocks();
-  // Fix 3: GithubProvider now clamps poll interval to >= 5000ms; use fake timers.
+  // Fix 3: GitHubProvider now clamps poll interval to >= 5000ms; use fake timers.
   // shouldAdvanceTime: true so @testing-library/react's waitFor polling also works.
   vi.useFakeTimers({ shouldAdvanceTime: true });
   mockInit.mockResolvedValue({
@@ -73,14 +73,14 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
   it('after auth, surfaces a repo-URL form (transitions auth → url)', async () => {
     const createWorkspace = vi.fn();
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubWorkspaceFlow
           authBase={AUTH_BASE}
           onCreated={() => {}}
           onCancel={() => {}}
           createWorkspace={createWorkspace}
         />
-      </GithubProvider>
+      </GitHubProvider>
     );
     // Fix 3: advance past the clamped 5 s poll interval so the provider
     // transitions to 'connected', which fires onConnected in the dialog,
@@ -95,14 +95,14 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
   it('Clone button is disabled until a parseable repo URL is typed', async () => {
     const createWorkspace = vi.fn();
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubWorkspaceFlow
           authBase={AUTH_BASE}
           onCreated={() => {}}
           onCancel={() => {}}
           createWorkspace={createWorkspace}
         />
-      </GithubProvider>
+      </GitHubProvider>
     );
     await advancePoll();
     await waitFor(() => screen.getByTestId('github-repo-form'));
@@ -131,14 +131,14 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
     const onCreated = vi.fn();
 
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubWorkspaceFlow
           authBase={AUTH_BASE}
           onCreated={onCreated}
           onCancel={() => {}}
           createWorkspace={createWorkspace}
         />
-      </GithubProvider>
+      </GitHubProvider>
     );
     await advancePoll();
     await waitFor(() => screen.getByTestId('github-repo-form'));
@@ -177,14 +177,14 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
       .mockRejectedValue(new Error('clone failed: 404'));
 
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubWorkspaceFlow
           authBase={AUTH_BASE}
           onCreated={() => {}}
           onCancel={() => {}}
           createWorkspace={createWorkspace}
         />
-      </GithubProvider>
+      </GitHubProvider>
     );
     await advancePoll();
     await waitFor(() => screen.getByTestId('github-repo-form'));

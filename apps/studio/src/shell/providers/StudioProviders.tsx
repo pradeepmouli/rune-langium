@@ -4,7 +4,7 @@ import type React from 'react';
 import { WorkspaceProvider } from './WorkspaceProvider.js';
 import { LspProvider } from './LspProvider.js';
 import { CodegenProvider } from './CodegenProvider.js';
-import { GithubProvider } from './GithubProvider.js';
+import { GitHubProvider } from './GitHubProvider.js';
 import type { WorkspaceState } from './workspace-context.js';
 import type { WorkspaceActions } from '../perspectives/workspace-actions-context.js';
 
@@ -17,7 +17,7 @@ interface Props {
 /**
  * App-level composition root. Reserved app-global sibling slots (insertion
  * contract, design §10):
- *   - <GithubProvider/>  (IMPLEMENTED) outermost; auth state from the github-auth service singleton
+ *   - <GitHubProvider/>  (IMPLEMENTED) outermost; auth state from the github-auth service singleton
  *   - <SettingsProvider/> sibling; lands with .runestudio config
  *   - <CuratedModelProvider/> not warranted (registry + service + useModelStore own it)
  * Rule: nest only on context-consumption; otherwise sibling. Lsp/Codegen nest
@@ -26,12 +26,12 @@ interface Props {
  */
 export function StudioProviders({ state, actions, children }: Props): React.ReactElement {
   return (
-    <GithubProvider>
+    <GitHubProvider>
       <WorkspaceProvider state={state} actions={actions}>
         <LspProvider>
           <CodegenProvider>{children}</CodegenProvider>
         </LspProvider>
       </WorkspaceProvider>
-    </GithubProvider>
+    </GitHubProvider>
   );
 }

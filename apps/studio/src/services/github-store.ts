@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 import { openDB, type IDBPDatabase } from 'idb';
 
-export interface GithubIdentity { login: string; avatarUrl: string; }
-interface GlobalGithubRecord { token: string; identity?: GithubIdentity; }
+export interface GitHubIdentity { login: string; avatarUrl: string; }
+interface GlobalGitHubRecord { token: string; identity?: GitHubIdentity; }
 
 const DB_NAME = 'rune-studio-github';
 const DB_VERSION = 1;
@@ -22,20 +22,20 @@ function db(): Promise<IDBPDatabase> {
   return dbPromise;
 }
 
-export async function saveGlobalGithub(token: string, identity?: GithubIdentity): Promise<void> {
-  const record: GlobalGithubRecord = { token, ...(identity ? { identity } : {}) };
+export async function saveGlobalGitHub(token: string, identity?: GitHubIdentity): Promise<void> {
+  const record: GlobalGitHubRecord = { token, ...(identity ? { identity } : {}) };
   await (await db()).put(STORE, record, KEY);
 }
-export async function loadGlobalGithub(): Promise<GlobalGithubRecord | null> {
+export async function loadGlobalGitHub(): Promise<GlobalGitHubRecord | null> {
   return (await (await db()).get(STORE, KEY)) ?? null;
 }
-export async function loadGlobalGithubToken(): Promise<string | null> {
-  return (await loadGlobalGithub())?.token ?? null;
+export async function loadGlobalGitHubToken(): Promise<string | null> {
+  return (await loadGlobalGitHub())?.token ?? null;
 }
-export async function clearGlobalGithub(): Promise<void> {
+export async function clearGlobalGitHub(): Promise<void> {
   await (await db()).delete(STORE, KEY);
 }
 /** Test-only: drop the cached connection so a fresh DB handle is opened. */
-export async function _resetGithubStoreForTests(): Promise<void> {
+export async function _resetGitHubStoreForTests(): Promise<void> {
   if (dbPromise) { (await dbPromise).close(); dbPromise = null; }
 }

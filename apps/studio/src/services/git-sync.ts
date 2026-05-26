@@ -13,7 +13,7 @@ import type { GitBackingRecord } from '../workspace/persistence.js';
 import { loadWorkspace, saveWorkspace } from '../workspace/persistence.js';
 import { createInteractiveConflictPolicy, type InteractiveConflictPolicy } from './interactive-conflict-policy.js';
 import { loadWorkspaceToken } from './github-auth.js';
-import { loadGlobalGithubToken } from './github-store.js';
+import { loadGlobalGitHubToken } from './github-store.js';
 
 /**
  * Resolve the git token for a workspace: use the per-workspace OPFS token
@@ -21,7 +21,7 @@ import { loadGlobalGithubToken } from './github-store.js';
  * is set.
  */
 export async function resolveGitToken(fs: OpfsFs, workspaceId: string): Promise<string> {
-  return (await loadWorkspaceToken(fs, workspaceId)) ?? (await loadGlobalGithubToken()) ?? '';
+  return (await loadWorkspaceToken(fs, workspaceId)) ?? (await loadGlobalGitHubToken()) ?? '';
 }
 
 /** Map the engine's live phase to the persisted GitBackingRecord.syncState. */

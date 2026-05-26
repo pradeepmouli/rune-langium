@@ -16,8 +16,8 @@
  *                                  support."
  *   - any other failure         → existing fallback "Connection failed"
  *
- * The dialog now delegates to GithubProvider; tests wrap in a real
- * <GithubProvider> with github-store and github-auth mocked so the
+ * The dialog now delegates to GitHubProvider; tests wrap in a real
+ * <GitHubProvider> with github-store and github-auth mocked so the
  * provider's init error surfaces as the dialog's error phase.
  */
 
@@ -25,12 +25,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 
 // Mock github-store (no-op IDB). Error paths never reach onConnected so the
-// token round-trip does not need to work; loadGlobalGithubToken just returns null.
+// token round-trip does not need to work; loadGlobalGitHubToken just returns null.
 vi.mock('../../src/services/github-store.js', () => ({
-  loadGlobalGithub: vi.fn(async () => null),
-  loadGlobalGithubToken: vi.fn(async () => null),
-  saveGlobalGithub: vi.fn(async () => {}),
-  clearGlobalGithub: vi.fn(async () => {})
+  loadGlobalGitHub: vi.fn(async () => null),
+  loadGlobalGitHubToken: vi.fn(async () => null),
+  saveGlobalGitHub: vi.fn(async () => {}),
+  clearGlobalGitHub: vi.fn(async () => {})
 }));
 
 const mockInit = vi.fn();
@@ -44,7 +44,7 @@ vi.mock('../../src/services/github-auth.js', () => ({
 }));
 
 import type { GitHubAuthErrorCategory } from '../../src/services/github-auth.js';
-import { GithubProvider } from '../../src/shell/providers/GithubProvider.js';
+import { GitHubProvider } from '../../src/shell/providers/GitHubProvider.js';
 import { GitHubConnectDialog } from '../../src/components/GitHubConnectDialog.js';
 
 const AUTH_BASE = 'https://www.daikonic.dev/rune-studio/api/github-auth';
@@ -66,9 +66,9 @@ describe('GitHubConnectDialog error-category copy (T032b / EC-6)', () => {
   it('502 github_misconfigured → user-facing "not yet available" copy', async () => {
     mockInitWithError('misconfigured', 'HTTP 502');
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={() => {}} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     await waitFor(() => {
       expect(screen.getByText(/GitHub authorisation is not yet available/i)).toBeInTheDocument();
@@ -80,9 +80,9 @@ describe('GitHubConnectDialog error-category copy (T032b / EC-6)', () => {
   it('503 github_unavailable → user-facing "appears to be down" copy', async () => {
     mockInitWithError('unavailable', 'HTTP 503');
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={() => {}} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     await waitFor(() => {
       expect(screen.getByText(/GitHub appears to be down/i)).toBeInTheDocument();
@@ -92,9 +92,9 @@ describe('GitHubConnectDialog error-category copy (T032b / EC-6)', () => {
   it('403 origin_not_allowed → user-facing "Studio configuration error" copy', async () => {
     mockInitWithError('origin_blocked', 'HTTP 403');
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={() => {}} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     await waitFor(() => {
       expect(screen.getByText(/Studio configuration error/i)).toBeInTheDocument();
@@ -104,9 +104,9 @@ describe('GitHubConnectDialog error-category copy (T032b / EC-6)', () => {
   it('falls back to "Connection failed" copy on uncategorised failure', async () => {
     mockInitWithError('unknown', 'HTTP 500');
     render(
-      <GithubProvider>
+      <GitHubProvider>
         <GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={() => {}} />
-      </GithubProvider>
+      </GitHubProvider>
     );
     await waitFor(() => {
       expect(screen.getByText(/Connection failed/i)).toBeInTheDocument();

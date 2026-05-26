@@ -20,7 +20,7 @@ import { useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import { GitHubConnectDialog } from './GitHubConnectDialog.js';
-import { loadGlobalGithubToken } from '../services/github-store.js';
+import { loadGlobalGitHubToken } from '../services/github-store.js';
 
 export interface GitHubWorkspaceFlowProps {
   authBase: string;
@@ -197,7 +197,7 @@ export function GitHubWorkspaceFlow({
           // If the flow went through device-auth, state.token was set by
           // onConnected; if skipAuth was true, we read from IDB now (never
           // held in React state).
-          const token = state.token ?? (await loadGlobalGithubToken());
+          const token = state.token ?? (await loadGlobalGitHubToken());
           if (!token) {
             // Token is unexpectedly absent — surface error, revert to auth phase.
             setState({

@@ -2,17 +2,17 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * GitHubConnectDialog — thin view of the app-global GithubProvider state.
+ * GitHubConnectDialog — thin view of the app-global GitHubProvider state.
  *
  * The device-flow lifecycle (init → poll → connected/error) is now owned by
- * GithubProvider (app-global). This component only:
+ * GitHubProvider (app-global). This component only:
  *  1. Calls connect() on mount (if not already connecting/connected).
  *  2. Maps provider state → the original per-phase UI.
  *  3. Fires onConnected(accessToken) once when status becomes 'connected'.
  *  4. Fires onCancel() when the user clicks Cancel/Close.
  *
  * The `authBase` prop is preserved for Props-contract compatibility but is
- * now vestigial — the provider uses getGithubAuthBase() internally.
+ * now vestigial — the provider uses getGitHubAuthBase() internally.
  *
  * The "I've authorised — check now" button is retained in the markup for
  * backward compatibility but is a no-op: the provider drives its own poll
@@ -21,12 +21,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { useGithub } from '../shell/providers/github-context.js';
+import { useGitHub } from '../shell/providers/github-context.js';
 import { categoryCopy } from '../services/github-error-copy.js';
-import { loadGlobalGithubToken } from '../services/github-store.js';
+import { loadGlobalGitHubToken } from '../services/github-store.js';
 
 interface Props {
-  /** Preserved for Props-contract compatibility; vestigial — provider uses getGithubAuthBase(). */
+  /** Preserved for Props-contract compatibility; vestigial — provider uses getGitHubAuthBase(). */
   authBase: string;
   onConnected: (accessToken: string) => void;
   onCancel: () => void;
@@ -36,7 +36,7 @@ export function GitHubConnectDialog({
   onConnected,
   onCancel
 }: Props): React.ReactElement {
-  const github = useGithub();
+  const github = useGitHub();
   const { status, deviceFlow, error, errorCategory, connect } = github;
   const connectedFiredRef = useRef(false);
   // Fix 6: track when the provider is connected but the IDB token read returned
@@ -52,8 +52,8 @@ export function GitHubConnectDialog({
   }, []);
 
   // Fire onConnected exactly once when the provider reaches 'connected'.
-  // Reads the token from IDB (where GithubProvider.connect() persisted it via
-  // saveGlobalGithub BEFORE setting status to 'connected') so the raw token
+  // Reads the token from IDB (where GitHubProvider.connect() persisted it via
+  // saveGlobalGitHub BEFORE setting status to 'connected') so the raw token
   // never travels through the React context value.
   useEffect(() => {
     if (status === 'connected' && !connectedFiredRef.current) {
@@ -61,7 +61,7 @@ export function GitHubConnectDialog({
       // or a re-render mid-await cannot fire onConnected twice.
       connectedFiredRef.current = true;
       void (async () => {
-        const token = await loadGlobalGithubToken();
+        const token = await loadGlobalGitHubToken();
         if (token) {
           onConnected(token);
         } else {

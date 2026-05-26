@@ -2,15 +2,15 @@
 // Copyright (c) 2026 Pradeep Mouli
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { GithubContext, type GithubContextValue, type GithubIdentity } from './github-context.js';
-import { getGithubAuthBase } from '../../services/github-authbase.js';
+import { GitHubContext, type GitHubContextValue, type GitHubIdentity } from './github-context.js';
+import { getGitHubAuthBase } from '../../services/github-authbase.js';
 import { initDeviceFlow, pollDeviceFlow, fetchGitHubUser, type GitHubAuthErrorCategory } from '../../services/github-auth.js';
-import { loadGlobalGithub, saveGlobalGithub, clearGlobalGithub } from '../../services/github-store.js';
+import { loadGlobalGitHub, saveGlobalGitHub, clearGlobalGitHub } from '../../services/github-store.js';
 
-export function GithubProvider({ children }: { children: React.ReactNode }): React.ReactElement {
-  const [status, setStatus] = useState<GithubContextValue['status']>('disconnected');
-  const [user, setUser] = useState<GithubIdentity | undefined>(undefined);
-  const [deviceFlow, setDeviceFlow] = useState<GithubContextValue['deviceFlow']>(undefined);
+export function GitHubProvider({ children }: { children: React.ReactNode }): React.ReactElement {
+  const [status, setStatus] = useState<GitHubContextValue['status']>('disconnected');
+  const [user, setUser] = useState<GitHubIdentity | undefined>(undefined);
+  const [deviceFlow, setDeviceFlow] = useState<GitHubContextValue['deviceFlow']>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [errorCategory, setErrorCategory] = useState<GitHubAuthErrorCategory | undefined>(undefined);
   const connectingRef = useRef(false);
@@ -28,7 +28,7 @@ export function GithubProvider({ children }: { children: React.ReactNode }): Rea
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const rec = await loadGlobalGithub();
+      const rec = await loadGlobalGitHub();
       if (cancelled || !rec) return;
       setUser(rec.identity);
       setStatus('connected');
@@ -44,7 +44,7 @@ export function GithubProvider({ children }: { children: React.ReactNode }): Rea
     setError(undefined);
     setErrorCategory(undefined);
     setStatus('connecting');
-    const authBase = getGithubAuthBase();
+    const authBase = getGitHubAuthBase();
     try {
       const init = await initDeviceFlow(authBase);
       // Fix 2: bail if disconnected or superseded after await.
@@ -69,12 +69,12 @@ export function GithubProvider({ children }: { children: React.ReactNode }): Rea
         // Fix 2: bail after the poll if invalidated.
         if (!mountedRef.current || connectAttemptRef.current !== attempt) return;
         if (poll.kind === 'ok') {
-          let identity: GithubIdentity | undefined;
+          let identity: GitHubIdentity | undefined;
           const u = await fetchGitHubUser(authBase, poll.accessToken);
           // Fix 2: bail after user fetch if invalidated.
           if (!mountedRef.current || connectAttemptRef.current !== attempt) return;
           if (u.kind === 'ok') identity = { login: u.login, avatarUrl: u.avatarUrl };
-          await saveGlobalGithub(poll.accessToken, identity);
+          await saveGlobalGitHub(poll.accessToken, identity);
           if (!mountedRef.current || connectAttemptRef.current !== attempt) return;
           setUser(identity);
           setDeviceFlow(undefined);
@@ -109,10 +109,10 @@ export function GithubProvider({ children }: { children: React.ReactNode }): Rea
   const disconnect = useCallback(async () => {
     // Fix 2: invalidate any in-flight connect() so it won't re-connect after this.
     connectAttemptRef.current++;
-    await clearGlobalGithub();
+    await clearGlobalGitHub();
     setUser(undefined); setDeviceFlow(undefined); setError(undefined); setErrorCategory(undefined); setStatus('disconnected');
   }, []);
 
-  const value: GithubContextValue = { status, user, deviceFlow, error, errorCategory, connect, disconnect };
-  return <GithubContext.Provider value={value}>{children}</GithubContext.Provider>;
+  const value: GitHubContextValue = { status, user, deviceFlow, error, errorCategory, connect, disconnect };
+  return <GitHubContext.Provider value={value}>{children}</GitHubContext.Provider>;
 }
