@@ -22,27 +22,8 @@
 import { useEffect, useRef } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { useGithub } from '../shell/providers/github-context.js';
-import type { GitHubAuthErrorCategory } from '../services/github-auth.js';
+import { categoryCopy } from '../services/github-error-copy.js';
 import { loadGlobalGithubToken } from '../services/github-store.js';
-
-/**
- * User-facing copy per error category (FR-006 / EC-6). Surfaces the
- * github-auth Worker's structured failures as plain English instead
- * of a raw `HTTP 5xx` string.
- */
-function categoryCopy(category: GitHubAuthErrorCategory | undefined, fallback: string): string {
-  switch (category) {
-    case 'misconfigured':
-      return 'GitHub authorisation is not yet available — please come back later.';
-    case 'unavailable':
-      return 'GitHub appears to be down — please retry shortly.';
-    case 'origin_blocked':
-      return 'Studio configuration error — contact support.';
-    case 'unknown':
-    default:
-      return `Connection failed: ${fallback}`;
-  }
-}
 
 interface Props {
   /** Preserved for Props-contract compatibility; vestigial — provider uses getGithubAuthBase(). */

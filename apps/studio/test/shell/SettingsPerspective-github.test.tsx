@@ -45,4 +45,12 @@ describe('SettingsPerspective — GitHub account section', () => {
     renderWith({ status: 'error', error: 'Token expired' });
     expect(screen.getByText(/token expired/i)).toBeTruthy();
   });
+
+  it('renders the categorised plain-English copy when an errorCategory is present', () => {
+    // Spec §8: the Settings error state shows the same plain-English copy the
+    // dialog renders (categoryCopy), not the raw `HTTP 5xx` reason.
+    renderWith({ status: 'error', error: 'HTTP 502', errorCategory: 'misconfigured' });
+    expect(screen.getByText(/GitHub authorisation is not yet available/i)).toBeTruthy();
+    expect(screen.queryByText(/HTTP 502/)).toBeNull();
+  });
 });

@@ -5,6 +5,7 @@ import type React from 'react';
 import { FontScaleButton } from '../../../components/FontScaleButton.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { useGithub } from '../../providers/github-context.js';
+import { categoryCopy } from '../../../services/github-error-copy.js';
 
 /**
  * SettingsPerspective — per-machine studio settings scaffold.
@@ -20,7 +21,7 @@ import { useGithub } from '../../providers/github-context.js';
  */
 
 function GitHubAccountSection(): React.ReactElement {
-  const { status, user, deviceFlow, error, connect, disconnect } = useGithub();
+  const { status, user, deviceFlow, error, errorCategory, connect, disconnect } = useGithub();
 
   return (
     <section data-testid="settings-github-section" className="space-y-4">
@@ -78,7 +79,7 @@ function GitHubAccountSection(): React.ReactElement {
 
       {status === 'error' && (
         <div className="space-y-2">
-          <p className="text-xs text-destructive">{error}</p>
+          <p className="text-xs text-destructive">{categoryCopy(errorCategory, error ?? '')}</p>
           <Button size="sm" onClick={() => void connect()}>
             Connect GitHub
           </Button>
